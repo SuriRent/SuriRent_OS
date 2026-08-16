@@ -5663,17 +5663,18 @@ async def tenant_forgot_pin(body: TenantForgotPinIn, request: Request):
             from email_service import send_email as _send_smtp, wrap_template
             smtp = await get_company_section(cid, "smtp")
             if smtp and smtp.get("enabled") and smtp.get("host"):
+                brand_kwargs = await _tenant_email_brand(cid)
                 subject = f"Uw nieuwe PIN voor {company_name}"
                 content_html = (
-                    f"<h2 style='color:#FF5C00;margin:0 0 12px 0;'>Nieuwe PIN code</h2>"
+                    f"<h2 style='color:{brand_kwargs['brand_color']};margin:0 0 12px 0;'>Nieuwe PIN code</h2>"
                     f"<p>Beste {tenant.get('name', 'huurder')},</p>"
                     f"<p>U heeft een nieuwe PIN aangevraagd om in te loggen op uw huurder-kiosk:</p>"
                     f"<p style='font-size:32px;font-weight:bold;letter-spacing:8px;text-align:center;"
-                    f"padding:16px;background:#f5f5f5;border-radius:12px;color:#FF5C00;'>{new_pin}</p>"
+                    f"padding:16px;background:#f5f5f5;border-radius:12px;color:{brand_kwargs['brand_color']};'>{new_pin}</p>"
                     f"<p>Gebruik deze code om uw saldo en betalingen te bekijken. "
                     f"Heeft u dit niet aangevraagd? Neem dan contact op met de receptie.</p>"
                 )
-                body_html = wrap_template(content_html, footer=company_name)
+                body_html = wrap_template(content_html, footer=company_name, **brand_kwargs)
                 await _send_smtp(smtp, to=email, subject=subject, body_html=body_html)
                 via.append("email")
         except Exception as e:
@@ -7007,6 +7008,46 @@ async def _next_receipt_number() -> str:
     )
     seq = counter.get("seq", 1)
     return f"KW{year}-{seq:05d}"
+
+
+async def _tenant_email_brand(company_id: Optional[str]) -> dict:
+    """Levert white-label branding-kwargs voor tenant-emails.
+
+    Returnt een dict die 1-op-1 als kwargs aan `wrap_template(...)` gegeven
+    kan worden: `brand_name`, `brand_color`, `logo_url`. Bevat NOOIT
+    SuriRent branding — dit is uitsluitend voor mails die namens een
+    klantbedrijf worden verstuurd via hun eigen SMTP.
+    """
+    if not company_id:
+        return {"brand_name": "Vastgoed", "brand_color": "#FF5C00", "logo_url": ""}
+    co = await db.companies.find_one(
+        {"id": company_id},
+        {"_id": 0, "name": 1, "branding": 1},
+    ) or {}
+    branding = co.get("branding") or {}
+    logo_rel = (branding.get("logo_url") or "").strip()
+    logo_abs = ""
+    if logo_rel:
+        if logo_rel.startswith("http"):
+            logo_abs = logo_rel
+        else:
+            base = (os.environ.get("APP_PUBLIC_URL") or "https://app.surirent.sr").rstrip("/")
+            logo_abs = f"{base}{logo_rel if logo_rel.startswith('/') else '/' + logo_rel}"
+    return {
+        "brand_name": co.get("name") or "Vastgoed",
+        "brand_color": branding.get("primary_color") or "#FF5C00",
+        "logo_url": logo_abs,
+    }
+
+
+async def _brand_name_of(company_id: Optional[str]) -> str:
+    """Lichtgewicht helper: alleen de bedrijfsnaam ophalen voor gebruik in
+    WhatsApp/SMS signoffs. Fallback op 'Vastgoed' zodat we nooit per ongeluk
+    de SuriRent branding lekken in klant-communicatie."""
+    if not company_id:
+        return "Vastgoed"
+    co = await db.companies.find_one({"id": company_id}, {"_id": 0, "name": 1}) or {}
+    return co.get("name") or "Vastgoed"
 
 
 async def _company_brand_info(company_id: Optional[str]) -> dict:
@@ -9040,6 +9081,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
 
     try:
         pdf_bytes = receipt_pdf(p_enriched)
+        brand_kwargs = await _tenant_email_brand(cid)
         content = f"""
             <h1>Kwitantie {p_enriched['receipt_number']}</h1>
             <p>Beste {tenant.get('name', 'huurder')},<br />
@@ -9059,7 +9101,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
         await send_email(
             cfg, to,
             f"Kwitantie {p_enriched['receipt_number']}",
-            wrap_template(content),
+            wrap_template(content, **brand_kwargs),
             attachments=[(f"kwitantie-{p_enriched['receipt_number']}.pdf", pdf_bytes, "application/pdf")],
         )
         return {"sent": True, "to": to}
@@ -11610,13 +11652,15 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
         to = user.get("email") or cfg.get("from_email")
         if not to:
             raise HTTPException(status_code=400, detail="Geen ontvanger gevonden (vul afzender e-mail in)")
+        brand_kwargs = await _tenant_email_brand(cid)
         html = wrap_template(
             "<h1>SMTP test geslaagd</h1>"
             "<p>Als je deze e-mail ontvangt, is de SMTP configuratie voor je bedrijf correct.</p>"
-            "<p>Je kunt nu kwitanties, facturen en herinneringen verzenden naar je huurders.</p>"
+            "<p>Je kunt nu kwitanties, facturen en herinneringen verzenden naar je huurders.</p>",
+            **brand_kwargs,
         )
         try:
-            await send_email(cfg, to, "SuriRent SMTP test", html)
+            await send_email(cfg, to, f"{brand_kwargs['brand_name']} — SMTP test", html)
         except EmailError as e:
             return {"section": section, "ok": False, "detail": str(e)}
         return {"section": section, "ok": True, "detail": f"Test e-mail verzonden naar {to}"}
@@ -11624,7 +11668,9 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
     if section == "twilio":
         from twilio_service import send_whatsapp, send_sms, TwilioError
         # Try WhatsApp first if from is set, else SMS.
-        test_msg = "SuriRent test bericht — als je dit ontvangt is je Twilio configuratie correct."
+        co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+        brand_name_twil = co.get("name") or "Vastgoed"
+        test_msg = f"{brand_name_twil} test bericht — als je dit ontvangt is je Twilio configuratie correct."
         # Find a destination: prefer admin's own phone from user record (not stored normally),
         # so we test by sending to the configured `from` itself (will fail with sandbox not paired,
         # but at minimum validates credentials).
@@ -11955,6 +12001,7 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     if not to:
         raise HTTPException(status_code=400, detail="Geen ontvanger — vul een e-mailadres in of zet er een bij de huurder")
     pdf_bytes = receipt_pdf(p)
+    brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     content = f"""
         {extra_note}
@@ -11968,7 +12015,8 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
         </table>
     """
     try:
-        await send_email(cfg, to, f"Kwitantie {p['receipt_number']} - SuriRent", wrap_template(content),
+        await send_email(cfg, to, f"Kwitantie {p['receipt_number']} - {brand_kwargs['brand_name']}",
+                         wrap_template(content, **brand_kwargs),
                          attachments=[(f"kwitantie-{p['receipt_number']}.pdf", pdf_bytes, "application/pdf")])
     except EmailError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -11995,6 +12043,7 @@ async def email_invoice(invoice_id: str, body: EmailSendIn, user=Depends(get_cur
     }, {"_id": 0}).to_list(50)
     inv = {**inv, **(await _company_brand_info(inv.get("company_id")))}
     pdf_bytes = invoice_pdf(inv, tenant, apt, payments)
+    brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
                  "juli", "augustus", "september", "oktober", "november", "december"]
@@ -12011,7 +12060,8 @@ async def email_invoice(invoice_id: str, body: EmailSendIn, user=Depends(get_cur
         </table>
     """
     try:
-        await send_email(cfg, to, f"Factuur {inv['invoice_number']} - SuriRent", wrap_template(content),
+        await send_email(cfg, to, f"Factuur {inv['invoice_number']} - {brand_kwargs['brand_name']}",
+                         wrap_template(content, **brand_kwargs),
                          attachments=[(f"factuur-{inv['invoice_number']}.pdf", pdf_bytes, "application/pdf")])
     except EmailError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -12035,6 +12085,7 @@ async def email_contract(contract_id: str, body: EmailSendIn, user=Depends(get_c
     id_photo_bytes = await _load_tenant_id_photo_bytes(tenant)
     ev = await _load_tenant_evidence_bundle(tenant)
     pdf_bytes = contract_pdf(c, tenant, apt, **ev)
+    brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     # If contract is unsigned, include a signing link.
     sign_block = ""
@@ -12043,7 +12094,7 @@ async def email_contract(contract_id: str, body: EmailSendIn, user=Depends(get_c
                        or os.environ.get("PUBLIC_APP_URL", "")).rstrip("/")
         if backend_url:
             sign_block = (f"<p style=\"margin-top:14px\"><a href=\"{backend_url}/onderteken/{c['sign_token']}\""
-                          f" style=\"background:#FF5C00;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:700;display:inline-block\">"
+                          f" style=\"background:{brand_kwargs['brand_color']};color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:700;display:inline-block\">"
                           f"Onderteken contract</a></p>")
     content = f"""
         {extra_note}
@@ -12058,7 +12109,8 @@ async def email_contract(contract_id: str, body: EmailSendIn, user=Depends(get_c
         {sign_block}
     """
     try:
-        await send_email(cfg, to, f"Huurcontract {c['contract_number']} - SuriRent", wrap_template(content),
+        await send_email(cfg, to, f"Huurcontract {c['contract_number']} - {brand_kwargs['brand_name']}",
+                         wrap_template(content, **brand_kwargs),
                          attachments=[(f"contract-{c['contract_number']}.pdf", pdf_bytes, "application/pdf")])
     except EmailError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -12112,6 +12164,7 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
     to = (body.to or tenant.get("phone") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen telefoonnummer — vul een nummer in of voeg toe aan de huurder")
+    brand_name = await _brand_name_of(company_id_of(user))
     extra = f"{body.message.strip()}\n\n" if body.message else ""
     msg = (
         f"{extra}"
@@ -12121,7 +12174,7 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
         f"• Datum: {p.get('paid_at', '')[:10]}\n"
         f"• Methode: {p.get('method', '')}\n\n"
         f"📄 Kwitantie PDF: {_public_url(f'/api/payments/{payment_id}/pdf')}\n\n"
-        f"— SuriRent"
+        f"— {brand_name}"
     )
     # Voor WhatsApp: stuur JPG kwitantie als media-bijlage (inline preview).
     if body.channel == "whatsapp":
@@ -12147,6 +12200,7 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
     to = (body.to or tenant.get("phone") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen telefoonnummer — vul een nummer in of voeg toe aan de huurder")
+    brand_name = await _brand_name_of(company_id_of(user))
     months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
                  "juli", "augustus", "september", "oktober", "november", "december"]
     period = f"{months_nl[inv['period_month'] - 1]} {inv['period_year']}"
@@ -12158,7 +12212,7 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
         f"• Bedrag: {inv['currency']} {inv['amount']:.2f}\n"
         f"• Status: {inv['status']}\n\n"
         f"PDF: {_public_url(f'/api/invoices/{invoice_id}/pdf')}\n\n"
-        f"— SuriRent"
+        f"— {brand_name}"
     )
     await _twilio_send(cfg, body.channel, to, msg)
     return {"ok": True, "sent_to": to, "channel": body.channel}
@@ -12207,6 +12261,7 @@ async def tenant_payment_reminder(
         to = (tenant.get("email") or "").strip()
         if not to:
             raise HTTPException(status_code=400, detail="Geen e-mailadres bij huurder")
+        brand_kwargs = await _tenant_email_brand(company_id_of(user))
         extra_note = f"<p>{custom_msg}</p>" if custom_msg else ""
         rows = "".join(
             f"<tr><td>{months_nl[i['period_month']-1].capitalize()} {i['period_year']}</td>"
@@ -12230,7 +12285,7 @@ async def tenant_payment_reminder(
         """
         try:
             await send_email(cfg, to, "Betalingsherinnering openstaande facturen",
-                             wrap_template(content))
+                             wrap_template(content, **brand_kwargs))
         except EmailError as e:
             raise HTTPException(status_code=502, detail=str(e))
         return {"sent": True, "channel": "email", "to": to, "count": len(invs)}
@@ -12240,6 +12295,7 @@ async def tenant_payment_reminder(
     to = (tenant.get("phone") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen telefoonnummer bij huurder")
+    brand_name = await _brand_name_of(company_id_of(user))
     extra = f"{custom_msg}\n\n" if custom_msg else ""
     msg = (
         f"{extra}"
@@ -12249,7 +12305,7 @@ async def tenant_payment_reminder(
         + "\n".join(lines)
         + f"\n\nTotaal openstaand: *{cur} {total:.2f}*\n\n"
         f"Periodes: {period_label}\n\n"
-        f"Gelieve zo spoedig mogelijk te betalen.\n\n— SuriRent"
+        f"Gelieve zo spoedig mogelijk te betalen.\n\n— {brand_name}"
     )
     await _twilio_send(cfg, channel, to, msg)
     return {"sent": True, "channel": channel, "to": to, "count": len(invs)}
@@ -12266,6 +12322,7 @@ async def message_contract(contract_id: str, body: MessageSendIn, user=Depends(g
     to = (body.to or tenant.get("phone") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen telefoonnummer — vul een nummer in of voeg toe aan de huurder")
+    brand_name = await _brand_name_of(company_id_of(user))
     extra = f"{body.message.strip()}\n\n" if body.message else ""
     pdf_link = _public_url(f"/api/contracts/{contract_id}/pdf")
     sign_line = ""
@@ -12280,7 +12337,7 @@ async def message_contract(contract_id: str, body: MessageSendIn, user=Depends(g
         f"• Einddatum: {c.get('end_date') or '—'}\n\n"
         f"PDF: {pdf_link}"
         f"{sign_line}\n\n"
-        f"— SuriRent"
+        f"— {brand_name}"
     )
     await _twilio_send(cfg, body.channel, to, msg)
     return {"ok": True, "sent_to": to, "channel": body.channel}
@@ -12299,13 +12356,14 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
     bal = await _calc_balance(t)
     if bal.get("balance", 0) <= 0:
         raise HTTPException(status_code=400, detail="Deze huurder heeft geen achterstand")
+    brand_name = await _brand_name_of(company_id_of(user))
     extra = f"{body.message.strip()}\n\n" if body.message else ""
     msg = (
         f"{extra}"
         f"Hallo {t.get('name', 'huurder')},\n\n"
         f"Vriendelijke herinnering: er staat nog {bal['currency']} {bal['balance']:.2f} open.\n\n"
         f"Je kunt langskomen bij ons kantoor of via de Kiosk betalen.\n\n"
-        f"— SuriRent"
+        f"— {brand_name}"
     )
     await _twilio_send(cfg, body.channel, to, msg)
     return {"ok": True, "sent_to": to, "channel": body.channel}
@@ -12611,7 +12669,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
             )
         if receipt_pdf_url:
             body += f"📄 Kwitantie PDF: {receipt_pdf_url}\n\n"
-        body += "— SuriRent"
+        body += f"— {await _brand_name_of(cid)}"
         if cfg.get("enabled") and phone:
             try:
                 from twilio_service import send_whatsapp
@@ -12624,6 +12682,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
         if smtp.get("enabled") and email:
             try:
                 from email_service import send_email, wrap_template
+                brand_kwargs = await _tenant_email_brand(cid)
                 next_line = ""
                 if paid_inst < total_inst and next_inst:
                     next_line = f"<p>Nog <b>{remaining}</b> termijn(en) te gaan, volgende vervaldatum {next_inst.get('due_date','')}.</p>"
@@ -12631,7 +12690,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                     next_line = "<p><b>Uw betalingsregeling is volledig voldaan.</b></p>"
                 link_block = (
                     f'<p style="margin:18px 0;"><a href="{receipt_pdf_url}" '
-                    f'style="background:#FF5C00;color:#fff;padding:10px 16px;border-radius:8px;'
+                    f'style="background:{brand_kwargs["brand_color"]};color:#fff;padding:10px 16px;border-radius:8px;'
                     f'text-decoration:none;font-weight:bold;display:inline-block;">'
                     f'📄 Download kwitantie</a></p>'
                 ) if receipt_pdf_url else ""
@@ -12658,7 +12717,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                 await send_email(
                     smtp, email,
                     f"Termijn {seq}/{total_inst} ontvangen — Betalingsregeling",
-                    wrap_template(content),
+                    wrap_template(content, **brand_kwargs),
                     attachments=attachments,
                 )
             except Exception as e:  # noqa: BLE001
@@ -12871,7 +12930,7 @@ async def uni5pay_mock_pay_page(ref: str, amount: str = "0", currency: str = "SR
   <div class="card">
     <div class="pay-form" id="payForm">
       <span class="badge"><span class="dot"></span>UNI5PAY MOCK</span>
-      <h1>SuriRent betaling</h1>
+      <h1>Betaling</h1>
       <p class="ref">REF · {safe_ref}</p>
       <p class="label">Bedrag</p>
       <p class="amount">{safe_currency} {safe_amount}<span>/eenmalig</span></p>
@@ -13278,13 +13337,15 @@ async def _send_overdue_installment_reminders():
         # WhatsApp / SMS via twilio
         twilio_cfg = await get_company_section(cid, "twilio")
         if twilio_cfg.get("enabled") and (tenant.get("phone") or "").strip():
+            co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+            brand_name_wa = co.get("name") or "Vastgoed"
             msg = (
                 f"Hallo {tenant.get('name', 'huurder')},\n\n"
                 f"Vriendelijke herinnering — u heeft {n} achterstallige "
                 f"termijn{'en' if n > 1 else ''} in uw betalingsregeling.\n\n"
                 f"Totaal achterstallig: *{cur} {total:.2f}*\n"
                 f"Eerst-vervallen: {earliest}\n\n"
-                f"Gelieve zo spoedig mogelijk te voldoen via onze kiosk of betaalapp.\n\n— SuriRent"
+                f"Gelieve zo spoedig mogelijk te voldoen via onze kiosk of betaalapp.\n\n— {brand_name_wa}"
             )
             try:
                 await _twilio_send(twilio_cfg, "whatsapp", tenant["phone"], msg)
@@ -13296,6 +13357,7 @@ async def _send_overdue_installment_reminders():
         if smtp_cfg.get("enabled") and (tenant.get("email") or "").strip():
             try:
                 from email_service import send_email, wrap_template
+                brand_kwargs = await _tenant_email_brand(cid)
                 content = f"""
                     <h1>Achterstallige termijn(en)</h1>
                     <p>Beste {tenant.get('name', 'huurder')},<br />
@@ -13307,7 +13369,7 @@ async def _send_overdue_installment_reminders():
                 """
                 await send_email(smtp_cfg, tenant["email"],
                                  "Achterstallige termijn(en) — betalingsregeling",
-                                 wrap_template(content))
+                                 wrap_template(content, **brand_kwargs))
             except Exception as e:  # noqa: BLE001
                 print(f"[reminder] smtp installment fail: {e}")
 

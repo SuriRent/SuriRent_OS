@@ -1,0 +1,32 @@
+{
+  "summary": "Backend-only regression + unit testing of white-label email fix. Verified wrap_template no longer leaks 'SuriRent' when tenant brand kwargs are passed, tenant SMTP-test endpoint uses dynamic company name+color via _tenant_email_brand, and platform default still preserves SuriRent branding. Core auth (admin@vastgoed.sr, demo@surirent.sr) and demo GET /api/settings + GET /api/tenants smoke tests pass — server boots cleanly with the new helpers. 9/9 tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_whitelabel_email.py",
+    "/app/test_reports/pytest/whitelabel_email.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~13.4k lines — should be split into focused modules (auth, settings, tenants, email, saas, superadmin). Very large monolith increases regression risk.",
+    "Grep of remaining hardcoded 'SuriRent' strings in server.py is confined to platform/SaaS paths (superadmin SMTP test at L4940, welcome/reactivation/cancellation platform emails, password-reset subject at L1726) — these are intentionally platform-branded and correctly NOT going through _tenant_email_brand. Verified during code review.",
+    "wrap_template signature is clean and backward-compatible (default kwargs preserve SuriRent for platform emails). Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_whitelabel_email.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Used from /app/memory/test_credentials.md and prompt: admin@vastgoed.sr/admin123, demo@surirent.sr/demo1234.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_whitelabel_email.py covers (a) unit-level wrap_template white-label + platform-default behavior, (b) auth login regression for default+demo admin, (c) demo admin smoke on /api/settings and /api/tenants, (d) POST /api/settings/smtp/test verifying no 'SuriRent SMTP test' subject leak (accepts 200/400/422 depending on SMTP-enabled state — currently returns 400 'Sectie is uitgeschakeld' which is expected as demo has SMTP disabled). If SMTP later enabled for demo, endpoint would return 200 with brand-scoped subject.",
+  "rca of the issue": "Not applicable — verifying fix, not diagnosing regression. Fix implementation is correct: wrap_template accepts brand_name/brand_color/brand_color_dark/logo_url and all tenant-scoped call sites (payment receipt, invoice, contract, WhatsApp signoff, SMTP test) now resolve these via _tenant_email_brand(company_id) / _brand_name_of(company_id) helpers reading db.companies.branding."
+}

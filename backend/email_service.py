@@ -134,16 +134,50 @@ async def send_platform_email(to: str, subject: str, body_html: str,
 
 
 # ============== Branded HTML helpers ==============
-def wrap_template(content_html: str, footer: str = "") -> str:
-    """Wrap a snippet in a SuriRent-styled HTML email shell."""
+def _darken_hex(hex_color: str, factor: float = 0.7) -> str:
+    """Return a darker variant of `hex_color` (e.g. #FF8A3D → #B36126)."""
+    try:
+        h = (hex_color or "").lstrip("#")
+        if len(h) != 6:
+            return "#C74600"
+        r = max(0, min(255, int(int(h[0:2], 16) * factor)))
+        g = max(0, min(255, int(int(h[2:4], 16) * factor)))
+        b = max(0, min(255, int(int(h[4:6], 16) * factor)))
+        return f"#{r:02X}{g:02X}{b:02X}"
+    except Exception:
+        return "#C74600"
+
+
+def wrap_template(content_html: str, footer: str = "", *,
+                  brand_name: str = "SuriRent",
+                  brand_color: str = "#FF8A3D",
+                  brand_color_dark: str | None = None,
+                  logo_url: str = "") -> str:
+    """Wrap a snippet in a white-label styled HTML email shell.
+
+    Alle branding-elementen (brand-pil, header, footer, background-tint) worden
+    dynamisch afgeleid uit `brand_name` + `brand_color`. Wanneer `logo_url`
+    is opgegeven wordt daar een <img> voor gerenderd i.p.v. de brand-tekst.
+    Callers die een `send_email` doen namens een klant moeten deze kwargs
+    altijd vullen met de gegevens van het klantbedrijf — nooit SuriRent
+    branding meesturen in tenant-mails.
+    """
+    dark = brand_color_dark or _darken_hex(brand_color, 0.6)
+    brand_block = (
+        f'<img src="{logo_url}" alt="{brand_name}" '
+        f'style="max-height:56px;max-width:220px;display:inline-block;" />'
+        if logo_url else
+        f'<div class="brand">{brand_name}</div>'
+    )
+    footer_text = footer or f"Deze e-mail is automatisch verzonden door {brand_name}."
     return f"""<!DOCTYPE html>
 <html lang="nl"><head><meta charset="utf-8" />
-<title>SuriRent</title>
+<title>{brand_name}</title>
 <style>
-  body {{ margin: 0; padding: 0; background: #FFF7F0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; }}
+  body {{ margin: 0; padding: 0; background: #F8FAFC; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; }}
   .container {{ max-width: 560px; margin: 0 auto; padding: 24px 16px; }}
-  .card {{ background: #fff; border: 1px solid #FFD7B8; border-radius: 18px; padding: 28px; }}
-  .brand {{ background: linear-gradient(135deg, #FF8A3D, #C74600); color: #fff; border-radius: 14px; padding: 14px 18px; font-weight: 800; letter-spacing: 0.5px; display: inline-block; }}
+  .card {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 28px; }}
+  .brand {{ background: linear-gradient(135deg, {brand_color}, {dark}); color: #fff; border-radius: 14px; padding: 14px 18px; font-weight: 800; letter-spacing: 0.5px; display: inline-block; }}
   h1 {{ font-size: 22px; margin: 18px 0 4px; }}
   p {{ line-height: 1.55; font-size: 14px; color: #334155; }}
   .footer {{ text-align: center; color: #94a3b8; font-size: 11px; margin-top: 18px; line-height: 1.5; }}
@@ -154,8 +188,8 @@ def wrap_template(content_html: str, footer: str = "") -> str:
 </style></head>
 <body><div class="container">
   <div class="card">
-    <div class="brand">SuriRent</div>
+    {brand_block}
     {content_html}
   </div>
-  <div class="footer">{footer or "Deze e-mail is automatisch verzonden door SuriRent Vastgoed."}</div>
+  <div class="footer">{footer_text}</div>
 </div></body></html>"""
