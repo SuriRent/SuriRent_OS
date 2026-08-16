@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Palette, Save, Loader2, Upload, Check, AlertCircle, Eye, RotateCcw, Building2, Mail, Phone, MapPin, Landmark } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { resolveLogoUrl, applyBranding } from '../../../lib/branding';
@@ -227,8 +227,93 @@ export default function Branding() {
             </div>
           </div>
           <p className="text-[11px] text-slate-400 text-center">Dit is wat klanten zien op {(typeof window !== 'undefined' ? window.location.origin : '')}/login?c={b.slug}</p>
+
+          <EmailPreview brandName={b.app_name || b.name} brandColor={previewColor} logoUrl={b.logo_url} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============== Email white-label preview ==============
+// Live iframe-preview van hoe een tenant-email eruit ziet met de huidige
+// brand-instellingen. Debounced fetch naar /api/settings/email/preview zodat
+// we niet bij elke keystroke een backend call doen.
+function EmailPreview({ brandName, brandColor, logoUrl }) {
+  const [html, setHtml] = useState('');
+  const [kind, setKind] = useState('kwitantie');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  const debRef = useRef(null);
+
+  const fetchPreview = useCallback(async () => {
+    setLoading(true); setErr('');
+    try {
+      const { data } = await api.post('/settings/email/preview', {
+        brand_name: brandName || undefined,
+        brand_color: brandColor || undefined,
+        logo_url: logoUrl || '',
+        kind,
+      });
+      setHtml(data.html || '');
+    } catch (e) { setErr(formatError(e)); }
+    finally { setLoading(false); }
+  }, [brandName, brandColor, logoUrl, kind]);
+
+  // Debounced live-update wanneer branding-inputs wijzigen.
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    debRef.current = setTimeout(fetchPreview, 350);
+    return () => { if (debRef.current) clearTimeout(debRef.current); };
+  }, [fetchPreview]);
+
+  const KINDS = [
+    { id: 'kwitantie', label: 'Kwitantie' },
+    { id: 'factuur', label: 'Factuur' },
+    { id: 'contract', label: 'Contract' },
+    { id: 'herinnering', label: 'Herinnering' },
+  ];
+
+  return (
+    <div className="mt-4 space-y-2" data-testid="branding-email-preview">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-widest font-extrabold text-slate-500 flex items-center gap-1.5">
+          <Mail className="w-3.5 h-3.5" /> Email preview (white-label)
+        </p>
+        <div className="flex gap-1">
+          {KINDS.map((k) => (
+            <button key={k.id} type="button" onClick={() => setKind(k.id)}
+              data-testid={`branding-email-kind-${k.id}`}
+              className={`h-7 px-2.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider transition ${kind === k.id ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              style={kind === k.id ? { backgroundColor: brandColor || '#FF5C00' } : {}}>
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-3xl overflow-hidden border-2 border-slate-200 shadow-2xl bg-slate-100 relative" style={{ minHeight: 420 }}>
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm z-10">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-600" />
+          </div>
+        )}
+        {err ? (
+          <div className="p-4 text-xs text-rose-700 bg-rose-50 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{err}</div>
+        ) : (
+          <iframe
+            title="Email preview"
+            data-testid="branding-email-iframe"
+            srcDoc={html}
+            className="w-full block border-0 bg-white"
+            style={{ height: 480 }}
+            sandbox=""
+          />
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400 text-center">
+        Zo ontvangen uw huurders {kind === 'kwitantie' ? 'een kwitantie' : kind === 'factuur' ? 'een factuur' : kind === 'contract' ? 'hun huurcontract' : 'een betalingsherinnering'} —
+        geen enkele SuriRent branding.
+      </p>
     </div>
   );
 }

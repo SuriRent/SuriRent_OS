@@ -41,108 +41,26 @@ from landing_content import (
 # =====================================================================
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
-JWT_SECRET = os.environ["JWT_SECRET"]
-JWT_ALG = "HS256"
-ACCESS_MIN = 60 * 12  # 12h for convenience in this app
-KIOSK_TOKEN_MIN = 60 * 8  # kiosk session 8h
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-
-# =====================================================================
-# Helpers - password & jwt
-# =====================================================================
-def hash_password(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(pw: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
-
-
-def create_token(payload: dict, minutes: int) -> str:
-    data = {**payload, "exp": datetime.now(timezone.utc) + timedelta(minutes=minutes)}
-    return jwt.encode(data, JWT_SECRET, algorithm=JWT_ALG)
-
-
-def decode_token(token: str) -> dict:
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-
-
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat()
-
-
-def new_id() -> str:
-    return str(uuid.uuid4())
-
-
-# =====================================================================
-# Brute-force lockout for PIN endpoints (in-memory, per process)
-# =====================================================================
-# key -> {"attempts": int, "locked_until": float (epoch seconds)}
-_PIN_ATTEMPTS: dict = {}
-PIN_MAX_ATTEMPTS = int(os.environ.get("PIN_MAX_ATTEMPTS", "8"))
-PIN_LOCKOUT_SECONDS = int(os.environ.get("PIN_LOCKOUT_SECONDS", "300"))  # 5 minutes
-
-
-def _pin_throttle_check(key: str) -> None:
-    import time
-    rec = _PIN_ATTEMPTS.get(key)
-    if rec and rec.get("locked_until", 0) > time.time():
-        wait = int(rec["locked_until"] - time.time())
-        raise HTTPException(
-            status_code=429,
-            detail=f"Te veel mislukte pogingen. Probeer opnieuw over {wait} seconden.",
-        )
-
-
-def _pin_throttle_fail(key: str) -> None:
-    import time
-    rec = _PIN_ATTEMPTS.get(key, {"attempts": 0, "locked_until": 0})
-    rec["attempts"] = rec.get("attempts", 0) + 1
-    if rec["attempts"] >= PIN_MAX_ATTEMPTS:
-        rec["locked_until"] = time.time() + PIN_LOCKOUT_SECONDS
-        rec["attempts"] = 0
-    _PIN_ATTEMPTS[key] = rec
-
-
-def _pin_throttle_clear(key: str) -> None:
-    _PIN_ATTEMPTS.pop(key, None)
-
-
-def _client_ip(request: Request) -> str:
-    return (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-            or (request.client.host if request.client else "unknown"))
+# Pure auth-helpers zijn verplaatst naar auth_utils.py. We re-exporten
+# ze hier zodat bestaande route-code (en externe imports) blijven werken
+# zonder aanpassing.
+from auth_utils import (  # noqa: E402
+    JWT_SECRET, JWT_ALG, ACCESS_MIN, KIOSK_TOKEN_MIN,
+    hash_password, verify_password, create_token, decode_token,
+    now_utc, iso, new_id,
+    PIN_MAX_ATTEMPTS, PIN_LOCKOUT_SECONDS,
+    _pin_throttle_check, _pin_throttle_fail, _pin_throttle_clear,
+    _client_ip, extract_token,
+)
 
 
 # =====================================================================
 # Auth Dependencies
 # =====================================================================
-def extract_token(request: Request, cookie_name: str = "access_token") -> Optional[str]:
-    tok = request.cookies.get(cookie_name)
-    if tok:
-        return tok
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        return auth[7:]
-    # EventSource (SSE) kan geen custom headers sturen — fallback op
-    # ?token=... query param. Wordt alleen gelezen op SSE endpoints
-    # waar deze fallback bedoeld is.
-    qp = request.query_params.get("token")
-    if qp:
-        return qp
-    return None
-
-
 async def get_current_user(request: Request) -> dict:
     token = extract_token(request, "access_token")
     if not token:
@@ -278,190 +196,16 @@ def kiosk_scope(session: dict) -> dict:
 
 
 # =====================================================================
-# Models
+# Models — verplaatst naar models.py voor onderhoudbaarheid.
 # =====================================================================
-class RegisterIn(BaseModel):
-    name: str
-    email: EmailStr
-    password: str = Field(min_length=6)
-    company_name: Optional[str] = None  # If set, creates a new company with this user as admin
-    # Slug (portal-URL) — moet expliciet worden opgegeven door de gebruiker.
-    # Valideerd: 2-40 chars, kleine letters + cijfers + koppelteken. Auto-uniek
-    # suffix (bijv. `-2`) wordt NIET meer toegepast — de gebruiker moet zelf
-    # een vrije slug kiezen (409 conflict wanneer bezet).
-    slug: Optional[str] = Field(default=None, min_length=2, max_length=40)
-    telefoon: Optional[str] = ""
-    address: Optional[str] = ""
-    plan: Optional[Literal["starter", "professional"]] = "starter"
-    kiosk_pin: Optional[str] = None  # 4 digits — set the kiosk PIN at registration
-    country: Optional[Literal["SR", "NL"]] = None  # Explicit override; falls back to phone-based detection
-
-
-class LoginIn(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class PinIn(BaseModel):
-    pin: str = Field(min_length=4, max_length=4)
-    # Optioneel: bedrijfs-context. Op `/<slug>/login` stuurt frontend de slug
-    # mee zodat de PIN alleen tegen die bedrijfs-PINs (en employees) gecheckt
-    # wordt. Op de generieke `/login` (zonder slug) wordt PIN-login geweigerd.
-    company_slug: Optional[str] = None
-    company_id: Optional[str] = None
-
-
-class SetPinIn(BaseModel):
-    pin: str = Field(min_length=4, max_length=4)
-
-
-class UserOut(BaseModel):
-    id: str
-    name: str
-    email: EmailStr
-    role: str
-    created_at: str
-
-
-class ApartmentIn(BaseModel):
-    number: str
-    address: Optional[str] = ""
-    rent_amount: float
-    currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    description: Optional[str] = ""
-    location_id: Optional[str] = None
-    photo_url: Optional[str] = ""
-
-
-class ApartmentOut(ApartmentIn):
-    id: str
-    status: Literal["vacant", "occupied"]
-    tenant_id: Optional[str] = None
-    tenant_name: Optional[str] = None
-    shelly: Optional[dict] = None  # {device_id, channel, label} when bound
-    created_at: str
-
-
-class ShellyBindIn(BaseModel):
-    device_id: Optional[str] = None  # None / "" unbinds
-    channel: int = 0
-    label: Optional[str] = ""
-
-
-class ShellyControlIn(BaseModel):
-    turn: Literal["on", "off", "toggle"]
-
-
-class TenantIn(BaseModel):
-    name: str
-    phone: Optional[str] = ""
-    email: Optional[str] = ""
-    apartment_id: Optional[str] = None
-    internet_amount: float = 0.0  # Vast bedrag per maand voor internet (SRD)
-    # Persoonsgegevens — komen automatisch in het huurcontract PDF
-    birth_date: Optional[str] = ""   # YYYY-MM-DD
-    id_number: Optional[str] = ""    # bv. FM008370
-    id_photo_url: Optional[str] = ""  # ID-kaart voorkant, /api/landing/asset/{id}
-    id_photo_back_url: Optional[str] = ""  # ID-kaart achterkant
-    signature_url: Optional[str] = ""  # Digitale handtekening (PNG)
-    signature_signed_at: Optional[str] = ""
-
-
-class TenantOut(TenantIn):
-    id: str
-    apartment_number: Optional[str] = None
-    rent_amount: Optional[float] = None
-    currency: Optional[str] = None
-    nfc_card_id: Optional[str] = None
-    created_at: str
-
-
-class LocationIn(BaseModel):
-    name: str
-    address: Optional[str] = ""
-    photo_url: Optional[str] = ""
-
-
-class LocationOut(LocationIn):
-    id: str
-    apartments_total: int = 0
-    apartments_occupied: int = 0
-    created_at: str
-
-
-class PaymentIn(BaseModel):
-    tenant_id: str
-    apartment_id: Optional[str] = None
-    amount: float
-    currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "mope", "sumup", "uni5pay"] = "contant"
-    category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
-    period_month: Optional[int] = None
-    period_year: Optional[int] = None
-    note: Optional[str] = ""
-    received_by: Optional[str] = ""  # naam medewerker die betaling ontving
-    # Optioneel: specifieke factuur-IDs waarop de betaling moet worden
-    # toegewezen. Wanneer leeg: backend gebruikt FIFO over alle open
-    # facturen van de huurder. Wanneer gevuld: het bedrag wordt alleen
-    # over deze facturen verdeeld (volgens periode-volgorde). Sinds
-    # 2026-02-26 om huurders te laten kiezen welke maanden te betalen.
-    invoice_ids: Optional[List[str]] = None
-
-
-class PaymentOut(BaseModel):
-    id: str
-    tenant_id: str
-    tenant_name: Optional[str] = None
-    apartment_id: Optional[str] = None
-    apartment_number: Optional[str] = None
-    location_name: Optional[str] = None
-    amount: float
-    currency: str
-    method: str
-    category: str
-    period_month: Optional[int] = None
-    period_year: Optional[int] = None
-    invoice_id: Optional[str] = None
-    invoice_number: Optional[str] = None
-    receipt_number: str
-    paid_at: str
-    note: Optional[str] = ""
-    received_by: Optional[str] = ""
-    approved_by: Optional[str] = ""
-    # Approval workflow — alleen Kiosk-medewerkers triggeren pending state.
-    # Beheerder/boekhouder betalingen krijgen direct status="approved".
-    status: Optional[str] = "approved"  # approved | pending_approval | rejected
-    kiosk_employee_id: Optional[str] = None
-    kiosk_employee_name: Optional[str] = None
-    approved_at: Optional[str] = None
-    approved_by_user_id: Optional[str] = None
-    signature_data_url: Optional[str] = None  # base64 PNG van handtekening
-    rejected_reason: Optional[str] = None
-    # Bankoverschrijving-velden (alleen aanwezig als method=="bank")
-    bank_country: Optional[str] = None  # "SR" of "NL"
-    bank_statement_id: Optional[str] = None
-    bank_statement_filename: Optional[str] = None
-    bank_statement_size: Optional[int] = None
-    bank_statement_content_type: Optional[str] = None
-    # OCR-resultaat (gevuld door achtergrond-task na bank upload)
-    ocr_status: Optional[str] = None  # matched|mismatch|failed
-    ocr_amount: Optional[float] = None
-    ocr_currency: Optional[str] = None
-    ocr_date_iso: Optional[str] = None
-    ocr_payer_name: Optional[str] = None
-    ocr_beneficiary: Optional[str] = None
-    ocr_reference: Optional[str] = None
-    ocr_confidence: Optional[float] = None
-    ocr_mismatch_reasons: Optional[list] = None
-    auto_approved: Optional[bool] = None
-
-
-class PaymentApproveIn(BaseModel):
-    signature_data_url: str  # base64 data URL van canvas handtekening
-
-
-class PaymentRejectIn(BaseModel):
-    reason: Optional[str] = ""
+from models import (  # noqa: E402
+    RegisterIn, LoginIn, PinIn, SetPinIn, UserOut,
+    ApartmentIn, ApartmentOut,
+    ShellyBindIn, ShellyControlIn,
+    TenantIn, TenantOut,
+    LocationIn, LocationOut,
+    PaymentIn, PaymentOut, PaymentApproveIn, PaymentRejectIn,
+)
 
 
 # =====================================================================
@@ -11810,6 +11554,108 @@ async def public_domain_resolve(host: str = ""):
 
 
 # ============== Domain target info (voor DNS instructies) ==============
+@api.post("/settings/email/preview")
+async def preview_email_template(body: dict = Body(default={}), user=Depends(get_current_user)):
+    """Rendert een voorbeeld-e-mail HTML zoals huurders die zullen ontvangen.
+
+    Body (alle optioneel — vult defaults aan uit `db.companies.branding`):
+      - brand_name: overschrijft bedrijfsnaam voor preview
+      - brand_color: overschrijft primaire kleur
+      - logo_url: overschrijft logo (mag `/api/landing/asset/<id>` of full URL)
+      - kind: soort mail (`kwitantie` | `factuur` | `contract` | `herinnering`).
+              Default `kwitantie`.
+
+    Retourneert `{"html": "<full email html>"}` — frontend kan dit in een
+    iframe `srcdoc` renderen voor een 1:1 live preview.
+    """
+    from email_service import wrap_template
+    cid = company_id_of(user)
+    brand = await _tenant_email_brand(cid)
+    # Overrides — de admin kan de preview aanpassen zonder eerst op te slaan.
+    override_name = (body or {}).get("brand_name")
+    override_color = (body or {}).get("brand_color")
+    override_logo = (body or {}).get("logo_url")
+    if override_name:
+        brand["brand_name"] = override_name
+    if override_color:
+        brand["brand_color"] = override_color
+    if override_logo is not None:
+        rel = str(override_logo).strip()
+        if rel and not rel.startswith("http"):
+            base = (os.environ.get("APP_PUBLIC_URL") or "https://app.surirent.sr").rstrip("/")
+            brand["logo_url"] = f"{base}{rel if rel.startswith('/') else '/' + rel}"
+        else:
+            brand["logo_url"] = rel
+
+    kind = (body or {}).get("kind") or "kwitantie"
+    samples = {
+        "kwitantie": {
+            "subject_line": "Kwitantie R-2026-0042",
+            "content": """
+                <h1>Kwitantie R-2026-0042</h1>
+                <p>Beste Jan de Vries,<br />Hierbij ontvangt u een digitale kopie van uw kwitantie.</p>
+                <table class="kv">
+                  <tr><td>Datum</td><td>2026-02-27</td></tr>
+                  <tr><td>Bedrag</td><td>SRD 3.500,00</td></tr>
+                  <tr><td>Betaalmethode</td><td>Contant</td></tr>
+                  <tr><td>Appartement</td><td>A-102</td></tr>
+                  <tr><td>Categorie</td><td>Huur</td></tr>
+                </table>
+                <p style="margin-top:20px;color:#64748b;font-size:13px">Bewaar deze e-mail als bewijs van betaling.</p>
+            """,
+        },
+        "factuur": {
+            "subject_line": "Factuur F-2026-0203 - februari 2026",
+            "content": """
+                <h1>Factuur F-2026-0203</h1>
+                <p>Beste Jan de Vries,<br />Hierbij ontvangt u uw factuur voor februari 2026.</p>
+                <table class="kv">
+                  <tr><td>Periode</td><td>februari 2026</td></tr>
+                  <tr><td>Bedrag</td><td>SRD 3.500,00</td></tr>
+                  <tr><td>Status</td><td>Openstaand</td></tr>
+                  <tr><td>Appartement</td><td>A-102</td></tr>
+                </table>
+            """,
+        },
+        "contract": {
+            "subject_line": "Huurcontract C-2026-0005",
+            "content": """
+                <h1>Contract C-2026-0005</h1>
+                <p>Beste Jan de Vries,<br />Hierbij ontvangt u uw huurcontract.</p>
+                <table class="kv">
+                  <tr><td>Contract</td><td>C-2026-0005</td></tr>
+                  <tr><td>Appartement</td><td>A-102</td></tr>
+                  <tr><td>Startdatum</td><td>2026-03-01</td></tr>
+                  <tr><td>Einddatum</td><td>2027-02-28</td></tr>
+                </table>
+            """,
+        },
+        "herinnering": {
+            "subject_line": "Betalingsherinnering openstaande facturen",
+            "content": """
+                <h1>Betalingsherinnering</h1>
+                <p>Beste Jan de Vries,<br />U heeft op dit moment <b>2</b> openstaande facturen.</p>
+                <table class="kv" style="width:100%;border-collapse:collapse">
+                  <tr><td>Januari 2026</td><td style='text-align:right'><b>SRD 3.500,00</b></td></tr>
+                  <tr><td>Februari 2026</td><td style='text-align:right'><b>SRD 3.500,00</b></td></tr>
+                  <tr style="border-top:2px solid #e2e8f0">
+                    <td><b>Totaal openstaand</b></td>
+                    <td style='text-align:right;color:#dc2626'><b>SRD 7.000,00</b></td>
+                  </tr>
+                </table>
+                <p style="margin-top:20px">Heeft u vragen? Neem gerust contact met ons op.</p>
+            """,
+        },
+    }
+    sample = samples.get(kind) or samples["kwitantie"]
+    html = wrap_template(sample["content"], **brand)
+    return {
+        "html": html,
+        "subject": f"{sample['subject_line']} - {brand['brand_name']}",
+        "brand": brand,
+    }
+
+
 @api.get("/settings/domain/target")
 async def get_domain_target(user=Depends(get_current_user)):
     """Geeft aan het frontend door welke host en IP-adres een custom domein

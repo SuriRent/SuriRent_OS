@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 50 backend tests — verified new POST /api/settings/email/preview (white-label) and full regression after extraction of Pydantic models -> models.py and auth helpers -> auth_utils.py. 15/15 tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter50_refactor_and_email_preview.py",
+    "/app/test_reports/pytest/iter50.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is still very large (>13k lines). Continue extraction started here (models.py, auth_utils.py) — next natural cut-lines are the kiosk/PIN endpoints, SMTP/email-preview endpoints, and settings routes.",
+    "auth_utils.py re-export via `from auth_utils import *` in server.py works but is fragile — prefer explicit imports so linters catch missing symbols."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter50_refactor_and_email_preview.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "demo@surirent.sr / demo1234 ; admin@vastgoed.sr / admin123 ; kiosk PIN 1234 (company slug 'demo')",
+  "seed_data_creation": "Registered a single throwaway company 'testco-<uid>' per run for RegisterIn regression; no cleanup performed (previous iterations follow same pattern).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New endpoint POST /api/settings/email/preview accepts {brand_name, brand_color, kind} where kind ∈ {kwitantie, factuur, contract, herinnering}; empty body defaults to caller's company brand. HTML rendered is verified to (a) never contain 'SuriRent', (b) contain the supplied brand_name, (c) contain the supplied brand_color. Note: /api/kiosk/unlock and /api/kiosk/tenants (list) DO NOT exist — the correct PIN endpoint is /api/auth/kiosk-pin with body {pin, company_slug}. The demo company slug is 'demo'. Refactor (models.py + auth_utils.py) is regression-clean: login, register, /auth/me, tenants, apartments, kiosk-pin, SMTP test, tenant email/message routes all healthy.",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}
