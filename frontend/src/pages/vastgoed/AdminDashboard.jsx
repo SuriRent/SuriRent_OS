@@ -11,7 +11,7 @@ import {
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
-  ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon,
+  ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -3025,7 +3025,6 @@ function Tenants() {
           onBack={() => setDetailId(null)}
           onEdit={() => setEditing(t)}
           onPin={() => setPinFor(t)}
-          onPoster={() => openAuthedPdf(`/tenants/${t.id}/portal-poster.pdf`, { filename: `huurportaal-${t.name || t.id}.pdf` })}
           onDelete={() => del(t.id)}
           onReload={load} />
         {sharedModals}
@@ -3172,10 +3171,11 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
 // - Persoonsgegevens (geboortedatum, ID-nummer) inzichtelijk
 // - Actie-grid: Bewerk / Portal PIN / Portal Poster / Verwijder
 // =====================================================================
-function TenantDetail({ tenant: t, onBack, onEdit, onPin, onPoster, onDelete, onReload }) {
+function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [nfcOpen, setNfcOpen] = useState(false);
+  const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
   // Scroll altijd naar boven bij openen — anders kan een verborgen file-
   // input (met autofocus/keyboard trigger) de pagina naar beneden scrollen
   // waardoor de gebruiker de naam niet direct ziet.
@@ -3333,16 +3333,13 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onPoster, onDelete, on
         )}
       </div>
 
-      {/* ID-kaart ACHTERKANT sectie */}
-      <IdPhotoSection tenant={t} which="back" onReload={onReload} />
-
-      {/* Digitale handtekening sectie */}
-      <SignaturePadSection tenant={t} onReload={onReload} />
+      {/* Digitale handtekening — nu via popup form via de Acties knop */}
+      <SignatureModal tenant={t} open={sigOpen} onClose={() => setSigOpen(false)} onReload={onReload} />
 
       {/* Acties */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Acties</p>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button onClick={onEdit} data-testid="tenant-detail-edit"
             className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-1.5">
             <Pencil className="w-3.5 h-3.5" /> Bewerk
@@ -3355,12 +3352,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onPoster, onDelete, on
             className="h-11 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-sm flex items-center justify-center gap-1.5">
             <Zap className="w-3.5 h-3.5" /> NFC-kaart
           </button>
-          <button onClick={onPoster} data-testid="tenant-detail-poster"
+          <button onClick={() => setSigOpen(true)} data-testid="tenant-detail-signature"
             className="h-11 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center gap-1.5">
-            <Printer className="w-3.5 h-3.5" /> Poster
+            <PenTool className="w-3.5 h-3.5" /> {t.signature_url ? 'Bekijk handtekening' : 'Handtekening'}
           </button>
           <button onClick={onDelete} data-testid="tenant-detail-delete"
-            className="h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm flex items-center justify-center gap-1.5">
+            className="h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm flex items-center justify-center gap-1.5 col-span-2 sm:col-span-4">
             <Trash2 className="w-3.5 h-3.5" /> Verwijder
           </button>
         </div>
@@ -3428,91 +3425,30 @@ function InfoRow({ label, value, mono }) {
 }
 
 // =====================================================================
-// IdPhotoSection — Achterkant ID-kaart (front is inline in TenantDetail).
+// SignatureModal — popup form met canvas voor huurder-handtekening.
+// Toont bestaande handtekening (bekijken/wissen) of laat opnieuw tekenen.
+// Slaat op via `POST /api/tenants/{id}/signature` als Bijlage 3 in contract PDF.
 // =====================================================================
-function IdPhotoSection({ tenant: t, which = 'back', onReload }) {
-  const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(false);
-  const base = process.env.REACT_APP_BACKEND_URL;
-  const url = t.id_photo_back_url || '';
-  const src = url ? (url.startsWith('http') ? url : `${base}${url}`) : '';
-
-  const doUpload = async (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    setUploading(true);
-    try {
-      const fd = new FormData(); fd.append('file', file);
-      await api.post(`/tenants/${t.id}/id-photo-${which}`, fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } });
-      if (onReload) await onReload();
-    } catch (e) {
-      window.alert('Upload mislukt: ' + (e?.response?.data?.detail || e.message));
-    } finally { setUploading(false); }
-  };
-
-  const remove = async () => {
-    if (!window.confirm('Achterkant verwijderen?')) return;
-    await api.delete(`/tenants/${t.id}/id-photo-${which}`);
-    if (onReload) await onReload();
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5" data-testid="tenant-id-back-section">
-      <div className="flex items-center justify-between mb-3 gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID-kaart achterkant</p>
-          <p className="text-sm text-slate-500 mt-0.5">Optioneel · komt als extra bijlage in het contract</p>
-        </div>
-        {src && (
-          <button onClick={remove} data-testid="tenant-id-back-remove"
-            className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
-            <Trash2 className="w-3.5 h-3.5" /> Verwijderen
-          </button>
-        )}
-      </div>
-      {src ? (
-        <div className="relative rounded-xl overflow-hidden bg-slate-100 cursor-pointer" onClick={() => setPreview(true)}>
-          <img src={src} alt="ID achterkant" className="w-full max-h-64 object-contain bg-slate-100" />
-        </div>
-      ) : (
-        <label htmlFor="tenant-id-back-upload"
-          className="block w-full py-6 rounded-xl border-2 border-dashed border-slate-200 hover:border-[#FF5C00] hover:bg-orange-50 text-center cursor-pointer transition">
-          {uploading ? (
-            <div><Loader2 className="w-5 h-5 animate-spin mx-auto text-[#FF5C00]" /></div>
-          ) : (
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center mx-auto mb-1"><Plus className="w-5 h-5" /></div>
-              <p className="text-sm font-bold text-slate-700">Upload achterkant</p>
-            </div>
-          )}
-          <input id="tenant-id-back-upload" type="file" accept="image/*" className="hidden"
-            onChange={(e) => doUpload(e.target.files?.[0])} data-testid="tenant-id-back-input" />
-        </label>
-      )}
-      {preview && src && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPreview(false)}>
-          <img src={src} alt="ID achterkant" className="max-w-full max-h-full rounded-xl" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =====================================================================
-// SignaturePadSection — HTML canvas met muis/touch tekenen. Slaat op als
-// PNG via `POST /api/tenants/{id}/signature`. Verschijnt als Bijlage 3
-// in het contract PDF.
-// =====================================================================
-function SignaturePadSection({ tenant: t, onReload }) {
+function SignatureModal({ tenant: t, open, onClose, onReload }) {
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasInk, setHasInk] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [redraw, setRedraw] = useState(false);   // true = user wil een nieuwe handtekening zetten
   const base = process.env.REACT_APP_BACKEND_URL;
   const src = t.signature_url ? (t.signature_url.startsWith('http') ? t.signature_url : `${base}${t.signature_url}`) : '';
 
+  // Reset state bij openen/sluiten
   useEffect(() => {
+    if (!open) return;
+    setRedraw(false);
+    setHasInk(false);
+  }, [open]);
+
+  // Init canvas — draait ook wanneer we naar de "opnieuw tekenen" flow gaan
+  useEffect(() => {
+    if (!open) return;
+    if (src && !redraw) return;  // canvas is niet zichtbaar in "bekijk" modus
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext('2d');
@@ -3522,7 +3458,8 @@ function SignaturePadSection({ tenant: t, onReload }) {
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [src]);
+    setHasInk(false);
+  }, [open, src, redraw]);
 
   const pos = (e) => {
     const c = canvasRef.current;
@@ -3533,7 +3470,7 @@ function SignaturePadSection({ tenant: t, onReload }) {
   const start = (e) => { e.preventDefault(); const { x, y } = pos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); setDrawing(true); };
   const move = (e) => { if (!drawing) return; e.preventDefault(); const { x, y } = pos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); setHasInk(true); };
   const end = () => setDrawing(false);
-  const clear = () => {
+  const clearCanvas = () => {
     const c = canvasRef.current;
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
@@ -3549,7 +3486,9 @@ function SignaturePadSection({ tenant: t, onReload }) {
       await api.post(`/tenants/${t.id}/signature`, fd,
         { headers: { 'Content-Type': 'multipart/form-data' } });
       setHasInk(false);
+      setRedraw(false);
       if (onReload) await onReload();
+      onClose();
     } catch (e) {
       window.alert('Handtekening opslaan mislukt: ' + (e?.response?.data?.detail || e.message));
     } finally { setSaving(false); }
@@ -3558,50 +3497,71 @@ function SignaturePadSection({ tenant: t, onReload }) {
     if (!window.confirm('Handtekening verwijderen?')) return;
     await api.delete(`/tenants/${t.id}/signature`);
     if (onReload) await onReload();
+    onClose();
   };
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5" data-testid="tenant-signature-section">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Digitale handtekening</p>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {src ? `Ondertekend op ${(t.signature_signed_at || '').slice(0, 10)}` : 'Laat de huurder hier tekenen'}
-          </p>
-        </div>
-        {src && (
-          <button onClick={removeSig} data-testid="tenant-signature-remove"
-            className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
-            <Trash2 className="w-3.5 h-3.5" /> Wissen
-          </button>
-        )}
-      </div>
+  if (!open) return null;
 
-      {src ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <img src={src} alt="Handtekening" className="w-full max-h-32 object-contain" data-testid="tenant-signature-image" />
+  const showCanvas = !src || redraw;
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose} data-testid="tenant-signature-modal">
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Digitale handtekening</p>
+            <p className="text-base font-black text-slate-900 mt-0.5">{t.name || 'Huurder'}</p>
+          </div>
+          <button onClick={onClose} data-testid="tenant-signature-close"
+            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      ) : (
-        <>
-          <div className="rounded-xl border-2 border-dashed border-slate-300 overflow-hidden bg-white">
-            <canvas ref={canvasRef} width={600} height={200}
-              className="w-full h-40 touch-none"
-              onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
-              onTouchStart={start} onTouchMove={move} onTouchEnd={end}
-              data-testid="tenant-signature-canvas" />
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button onClick={clear} disabled={!hasInk}
-              className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-50"
-              data-testid="tenant-signature-clear">Wis</button>
-            <button onClick={save} disabled={!hasInk || saving} data-testid="tenant-signature-save"
-              className="flex-1 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm disabled:opacity-50 flex items-center justify-center gap-1.5">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              Ondertekenen
-            </button>
-          </div>
-        </>
-      )}
+
+        <div className="p-5 space-y-4">
+          {showCanvas ? (
+            <>
+              <p className="text-sm text-slate-600">Laat de huurder hier tekenen. De handtekening komt als Bijlage 3 in het huurcontract PDF.</p>
+              <div className="rounded-xl border-2 border-dashed border-slate-300 overflow-hidden bg-white">
+                <canvas ref={canvasRef} width={600} height={220}
+                  className="w-full h-48 touch-none"
+                  onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+                  onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+                  data-testid="tenant-signature-canvas" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={clearCanvas} disabled={!hasInk}
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-50"
+                  data-testid="tenant-signature-clear">Wis</button>
+                <button onClick={save} disabled={!hasInk || saving} data-testid="tenant-signature-save"
+                  className="flex-1 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Ondertekenen
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">Ondertekend op {(t.signature_signed_at || '').slice(0, 10)}.</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <img src={src} alt="Handtekening" className="w-full max-h-40 object-contain" data-testid="tenant-signature-image" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setRedraw(true)} data-testid="tenant-signature-redraw"
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-1.5">
+                  <Pencil className="w-3.5 h-3.5" /> Opnieuw tekenen
+                </button>
+                <button onClick={removeSig} data-testid="tenant-signature-remove"
+                  className="flex-1 h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm flex items-center justify-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5" /> Wissen
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
