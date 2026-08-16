@@ -92,7 +92,7 @@ export default function Locations() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(() => load({ silent: true }), {
-    interval: 15000,
+    interval: 45000,
     enabled: !creating && !editing && !detailId,
   });
 

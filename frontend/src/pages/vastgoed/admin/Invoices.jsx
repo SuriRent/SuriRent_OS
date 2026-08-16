@@ -52,7 +52,7 @@ export default function Invoices() {
     } finally { if (!silent) setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(() => load({ silent: true }), { interval: 10000, enabled: !creating && !reminding });
+  useAutoRefresh(() => load({ silent: true }), { interval: 45000, enabled: !creating && !reminding });
 
   // Luister naar `invoice-delete` event vanaf <InvoiceRow> en voer DELETE uit.
   useEffect(() => {

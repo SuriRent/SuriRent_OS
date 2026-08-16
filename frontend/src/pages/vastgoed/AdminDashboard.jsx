@@ -1920,7 +1920,7 @@ function Apartments() {
   useEffect(() => { load(); }, [load]);
   // Stille polling — pauzeer wanneer een modal open is óf we in detail-view zitten.
   useAutoRefresh(load, {
-    interval: 15000,
+    interval: 45000,
     enabled: !creating && !editing && !assignFor && !shellyFor && !plateFor && !detailId,
   });
 
@@ -2991,7 +2991,7 @@ function Tenants() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, {
-    interval: 15000,
+    interval: 45000,
     enabled: !creating && !editing && !pinFor && !detailId,
   });
   const del = async (id) => {

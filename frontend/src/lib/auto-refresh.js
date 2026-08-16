@@ -16,7 +16,10 @@
 import { useEffect, useRef } from 'react';
 
 export function useAutoRefresh(loadFn, opts = {}) {
-  const interval = typeof opts === 'number' ? opts : (opts.interval || 10000);
+  // Standaard interval verhoogd van 10s → 45s. SSE (surirent:live-change)
+  // zorgt voor de echte "live" refresh; polling is enkel een safety-net
+  // voor gevallen waar de SSE-verbinding is weggevallen.
+  const interval = typeof opts === 'number' ? opts : (opts.interval || 45000);
   const enabled = typeof opts === 'object' ? (opts.enabled ?? true) : true;
 
   // Bewaar de meest recente loadFn in een ref zodat we hem niet steeds opnieuw
@@ -26,6 +29,8 @@ export function useAutoRefresh(loadFn, opts = {}) {
 
   useEffect(() => {
     if (!enabled) return undefined;
+    // Skip polling op productie wanneer SSE actief is en de user tab in
+    // de achtergrond staat — bespaart CPU op het productie-pod (tier_0).
     let inflight = false;
     let timer = null;
 

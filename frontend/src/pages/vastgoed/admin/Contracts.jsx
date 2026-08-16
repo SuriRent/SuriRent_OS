@@ -157,7 +157,7 @@ export default function Contracts() {
     setItems(c.data); setTenants(t.data); setApartments(a.data);
   }, []);
   useEffect(() => { load(); }, [load]);
-  useAutoRefresh(load, { interval: 15000, enabled: !creating && !emailing });
+  useAutoRefresh(load, { interval: 45000, enabled: !creating && !emailing });
 
   const del = async (id) => {
     if (!window.confirm('Contract verwijderen?')) return;
