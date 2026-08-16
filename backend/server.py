@@ -926,6 +926,54 @@ else:
         allow_headers=["*"],
     )
 
+
+# =====================================================================
+# Live-sync middleware — na elke succesvolle mutatie (POST/PUT/DELETE/PATCH)
+# op een /api/* route (behalve auth/kiosk/public) broadcasten we een event
+# naar de SSE-queue van het bedrijf zodat andere ingelogde admin-tabs direct
+# hun data herladen zonder polling.
+# =====================================================================
+@app.middleware("http")
+async def _live_sync_broadcast(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        method = request.method.upper()
+        if method in ("GET", "HEAD", "OPTIONS"):
+            return response
+        if response.status_code >= 400:
+            return response
+        path = request.url.path or ""
+        # Alleen mutaties op admin/company data — sluit auth/kiosk/public/events uit.
+        if not path.startswith("/api/"):
+            return response
+        skip = ("/api/auth/", "/api/kiosk/", "/api/public/", "/api/admin/events",
+                "/api/push/", "/api/landing/asset/", "/api/tenants/ocr-id-card")
+        if any(path.startswith(s) for s in skip):
+            return response
+
+        # Bepaal company_id uit de JWT (best-effort, geen fout doorlaten).
+        auth = request.headers.get("authorization") or ""
+        if not auth.lower().startswith("bearer "):
+            return response
+        try:
+            import jwt as _pyjwt
+            payload = _pyjwt.decode(auth.split(" ", 1)[1], JWT_SECRET, algorithms=[JWT_ALG])
+            cid = payload.get("company_id")
+        except Exception:
+            return response
+        if not cid:
+            return response
+        # Kort event — client vraagt zelf zijn data opnieuw op. Bevat pad
+        # zodat je in de toekomst granulair kunt filteren op collectie.
+        try:
+            await _sse_broadcast(cid, {"type": "change", "path": path, "method": method})
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return response
+
+
 api = APIRouter(prefix="/api")
 
 

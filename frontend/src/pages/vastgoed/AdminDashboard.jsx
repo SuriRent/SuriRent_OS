@@ -3668,6 +3668,36 @@ export default function AdminDashboard() {
   // de admin heeft de wizard nog niet bewust gesloten voor dit bedrijf.
   const [wizardOpen, setWizardOpen] = useState(false);
   const navigate = useBrandedNavigate();
+
+  // Live-sync SSE — luister naar /api/admin/events en dispatch een window
+  // event zodra een andere admin-tab/-apparaat iets muteert. Alle pagina's
+  // die useAutoRefresh gebruiken herladen dan onmiddellijk.
+  useEffect(() => {
+    if (!user || (user.role !== 'admin' && user.role !== 'employee')) return undefined;
+    const token = localStorage.getItem('token') || '';
+    if (!token) return undefined;
+    const base = process.env.REACT_APP_BACKEND_URL || '';
+    // EventSource ondersteunt geen headers → token via query param.
+    const url = `${base}/api/admin/events?token=${encodeURIComponent(token)}`;
+    let es;
+    try {
+      es = new EventSource(url, { withCredentials: false });
+    } catch {
+      return undefined;
+    }
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.type === 'change' || data?.type === 'notification') {
+          window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data }));
+        }
+      } catch { /* noop */ }
+    };
+    es.onerror = () => {
+      // Browser doet zelf reconnect; log niet in productie.
+    };
+    return () => { try { es.close(); } catch { /* noop */ } };
+  }, [user]);
   const location = useLocation();
   const { count: badgeCount } = useBadge();
 

@@ -63,14 +63,20 @@ export function useAutoRefresh(loadFn, opts = {}) {
       else { tick(); start(); }
     };
     const onFocus = () => { tick(); };
+    // Live-sync: onmiddellijk refreshen wanneer een andere admin-tab of
+    // een ander apparaat een mutatie heeft gedaan (SSE-hook in
+    // AdminDashboard dispatched dit event).
+    const onLiveChange = () => { tick(); };
 
     start();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('surirent:live-change', onLiveChange);
     return () => {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('surirent:live-change', onLiveChange);
     };
   }, [interval, enabled]);
 }
