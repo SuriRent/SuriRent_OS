@@ -50,6 +50,7 @@ const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
 const CustomerDisplay = lazyWithRetry(() => import('./pages/vastgoed/CustomerDisplay'));
 const ContractSignPage = lazyWithRetry(() => import('./pages/vastgoed/ContractSignPage'));
+const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantSignaturePage'));
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 
 function RouteFallback() {
@@ -188,6 +189,7 @@ function AppRoutes() {
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
+      <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />
@@ -228,6 +230,7 @@ function HybridRoutes() {
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
+      <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />
@@ -293,6 +296,7 @@ export default function App() {
             <Route path="/kiosk/klant" element={<Navigate to={`/${slug}/kiosk/klant`} replace />} />
             <Route path="/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
             <Route path="/onderteken/:token" element={<ContractSignPage />} />
+            <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
             <Route path="/qr-link" element={<QrLinkPage />} />
             {/* Branded routes matchen door — zelfde als HybridRoutes */}
             <Route path="/:slug/*" element={<BrandedRouteTree />} />

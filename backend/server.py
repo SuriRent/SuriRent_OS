@@ -6662,6 +6662,157 @@ async def delete_tenant_signature(tenant_id: str, user=Depends(get_current_user)
     return {"ok": True}
 
 
+class SignatureRequestIn(BaseModel):
+    channel: Literal["whatsapp", "sms"] = "whatsapp"
+    message: Optional[str] = ""
+
+
+@api.post("/tenants/{tenant_id}/signature/request")
+async def request_tenant_signature(tenant_id: str, body: SignatureRequestIn,
+                                     user=Depends(get_current_user)):
+    """Genereer een tijdelijke handtekening-link en stuur die via WhatsApp/SMS
+    naar de huurder. Link is 24u geldig en éénmalig te gebruiken. Wanneer
+    WhatsApp faalt (bv. huurder is niet joined) proberen we automatisch SMS."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    phone = (t.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Deze huurder heeft geen telefoonnummer — voeg er eerst één toe.")
+    twilio_cfg = await get_company_section(cid, "twilio")
+    if not twilio_cfg.get("enabled"):
+        raise HTTPException(status_code=400, detail="WhatsApp/SMS is niet ingeschakeld — configureer eerst onder Instellingen → WhatsApp & SMS.")
+
+    # Bestaande niet-verlopen, niet-gebruikte tokens hergebruiken zou de
+    # link kunnen leaken via twee kanalen. Simpler: elke request maakt een
+    # nieuwe token en oude worden inactief (best-effort cleanup).
+    token = secrets.token_urlsafe(24)
+    now = now_utc()
+    expires = now + timedelta(hours=24)
+    await db.tenant_signature_tokens.insert_one({
+        "_id": token,
+        "tenant_id": tenant_id,
+        "company_id": cid,
+        "created_at": iso(now),
+        "expires_at": iso(expires),
+        "used_at": None,
+        "requested_by": user.get("email"),
+    })
+
+    base = (os.environ.get("APP_PUBLIC_URL") or "").rstrip("/") or _public_url("").rstrip("/")
+    sign_url = f"{base}/onderteken-huurder/{token}"
+    brand_name = await _brand_name_of(cid)
+
+    extra = f"{body.message.strip()}\n\n" if body.message else ""
+    msg = (
+        f"{extra}"
+        f"Hallo {t.get('name', 'huurder')},\n\n"
+        f"{brand_name} verzoekt u om uw digitale handtekening te plaatsen.\n"
+        f"Open de veilige link hieronder en teken op uw telefoon:\n\n"
+        f"{sign_url}\n\n"
+        f"Deze link is 24 uur geldig.\n\n"
+        f"— {brand_name}"
+    )
+
+    # Probeer WhatsApp eerst (indien gekozen); fallback naar SMS.
+    from twilio_service import send_whatsapp, send_sms, TwilioError
+    used_channel = None
+    try:
+        if body.channel == "whatsapp":
+            await send_whatsapp(twilio_cfg, phone, msg)
+            used_channel = "whatsapp"
+        else:
+            await send_sms(twilio_cfg, phone, msg)
+            used_channel = "sms"
+    except TwilioError as e:
+        # Val terug op SMS wanneer WhatsApp faalde (bv. niet gejoinde sandbox).
+        if body.channel == "whatsapp":
+            try:
+                await send_sms(twilio_cfg, phone, msg)
+                used_channel = "sms"
+            except TwilioError as e2:
+                raise HTTPException(status_code=502, detail=f"Zowel WhatsApp als SMS faalden: {e2}") from e2
+        else:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+
+    return {"ok": True, "sent_to": phone, "channel": used_channel,
+            "expires_at": iso(expires), "url": sign_url}
+
+
+@app.get("/api/public/signature-request/{token}")
+async def public_signature_request_info(token: str):
+    """Publieke lookup: valideert de token en geeft alleen huurder-naam
+    + bedrijfs-branding terug (geen PII). Frontend rendert daarmee de
+    ondertekening-pagina op /onderteken-huurder/{token}."""
+    doc = await db.tenant_signature_tokens.find_one({"_id": token})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Ongeldige of verlopen link")
+    if doc.get("used_at"):
+        raise HTTPException(status_code=410, detail="Deze link is al gebruikt.")
+    try:
+        exp = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
+        if exp < now_utc():
+            raise HTTPException(status_code=410, detail="Deze link is verlopen.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    tenant = await db.tenants.find_one({"id": doc["tenant_id"]}, {"_id": 0, "name": 1}) or {}
+    brand = await _tenant_email_brand(doc.get("company_id"))
+    return {
+        "tenant_name": tenant.get("name") or "Huurder",
+        "brand_name": brand["brand_name"],
+        "brand_color": brand["brand_color"],
+        "logo_url": brand["logo_url"] or "",
+    }
+
+
+@app.post("/api/public/signature-request/{token}")
+async def public_signature_request_submit(token: str, file: UploadFile = File(...)):
+    """Publieke submit: huurder plakt hier de PNG blob van hun canvas.
+    Slaat de handtekening op als asset, koppelt aan tenant en markeert
+    de token als gebruikt."""
+    doc = await db.tenant_signature_tokens.find_one({"_id": token})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Ongeldige of verlopen link")
+    if doc.get("used_at"):
+        raise HTTPException(status_code=410, detail="Deze link is al gebruikt.")
+    try:
+        exp = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
+        if exp < now_utc():
+            raise HTTPException(status_code=410, detail="Deze link is verlopen.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Handtekening te groot (>2 MB).")
+    tenant_id = doc["tenant_id"]
+    asset_id = new_id()
+    now = now_utc()
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": f"signature-{tenant_id[:8]}.png",
+        "content_type": "image/png",
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+        "size": len(raw),
+        "uploaded_by": f"tenant:{tenant_id}",
+        "uploaded_at": iso(now),
+    })
+    url = f"/api/landing/asset/{asset_id}"
+    await db.tenants.update_one({"id": tenant_id}, {
+        "$set": {"signature_url": url, "signature_signed_at": iso(now)},
+    })
+    await db.tenant_signature_tokens.update_one(
+        {"_id": token}, {"$set": {"used_at": iso(now)}},
+    )
+    return {"ok": True}
+
+
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
                        user=Depends(get_current_user)):

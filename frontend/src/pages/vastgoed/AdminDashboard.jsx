@@ -11,7 +11,7 @@ import {
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
-  ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool,
+  ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -3541,6 +3541,7 @@ function SignatureModal({ tenant: t, open, onClose, onReload }) {
                   Ondertekenen
                 </button>
               </div>
+              <RemoteSignatureRequest tenant={t} />
             </>
           ) : (
             <>
@@ -3571,6 +3572,87 @@ function SignatureModal({ tenant: t, open, onClose, onReload }) {
 function Settings() {
   // Replaced by `SettingsPage` from ./admin/Settings.jsx — kept as a no-op for safety.
   return null;
+}
+
+// =====================================================================
+// RemoteSignatureRequest — knop die een tijdelijke handtekening-link via
+// WhatsApp/SMS stuurt naar de huurder. Voor huurders die niet fysiek aanwezig
+// zijn. Toont eerst een channel-picker; toont daarna een bevestiging met
+// vervaldatum en een kopieerbare link.
+// =====================================================================
+function RemoteSignatureRequest({ tenant: t }) {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);   // { channel, sent_to, expires_at, url }
+  const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const send = async (channel) => {
+    setSending(true); setErr(''); setResult(null);
+    try {
+      const { data } = await api.post(`/tenants/${t.id}/signature/request`, { channel });
+      setResult(data);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSending(false); }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(result.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { /* clipboard blocked */ }
+  };
+
+  const hasPhone = !!(t.phone || '').trim();
+
+  return (
+    <div className="pt-4 mt-4 border-t border-dashed border-slate-200" data-testid="remote-signature-request">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Of vraag op afstand</p>
+      {!result && (
+        <>
+          <p className="text-xs text-slate-500 mb-3">
+            Stuur een tijdelijke link naar de huurder ({t.phone || 'geen telefoonnummer'}). De link is 24 uur geldig en éénmalig te gebruiken.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => send('whatsapp')} disabled={sending || !hasPhone}
+              data-testid="signature-request-whatsapp"
+              className="flex-1 h-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs disabled:opacity-40 flex items-center justify-center gap-1.5">
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
+              WhatsApp
+            </button>
+            <button onClick={() => send('sms')} disabled={sending || !hasPhone}
+              data-testid="signature-request-sms"
+              className="flex-1 h-10 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs disabled:opacity-40 flex items-center justify-center gap-1.5">
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              SMS
+            </button>
+          </div>
+          {!hasPhone && <p className="text-[11px] text-red-500 mt-2">Voeg eerst een telefoonnummer toe.</p>}
+          {err && <p className="text-[11px] text-red-500 mt-2" data-testid="signature-request-err">{err}</p>}
+        </>
+      )}
+      {result && (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3" data-testid="signature-request-result">
+          <div className="flex items-start gap-2">
+            <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black text-emerald-800">
+                Link verstuurd via {result.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} naar {result.sent_to}
+              </p>
+              <p className="text-[11px] text-emerald-700 mt-1">Verloopt op {(result.expires_at || '').slice(0, 16).replace('T', ' ')}</p>
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-white/70 px-2 py-1.5 border border-emerald-200">
+                <code className="flex-1 text-[10px] text-slate-700 truncate font-mono">{result.url}</code>
+                <button onClick={copy} data-testid="signature-request-copy"
+                  className="text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-900">
+                  {copied ? 'Gekopieerd' : 'Kopieer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DesktopTopBar({ user, activeCompany, tab, tabs }) {
