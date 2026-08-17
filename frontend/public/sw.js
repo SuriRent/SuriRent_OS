@@ -6,7 +6,7 @@
  * - Bypass /api/* (always go to network)
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v88';
+const CACHE_VERSION = 'surirent-v89';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -96,25 +96,41 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML navigation: NETWORK-FIRST. Vroeger gebruikten we stale-while-revalidate
-  // voor snellere first-paint op PWA, maar dat veroorzaakte een ongelukkige
-  // race-conditie: na een deploy bleef de geïnstalleerde PWA de gecachete
-  // index.html serveren met OUDE bundle.js → OUDE pwa-manifest code →
-  // verkeerd `start_url` → PWA opent in de verkeerde route.
+  // HTML navigation: NETWORK-FIRST met 2s TIMEOUT. Vroeger gebruikten we
+  // stale-while-revalidate voor snellere first-paint op PWA, maar dat
+  // veroorzaakte een ongelukkige race-conditie: na een deploy bleef de
+  // geïnstalleerde PWA de gecachete index.html serveren met OUDE bundle.js
+  // → OUDE pwa-manifest code → verkeerd `start_url` → PWA opent in de
+  // verkeerde route.
   //
-  // Network-first lost dit op: nieuwe pageloads krijgen ALTIJD fresh HTML
-  // (en daarmee fresh bundle.js + fresh manifest URL). Bij offline valt
-  // het netjes terug op de cache zodat de PWA blijft werken zonder netwerk.
+  // Network-first met timeout is het beste van twee werelden: probeer 2s
+  // lang een verse HTML te halen zodat we altijd de nieuwste bundle.js
+  // referenties krijgen. Als het netwerk trager is dan 2s (typisch 3G of
+  // overbelaste backend), serveer instant vanuit cache zodat de app zelf
+  // niet 3s laat vertraagt. De echte data-fetches gaan wel steeds naar
+  // het netwerk (api's zijn hierboven gebypassed).
   const isHTML = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
   if (isHTML) {
     event.respondWith(
       caches.open(RUNTIME_CACHE).then(async (cache) => {
-        try {
-          const res = await fetch(req);
+        // Race: netwerk vs. 2s timeout. Winnaar wordt geserveerd.
+        const networkPromise = fetch(req).then((res) => {
           if (res && res.status === 200) {
             cache.put(req, res.clone()).catch(() => {});
           }
           return res;
+        });
+        const timeoutPromise = new Promise((resolve) => {
+          setTimeout(async () => {
+            const cached = await cache.match(req) || await cache.match('/');
+            resolve(cached || null);
+          }, 2000);
+        });
+        try {
+          const winner = await Promise.race([networkPromise, timeoutPromise]);
+          if (winner) return winner;
+          // Timeout won maar had geen cache-hit → wacht alsnog op netwerk
+          return await networkPromise;
         } catch {
           const cached = await cache.match(req) || await cache.match('/');
           return cached || Response.error();
