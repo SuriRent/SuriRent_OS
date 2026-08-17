@@ -458,11 +458,19 @@ function LandlordSignatureSection({ value, signedAt, onReload }) {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <img src={src} alt="Verhuurder handtekening" className="w-full max-h-32 object-contain" data-testid="landlord-signature-image" />
           </div>
-          <button type="button" onClick={() => setRedraw(true)}
-            data-testid="landlord-signature-redraw"
-            className="mt-3 w-full h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
-            Opnieuw tekenen
-          </button>
+          <div className="flex gap-2 mt-3">
+            <button type="button" onClick={() => setRedraw(true)}
+              data-testid="landlord-signature-redraw"
+              className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
+              Opnieuw tekenen
+            </button>
+            <a href={`${process.env.REACT_APP_BACKEND_URL}/api/companies/me/landlord-signature/preview.pdf`}
+              target="_blank" rel="noreferrer"
+              data-testid="landlord-signature-preview-pdf"
+              className="flex-1 h-10 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-sm flex items-center justify-center gap-1.5">
+              <Eye className="w-3.5 h-3.5" /> Bekijk op contract
+            </a>
+          </div>
         </>
       )}
     </div>

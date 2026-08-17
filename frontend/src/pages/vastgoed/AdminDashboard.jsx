@@ -2235,16 +2235,11 @@ function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShel
       {/* Acties */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Documenten & acties</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <button onClick={onEdit} data-testid="apt-detail-edit"
             className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-1.5">
             <Pencil className="w-3.5 h-3.5" /> Bewerk
           </button>
-          <a href={`${base}/api/apartments/${a.id}/kiosk-sticker.pdf`}
-            target="_blank" rel="noreferrer" data-testid="apt-detail-qr"
-            className="h-11 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-sm flex items-center justify-center gap-1.5">
-            <QrCode className="w-3.5 h-3.5" /> QR-sticker
-          </a>
           {a.tenant_id && (
             <button onClick={onPlate} data-testid="apt-detail-plate"
               className="h-11 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm flex items-center justify-center gap-1.5">
@@ -2263,22 +2258,39 @@ function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShel
 
 function PlateSizeModal({ apt, onClose }) {
   const tenantId = apt.tenant_id;
-  const base = process.env.REACT_APP_BACKEND_URL;
+  const [busy, setBusy] = useState('');   // size id die momenteel laadt
+  const [err, setErr] = useState('');
   const SIZES = [
     { id: 'small',  label: 'Klein',   sub: '200 × 133 mm',  hint: 'A5-landschap, voor sticker' },
     { id: 'medium', label: 'Normaal', sub: '300 × 200 mm',  hint: 'A4-landschap, standaard' },
     { id: 'large',  label: 'Groot',   sub: '400 × 267 mm',  hint: 'A3-landschap, voordeur-plaat' },
   ];
-  const open = (size) => {
-    window.open(
-      `${base}/api/tenants/${tenantId}/qr-plate.pdf?size=${size}`,
-      '_blank', 'noopener,noreferrer'
-    );
-    onClose();
+  // Haal de PDF op als blob met auth-header en open die dan in een nieuw
+  // tabblad. Voorkomt het "10-30s witte tabblad" ervaring wanneer de AI-
+  // versie voor het eerst wordt gegenereerd. Toont ondertussen een spinner
+  // op de gekozen knop.
+  const open = async (size) => {
+    if (busy) return;
+    setBusy(size); setErr('');
+    try {
+      const { data } = await api.get(`/tenants/${tenantId}/qr-plate.pdf?size=${size}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) {
+        // Popup blocker actief — bied download aan via link
+        const a = document.createElement('a');
+        a.href = url; a.download = `qr-plaat-${apt.number}-${size}.pdf`; a.click();
+      }
+      // Cleanup na 60s zodat de nieuwe tab tijd heeft om te laden
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      onClose();
+    } catch (e) {
+      setErr(formatError(e, 'Kon de plaat niet ophalen'));
+    } finally { setBusy(''); }
   };
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-      onClick={onClose} data-testid="plate-size-modal">
+      onClick={busy ? undefined : onClose} data-testid="plate-size-modal">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -2286,26 +2298,32 @@ function PlateSizeModal({ apt, onClose }) {
             <h3 className="text-base font-extrabold text-slate-900">Gouden plaat formaat</h3>
             <p className="text-xs text-slate-500 mt-0.5">Huis {apt.number} — kies een afdrukformaat</p>
           </div>
-          <button onClick={onClose} data-testid="plate-size-close"
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 font-bold">
+          <button onClick={onClose} disabled={!!busy} data-testid="plate-size-close"
+            className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 font-bold disabled:opacity-40">
             ✕
           </button>
         </div>
+        {err && <p className="mb-2 text-xs font-bold text-rose-600" data-testid="plate-size-err">{err}</p>}
         <div className="space-y-2">
           {SIZES.map((s) => (
-            <button key={s.id} type="button" onClick={() => open(s.id)}
+            <button key={s.id} type="button" onClick={() => open(s.id)} disabled={!!busy}
               data-testid={`plate-size-${s.id}`}
-              className="w-full text-left p-3 rounded-xl border-2 border-slate-200 hover:border-amber-500 hover:bg-amber-50 transition flex items-center justify-between gap-3">
+              className="w-full text-left p-3 rounded-xl border-2 border-slate-200 hover:border-amber-500 hover:bg-amber-50 transition flex items-center justify-between gap-3 disabled:opacity-60 disabled:cursor-wait">
               <div>
-                <div className="font-extrabold text-slate-900 text-sm">{s.label}</div>
-                <div className="text-[11px] text-slate-500">{s.hint}</div>
+                <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                  {busy === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />}
+                  {s.label}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {busy === s.id ? 'Plaat wordt gegenereerd — kan tot 30 sec duren…' : s.hint}
+                </div>
               </div>
               <div className="text-xs font-mono font-bold text-amber-700">{s.sub}</div>
             </button>
           ))}
         </div>
         <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
-          Elke download opent in een nieuw tabblad. De PDF heeft exact 3:2 verhouding voor optimaal afdrukken zonder vervorming.
+          De eerste plaat per formaat wordt door AI ontworpen (10-30 sec). Volgende keer is de plaat direct beschikbaar dankzij cache.
         </p>
       </div>
     </div>
@@ -2619,6 +2637,129 @@ function TenantNfcField({ tenantId, value, onChange }) {
 }
 
 // =====================================================================
+// CameraCaptureModal — live camera stream via getUserMedia. Werkt op zowel
+// desktop (webcam) als mobiel (achterste camera door facingMode:'environment').
+// Bij falen (permission denied / geen camera) toont het een fallback met
+// een reguliere file-picker. Geeft een File-object terug via onCapture.
+// =====================================================================
+function CameraCaptureModal({ onCapture, onClose }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [err, setErr] = useState('');
+  const [ready, setReady] = useState(false);
+  const streamRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const start = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setErr('Deze browser ondersteunt geen camera-toegang. Kies "Uit galerij" of neem een foto met je telefoon.');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => setReady(true);
+        }
+      } catch (e) {
+        const msg = e?.name === 'NotAllowedError'
+          ? 'Camera-toegang geweigerd. Sta de camera toe in je browser-instellingen of gebruik "Uit galerij".'
+          : e?.name === 'NotFoundError'
+          ? 'Geen camera gevonden op dit apparaat.'
+          : `Camera kon niet starten: ${e?.message || e}`;
+        setErr(msg);
+      }
+    };
+    start();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  const snap = () => {
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c) return;
+    const w = v.videoWidth || 1280;
+    const h = v.videoHeight || 720;
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(v, 0, 0, w, h);
+    c.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `id-scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      onCapture(file);
+    }, 'image/jpeg', 0.92);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3"
+      onClick={onClose} data-testid="id-camera-modal">
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+          <p className="text-sm font-black text-slate-900">ID-kaart scannen</p>
+          <button onClick={onClose} data-testid="id-camera-close"
+            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="relative bg-black" style={{ aspectRatio: '4/3' }}>
+          {err ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-white">
+              <div>
+                <p className="text-sm font-bold mb-3">{err}</p>
+                <label htmlFor="id-camera-fallback"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm cursor-pointer">
+                  <ImageIcon className="w-4 h-4" /> Kies foto uit galerij
+                </label>
+                <input id="id-camera-fallback" type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onCapture(f); }}
+                  data-testid="id-camera-fallback-input" />
+              </div>
+            </div>
+          ) : (
+            <>
+              <video ref={videoRef} autoPlay playsInline muted
+                className="w-full h-full object-cover"
+                data-testid="id-camera-video" />
+              {!ready && (
+                <div className="absolute inset-0 flex items-center justify-center text-white">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+              )}
+              {/* ID kaart overlay-guide */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-[85%] aspect-[85/54] rounded-2xl border-4 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              </div>
+            </>
+          )}
+        </div>
+        <canvas ref={canvasRef} className="hidden" />
+        {!err && (
+          <div className="p-4 flex items-center justify-center gap-3">
+            <button onClick={snap} disabled={!ready} data-testid="id-camera-snap"
+              className="w-16 h-16 rounded-full bg-[#FF5C00] hover:bg-[#C74600] disabled:opacity-40 text-white flex items-center justify-center shadow-lg ring-4 ring-white">
+              <div className="w-11 h-11 rounded-full border-4 border-white" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// =====================================================================
 // IdScannerField — knop-groep om een ID-kaart foto toe te voegen tijdens
 // het aanmaken/bewerken van een huurder. Op mobiel opent `capture=environment`
 // direct de camera. Op desktop valt het terug op file-picker.
@@ -2630,6 +2771,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
   const [preview, setPreview] = useState('');
   const [ocring, setOcring] = useState(false);
   const [ocrResult, setOcrResult] = useState(null);
+  const [camOpen, setCamOpen] = useState(false);
   const previewUrl = pendingFile ? URL.createObjectURL(pendingFile) : '';
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
@@ -2660,24 +2802,25 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
         Scan met de camera of kies een foto. Naam / ID-nummer / geboortedatum worden automatisch gelezen.
       </p>
       <div className="grid grid-cols-2 gap-2">
-        <label htmlFor="tenant-id-scan"
+        <button type="button" onClick={() => setCamOpen(true)}
           className="h-11 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer border-2 border-orange-100"
           data-testid="tenant-id-scan-btn">
           <ScanLine className="w-4 h-4" /> Scan camera
-        </label>
+        </button>
         <label htmlFor="tenant-id-pick"
           className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer">
           <ImageIcon className="w-4 h-4" /> Uit galerij
         </label>
-        <input id="tenant-id-scan" type="file" accept="image/*" capture="environment"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-          data-testid="tenant-id-scan-input" />
         <input id="tenant-id-pick" type="file" accept="image/*"
           className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           data-testid="tenant-id-pick-input" />
       </div>
+      {camOpen && (
+        <CameraCaptureModal
+          onCapture={(f) => { setCamOpen(false); handleFile(f); }}
+          onClose={() => setCamOpen(false)} />
+      )}
       {pendingFile && (
         <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 relative">
           <img src={previewUrl} alt="ID scan"

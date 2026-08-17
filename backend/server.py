@@ -3664,6 +3664,44 @@ async def delete_landlord_signature(user=Depends(require_role("admin"))):
     return {"ok": True}
 
 
+@api.get("/companies/me/landlord-signature/preview.pdf")
+async def preview_contract_with_landlord_signature(user=Depends(require_role("admin"))):
+    """Genereer een voorbeeld-contract PDF met daarop de opgeslagen verhuurder-
+    handtekening inline (huurder-kolom blijft leeg met '_____' streep). De
+    admin kan hiermee zien hoe zijn handtekening straks op elk contract komt.
+    """
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    co = await db.companies.find_one({"id": cid}, {"_id": 0}) or {}
+    landlord_url = (co.get("landlord_signature_url") or "").strip()
+    landlord_bytes = await _load_landing_asset_bytes(landlord_url) if landlord_url else None
+    brand = await _company_brand_info(cid)
+
+    # Mock contract + tenant + apartment — genoeg data zodat contract_pdf niet crasht
+    sample_contract = {
+        "id": "preview",
+        "contract_number": "VOORBEELD-0001",
+        "start_date": now_utc().date().isoformat(),
+        "end_date": "",
+        "payment_day": 1,
+        "deposit_amount": 0,
+        "landlord": co.get("landlord_name") or brand.get("name") or "Verhuurder",
+        "terms": "",
+        "created_at": iso(now_utc()),
+        **brand,  # company_name, address, phone, email, logo_bytes
+    }
+    sample_tenant = {"id": "preview-t", "name": "Voorbeeld Huurder", "phone": "", "email": ""}
+    sample_apartment = {"id": "preview-a", "number": "A-VOORBEELD",
+                        "rent_amount": 1500.0, "currency": "SRD", "address": ""}
+
+    pdf = contract_pdf(sample_contract, sample_tenant, sample_apartment,
+                       landlord_signature_bytes=landlord_bytes)
+    return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf", headers={
+        "Content-Disposition": 'inline; filename="voorbeeld-contract.pdf"',
+    })
+
+
 @api.get("/companies/me/url-info")
 async def get_my_url_info(request: Request, user=Depends(get_current_user)):
     """Return all login-URL variants for the current company. Het branded pad
