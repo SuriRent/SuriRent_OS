@@ -18,7 +18,12 @@ import { playPendingApprovalDing } from './notify-sound';
 import { isTapSoundsEnabled } from './tap-sounds';
 
 const LS_KEY = 'last_pending_id_seen';
-const POLL_MS = 5000;
+// Polling interval — bewust op 30s omdat SSE (/api/admin/events) al de
+// instant-update triggert zodra een pending payment binnenkomt. Deze
+// interval is puur een safety net voor het geval SSE tijdelijk faalt.
+// Was 5s wat leidde tot ~12 requests/min per admin tab en de single-worker
+// backend blokkeerde.
+const POLL_MS = 30000;
 
 function fmtMoney(amount, cur) {
   try {

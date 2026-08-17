@@ -256,6 +256,8 @@ async def lifespan(app: FastAPI):
     # trage list-queries + herhaalde full-collection scans.
     await db.subscription_invoices.create_index("company_id")
     await db.subscription_invoices.create_index([("company_id", 1), ("status", 1)])
+    await db.landing_assets.create_index("company_id")
+    await db.landing_assets.create_index([("company_id", 1), ("scope", 1)])
     await db.subscription_invoices.create_index([("status", 1), ("period_end", 1)])
     await db.subscription_payments.create_index("company_id")
     await db.subscription_payments.create_index([("company_id", 1), ("paid_at", -1)])
@@ -3695,8 +3697,8 @@ async def preview_contract_with_landlord_signature(user=Depends(require_role("ad
     sample_apartment = {"id": "preview-a", "number": "A-VOORBEELD",
                         "rent_amount": 1500.0, "currency": "SRD", "address": ""}
 
-    pdf = contract_pdf(sample_contract, sample_tenant, sample_apartment,
-                       landlord_signature_bytes=landlord_bytes)
+    pdf = await asyncio.to_thread(contract_pdf, sample_contract, sample_tenant, sample_apartment,
+                                   landlord_signature_bytes=landlord_bytes)
     return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf", headers={
         "Content-Disposition": 'inline; filename="voorbeeld-contract.pdf"',
     })
@@ -6383,7 +6385,8 @@ async def tenant_qr_plate(tenant_id: str, request: Request, refresh: int = 0,
             _logging.getLogger("uvicorn.error").warning(
                 f"AI plaque generatie faalde, fallback naar PIL: {e}"
             )
-            pdf = luxury_plate_pdf(
+            pdf = await asyncio.to_thread(
+                luxury_plate_pdf,
                 tenant_name=t.get("name") or "",
                 apartment_number=apt_number,
                 address=address,
@@ -6426,7 +6429,8 @@ async def company_portal_poster(request: Request, user=Depends(get_current_user)
     portal_url = f"{base}/{c['slug']}/kiosk/huurder"
     primary_hex = ((c.get("branding") or {}).get("primary_color")) or "#FF5C00"
     from pdf_gen import portal_poster_pdf
-    pdf = portal_poster_pdf(
+    pdf = await asyncio.to_thread(
+        portal_poster_pdf,
         company_name=c.get("name") or "SuriRent",
         portal_url=portal_url,
         primary_hex=primary_hex,
@@ -6464,7 +6468,8 @@ async def tenant_portal_poster(tenant_id: str, request: Request, user=Depends(ge
     portal_url = f"{base}/{c['slug']}/kiosk/huurder"
     primary_hex = ((c.get("branding") or {}).get("primary_color")) or "#FF5C00"
     from pdf_gen import portal_poster_pdf
-    pdf = portal_poster_pdf(
+    pdf = await asyncio.to_thread(
+        portal_poster_pdf,
         company_name=c.get("name") or "SuriRent",
         portal_url=portal_url,
         tenant_name=t.get("name"),
@@ -9061,7 +9066,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
         return {"sent": False, "reason": "no_tenant_email"}
 
     try:
-        pdf_bytes = receipt_pdf(p_enriched)
+        pdf_bytes = await asyncio.to_thread(receipt_pdf, p_enriched)
         brand_kwargs = await _tenant_email_brand(cid)
         content = f"""
             <h1>Kwitantie {p_enriched['receipt_number']}</h1>
@@ -9442,7 +9447,7 @@ async def payment_pdf(payment_id: str):
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
-    pdf = receipt_pdf(p)
+    pdf = await asyncio.to_thread(receipt_pdf, p)
     return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
 
 
@@ -9456,7 +9461,7 @@ async def payment_image(payment_id: str):
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
-    pdf_bytes = receipt_pdf(p)
+    pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
     # PDF eerste pagina → JPG via pymupdf (zoom 2.5× voor scherpe weergave
     # op iPhone retina-schermen)
     try:
@@ -9597,7 +9602,7 @@ async def contract_pdf_admin(contract_id: str):
     a = await db.apartments.find_one({"id": c["apartment_id"]}, {"_id": 0}) or {}
     c = {**c, **(await _company_brand_info(c.get("company_id")))}
     ev = await _load_tenant_evidence_bundle(t, c.get("company_id"))
-    pdf = contract_pdf(c, t, a, **ev)
+    pdf = await asyncio.to_thread(contract_pdf, c, t, a, **ev)
     return _pdf_response(pdf, f"contract-{c.get('contract_number') or contract_id}.pdf")
 
 
@@ -9683,7 +9688,7 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
     c = {**c, **(await _company_brand_info(cid))}
     id_photo_bytes = await _load_tenant_id_photo_bytes(t)
     ev = await _load_tenant_evidence_bundle(t, cid)
-    pdf = contract_pdf(c, t, a, **ev)
+    pdf = await asyncio.to_thread(contract_pdf, c, t, a, **ev)
     return _pdf_response(pdf, "contract-preview.pdf")
 
 
@@ -10610,7 +10615,7 @@ async def invoice_pdf_endpoint(invoice_id: str):
         "period_year": inv["period_year"],
     }, {"_id": 0}).to_list(50)
     inv = {**inv, **(await _company_brand_info(inv.get("company_id")))}
-    pdf = invoice_pdf(inv, t, a, payments)
+    pdf = await asyncio.to_thread(invoice_pdf, inv, t, a, payments)
     return _pdf_response(pdf, f"factuur-{inv['invoice_number']}.pdf")
 
 
@@ -11196,7 +11201,7 @@ async def payment_secure_pdf(payment_id: str, encrypted: bool = False):
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
-    base = receipt_pdf(p)
+    base = await asyncio.to_thread(receipt_pdf, p)
     token = make_verify_token({
         "kind": "payment", "id": payment_id, "rn": p["receipt_number"],
         "amt": p["amount"], "cur": p["currency"], "ts": int(now_utc().timestamp()),
@@ -12091,7 +12096,7 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     to = (body.to or tenant.get("email") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen ontvanger — vul een e-mailadres in of zet er een bij de huurder")
-    pdf_bytes = receipt_pdf(p)
+    pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     content = f"""
@@ -12133,7 +12138,7 @@ async def email_invoice(invoice_id: str, body: EmailSendIn, user=Depends(get_cur
         "period_month": inv["period_month"], "period_year": inv["period_year"],
     }, {"_id": 0}).to_list(50)
     inv = {**inv, **(await _company_brand_info(inv.get("company_id")))}
-    pdf_bytes = invoice_pdf(inv, tenant, apt, payments)
+    pdf_bytes = await asyncio.to_thread(invoice_pdf, inv, tenant, apt, payments)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
@@ -12175,7 +12180,7 @@ async def email_contract(contract_id: str, body: EmailSendIn, user=Depends(get_c
     c = {**c, **(await _company_brand_info(c.get("company_id")))}
     id_photo_bytes = await _load_tenant_id_photo_bytes(tenant)
     ev = await _load_tenant_evidence_bundle(tenant, c.get("company_id"))
-    pdf_bytes = contract_pdf(c, tenant, apt, **ev)
+    pdf_bytes = await asyncio.to_thread(contract_pdf, c, tenant, apt, **ev)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     # If contract is unsigned, include a signing link.
