@@ -92,6 +92,12 @@ function ImageUploader({ value, onChange, testid }) {
 }
 
 // ============== List item helpers (add/remove/reorder) ==============
+// Client-side ID toevoegen aan nieuwe items zodat React de juiste rij
+// koppelt aan zijn input-state bij reorder/remove. Blijft niet meegestuurd
+// naar backend want backend negeert onbekende velden.
+let _repeatableListCounter = 0;
+function _newItemKey() { _repeatableListCounter += 1; return `rl-${Date.now()}-${_repeatableListCounter}`; }
+
 function RepeatableList({ items = [], onChange, render, addLabel, emptyLabel, testid }) {
   const move = (idx, dir) => {
     const next = [...items];
@@ -107,7 +113,7 @@ function RepeatableList({ items = [], onChange, render, addLabel, emptyLabel, te
       )}
       <div className="space-y-3">
         {items.map((item, idx) => (
-          <div key={idx} className="border border-slate-200 rounded-xl p-3 bg-slate-50/40">
+          <div key={item._key || `rl-${idx}`} className="border border-slate-200 rounded-xl p-3 bg-slate-50/40">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">#{idx + 1}</span>
               <div className="flex items-center gap-1">
@@ -130,7 +136,7 @@ function RepeatableList({ items = [], onChange, render, addLabel, emptyLabel, te
           </div>
         ))}
       </div>
-      <button type="button" onClick={() => onChange([...items, {}])} data-testid={`${testid}-add`}
+      <button type="button" onClick={() => onChange([...items, { _key: _newItemKey() }])} data-testid={`${testid}-add`}
         className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-[#C74600] border border-orange-200 text-xs font-bold hover:bg-orange-100 transition">
         <Plus className="w-3.5 h-3.5" /> {addLabel || 'Toevoegen'}
       </button>

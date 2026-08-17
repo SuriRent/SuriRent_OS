@@ -357,7 +357,7 @@ function InstallSection({ c = {} }) {
 
             <ol className="mt-8 space-y-4">
               {iosSteps.map((s, i) => (
-                <InstallStep key={i} num={i + 1} icon={resolveIcon(s.icon)} title={s.title} desc={s.desc} />
+                <InstallStep key={s.title || `ios-step-${i}`} num={i + 1} icon={resolveIcon(s.icon)} title={s.title} desc={s.desc} />
               ))}
             </ol>
           </div>
@@ -387,7 +387,7 @@ function InstallSection({ c = {} }) {
               {androidSteps.map((s, i) => {
                 const Icon = resolveIcon(s.icon);
                 return (
-                  <li key={i} className="flex gap-4">
+                  <li key={s.title || `android-step-${i}`} className="flex gap-4">
                     <div className="shrink-0 w-10 h-10 rounded-xl bg-white text-[#FF5C00] flex items-center justify-center font-black shadow-lg">{i + 1}</div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 text-sm font-black">
@@ -407,7 +407,7 @@ function InstallSection({ c = {} }) {
           {benefits.map((b, i) => {
             const Icon = resolveIcon(b.icon);
             return (
-              <div key={i} data-testid={`install-benefit-${i}`}
+              <div key={b.title || `install-benefit-${i}`} data-testid={`install-benefit-${i}`}
                 className="bg-white rounded-2xl border border-orange-100 p-5 flex gap-3 items-start">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0">
                   <Icon className="w-5 h-5 text-[#FF5C00]" strokeWidth={2.3} />
@@ -745,17 +745,18 @@ function Footer({ onLogin, c = {} }) {
             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-[#FF5C00] mb-5">Toegang</h4>
             <ul className="space-y-3.5 text-sm">
               {links.map((lnk, i) => {
+                const linkKey = `${lnk.kind || 'link'}-${lnk.label || lnk.anchor || lnk.url || i}`;
                 if (lnk.kind === 'login') {
-                  return <li key={i}><button onClick={onLogin} data-testid="footer-login-btn" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</button></li>;
+                  return <li key={linkKey}><button onClick={onLogin} data-testid="footer-login-btn" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</button></li>;
                 }
                 if (lnk.kind === 'tenant_portal') {
-                  return <li key={i}><a href={appLink('/kiosk/huurder')} data-testid="footer-tenant-portal" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
+                  return <li key={linkKey}><a href={appLink('/kiosk/huurder')} data-testid="footer-tenant-portal" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
                 }
                 if (lnk.kind === 'anchor') {
-                  return <li key={i}><a href={`#${lnk.anchor}`} className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
+                  return <li key={linkKey}><a href={`#${lnk.anchor}`} className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
                 }
                 if (lnk.kind === 'url') {
-                  return <li key={i}><a href={lnk.url} target={lnk.url?.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
+                  return <li key={linkKey}><a href={lnk.url} target={lnk.url?.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className="text-slate-700 hover:text-[#FF5C00] transition-colors font-semibold">{lnk.label}</a></li>;
                 }
                 return null;
               })}

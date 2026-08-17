@@ -737,7 +737,7 @@ function FAQSection() {
           {FAQS.map((f, i) => {
             const isOpen = open === i;
             return (
-              <div key={i} className="border-b border-slate-200">
+              <div key={f.q || `faq-${i}`} className="border-b border-slate-200">
                 <button onClick={() => setOpen(isOpen ? -1 : i)}
                   data-testid={`faq-${i}`}
                   className="w-full text-left py-5 flex items-start justify-between gap-4 hover:text-[#FF5C00] transition-colors">

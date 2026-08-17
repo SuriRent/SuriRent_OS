@@ -902,7 +902,7 @@ export default function CustomerDisplay() {
       lastStateKey.current = contentKey;
     } catch { /* ignore */ }
     setState(newState || { step: 'idle' });
-    if (source) console.debug('[customer-display] update via', source);
+    if (source && process.env.NODE_ENV === 'development') console.debug('[customer-display] update via', source);
   }, []);
 
   // 1) BroadcastChannel — instant lokale sync zelfde browser
