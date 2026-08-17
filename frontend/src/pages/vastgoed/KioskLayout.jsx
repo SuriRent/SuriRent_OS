@@ -278,11 +278,13 @@ function TenantOverview({ apartment, onBack, onPay }) {
   // openstaande maand). Backend levert altijd expliciet 0.0 als er geen
   // achterstand is, dus vertrouwen we die.
   const openRent = openInvoicesTotal;
-  // Huidige maand: som van alle current_invoices, met fallback op
-  // apartment.rent_amount wanneer er nog géén factuur is voor deze maand.
+  // Huidige maand: som van alle current_invoices. Wanneer er GEEN openstaande
+  // factuur is voor deze maand (want betaald of nog niet gegenereerd) staat
+  // dit op 0 — anders zou een reeds voldane factuur nog steeds SRD 7.500
+  // als "Maandhuur" tonen (bug pre-2026-02-27).
   const currentMonthAmount = currentInvoices.length > 0
     ? currentInvoicesTotal
-    : (currentInvoice ? Number(currentInvoice.outstanding || 0) : Number(apt.rent_amount || 0));
+    : (currentInvoice ? Number(currentInvoice.outstanding || 0) : 0);
   const currentMonthLabel = currentInvoice && currentInvoice.period_month
     ? `Huidige maandhuur · ${MONTHS_NL[currentInvoice.period_month - 1]} ${currentInvoice.period_year}`
     : 'Maandhuur';
@@ -581,18 +583,16 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   // current_invoices bevatte).
   const openRent = openRentFromInvoices;
   // Huidige maand: array van facturen (kan 1 of 2 zijn — mei in grace + juni
-  // bijvoorbeeld). Fallback: 1 synthetische rij met apt.rent_amount wanneer
-  // er nog géén factuur is voor huidige maand.
+  // bijvoorbeeld). Wanneer er GEEN openstaande factuur is voor de huidige
+  // maand (want betaald of nog niet gegenereerd), tonen we ook geen
+  // synthetische rij meer — dat toonde eerder 7.500 terwijl de factuur al
+  // voldaan was. Nieuwe huurders zonder factuur kunnen "Vooruitbetaling"
+  // gebruiken via de Overview-knop.
   const currentInvoices = Array.isArray(currentInvoicesRaw) && currentInvoicesRaw.length > 0
     ? currentInvoicesRaw
     : (currentInvoice ? [currentInvoice] : []);
   const futureInvoices = Array.isArray(futureInvoicesRaw) ? futureInvoicesRaw : [];
-  // Synthetische huidige-maand-rij wanneer er HELEMAAL geen factuur is
-  // (huurder is gloednieuw). Gebruikt apt.rent_amount.
-  const syntheticCurrent = currentInvoices.length === 0
-    ? { id: '__syn_current__', synthetic: true, outstanding: Number(apt.rent_amount || 0),
-        period_month: null, period_year: null }
-    : null;
+  const syntheticCurrent = null;
 
   const amounts = {
     boete: 0,
@@ -601,7 +601,9 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
 
   const [selected, setSelected] = useState(new Set());
   const [custom, setCustom] = useState('');
-  const [showMobileKeypad, setShowMobileKeypad] = useState(false);
+  // Ander bedrag / keypad is standaard OPEN op mobiel zodat de huurder direct
+  // een bedrag kan invoeren zonder eerst op "Ander bedrag invoeren" te klikken.
+  const [showMobileKeypad, setShowMobileKeypad] = useState(true);
   const [planInstallments, setPlanInstallments] = useState([]);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planSuccess, setPlanSuccess] = useState(null);  // {id, num_installments, total_amount}
