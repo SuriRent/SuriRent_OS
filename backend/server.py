@@ -8211,6 +8211,14 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             overdue_invoices.append(item)
             overdue_total += outstanding
     current_month_invoice = current_invoices[0] if current_invoices else None
+    # `has_history` — bepaalt of frontend "Vooruit betalen voor eerste maand"
+    # als prominente knop toont (nieuwe huurder) of gewoon de kleine
+    # "Vooruitbetaling registreren" (bestaande huurder, alles voldaan).
+    # Nieuwe huurder = 0 betalingen ooit én 0 facturen (paid of unpaid).
+    has_payment = await db.payments.find_one({"tenant_id": tenant_id, "status": "approved"},
+                                              {"_id": 1}) is not None
+    has_invoice = await db.invoices.find_one({"tenant_id": tenant_id},
+                                              {"_id": 1}) is not None
     return {
         "tenant": {
             "id": t["id"],
@@ -8236,6 +8244,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "future_invoices_total": round(future_total, 2),
         "current_month_invoice": current_month_invoice,
         "grace_workdays": grace_wd,
+        "has_history": bool(has_payment or has_invoice),
     }
 
 

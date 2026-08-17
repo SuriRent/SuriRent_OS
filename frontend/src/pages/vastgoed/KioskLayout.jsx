@@ -278,6 +278,13 @@ function TenantOverview({ apartment, onBack, onPay }) {
   // openstaande maand). Backend levert altijd expliciet 0.0 als er geen
   // achterstand is, dus vertrouwen we die.
   const openRent = openInvoicesTotal;
+  // Nieuwe huurder = géén betalingen én géén facturen ooit. Backend
+  // levert dit als `has_history` (false voor gloednieuw). Wordt gebruikt
+  // om de "Vooruit betalen voor eerste maand" knop prominent te tonen
+  // i.p.v. het gewone "Alles voldaan" scherm dat verwarrend is voor
+  // een nieuwe huurder die nog geen enkele factuur heeft ontvangen.
+  const isNewTenant = data.has_history === false;
+  const firstMonthRent = Number(apt.rent_amount || 0);
   // Huidige maand: som van alle current_invoices. Wanneer er GEEN openstaande
   // factuur is voor deze maand (want betaald of nog niet gegenereerd) staat
   // dit op 0 — anders zou een reeds voldane factuur nog steeds SRD 7.500
@@ -412,34 +419,67 @@ function TenantOverview({ apartment, onBack, onPay }) {
         <div className="bg-white rounded-2xl md:flex-[2] flex flex-col items-center justify-center text-center p-6 sm:p-8 min-h-[260px]">
           {allPaid ? (
             <>
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
-                <Check className="w-8 h-8 sm:w-10 sm:h-10 text-emerald-600" />
-              </div>
-              <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-emerald-700">Alles voldaan</p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
-                Geen openstaande facturen
-              </p>
-              {credit > 0 && (
-                <div className="mt-3 mb-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Positief saldo</p>
-                  <p className="text-xl font-extrabold text-emerald-700">{fmtMoney(credit, cur)}</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">Wordt verrekend met volgende factuur</p>
-                </div>
+              {isNewTenant ? (
+                // Nieuwe huurder — nog geen factuur. Toon prominente knop
+                // om vooruit te betalen voor de eerste maand.
+                <>
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-3">
+                    <Home className="w-8 h-8 sm:w-9 sm:h-9 text-orange-500" />
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-orange-600">Welkom {tenant.name.split(' ')[0]}</p>
+                  <p className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight mt-1 mb-1">
+                    Nog geen factuur
+                  </p>
+                  <p className="text-xs text-slate-500 mb-3 max-w-xs">
+                    Betaal je eerste maand alvast vooruit — {fmtMoney(firstMonthRent, cur)} voor huisnummer {apt.number}
+                  </p>
+                  <button onClick={() => onPay({ ...data, internet, total_due: firstMonthRent, isAdvance: true,
+                    prefill_advance_amount: firstMonthRent,
+                    open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
+                    current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
+                    future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
+                    current_month_invoice: currentInvoice })}
+                    data-testid="overview-first-month-btn"
+                    className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-base font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 active:scale-[0.98]">
+                    Vooruit betalen voor eerste maand <ArrowRight className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
+                    className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
+                    <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
+                    <Check className="w-8 h-8 sm:w-10 sm:h-10 text-emerald-600" />
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-emerald-700">Alles voldaan</p>
+                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+                    Geen openstaande facturen
+                  </p>
+                  {credit > 0 && (
+                    <div className="mt-3 mb-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Positief saldo</p>
+                      <p className="text-xl font-extrabold text-emerald-700">{fmtMoney(credit, cur)}</p>
+                      <p className="text-[10px] text-emerald-600 mt-0.5">Wordt verrekend met volgende factuur</p>
+                    </div>
+                  )}
+                  {!credit && <div className="h-3" />}
+                  <button onClick={() => onPay({ ...data, internet, total_due: 0, isAdvance: true,
+                    open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
+                    current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
+                    future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
+                    current_month_invoice: currentInvoice })}
+                    data-testid="overview-advance-pay-btn"
+                    className="mt-2 w-full max-w-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 text-sm active:scale-[0.98]">
+                    Vooruitbetaling registreren
+                  </button>
+                  <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
+                    className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
+                    <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
+                  </button>
+                </>
               )}
-              {!credit && <div className="h-3" />}
-              <button onClick={() => onPay({ ...data, internet, total_due: 0, isAdvance: true,
-                open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
-                current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
-                future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
-                current_month_invoice: currentInvoice })}
-                data-testid="overview-advance-pay-btn"
-                className="mt-2 w-full max-w-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 text-sm active:scale-[0.98]">
-                Vooruitbetaling registreren
-              </button>
-              <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
-                className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
-                <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
-              </button>
             </>
           ) : (
             <>
@@ -571,6 +611,7 @@ const PAY_ITEMS_TEMPLATE = [
 
 function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   const { tenant, apartment: apt, balance, internet, total_due, isAdvance = false,
+    prefill_advance_amount: prefillAdvance = 0,
     open_invoices: openInvoices = [], open_invoices_total: openInvoicesTotal = 0,
     current_invoices: currentInvoicesRaw = [],
     future_invoices: futureInvoicesRaw = [],
@@ -600,7 +641,10 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   };
 
   const [selected, setSelected] = useState(new Set());
-  const [custom, setCustom] = useState('');
+  // Prefill custom-bedrag met eerste-maand-huur als de nieuwe-huurder flow
+  // deze doorgeeft — huurder ziet direct het correcte bedrag en kan
+  // desgewenst nog aanpassen.
+  const [custom, setCustom] = useState(prefillAdvance > 0 ? String(prefillAdvance.toFixed(2)) : '');
   // Ander bedrag / keypad is standaard OPEN op mobiel zodat de huurder direct
   // een bedrag kan invoeren zonder eerst op "Ander bedrag invoeren" te klikken.
   const [showMobileKeypad, setShowMobileKeypad] = useState(true);
