@@ -191,6 +191,8 @@ export default function Branding() {
                 className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
             </label>
           </div>
+
+          <LandlordSignatureSection value={b.landlord_signature_url} signedAt={b.landlord_signature_signed_at} onReload={load} />
         </div>
 
         {/* RIGHT: live preview */}
@@ -320,3 +322,149 @@ function EmailPreview({ brandName, brandColor, logoUrl }) {
 
 // Quiet unused-import lint flag
 void RotateCcw;
+
+// =====================================================================
+// LandlordSignatureSection — Verhuurder-handtekening tekenen of uploaden.
+// Wordt inline op elk contract PDF gerenderd bij "Verhuurder → Handtekening".
+// =====================================================================
+function LandlordSignatureSection({ value, signedAt, onReload }) {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasInk, setHasInk] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [redraw, setRedraw] = useState(false);
+  const [err, setErr] = useState('');
+  const src = value ? resolveLogoUrl(value) : '';
+
+  useEffect(() => {
+    if (value && !redraw) return;   // canvas niet zichtbaar in bekijk-modus
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    setHasInk(false);
+  }, [value, redraw]);
+
+  const pos = (e) => {
+    const c = canvasRef.current;
+    const r = c.getBoundingClientRect();
+    const evt = e.touches?.[0] || e;
+    return { x: (evt.clientX - r.left) * (c.width / r.width),
+             y: (evt.clientY - r.top) * (c.height / r.height) };
+  };
+  const start = (e) => { e.preventDefault(); const { x, y } = pos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); setDrawing(true); };
+  const move = (e) => { if (!drawing) return; e.preventDefault(); const { x, y } = pos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); setHasInk(true); };
+  const end = () => setDrawing(false);
+  const clearCanvas = () => {
+    const c = canvasRef.current;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+    setHasInk(false);
+  };
+
+  const uploadBlob = async (blob, filename = 'landlord-signature.png') => {
+    setSaving(true); setErr('');
+    try {
+      const fd = new FormData(); fd.append('file', blob, filename);
+      await api.post('/companies/me/landlord-signature', fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } });
+      setRedraw(false);
+      setHasInk(false);
+      if (onReload) await onReload();
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  const save = async () => {
+    if (!hasInk) return;
+    const blob = await new Promise((res) => canvasRef.current.toBlob(res, 'image/png'));
+    await uploadBlob(blob);
+  };
+
+  const uploadFile = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setErr('Alleen afbeeldingen toegestaan.');
+    await uploadBlob(file, file.name);
+  };
+
+  const remove = async () => {
+    if (!window.confirm('Verhuurder-handtekening verwijderen?')) return;
+    setSaving(true); setErr('');
+    try {
+      await api.delete('/companies/me/landlord-signature');
+      if (onReload) await onReload();
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  const showCanvas = !value || redraw;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4" data-testid="landlord-signature-section">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-900">Verhuurder handtekening</h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {value ? `Ondertekend op ${(signedAt || '').slice(0, 10)}` : 'Teken of upload één keer — komt automatisch op elk contract'}
+          </p>
+        </div>
+        {value && !redraw && (
+          <button type="button" onClick={remove} data-testid="landlord-signature-remove"
+            className="h-8 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[11px]">
+            Wissen
+          </button>
+        )}
+      </div>
+
+      {err && <p className="text-[11px] text-rose-600 mb-2" data-testid="landlord-signature-err">{err}</p>}
+
+      {showCanvas ? (
+        <>
+          <div className="rounded-xl border-2 border-dashed border-slate-300 overflow-hidden bg-white">
+            <canvas ref={canvasRef} width={600} height={180}
+              className="w-full h-40 touch-none"
+              onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+              onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+              data-testid="landlord-signature-canvas" />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button type="button" onClick={clearCanvas} disabled={!hasInk}
+              data-testid="landlord-signature-clear"
+              className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-50">
+              Wis
+            </button>
+            <button type="button" onClick={save} disabled={!hasInk || saving}
+              data-testid="landlord-signature-save"
+              className="flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-50 flex items-center justify-center gap-1.5">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Opslaan
+            </button>
+          </div>
+          <label className="mt-3 block w-full h-10 rounded-lg border-2 border-dashed border-slate-300 hover:border-slate-900 hover:bg-slate-50 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer"
+            data-testid="landlord-signature-upload">
+            <Upload className="w-4 h-4" /> Of upload een afbeelding (PNG)
+            <input type="file" accept="image/*" className="hidden"
+              onChange={(e) => uploadFile(e.target.files?.[0])}
+              data-testid="landlord-signature-file" />
+          </label>
+        </>
+      ) : (
+        <>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <img src={src} alt="Verhuurder handtekening" className="w-full max-h-32 object-contain" data-testid="landlord-signature-image" />
+          </div>
+          <button type="button" onClick={() => setRedraw(true)}
+            data-testid="landlord-signature-redraw"
+            className="mt-3 w-full h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
+            Opnieuw tekenen
+          </button>
+        </>
+      )}
+    </div>
+  );
+}

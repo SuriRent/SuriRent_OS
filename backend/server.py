@@ -3334,6 +3334,8 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
         out["landlord_name"] = c.get("landlord_name") or ""
         out["landlord_birth_date"] = c.get("landlord_birth_date") or ""
         out["landlord_id_number"] = c.get("landlord_id_number") or ""
+        out["landlord_signature_url"] = c.get("landlord_signature_url") or ""
+        out["landlord_signature_signed_at"] = c.get("landlord_signature_signed_at") or ""
     return out
 
 
@@ -3614,6 +3616,52 @@ async def upload_branding_asset(file: UploadFile = File(...),
         "uploaded_at": iso(now_utc()),
     })
     return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}"}
+
+
+@api.post("/companies/me/landlord-signature")
+async def upload_landlord_signature(file: UploadFile = File(...),
+                                     user=Depends(require_role("admin"))):
+    """Sla de handtekening van de verhuurder op (PNG uit canvas of upload).
+    Wordt inline op elk contract getoond onder 'Verhuurder → Handtekening'.
+    Max 2 MB. Overschrijft de vorige handtekening."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Handtekening te groot (>2 MB).")
+    ctype = (file.content_type or "").lower()
+    if not ctype.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    asset_id = new_id()
+    now = now_utc()
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": f"landlord-signature-{cid[:8]}.png",
+        "content_type": ctype,
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+        "size": len(raw),
+        "scope": "company",
+        "company_id": cid,
+        "uploaded_by": user.get("email"),
+        "uploaded_at": iso(now),
+    })
+    url = f"/api/landing/asset/{asset_id}"
+    await db.companies.update_one({"id": cid}, {
+        "$set": {"landlord_signature_url": url, "landlord_signature_signed_at": iso(now)},
+    })
+    return {"landlord_signature_url": url, "landlord_signature_signed_at": iso(now)}
+
+
+@api.delete("/companies/me/landlord-signature")
+async def delete_landlord_signature(user=Depends(require_role("admin"))):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await db.companies.update_one({"id": cid}, {
+        "$unset": {"landlord_signature_url": "", "landlord_signature_signed_at": ""},
+    })
+    return {"ok": True}
 
 
 @api.get("/companies/me/url-info")
@@ -9510,7 +9558,7 @@ async def contract_pdf_admin(contract_id: str):
     t = await db.tenants.find_one({"id": c["tenant_id"]}, {"_id": 0}) or {}
     a = await db.apartments.find_one({"id": c["apartment_id"]}, {"_id": 0}) or {}
     c = {**c, **(await _company_brand_info(c.get("company_id")))}
-    ev = await _load_tenant_evidence_bundle(t)
+    ev = await _load_tenant_evidence_bundle(t, c.get("company_id"))
     pdf = contract_pdf(c, t, a, **ev)
     return _pdf_response(pdf, f"contract-{c.get('contract_number') or contract_id}.pdf")
 
@@ -9535,14 +9583,22 @@ async def _load_landing_asset_bytes(url: str | None) -> bytes | None:
         return None
 
 
-async def _load_tenant_evidence_bundle(tenant: dict) -> dict:
+async def _load_tenant_evidence_bundle(tenant: dict, company_id: Optional[str] = None) -> dict:
     """Voeg alle beschikbare bewijsstukken van een huurder samen tot één
     dict die door `contract_pdf` gebruikt kan worden (voorkant/achterkant
-    ID + handtekening)."""
+    ID + huurder handtekening + verhuurder handtekening).
+
+    Wanneer `company_id` is opgegeven wordt ook de handtekening van de
+    verhuurder opgehaald zodat die inline op het contract komt te staan."""
+    landlord_url = ""
+    if company_id:
+        co = await db.companies.find_one({"id": company_id}, {"_id": 0, "landlord_signature_url": 1}) or {}
+        landlord_url = (co.get("landlord_signature_url") or "").strip()
     return {
         "id_photo_bytes": await _load_landing_asset_bytes((tenant or {}).get("id_photo_url")),
         "id_photo_back_bytes": await _load_landing_asset_bytes((tenant or {}).get("id_photo_back_url")),
         "signature_bytes": await _load_landing_asset_bytes((tenant or {}).get("signature_url")),
+        "landlord_signature_bytes": await _load_landing_asset_bytes(landlord_url) if landlord_url else None,
     }
 
 
@@ -9588,7 +9644,7 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
     }
     c = {**c, **(await _company_brand_info(cid))}
     id_photo_bytes = await _load_tenant_id_photo_bytes(t)
-    ev = await _load_tenant_evidence_bundle(t)
+    ev = await _load_tenant_evidence_bundle(t, cid)
     pdf = contract_pdf(c, t, a, **ev)
     return _pdf_response(pdf, "contract-preview.pdf")
 
@@ -12080,7 +12136,7 @@ async def email_contract(contract_id: str, body: EmailSendIn, user=Depends(get_c
         raise HTTPException(status_code=400, detail="Geen ontvanger — vul een e-mailadres in of zet er een bij de huurder")
     c = {**c, **(await _company_brand_info(c.get("company_id")))}
     id_photo_bytes = await _load_tenant_id_photo_bytes(tenant)
-    ev = await _load_tenant_evidence_bundle(tenant)
+    ev = await _load_tenant_evidence_bundle(tenant, c.get("company_id"))
     pdf_bytes = contract_pdf(c, tenant, apt, **ev)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""

@@ -684,7 +684,8 @@ def receipt_pdf(payment: dict) -> bytes:
 def contract_pdf(contract: dict, tenant: dict, apartment: dict,
                  id_photo_bytes: bytes | None = None,
                  id_photo_back_bytes: bytes | None = None,
-                 signature_bytes: bytes | None = None) -> bytes:
+                 signature_bytes: bytes | None = None,
+                 landlord_signature_bytes: bytes | None = None) -> bytes:
     """Officiële HUUROVEREENKOMST — Surinaams recht.
 
     Volgt de door de opdrachtgever vastgestelde structuur met 10 artikelen.
@@ -692,8 +693,12 @@ def contract_pdf(contract: dict, tenant: dict, apartment: dict,
     weergegeven zodat de PDF met pen kan worden aangevuld en dubbel worden
     ondertekend.
 
-    Als `id_photo_bytes` is meegegeven, wordt aan het eind een extra pagina
-    toegevoegd met de ID-kaart foto van de huurder als bewijs (bijlage).
+    Handtekeningen (`signature_bytes` voor huurder, `landlord_signature_bytes`
+    voor verhuurder) worden inline op de contract-pagina zelf gerenderd
+    boven de "Handtekening:" tekst. NIET meer als aparte bijlage.
+
+    `id_photo_bytes` (voorkant) en `id_photo_back_bytes` (achterkant)
+    komen als Bijlage 1 en 2 aan het eind van het document.
     """
     s = _styles()
     el = []
@@ -957,20 +962,61 @@ def contract_pdf(contract: dict, tenant: dict, apartment: dict,
         fontName="Helvetica", fontSize=9, textColor=MUTED,
         leading=12, spaceAfter=2,
     )
-    sig_table_data = [[
-        [
-            Paragraph("Verhuurder", sig_style),
-            Paragraph(f"Naam: <b>{landlord_name}</b>", sig_line_style),
-            Spacer(1, 30),
-            Paragraph("Handtekening: ________________________", sig_line_style),
-        ],
-        [
-            Paragraph("Huurder", sig_style),
-            Paragraph(f"Naam: <b>{tenant_name}</b>", sig_line_style),
-            Spacer(1, 30),
-            Paragraph("Handtekening: ________________________", sig_line_style),
-        ],
-    ]]
+
+    def _inline_sig_image(raw_bytes):
+        """Rendert een handtekening PNG als reportlab Image (max 70mm x 22mm)
+        boven de 'Handtekening:' regel. Geeft None terug bij fout of leeg."""
+        if not raw_bytes:
+            return None
+        try:
+            from PIL import Image as PILImage
+            src = PILImage.open(io.BytesIO(raw_bytes))
+            if src.mode not in ("RGB", "RGBA", "L"):
+                src = src.convert("RGB")
+            buf = io.BytesIO()
+            src.save(buf, format="PNG")
+            iw, ih = src.size
+            max_w, max_h = 70 * mm, 22 * mm
+            ratio = min(max_w / iw, max_h / ih)
+            img = Image(io.BytesIO(buf.getvalue()), width=iw * ratio, height=ih * ratio)
+            img.hAlign = "LEFT"
+            return img
+        except Exception:
+            return None
+
+    landlord_sig_img = _inline_sig_image(landlord_signature_bytes)
+    tenant_sig_img = _inline_sig_image(signature_bytes)
+
+    # Verhuurder-kolom — met inline handtekening indien beschikbaar
+    landlord_col = [
+        Paragraph("Verhuurder", sig_style),
+        Paragraph(f"Naam: <b>{landlord_name}</b>", sig_line_style),
+    ]
+    if landlord_sig_img is not None:
+        landlord_col.append(Spacer(1, 4))
+        landlord_col.append(landlord_sig_img)
+        landlord_col.append(Paragraph("Handtekening: <i>digitaal ondertekend</i>", sig_line_style))
+    else:
+        landlord_col.append(Spacer(1, 30))
+        landlord_col.append(Paragraph("Handtekening: ________________________", sig_line_style))
+
+    # Huurder-kolom — met inline handtekening indien beschikbaar
+    tenant_col = [
+        Paragraph("Huurder", sig_style),
+        Paragraph(f"Naam: <b>{tenant_name}</b>", sig_line_style),
+    ]
+    if tenant_sig_img is not None:
+        tenant_col.append(Spacer(1, 4))
+        tenant_col.append(tenant_sig_img)
+        signed_dt = ""
+        if tenant.get("signature_signed_at"):
+            signed_dt = f" · {tenant.get('signature_signed_at', '')[:10]}"
+        tenant_col.append(Paragraph(f"Handtekening: <i>digitaal ondertekend{signed_dt}</i>", sig_line_style))
+    else:
+        tenant_col.append(Spacer(1, 30))
+        tenant_col.append(Paragraph("Handtekening: ________________________", sig_line_style))
+
+    sig_table_data = [[landlord_col, tenant_col]]
     sig_table = Table(sig_table_data, colWidths=[85 * mm, 85 * mm])
     sig_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -1045,13 +1091,6 @@ def contract_pdf(contract: dict, tenant: dict, apartment: dict,
             el, id_photo_back_bytes,
             "BIJLAGE 2 — LEGITIMATIEBEWIJS HUURDER (ACHTERKANT)",
             f"Naam: <b>{tenant.get('name') or ''}</b>",
-        )
-    if signature_bytes:
-        _safe_image(
-            el, signature_bytes,
-            "BIJLAGE 3 — DIGITALE HANDTEKENING HUURDER",
-            f"Ondertekend door <b>{tenant.get('name') or ''}</b>"
-            + (f" op <b>{tenant.get('signature_signed_at', '')[:10]}</b>." if tenant.get('signature_signed_at') else "."),
         )
 
     return _build(el)

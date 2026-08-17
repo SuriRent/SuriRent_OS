@@ -3427,7 +3427,7 @@ function InfoRow({ label, value, mono }) {
 // =====================================================================
 // SignatureModal — popup form met canvas voor huurder-handtekening.
 // Toont bestaande handtekening (bekijken/wissen) of laat opnieuw tekenen.
-// Slaat op via `POST /api/tenants/{id}/signature` als Bijlage 3 in contract PDF.
+// Slaat op via `POST /api/tenants/{id}/signature` — komt inline op het contract PDF.
 // =====================================================================
 function SignatureModal({ tenant: t, open, onClose, onReload }) {
   const canvasRef = useRef(null);
@@ -3523,7 +3523,7 @@ function SignatureModal({ tenant: t, open, onClose, onReload }) {
         <div className="p-5 space-y-4">
           {showCanvas ? (
             <>
-              <p className="text-sm text-slate-600">Laat de huurder hier tekenen. De handtekening komt als Bijlage 3 in het huurcontract PDF.</p>
+              <p className="text-sm text-slate-600">Laat de huurder hier tekenen. De handtekening komt direct bij "Handtekening huurder" op het contract PDF te staan.</p>
               <div className="rounded-xl border-2 border-dashed border-slate-300 overflow-hidden bg-white">
                 <canvas ref={canvasRef} width={600} height={220}
                   className="w-full h-48 touch-none"
