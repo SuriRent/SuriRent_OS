@@ -271,8 +271,13 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const futureInvoicesTotal = Number(data.future_invoices_total || 0);
   // Eerste current factuur voor legacy-display (backwards compat).
   const currentInvoice = data.current_month_invoice || currentInvoices[0] || null;
-  const openRentLegacy = balance.balance > 0 ? balance.balance : 0;
-  const openRent = openInvoices.length > 0 ? openInvoicesTotal : openRentLegacy;
+  // Achterstand — ALTIJD uit het backend bucket (`open_invoices_total`). De
+  // oude fallback op `balance.balance` was buggy: `balance.balance` bevat
+  // ook current_invoices + internet, waardoor die bij het openstaand bedrag
+  // werd opgeteld = dubbeltelling (bv. 2× SRD 7.500 = SRD 15.000 bij één
+  // openstaande maand). Backend levert altijd expliciet 0.0 als er geen
+  // achterstand is, dus vertrouwen we die.
+  const openRent = openInvoicesTotal;
   // Huidige maand: som van alle current_invoices, met fallback op
   // apartment.rent_amount wanneer er nog géén factuur is voor deze maand.
   const currentMonthAmount = currentInvoices.length > 0
@@ -571,8 +576,10 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   const cur = (balance.currency || apt.currency || 'SRD').toUpperCase();
   const fmt = (v) => fmtMoney(v, cur);
   const openRentFromInvoices = Number(openInvoicesTotal || 0);
-  const openRentLegacy = balance.balance > 0 ? balance.balance : 0;
-  const openRent = openInvoices.length > 0 ? openRentFromInvoices : openRentLegacy;
+  // Vertrouw ALTIJD het backend-bucket `open_invoices_total` (dubbeltelling-
+  // fix, was: balance.balance viel terug op totaal-saldo dat óók
+  // current_invoices bevatte).
+  const openRent = openRentFromInvoices;
   // Huidige maand: array van facturen (kan 1 of 2 zijn — mei in grace + juni
   // bijvoorbeeld). Fallback: 1 synthetische rij met apt.rent_amount wanneer
   // er nog géén factuur is voor huidige maand.
