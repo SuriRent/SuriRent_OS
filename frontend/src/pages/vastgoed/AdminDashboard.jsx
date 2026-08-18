@@ -21,6 +21,7 @@ import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { useApiSWR } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
+import { useLivePulse } from '../../lib/live-pulse';
 import Contracts from './admin/Contracts';
 import Invoices from './admin/Invoices';
 import Payments from './admin/Payments';
@@ -444,6 +445,7 @@ function groupTabs(tabs) {
 
 function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCompany }) {
   const groups = groupTabs(tabs);
+  const pulsingTabs = useLivePulse(active);
   // Splits de bedrijfsnaam in 2 delen voor de "zwart + oranje" branding stijl.
   // Multi-woord namen: eerste woord zwart, rest oranje (bv. "GOPI APPARTEMENT'S").
   // Single-woord: split rond het midden (bv. "SuriRent" → "Suri" + "Rent").
@@ -516,6 +518,7 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                 const Icon = t.icon;
                 const isActive = active === t.id;
                 const showBadge = t.id === 'notifications' && badgeCount > 0;
+                const isPulsing = pulsingTabs.has(t.id);
                 return (
                   <button key={t.id} onClick={() => onChange(t.id)}
                     data-testid={`tab-${t.id}`}
@@ -533,6 +536,17 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                         <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white"
                           data-testid="sidebar-badge">
                           {badgeCount > 9 ? '9+' : badgeCount}
+                        </span>
+                      )}
+                      {/* Live-puls dot — SSE-broadcast heeft zojuist deze
+                          collectie muteerd op een ander apparaat. Rustig
+                          groen ping icoontje voor ~2.5s. Verborgen als de
+                          gebruiker al op deze tab staat (die is al vers). */}
+                      {isPulsing && !showBadge && (
+                        <span aria-hidden data-testid={`live-pulse-${t.id}`}
+                          className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white" />
                         </span>
                       )}
                     </span>
