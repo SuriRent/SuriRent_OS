@@ -51,6 +51,7 @@ const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKio
 const CustomerDisplay = lazyWithRetry(() => import('./pages/vastgoed/CustomerDisplay'));
 const ContractSignPage = lazyWithRetry(() => import('./pages/vastgoed/ContractSignPage'));
 const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantSignaturePage'));
+const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback'));
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 
 function RouteFallback() {
@@ -177,6 +178,16 @@ function useTenantLandingResolver() {
 function AppRoutes() {
   // app.surirent.sr serves the kiosk + admin + tenant portal + contract sign.
   // On preview / local dev, all routes are reachable under the same domain.
+  //
+  // === Emergent Google OAuth callback detectie ===
+  // Als de URL een `#session_id=...` fragment heeft (Emergent redirect ons
+  // hier terug), rendered we AuthCallback synchroon tijdens render — vóór
+  // ProtectedRoute of AuthProvider kan draaien. Zo voorkomen we een race
+  // waar /auth/me een 401 gaf omdat de cookie nog niet was gezet.
+  const _routeLoc = useLocation();
+  if ((_routeLoc.hash || '').includes('session_id=')) {
+    return <AuthCallback />;
+  }
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
@@ -190,6 +201,7 @@ function AppRoutes() {
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
       <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />

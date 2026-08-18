@@ -62,6 +62,32 @@ from auth_utils import (  # noqa: E402
 # Auth Dependencies
 # =====================================================================
 async def get_current_user(request: Request) -> dict:
+    # === Emergent Google Auth pad ===
+    # Als `session_token` cookie aanwezig is (Emergent Google login), zoek
+    # de user via user_sessions → users. Voorkomt breken van de bestaande
+    # JWT-flow: JWT wordt hierna alsnog geprobeerd.
+    google_tok = request.cookies.get("session_token")
+    if google_tok:
+        sess = await db.user_sessions.find_one({"session_token": google_tok}, {"_id": 0})
+        if sess:
+            exp = sess.get("expires_at")
+            if isinstance(exp, str):
+                try:
+                    exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                except Exception:
+                    exp = None
+            if exp and exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp and exp >= now_utc():
+                gu = await db.users.find_one({"user_id": sess["user_id"]},
+                                              {"_id": 0, "password_hash": 0})
+                if gu:
+                    # Zorg dat downstream code de standaard velden vindt.
+                    gu.setdefault("id", gu.get("user_id"))
+                    gu.setdefault("role", "admin")
+                    gu["active_company_id"] = gu.get("company_id")
+                    return gu
+
     token = extract_token(request, "access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
@@ -1512,9 +1538,134 @@ async def me(user=Depends(get_current_user)):
     return {**user, "active_company": company}
 
 
-# =====================================================================
-# Billing — trial status + bank details for offline payments
-# =====================================================================
+# ============== Emergent Google OAuth ==============
+# REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
+# THIS BREAKS THE AUTH. Frontend construeert redirect via window.location.origin.
+class GoogleCallbackIn(BaseModel):
+    session_id: str
+    company_slug: Optional[str] = None  # scope naar deze company als opgegeven
+
+
+@api.post("/auth/google/callback")
+async def google_auth_callback(body: GoogleCallbackIn, response: Response):
+    """Exchange Emergent session_id for our user + session_token cookie.
+    Creates a new user record on first sign-in (role=admin) — auto-creates
+    a company als slug ontbreekt of niet bestaat.
+    """
+    import httpx as _httpx
+    async with _httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            r = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": body.session_id},
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"OAuth service niet bereikbaar: {e}") from e
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Ongeldige of verlopen sessie")
+    data = r.json()
+    email = (data.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Google-sessie zonder e-mail")
+    session_token = data.get("session_token")
+    name = data.get("name") or email.split("@")[0]
+    picture = data.get("picture") or ""
+
+    # Zoek bestaande user (op email OF user_id). Voorkeur: match op email
+    # zodat een bestaande JWT-user zijn account behoudt bij eerste Google
+    # login.
+    existing = await db.users.find_one(
+        {"$or": [{"email": email}, {"user_id": data.get("id")}]},
+        {"_id": 0},
+    )
+    if existing:
+        user_id = existing.get("user_id") or existing.get("id") or f"user_{uuid.uuid4().hex[:12]}"
+        update = {
+            "user_id": user_id,
+            "name": existing.get("name") or name,
+            "picture": picture,
+            "auth_provider": "google",
+            "last_login_at": iso(now_utc()),
+        }
+        await db.users.update_one({"email": email}, {"$set": update}, upsert=False)
+        user_doc = {**existing, **update}
+    else:
+        # Nieuwe user — auto-create company (slug uit company_slug of
+        # afgeleid van email-domein) zodat multi-tenant scope werkt.
+        company_id = None
+        if body.company_slug:
+            co = await db.companies.find_one({"slug": body.company_slug.lower()},
+                                              {"_id": 0, "id": 1})
+            if co:
+                company_id = co["id"]
+        if not company_id:
+            # Genereer slug uit email of naam. Val terug op random suffix
+            # bij collision.
+            base_slug = _slugify(name or email.split("@")[0])[:30] or "user"
+            slug = base_slug
+            suffix = 1
+            while await db.companies.find_one({"slug": slug}, {"_id": 1}):
+                suffix += 1
+                slug = f"{base_slug}-{suffix}"
+            company_id = new_id()
+            await db.companies.insert_one({
+                "id": company_id,
+                "slug": slug,
+                "name": name,
+                "plan": "starter",
+                "created_at": iso(now_utc()),
+                "trial_started_at": iso(now_utc()),
+            })
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        user_doc = {
+            "user_id": user_id,
+            "id": user_id,   # legacy field, sommige code kijkt naar "id"
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "role": "admin",
+            "auth_provider": "google",
+            "company_id": company_id,
+            "created_at": iso(now_utc()),
+            "last_login_at": iso(now_utc()),
+        }
+        await db.users.insert_one(user_doc)
+
+    # Sla sessie op. Emergent session_token is 7 dagen geldig.
+    expires_at = now_utc() + timedelta(days=7)
+    await db.user_sessions.update_one(
+        {"session_token": session_token},
+        {"$set": {
+            "session_token": session_token,
+            "user_id": user_doc.get("user_id") or user_doc.get("id"),
+            "expires_at": iso(expires_at),
+            "created_at": iso(now_utc()),
+        }},
+        upsert=True,
+    )
+    # httpOnly cookie zodat XSS er niet bij kan.
+    response.set_cookie(
+        key="session_token", value=session_token,
+        httponly=True, secure=True, samesite="none", path="/",
+        max_age=7 * 24 * 3600,
+    )
+    return {
+        "user_id": user_doc.get("user_id") or user_doc.get("id"),
+        "email": email, "name": name, "picture": picture,
+        "role": user_doc.get("role", "admin"),
+    }
+
+
+@api.post("/auth/google/logout")
+async def google_auth_logout(request: Request, response: Response):
+    tok = request.cookies.get("session_token")
+    if tok:
+        await db.user_sessions.delete_one({"session_token": tok})
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True}
+
+
+# ============== Billing — trial status + bank details for offline payments ==============
 PLAN_PRICES = {
     "starter": {"name": "Starter", "amount": 3000, "currency": "SRD", "interval": "month",
                 "description": "Voor kleinere vastgoedbeheerders.",
