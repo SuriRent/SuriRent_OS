@@ -199,9 +199,37 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
  * useLandingContent — fetch published content + defaults.
  * Voor de PUBLIC landing page. Voor edit-mode binnen iframe gebruiken we
  * `/superadmin/landing/content?mode=draft` (zie LiveLandingEditor).
+ *
+ * Stale-while-revalidate: leest eerst de laatst gecachede content uit
+ * localStorage (synchronously → géén flicker bij herhaalbezoek), zet die
+ * meteen als initial state, en revalidate in de achtergrond. Als het
+ * netwerk-antwoord identiek is aan de cache doen we GEEN setState,
+ * waardoor React niet re-rendert en de fade-in animaties niet opnieuw
+ * afspelen. Bij afwijking wordt cache overschreven.
  */
+const LANDING_CACHE_KEY = 'sr_landing_content_v1';
+
+function readLandingCache(editMode) {
+  // Edit-mode = draft, nooit cachen (superadmin wil altijd de laatste versie)
+  if (editMode) return null;
+  try {
+    const raw = localStorage.getItem(LANDING_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch { return null; }
+}
+
+function writeLandingCache(content) {
+  try { localStorage.setItem(LANDING_CACHE_KEY, JSON.stringify(content || {})); }
+  catch { /* quota / private mode — negeren */ }
+}
+
 export function useLandingContent(editMode = false) {
-  const [content, setContent] = useState(null);
+  // Init state direct met cache zodat de eerste render al de "juiste"
+  // content laat zien i.p.v. hardcoded fallbacks (voorkomt de flicker
+  // van fallback → server-content).
+  const [content, setContent] = useState(() => readLandingCache(editMode));
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
 
@@ -220,7 +248,18 @@ export function useLandingContent(editMode = false) {
         const res = await fetch(url, init);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!abort) setContent(data.content || {});
+        if (abort) return;
+        const next = data.content || {};
+        // Skip setState wanneer server-content exact gelijk is aan de
+        // huidige (uit cache geladen) state — dit voorkomt re-render en
+        // flicker bij herhaalbezoek zonder wijzigingen.
+        setContent((prev) => {
+          try {
+            if (prev && JSON.stringify(prev) === JSON.stringify(next)) return prev;
+          } catch { /* fall through — vervang */ }
+          return next;
+        });
+        if (!editMode) writeLandingCache(next);
       } catch (e) {
         if (!abort) setErr(e);
       } finally {

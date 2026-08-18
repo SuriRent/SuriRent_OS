@@ -2857,10 +2857,15 @@ MAX_LANDING_ASSET_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
 
 
 @api.get("/landing/content")
-async def get_landing_content():
+async def get_landing_content(response: Response):
     """Public — returns the *published* landing content merged with defaults."""
     doc = await db.landing_content.find_one({"id": PUBLISHED_ID}, {"_id": 0})
     content = merge_with_defaults(doc)
+    # Stale-while-revalidate: browser mag content 60s uit disk-cache
+    # serveren en 5 min lang stale-content tonen terwijl hij op de
+    # achtergrond revalidateert. Combineert perfect met de frontend
+    # localStorage cache — 2e bezoek = instant paint.
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     return {"content": content, "allowed_icons": ALLOWED_FEATURE_ICONS}
 
 
