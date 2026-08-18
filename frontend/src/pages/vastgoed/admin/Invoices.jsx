@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { useApiSWR } from '../../../lib/swr';
 
 import { fmtAmount, fmtAmountWhole, groupByTenant, isUnpaid } from './invoices/helpers';
 import { Tab, MobileFilterPill, KpiCard, FilterMenu, Toast } from './invoices/kpi';
@@ -21,10 +22,14 @@ import CreditSourcesPopover from './invoices/CreditSourcesPopover';
 // `./invoices/` (helpers.js, InvoiceRow.jsx, TenantRow.jsx, ...).
 // =====================================================================
 export default function Invoices() {
-  const [items, setItems] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [credits, setCredits] = useState({}); // { tenant_id: { SRD: 2000, ... } }
-  const [loading, setLoading] = useState(true);
+  // SWR cache — tabwissel serveert instant uit cache
+  const { data: itemsRaw, mutate: refetchI, isLoading: loadingI } = useApiSWR('/invoices');
+  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const { data: creditsRaw, mutate: refetchC } = useApiSWR('/tenants/credits');
+  const items = itemsRaw || [];
+  const tenants = tenantsRaw || [];
+  const credits = creditsRaw || {};
+  const loading = (loadingI || loadingT) && items.length === 0;
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [reminding, setReminding] = useState(null);
@@ -40,19 +45,10 @@ export default function Invoices() {
   const [toast, setToast] = useState(null);
   const today = new Date();
 
-  const load = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const [i, t, c] = await Promise.all([
-        api.get('/invoices'),
-        api.get('/tenants'),
-        api.get('/tenants/credits').catch(() => ({ data: {} })),
-      ]);
-      setItems(i.data); setTenants(t.data); setCredits(c.data || {});
-    } finally { if (!silent) setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-  useAutoRefresh(() => load({ silent: true }), { interval: 45000, enabled: !creating && !reminding });
+  const load = useCallback(async () => {
+    await Promise.all([refetchI(), refetchT(), refetchC()]);
+  }, [refetchI, refetchT, refetchC]);
+  useAutoRefresh(load, { interval: 45000, enabled: !creating && !reminding });
 
   // Luister naar `invoice-delete` event vanaf <InvoiceRow> en voer DELETE uit.
   useEffect(() => {
@@ -62,7 +58,7 @@ export default function Invoices() {
       try {
         await api.delete(`/invoices/${inv.id}`);
         setToast({ type: 'success', text: `Factuur ${inv.invoice_number} verwijderd` });
-        load({ silent: true });
+        load();
       } catch (e) {
         setToast({ type: 'err', text: formatError(e) || 'Kon factuur niet verwijderen' });
       }
@@ -163,7 +159,7 @@ export default function Invoices() {
         <InvoiceDetailPage
           group={g}
           credits={credits[g.tenant_id]}
-          onBack={() => { setDetail(null); load({ silent: true }); }}
+          onBack={() => { setDetail(null); load(); }}
           onReminder={openReminder}
           onCreditClick={() => openCreditSources(g)}
           onPaid={(payment) => {
@@ -171,7 +167,7 @@ export default function Invoices() {
               ? payment._message
               : `Kwitantie ${payment.receipt_number} — ${payment.currency} ${Number(payment.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`;
             setToast({ type: 'ok', text: msg });
-            load({ silent: true });
+            load();
           }}
         />
         {reminding && (

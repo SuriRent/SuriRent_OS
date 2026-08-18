@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Plus, Pencil, Trash2, X, Check, Loader2, Building2, Image as ImageIcon, Search, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { useApiSWR } from '../../../lib/swr';
 import PhotoUpload from '../../../components/PhotoUpload';
 
 function LocationForm({ initial, onCancel, onSaved }) {
@@ -75,23 +76,18 @@ function LocationForm({ initial, onCancel, onSaved }) {
 }
 
 export default function Locations() {
-  const [items, setItems] = useState([]);
+  // SWR cache — tabwissel toont instant vanuit cache
+  const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
+  const items = itemsRaw || [];
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | active | empty
-  const [loading, setLoading] = useState(true);
+  const loading = isLoading && items.length === 0;
 
-  const load = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const { data } = await api.get('/locations');
-      setItems(data);
-    } finally { if (!silent) setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-  useAutoRefresh(() => load({ silent: true }), {
+  const load = useCallback(async () => { await refetch(); }, [refetch]);
+  useAutoRefresh(load, {
     interval: 45000,
     enabled: !creating && !editing && !detailId,
   });

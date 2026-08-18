@@ -7,6 +7,7 @@ import {
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useAdminEvents } from '../../../lib/admin-events';
+import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
 import SignaturePad from '../../../components/SignaturePad';
 import { playApproveConfirm, playErrorBuzz, playSwoosh } from '../../../lib/tap-sounds';
@@ -805,11 +806,15 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // Main page
 // =====================================================================
 export default function Payments() {
-  const [items, setItems] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [pending, setPending] = useState([]);
+  // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
+  const { data: itemsRaw, mutate: refetchP, isLoading: loadingP } = useApiSWR('/payments');
+  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const { data: pendingRaw, mutate: refetchPend } = useApiSWR('/payments?status=pending_approval');
+  const items = itemsRaw || [];
+  const tenants = tenantsRaw || [];
+  const pending = pendingRaw || [];
+  const loading = (loadingP || loadingT) && items.length === 0;
   const [approveFor, setApproveFor] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -821,18 +826,9 @@ export default function Payments() {
   const toggleExpandMobile = (id) => setExpanded((cur) => (cur === id ? null : id));
   const today = useMemo(() => new Date(), []);
 
-  const load = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const [p, t, pend] = await Promise.all([
-        api.get('/payments'),
-        api.get('/tenants'),
-        api.get('/payments?status=pending_approval'),
-      ]);
-      setItems(p.data); setTenants(t.data); setPending(pend.data || []);
-    } finally { if (!silent) setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async () => {
+    await Promise.all([refetchP(), refetchT(), refetchPend()]);
+  }, [refetchP, refetchT, refetchPend]);
 
   // Wanneer een admin de push-notificatie van een pending betaling
   // aanklikt landt hij hier met ?filter=pending in de URL. We scrollen
@@ -872,7 +868,7 @@ export default function Payments() {
   // Stille polling — snel (3s) zodat nieuwe pending betalingen vrijwel
   // realtime verschijnen ook als de SW push miss (bv. PWA in achtergrond
   // stond bij binnenkomst). Geen spinner / scroll-reset tijdens auto-refresh.
-  useAutoRefresh(() => load({ silent: true }), { interval: 3000, enabled: !creating && !emailing });
+  useAutoRefresh(() => load(), { interval: 3000, enabled: !creating && !emailing });
 
   // Server-Sent Events — INSTANT push (~50ms latency) zodra de backend een
   // nieuwe pending betaling registreert. Veel sneller dan FCM/APNS WebPush.
@@ -880,7 +876,7 @@ export default function Payments() {
   // de notificatie pop-up ook maar half geanimeerd is.
   useAdminEvents((evt) => {
     if (evt?.type === 'notification') {
-      load({ silent: true });
+      load();
     }
   }, { enabled: !creating && !emailing });
 
@@ -889,7 +885,7 @@ export default function Payments() {
   // window focus (zelfs zonder push) — perfect voor "PWA terug op de
   // voorgrond" scenario.
   useEffect(() => {
-    const refresh = () => load({ silent: true });
+    const refresh = () => load();
     const onSwMsg = (ev) => {
       const t = ev?.data?.type;
       if (t === 'BADGE_CHANGED' || t === 'SW_ACTIVATED') refresh();
@@ -977,7 +973,7 @@ export default function Payments() {
     return (
       <PaymentDetail
         payment={detailPayment}
-        onBack={() => { setDetailPayment(null); load({ silent: true }); }}
+        onBack={() => { setDetailPayment(null); load(); }}
         onEmail={(item) => setEmailing(item)}
         onDelete={(item) => setDeleting(item)}
         apiBase={apiBase}
