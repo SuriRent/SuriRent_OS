@@ -773,11 +773,13 @@ function MobileTabBar({ active, onChange, tabs, onOpenMenu, user, badgeCount }) 
   // Splits in 2 links + 2 rechts (de "+" zit in het midden).
   const left = primary.slice(0, 2);
   const right = primary.slice(2, 4);
+  const pulsingTabs = useLivePulse(active);
 
   const renderTab = (t) => {
     const Icon = MOBILE_TAB_ICON_OVERRIDES[t.id] || t.icon;
     const isActive = active === t.id;
     const showBadge = t.id === 'notifications' && badgeCount > 0;
+    const isPulsing = pulsingTabs.has(t.id);
     return (
       <button
         key={t.id}
@@ -799,6 +801,16 @@ function MobileTabBar({ active, onChange, tabs, onOpenMenu, user, badgeCount }) 
           {showBadge && (
             <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-[0_2px_6px_-1px_rgba(239,68,68,0.55)] ring-2 ring-white">
               {badgeCount > 9 ? '9+' : badgeCount}
+            </span>
+          )}
+          {/* Live-puls dot — identiek gedrag als desktop sidebar (2.5s
+              ping) maar iets kleiner geformatteerd voor de compactere
+              mobiele tabbar. Notifications-badge heeft voorrang. */}
+          {isPulsing && !showBadge && (
+            <span aria-hidden data-testid={`live-pulse-mobile-${t.id}`}
+              className="absolute -top-0.5 -right-1.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white" />
             </span>
           )}
         </span>
