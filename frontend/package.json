@@ -17,6 +17,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
+    "postbuild": "node scripts/inline-landing-content.js",
     "test": "craco test"
   },
   "browserslist": {

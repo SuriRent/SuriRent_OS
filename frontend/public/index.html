@@ -195,6 +195,14 @@
     <!-- (oudere PWA-rol detectie is vervangen door het inline-script
          bovenin de <head> dat eerder draait dan de brand-color injector
          en de juiste <title>/manifest/icon set vóór React mount.) -->
+
+    <!-- Landing content marker — bij `yarn build` vervangt
+         scripts/inline-landing-content.js deze comment door een
+         <script>window.__LANDING_CONTENT__=…</script> tag met de
+         gepubliceerde marketing content. Blijft leeg in dev / bij
+         backend-onbereikbaarheid; frontend faalt dan terug op de
+         runtime fetch. -->
+    <!--__LANDING_CONTENT__-->
   </head>
   <body style="background-color: #FFF7F0;">
     <noscript>JavaScript is vereist om deze app te gebruiken.</noscript>

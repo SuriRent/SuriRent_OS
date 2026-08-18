@@ -212,6 +212,17 @@ const LANDING_CACHE_KEY = 'sr_landing_content_v1';
 function readLandingCache(editMode) {
   // Edit-mode = draft, nooit cachen (superadmin wil altijd de laatste versie)
   if (editMode) return null;
+  // 1) BUILD-TIME INLINE — bij `yarn build` injecteert
+  //    scripts/inline-landing-content.js de gepubliceerde content in
+  //    `build/index.html` als `window.__LANDING_CONTENT__`. Als die
+  //    aanwezig is dan is dit de "server-side rendered" versie: geen
+  //    API round-trip nodig en geen flicker op eerste bezoek ooit.
+  try {
+    if (typeof window !== 'undefined' && window.__LANDING_CONTENT__) {
+      return window.__LANDING_CONTENT__;
+    }
+  } catch { /* noop */ }
+  // 2) RUNTIME CACHE — vorig bezoek heeft content bewaard.
   try {
     const raw = localStorage.getItem(LANDING_CACHE_KEY);
     if (!raw) return null;
