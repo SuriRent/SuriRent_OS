@@ -1595,6 +1595,17 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
     )
     if existing:
         user_id = existing.get("user_id") or existing.get("id") or f"user_{uuid.uuid4().hex[:12]}"
+        # Verifieer dat het bedrijf van deze user nog bestaat. Als het is
+        # gewist (bv. via Danger Zone / Wipe-all) dan hangt de user in het
+        # niets en faalt élk admin-endpoint met "Bedrijf niet gevonden".
+        # In dat geval: log de user opnieuw in door een nieuw bedrijf voor
+        # hem/haar aan te maken (zelfde flow als een nieuwe Google user).
+        existing_cid = existing.get("company_id")
+        company_still_exists = False
+        if existing_cid:
+            company_still_exists = bool(
+                await db.companies.find_one({"id": existing_cid}, {"_id": 1})
+            )
         update = {
             "user_id": user_id,
             "name": existing.get("name") or name,
@@ -1602,6 +1613,28 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
             "auth_provider": "google",
             "last_login_at": iso(now_utc()),
         }
+        # Superadmins hebben geen company nodig — sla company-heruitrol over.
+        role = existing.get("role") or "admin"
+        if role != "superadmin" and not company_still_exists:
+            base_slug = _slugify(name or email.split("@")[0])[:30] or "user"
+            slug = base_slug
+            suffix = 1
+            while await db.companies.find_one({"slug": slug}, {"_id": 1}):
+                suffix += 1
+                slug = f"{base_slug}-{suffix}"
+            new_company_id = new_id()
+            await db.companies.insert_one({
+                "id": new_company_id,
+                "slug": slug,
+                "name": name,
+                "plan": "starter",
+                "billing_status": "trial",
+                "trial_started_at": iso(now_utc()),
+                "trial_ends_at": iso(now_utc() + timedelta(days=14)),
+                "owner_email": email,
+                "created_at": iso(now_utc()),
+            })
+            update["company_id"] = new_company_id
         await db.users.update_one({"email": email}, {"$set": update}, upsert=False)
         user_doc = {**existing, **update}
     else:
@@ -1628,8 +1661,11 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
                 "slug": slug,
                 "name": name,
                 "plan": "starter",
-                "created_at": iso(now_utc()),
+                "billing_status": "trial",
                 "trial_started_at": iso(now_utc()),
+                "trial_ends_at": iso(now_utc() + timedelta(days=14)),
+                "owner_email": email,
+                "created_at": iso(now_utc()),
             })
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
