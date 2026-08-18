@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
+import { useApiSWR } from '../../../lib/swr';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -234,8 +235,11 @@ function SalaryForm({ employees, onCancel, onSaved }) {
 }
 
 export default function Employees() {
-  const [employees, setEmployees] = useState([]);
-  const [salaries, setSalaries] = useState([]);
+  // SWR + SSE live-sync — geen useEffect fetch, geen polling.
+  const { data: empRaw, mutate: refetchEmp } = useApiSWR('/employees');
+  const { data: salRaw, mutate: refetchSal } = useApiSWR('/salaries');
+  const employees = empRaw || [];
+  const salaries = salRaw || [];
   const [view, setView] = useState('employees'); // employees | salaries
   const [editing, setEditing] = useState(null);
   const [creatingEmp, setCreatingEmp] = useState(false);
@@ -243,10 +247,8 @@ export default function Employees() {
   const [pinFor, setPinFor] = useState(null);
 
   const load = useCallback(async () => {
-    const [e, s] = await Promise.all([api.get('/employees'), api.get('/salaries')]);
-    setEmployees(e.data); setSalaries(s.data);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchEmp(), refetchSal()]);
+  }, [refetchEmp, refetchSal]);
 
   const delEmp = async (id) => {
     if (!window.confirm('Werknemer verwijderen?')) return;

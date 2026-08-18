@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Plus, X, Check, Loader2, Wrench, Trash2 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
+import { useApiSWR } from '../../../lib/swr';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -110,16 +111,17 @@ const STATUS_LABELS = {
 };
 
 export default function Maintenance() {
-  const [items, setItems] = useState([]);
-  const [apartments, setApartments] = useState([]);
+  // SWR + SSE live-sync — geen polling meer, geen 30s intervals.
+  const { data: itemsRaw, mutate: refetchItems } = useApiSWR('/maintenance');
+  const { data: aptsRaw, mutate: refetchApts } = useApiSWR('/apartments');
+  const items = itemsRaw || [];
+  const apartments = aptsRaw || [];
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
 
   const load = useCallback(async () => {
-    const [m, a] = await Promise.all([api.get('/maintenance'), api.get('/apartments')]);
-    setItems(m.data); setApartments(a.data);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchItems(), refetchApts()]);
+  }, [refetchItems, refetchApts]);
 
   const updateStatus = async (id, status) => {
     await api.post(`/maintenance/${id}/status`, { status });

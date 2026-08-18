@@ -3,6 +3,7 @@ import {
   Plus, Loader2, Wallet, Trash2, ArrowDownCircle, ArrowUpCircle, Receipt, X,
 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
+import { useApiSWR } from '../../../lib/swr';
 
 // =====================================================================
 // InlineCashForm (desktop) — één compacte rij: type-toggle · bedrag ·
@@ -294,15 +295,18 @@ function MobileCashCard({ c, onDelete }) {
 }
 
 export default function Kasgeld() {
-  const [items, setItems] = useState([]);
-  const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
+  // SWR — cache-hit bij tabwissel; SSE-broadcast (globalMutate in
+  // AdminDashboard) refresht automatisch bij mutations vanaf een ander
+  // apparaat. Geen polling.
+  const { data: itemsRaw, mutate: refetchItems } = useApiSWR('/kasgeld');
+  const { data: balRaw, mutate: refetchBal } = useApiSWR('/kasgeld/balance');
+  const items = itemsRaw || [];
+  const balances = balRaw || { SRD: 0, USD: 0, EUR: 0 };
   const [filter, setFilter] = useState('all'); // all | manual | payment
   const [sheetOpen, setSheetOpen] = useState(false);
   const load = useCallback(async () => {
-    const [c, b] = await Promise.all([api.get('/kasgeld'), api.get('/kasgeld/balance')]);
-    setItems(c.data); setBalances(b.data);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchItems(), refetchBal()]);
+  }, [refetchItems, refetchBal]);
   const del = async (id) => {
     if (!window.confirm('Mutatie verwijderen?')) return;
     try { await api.delete(`/kasgeld/${id}`); load(); }

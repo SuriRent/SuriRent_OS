@@ -2,29 +2,27 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { playApproveConfirm, playSwoosh, playErrorBuzz } from '../../../lib/tap-sounds';
+import { useApiSWR } from '../../../lib/swr';
 
 // =====================================================================
 // Top-level — list of payment plans + "Nieuwe regeling" knop
 // =====================================================================
 export default function PaymentPlans() {
-  const [plans, setPlans] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState(null); // plan in detail-view
 
-  const load = useCallback(async () => {
-    setErr('');
-    try {
-      const q = statusFilter && statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const { data } = await api.get(`/payment-plans${q}`);
-      setPlans(data || []);
-    } catch (e) { setErr(formatError(e)); }
-    finally { setLoading(false); }
-  }, [statusFilter]);
-
-  useEffect(() => { load(); }, [load]);
+  // SWR — cache-hit bij navigatie; SSE-broadcast (globalMutate in
+  // AdminDashboard) refresht dezelfde key automatisch bij mutaties
+  // ergens anders. Geen polling meer.
+  const swrKey = statusFilter && statusFilter !== 'all'
+    ? `/payment-plans?status=${statusFilter}`
+    : '/payment-plans';
+  const { data: plansData, error: swrErr, isLoading: swrLoading, mutate: reloadPlans } = useApiSWR(swrKey);
+  const plans = plansData || [];
+  const loading = swrLoading && !plansData;
+  const err = swrErr ? formatError(swrErr) : '';
+  const load = useCallback(async () => { await reloadPlans(); }, [reloadPlans]);
 
   // Open direct de detail-pagina wanneer we hier komen via een klik op de
   // REGELING-badge in Facturen. Twee triggers:

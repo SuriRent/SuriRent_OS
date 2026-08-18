@@ -239,9 +239,12 @@ export function DomainForm({ initial }) {
     finally { setStatusLoading(false); }
   }, [d.custom_domain]);
   useEffect(() => {
+    // Éénmalig laden bij mount + wanneer domain-veld verandert.
+    // Polling (voorheen 30s setInterval) VERWIJDERD — de widget heeft
+    // een expliciete refresh-knop en de user opent deze pagina zelden.
+    // SSE dekt overige mutations; DNS/SSL status is een externe check
+    // die niet via SSE binnenkomt, dus we vertrouwen op de refresh-knop.
     refreshStatus();
-    const t = setInterval(refreshStatus, 30_000);
-    return () => clearInterval(t);
   }, [refreshStatus]);
 
   return (

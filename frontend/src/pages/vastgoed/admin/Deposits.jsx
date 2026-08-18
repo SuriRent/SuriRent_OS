@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
+import { useApiSWR } from '../../../lib/swr';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -133,16 +134,19 @@ function RefundForm({ deposit, onCancel, onSaved }) {
 }
 
 export default function Deposits() {
-  const [items, setItems] = useState([]);
-  const [tenants, setTenants] = useState([]);
+  // SWR — instant cache-hit bij tabwissel; SSE-broadcast invalideert
+  // deze keys automatisch zodra een borg wordt gewijzigd op een ander
+  // apparaat. Geen polling.
+  const { data: itemsRaw, mutate: refetchDeposits } = useApiSWR('/deposits');
+  const { data: tenantsRaw, mutate: refetchTenants } = useApiSWR('/tenants');
+  const items = itemsRaw || [];
+  const tenants = tenantsRaw || [];
   const [creating, setCreating] = useState(false);
   const [refunding, setRefunding] = useState(null);
   const [detail, setDetail] = useState(null);
   const load = useCallback(async () => {
-    const [d, t] = await Promise.all([api.get('/deposits'), api.get('/tenants')]);
-    setItems(d.data); setTenants(t.data);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchDeposits(), refetchTenants()]);
+  }, [refetchDeposits, refetchTenants]);
   const del = async (id) => {
     if (!window.confirm('Borg verwijderen?')) return;
     await api.delete(`/deposits/${id}`); load();

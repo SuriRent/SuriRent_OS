@@ -1128,14 +1128,11 @@ function GlobalSearch({ variant = 'quick' }) {
 // Betalingsregelingen-tab.
 // =====================================================================
 function PaymentPlansList() {
-  const [plans, setPlans] = useState(null);
-  const reload = useCallback(() => {
-    api.get('/payment-plans?status=active')
-      .then((r) => setPlans(r.data || []))
-      .catch(() => setPlans([]));
-  }, []);
-  useEffect(() => { reload(); }, [reload]);
-  useAutoRefresh(reload, 15000);
+  // SWR cache — instant zichtbaar bij tabwissel; SSE-broadcast triggert
+  // globalMutate zodra een regeling wordt aangemaakt/gewijzigd op een
+  // ander apparaat, dus polling is overbodig.
+  const { data: plansData } = useApiSWR('/payment-plans?status=active');
+  const plans = plansData === undefined ? null : (plansData || []);
 
   const go = () => window.dispatchEvent(new CustomEvent('go-tab', { detail: 'payment_plans' }));
 
@@ -1232,13 +1229,11 @@ function PaymentPlansList() {
 }
 
 function Overview() {
-  const [stats, setStats] = useState(null);
+  // SWR — instant zichtbaar bij terug-navigeren; live-sync via SSE
+  // (AdminDashboard globalMutate) refresht /admin/stats automatisch
+  // zodra een mutatie ergens in de app plaatsvindt. Geen polling meer.
+  const { data: stats } = useApiSWR('/admin/stats');
   const navigate = useBrandedNavigate();
-  const reload = useCallback(() => {
-    api.get('/admin/stats').then((r) => setStats(r.data)).catch(() => { /* keep last */ });
-  }, []);
-  useEffect(() => { reload(); }, [reload]);
-  useAutoRefresh(reload, 10000);
   if (!stats) return <div className="text-slate-400 text-sm">Laden...</div>;
 
   const cards = [
@@ -3910,12 +3905,16 @@ export default function AdminDashboard() {
               // 2) cross-collectie invalidatie voor typische afhankelijkheden:
               //    - payments → invoices status verandert
               //    - assign-tenant → tenants + apartments beide
-              const crossInvalidate = [];
+              //    - iedere mutation → /admin/stats (aggregaat op Overzicht)
+              const crossInvalidate = ['/admin/stats'];
               if (swrKey.startsWith('/payments')) crossInvalidate.push('/invoices');
               if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
                 crossInvalidate.push('/tenants', '/apartments');
               }
               if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
+              if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
+                crossInvalidate.push('/payment-plans?status=active');
+              }
               crossInvalidate.forEach((base) => {
                 swrGlobalMutate(
                   (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
