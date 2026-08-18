@@ -60,6 +60,32 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <script>
+      // Conditionele hero-image preload — alleen op de marketing landing (`/`)
+      // en `/site/<slug>` (public tenant landing). Op andere routes (admin,
+      // kiosk, login) is de hero-visual nooit nodig; een onbenutte preload
+      // veroorzaakt een console warning en verspilt bandbreedte.
+      (function () {
+        try {
+          var p = (window.location.pathname || '').toLowerCase();
+          var isMarketing = p === '/' || p === '' || p.indexOf('/site/') === 0;
+          if (!isMarketing) return;
+          // Preconnect naar assets-CDN (TCP+TLS handshake vast open).
+          var pc = document.createElement('link');
+          pc.rel = 'preconnect';
+          pc.href = 'https://customer-assets.emergentagent.com';
+          pc.crossOrigin = 'anonymous';
+          document.head.appendChild(pc);
+          // Preload van de hero achtergrondafbeelding (LCP-kandidaat).
+          var pl = document.createElement('link');
+          pl.rel = 'preload';
+          pl.as = 'image';
+          pl.setAttribute('fetchpriority', 'high');
+          pl.href = 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png';
+          document.head.appendChild(pl);
+        } catch (e) { /* noop */ }
+      })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>App</title>
     <script>
