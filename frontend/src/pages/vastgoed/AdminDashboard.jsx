@@ -20,6 +20,7 @@ import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { useApiSWR } from '../../lib/swr';
+import { mutate as swrGlobalMutate } from 'swr';
 import Contracts from './admin/Contracts';
 import Invoices from './admin/Invoices';
 import Payments from './admin/Payments';
@@ -1929,10 +1930,8 @@ function Apartments() {
     await Promise.all([refetchApts(), refetchTenants()]);
   }, [refetchApts, refetchTenants]);
   // Stille polling — pauzeer wanneer een modal open is óf we in detail-view zitten.
-  useAutoRefresh(load, {
-    interval: 45000,
-    enabled: !creating && !editing && !assignFor && !shellyFor && !plateFor && !detailId,
-  });
+  // POLLING VERWIJDERD (per user verzoek 2026-02-28): 45s useAutoRefresh
+  // uitgeschakeld. SWR + SSE (/api/admin/events) dekken alle updates.
 
   const del = async (id) => {
     if (!window.confirm('Appartement verwijderen?')) return;
@@ -3150,10 +3149,8 @@ function Tenants() {
   const [detailId, setDetailId] = useState(null);  // huurder in detail-view
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
-  useAutoRefresh(load, {
-    interval: 45000,
-    enabled: !creating && !editing && !pinFor && !detailId,
-  });
+  // POLLING VERWIJDERD (per user verzoek 2026-02-28): SWR cache + SSE
+  // dekken alle huurder-updates. Vroeger stond hier een 45s useAutoRefresh.
   const del = async (id) => {
     if (!window.confirm('Huurder verwijderen?')) return;
     await api.delete(`/tenants/${id}`);
@@ -3894,6 +3891,40 @@ export default function AdminDashboard() {
         const data = JSON.parse(e.data);
         if (data?.type === 'change' || data?.type === 'notification') {
           window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data }));
+          // Invalideer alle SWR-caches waarvan de key onder het gemuteerde
+          // API-pad valt. Voorbeeld: mutation op `/api/tenants/abc` triggert
+          // revalidate van SWR-key `/tenants`, `/tenants/abc`, etc.
+          // Werkt over álle admin-lijsten (Huurders/Appartementen/Contracten
+          // /Facturen/Betalingen/Locaties) zonder dat elk scherm expliciet
+          // hoeft te luisteren.
+          try {
+            const rawPath = String(data?.path || '');
+            if (rawPath.startsWith('/api/')) {
+              const swrKey = rawPath.slice(4); // strip '/api'
+              // 1) exacte key + eventuele detail-endpoints eronder
+              swrGlobalMutate(
+                (k) => typeof k === 'string' && (k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?')),
+                undefined,
+                { revalidate: true }
+              );
+              // 2) cross-collectie invalidatie voor typische afhankelijkheden:
+              //    - payments → invoices status verandert
+              //    - assign-tenant → tenants + apartments beide
+              const crossInvalidate = [];
+              if (swrKey.startsWith('/payments')) crossInvalidate.push('/invoices');
+              if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
+                crossInvalidate.push('/tenants', '/apartments');
+              }
+              if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
+              crossInvalidate.forEach((base) => {
+                swrGlobalMutate(
+                  (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
+                  undefined,
+                  { revalidate: true }
+                );
+              });
+            }
+          } catch { /* noop */ }
         }
       } catch { /* noop */ }
     };

@@ -1,0 +1,63 @@
+{
+  "summary": "Iter 55 — Tested removal of short polling and SSE-driven refresh replacement. POLLING REMOVAL: fully verified. Betalingen 30s idle = 0 REST calls; Huurders/Contracten/Locaties 12s idle = 0 REST calls; Appartementen/Facturen 12s idle = 1 REST call each (only /api/payments/pending-count from a separate foreground-notify 30s poll, NOT a short poll). Tab-cache test (Huurders→Appartementen→Huurders) = 0 REST calls (SWR cache works). Login POST /api/auth/login = 1.085s (borderline but acceptable). CRITICAL FINDING: SSE-driven refresh is BROKEN for the tabs where polling was just removed. Verified end-to-end: created a tenant via POST /api/tenants (200 OK, using the SAME cookie-auth path the frontend uses); 3s later the Huurders tab UI was NOT updated (still shows '3 huurders geregistreerd', new ZZZ_TESTSSE_Runner absent, 0 network activity to refetch). Root cause is TWO independent bugs stacked (see rca).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "backend/server.py L740-748 (broadcast middleware)",
+        "issue": "SSE broadcast middleware only fires when request carries `Authorization: Bearer` header. All frontend calls use httpOnly cookies (credentials:'include') and do NOT send a Bearer header, so NO SSE 'change' event is ever broadcast for cookie-auth mutations. Since the middleware bails out at `if not auth.lower().startswith('bearer '): return response`, the whole SSE-as-safety-net premise fails. Must also extract company_id from the access_token cookie when Bearer is absent.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "SSE-driven tab refresh (Huurders/Appartementen/Contracten/Facturen/Locaties)",
+        "issue": "useAdminEvents is ONLY wired into the 3 bells + Payments.jsx. The 5 tabs where useAutoRefresh(45s) was just removed have NO SSE listener at all, so even if the backend broadcast bug (see backend/critical) is fixed, these tabs will still never refresh on external mutations (portal onboarding, webhooks, another admin session, API-triggered changes). Add useAdminEvents((evt)=>{ if(evt.type==='change' && evt.path.startsWith('/api/tenants')) mutate('/tenants') }) in each list component — or better, wire it inside the useApiSWR hook itself so all SWR keys refresh on matching paths.",
+        "affected_selectors": ["Huurders list", "Appartementen list", "Contracten list", "Facturen list", "Locaties list"]
+      },
+      {
+        "flow": "Payments SSE handler mismatch",
+        "issue": "Payments.jsx L887-891 listens for evt.type==='notification', but backend broadcast middleware emits evt.type==='change'. Only the bells match on 'change'. Payments tab will not refresh on generic mutations either — it only reacts to a separate notification pipeline.",
+        "affected_selectors": ["Betalingen tab"]
+      },
+      {
+        "flow": "Overzicht tab still short-polls",
+        "issue": "AdminDashboard.jsx L1240 has useAutoRefresh(reload, 10000) on Overview (/api/admin/stats) and L1137 useAutoRefresh(reload, 15000) on PaymentPlansList. If the intent was 'remove all short polling', these 10s and 15s intervals on the default landing tab were missed. The review scope did not include Overzicht explicitly but the spec said 'remove all short polling intervals (2s, 3s, 10s)'.",
+        "affected_selectors": ["Overzicht tab", "PaymentPlansList card"]
+      },
+      {
+        "flow": "foreground-notify 30s poll still active",
+        "issue": "lib/foreground-notify.js still runs setInterval every 30s hitting /api/payments/pending-count (observed once each in Appartementen and Facturen 12s windows — a 30s tick landing inside the observation). Not a 'short poll' but the review said bell components should use SSE only. This module is separate from PendingApprovalBell but still fires background polls for the same purpose."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Fix backend/server.py SSE broadcast to also work with cookie-based auth. Read access_token from request.cookies when Authorization header is missing, then decode for company_id.",
+    "CRITICAL: Wire useAdminEvents into the 5 list pages that lost their 45s polling (Huurders, Appartementen, Contracten, Facturen, Locaties). Simplest: add a global bridge in useApiSWR that calls mutate() when the SSE event.path matches the SWR key prefix.",
+    "Fix Payments.jsx SSE listener to react to evt.type==='change' (currently only reacts to 'notification'). Otherwise create-payment-from-external will not refresh Betalingen without polling.",
+    "Decide on Overzicht (Overview) tab: remove/lengthen the 10s /api/admin/stats and 15s /api/payment-plans polls, or explicitly document them as out-of-scope.",
+    "Consider removing/lengthening the 30s poll in lib/foreground-notify.js if the SSE fix lands and the same events can piggyback."
+  ],
+  "critical_code_review_comments": [
+    "The whole polling-removal iteration is safe on paper because SSE middleware exists, but the middleware skips cookie-auth (which is the default) so in practice zero broadcasts fire. This should be caught by an integration test: POST a mutation via cookie session, assert an event is received on the SSE stream within 500ms.",
+    "SSE event schema is inconsistent between producer and consumers: producer sends {type:'change', path, method}; PendingApprovalBell/OverdueBell/ApartmentsBell filter on type='change' correctly; Payments.jsx filters on type='notification' (mismatch); the 5 list tabs don't subscribe at all. Recommend a single shared hook useSwrSseSync() that maps event.path → matching SWR keys.",
+    "AdminDashboard.jsx is 4101 lines — the two remaining useAutoRefresh call-sites (L1137, L1240) are easy to miss during a sweep. Splitting Overview and PaymentPlansList into their own files would prevent future 'we thought we removed all polling' misses.",
+    "backend/server.py L740-748: the middleware uses PyJWT with `import jwt as _pyjwt` inside the request path. Move the import to module scope. Also add a metric/log for skipped broadcasts so this class of regression is observable."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not re-tested for full API surface; SSE broadcast has 1 CRITICAL bug",
+    "frontend": "polling removal 100% (per user scope), SSE-driven refresh 0% (broken end-to-end)"
+  },
+  "test_credentials": "demo@surirent.sr / demo1234",
+  "seed_data_creation": "Created + deleted 1 tenant (ZZZ_TESTSSE_Runner) during SSE verification. Cleanup DELETE returned 200.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Verification pattern for SSE fix: (1) open EventSource to /api/admin/events with cookie auth, (2) POST /api/tenants via fetch(credentials:'include'), (3) assert a message with {type:'change', path:'/api/tenants', method:'POST'} arrives within 1s. Then in the UI test: on Huurders tab (0 refresh), POST tenant via cookie session, assert 'X huurders geregistreerd' count increments and new row appears within 2s without navigation. All the polling-removal claims (30s idle Betalingen = 0 REST, tab cache = 0 REST) are already verified — no need to re-run those unless caching config changes.",
+  "rca of the issue": "SSE end-to-end is broken due to two stacked bugs. BUG-A (backend/server.py L740-748): the broadcast middleware early-returns when the request has no `Authorization: Bearer` header, but the frontend switched to httpOnly cookie auth — every mutation request comes in with cookies only, never a Bearer header, so _sse_broadcast is never called. BUG-B (frontend): only the 3 bells + Payments.jsx subscribe to useAdminEvents, and Payments.jsx checks for evt.type==='notification' while the producer sends type='change'. Meanwhile the 5 tabs where 45s useAutoRefresh was just removed (Huurders/Appartementen/Contracten/Facturen/Locaties) have NO SSE subscription at all. Repro: log in as demo, sit on Huurders, from another shell or from browser devtools POST /api/tenants with cookie credentials → tenant is created (200), no SSE event fires, list stays stale forever until manual refresh. Mitigation: (1) in the middleware, if Authorization header absent, read the `access_token` cookie via request.cookies.get('access_token') and decode it the same way; (2) add a useSwrSseSync() hook that runs at AdminDashboard root and calls mutate() on matching SWR keys for each incoming SSE 'change' event; (3) unify Payments.jsx to also listen for type==='change'."
+}

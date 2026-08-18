@@ -829,6 +829,13 @@ export default function Payments() {
   const load = useCallback(async () => {
     await Promise.all([refetchP(), refetchT(), refetchPend()]);
   }, [refetchP, refetchT, refetchPend]);
+  // Aparte lichte refresh — alleen `pending_approval` fetchen. Wordt door
+  // de 3s auto-refresh gebruikt zodat we niet elke 3s /payments én /tenants
+  // meepakken (dat verspilde bandbreedte en veroorzaakte flikker op andere
+  // tabs die dezelfde SWR-keys delen).
+  const refreshPendingOnly = useCallback(() => {
+    refetchPend();
+  }, [refetchPend]);
 
   // Wanneer een admin de push-notificatie van een pending betaling
   // aanklikt landt hij hier met ?filter=pending in de URL. We scrollen
@@ -868,14 +875,21 @@ export default function Payments() {
   // Stille polling — snel (3s) zodat nieuwe pending betalingen vrijwel
   // realtime verschijnen ook als de SW push miss (bv. PWA in achtergrond
   // stond bij binnenkomst). Geen spinner / scroll-reset tijdens auto-refresh.
-  useAutoRefresh(() => load(), { interval: 3000, enabled: !creating && !emailing });
+  // POLLING VERWIJDERD (per user verzoek 2026-02-28): geen 3s pending poll
+  // meer. SSE `type==='notification'` + window focus refresh dekken instant
+  // updates. Bij backend-restart of SSE disconnect valt LiveIndicator terug
+  // op reconnect-logica.
 
   // Server-Sent Events — INSTANT push (~50ms latency) zodra de backend een
   // nieuwe pending betaling registreert. Veel sneller dan FCM/APNS WebPush.
   // Triggert direct een silent reload zodat de rij in UI verschijnt voordat
   // de notificatie pop-up ook maar half geanimeerd is.
   useAdminEvents((evt) => {
-    if (evt?.type === 'notification') {
+    // Backend broadcast type is 'change' voor iedere mutatie (POST/PUT/DELETE).
+    // We reagerden voorheen alléén op 'notification' — dat werkte niet voor
+    // reguliere betaal-mutaties vanaf andere apparaten, waardoor de UI niet
+    // meer live bijgewerkt werd na de switch van polling → SSE.
+    if (evt?.type === 'change' || evt?.type === 'notification') {
       load();
     }
   }, { enabled: !creating && !emailing });

@@ -5,27 +5,26 @@ import { useEffect, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { api } from '../lib/api';
 import { useBrandedNavigate } from '../lib/branded-nav';
+import { useAdminEvents } from '../lib/admin-events';
 
 export default function PendingApprovalBell() {
   const navigate = useBrandedNavigate();
   const [count, setCount] = useState(0);
 
+  const load = async () => {
+    try {
+      const { data } = await api.get('/payments/pending-count');
+      setCount(data?.count || 0);
+    } catch { /* stilzwijgend */ }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const { data } = await api.get('/payments/pending-count');
-        if (!cancelled) setCount(data?.count || 0);
-      } catch { /* stilzwijgend */ }
-    };
     load();
-    const id = setInterval(load, 30000); // refresh elke 30s
-    // Ook on focus refreshen zodat na approval het direct klopt.
+    // POLLING VERWIJDERD (30s interval) — SSE via useAdminEvents pushed
+    // instant updates zodra pending approval status wijzigt. Focus event
+    // + service-worker BADGE_CHANGED events dekken de rest.
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);
-    // Wanneer de service worker een push notificatie ontvangt en de badge
-    // bijwerkt, dan triggeren we ook direct een count-refresh — dit geeft
-    // de admin een instant update zonder te wachten op de 30s poll.
     const onSwMsg = (ev) => {
       if (ev?.data?.type === 'BADGE_CHANGED') load();
     };
@@ -33,14 +32,20 @@ export default function PendingApprovalBell() {
       navigator.serviceWorker.addEventListener('message', onSwMsg);
     }
     return () => {
-      cancelled = true;
-      clearInterval(id);
       window.removeEventListener('focus', onFocus);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', onSwMsg);
       }
     };
   }, []);
+
+  // Server-Sent Events — instant push zodra backend een nieuwe pending
+  // registreert of een bestaande approved/rejected wordt.
+  useAdminEvents((evt) => {
+    if (evt?.type === 'notification' || evt?.type === 'payment_pending' || evt?.type === 'payment_approved') {
+      load();
+    }
+  });
 
   if (count === 0) return null;
   return (

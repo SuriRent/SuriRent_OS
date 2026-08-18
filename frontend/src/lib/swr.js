@@ -18,15 +18,30 @@ const fetcher = async (url) => {
   return r.data;
 };
 
-// Gedeelde default config — houd cache voor 30s (dedupingInterval), maar
-// revalidateOnFocus zodat data verse blijft wanneer gebruiker terugkomt.
+// Deep-equality compare via JSON zodat een refetch met identieke data
+// geen re-render triggert. Voorkomt "tekst flikker" bij tabwissel wanneer
+// de background-revalidate identieke bytes terugkrijgt.
+const jsonCompare = (a, b) => {
+  if (a === b) return true;
+  try { return JSON.stringify(a) === JSON.stringify(b); }
+  catch { return false; }
+};
+
+// Gedeelde default config — houd cache voor 60s (dedupingInterval), skip
+// mount-revalidate wanneer data uit cache komt zodat er GEEN extra render
+// gebeurt bij tabwissel. `compare` voorkomt re-render als revalidate
+// dezelfde data teruggeeft.
 const defaultConfig = {
   fetcher,
-  revalidateOnFocus: true,
+  revalidateOnFocus: false,      // was: true — te agressief, veroorzaakte flikker
   revalidateOnReconnect: true,
-  dedupingInterval: 30000,   // 30s: zelfde key wordt binnen 30s uit cache geserveerd
-  keepPreviousData: true,    // toon oude data tijdens revalidate ipv loading state
+  revalidateIfStale: false,      // cache is goed genoeg tot expliciete mutate()
+  revalidateOnMount: undefined,  // laat SWR zelf beslissen (skip als cache present)
+  dedupingInterval: 60000,       // 60s (was 30s)
+  focusThrottleInterval: 60000,
+  keepPreviousData: true,        // vorige data blijft zichtbaar tijdens fetch
   errorRetryCount: 2,
+  compare: jsonCompare,
 };
 
 export function useApiSWR(key, options) {

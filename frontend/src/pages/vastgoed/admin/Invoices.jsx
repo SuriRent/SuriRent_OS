@@ -48,7 +48,7 @@ export default function Invoices() {
   const load = useCallback(async () => {
     await Promise.all([refetchI(), refetchT(), refetchC()]);
   }, [refetchI, refetchT, refetchC]);
-  useAutoRefresh(load, { interval: 45000, enabled: !creating && !reminding });
+  // POLLING VERWIJDERD (2026-02-28): SWR + SSE dekken updates.
 
   // Luister naar `invoice-delete` event vanaf <InvoiceRow> en voer DELETE uit.
   useEffect(() => {

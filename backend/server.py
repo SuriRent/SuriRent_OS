@@ -737,12 +737,21 @@ async def _live_sync_broadcast(request: Request, call_next):
             return response
 
         # Bepaal company_id uit de JWT (best-effort, geen fout doorlaten).
+        # Werkt met zowel Bearer header (legacy) als access_token cookie
+        # (nieuwe frontend auth flow met httpOnly cookies) — anders
+        # broadcastte de middleware nooit voor cookie-based mutations en
+        # miste elke ontvanger de update.
+        import jwt as _pyjwt
         auth = request.headers.get("authorization") or ""
-        if not auth.lower().startswith("bearer "):
+        raw_token = ""
+        if auth.lower().startswith("bearer "):
+            raw_token = auth.split(" ", 1)[1]
+        else:
+            raw_token = request.cookies.get("access_token") or ""
+        if not raw_token:
             return response
         try:
-            import jwt as _pyjwt
-            payload = _pyjwt.decode(auth.split(" ", 1)[1], JWT_SECRET, algorithms=[JWT_ALG])
+            payload = _pyjwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALG])
             cid = payload.get("company_id")
         except Exception:
             return response

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Building2, X, Home, KeySquare, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../lib/api';
+import { useAdminEvents } from '../lib/admin-events';
 
 /**
  * ApartmentsBell — overzicht-icoon rechtsboven in de admin mobile header.
@@ -28,16 +29,19 @@ export default function ApartmentsBell() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30_000);
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
-      clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
   }, [load]);
+
+  // SSE — instant update bij nieuwe/verwijderde appartementen of assign/unassign.
+  useAdminEvents((evt) => {
+    if (evt?.type === 'notification' || evt?.type === 'apartment_updated') load();
+  });
 
   useEffect(() => {
     if (!open) return undefined;

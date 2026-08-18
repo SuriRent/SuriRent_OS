@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Bell, X, AlertCircle, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney, MONTHS_NL } from '../lib/api';
+import { useAdminEvents } from '../lib/admin-events';
 
 const UNPAID = ['open', 'sent', 'pending', 'overdue'];
 const isUnpaid = (inv) => UNPAID.includes((inv.status || '').toLowerCase());
@@ -72,18 +73,22 @@ export default function OverdueBell() {
     } catch { /* stil falen — geen badge bij netwerkfout */ }
   }, []);
 
-  // Initial load + polling (elke 30s) + bij focus / visibility-change.
+  // Initial load + focus/visibility. Polling verwijderd — SSE dekt
+  // instant updates zodra facturen worden aangemaakt of betaald.
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30_000);
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
-      clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
+
+  // SSE — instant refresh bij factuur/betaling events (backend push).
+  useAdminEvents((evt) => {
+    if (evt?.type === 'notification' || evt?.type === 'invoice_updated' || evt?.type === 'payment_approved') load();
+  });
   }, [load]);
 
   // Sluit paneel bij klik buiten of Escape.

@@ -51,9 +51,11 @@ export default function LiveIndicator({ className = '', compact = false }) {
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
-    // Re-evalueer iedere 10s zodat een stille periode zonder events
-    // (bv. tab in standby) toch de juiste status laat zien.
-    const interval = setInterval(updateStatus, 10_000);
+    // POLLING VERWIJDERD (per user verzoek 2026-02-28): eerder was hier een
+    // 10s setInterval om na een idle-periode de status opnieuw te evalueren.
+    // Dit veroorzaakte micro-jitter en frequent React re-renders. `online`/
+    // `offline` events + `surirent:refresh*` events dekken alle relevante
+    // status-transities zonder polling.
     updateStatus();
 
     return () => {
@@ -61,7 +63,6 @@ export default function LiveIndicator({ className = '', compact = false }) {
       window.removeEventListener('surirent:refresh-failed', onFail);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
-      clearInterval(interval);
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
     };
   }, []);

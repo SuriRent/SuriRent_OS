@@ -1,0 +1,25 @@
+{
+  "summary": "Iter 54 — Verified flicker-fix + Payments polling fine-tune. All primary claims validated end-to-end. (1) SWR config (revalidateOnFocus:false, revalidateIfStale:false, dedupingInterval:60000, compare:jsonCompare) is in place in /app/frontend/src/lib/swr.js. (2) Rapid switching Huurders↔Betalingen↔Appartementen↔Facturen 6x — text content is IDENTICAL between 300ms and 1000ms post-switch on every tab (0 flickers detected). (3) 10-sec network trace on Betalingen shows EXACTLY 3 requests, all to /payments?status=pending_approval (3s interval), and ZERO calls to /payments or /tenants. (4) When leaving Betalingen (idle on Huurders) 6-sec network trace shows 0 API calls — polling correctly halts. (5) Return to Betalingen after visiting Huurders: no re-fetch of /payments, /tenants, or /payments?status=pending_approval (served from SWR cache within 60s dedupingInterval).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter53_swr_endpoints.py (still valid, not re-run this iteration)"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Payments.jsx is still ~1230 lines — carry-over recommendation from iter53 to split into ./payments/PaymentRow.jsx, PaymentDetail.jsx, ApprovePaymentSheet.jsx, PaymentForm.jsx modules like Invoices already does.",
+    "swr.js `defaultConfig.compare: jsonCompare` uses JSON.stringify — for large payload lists (>1000 items) this can be O(n) each revalidate. Fine for current scale but worth noting.",
+    "Payments.jsx PaymentDetail useEffect still does raw api.get('/invoices') on mount (bypasses SWR cache). Small waste but not a regression. Recommend accepting invoices as prop from parent or using useApiSWR('/invoices').",
+    "Betalingen v2 return-fetch still fires /payments/pending-count, /invoices, /apartments — these come from header/badge components (NOT the tab's SWR keys). The cached tab-specific keys (/payments, /tenants, /payments?status=pending_approval) correctly serve from cache. If desired, those global header endpoints could also be wrapped in useApiSWR with longer dedup to further reduce chatter."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-tested — iter53 baseline still valid", "frontend": "100% — all 3 flicker+polling claims verified"},
+  "test_credentials": "demo@surirent.sr / demo1234",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Flicker fix VERIFIED. Playwright measurement: text_content of the active tab is compared at t=300ms and t=1000ms after tab click; identical strings across 6 consecutive rapid switches. Betalingen 3s poll narrowed to /payments?status=pending_approval only (was full load()); auto-refresh is gated by `enabled: !creating && !emailing` so modals also pause polling. Note that pending-count/invoices/apartments requests still fire on tab-return from header components — these are OUTSIDE the SWR wrapper and unaffected by dedupingInterval; not a flicker source since those components render in fixed header area.",
+  "rca of the issue": "Flicker RCA: SWR's revalidateOnFocus:true + 30s dedupingInterval caused a background revalidate on every tab-switch that returned a new object reference (even for identical bytes), triggering React re-render of the entire list. Fix combines three safeguards: (a) disable revalidateOnFocus, (b) raise dedupingInterval to 60s so within a normal admin session the cache is never revalidated on switch, (c) compare:jsonCompare so if a revalidate DOES fire and returns identical JSON, SWR skips the state update entirely — preventing render even when data is 'new object, same shape'. Verified: 0 flickers across 6 rapid switches; Betalingen 3s poll reduced from 3 keys to 1 key."
+}

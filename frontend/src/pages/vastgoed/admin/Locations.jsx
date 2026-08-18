@@ -87,10 +87,8 @@ export default function Locations() {
   const loading = isLoading && items.length === 0;
 
   const load = useCallback(async () => { await refetch(); }, [refetch]);
-  useAutoRefresh(load, {
-    interval: 45000,
-    enabled: !creating && !editing && !detailId,
-  });
+  // POLLING VERWIJDERD (2026-02-28): SWR + SSE dekken updates.
+  // useAutoRefresh(load, { interval: 45000, ... }) uitgeschakeld.
 
   const del = async (loc) => {
     if (!window.confirm(`Locatie "${loc.name}" verwijderen? Appartementen worden ontkoppeld.`)) return;

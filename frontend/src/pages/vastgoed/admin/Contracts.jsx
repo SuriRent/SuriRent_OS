@@ -161,7 +161,8 @@ export default function Contracts() {
   const load = useCallback(async () => {
     await Promise.all([refetchC(), refetchT(), refetchA()]);
   }, [refetchC, refetchT, refetchA]);
-  useAutoRefresh(load, { interval: 45000, enabled: !creating && !emailing });
+  // POLLING VERWIJDERD (2026-02-28): SWR + SSE dekken alle updates.
+  // useAutoRefresh(load, { interval: 45000, ... }) uitgeschakeld.
 
   const del = async (id) => {
     if (!window.confirm('Contract verwijderen?')) return;

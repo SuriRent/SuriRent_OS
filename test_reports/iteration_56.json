@@ -1,0 +1,43 @@
+{
+  "summary": "Iter 56 — Verified SSE broadcast middleware cookie-auth fix (backend/server.py L720-768). All 12 pytest tests PASS. The middleware now correctly extracts access_token from request.cookies when Authorization header is absent, then decodes JWT and broadcasts a 'change' event to /api/admin/events subscribers. Cookie-based mutation POST /api/tenants → SSE 'change' event received within <6s. Bearer-based flow (legacy) still works. /api/admin/events accepts cookie auth (200) and returns 401 without auth. Skip path /api/auth/login does NOT emit broadcast events. Regression smoke tests for tenants/apartments/locations/invoices/payments list endpoints via cookie all return 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "backend/server.py L744 (_live_sync_broadcast)",
+        "issue": "`import jwt as _pyjwt` is inside the request path (executed on every mutation). Move to module scope for tiny perf win and consistency with other imports. Not blocking."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sse_broadcast.py",
+    "/app/test_reports/pytest/sse_broadcast.xml"
+  ],
+  "action_items": [
+    "Backend SSE fix is verified end-to-end. Main agent should now confirm the FRONTEND side of the stacked bug from iter 55: (a) wire useAdminEvents into the 5 list pages that lost 45s polling (Huurders, Appartementen, Contracten, Facturen, Locaties) so they mutate() their SWR keys on incoming 'change' events, and (b) fix Payments.jsx which listens for evt.type==='notification' instead of 'change'.",
+    "Optional: move `import jwt as _pyjwt` to module scope in server.py."
+  ],
+  "critical_code_review_comments": [
+    "The middleware now correctly supports both Bearer and cookie auth — this is a clean, minimal fix. Suggest adding a debug log/metric when a broadcast fires vs. is skipped, so future regressions of this class are observable in logs (iter 55 recommended this too).",
+    "Skip path check uses startswith on a tuple — clear and correct. /api/admin/events itself is in the skip list so an SSE client's own GET can't recursively trigger anything (moot since GET is filtered earlier, but defensive).",
+    "The SSE consumer /api/admin/events depends on get_current_user which supports both Emergent Google session_token cookie AND access_token cookie/Bearer — good symmetry with the broadcast middleware (except broadcast does not currently check session_token cookie; if any Google-auth admin does mutations, no broadcast will fire for them). Consider extending the middleware to also read session_token and resolve company_id via user_sessions if that flow is expected to trigger broadcasts."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sse_broadcast.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "not tested this iteration (backend-only scope)"
+  },
+  "test_credentials": "demo@surirent.sr / demo1234",
+  "seed_data_creation": "Created 2 test tenants (TEST_SSECookie_*, TEST_SSEBearer_*) via POST /api/tenants; cleaned up via DELETE in TestZZZCleanup at end of test run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SSE broadcast middleware (backend) is now fully verified for cookie-auth and Bearer flows. If frontend list pages still don't refresh on external mutations, the bug is on the frontend consumer side (iter 55 BUG-B): useAdminEvents is not wired into Huurders/Appartementen/Contracten/Facturen/Locaties, and Payments.jsx listens for the wrong event type ('notification' vs 'change'). Test pattern for future SSE verification: use SSEListener class in test_sse_broadcast.py — spawn thread, wait for 'event: ready' line, then trigger mutation and poll self.events for {type:'change', path, method}. One caveat: SSE endpoint always emits an initial `event: ready` line, so tests must skip that.",
+  "rca of the issue": "Fix verified. Previous bug (iter 55): middleware early-returned when Authorization header missing, so cookie-auth mutations never broadcast. Fix (L745-750): if bearer header absent, fall back to request.cookies.get('access_token') and decode that. Confirmed: POST /api/tenants with cookies-only auth now produces a {type:'change', path:'/api/tenants', method:'POST'} event on the SSE stream within ~1s (test asserts <6s window). Backwards compat: Bearer POST also broadcasts. Skip paths (/api/auth/*) correctly bypass broadcast."
+}
