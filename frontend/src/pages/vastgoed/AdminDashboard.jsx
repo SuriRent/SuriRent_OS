@@ -1901,9 +1901,33 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
   );
 }
 
+// =====================================================================
+// ListSkeleton — placeholder-rijen voor lijstschermen (Huurders, Appartementen,
+// Facturen, Contracten) zodat gebruikers geen valse "Geen ... gevonden" flash
+// zien tijdens de eerste fetch. Puur presentational, geen state.
+// =====================================================================
+function ListSkeleton({ rows = 5, testid = 'list-skeleton' }) {
+  return (
+    <div className="space-y-2" data-testid={testid}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={`sk-${i}`} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 animate-pulse">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="h-3.5 rounded bg-slate-100 w-1/3 mb-2" />
+            <div className="h-2.5 rounded bg-slate-100 w-1/2" />
+          </div>
+          <div className="h-6 w-16 rounded-full bg-slate-100 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 function Apartments() {
   const [items, setItems] = useState([]);
   const [tenants, setTenants] = useState([]);
+  const [loaded, setLoaded] = useState(false);   // ← voorkomt flash "Geen appartementen"
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [assignFor, setAssignFor] = useState(null);
@@ -1916,6 +1940,7 @@ function Apartments() {
   const load = useCallback(async () => {
     const [a, t] = await Promise.all([api.get('/apartments'), api.get('/tenants')]);
     setItems(a.data); setTenants(t.data);
+    setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
   // Stille polling — pauzeer wanneer een modal open is óf we in detail-view zitten.
@@ -2064,7 +2089,9 @@ function Apartments() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {!loaded ? (
+        <ListSkeleton rows={5} testid="apts-skeleton" />
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="apts-empty">
           <Building2 className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen appartementen gevonden.</p>
@@ -3122,6 +3149,7 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
 function Tenants() {
   const [items, setItems] = useState([]);
   const [apts, setApts] = useState([]);
+  const [loaded, setLoaded] = useState(false);   // ← voorkomt flash "Geen huurders" bij eerste render
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [pinFor, setPinFor] = useState(null);
@@ -3131,6 +3159,7 @@ function Tenants() {
   const load = useCallback(async () => {
     const [t, a] = await Promise.all([api.get('/tenants'), api.get('/apartments')]);
     setItems(t.data); setApts(a.data);
+    setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, {
@@ -3228,7 +3257,9 @@ function Tenants() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {!loaded ? (
+        <ListSkeleton rows={5} testid="tenants-skeleton" />
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="tenants-empty">
           <Users className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen huurders gevonden.</p>

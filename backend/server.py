@@ -1035,7 +1035,13 @@ async def register(body: RegisterIn, response: Response):
 async def login(body: LoginIn, response: Response):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user.get("password_hash", "")):
+    # bcrypt is CPU-bound (~200-1000ms afhankelijk van pod-CPU) — wrap in
+    # threadpool zodat het event loop niet blokkeert en andere requests
+    # gewoon door kunnen gaan tijdens het verifiëren.
+    ok = user and await asyncio.to_thread(
+        verify_password, body.password, user.get("password_hash", "")
+    )
+    if not ok:
         raise HTTPException(status_code=401, detail="Onjuiste inloggegevens")
     token = create_token({
         "sub": user["id"], "email": email, "type": "access",

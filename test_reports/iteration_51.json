@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 51 — Verified (1) list-skeleton UX fix on /admin Huurders/Appartementen/Contracten tabs (skeleton visible first, no flash of 'Geen ...' empty state) via throttled Playwright, and (2) login perf/regression after wrapping bcrypt in asyncio.to_thread. All 9 backend regression tests pass (login 200/401, tenants/apartments/contracts lists 200, contract & payment PDFs 200 with %PDF header, google/callback invalid session_id => 401 not 500).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter51_login_perf_and_regressions.py",
+    "/app/test_reports/pytest/iter51.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py still >13k lines — continue extraction (kiosk, settings, email routes) as noted in iter50.",
+    "Consider a shared `<ListSkeleton>` in /components rather than duplicating the block inline in Contracts.jsx — currently the skeleton markup is duplicated between AdminDashboard.jsx and Contracts.jsx."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter51_login_perf_and_regressions.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (3/3 tabs verified)"},
+  "test_credentials": "demo@surirent.sr / demo1234 ; super@surirent.sr / super1234",
+  "seed_data_creation": "None — used demo company existing data (3 contracts).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Frontend UX test used Chrome DevTools network throttling (latency=1000ms, 150KB/s) to make the skeleton visible. Selectors used: [data-testid='tenants-skeleton'], [data-testid='apts-skeleton'], [data-testid='contracts-skeleton']. All three appear before their empty-state text ever renders. Login latency after asyncio.to_thread wrap ≈ acceptable (<2s in most runs). No regressions found.",
+  "rca of the issue": "N/A — all requested fixes verified working."
+}

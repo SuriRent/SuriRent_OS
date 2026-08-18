@@ -148,6 +148,7 @@ export default function Contracts() {
   const [items, setItems] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [apartments, setApartments] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [filter, setFilter] = useState('all'); // all | signed | draft
@@ -155,6 +156,7 @@ export default function Contracts() {
   const load = useCallback(async () => {
     const [c, t, a] = await Promise.all([api.get('/contracts'), api.get('/tenants'), api.get('/apartments')]);
     setItems(c.data); setTenants(t.data); setApartments(a.data);
+    setLoaded(true);
   }, []);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, { interval: 45000, enabled: !creating && !emailing });
@@ -224,7 +226,20 @@ export default function Contracts() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {!loaded ? (
+        <div className="space-y-2" data-testid="contracts-skeleton">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={`sk-${i}`} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 animate-pulse">
+              <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="h-3.5 rounded bg-slate-100 w-1/3 mb-2" />
+                <div className="h-2.5 rounded bg-slate-100 w-1/2" />
+              </div>
+              <div className="h-6 w-16 rounded-full bg-slate-100 shrink-0" />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="contracts-empty">
           <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen contracten gevonden.</p>
