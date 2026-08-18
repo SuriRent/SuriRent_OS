@@ -18,6 +18,8 @@ import { useAuth } from '../../lib/auth';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
+import { ListSkeleton } from '../../components/ListSkeleton';
+import { useApiSWR } from '../../lib/swr';
 import Contracts from './admin/Contracts';
 import Invoices from './admin/Invoices';
 import Payments from './admin/Payments';
@@ -1902,32 +1904,18 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
 }
 
 // =====================================================================
-// ListSkeleton — placeholder-rijen voor lijstschermen (Huurders, Appartementen,
-// Facturen, Contracten) zodat gebruikers geen valse "Geen ... gevonden" flash
-// zien tijdens de eerste fetch. Puur presentational, geen state.
+// ListSkeleton is verplaatst naar /components/ListSkeleton.jsx voor
+// hergebruik in andere lijstschermen (Contracts, etc.). Import bovenaan.
 // =====================================================================
-function ListSkeleton({ rows = 5, testid = 'list-skeleton' }) {
-  return (
-    <div className="space-y-2" data-testid={testid}>
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={`sk-${i}`} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 animate-pulse">
-          <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="h-3.5 rounded bg-slate-100 w-1/3 mb-2" />
-            <div className="h-2.5 rounded bg-slate-100 w-1/2" />
-          </div>
-          <div className="h-6 w-16 rounded-full bg-slate-100 shrink-0" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 
 function Apartments() {
-  const [items, setItems] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [loaded, setLoaded] = useState(false);   // ← voorkomt flash "Geen appartementen"
+  // SWR cache — bij tabwissel data instant uit cache, revalidate in bg.
+  const { data: itemsRaw, mutate: refetchApts, isLoading: loadingA } = useApiSWR('/apartments');
+  const { data: tenantsRaw, mutate: refetchTenants, isLoading: loadingT } = useApiSWR('/tenants');
+  const items = itemsRaw || [];
+  const tenants = tenantsRaw || [];
+  const loaded = !loadingA && !loadingT;
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [assignFor, setAssignFor] = useState(null);
@@ -1938,11 +1926,8 @@ function Apartments() {
   const [filter, setFilter] = useState('all');  // all | occupied | vacant
 
   const load = useCallback(async () => {
-    const [a, t] = await Promise.all([api.get('/apartments'), api.get('/tenants')]);
-    setItems(a.data); setTenants(t.data);
-    setLoaded(true);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchApts(), refetchTenants()]);
+  }, [refetchApts, refetchTenants]);
   // Stille polling — pauzeer wanneer een modal open is óf we in detail-view zitten.
   useAutoRefresh(load, {
     interval: 45000,
@@ -3147,21 +3132,24 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
 }
 
 function Tenants() {
-  const [items, setItems] = useState([]);
-  const [apts, setApts] = useState([]);
-  const [loaded, setLoaded] = useState(false);   // ← voorkomt flash "Geen huurders" bij eerste render
+  // SWR cache — bij tabwissel wordt de vorige data direct getoond en
+  // achtergrond-revalidate hoeven we niet af te wachten.
+  const { data: itemsRaw, mutate: refetchTenants, isLoading: loadingT } = useApiSWR('/tenants');
+  const { data: aptsRaw, mutate: refetchApts, isLoading: loadingA } = useApiSWR('/apartments');
+  const items = itemsRaw || [];
+  const apts = aptsRaw || [];
+  const loaded = !loadingT && !loadingA;   // pas skeleton verbergen als beide klaar zijn
+  const load = useCallback(async () => {
+    // Handmatige refresh — bv. na create/delete. Beide keys parallel her-fetchen.
+    await Promise.all([refetchTenants(), refetchApts()]);
+  }, [refetchTenants, refetchApts]);
+
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [pinFor, setPinFor] = useState(null);
   const [detailId, setDetailId] = useState(null);  // huurder in detail-view
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
-  const load = useCallback(async () => {
-    const [t, a] = await Promise.all([api.get('/tenants'), api.get('/apartments')]);
-    setItems(t.data); setApts(a.data);
-    setLoaded(true);
-  }, []);
-  useEffect(() => { load(); }, [load]);
   useAutoRefresh(load, {
     interval: 45000,
     enabled: !creating && !editing && !pinFor && !detailId,

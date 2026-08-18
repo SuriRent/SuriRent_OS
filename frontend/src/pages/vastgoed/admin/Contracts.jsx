@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, Mail } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { EmailDialog, SendDialog } from '../../../components/EmailDialog';
+import { ListSkeleton } from '../../../components/ListSkeleton';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { useApiSWR } from '../../../lib/swr';
 
 function ContractForm({ tenants, apartments, onCancel, onSaved }) {
   const [data, setData] = useState({
@@ -145,20 +147,20 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
 }
 
 export default function Contracts() {
-  const [items, setItems] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [apartments, setApartments] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  const { data: itemsRaw, mutate: refetchC, isLoading: loadingC } = useApiSWR('/contracts');
+  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const { data: apartmentsRaw, mutate: refetchA, isLoading: loadingA } = useApiSWR('/apartments');
+  const items = itemsRaw || [];
+  const tenants = tenantsRaw || [];
+  const apartments = apartmentsRaw || [];
+  const loaded = !loadingC && !loadingT && !loadingA;
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [filter, setFilter] = useState('all'); // all | signed | draft
 
   const load = useCallback(async () => {
-    const [c, t, a] = await Promise.all([api.get('/contracts'), api.get('/tenants'), api.get('/apartments')]);
-    setItems(c.data); setTenants(t.data); setApartments(a.data);
-    setLoaded(true);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    await Promise.all([refetchC(), refetchT(), refetchA()]);
+  }, [refetchC, refetchT, refetchA]);
   useAutoRefresh(load, { interval: 45000, enabled: !creating && !emailing });
 
   const del = async (id) => {
@@ -227,18 +229,7 @@ export default function Contracts() {
       </div>
 
       {!loaded ? (
-        <div className="space-y-2" data-testid="contracts-skeleton">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={`sk-${i}`} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 animate-pulse">
-              <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="h-3.5 rounded bg-slate-100 w-1/3 mb-2" />
-                <div className="h-2.5 rounded bg-slate-100 w-1/2" />
-              </div>
-              <div className="h-6 w-16 rounded-full bg-slate-100 shrink-0" />
-            </div>
-          ))}
-        </div>
+        <ListSkeleton rows={5} testid="contracts-skeleton" />
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="contracts-empty">
           <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />

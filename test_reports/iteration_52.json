@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 52 — Verified SWR refactor + shared ListSkeleton. CRITICAL BUG found in /app/frontend/src/lib/swr.js (useApiSWR passed `undefined` as fetcher, which SWR v2 resolve-args treats as 'no fetcher' when 3 args are given, so ZERO network requests were fired for /tenants, /apartments, /contracts SWR keys — UI silently rendered empty state). Fixed by passing fetcher from merged config explicitly as 2nd arg. After the fix: (a) 1st tab visit shows skeleton then loads data (5 tenants), (b) 2nd tab visit is INSTANT with no skeleton (SWR cache hit), (c) create/delete tenant triggers mutate() and list updates without full reload, (d) 9/9 backend regression tests pass (login 200/401, list endpoints 200, contract/payment PDFs 200, google callback 401 not 500).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter51_login_perf_and_regressions.py",
+    "/app/test_reports/pytest/iter52.xml"
+  ],
+  "action_items": [
+    "Review the swr.js fetcher-argument fix (see updated_files). Consider unit test covering `useApiSWR('/x')` actually invokes the axios fetcher.",
+    "Cleanup: 2 stale TEST_ tenants (`TEST SWR Tenant 1787054512`, `TEST SWR 1787054553`) linger in demo company; DELETE /api/tenants/{id} returned 403 from a plain fetch (no company-slug header) — check if admin should be able to delete without slug context, or clean via UI."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL fix applied: `useSWR(key, undefined, config)` in v2.5+ resolve-args returns args[1] (undefined) as fetcher when args.length>2, disabling all fetches. Correct pattern is either `useSWR(key, fetcher, config)` (fetcher explicit) or `useSWR(key, config)` (2 args, config.fetcher used). Wrapper now passes `merged.fetcher` explicitly.",
+    "swr.js has no SWRConfig provider at app root — every hook uses local defaults. Consider wrapping <App> in <SWRConfig value={defaultConfig}> so 3rd-party useSWR calls (if any added later) also inherit fetcher/dedupe/revalidate settings.",
+    "ListSkeleton refactor is clean (single shared component, testid prop). No issues."
+  ],
+  "updated_files": [
+    "/app/frontend/src/lib/swr.js — fixed useApiSWR to pass fetcher as 2nd arg (was passing undefined which disabled fetching)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% after fix (SWR cache, mutate, revalidation all verified)"},
+  "test_credentials": "demo@surirent.sr / demo1234",
+  "seed_data_creation": "None — used existing 5 demo tenants (3 seed + 2 stale TEST_ from prior iteration runs).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SWR wrapper fix is in /app/frontend/src/lib/swr.js. Before this fix, ALL useApiSWR hooks were no-ops (no network, no data). Verified network trace: after fix, `/api/tenants` fires on 1st visit only; 2nd tab visit uses cache (0 requests, instant render). Selectors: [data-testid='tenants-skeleton'|'apts-skeleton'|'contracts-skeleton'], [data-testid='tenant-new-btn'|'tenant-save'|'tenant-modal'|'tenant-row-{id}']. To reproduce SWR instant-cache verification: login → open Huurders (skeleton flashes, then rows) → open Appartementen → open Huurders again → no skeleton, immediate 5 rows.",
+  "rca of the issue": "SWR v2 resolve-args logic: `args.length > 2 ? args[1] : ... : config.fetcher`. Passing `useSWR(key, undefined, config)` sends 3 args, so args[1]=undefined is used as fetcher → SWR never calls fetcher → data stays undefined → UI shows empty state instead of loading + real data. Mitigation: pass fetcher explicitly, or use only 2 args (key, config). Applied the explicit-fetcher fix; verified all 3 tabs (Huurders/Appartementen/Contracten) now fetch, cache, mutate correctly."
+}
