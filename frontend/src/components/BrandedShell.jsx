@@ -5,12 +5,19 @@ import { fetchBranding, applyBranding, setStoredSlug } from '../lib/branding';
 /**
  * Top-level pad-segmenten die NIET als bedrijfscode mogen worden behandeld.
  * Voorbeelden: /login, /admin, /kiosk, /huurder — die hebben hun eigen route.
+ * MOET synchroon blijven met `RESERVED_SLUGS` in `/src/lib/branded-nav.js`.
+ * De Google OAuth callback landt op `/auth/callback` — ontbreekt hier `auth`
+ * dan crasht de flow met "Onbekend bedrijf 404".
  */
 export const RESERVED_TOP_PATHS = new Set([
   'login', 'admin', 'kiosk', 'huurder', 'onderteken', 'c', 'vastgoed',
   'site',
-  'api', 'static', 'assets', 'public', 'manifest.json', 'sw.js',
-  'favicon.ico', 'robots.txt', 'sitemap.xml', 'index.html',
+  'api', 'health', 'static', 'assets', 'public', 'manifest', 'manifest.json',
+  'sw', 'sw.js', 'favicon', 'favicon.ico', 'robots.txt', 'sitemap.xml',
+  'index.html', 'www', 'app', 'mail', 'ftp', 'blog', 'support', 'docs', 'help',
+  'auth', 'logout', 'register', 'settings', 'billing', 'checkout',
+  'tenant', 'tenants', 'company', 'companies', 'superadmin',
+  'qr-link', 'qr',
 ]);
 
 /**

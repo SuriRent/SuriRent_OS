@@ -246,6 +246,10 @@ function HybridRoutes() {
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
       <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
+      {/* Emergent Google OAuth callback — MOET expliciet gerouteerd zijn
+          vóór `/:slug/*` anders wordt `auth` als bedrijfscode gelezen en
+          crasht de flow met "Onbekend bedrijf 404". */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />
@@ -312,6 +316,10 @@ export default function App() {
             <Route path="/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
             <Route path="/onderteken/:token" element={<ContractSignPage />} />
             <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
+            {/* Emergent Google OAuth callback — óók op custom domains
+                (www.surirent.sr etc.) moet /auth/callback direct matchen
+                zodat 'auth' niet als slug wordt geïnterpreteerd. */}
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/qr-link" element={<QrLinkPage />} />
             {/* Branded routes matchen door — zelfde als HybridRoutes */}
             <Route path="/:slug/*" element={<BrandedRouteTree />} />
