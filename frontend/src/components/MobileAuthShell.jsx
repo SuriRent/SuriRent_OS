@@ -356,8 +356,12 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
   // ───────────── WIZARD VIEW ─────────────
   return (
     <OrangeShell primary={primary}>
+      {/* Content-clamp: fullscreen op mobiel, gecenterde max-2xl kolom
+          op desktop zodat het formulier niet gestretched aanvoelt.
+          De oranje achtergrond blijft volledig doorlopen. */}
+      <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full mx-auto md:max-w-2xl md:px-4 md:py-6">
       {/* TOP: terug-knop + progress dots */}
-      <div className="relative z-10 flex items-center justify-between px-5"
+      <div className="flex items-center justify-between px-5"
         style={{ paddingTop: 'clamp(12px, 2vh, 24px)', paddingBottom: 'clamp(8px, 1.5vh, 16px)' }}>
         <button onClick={prev} data-testid="mobile-register-back"
           className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white text-sm font-bold">
@@ -558,7 +562,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
       </div>
 
       {/* BOTTOM: primary action button */}
-      <div className="relative z-10 px-6 pb-6 pt-2 shrink-0">
+      <div className="px-6 pb-6 pt-2 shrink-0">
         <button onClick={next} disabled={!stepValid || loading} data-testid="mobile-register-next"
           className="w-full h-14 bg-white text-[#0F0F0F] rounded-full text-lg font-black shadow-[0_8px_20px_-6px_rgba(0,0,0,0.35)] active:scale-[0.97] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
           {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
@@ -569,6 +573,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
           )}
         </button>
       </div>
+      </div>{/* /content-clamp */}
     </OrangeShell>
   );
 }
