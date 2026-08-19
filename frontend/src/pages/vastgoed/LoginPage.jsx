@@ -12,6 +12,7 @@ import {
 import { publicMarketingUrl } from '../../lib/env';
 import PinLanding from './auth/PinLogin';
 import PasswordView from './auth/EmailLogin';
+import RegisterModal from '../../components/RegisterModal';
 import PwaOnboarding, { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 
 
@@ -262,7 +263,18 @@ export default function LoginPage() {
     );
   }
 
-  if (view === 'login' || view === 'register') {
+  // View-state 'register' opent nu de nieuwe oranje step-wizard
+  // (RegisterModal → MobileRegisterWizard) i.p.v. het oude compacte
+  // PasswordView 'register' formulier. Consistente flow met de landing
+  // page en betere UX (Google-shortcut, progress dots, grote inputs).
+  if (view === 'register') {
+    // Terugkeren naar login zodra wizard gesloten wordt zonder submit.
+    // Als de wizard succesvol een account aanmaakt logt useAuth in
+    // en de auto-redirect naar /admin (regel ~250) neemt het over.
+    return <RegisterModal open={true} onClose={() => setView('pin')} />;
+  }
+
+  if (view === 'login') {
     return (
       <PasswordView initialMode={view} onBack={() => setView('pin')}
         onRegistered={() => setSkipRedirect(true)} branding={branding} />

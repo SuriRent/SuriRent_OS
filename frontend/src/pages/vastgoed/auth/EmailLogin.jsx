@@ -12,6 +12,7 @@ import { MobileEmailLogin } from '../../../components/MobileAuthShell';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import RegisterSuccess from './RegisterSuccess';
 import Header from './LoginHeader';
+import RegisterModal from '../../../components/RegisterModal';
 
 function PasswordView({ initialMode = 'login', onBack, onRegistered, branding }) {
   const navigate = useBrandedNavigate();
@@ -28,6 +29,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
     try { return localStorage.getItem('saved_login_email') !== null; } catch { return false; }
   });
   const [showForgot, setShowForgot] = useState(false);
+  const [showRegisterWizard, setShowRegisterWizard] = useState(false);
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [telefoon, setTelefoon] = useState('');
@@ -625,11 +627,13 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
 
           {/* Mode switcher — alleen op generieke /login. Op /<slug>/login is
               registratie niet relevant (klanten loggen in, ze maken geen
-              nieuw bedrijf aan). */}
+              nieuw bedrijf aan). Klik opent de oranje wizard (zelfde flow
+              als vanaf de marketing landing page) i.p.v. het oude dense
+              formulier — consistent en mobiel-first. */}
           {!branding?.slug && (
             <p className="text-center text-sm text-slate-400 mt-4">
               Nog geen account?{' '}
-              <button onClick={() => { setMode('register'); setError(''); }}
+              <button onClick={() => { setShowRegisterWizard(true); setError(''); }}
                 data-testid="auth-switch-mode"
                 className="text-[#FF5C00] font-semibold hover:underline">
                 Registreer hier
@@ -639,6 +643,10 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
         </div>
       )}
       </div>
+
+      {showRegisterWizard && (
+        <RegisterModal open={true} onClose={() => setShowRegisterWizard(false)} />
+      )}
 
       {showForgot && (
         <ForgotPasswordModal initialEmail={email} onClose={() => setShowForgot(false)} />

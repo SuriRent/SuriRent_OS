@@ -19,7 +19,8 @@ Extract ONLY de Vastgoed + Kiosk-functionaliteit uit een legacy ERP en bouw hem 
 - Handmatige kasmutaties (correcties/refunds) door superadmin.
 
 ## Wat is af (recente sessies)
-- **2026-02-28k**: **data-testid cleanup: `mobile-register-*` → `register-*`** — alle 14 test-ids in `MobileAuthShell.jsx` hernoemd nu de wizard ook op desktop draait. Testrapporten worden leesbaarder (geen "mobile" misleiding). Verified: `register-company`, `register-google-btn`, `register-next` etc. werken, 0 oude referenties over in codebase (behalve historisch git commit-log).
+- **2026-02-28l**: **Registratie-flow overal consistent + SuriRent brand-mark** — (1) "Registreer hier" link in EmailLogin's PasswordView opent nu de oranje wizard (RegisterModal) i.p.v. het oude dense formulier binnen dezelfde view. Zelfde flow als de landing-page trigger. (2) `LoginPage.jsx` view === 'register' rendert nu ook de wizard i.p.v. PasswordView-in-register-mode. (3) SuriRent brand-mark (kiosk-192.png icoon + tekst "SuriRent") toegevoegd in de top-header van de wizard, tussen "Vorige" en "Sluiten" — subtiel maar bevestigt aan gebruikers dat ze zich op de juiste service registreren. Verified visueel: "Registreer hier" → oranje wizard opent met logo boven de progress dots.
+- **2026-02-28k**: **data-testid cleanup: `mobile-register-*` → `register-*`** — 14 test-ids hernoemd, 0 oude referenties over.
 - **2026-02-28j**: **Desktop registratie = mobile wizard-stijl** — RegisterModal thin wrapper rond `MobileRegisterWizard`.
 - **2026-02-28i**: **Post-Google "Kies uw portalnaam" mini-modal** — nieuwe onboarding endpoint + auto-mount modal in AdminDashboard bij `needs_onboarding` flag.
 - **2026-02-28h**: **Google Auth: stale-company fix + registratie via Google** — bug fix `/api/auth/google/callback` + Google-knop bovenaan RegisterModal en MobileRegisterWizard.

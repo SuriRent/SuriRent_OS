@@ -360,7 +360,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
           op desktop zodat het formulier niet gestretched aanvoelt.
           De oranje achtergrond blijft volledig doorlopen. */}
       <div className="relative z-10 flex flex-col flex-1 min-h-0 w-full mx-auto md:max-w-2xl md:px-4 md:py-6">
-      {/* TOP: terug-knop + progress dots */}
+      {/* TOP: terug-knop + logo + close-knop */}
       <div className="flex items-center justify-between px-5"
         style={{ paddingTop: 'clamp(12px, 2vh, 24px)', paddingBottom: 'clamp(8px, 1.5vh, 16px)' }}>
         <button onClick={prev} data-testid="register-back"
@@ -368,6 +368,17 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
           <ArrowLeft className="w-4 h-4" />
           {step === 0 ? 'Sluiten' : 'Vorige'}
         </button>
+        {/* SuriRent brand-mark — bevestigt aan de gebruiker dat ze
+            zich op de juiste service registreren. Klein en subtiel
+            zodat het niet met de step-titel concurreert. */}
+        <div className="flex items-center gap-2 select-none pointer-events-none">
+          <div className="w-8 h-8 rounded-xl bg-white/95 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center">
+            <img src="/kiosk-icons/kiosk-192.png" alt="SuriRent"
+              className="w-6 h-6 object-contain"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          </div>
+          <span className="hidden sm:inline text-white font-black text-sm tracking-tight">SuriRent</span>
+        </div>
         <button onClick={onClose} data-testid="register-close"
           className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white"
           aria-label="Sluiten">
