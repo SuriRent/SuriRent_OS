@@ -1550,6 +1550,9 @@ async def me(user=Depends(get_current_user)):
         c = await db.companies.find_one({"id": active_id}, {"_id": 0})
         if c:
             company = {k: c[k] for k in ("id", "slug", "name", "plan")}
+            # Expose de onboarding-flag zodat de frontend na reload nog
+            # steeds weet dat er een "Kies uw portalnaam" modal moet komen.
+            company["needs_onboarding"] = bool(c.get("needs_onboarding"))
     return {**user, "active_company": company}
 
 
@@ -1632,6 +1635,9 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
                 "trial_started_at": iso(now_utc()),
                 "trial_ends_at": iso(now_utc() + timedelta(days=14)),
                 "owner_email": email,
+                # Markeer als auto-generated zodat de frontend na de
+                # Google-callback een "Kies uw portalnaam" modal opent.
+                "needs_onboarding": True,
                 "created_at": iso(now_utc()),
             })
             update["company_id"] = new_company_id
@@ -1665,6 +1671,9 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
                 "trial_started_at": iso(now_utc()),
                 "trial_ends_at": iso(now_utc() + timedelta(days=14)),
                 "owner_email": email,
+                # Nieuwe Google user zonder eigen bedrijfsnaam gekozen —
+                # frontend toont "Kies uw portalnaam" modal na de callback.
+                "needs_onboarding": True,
                 "created_at": iso(now_utc()),
             })
         user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -1700,10 +1709,18 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
         httponly=True, secure=True, samesite="none", path="/",
         max_age=7 * 24 * 3600,
     )
+    # Frontend gebruikt `needs_onboarding` om de "Kies uw portalnaam" mini-
+    # modal te tonen na een fresh Google registratie.
+    needs_onb = False
+    cid_final = user_doc.get("company_id")
+    if cid_final:
+        co = await db.companies.find_one({"id": cid_final}, {"_id": 0, "needs_onboarding": 1})
+        needs_onb = bool(co and co.get("needs_onboarding"))
     return {
         "user_id": user_doc.get("user_id") or user_doc.get("id"),
         "email": email, "name": name, "picture": picture,
         "role": user_doc.get("role", "admin"),
+        "needs_onboarding": needs_onb,
     }
 
 
@@ -1714,6 +1731,56 @@ async def google_auth_logout(request: Request, response: Response):
         await db.user_sessions.delete_one({"session_token": tok})
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
+
+
+# ============== Company Onboarding (voor auto-generated Google companies)
+class CompanyOnboardingIn(BaseModel):
+    name: str
+    slug: str
+
+
+@api.post("/companies/me/onboarding")
+async def company_onboarding(body: CompanyOnboardingIn, user=Depends(get_current_user)):
+    """Update naam + slug van een net-aangemaakt (auto-generated) bedrijf.
+
+    Alleen toegelaten wanneer `needs_onboarding: True` op de company staat —
+    daarna klapt de flag om en is deze endpoint niet meer bruikbaar (verdere
+    naam/slug-wijzigingen lopen via Instellingen).
+    """
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    co = await db.companies.find_one({"id": cid}, {"_id": 0})
+    if not co:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if not co.get("needs_onboarding"):
+        raise HTTPException(status_code=400, detail="Onboarding is al voltooid")
+
+    name = (body.name or "").strip()
+    raw_slug = (body.slug or "").strip().lower()
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Bedrijfsnaam moet minstens 2 tekens hebben")
+
+    import re as _re
+    slug = _re.sub(r"[^a-z0-9-]+", "-", raw_slug).strip("-")
+    if not (2 <= len(slug) <= 40) or not _re.match(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$", slug):
+        raise HTTPException(
+            status_code=400,
+            detail="Ongeldige slug — 2-40 tekens, alleen kleine letters, cijfers en koppelteken.",
+        )
+    if slug in RESERVED_SLUGS:
+        raise HTTPException(status_code=409, detail=f"Slug '{slug}' is gereserveerd. Kies een andere naam.")
+    # Slug mag alleen conflicteren als hij van een ander bedrijf is.
+    clash = await db.companies.find_one({"slug": slug, "id": {"$ne": cid}}, {"_id": 1})
+    if clash:
+        raise HTTPException(status_code=409, detail=f"Slug '{slug}' is al in gebruik. Kies een andere naam.")
+
+    await db.companies.update_one(
+        {"id": cid},
+        {"$set": {"name": name, "slug": slug, "needs_onboarding": False,
+                  "onboarded_at": iso(now_utc())}},
+    )
+    return {"id": cid, "slug": slug, "name": name, "needs_onboarding": False}
 
 
 # ============== Billing — trial status + bank details for offline payments ==============

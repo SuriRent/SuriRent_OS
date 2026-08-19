@@ -19,6 +19,7 @@ import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
+import OnboardingModal from '../../components/OnboardingModal';
 import { useApiSWR } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
@@ -3869,7 +3870,7 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
 }
 
 export default function AdminDashboard() {
-  const { user, logout, activeCompany } = useAuth();
+  const { user, logout, activeCompany, refresh: refreshAuth } = useAuth();
   const tabs = getTabsFor(user);
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
@@ -4155,6 +4156,16 @@ export default function AdminDashboard() {
         onClose={() => setWizardOpen(false)}
         companyId={user?.company_id}
       />
+      {/* Post-Google-registratie: als het bedrijf auto-gegenereerd is
+          (needs_onboarding flag op company) → verplichte "Kies uw
+          portalnaam" mini-modal. Sluit alleen bij succesvolle submit. */}
+      {activeCompany?.needs_onboarding && user?.role !== 'superadmin' && (
+        <OnboardingModal
+          initialName={activeCompany.name || user?.name || ''}
+          initialSlug={activeCompany.slug || ''}
+          onDone={() => { refreshAuth(); }}
+        />
+      )}
     </div>
   );
 }
