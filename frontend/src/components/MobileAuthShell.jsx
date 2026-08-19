@@ -343,7 +343,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
           <p className="text-white/80 text-sm mb-8 max-w-sm">
             Je eigen vastgoed-omgeving is aangemaakt en klaar voor gebruik. 14 dagen gratis proberen.
           </p>
-          <button onClick={goToPortal} data-testid="mobile-register-success-continue"
+          <button onClick={goToPortal} data-testid="register-success-continue"
             className="w-full max-w-sm h-14 bg-white text-[#0F0F0F] rounded-full text-lg font-black shadow-[0_8px_20px_-6px_rgba(0,0,0,0.35)] active:scale-[0.97] transition-all flex items-center justify-center gap-2">
             Naar mijn dashboard
             <ArrowRight className="w-5 h-5" />
@@ -363,12 +363,12 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
       {/* TOP: terug-knop + progress dots */}
       <div className="flex items-center justify-between px-5"
         style={{ paddingTop: 'clamp(12px, 2vh, 24px)', paddingBottom: 'clamp(8px, 1.5vh, 16px)' }}>
-        <button onClick={prev} data-testid="mobile-register-back"
+        <button onClick={prev} data-testid="register-back"
           className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white text-sm font-bold">
           <ArrowLeft className="w-4 h-4" />
           {step === 0 ? 'Sluiten' : 'Vorige'}
         </button>
-        <button onClick={onClose} data-testid="mobile-register-close"
+        <button onClick={onClose} data-testid="register-close"
           className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white"
           aria-label="Sluiten">
           <X className="w-4 h-4" />
@@ -411,7 +411,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
 
         {error && (
           <div className="mb-3 px-4 py-2 rounded-full bg-red-500/95 text-white text-xs font-bold shadow-lg text-center"
-            data-testid="mobile-register-error">
+            data-testid="register-error">
             {error}
           </div>
         )}
@@ -426,7 +426,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
                 const redirectUrl = window.location.origin + '/auth/callback';
                 window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
               }}
-              data-testid="mobile-register-google-btn"
+              data-testid="register-google-btn"
               className="w-full h-14 rounded-full bg-white text-slate-800 text-sm font-black flex items-center justify-center gap-2.5 shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] active:scale-95 transition">
               <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -443,7 +443,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
               </div>
             </div>
             <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)}
-              data-testid="mobile-register-company" autoFocus
+              data-testid="register-company" autoFocus
               placeholder="Bedrijfsnaam (bv. Demo Vastgoed N.V.)"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
             {portalPreview.slug && (
@@ -458,7 +458,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
               </div>
             )}
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)}
-              data-testid="mobile-register-address"
+              data-testid="register-address"
               placeholder="Adres (optioneel)"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
           </div>
@@ -468,11 +468,11 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
         {step === 1 && (
           <div className="space-y-3">
             <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-              data-testid="mobile-register-name" autoFocus
+              data-testid="register-name" autoFocus
               placeholder="Voor- en achternaam"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
             <input type="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)}
-              data-testid="mobile-register-phone"
+              data-testid="register-phone"
               placeholder="Telefoon (optioneel)"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
           </div>
@@ -482,12 +482,12 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
         {step === 2 && (
           <div className="space-y-3">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              data-testid="mobile-register-email" autoFocus autoComplete="email"
+              data-testid="register-email" autoFocus autoComplete="email"
               placeholder="E-mailadres"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
             <div className="relative">
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                data-testid="mobile-register-password" minLength={6} autoComplete="new-password"
+                data-testid="register-password" minLength={6} autoComplete="new-password"
                 placeholder="Wachtwoord (min. 6 tekens)"
                 className="w-full h-14 px-5 pr-14 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
               <button type="button" onClick={() => setShowPw((s) => !s)}
@@ -513,7 +513,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
                 const sel = country === c.code;
                 return (
                   <button key={c.code} type="button" onClick={() => setCountry(c.code)}
-                    data-testid={`mobile-register-country-${c.code.toLowerCase()}`}
+                    data-testid={`register-country-${c.code.toLowerCase()}`}
                     className={`h-14 rounded-2xl border-2 transition-all flex items-center justify-center gap-2 ${
                       sel ? 'bg-white text-slate-900 border-white shadow-lg' : 'bg-white/10 text-white border-white/30'
                     }`}>
@@ -538,7 +538,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
                   const sel = plan === p.id;
                   return (
                     <button key={p.id} type="button" onClick={() => setPlan(p.id)}
-                      data-testid={`mobile-register-plan-${p.id}`}
+                      data-testid={`register-plan-${p.id}`}
                       className={`w-full text-left rounded-2xl border-2 p-4 transition-all flex items-center justify-between ${
                         sel ? 'bg-white text-slate-900 border-white shadow-lg' : 'bg-white/10 text-white border-white/30'
                       }`}>
@@ -563,7 +563,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
 
       {/* BOTTOM: primary action button */}
       <div className="px-6 pb-6 pt-2 shrink-0">
-        <button onClick={next} disabled={!stepValid || loading} data-testid="mobile-register-next"
+        <button onClick={next} disabled={!stepValid || loading} data-testid="register-next"
           className="w-full h-14 bg-white text-[#0F0F0F] rounded-full text-lg font-black shadow-[0_8px_20px_-6px_rgba(0,0,0,0.35)] active:scale-[0.97] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
           {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
             <>

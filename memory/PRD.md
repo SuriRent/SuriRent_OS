@@ -19,7 +19,8 @@ Extract ONLY de Vastgoed + Kiosk-functionaliteit uit een legacy ERP en bouw hem 
 - Handmatige kasmutaties (correcties/refunds) door superadmin.
 
 ## Wat is af (recente sessies)
-- **2026-02-28j**: **Desktop registratie = mobile wizard-stijl** — RegisterModal.jsx uitgekleed tot thin wrapper rond `MobileRegisterWizard`; oude 2-kolom split-panel desktop-flow verwijderd (was 583 → 15 regels). Wizard kreeg een `md:max-w-2xl md:mx-auto` content-clamp zodat het op desktop niet als gestrekt fullscreen aanvoelt maar als een gecenterde kolom met de fullscreen oranje-achtergrond doorlopend. Zelfde UX op elk apparaat: progress dots, grote koptekst per stap, Google-shortcut op stap 1, "Volgende" primary action onderaan. Verified visueel op 1920x900: stap 1 (bedrijf) + stap 2 (persoon) tonen perfect gecentreerde content.
+- **2026-02-28k**: **data-testid cleanup: `mobile-register-*` → `register-*`** — alle 14 test-ids in `MobileAuthShell.jsx` hernoemd nu de wizard ook op desktop draait. Testrapporten worden leesbaarder (geen "mobile" misleiding). Verified: `register-company`, `register-google-btn`, `register-next` etc. werken, 0 oude referenties over in codebase (behalve historisch git commit-log).
+- **2026-02-28j**: **Desktop registratie = mobile wizard-stijl** — RegisterModal thin wrapper rond `MobileRegisterWizard`.
 - **2026-02-28i**: **Post-Google "Kies uw portalnaam" mini-modal** — nieuwe onboarding endpoint + auto-mount modal in AdminDashboard bij `needs_onboarding` flag.
 - **2026-02-28h**: **Google Auth: stale-company fix + registratie via Google** — bug fix `/api/auth/google/callback` + Google-knop bovenaan RegisterModal en MobileRegisterWizard.
 - **2026-02-28g**: **Live Puls Badge ook op mobiele bottom-tabbar** — `MobileTabBar` gebruikt dezelfde `useLivePulse` hook.
