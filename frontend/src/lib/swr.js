@@ -94,6 +94,6 @@ export function usePrefetchAdmin(keys, deps = []) {
       try { swrPreload(k, fetcher); }
       catch { /* niet-fataal — SWR faalt zelfstandig af */ }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, deps);
 }
