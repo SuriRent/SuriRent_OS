@@ -327,6 +327,7 @@ function DomainStatusWidget({ status, loading, onRefresh }) {
     dns_missing: { color: 'red', label: 'DNS ontbreekt', icon: '✕', desc: 'DNS record is nog niet gepropageerd of niet ingesteld.' },
     dns_wrong: { color: 'red', label: 'DNS wijst verkeerd', icon: '✕', desc: 'CNAME/A-record wijst niet naar de juiste target.' },
     dns_ok_ssl_pending: { color: 'amber', label: 'SSL vereist', icon: '⏳', desc: 'DNS ✓ — regel zelf HTTPS via Cloudflare of eigen reverse-proxy.' },
+    cloudflare_loop: { color: 'red', label: 'Cloudflare loop', icon: '⚠', desc: 'DNS + SSL ✓ maar Cloudflare blokkeert — zet CNAME op DNS-only (grijze wolk).' },
     live: { color: 'emerald', label: 'Live', icon: '✓', desc: 'Domein is bereikbaar via HTTPS.' },
   };
   const m = STATE_META[status.status] || STATE_META.not_configured;

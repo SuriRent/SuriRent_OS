@@ -11998,6 +11998,7 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
 
     if section == "domain":
         import socket
+        import ipaddress
         custom = (cfg.get("custom_domain") or "").strip().lower()
         if not custom:
             return {"section": section, "ok": False, "detail": "Vul eerst een custom domein in."}
@@ -12019,15 +12020,74 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
         except socket.gaierror:
             return {"section": section, "ok": False,
                     "detail": f"Kan target {app_target} niet resolven — controleer APP_PUBLIC_HOST."}
-        if host_ip == target_ip:
-            await db.company_settings.update_one(
-                {"company_id": company_id_of(user)},
-                {"$set": {"domain.dns_verified": True, "updated_at": iso(now_utc())}},
-            )
-            return {"section": section, "ok": True,
-                    "detail": f"{custom} wijst correct naar {app_target} (IP {target_ip}). "
-                              "DNS is geverifieerd. Regel nog HTTPS/SSL zelf via Cloudflare (gratis) "
-                              "of een eigen reverse-proxy met Let's Encrypt."}
+
+        # ────────────────────────────────────────────────────────────
+        # Cloudflare edge-IP ranges. Als beide IPs binnen Cloudflare
+        # vallen dan is een IP-vergelijking zinloos: Cloudflare kiest
+        # per zone een andere edge-IP maar routeert intern op basis van
+        # Host header. Doe in dat geval een functionele HTTPS-check.
+        # ────────────────────────────────────────────────────────────
+        CLOUDFLARE_RANGES = [
+            "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+            "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+            "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+            "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+            "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+        ]
+
+        def _in_cloudflare(ip_str):
+            try:
+                ip = ipaddress.ip_address(ip_str)
+                return any(ip in ipaddress.ip_network(cidr) for cidr in CLOUDFLARE_RANGES)
+            except (ValueError, TypeError):
+                return False
+
+        both_cloudflare = _in_cloudflare(host_ip) and _in_cloudflare(target_ip)
+        if host_ip == target_ip or both_cloudflare:
+            # Functionele HTTPS check — verify dat het domein DE APP
+            # serveert i.p.v. een Cloudflare error page (1000-serie).
+            https_ok = False
+            cf_error_code = None
+            try:
+                import httpx
+                async with httpx.AsyncClient(verify=True, timeout=6, follow_redirects=False) as client:
+                    r = await client.get(f"https://{custom}/api/health", headers={"Host": custom})
+                    # 200/301/302/403 → app antwoordt (403 kan van auth zijn)
+                    if r.status_code < 500:
+                        https_ok = True
+                    # Cloudflare error page detectie
+                    text_head = r.text[:2000] if r.text else ""
+                    if "Error 1034" in text_head:
+                        cf_error_code = "1034 (Edge IP Restricted)"
+                    elif "Error 1000" in text_head:
+                        cf_error_code = "1000 (DNS points to prohibited IP)"
+                    elif "Error 1014" in text_head:
+                        cf_error_code = "1014 (CNAME cross-user banned)"
+            except Exception as e:
+                cf_error_code = f"HTTPS check faalde: {str(e)[:100]}"
+
+            if cf_error_code:
+                return {"section": section, "ok": False,
+                        "detail": (
+                            f"DNS resolveert (host {host_ip}, target {target_ip}), maar Cloudflare "
+                            f"geeft {cf_error_code}. Oorzaak: {custom} is via Cloudflare geproxied "
+                            f"maar {app_target} draait óók achter Cloudflare — dit is een "
+                            "Cloudflare-to-Cloudflare loop die Cloudflare blokkeert. "
+                            "OPLOSSING: (a) Zet je CNAME record op 'DNS only' (grijze wolk i.p.v. "
+                            f"oranje) zodat je browser rechtstreeks naar {app_target} gaat. Of "
+                            "(b) neem contact op met support zodat we jouw domein op ons Cloudflare "
+                            "SaaS platform kunnen registreren."
+                        )}
+            if https_ok or both_cloudflare:
+                await db.company_settings.update_one(
+                    {"company_id": company_id_of(user)},
+                    {"$set": {"domain.dns_verified": True, "updated_at": iso(now_utc())}},
+                )
+                cf_note = f" (beide via Cloudflare edge)" if both_cloudflare else ""
+                return {"section": section, "ok": True,
+                        "detail": f"{custom} wijst correct naar {app_target}{cf_note}. "
+                                  "DNS is geverifieerd. Regel nog HTTPS/SSL zelf via Cloudflare (gratis) "
+                                  "of een eigen reverse-proxy met Let's Encrypt."}
         return {"section": section, "ok": False,
                 "detail": f"{custom} resolveert naar {host_ip}, maar verwacht het IP van {app_target} ({target_ip}). "
                           f"Controleer je DNS record."}
@@ -12292,12 +12352,27 @@ async def get_domain_status(user=Depends(get_current_user)):
             # Zelfde /16 (bv. 172.66.2.113 vs 162.159.142.117 zijn beide CF)
             try:
                 a = result["resolved_ip"].split(".")[:2]
-                b = target_ip.split(".")[:2]
-                # Cloudflare gebruikt 172.66.x.x en 162.159.x.x — beide zijn OK
-                cf_ranges = [("172", "66"), ("162", "159"), ("104", "16"),
-                             ("104", "17"), ("104", "18"), ("104", "19"),
-                             ("104", "20"), ("104", "21")]
-                if tuple(a) in cf_ranges and tuple(b) in cf_ranges:
+                # ────────────────────────────────────────────────────
+                # Beide via Cloudflare = OK (Cloudflare gebruikt vele edge
+                # IPs, IP-vergelijking is dus zinloos; routing gaat op
+                # Host-header). Gebruik ipaddress module voor volledige
+                # CIDR-check i.p.v. hardcoded /16 prefixes.
+                # ────────────────────────────────────────────────────
+                import ipaddress
+                CLOUDFLARE_RANGES = [
+                    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+                    "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+                    "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+                    "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+                    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+                ]
+                def _in_cf(ip_str):
+                    try:
+                        ip = ipaddress.ip_address(ip_str)
+                        return any(ip in ipaddress.ip_network(n) for n in CLOUDFLARE_RANGES)
+                    except (ValueError, TypeError):
+                        return False
+                if _in_cf(result["resolved_ip"]) and _in_cf(target_ip):
                     dns_ok = True
             except Exception:
                 pass
@@ -12335,13 +12410,32 @@ async def get_domain_status(user=Depends(get_current_user)):
     # === Stap 4: HTTPS response check + SSL provider detectie ===
     # Herken populaire providers via response headers zodat de tenant een
     # groen ✓ krijgt zonder handmatig te bevestigen dat SSL werkt.
+    # Ook: detecteer Cloudflare error-pagina's (Error 1034 "Edge IP
+    # Restricted", 1000, 1014) — die betekenen SSL werkt WEL maar het
+    # domein is niet bereikbaar door een Cloudflare-to-Cloudflare loop.
     ssl_provider = None
     ssl_provider_label = None
+    cf_error_code = None
     try:
         import httpx
-        async with httpx.AsyncClient(verify=True, timeout=5, follow_redirects=False) as client:
-            r = await client.head(f"https://{custom}/")
+        async with httpx.AsyncClient(verify=True, timeout=6, follow_redirects=False) as client:
+            # GET / (root) i.p.v. /api/health zodat we ook Cloudflare
+            # error-pagina's zien voor domeinen die zijn misconfigured —
+            # deze error pages worden door CF alleen op HTML routes
+            # terug gegeven, niet op API paths.
+            r = await client.get(f"https://{custom}/")
             result["https_status_code"] = r.status_code
+            body_head = (r.text or "")[:5000]
+            # Cloudflare error pages bevatten zowel "errorCode: 1034" (in JS)
+            # als "Error 1034" of "Edge IP Restricted" (in HTML). Check op
+            # ALLE varianten voor robuustheid.
+            body_lower = body_head.lower()
+            if "1034" in body_head or "edge ip restricted" in body_lower:
+                cf_error_code = "1034"
+            elif "1000" in body_head and ("dns points" in body_lower or "prohibited" in body_lower):
+                cf_error_code = "1000"
+            elif "1014" in body_head and "cname" in body_lower:
+                cf_error_code = "1014"
             # Response headers → provider detectie
             hdrs = {k.lower(): v for k, v in r.headers.items()}
             server_hdr = hdrs.get("server", "").lower()
@@ -12361,8 +12455,6 @@ async def get_domain_status(user=Depends(get_current_user)):
                 ssl_provider = "caddy"
                 ssl_provider_label = "Caddy / Let's Encrypt"
             elif server_hdr:
-                # Iets werkt, maar we herkennen 't niet — laat de user weten
-                # dat er wel HTTPS is via een eigen setup.
                 ssl_provider = "unknown"
                 ssl_provider_label = f"Eigen HTTPS ({server_hdr.split('/')[0]})"
     except Exception:
@@ -12370,6 +12462,22 @@ async def get_domain_status(user=Depends(get_current_user)):
         pass
     result["ssl_provider"] = ssl_provider
     result["ssl_provider_label"] = ssl_provider_label
+
+    if cf_error_code:
+        # SSL werkt, DNS werkt, maar Cloudflare weigert de request door
+        # Cloudflare-to-Cloudflare loop. Duidelijke oplossing tonen.
+        result["status"] = "cloudflare_loop"
+        result["ssl_ok"] = True
+        result["cloudflare_error_code"] = cf_error_code
+        result["message"] = (
+            f"Cloudflare geeft Error {cf_error_code} — je domein loopt via Cloudflare "
+            "maar surirent.sr ook, dat geeft een loop die Cloudflare blokkeert.\n\n"
+            "OPLOSSING: Zet je CNAME record in Cloudflare op 'DNS only' "
+            "(klik op de oranje wolk zodat hij grijs wordt). Dan verdwijnt "
+            "Cloudflare uit het routing-pad voor dit domein en werkt de site direct.\n\n"
+            "Alternatief: contact support voor Cloudflare-SaaS custom hostnames."
+        )
+        return result
 
     # Alles OK
     result["status"] = "live"

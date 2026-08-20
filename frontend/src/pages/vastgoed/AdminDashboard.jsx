@@ -3849,13 +3849,20 @@ function CustomDomainQuickAccess() {
   });
   const status = data?.status || 'not_configured';
   const isLive = status === 'live';
-  const isPartial = status === 'dns_ok_ssl_pending' || status === 'dns_missing' || status === 'dns_wrong';
-  const dotColor = isLive ? 'bg-emerald-500' : isPartial ? 'bg-amber-500' : 'bg-slate-300';
+  const isError = status === 'cloudflare_loop' || status === 'dns_wrong' || status === 'dns_missing';
+  const isPartial = status === 'dns_ok_ssl_pending';
+  const dotColor = isLive ? 'bg-emerald-500'
+    : isError ? 'bg-red-500'
+    : isPartial ? 'bg-amber-500'
+    : 'bg-slate-300';
+  const shouldPulse = isError || isPartial;
   const title = isLive
     ? `Domein live: ${data?.custom_domain || ''}`
-    : isPartial
-      ? 'Domein in behandeling — klik om DNS/SSL af te ronden'
-      : 'Configureer eigen domein';
+    : isError
+      ? `Domein fout: ${status} — klik om af te ronden`
+      : isPartial
+        ? 'Domein in behandeling — klik om DNS/SSL af te ronden'
+        : 'Configureer eigen domein';
   return (
     <button
       onClick={() => {
@@ -3872,7 +3879,7 @@ function CustomDomainQuickAccess() {
       className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50 flex items-center justify-center text-slate-500 hover:text-[#FF5C00] transition"
     >
       <Globe className="w-4 h-4" strokeWidth={2.2} />
-      <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white ${isPartial ? 'animate-pulse' : ''}`} />
+      <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white ${shouldPulse ? 'animate-pulse' : ''}`} />
     </button>
   );
 }
