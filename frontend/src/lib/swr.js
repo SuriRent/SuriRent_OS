@@ -8,7 +8,8 @@
 //   • Data is instant zichtbaar bij tabwissel (SWR cachet per key)
 //   • Achtergrond-revalidate bij focus / reconnect (verse data zonder wachten)
 //   • Automatisch deduping als meerdere componenten dezelfde URL fetchen
-import useSWR, { mutate as globalMutate } from 'swr';
+import useSWR, { mutate as globalMutate, preload as swrPreload } from 'swr';
+import { useEffect, useRef } from 'react';
 import { api } from './api';
 
 // Fetcher — SWR key = API path (bv. '/tenants'). Retourneert `data` uit
@@ -55,4 +56,44 @@ export function useApiSWR(key, options) {
 // om SWR te forceren nieuw op te halen. Werkt met dezelfde key als useApiSWR.
 export function invalidateSWR(key) {
   return globalMutate(key);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Prefetching — vul de SWR cache proactief voor tab-content die de user
+// binnenkort waarschijnlijk gaat openen. Zo is er GEEN loading-state of
+// flikker bij de eerste tabwissel; data staat al klaar.
+//
+// Gebruik in AdminDashboard:
+//    usePrefetchAdmin([
+//      '/tenants', '/apartments', '/contracts', '/invoices',
+//      '/payments', '/locations', '/deposits', '/kasgeld',
+//      '/maintenance', '/employees', '/payment-plans?status=active',
+//    ]);
+//
+// Prefetch triggert een fetch zonder React-subscription (rendert niets).
+// Als een component later met dezelfde key een `useApiSWR` doet, is de
+// data instant beschikbaar uit de cache — geen skeleton/empty state.
+// ────────────────────────────────────────────────────────────────────
+export function prefetchApi(key) {
+  if (!key) return null;
+  return swrPreload(key, fetcher);
+}
+
+/**
+ * usePrefetchAdmin — batch-prefetch bij mount + refresh bij `deps`-wijzigingen.
+ * Prefetches vuren IMMEDIATELY (niet requestIdleCallback) zodat de cache al
+ * gevuld is voordat de gebruiker een tab aanklikt. Axios-calls zijn async
+ * en blokkeren de paint niet, dus vroeg starten is puur winst.
+ */
+export function usePrefetchAdmin(keys, deps = []) {
+  const doneRef = useRef(new Set());
+  useEffect(() => {
+    (keys || []).forEach((k) => {
+      if (!k || doneRef.current.has(k)) return;
+      doneRef.current.add(k);
+      try { swrPreload(k, fetcher); }
+      catch { /* niet-fataal — SWR faalt zelfstandig af */ }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }

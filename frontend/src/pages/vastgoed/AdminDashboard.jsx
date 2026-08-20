@@ -20,7 +20,7 @@ import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import OnboardingModal from '../../components/OnboardingModal';
-import { useApiSWR } from '../../lib/swr';
+import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
 import Contracts from './admin/Contracts';
@@ -3891,6 +3891,24 @@ export default function AdminDashboard() {
   // de admin heeft de wizard nog niet bewust gesloten voor dit bedrijf.
   const [wizardOpen, setWizardOpen] = useState(false);
   const navigate = useBrandedNavigate();
+
+  // Proactieve prefetch — vul de SWR cache voor álle admin-tabs zodra
+  // de dashboard mount (via requestIdleCallback zodat het geen paint
+  // vertraagt). Zo is er GEEN skeleton of empty state bij de eerste
+  // tabwissel; data staat al klaar. SSE globalMutate houdt daarna
+  // alles vers.
+  const isAdmin = user && (user.role === 'admin' || user.role === 'employee');
+  usePrefetchAdmin(
+    isAdmin ? [
+      '/tenants', '/apartments', '/contracts', '/invoices',
+      '/payments', '/locations', '/deposits', '/kasgeld',
+      '/kasgeld/balance',
+      '/maintenance', '/employees', '/salaries',
+      '/payment-plans?status=active',
+      '/admin/stats', '/setup-status',
+    ] : [],
+    [isAdmin]
+  );
 
   // Live-sync SSE — luister naar /api/admin/events en dispatch een window
   // event zodra een andere admin-tab/-apparaat iets muteert. Alle pagina's
