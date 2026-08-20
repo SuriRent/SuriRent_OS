@@ -12465,17 +12465,24 @@ async def get_domain_status(user=Depends(get_current_user)):
 
     if cf_error_code:
         # SSL werkt, DNS werkt, maar Cloudflare weigert de request door
-        # Cloudflare-to-Cloudflare loop. Duidelijke oplossing tonen.
+        # Cloudflare-to-Cloudflare loop óók bij DNS-only. In dat geval is
+        # de enige oplossing dat Emergent Cloudflare-SaaS Custom Hostnames
+        # aanzet, OF dat de tenant naar de origin-IP van Emergent's K8s
+        # ingress wijst (niet naar surirent.sr).
         result["status"] = "cloudflare_loop"
         result["ssl_ok"] = True
         result["cloudflare_error_code"] = cf_error_code
         result["message"] = (
-            f"Cloudflare geeft Error {cf_error_code} — je domein loopt via Cloudflare "
-            "maar surirent.sr ook, dat geeft een loop die Cloudflare blokkeert.\n\n"
-            "OPLOSSING: Zet je CNAME record in Cloudflare op 'DNS only' "
-            "(klik op de oranje wolk zodat hij grijs wordt). Dan verdwijnt "
-            "Cloudflare uit het routing-pad voor dit domein en werkt de site direct.\n\n"
-            "Alternatief: contact support voor Cloudflare-SaaS custom hostnames."
+            f"Cloudflare geeft Error {cf_error_code} \u2014 dit betekent dat "
+            f"jouw domein {custom} niet bereikbaar is via onze standaard "
+            "custom-domain flow. Beide domeinen (jouw én surirent.sr) draaien "
+            "op Cloudflare en dat werkt alleen als Emergent voor jouw domein "
+            "Cloudflare-SaaS Custom Hostnames heeft geactiveerd.\n\n"
+            "OPLOSSING: Neem contact op met support (support@emergent.sh) en "
+            f"vraag om {custom} als custom hostname toe te voegen. Vermeld "
+            "in je bericht je bedrijfsnaam en dit foutbericht (Error 1034). "
+            "Alternatief: gebruik de standaard-URL surirent.sr/<jouw-slug> — "
+            "die werkt direct zonder DNS-config."
         )
         return result
 
