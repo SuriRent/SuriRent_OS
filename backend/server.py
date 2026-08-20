@@ -12050,40 +12050,76 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
             cf_error_code = None
             try:
                 import httpx
-                async with httpx.AsyncClient(verify=True, timeout=6, follow_redirects=False) as client:
-                    r = await client.get(f"https://{custom}/api/health", headers={"Host": custom})
-                    # 200/301/302/403 → app antwoordt (403 kan van auth zijn)
+                async with httpx.AsyncClient(verify=True, timeout=10, follow_redirects=False) as client:
+                    r = await client.get(f"https://{custom}/")
                     if r.status_code < 500:
                         https_ok = True
-                    # Cloudflare error page detectie
-                    text_head = r.text[:2000] if r.text else ""
-                    if "Error 1034" in text_head:
+                    text_head = (r.text or "")[:5000]
+                    text_lower = text_head.lower()
+                    if "1034" in text_head or "edge ip restricted" in text_lower:
                         cf_error_code = "1034 (Edge IP Restricted)"
-                    elif "Error 1000" in text_head:
+                    elif "1000" in text_head and ("dns points" in text_lower or "prohibited" in text_lower):
                         cf_error_code = "1000 (DNS points to prohibited IP)"
-                    elif "Error 1014" in text_head:
+                    elif "1014" in text_head and "cname" in text_lower:
                         cf_error_code = "1014 (CNAME cross-user banned)"
+            except httpx.HTTPError as e:
+                # Netwerk-timeout of TLS fout — meestal betekent dit dat de
+                # backend Cloudflare's edge niet vlot bereikt (fluctueert). Bij
+                # deze test doen we een 2e poging via HEAD als bevestiging dat
+                # er GEEN 1034 aanwezig is (zodat we niet ten onrechte "email
+                # support" adviseren).
+                try:
+                    async with httpx.AsyncClient(verify=True, timeout=8, follow_redirects=False) as client2:
+                        r2 = await client2.head(f"https://{custom}/")
+                        if r2.status_code < 500:
+                            https_ok = True
+                except Exception:
+                    cf_error_code = f"HTTPS check faalde ({type(e).__name__})"
             except Exception as e:
-                cf_error_code = f"HTTPS check faalde: {str(e)[:100]}"
+                cf_error_code = f"HTTPS check faalde ({type(e).__name__})"
 
-            if cf_error_code:
+            if cf_error_code and "1034" in str(cf_error_code):
                 return {"section": section, "ok": False,
                         "detail": (
                             f"DNS resolveert (host {host_ip}, target {target_ip}), maar Cloudflare "
-                            f"geeft {cf_error_code}. Oorzaak: {custom} is via Cloudflare geproxied "
-                            f"maar {app_target} draait óók achter Cloudflare — dit is een "
-                            "Cloudflare-to-Cloudflare loop die Cloudflare blokkeert. "
-                            "OPLOSSING: (a) Zet je CNAME record op 'DNS only' (grijze wolk i.p.v. "
-                            f"oranje) zodat je browser rechtstreeks naar {app_target} gaat. Of "
-                            "(b) neem contact op met support zodat we jouw domein op ons Cloudflare "
-                            "SaaS platform kunnen registreren."
+                            f"geeft {cf_error_code}. Dit is een multi-tenant custom-hostname "
+                            "beperking van het Emergent platform.\n\n"
+                            f"OPLOSSING: Mail support@emergent.sh met (a) je Job ID, (b) een "
+                            f"screenshot van Error 1034 en (c) het verzoek om {custom} als "
+                            "custom hostname op de Cloudflare zone van dit deployment toe te "
+                            f"voegen. Ondertussen werkt de standaard-URL {app_target}/<jouw-slug> "
+                            "wel direct zonder DNS-config."
+                        )}
+            if cf_error_code and both_cloudflare and "HTTPS check faalde" in cf_error_code:
+                # Timeout op een dual-Cloudflare setup is bijna altijd Error
+                # 1034 die de backend niet snel kon afronden — geef dezelfde
+                # duidelijke oplossing i.p.v. een verwarrende "check je DNS".
+                return {"section": section, "ok": False,
+                        "detail": (
+                            f"Cloudflare blokkeert de verbinding naar {custom} (dubbele Cloudflare "
+                            f"setup: beide {custom} en {app_target} draaien op Cloudflare). Dit is "
+                            "een multi-tenant custom-hostname beperking van het Emergent platform.\n\n"
+                            "OPLOSSING: Mail support@emergent.sh met (a) je Job ID, (b) een "
+                            f"screenshot van Error 1034 en (c) het verzoek om {custom} als "
+                            "custom hostname op de Cloudflare zone van dit deployment toe te "
+                            f"voegen. Ondertussen werkt de standaard-URL {app_target}/<jouw-slug> "
+                            "wel direct zonder DNS-config."
+                        )}
+            if cf_error_code:
+                return {"section": section, "ok": False,
+                        "detail": (
+                            f"DNS resolveert (host {host_ip}, target {target_ip}) maar er is een "
+                            f"probleem: {cf_error_code}. Controleer of jouw domein correct is "
+                            "geconfigureerd bij je registrar en dat DNS-propagatie voltooid is "
+                            "(kan tot 24u duren). Als het probleem aanhoudt, mail support met "
+                            "je Job ID en dit foutbericht."
                         )}
             if https_ok or both_cloudflare:
                 await db.company_settings.update_one(
                     {"company_id": company_id_of(user)},
                     {"$set": {"domain.dns_verified": True, "updated_at": iso(now_utc())}},
                 )
-                cf_note = f" (beide via Cloudflare edge)" if both_cloudflare else ""
+                cf_note = " (beide via Cloudflare edge)" if both_cloudflare else ""
                 return {"section": section, "ok": True,
                         "detail": f"{custom} wijst correct naar {app_target}{cf_note}. "
                                   "DNS is geverifieerd. Regel nog HTTPS/SSL zelf via Cloudflare (gratis) "
