@@ -1,10 +1,31 @@
 import { FileText, ChevronRight, ChevronDown, MessageCircle, Mail } from 'lucide-react';
 import { fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { openWhatsApp } from '../../../../lib/external-link';
+import { useAuth } from '../../../../lib/auth';
 import { fmtAmount, fmtAmountWhole } from './helpers';
 import { StatusPill, InvoiceRow, MobileInvoiceLine } from './InvoiceRow';
 import PaidHistorySection from './PaidHistorySection';
 import CreditBadge from './CreditBadge';
+
+// =====================================================================
+// Reminder message builder — vult tenant's eigen bedrijfsnaam in (nooit
+// "SuriRent") en voegt publieke PDF-links toe zodat WhatsApp automatisch
+// een preview toont van de factuur.
+// =====================================================================
+function buildReminderMessage(group, companyName) {
+  const cur = group.currency;
+  const list = (group.overdue || [])
+    .map((i) => {
+      const pdfUrl = i.id ? `${window.location.origin}/api/invoices/${i.id}/pdf` : '';
+      const line = `• ${MONTHS_NL[i.period_month - 1]} ${i.period_year}: ${cur} ${Number(i.amount).toFixed(2)}`;
+      return pdfUrl ? `${line}\n  ${pdfUrl}` : line;
+    })
+    .join('\n\n');
+  const count = group.overdueCount;
+  const total = Number(group.totalOverdue).toFixed(2);
+  const signature = companyName ? `\n\n— ${companyName}` : '';
+  return `Beste ${group.tenant_name},\n\nVriendelijke herinnering — u heeft ${count} openstaande factu${count > 1 ? 'ren' : 'ur'}:\n\n${list}\n\n*Totaal openstaand: ${cur} ${total}*\n\nGelieve zo spoedig mogelijk te betalen.${signature}`;
+}
 
 // =====================================================================
 // MOBIELE POS-card — compacte rij per huurder voor telefoon-weergave
@@ -67,6 +88,8 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick }) {
 // Desktop tenant row + open/paid uitklap. Wordt in de lijstweergave gebruikt.
 // =====================================================================
 export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCreditClick, tenants }) {
+  const { activeCompany } = useAuth();
+  const companyName = activeCompany?.name || '';
   const sev = group.severity;
   const amtCls = sev === 'critical' ? 'text-red-600'
     : sev === 'late' ? 'text-orange-600'
@@ -280,12 +303,7 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
                     alert(`${group.tenant_name} heeft geen telefoonnummer. Voeg toe via Huurders.`);
                     return;
                   }
-                  const cur = group.currency;
-                  const list = group.overdue
-                    .map((i) => `• ${MONTHS_NL[i.period_month - 1]} ${i.period_year}: ${cur} ${Number(i.amount).toFixed(2)}`)
-                    .join('\n');
-                  const msg = `Beste ${group.tenant_name},\n\nVriendelijke herinnering — u heeft ${group.overdueCount} openstaande factu${group.overdueCount > 1 ? 'ren' : 'ur'}:\n\n${list}\n\n*Totaal openstaand: ${cur} ${Number(group.totalOverdue).toFixed(2)}*\n\nGelieve zo spoedig mogelijk te betalen.\n\n— SuriRent`;
-                  openWhatsApp(phone, msg);
+                  openWhatsApp(phone, buildReminderMessage(group, companyName));
                 }}
                 data-testid={`reminder-wa-manual-${group.tenant_id}`}
                 className="inline-flex items-center justify-center gap-1.5 px-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs sm:text-sm shadow-[0_6px_16px_-4px_rgba(16,185,129,0.5)]">
@@ -332,6 +350,8 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
 // Mobile expand: bucket-secties + betalingsgeschiedenis van huurder.
 // =====================================================================
 export function MobileTenantExpand({ g, tenants, onReminder }) {
+  const { activeCompany } = useAuth();
+  const companyName = activeCompany?.name || '';
   const paidInvoices = (g.all || []).filter((i) => (i.status || '') === 'paid');
   return (
     <div className="mt-2 mx-1" data-testid={`mi-detail-${g.tenant_id}`}>
@@ -405,9 +425,7 @@ export function MobileTenantExpand({ g, tenants, onReminder }) {
             const t = tenants?.find((x) => x.id === g.tenant_id);
             const phone = (t?.phone || '').replace(/\D/g, '');
             if (!phone) { alert(`${g.tenant_name} heeft geen telefoonnummer.`); return; }
-            const list = g.overdue.map((i) => `• ${MONTHS_NL[i.period_month - 1]} ${i.period_year}: ${g.currency} ${Number(i.amount).toFixed(2)}`).join('\n');
-            const msg = `Beste ${g.tenant_name},\n\nVriendelijke herinnering — u heeft ${g.overdueCount} openstaande factu${g.overdueCount > 1 ? 'ren' : 'ur'}:\n\n${list}\n\n*Totaal openstaand: ${g.currency} ${Number(g.totalOverdue).toFixed(2)}*\n\n— SuriRent`;
-            openWhatsApp(phone, msg);
+            openWhatsApp(phone, buildReminderMessage(g, companyName));
           }}
             data-testid={`mi-wa-${g.tenant_id}`}
             className="h-10 rounded-xl bg-emerald-500 text-white font-bold text-[12px] inline-flex items-center justify-center gap-1.5">

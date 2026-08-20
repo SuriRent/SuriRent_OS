@@ -12813,7 +12813,11 @@ async def tenant_payment_reminder(
                  "juli", "augustus", "september", "oktober", "november", "december"]
     cur = invs[0].get("currency", "SRD")
     total = sum(float(i.get("amount", 0)) for i in invs)
-    lines = [f"• {months_nl[i['period_month']-1].capitalize()} {i['period_year']}: {cur} {float(i['amount']):.2f}" for i in invs]
+    lines = []
+    for i in invs:
+        pdf_link = _public_url(f"/api/invoices/{i['id']}/pdf")
+        month_lbl = months_nl[i['period_month']-1].capitalize()
+        lines.append(f"• {month_lbl} {i['period_year']}: {cur} {float(i['amount']):.2f}\n  {pdf_link}")
     period_label = ", ".join(f"{months_nl[i['period_month']-1].capitalize()} {i['period_year']}" for i in invs[:3])
     if len(invs) > 3:
         period_label += f" (+{len(invs) - 3} meer)"
