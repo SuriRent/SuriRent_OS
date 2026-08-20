@@ -12332,19 +12332,49 @@ async def get_domain_status(user=Depends(get_current_user)):
         result["ssl_error"] = str(e)[:200]
         return result
 
-    # === Stap 4: HTTPS response check (optioneel — best effort) ===
+    # === Stap 4: HTTPS response check + SSL provider detectie ===
+    # Herken populaire providers via response headers zodat de tenant een
+    # groen ✓ krijgt zonder handmatig te bevestigen dat SSL werkt.
+    ssl_provider = None
+    ssl_provider_label = None
     try:
         import httpx
         async with httpx.AsyncClient(verify=True, timeout=5, follow_redirects=False) as client:
             r = await client.head(f"https://{custom}/")
             result["https_status_code"] = r.status_code
+            # Response headers → provider detectie
+            hdrs = {k.lower(): v for k, v in r.headers.items()}
+            server_hdr = hdrs.get("server", "").lower()
+            if hdrs.get("cf-ray") or "cloudflare" in server_hdr:
+                ssl_provider = "cloudflare"
+                ssl_provider_label = "Cloudflare"
+            elif hdrs.get("x-vercel-id") or "vercel" in server_hdr:
+                ssl_provider = "vercel"
+                ssl_provider_label = "Vercel"
+            elif hdrs.get("x-served-by") and "fastly" in hdrs.get("x-served-by", "").lower():
+                ssl_provider = "fastly"
+                ssl_provider_label = "Fastly"
+            elif "nginx" in server_hdr:
+                ssl_provider = "nginx"
+                ssl_provider_label = "Nginx / Let's Encrypt"
+            elif "caddy" in server_hdr:
+                ssl_provider = "caddy"
+                ssl_provider_label = "Caddy / Let's Encrypt"
+            elif server_hdr:
+                # Iets werkt, maar we herkennen 't niet — laat de user weten
+                # dat er wel HTTPS is via een eigen setup.
+                ssl_provider = "unknown"
+                ssl_provider_label = f"Eigen HTTPS ({server_hdr.split('/')[0]})"
     except Exception:
         # SSL werkt maar routing niet — nog altijd "live" want cert is er
         pass
+    result["ssl_provider"] = ssl_provider
+    result["ssl_provider_label"] = ssl_provider_label
 
     # Alles OK
     result["status"] = "live"
-    result["message"] = f"✓ {custom} is live en veilig bereikbaar via HTTPS."
+    provider_txt = f" via {ssl_provider_label}" if ssl_provider_label else ""
+    result["message"] = f"✓ {custom} is live en veilig bereikbaar via HTTPS{provider_txt}."
     # Persist verified state
     await db.company_settings.update_one(
         {"company_id": cid},

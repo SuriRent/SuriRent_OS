@@ -12,6 +12,7 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
+  Globe,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -3836,6 +3837,46 @@ function RemoteSignatureRequest({ tenant: t }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// CustomDomainQuickAccess — icon-knop in admin topbar naast de bellen.
+// Groen puntje wanneer custom domein LIVE (DNS+SSL geverifieerd),
+// oranje bij in-progress, grijs bij niet-ingesteld. Klik opent
+// Instellingen → Integraties → Eigen domein.
+// ─────────────────────────────────────────────────────────────────────
+function CustomDomainQuickAccess() {
+  const { data } = useApiSWR('/settings/domain/status', {
+    shouldRetryOnError: false,
+  });
+  const status = data?.status || 'not_configured';
+  const isLive = status === 'live';
+  const isPartial = status === 'dns_ok_ssl_pending' || status === 'dns_missing' || status === 'dns_wrong';
+  const dotColor = isLive ? 'bg-emerald-500' : isPartial ? 'bg-amber-500' : 'bg-slate-300';
+  const title = isLive
+    ? `Domein live: ${data?.custom_domain || ''}`
+    : isPartial
+      ? 'Domein in behandeling — klik om DNS/SSL af te ronden'
+      : 'Configureer eigen domein';
+  return (
+    <button
+      onClick={() => {
+        window.dispatchEvent(new CustomEvent('go-tab', { detail: 'instellingen' }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('go-instellingen-section', {
+            detail: { section: 'integraties', integrationsSection: 'domain' },
+          }));
+        }, 60);
+      }}
+      title={title}
+      aria-label={title}
+      data-testid="topbar-custom-domain-btn"
+      className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50 flex items-center justify-center text-slate-500 hover:text-[#FF5C00] transition"
+    >
+      <Globe className="w-4 h-4" strokeWidth={2.2} />
+      <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${dotColor} ring-2 ring-white ${isPartial ? 'animate-pulse' : ''}`} />
+    </button>
+  );
+}
+
 function DesktopTopBar({ user, activeCompany, tab, tabs }) {
   // Moderne desktop topbar — toont de actieve tab als "page title" links
   // (vervangt de oude H1 in de content) + Live + actie-iconen rechts.
@@ -3861,6 +3902,7 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
         <GlobalSearch variant="topbar" />
+        <CustomDomainQuickAccess />
         <ApartmentsBell />
         <PendingApprovalBell />
         <OverdueBell />

@@ -368,6 +368,11 @@ function DomainStatusWidget({ status, loading, onRefresh }) {
         {status.target_host && <p>Target: <code className="font-mono">{status.target_host}</code>{status.target_ip ? ` (${status.target_ip})` : ''}</p>}
         {status.resolved_ip && <p>Resolveert naar: <code className="font-mono">{status.resolved_ip}</code></p>}
         {status.https_status_code && <p>HTTPS response: <b>{status.https_status_code}</b></p>}
+        {status.ssl_provider_label && (
+          <p className="text-emerald-700 font-bold" data-testid="domain-status-ssl-provider">
+            ✓ SSL provider: {status.ssl_provider_label}
+          </p>
+        )}
       </div>
     </div>
   );
