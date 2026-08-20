@@ -108,6 +108,23 @@ export default function InstellingenHub({ initialSection, integrationsSection })
     }
   }, [legacyMatch]);
 
+  // Deep-link vanuit andere pagina's (bv. MijnLanding "Configureer eigen
+  // domein" knop). Dispatcher: window.dispatchEvent(new CustomEvent(
+  //   'go-instellingen-section', { detail: { section, integrationsSection } }))
+  useEffect(() => {
+    const onDeepLink = (ev) => {
+      const s = ev?.detail?.section;
+      const sub = ev?.detail?.integrationsSection;
+      if (s) setActive(s);
+      if (sub) setIntSection(sub);
+      if (s && typeof window !== 'undefined') {
+        window.history.replaceState(null, '', `${window.location.pathname}#${s}`);
+      }
+    };
+    window.addEventListener('go-instellingen-section', onDeepLink);
+    return () => window.removeEventListener('go-instellingen-section', onDeepLink);
+  }, []);
+
   const handleSelect = useCallback((id) => {
     setActive(id);
     // Update hash zonder rerender storm / scroll-jump.

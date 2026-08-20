@@ -10,7 +10,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Save, Eye, RefreshCw, Trash2, AlertCircle, CheckCircle2, Loader2,
-  Monitor, Smartphone, Tablet, Paintbrush, History, Globe, Copy, ExternalLink, X,
+  Monitor, Smartphone, Tablet, Paintbrush, History, Globe, Copy, ExternalLink, X, ArrowRight,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
@@ -99,43 +99,57 @@ function CustomDomainCard({ currentDomain, landingUrl, onSaved }) {
         </div>
       )}
 
-      {/* CUSTOM DOMEIN — optioneel, voor wie een eigen URL wil. */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-5" data-testid="custom-domain-card">
+      {/* CUSTOM DOMEIN — verwijst naar de canonieke plek in Settings → Domein.
+          Historisch stond de configuratie hier én in Settings; nu leeft alle
+          UX daar (DNS records, live-status, HTTPS-uitleg). Deze card geeft
+          alleen visibiliteit + één-klik-toegang zodat gebruikers niet gaan
+          zoeken. */}
+      <div className={`rounded-2xl border p-5 ${currentDomain
+          ? 'bg-emerald-50 border-emerald-200'
+          : 'bg-white border-slate-100'}`}
+        data-testid="custom-domain-card">
         <div className="flex items-start gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            currentDomain ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
             <Globe className="w-5 h-5" />
           </div>
-          <div>
-            <h3 className="font-extrabold text-slate-900">Eigen domein <span className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">optioneel</span></h3>
-            <p className="text-xs text-slate-500 mt-0.5">Activeer deze landing ook op je eigen domein (bv. <span className="font-mono">gopiappartements.com</span>).</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-slate-900">
+              Eigen domein
+              {!currentDomain && (
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-2">optioneel</span>
+              )}
+              {currentDomain && (
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest ml-2">actief</span>
+              )}
+            </h3>
+            {currentDomain ? (
+              <p className="text-sm text-slate-700 mt-0.5">
+                Actief op <span className="font-mono font-bold text-emerald-700">{currentDomain}</span>. Beheer DNS, status en HTTPS in Instellingen&nbsp;→&nbsp;Domein.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-0.5">Toon deze landing op je eigen domein (bv. <span className="font-mono">gopiappartements.com</span>). DNS + eigen HTTPS-certificaat vereist.</p>
+            )}
           </div>
         </div>
-      <div className="flex flex-col sm:flex-row gap-2">
-        <input value={domain} onChange={(e) => setDomain(e.target.value)}
-          data-testid="custom-domain-input"
-          placeholder="uwbedrijf.com"
-          className="flex-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm font-mono" />
-        <button onClick={save} disabled={saving}
-          data-testid="custom-domain-save"
-          className="h-11 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-sm flex items-center gap-1.5 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Opslaan
-        </button>
-      </div>
-      {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
-      {savedMsg && <p className="text-sm text-emerald-700 mt-2 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> {savedMsg}</p>}
-      {currentDomain && (
-        <div className="mt-4 bg-slate-50 rounded-xl p-4 text-xs text-slate-600 space-y-1.5">
-          <p className="font-extrabold text-slate-700 mb-1">DNS-instellingen</p>
-          <p>Maak een <code className="bg-white px-1 rounded font-bold">CNAME</code> record bij uw domein-provider:</p>
-          <div className="bg-white rounded-md p-2.5 font-mono text-[11px] flex items-center justify-between">
-            <span><span className="text-slate-400">{currentDomain}</span> → <span className="text-emerald-700">surirent.sr</span></span>
-            <button onClick={() => navigator.clipboard?.writeText('surirent.sr')}
-              className="text-orange-600 hover:text-orange-700"><Copy className="w-3.5 h-3.5" /></button>
-          </div>
-          <p className="text-slate-400">DNS-propagatie duurt 5-60 minuten.</p>
-        </div>
-      )}
+        <a href="#/admin/instellingen"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('go-tab', { detail: 'instellingen' }));
+            // Na de tab-switch stuurt InstellingenHub zichzelf naar
+            // Integraties → Domein via het go-instellingen-section event.
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('go-instellingen-section', {
+                detail: { section: 'integraties', integrationsSection: 'domain' },
+              }));
+            }, 60);
+          }}
+          data-testid="custom-domain-goto-settings"
+          className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-slate-900 hover:bg-black text-white font-extrabold text-sm">
+          <Globe className="w-4 h-4" />
+          {currentDomain ? 'Beheer domein' : 'Configureer eigen domein'}
+          <ArrowRight className="w-4 h-4" />
+        </a>
       </div>
     </div>
   );

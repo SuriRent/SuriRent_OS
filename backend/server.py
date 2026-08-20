@@ -12026,8 +12026,8 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
             )
             return {"section": section, "ok": True,
                     "detail": f"{custom} wijst correct naar {app_target} (IP {target_ip}). "
-                              "DNS is geverifieerd — neem nu contact op met Emergent Support om dit "
-                              "domein als custom alias aan je deployment te koppelen (SSL wordt automatisch geregeld)."}
+                              "DNS is geverifieerd. Regel nog HTTPS/SSL zelf via Cloudflare (gratis) "
+                              "of een eigen reverse-proxy met Let's Encrypt."}
         return {"section": section, "ok": False,
                 "detail": f"{custom} resolveert naar {host_ip}, maar verwacht het IP van {app_target} ({target_ip}). "
                           f"Controleer je DNS record."}
@@ -12323,9 +12323,12 @@ async def get_domain_status(user=Depends(get_current_user)):
     except (_ssl.SSLError, _ssl.CertificateError, socket.error, socket.timeout, socket.gaierror, OSError) as e:
         result["ssl_ok"] = False
         result["status"] = "dns_ok_ssl_pending"
-        result["message"] = ("DNS wijst correct — maar SSL certificaat is nog niet uitgegeven. "
-                             f"Vraag Emergent Support om {custom} als custom alias te koppelen. "
-                             "Dit kan 5–15 minuten duren na koppeling.")
+        result["message"] = (
+            "DNS wijst correct — maar er is nog geen geldig HTTPS certificaat op je domein. "
+            "SSL regel je zelf: het snelst via Cloudflare (gratis) — voeg je domein toe, wijzig "
+            "de nameservers naar Cloudflare, zet de DNS-record op proxied (oranje wolk) en kies "
+            "SSL/TLS mode 'Full'. Alternatief: eigen reverse-proxy (nginx / Traefik) met Let's Encrypt."
+        )
         result["ssl_error"] = str(e)[:200]
         return result
 

@@ -226,7 +226,7 @@ export function DomainForm({ initial }) {
   const exampleIp = target.ip || '<IP van je productie server>';
 
   // Live DNS + SSL status — refresh elke 30s zodat gebruiker realtime
-  // ziet wanneer SSL certificaat is uitgegeven na Emergent Support koppeling.
+  // ziet wanneer HTTPS certificaat actief is (via Cloudflare of eigen proxy).
   const [status, setStatus] = useState(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const refreshStatus = useCallback(async () => {
@@ -280,7 +280,28 @@ Naam:   ${d.custom_domain || '@'}
 Waarde: ${exampleIp}
 TTL:    3600`}
         </pre>
-        <p className="text-slate-500">Na DNS-propagatie (max 24u): klik <b>Test verbinding</b> om te verifiëren. Zodra DNS is geverifieerd: neem contact op met <b>Emergent Support</b> om dit domein als custom alias aan je deployment te koppelen — SSL wordt automatisch geregeld.</p>
+        <p className="text-slate-500">Na DNS-propagatie (max 24u): klik <b>Test verbinding</b> om te verifiëren.</p>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SSL / HTTPS — belangrijke tekst dat de tenant dit ZELF moet
+          regelen. Emergent stelt geen certificaat uit voor custom
+          domeinen; anders krijgt de tenant een certificaat waarmee zijn
+          eindgebruikers zien dat de site door Emergent gehost wordt.
+          Aanbevolen: Cloudflare Proxy (gratis, geeft ook DDoS-protectie
+          en SSL "Flexible" of "Full" mode werkt direct).
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+        <p className="font-bold flex items-center gap-2 text-slate-900"><Shield className="w-4 h-4 text-blue-600" /> HTTPS / SSL — u regelt dit zelf</p>
+        <p>Voor uw eigen domein <b>bent u zelf verantwoordelijk voor het SSL/HTTPS certificaat</b>. Wij stellen geen certificaat uit voor custom domeinen — anders zouden uw huurders zien dat de site via een externe host loopt.</p>
+        <p className="font-semibold text-slate-800 mt-1.5">Aanbevolen aanpak (gratis, 5 min):</p>
+        <ol className="list-decimal ml-4 space-y-1 text-slate-600">
+          <li>Maak een gratis <a href="https://cloudflare.com" target="_blank" rel="noreferrer" className="text-blue-700 font-semibold hover:underline">Cloudflare</a> account aan en voeg uw domein toe.</li>
+          <li>Verander de nameservers bij uw registrar naar de Cloudflare nameservers.</li>
+          <li>In Cloudflare: zet de CNAME/A record (zoals hierboven) met de <b>oranje wolk aan</b> (proxied).</li>
+          <li>SSL/TLS → Overzicht → kies mode <b>&ldquo;Full&rdquo;</b> (of &ldquo;Flexible&rdquo; als tijdelijke test).</li>
+        </ol>
+        <p className="text-slate-500 mt-1.5">Cloudflare geeft u dan automatisch een geldig HTTPS-certificaat, DDoS-bescherming en een snelheidsboost via hun CDN. Alternatief: uw eigen reverse-proxy (nginx / Traefik) met Let&rsquo;s Encrypt.</p>
       </div>
       <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled && !!d.custom_domain} />
     </SectionShell>
@@ -305,7 +326,7 @@ function DomainStatusWidget({ status, loading, onRefresh }) {
     disabled: { color: 'slate', label: 'Uitgeschakeld', icon: '⏸', desc: 'Zet Ingeschakeld aan om te activeren.' },
     dns_missing: { color: 'red', label: 'DNS ontbreekt', icon: '✕', desc: 'DNS record is nog niet gepropageerd of niet ingesteld.' },
     dns_wrong: { color: 'red', label: 'DNS wijst verkeerd', icon: '✕', desc: 'CNAME/A-record wijst niet naar de juiste target.' },
-    dns_ok_ssl_pending: { color: 'amber', label: 'SSL in behandeling', icon: '⏳', desc: 'DNS ✓ — vraag Emergent Support om het domein te koppelen.' },
+    dns_ok_ssl_pending: { color: 'amber', label: 'SSL vereist', icon: '⏳', desc: 'DNS ✓ — regel zelf HTTPS via Cloudflare of eigen reverse-proxy.' },
     live: { color: 'emerald', label: 'Live', icon: '✓', desc: 'Domein is bereikbaar via HTTPS.' },
   };
   const m = STATE_META[status.status] || STATE_META.not_configured;
