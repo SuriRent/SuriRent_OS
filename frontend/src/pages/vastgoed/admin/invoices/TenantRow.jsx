@@ -14,17 +14,25 @@ import CreditBadge from './CreditBadge';
 // =====================================================================
 function buildReminderMessage(group, companyName) {
   const cur = group.currency;
-  const list = (group.overdue || [])
+  // Combineer achterstand (overdue) + lopende maand (current) — voorheen
+  // stond alleen `overdue` in de tekst, waardoor de huidige maand nog
+  // ontbrak en de huurder dacht dat alleen Juli openstond terwijl ook
+  // Augustus nog niet betaald was.
+  const items = group.dueMonths && group.dueMonths.length
+    ? group.dueMonths
+    : (group.overdue || []);
+  const list = items
     .map((i) => {
-      const pdfUrl = i.id ? `${window.location.origin}/api/invoices/${i.id}/pdf` : '';
+      const jpgUrl = i.id ? `${window.location.origin}/api/invoices/${i.id}/pdf` : '';
       const line = `• ${MONTHS_NL[i.period_month - 1]} ${i.period_year}: ${cur} ${Number(i.amount).toFixed(2)}`;
-      return pdfUrl ? `${line}\n  ${pdfUrl}` : line;
+      return jpgUrl ? `${line}\n  ${jpgUrl}` : line;
     })
     .join('\n\n');
-  const count = group.overdueCount;
-  const total = Number(group.totalOverdue).toFixed(2);
+  const count = items.length;
+  const total = Number((group.totalDue != null ? group.totalDue : group.totalOverdue) || 0).toFixed(2);
   const signature = companyName ? `\n\n— ${companyName}` : '';
-  return `Beste ${group.tenant_name},\n\nVriendelijke herinnering — u heeft ${count} openstaande factu${count > 1 ? 'ren' : 'ur'}:\n\n${list}\n\n*Totaal openstaand: ${cur} ${total}*\n\nGelieve zo spoedig mogelijk te betalen.${signature}`;
+  const noun = count > 1 ? 'ren' : 'ur';
+  return `Beste ${group.tenant_name},\n\nVriendelijke herinnering — u heeft ${count} openstaande factu${noun}:\n\n${list}\n\n*Totaal openstaand: ${cur} ${total}*\n\nGelieve zo spoedig mogelijk te betalen.${signature}`;
 }
 
 // =====================================================================
