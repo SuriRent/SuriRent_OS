@@ -3218,6 +3218,18 @@ function Tenants() {
     if (filter === 'with_apt') return !!t.apartment_number;
     return !t.apartment_number;
   });
+  // Sorteer op appartement-nummer (natural / alfanumeriek) zodat
+  // "HUIS 7A" vóór "HUIS 7B" komt en "HUIS 10A" na "HUIS 9C" —
+  // op user-verzoek 2026-02-28. Huurders zonder appartement zakken
+  // onderaan, alfabetisch op naam als fallback.
+  filtered.sort((a, b) => {
+    const aptA = (a.apartment_number || '').toString();
+    const aptB = (b.apartment_number || '').toString();
+    if (!aptA && !aptB) return (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' });
+    if (!aptA) return 1;
+    if (!aptB) return -1;
+    return aptA.localeCompare(aptB, 'nl', { numeric: true, sensitivity: 'base' });
+  });
   const counts = {
     all: bySearch.length,
     with_apt: bySearch.filter((t) => !!t.apartment_number).length,

@@ -19,7 +19,8 @@ Extract ONLY de Vastgoed + Kiosk-functionaliteit uit een legacy ERP en bouw hem 
 - Handmatige kasmutaties (correcties/refunds) door superadmin.
 
 ## Wat is af (recente sessies)
-- **2026-02-28t**: **BUG FIX: WhatsApp herinnering miste lopende maand** — `buildReminderMessage` in `TenantRow.jsx` gebruikte alleen `group.overdue` (echte achterstand). Lopende maand (bv. augustus openstaand) zit in `group.current`. Beide gecombineerd zit in `group.dueMonths`. Nu gebruikt de helper `dueMonths` → gebruiker Frans ziet nu ALLE openstaande facturen in de WhatsApp tekst, inclusief lopende maand. Total-bedrag switcht van `totalOverdue` naar `totalDue` (som van achterstand + huidige maand). Backend flow (`/tenants/{id}/reminder`) was al correct via `status IN [open, sent, pending, overdue]`.
+- **2026-02-28u**: **Huurders sortering op appartement (alfanumeriek)** — Tenants-lijst in AdminDashboard sorteert nu op `apartment_number` met `localeCompare(numeric: true)` — HUIS 7A < 7B < 7C, en HUIS 10A na HUIS 9C (natural sort i.p.v. lexicografisch). Huurders zonder appartement zakken naar onderaan (fallback op naam). Verified visueel: 1A → 1B → 2C volgorde correct.
+- **2026-02-28t**: **BUG FIX: WhatsApp herinnering miste lopende maand** — `group.overdue` → `group.dueMonths` (incl. current).
 - **2026-02-28s**: **WhatsApp factuur-herinnering: tenant naam + PDF-links** — Tenant company_name signature + PDF URL per factuur.
 - **2026-02-28r**: **Custom Domain Error 1034 — realistische foutmeldingen** — Betere platform-support-instructies zonder foute DNS-only advies.
 - **2026-02-28q**: **Custom Domain Cloudflare-to-Cloudflare loop detectie** — Backend detecteert Error 1034 en toont `cloudflare_loop` status met platform-support instructies.
