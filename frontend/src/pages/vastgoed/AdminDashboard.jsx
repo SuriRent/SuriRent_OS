@@ -3307,7 +3307,7 @@ function Tenants() {
 // roept de bijbehorende handler aan zonder detail te openen.
 // =====================================================================
 function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
-  const initials = (t.name || '?').split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (t.apartment_number || t.name || '?').split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
   const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
   return (
     <div onClick={onOpen} data-testid={`tenant-row-${t.id}`}
@@ -3319,14 +3319,16 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-black text-slate-900 truncate">{t.name}</p>
-          {t.apartment_number ? (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-              Appt. {t.apartment_number}
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-              Geen appartement
+          {/* Op verzoek gebruiker (2026-02-28): appartement-nummer als
+              hoofd-titel (huurders zijn makkelijker te matchen aan hun
+              woning dan hun naam), en de huurdersnaam wordt de secundaire
+              badge in groen. */}
+          <p className="font-black text-slate-900 truncate">
+            {t.apartment_number || <span className="text-slate-400 italic">Geen appartement</span>}
+          </p>
+          {t.name && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
+              {t.name}
             </span>
           )}
         </div>

@@ -19,7 +19,8 @@ Extract ONLY de Vastgoed + Kiosk-functionaliteit uit een legacy ERP en bouw hem 
 - Handmatige kasmutaties (correcties/refunds) door superadmin.
 
 ## Wat is af (recente sessies)
-- **2026-02-28u**: **Huurders sortering op appartement (alfanumeriek)** — Tenants-lijst in AdminDashboard sorteert nu op `apartment_number` met `localeCompare(numeric: true)` — HUIS 7A < 7B < 7C, en HUIS 10A na HUIS 9C (natural sort i.p.v. lexicografisch). Huurders zonder appartement zakken naar onderaan (fallback op naam). Verified visueel: 1A → 1B → 2C volgorde correct.
+- **2026-02-28v**: **Huurders-lijst: appartement als hoofd-titel, naam als badge** — In `TenantRow` (list view) is de hoofd-titel nu `apartment_number` (bv. "HUIS 1A"), en de huurder-naam wordt de secundaire groene badge. Avatar initialen komen ook uit het appartement-nummer. Op de detail-pagina blijft naam als H1 (context-gepast). Verified visueel: HUIS 1A/1B/2C met JAN PIETERSE / MARLIES SEWDIEN / ROY VAN DER BERG in de badges.
+- **2026-02-28u**: **Huurders sortering op appartement (natural alfanumeriek)** — HUIS 7A < 7B < 7C, en HUIS 10A na HUIS 9C.
 - **2026-02-28t**: **BUG FIX: WhatsApp herinnering miste lopende maand** — `group.overdue` → `group.dueMonths` (incl. current).
 - **2026-02-28s**: **WhatsApp factuur-herinnering: tenant naam + PDF-links** — Tenant company_name signature + PDF URL per factuur.
 - **2026-02-28r**: **Custom Domain Error 1034 — realistische foutmeldingen** — Betere platform-support-instructies zonder foute DNS-only advies.
