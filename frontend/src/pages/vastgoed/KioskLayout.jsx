@@ -831,14 +831,64 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
     // alloceert (i.p.v. oudste eerst).
     const category = (selectedInvItems.length > 0 || selectedSynCurrent > 0) && selectedPlainKeys.length === 0
       ? 'huur' : plainCategory;
+    // BUG FIX: period_month/year moet reflecteren wat de operator daadwerkelijk
+    // heeft geselecteerd, niet altijd next_period. Situatie: operator selecteert
+    // JULI-factuur maar next_period wijst naar augustus (of andersom) → dan
+    // stond periode=aug maar note="Huur jul" op de kwitantie. Verwarrend.
+    // Prioriteit: oudste geselecteerde factuur → syntetische huidige-maand →
+    // fallback next_period.
+    let periodMonthOut = null;
+    let periodYearOut = null;
+    if (category === 'huur') {
+      if (selectedInvItems.length > 0) {
+        const sortedInvs = [...selectedInvItems].sort((a, b) => {
+          const ay = a.period_year || 0, by = b.period_year || 0;
+          if (ay !== by) return ay - by;
+          return (a.period_month || 0) - (b.period_month || 0);
+        });
+        const oldest = sortedInvs[0];
+        periodMonthOut = oldest?.period_month || null;
+        periodYearOut = oldest?.period_year || null;
+      } else if (selectedSynCurrent > 0 && syntheticCurrent) {
+        periodMonthOut = syntheticCurrent.period_month || null;
+        periodYearOut = syntheticCurrent.period_year || null;
+      } else if (balance.next_period) {
+        periodMonthOut = balance.next_period.month;
+        periodYearOut = balance.next_period.year;
+      }
+    }
+    // Note MOET dezelfde periode reflecteren als period_month/year zodat
+    // kwitantie + email geen tegenstrijdige info tonen. Voor "huur" met
+    // een concrete maand → "Huur <maand> <jaar>". Anders val terug op de
+    // beschrijvende buildDescription() (voor gemengde betalingen).
+    let noteOut;
+    if (category === 'huur' && periodMonthOut && periodYearOut) {
+      const monthLabel = MONTHS_NL[periodMonthOut - 1];
+      if (selectedInvItems.length > 1) {
+        // Meerdere maanden — toon range i.p.v. alleen oudste.
+        const monthsShort = selectedInvItems
+          .slice()
+          .sort((a, b) => (a.period_year || 0) - (b.period_year || 0)
+            || (a.period_month || 0) - (b.period_month || 0))
+          .map((inv) => inv.period_month
+            ? `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year || ''}`.trim()
+            : null)
+          .filter(Boolean);
+        noteOut = `Huur ${monthsShort.join(', ')}`;
+      } else {
+        noteOut = `Huur ${monthLabel} ${periodYearOut}`;
+      }
+    } else {
+      noteOut = buildDescription();
+    }
     onConfirm({
       tenant_id: tenant.id, apartment_id: apt.id,
       amount: selectedTotal,  // totaal incl. plan items (voor display + Uni5Pay QR)
       plain_amount: selectedPlainTotal + selectedInvTotal + selectedSynCurrent,  // alleen plain + invoice + synth current
       currency: cur, category, method: 'contant',
-      period_month: category === 'huur' && balance.next_period ? balance.next_period.month : null,
-      period_year: category === 'huur' && balance.next_period ? balance.next_period.year : null,
-      note: buildDescription(),
+      period_month: periodMonthOut,
+      period_year: periodYearOut,
+      note: noteOut,
       plan_items: selectedPlanItems.map((x) => ({
         plan_id: x.planId, seq: x.seq, amount: x.amount,
       })),

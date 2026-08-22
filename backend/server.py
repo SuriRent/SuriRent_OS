@@ -9383,13 +9383,26 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
     try:
         pdf_bytes = await asyncio.to_thread(receipt_pdf, p_enriched)
         brand_kwargs = await _tenant_email_brand(cid)
+        # Periode-regel — voorheen ontbrak deze in de kiosk-email, waardoor
+        # de huurder niet zag voor welke maand de kwitantie was.
+        _months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
+                      "juli", "augustus", "september", "oktober", "november", "december"]
+        period_label = ""
+        if p_enriched.get("period_month") and p_enriched.get("period_year"):
+            try:
+                period_label = f"{_months_nl[int(p_enriched['period_month']) - 1]} {int(p_enriched['period_year'])}"
+            except Exception:
+                period_label = ""
+        intro_period = f" voor <b>{period_label}</b>" if period_label else ""
+        period_row = f"<tr><td>Periode</td><td>{period_label}</td></tr>" if period_label else ""
         content = f"""
             <h1>Kwitantie {p_enriched['receipt_number']}</h1>
             <p>Beste {tenant.get('name', 'huurder')},<br />
-            Hierbij ontvangt u een digitale kopie van uw kwitantie zoals
+            Hierbij ontvangt u een digitale kopie van uw kwitantie{intro_period}, zoals
             zojuist afgegeven via de Kiosk.</p>
             <table class="kv">
               <tr><td>Datum</td><td>{p_enriched.get('paid_at', '')[:10]}</td></tr>
+              {period_row}
               <tr><td>Bedrag</td><td>{p_enriched['currency']} {p_enriched['amount']:.2f}</td></tr>
               <tr><td>Betaalmethode</td><td>{p_enriched.get('method', '')}</td></tr>
               <tr><td>Appartement</td><td>{p_enriched.get('apartment_number', '-')}</td></tr>
@@ -9399,9 +9412,10 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
               Bewaar deze e-mail als bewijs van betaling.
             </p>
         """
+        subject_period = f" · {period_label}" if period_label else ""
         await send_email(
             cfg, to,
-            f"Kwitantie {p_enriched['receipt_number']}",
+            f"Kwitantie {p_enriched['receipt_number']}{subject_period}",
             wrap_template(content, **brand_kwargs),
             attachments=[(f"kwitantie-{p_enriched['receipt_number']}.pdf", pdf_bytes, "application/pdf")],
         )
@@ -12600,19 +12614,35 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
+    # Periode-regel — voorheen ontbrak deze in de e-mail, waardoor de huurder
+    # niet zag voor welke maand de kwitantie was. Toon de maand+jaar in
+    # zowel de intro-zin als de tabel. Voor niet-huur betalingen (borg,
+    # servicekosten, boete) hebben we geen periode dus laten we die weg.
+    _months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
+                  "juli", "augustus", "september", "oktober", "november", "december"]
+    period_label = ""
+    if p.get("period_month") and p.get("period_year"):
+        try:
+            period_label = f"{_months_nl[int(p['period_month']) - 1]} {int(p['period_year'])}"
+        except Exception:
+            period_label = ""
+    intro_period = f" voor <b>{period_label}</b>" if period_label else ""
+    period_row = f"<tr><td>Periode</td><td>{period_label}</td></tr>" if period_label else ""
     content = f"""
         {extra_note}
         <h1>Kwitantie {p['receipt_number']}</h1>
-        <p>Beste {tenant.get('name', 'huurder')},<br />Hierbij ontvang je de kwitantie van je betaling.</p>
+        <p>Beste {tenant.get('name', 'huurder')},<br />Hierbij ontvang je de kwitantie van je betaling{intro_period}.</p>
         <table class="kv">
           <tr><td>Datum</td><td>{p.get('paid_at', '')[:10]}</td></tr>
+          {period_row}
           <tr><td>Bedrag</td><td>{p['currency']} {p['amount']:.2f}</td></tr>
           <tr><td>Betaalmethode</td><td>{p.get('method', '')}</td></tr>
           <tr><td>Appartement</td><td>{p.get('apartment_number', '-')}</td></tr>
         </table>
     """
+    subject_period = f" · {period_label}" if period_label else ""
     try:
-        await send_email(cfg, to, f"Kwitantie {p['receipt_number']} - {brand_kwargs['brand_name']}",
+        await send_email(cfg, to, f"Kwitantie {p['receipt_number']}{subject_period} - {brand_kwargs['brand_name']}",
                          wrap_template(content, **brand_kwargs),
                          attachments=[(f"kwitantie-{p['receipt_number']}.pdf", pdf_bytes, "application/pdf")])
     except EmailError as e:
