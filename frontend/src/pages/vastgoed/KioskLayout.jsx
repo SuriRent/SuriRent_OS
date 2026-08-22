@@ -7,6 +7,7 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
   Smartphone, QrCode, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
+  MessageCircle,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -517,10 +518,95 @@ function TenantOverview({ apartment, onBack, onPay }) {
 function PaymentHistoryModal({ tenant, apartment, onClose }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
+  // Toast-achtige feedback per betaling voor de WhatsApp-knop. Key = payment.id,
+  // value = { kind: 'sending'|'ok'|'err', msg: string }. We tonen dit inline
+  // onder de rij zodat de operator direct ziet dat het bericht verstuurd is
+  // (of waarom niet: "geen telefoonnummer", "Twilio niet ingericht", etc.).
+  const [waState, setWaState] = useState({});
+  // Voorkomt dubbele afdruk/whatsapp-taps op dezelfde payment.
+  const [busy, setBusy] = useState({});
   useEffect(() => {
     api.get(`/kiosk/tenants/${tenant.id}/payments`)
       .then((r) => setItems(r.data)).catch((e) => setErr(formatError(e)));
   }, [tenant.id]);
+
+  // Direct-afdrukken: haal de PDF als blob op via de authenticated axios
+  // client (window.open naar /api/... werkt niet altijd in de kiosk-PWA
+  // want de child-tab krijgt niet automatisch de httpOnly cookies mee).
+  // Blob → verborgen iframe → contentWindow.print() opent de OS/browser
+  // printdialoog direct, met de kiosk-printer als default.
+  const handlePrint = async (paymentId) => {
+    if (busy[paymentId]) return;
+    setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
+    try {
+      const resp = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(resp.data);
+      const existing = document.getElementById('kiosk-print-iframe');
+      if (existing) existing.remove();
+      const iframe = document.createElement('iframe');
+      iframe.id = 'kiosk-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = blobUrl;
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch {
+            // Cross-origin/PDF-viewer beperking → fallback naar tab openen.
+            window.open(blobUrl, '_blank');
+          }
+        }, 250);
+      };
+      document.body.appendChild(iframe);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch {
+      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Afdruk mislukt' } }));
+    } finally {
+      setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
+    }
+  };
+
+  // WhatsApp/SMS versturen — hergebruikt de bestaande kiosk endpoint die
+  // eerst WhatsApp probeert en terugvalt op SMS als Twilio geen WhatsApp-
+  // nummer heeft. Retourneert { sent, reason, channel }.
+  const handleWhatsApp = async (paymentId) => {
+    if (busy[paymentId]) return;
+    setBusy((prev) => ({ ...prev, [paymentId]: 'wa' }));
+    setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Versturen…' } }));
+    try {
+      const resp = await api.post(`/kiosk/payments/${paymentId}/whatsapp`);
+      if (resp.data?.sent) {
+        const chan = resp.data.channel === 'sms' ? 'SMS' : 'WhatsApp';
+        setWaState((prev) => ({
+          ...prev,
+          [paymentId]: { kind: 'ok', msg: `${chan} verstuurd naar ${resp.data.to || 'huurder'}` },
+        }));
+      } else {
+        const reasonMap = {
+          no_tenant_phone: 'Geen telefoonnummer bij huurder',
+          twilio_disabled: 'Twilio niet ingericht',
+          no_channel_configured: 'Geen WhatsApp/SMS-kanaal',
+          not_found: 'Betaling niet gevonden',
+          send_failed: 'Versturen mislukt — probeer opnieuw',
+          no_company: 'Kioskfout — herstart de sessie',
+        };
+        setWaState((prev) => ({
+          ...prev,
+          [paymentId]: { kind: 'err', msg: reasonMap[resp.data?.reason] || 'Kon niet versturen' },
+        }));
+      }
+    } catch (e) {
+      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: formatError(e) } }));
+    } finally {
+      setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
@@ -581,11 +667,38 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                   </p>
                 )}
               </div>
-              <button data-testid={`history-print-${p.id}`}
-                onClick={() => window.open(`/api/payments/${p.id}/pdf`, '_blank')}
-                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0">
-                <Printer className="w-3 h-3" /> Afdruk
-              </button>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <button data-testid={`history-whatsapp-${p.id}`}
+                    onClick={() => handleWhatsApp(p.id)}
+                    disabled={!!busy[p.id]}
+                    className="px-2.5 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
+                    {busy[p.id] === 'wa'
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <MessageCircle className="w-3 h-3" />}
+                    WhatsApp
+                  </button>
+                  <button data-testid={`history-print-${p.id}`}
+                    onClick={() => handlePrint(p.id)}
+                    disabled={!!busy[p.id]}
+                    className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
+                    {busy[p.id] === 'print'
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Printer className="w-3 h-3" />}
+                    Afdruk
+                  </button>
+                </div>
+                {waState[p.id] && (
+                  <p data-testid={`history-wa-status-${p.id}`}
+                    className={`text-[10px] font-semibold px-1 ${
+                      waState[p.id].kind === 'ok' ? 'text-emerald-600'
+                      : waState[p.id].kind === 'err' ? 'text-red-500'
+                      : 'text-slate-500'
+                    }`}>
+                    {waState[p.id].msg}
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -9479,11 +9479,24 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 
     pdf_link = _public_url(f"/api/payments/{payment_id}/pdf")
     image_link = _public_url(f"/api/payments/{payment_id}/image")
+    # Periode-regel — consistent met de e-mail zodat de huurder direct ziet
+    # voor welke maand deze kwitantie is.
+    _months_nl = ["januari", "februari", "maart", "april", "mei", "juni",
+                  "juli", "augustus", "september", "oktober", "november", "december"]
+    period_line = ""
+    if p_enriched.get("period_month") and p_enriched.get("period_year"):
+        try:
+            pm = int(p_enriched["period_month"])
+            py = int(p_enriched["period_year"])
+            period_line = f"Periode: {_months_nl[pm - 1]} {py}\n"
+        except Exception:
+            period_line = ""
     msg = (
         f"Hallo {tenant.get('name', 'huurder')},\n\n"
         f"Uw betaling is succesvol verwerkt.\n"
         f"Kwitantie: {p_enriched['receipt_number']}\n"
         f"Bedrag: {p_enriched['currency']} {p_enriched['amount']:.2f}\n"
+        f"{period_line}"
         f"Methode: {p_enriched.get('method', '')}\n\n"
         f"📄 Kwitantie PDF: {pdf_link}"
     )
