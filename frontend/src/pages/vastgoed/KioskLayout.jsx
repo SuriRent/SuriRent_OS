@@ -7,7 +7,6 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
   Smartphone, QrCode, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
-  MessageCircle,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -572,41 +571,10 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     }
   };
 
-  // WhatsApp/SMS versturen — hergebruikt de bestaande kiosk endpoint die
-  // eerst WhatsApp probeert en terugvalt op SMS als Twilio geen WhatsApp-
-  // nummer heeft. Retourneert { sent, reason, channel }.
-  const handleWhatsApp = async (paymentId) => {
-    if (busy[paymentId]) return;
-    setBusy((prev) => ({ ...prev, [paymentId]: 'wa' }));
-    setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Versturen…' } }));
-    try {
-      const resp = await api.post(`/kiosk/payments/${paymentId}/whatsapp`);
-      if (resp.data?.sent) {
-        const chan = resp.data.channel === 'sms' ? 'SMS' : 'WhatsApp';
-        setWaState((prev) => ({
-          ...prev,
-          [paymentId]: { kind: 'ok', msg: `${chan} verstuurd naar ${resp.data.to || 'huurder'}` },
-        }));
-      } else {
-        const reasonMap = {
-          no_tenant_phone: 'Geen telefoonnummer bij huurder',
-          twilio_disabled: 'Twilio niet ingericht',
-          no_channel_configured: 'Geen WhatsApp/SMS-kanaal',
-          not_found: 'Betaling niet gevonden',
-          send_failed: 'Versturen mislukt — probeer opnieuw',
-          no_company: 'Kioskfout — herstart de sessie',
-        };
-        setWaState((prev) => ({
-          ...prev,
-          [paymentId]: { kind: 'err', msg: reasonMap[resp.data?.reason] || 'Kon niet versturen' },
-        }));
-      }
-    } catch (e) {
-      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: formatError(e) } }));
-    } finally {
-      setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
-    }
-  };
+  // WhatsApp/SMS versturen — endpoint hergebruikt (was toegevoegd voor UX
+  // ping, maar user vraagt om alleen printen). Behouden voor mogelijk hergebruik
+  // en aangeroepen via `handleWhatsApp`? Nee — verwijderd. Enkel `handlePrint`
+  // is nodig.
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
@@ -668,28 +636,17 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <button data-testid={`history-whatsapp-${p.id}`}
-                    onClick={() => handleWhatsApp(p.id)}
-                    disabled={!!busy[p.id]}
-                    className="px-2.5 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
-                    {busy[p.id] === 'wa'
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <MessageCircle className="w-3 h-3" />}
-                    WhatsApp
-                  </button>
-                  <button data-testid={`history-print-${p.id}`}
-                    onClick={() => handlePrint(p.id)}
-                    disabled={!!busy[p.id]}
-                    className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
-                    {busy[p.id] === 'print'
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Printer className="w-3 h-3" />}
-                    Afdruk
-                  </button>
-                </div>
+                <button data-testid={`history-print-${p.id}`}
+                  onClick={() => handlePrint(p.id)}
+                  disabled={!!busy[p.id]}
+                  className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
+                  {busy[p.id] === 'print'
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Printer className="w-3 h-3" />}
+                  Afdruk
+                </button>
                 {waState[p.id] && (
-                  <p data-testid={`history-wa-status-${p.id}`}
+                  <p data-testid={`history-print-status-${p.id}`}
                     className={`text-[10px] font-semibold px-1 ${
                       waState[p.id].kind === 'ok' ? 'text-emerald-600'
                       : waState[p.id].kind === 'err' ? 'text-red-500'
@@ -2044,6 +2001,49 @@ function ReceiptScreen({ payment, overview, onDone }) {
     }, 2900);  // direct na de tear-snap
     return () => clearTimeout(t);
   }, [payment.id]);
+
+  // AUTO-PRINT — direct na de tear-animatie de standaard kwitantie naar de
+  // kiosk-printer sturen. De operator hoeft niet meer via "Betalings-
+  // geschiedenis > Afdruk" te tikken voor elke betaling. Werkt via een
+  // verborgen iframe met de PDF-blob → contentWindow.print(). Faalt stil
+  // wanneer er geen printer geconfigureerd is (browser toont dan de
+  // print-dialoog die de operator gewoon kan annuleren).
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        const resp = await api.get(`/payments/${payment.id}/pdf`, { responseType: 'blob' });
+        const blobUrl = URL.createObjectURL(resp.data);
+        const existing = document.getElementById('kiosk-autoprint-iframe');
+        if (existing) existing.remove();
+        const iframe = document.createElement('iframe');
+        iframe.id = 'kiosk-autoprint-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        iframe.onload = () => {
+          setTimeout(() => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+            } catch {
+              // Cross-origin/PDF-viewer fallback — stille no-op, operator
+              // kan handmatig via Betalingsgeschiedenis printen.
+            }
+          }, 300);
+        };
+        document.body.appendChild(iframe);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } catch {
+        // Geen printer of PDF-fetch mislukt → stille fallback.
+      }
+    }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
+    return () => clearTimeout(t);
+  }, [payment.id]);
+
 
   // Bon-printer geluid — gesynthetiseerd via Web Audio API.
   // Imiteert een thermische kassa-printer: continue mechanische "zip" met
