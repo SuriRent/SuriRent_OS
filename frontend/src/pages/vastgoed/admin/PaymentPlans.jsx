@@ -271,7 +271,13 @@ function CreatePlanSheet({ onClose, onCreated }) {
                 data-testid="plan-tenant-select"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#FF5C00] focus:outline-none">
                 <option value="">— Kies huurder —</option>
-                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {[...tenants]
+                  .sort((a, b) => (a.apartment_number || '').localeCompare(b.apartment_number || '', 'nl', { numeric: true, sensitivity: 'base' }))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.apartment_number ? `${t.apartment_number} — ${t.name}` : t.name}
+                    </option>
+                  ))}
               </select>
             </div>
 

@@ -42,9 +42,12 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
               data-testid="invoice-tenant" required
               className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
               <option value="">— Kies huurder —</option>
-              {tenants.filter((t) => t.apartment_id).map((t) => (
-                <option key={t.id} value={t.id}>{t.name} (Appt. {t.apartment_number})</option>
-              ))}
+              {tenants
+                .filter((t) => t.apartment_id)
+                .sort((a, b) => (a.apartment_number || '').localeCompare(b.apartment_number || '', 'nl', { numeric: true, sensitivity: 'base' }))
+                .map((t) => (
+                  <option key={t.id} value={t.id}>{t.apartment_number} — {t.name}</option>
+                ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">

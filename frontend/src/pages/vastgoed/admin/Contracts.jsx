@@ -80,7 +80,20 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
             <select value={data.tenant_id} onChange={(e) => setData({ ...data, tenant_id: e.target.value })} data-testid="contract-tenant" required
               className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
               <option value="">— Kies huurder —</option>
-              {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {[...tenants]
+                .sort((a, b) => {
+                  const aptA = (a.apartment_number || '').toString();
+                  const aptB = (b.apartment_number || '').toString();
+                  if (!aptA && !aptB) return (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' });
+                  if (!aptA) return 1;
+                  if (!aptB) return -1;
+                  return aptA.localeCompare(aptB, 'nl', { numeric: true, sensitivity: 'base' });
+                })
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.apartment_number ? `${t.apartment_number} — ${t.name}` : t.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div>

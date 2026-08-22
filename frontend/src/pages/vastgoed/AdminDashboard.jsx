@@ -3978,14 +3978,20 @@ export default function AdminDashboard() {
   // die useAutoRefresh gebruiken herladen dan onmiddellijk.
   useEffect(() => {
     if (!user || (user.role !== 'admin' && user.role !== 'employee')) return undefined;
-    const token = localStorage.getItem('token') || '';
-    if (!token) return undefined;
+    // Admin JWT wordt opgeslagen onder 'admin_token' (Bearer legacy) OF
+    // via httpOnly cookie (Google Auth). EventSource ondersteunt geen
+    // headers → token via query param wanneer aanwezig, anders alleen
+    // via cookie (withCredentials). Voorheen las deze effect
+    // `localStorage.getItem('token')` → altijd leeg → SSE-connectie werd
+    // nooit gemaakt → geen live-sync/pulse en geen globale SWR-invalidatie.
+    const token = localStorage.getItem('admin_token') || '';
     const base = process.env.REACT_APP_BACKEND_URL || '';
-    // EventSource ondersteunt geen headers → token via query param.
-    const url = `${base}/api/admin/events?token=${encodeURIComponent(token)}`;
+    const url = token
+      ? `${base}/api/admin/events?token=${encodeURIComponent(token)}`
+      : `${base}/api/admin/events`;
     let es;
     try {
-      es = new EventSource(url, { withCredentials: false });
+      es = new EventSource(url, { withCredentials: true });
     } catch {
       return undefined;
     }

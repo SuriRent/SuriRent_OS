@@ -737,24 +737,56 @@ async def _live_sync_broadcast(request: Request, call_next):
             return response
 
         # Bepaal company_id uit de JWT (best-effort, geen fout doorlaten).
-        # Werkt met zowel Bearer header (legacy) als access_token cookie
-        # (nieuwe frontend auth flow met httpOnly cookies) — anders
-        # broadcastte de middleware nooit voor cookie-based mutations en
-        # miste elke ontvanger de update.
+        # Werkt met zowel Bearer header (legacy), access_token cookie (admin
+        # met httpOnly cookies), tenant_token cookie (huurder-portal) en
+        # kiosk_token cookie (kiosk device). Voor tenant/kiosk tokens is
+        # `company_id` niet in de JWT-payload aanwezig → we resolven het
+        # via de tenant/apartment/user lookup. Zonder deze fallback misten
+        # admin Betalingen live-updates na huurder-portal betalingen.
         import jwt as _pyjwt
         auth = request.headers.get("authorization") or ""
         raw_token = ""
+        token_kind = "access"
         if auth.lower().startswith("bearer "):
             raw_token = auth.split(" ", 1)[1]
         else:
             raw_token = request.cookies.get("access_token") or ""
-        if not raw_token:
-            return response
-        try:
-            payload = _pyjwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALG])
+            if not raw_token:
+                raw_token = request.cookies.get("tenant_token") or ""
+                if raw_token:
+                    token_kind = "tenant"
+            if not raw_token:
+                raw_token = request.cookies.get("kiosk_token") or ""
+                if raw_token:
+                    token_kind = "kiosk"
+        # Emergent Google Auth pad — session_token cookie linkt naar users.
+        session_tok = request.cookies.get("session_token") if not raw_token else None
+        cid = None
+        if raw_token:
+            try:
+                payload = _pyjwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALG])
+            except Exception:
+                return response
             cid = payload.get("company_id")
-        except Exception:
-            return response
+            if not cid and token_kind == "tenant":
+                # Tenant JWT bevat alleen sub=tenant_id → lookup company_id
+                sub = payload.get("sub")
+                if sub:
+                    t = await db.tenants.find_one({"id": sub}, {"_id": 0, "company_id": 1})
+                    cid = (t or {}).get("company_id")
+            elif not cid and token_kind == "kiosk":
+                # Kiosk JWT bevat normaal `company_id`; als niet, geen broadcast.
+                pass
+        elif session_tok:
+            try:
+                sess = await db.user_sessions.find_one({"session_token": session_tok},
+                                                        {"_id": 0, "user_id": 1})
+                if sess:
+                    gu = await db.users.find_one({"user_id": sess["user_id"]},
+                                                  {"_id": 0, "company_id": 1})
+                    cid = (gu or {}).get("company_id")
+            except Exception:
+                return response
         if not cid:
             return response
         # Kort event — client vraagt zelf zijn data opnieuw op. Bevat pad
@@ -11552,6 +11584,21 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
         {"_id": 0, "id": 1},
     ):
         admin_ids.append(u["id"])
+    # SSE ALTIJD broadcasten (ook als er geen push-subs of admin_ids zijn),
+    # zodat open admin-tabs live updates krijgen zonder OS-push setup. Voorheen
+    # returnde deze functie vroeg als er geen push-subs waren, waardoor de
+    # SSE-broadcast miste — met als gevolg dat admin Betalingen niet live
+    # ververste na een huurder-betaling.
+    try:
+        await _sse_broadcast(company_id, {
+            "type": "notification",
+            "title": title,
+            "body": body,
+            "data": data or {},
+        })
+    except Exception as e:  # noqa: BLE001
+        print(f"[sse] broadcast failed: {e}")
+
     if not admin_ids:
         return 0
     # Verzamel alle subscriptions eerst (1 DB-call), dispatch dan parallel
@@ -11571,19 +11618,6 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
         return ok
 
     results = await asyncio.gather(*[_send_one(s) for s in subs], return_exceptions=True)
-    # Naast de OS-level push, broadcast OOK direct naar elke open SSE
-    # connectie van deze company. Dit geeft <50ms latency naar open admin
-    # tabs (waar FCM/APNS 200-1000ms doet). Open tabs negeren de duplicate
-    # via een client-side timestamp dedupe.
-    try:
-        await _sse_broadcast(company_id, {
-            "type": "notification",
-            "title": title,
-            "body": body,
-            "data": data or {},
-        })
-    except Exception as e:  # noqa: BLE001
-        print(f"[sse] broadcast failed: {e}")
     return sum(1 for r in results if r is True)
 
 

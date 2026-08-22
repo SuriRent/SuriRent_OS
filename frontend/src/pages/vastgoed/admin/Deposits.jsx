@@ -42,7 +42,13 @@ function DepositForm({ tenants, onCancel, onSaved }) {
               data-testid="dep-tenant" required
               className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
               <option value="">— Kies huurder —</option>
-              {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {[...tenants]
+                .sort((a, b) => (a.apartment_number || '').localeCompare(b.apartment_number || '', 'nl', { numeric: true, sensitivity: 'base' }))
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.apartment_number ? `${t.apartment_number} — ${t.name}` : t.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="grid grid-cols-3 gap-3">
