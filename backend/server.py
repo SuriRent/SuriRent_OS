@@ -8285,25 +8285,48 @@ async def _calc_balance(tenant: dict) -> dict:
     async for p in cursor:
         total_paid += float(p.get("amount", 0))
     balance = total_due - total_paid
-    # Next due period - last paid period or first unpaid
-    paid_periods = set()
-    async for p in db.payments.find(
-        {"tenant_id": tenant["id"], "category": "huur"},
-        {"_id": 0, "period_month": 1, "period_year": 1},
-    ):
-        if p.get("period_month") and p.get("period_year"):
-            paid_periods.add((int(p["period_year"]), int(p["period_month"])))
-    # Find earliest unpaid month from start month onwards
+    # Next due period — pak de OUDSTE openstaande factuur (unpaid OF partial).
+    # Voorheen keken we naar payments met period_month, maar zodra er 1 partial
+    # betaling op juli was gedaan telde die periode als "betaald" — waardoor
+    # next_period naar augustus wees terwijl juli nog 500 open had. Resultaat:
+    # nieuwe partial-betalingen via kiosk "Bedrag invoeren" gingen naar
+    # augustus i.p.v. eerst juli af te maken.
+    #
+    # Nu: kijk direct in de invoices-collectie naar de oudste factuur met
+    # `status != "paid"` (dat dekt zowel "open" als "partial") — dat is de
+    # single source of truth. `_apply_payment_to_invoice` zet status="paid"
+    # zodra cumulatief ≥ 95% van het factuurbedrag betaald is.
     next_period = None
-    y, m = start.year, start.month
-    for _ in range(months + 12):
-        if (y, m) not in paid_periods:
-            next_period = {"year": y, "month": m}
-            break
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
+    oldest_open_inv = await db.invoices.find_one(
+        {"tenant_id": tenant["id"], "status": {"$ne": "paid"}},
+        {"_id": 0, "period_month": 1, "period_year": 1},
+        sort=[("period_year", 1), ("period_month", 1), ("created_at", 1)],
+    )
+    if oldest_open_inv and oldest_open_inv.get("period_month") and oldest_open_inv.get("period_year"):
+        next_period = {
+            "year": int(oldest_open_inv["period_year"]),
+            "month": int(oldest_open_inv["period_month"]),
+        }
+    else:
+        # Fallback (geen invoices ooit gegenereerd, bijv. nieuwe huurder):
+        # gebruik de oude payments-based heuristiek zodat kiosk toch een
+        # zinvolle "eerste maand" toont.
+        paid_periods = set()
+        async for p in db.payments.find(
+            {"tenant_id": tenant["id"], "category": "huur"},
+            {"_id": 0, "period_month": 1, "period_year": 1},
+        ):
+            if p.get("period_month") and p.get("period_year"):
+                paid_periods.add((int(p["period_year"]), int(p["period_month"])))
+        y, m = start.year, start.month
+        for _ in range(months + 12):
+            if (y, m) not in paid_periods:
+                next_period = {"year": y, "month": m}
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
     return {
         "rent_amount": rent,
         "currency": currency,
