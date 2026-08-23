@@ -3631,6 +3631,7 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
         # charcoal_gold, forest_gold, sunset_gold. Tenant kiest in
         # Instellingen → Facturatie → PDF-sjabloon.
         "pdf_template": b.get("pdf_template") or "midnight_gold",
+        "pdf_custom_dark": b.get("pdf_custom_dark") or "",
         "contact_email": c.get("contact_email") or "",
         "contact_phone": c.get("contact_phone") or "",
         "whatsapp_number": c.get("whatsapp_number") or c.get("contact_phone") or "",
@@ -3772,6 +3773,10 @@ class BrandingIn(BaseModel):
     tagline: Optional[str] = None
     # Kwitantie/factuur luxury sjabloon-keuze
     pdf_template: Optional[str] = None
+    # Custom dark-kleur voor PDF templates (overschrijft template.dark).
+    # Wanneer aanwezig, gebruikt de PDF gen deze kleur i.p.v. het template
+    # preset. Handig voor tenants die 100% brand-consistent willen zijn.
+    pdf_custom_dark: Optional[str] = None
 
 
 @api.put("/companies/me/branding")
@@ -3787,13 +3792,56 @@ async def put_my_branding(body: BrandingIn, user=Depends(require_role("admin")))
         "branding.updated_at": iso(now_utc()),
         "branding.updated_by": user.get("email"),
     }
-    # Alleen geldige sjabloon-keys accepteren zodat de PDF-generator niet crasht.
     allowed_templates = {"midnight_gold", "charcoal_gold", "forest_gold", "sunset_gold"}
     if body.pdf_template and body.pdf_template.strip().lower() in allowed_templates:
         update["branding.pdf_template"] = body.pdf_template.strip().lower()
+    if body.pdf_custom_dark is not None:
+        update["branding.pdf_custom_dark"] = _hex_color(body.pdf_custom_dark) if body.pdf_custom_dark else ""
     await db.companies.update_one({"id": cid}, {"$set": update})
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
     return _company_branding_response(c, include_private=True)
+
+
+@api.get("/companies/me/branding/preview-pdf")
+async def preview_branding_pdf(
+    template: Optional[str] = None,
+    custom_dark: Optional[str] = None,
+    user=Depends(require_role("admin")),
+):
+    """Genereert een DEMO kwitantie PDF met de opgegeven template/kleur zodat
+    de tenant live kan zien hoe zijn kwitantie eruit zal zien voordat hij de
+    branding-instellingen opslaat. Alle demo-data is fictief."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    pdf_meta = await _company_brand_info(cid)
+    if template:
+        pdf_meta["company_pdf_template"] = template
+    if custom_dark:
+        pdf_meta["company_pdf_custom_dark"] = custom_dark
+    demo_payment = {
+        "receipt_number": "KW-PREVIEW",
+        "paid_at": iso(now_utc()),
+        "tenant_name": "Jan Pieterse",
+        "apartment_number": "HUIS 3A",
+        "category": "huur",
+        "period_month": now_utc().month,
+        "period_year": now_utc().year,
+        "method": "contant",
+        "amount": 7500.00,
+        "currency": "SRD",
+        "outstanding_after": 0.0,
+        "note": "Voorbeeld — dit is hoe uw kwitantie eruit zal zien.",
+        "received_by": "Jan Pieterse",
+        "tenant_id": "preview",
+        **pdf_meta,
+    }
+    from pdf_gen import receipt_pdf as _rp
+    pdf_bytes = await asyncio.to_thread(_rp, demo_payment)
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=kwitantie-preview.pdf"},
+    )
 
 
 class CompanyProfileIn(BaseModel):
@@ -7361,6 +7409,7 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
     co = await db.companies.find_one(
         {"id": company_id},
         {"_id": 0, "name": 1, "contact_email": 1, "contact_phone": 1,
+         "whatsapp_number": 1, "tagline": 1,
          "address": 1, "branding": 1,
          "landlord_name": 1, "landlord_birth_date": 1, "landlord_id_number": 1},
     ) or {}
@@ -7395,6 +7444,8 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         # forest_gold, sunset_gold.
         "company_pdf_template": (co.get("branding") or {}).get("pdf_template")
             or co.get("pdf_template") or "midnight_gold",
+        # Custom dark-kleur override voor PDF-templates (optioneel).
+        "company_pdf_custom_dark": (co.get("branding") or {}).get("pdf_custom_dark") or "",
         "signature_data": settings.get("signature_data") or "",
         # Verhuurder-persoonsgegevens t.b.v. huurcontracten. Fallback op
         # de bedrijfsnaam wanneer geen aparte verhuurder-naam is ingesteld.

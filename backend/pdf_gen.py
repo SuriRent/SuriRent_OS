@@ -9,14 +9,41 @@ dezelfde visuele taal.
 import io
 import hashlib
 import base64
+import os
 from datetime import datetime
 from reportlab.lib.pagesizes import A4, A6
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image,
 )
+
+# =====================================================================
+# Font registratie — DejaVuSerif voor de luxe titel (Playfair-achtige look),
+# DejaVuSans voor Unicode-symbolen (crown ♛, icons, bell etc.). Deze fonts
+# staan standaard op Debian/Ubuntu via `fonts-dejavu-core`. Fallback naar
+# Times/Helvetica als registratie faalt.
+# =====================================================================
+_LUX_SERIF = "Helvetica-Bold"
+_LUX_SERIF_REG = "Helvetica"
+_LUX_SANS = "Helvetica"
+_LUX_SANS_BOLD = "Helvetica-Bold"
+try:
+    _dejavu_dir = "/usr/share/fonts/truetype/dejavu"
+    if os.path.isdir(_dejavu_dir):
+        pdfmetrics.registerFont(TTFont("LuxSerif", f"{_dejavu_dir}/DejaVuSerif.ttf"))
+        pdfmetrics.registerFont(TTFont("LuxSerif-Bold", f"{_dejavu_dir}/DejaVuSerif-Bold.ttf"))
+        pdfmetrics.registerFont(TTFont("LuxSans", f"{_dejavu_dir}/DejaVuSans.ttf"))
+        pdfmetrics.registerFont(TTFont("LuxSans-Bold", f"{_dejavu_dir}/DejaVuSans-Bold.ttf"))
+        _LUX_SERIF = "LuxSerif-Bold"
+        _LUX_SERIF_REG = "LuxSerif"
+        _LUX_SANS = "LuxSans"
+        _LUX_SANS_BOLD = "LuxSans-Bold"
+except Exception:  # noqa: BLE001
+    pass
 
 # Palet — bewust beperkt: zwarte tekst + lichte grijze achtergrond.
 ORANGE = colors.HexColor("#FF5C00")           # Behouden voor accenten/sticky knoppen
@@ -67,22 +94,31 @@ _DEFAULT_TEMPLATE = "midnight_gold"
 
 def _palette(doc: dict) -> dict:
     """Kies palet uit doc-dict (`company_pdf_template`). Ongeldige waarden
-    vallen terug op midnight_gold. Als de company een custom `company_primary_
-    color` heeft ingesteld, wordt dat de `dark` waarde (goud blijft, hairline
-    wordt herberekend) — zo respecteren we back-compat branding."""
+    vallen terug op midnight_gold. Custom dark-kleur via `company_pdf_custom_
+    dark` overschrijft `dark`. Legacy `company_primary_color` wordt gebruikt
+    wanneer geen template gekozen is."""
     key = ((doc or {}).get("company_pdf_template") or "").strip().lower()
     palette = dict(_TEMPLATES.get(key, _TEMPLATES[_DEFAULT_TEMPLATE]))
-    # Legacy override: als er een primary_color is en géén template gekozen,
-    # gebruik de primary als dark maar behoud goud.
-    raw = (doc or {}).get("company_primary_color") or ""
-    if key not in _TEMPLATES and raw and isinstance(raw, str):
-        s = raw.strip().lower()
-        if s.startswith("#") and len(s) in (4, 7):
-            try:
-                palette["dark"] = colors.HexColor(s)
-                palette["label"] = palette["dark"]
-            except Exception:
-                pass
+    # Custom dark override — hoogste prioriteit
+    custom_dark = ((doc or {}).get("company_pdf_custom_dark") or "").strip()
+    if custom_dark and custom_dark.startswith("#") and len(custom_dark) in (4, 7):
+        try:
+            palette["dark"] = colors.HexColor(custom_dark)
+            palette["label"] = palette["dark"]
+        except Exception:
+            pass
+    else:
+        # Legacy override: als er een primary_color is en géén template gekozen,
+        # gebruik de primary als dark maar behoud goud.
+        raw = (doc or {}).get("company_primary_color") or ""
+        if key not in _TEMPLATES and raw and isinstance(raw, str):
+            s = raw.strip().lower()
+            if s.startswith("#") and len(s) in (4, 7):
+                try:
+                    palette["dark"] = colors.HexColor(s)
+                    palette["label"] = palette["dark"]
+                except Exception:
+                    pass
     return palette
 
 MONTHS_NL = ["januari", "februari", "maart", "april", "mei", "juni",
@@ -576,12 +612,19 @@ def _build(doc_elements, *, with_bg: bool = True):
 # =====================================================================
 
 def _lux_bg_canvas_factory(palette, doc_meta, hash_payload=None):
-    """Genereert een onFirstPage/onLaterPages callback met dit palet + doc-
-    metadata voor logo/brand/contact rendering direct op de canvas. Zo hoeven
-    we niet met platypus-topMargins te vechten en krijgen we een echte
-    "ribbon met content erin" look. `hash_payload` is een dict met
-    doc_number/company_name/company_address/hash_extras die op de FOOTER
-    ribbon getekend worden."""
+    """Canvas callback — tekent alle "vaste" elementen die niet uit flowables
+    komen: witte pagina, ROUNDED dark header shape (linksboven, ~60% breed,
+    met diagonale gouden accent-driehoek rechts ernaast), brand+logo+contact,
+    rounded dark footer met gold shield + hash + gestileerde skyline-silhouet.
+
+    Layout streeft naar zo dichte match als mogelijk met de referentie:
+    - Header shape is een ROUNDED-corner rect (geen full-width strip)
+    - Extra gouden driehoek in de rechter-header-zone
+    - Diagonale gouden strook onder de dark header (loopt van links naar
+      rechts-boven af)
+    - Footer heeft rounded bovenhoeken + gestileerde stad-silhouet in gold
+      rechts van de shield
+    """
     dark = palette["dark"]
     gold = palette["gold"]
     brand_name = (doc_meta.get("company_name") or "SuriRent").upper()
@@ -596,119 +639,263 @@ def _lux_bg_canvas_factory(palette, doc_meta, hash_payload=None):
     def _canvas(canvas, doc):
         canvas.saveState()
         w, h = doc.pagesize
-        # Witte achtergrond
+        # Witte pagina
         canvas.setFillColor(colors.white)
         canvas.rect(0, 0, w, h, fill=1, stroke=0)
-        # === Header ribbon (dark full-width, ~46mm) ===
-        ribbon_h = 46 * mm
+
+        # === HEADER — rounded dark shape links (~55% breed, ~50mm hoog) ===
+        hdr_h = 52 * mm
+        hdr_w = w * 0.56
+        # Rounded rect met alleen bottom-right rounded corner effect (via
+        # canvas.roundRect met radius). Hij loopt tot aan de linker/boven-kant.
         canvas.setFillColor(dark)
-        canvas.rect(0, h - ribbon_h, w, ribbon_h, fill=1, stroke=0)
-        # Gouden diagonaal-wig in de rechter-onderkant
-        canvas.setFillColor(gold)
+        # Grote rounded rect die van links-boven doorloopt; extra path zorgt
+        # voor de diagonale afsnijding rechts-onder.
         p = canvas.beginPath()
-        p.moveTo(w * 0.55, h - ribbon_h)
-        p.lineTo(w * 0.94, h - ribbon_h)
-        p.lineTo(w, h - ribbon_h + 6 * mm)
-        p.lineTo(w * 0.60, h - ribbon_h + 6 * mm)
+        r = 12 * mm  # radius bottom-right
+        p.moveTo(0, h)                            # top-left
+        p.lineTo(hdr_w, h)                        # top-right
+        p.lineTo(hdr_w, h - hdr_h + r)            # rechter-zijkant tot bocht
+        # Rounded bottom-right corner via 2 curves
+        p.curveTo(hdr_w, h - hdr_h + r * 0.4,
+                  hdr_w - r * 0.4, h - hdr_h,
+                  hdr_w - r, h - hdr_h)
+        p.lineTo(0, h - hdr_h)                    # bottom-left
         p.close()
         canvas.drawPath(p, fill=1, stroke=0)
-        # Dunne gouden strook direct onder de header
-        canvas.rect(0, h - ribbon_h - 1.2 * mm, w, 1.2 * mm, fill=1, stroke=0)
 
-        # === Header content — links: logo + brand-name ===
-        left_x = 20 * mm
-        top_y = h - 16 * mm
-        # Logo (indien aanwezig) — max 14mm hoog
-        logo_w_used = 0
+        # Gouden diagonale streep die loopt van onderkant dark shape naar
+        # rechtsboven — geeft dat "curve met goud" effect.
+        canvas.setFillColor(gold)
+        stripe = canvas.beginPath()
+        stripe.moveTo(0, h - hdr_h - 2 * mm)
+        stripe.lineTo(hdr_w - r, h - hdr_h - 2 * mm)
+        stripe.curveTo(hdr_w - r * 0.4, h - hdr_h - 2 * mm,
+                       hdr_w, h - hdr_h + r * 0.4 - 2 * mm,
+                       hdr_w, h - hdr_h + r - 2 * mm)
+        stripe.lineTo(hdr_w, h - hdr_h + r - 2 * mm + 1.5 * mm)
+        stripe.curveTo(hdr_w, h - hdr_h + r * 0.4 - 2 * mm + 1.5 * mm,
+                       hdr_w - r * 0.4, h - hdr_h - 2 * mm + 1.5 * mm,
+                       hdr_w - r, h - hdr_h - 2 * mm + 1.5 * mm)
+        stripe.lineTo(0, h - hdr_h - 2 * mm + 1.5 * mm)
+        stripe.close()
+        canvas.drawPath(stripe, fill=1, stroke=0)
+
+        # Gouden driehoekige accent rechts van de dark shape
+        canvas.setFillColor(gold)
+        tri = canvas.beginPath()
+        tri.moveTo(hdr_w + 2 * mm, h - 20 * mm)
+        tri.lineTo(hdr_w + 24 * mm, h - 20 * mm)
+        tri.lineTo(hdr_w + 12 * mm, h - 32 * mm)
+        tri.close()
+        canvas.drawPath(tri, fill=1, stroke=0)
+
+        # === Header content — links: logo + GOPI-style stacked brand ===
+        left_x = 18 * mm
+        # Logo (kleine huisje-icon) - wanneer geen upload aanwezig, teken
+        # generic huisje via canvas.
+        top_y = h - 15 * mm
+        logo_h_used = 0
         if logo_bytes:
             try:
                 from reportlab.lib.utils import ImageReader
                 reader = ImageReader(io.BytesIO(logo_bytes))
                 iw, ih = reader.getSize()
                 max_h = 14 * mm
-                max_w = 16 * mm
+                max_w = 20 * mm
                 scale = min(max_w / iw, max_h / ih)
                 lw, lh = iw * scale, ih * scale
-                canvas.drawImage(reader, left_x, top_y - lh + 2 * mm,
+                canvas.drawImage(reader, left_x, top_y - lh,
                                  width=lw, height=lh, mask="auto")
-                logo_w_used = lw + 4 * mm
+                logo_h_used = lh + 2 * mm
             except Exception:
-                logo_w_used = 0
-        canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 22)
-        canvas.drawString(left_x + logo_w_used, top_y - 4 * mm, brand_name)
-        if tagline:
+                logo_h_used = 0
+        else:
+            # Teken een klein gouden huisje-symbool (dak driehoek + kleine
+            # deur+raam onder) — 12mm breed x 10mm hoog.
+            hx, hy = left_x + 3, top_y - 12 * mm
             canvas.setFillColor(gold)
-            canvas.setFont("Helvetica", 8)
-            canvas.drawString(left_x + logo_w_used, top_y - 9 * mm, tagline)
-        # Kleine gouden separator-lijn onder brand
-        canvas.setFillColor(gold)
-        canvas.rect(left_x + logo_w_used, top_y - 12 * mm, 22 * mm, 1.2, fill=1, stroke=0)
+            roof = canvas.beginPath()
+            roof.moveTo(hx + 6 * mm, hy + 10 * mm)     # top
+            roof.lineTo(hx, hy + 5 * mm)               # left
+            roof.lineTo(hx + 1.5 * mm, hy + 5 * mm)
+            roof.lineTo(hx + 1.5 * mm, hy + 2 * mm)
+            roof.lineTo(hx + 10.5 * mm, hy + 2 * mm)
+            roof.lineTo(hx + 10.5 * mm, hy + 5 * mm)
+            roof.lineTo(hx + 12 * mm, hy + 5 * mm)
+            roof.close()
+            canvas.drawPath(roof, fill=1, stroke=0)
+            # Raam
+            canvas.setFillColor(dark)
+            canvas.rect(hx + 5 * mm, hy + 5 * mm, 2 * mm, 3 * mm, fill=1, stroke=0)
+            logo_h_used = 13 * mm
 
-        # === Header content — rechts: contact-stack ===
-        right_x = w - 20 * mm  # rechtermarge
-        line_y = h - 12 * mm
+        # Brand naam — SERIF (Playfair-look) BIG, wit — fontSize dynamisch
+        # zodat lange namen niet overlopen buiten de dark shape.
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica", 9)
-        for icon, val in [("Adres:", address), ("Tel:", phone),
-                          ("WhatsApp:", whatsapp if whatsapp and whatsapp != phone else ""),
-                          ("Email:", email)]:
+        # Bereken max fontSize die past binnen (hdr_w - left_x - 10mm)
+        max_brand_w = hdr_w - left_x - 12 * mm
+        fs = 28
+        while fs > 14 and canvas.stringWidth(brand_name, _LUX_SERIF, fs) > max_brand_w:
+            fs -= 1
+        canvas.setFont(_LUX_SERIF, fs)
+        brand_y = top_y - logo_h_used - 2 * mm
+        canvas.drawString(left_x, brand_y, brand_name)
+        # Kleine gouden separator onder brand naam
+        canvas.setFillColor(gold)
+        sep_w = min(26 * mm, canvas.stringWidth(brand_name, _LUX_SERIF, fs) * 0.4)
+        canvas.rect(left_x, brand_y - 3 * mm, sep_w, 1.5, fill=1, stroke=0)
+        if tagline:
+            canvas.setFont(_LUX_SANS, 8)
+            canvas.drawString(left_x, brand_y - 8 * mm, tagline)
+
+        # === Header content — rechts: contact-stack met echte Unicode symbolen ===
+        # DejaVuSans ondersteunt ✆ (phone), ⌂ (house/pin fallback), ✉ (email).
+        # WhatsApp gebruikt ⚇ als benadering. Zwart-tekst op de witte
+        # rechterkant, gouden ronde dot met wit symbool.
+        right_x = w - 18 * mm
+        line_y = h - 15 * mm
+        contact_items = [
+            ("⌂", address),
+            ("✆", phone),
+            ("⚇", whatsapp if whatsapp and whatsapp != phone else ""),
+            ("✉", email),
+        ]
+        for icon_char, val in contact_items:
             if not val:
                 continue
-            canvas.setFillColor(colors.white)
-            text_w = canvas.stringWidth(val, "Helvetica", 9)
-            canvas.drawString(right_x - text_w, line_y, val)
+            lines = [ln.strip() for ln in str(val).split("\n") if ln.strip()]
+            if not lines:
+                continue
+            line_h = 4.5 * mm
+            block_h = line_h * len(lines)
+            dot_x = right_x - 78 * mm
             canvas.setFillColor(gold)
-            canvas.setFont("Helvetica-Bold", 8)
-            icon_w = canvas.stringWidth(icon, "Helvetica-Bold", 8)
-            canvas.drawString(right_x - text_w - icon_w - 3, line_y, icon)
-            canvas.setFont("Helvetica", 9)
-            line_y -= 5.5 * mm
+            canvas.circle(dot_x + 3 * mm, line_y - 2 * mm, 3 * mm, fill=1, stroke=0)
+            canvas.setFillColor(colors.white)
+            canvas.setFont(_LUX_SANS_BOLD, 9)
+            canvas.drawCentredString(dot_x + 3 * mm, line_y - 3.5 * mm, icon_char)
+            canvas.setFillColor(dark)
+            canvas.setFont(_LUX_SANS, 10)
+            for i, ln in enumerate(lines):
+                canvas.drawString(dot_x + 9 * mm, line_y - 3 * mm - i * line_h, ln)
+            line_y -= (block_h + 2 * mm)
 
-        # === Footer ribbon (dark, ~34mm, gouden top-lijn) ===
-        foot_h = 34 * mm
-        canvas.setFillColor(gold)
-        canvas.rect(0, foot_h, w, 1.2 * mm, fill=1, stroke=0)
+        # === FOOTER — rounded dark shape onderaan ===
+        foot_h = 30 * mm
+        foot_w = w
         canvas.setFillColor(dark)
-        canvas.rect(0, 0, w, foot_h, fill=1, stroke=0)
+        # Rounded top corners
+        fr = 14 * mm
+        fp = canvas.beginPath()
+        fp.moveTo(0, 0)
+        fp.lineTo(foot_w, 0)
+        fp.lineTo(foot_w, foot_h - fr)
+        fp.curveTo(foot_w, foot_h - fr * 0.4,
+                   foot_w - fr * 0.4, foot_h,
+                   foot_w - fr, foot_h)
+        fp.lineTo(fr, foot_h)
+        fp.curveTo(fr * 0.4, foot_h,
+                   0, foot_h - fr * 0.4,
+                   0, foot_h - fr)
+        fp.close()
+        canvas.drawPath(fp, fill=1, stroke=0)
+        # Gouden top-lijn boven de dark footer
+        canvas.setFillColor(gold)
+        gp = canvas.beginPath()
+        gp.moveTo(fr, foot_h + 1.5 * mm)
+        gp.lineTo(foot_w - fr, foot_h + 1.5 * mm)
+        gp.curveTo(foot_w - fr * 0.4, foot_h + 1.5 * mm,
+                   foot_w, foot_h + 1.5 * mm - fr * 0.4,
+                   foot_w, foot_h + 1.5 * mm - fr)
+        gp.lineTo(foot_w, foot_h - fr)
+        gp.curveTo(foot_w, foot_h - fr * 0.4,
+                   foot_w - fr * 0.4, foot_h,
+                   foot_w - fr, foot_h)
+        gp.lineTo(fr, foot_h)
+        gp.curveTo(fr * 0.4, foot_h,
+                   0, foot_h - fr * 0.4,
+                   0, foot_h - fr)
+        gp.lineTo(0, foot_h + 1.5 * mm - fr)
+        gp.curveTo(0, foot_h + 1.5 * mm - fr * 0.4,
+                   fr * 0.4, foot_h + 1.5 * mm,
+                   fr, foot_h + 1.5 * mm)
+        gp.close()
+        canvas.drawPath(gp, fill=1, stroke=0)
 
-        # === Footer content: shield-icoon + verifikatie + hash ===
+        # === Footer content: shield-icoon (gouden hex met witte checkmark) ===
         doc_number = hp.get("doc_number") or ""
         company_name_hp = hp.get("company_name") or ""
         company_address_hp = hp.get("company_address") or ""
-        # Bereken hash
         try:
             h256 = _doc_hash(doc_number, *hp.get("extras", []))
         except Exception:
             h256 = ""
         short_hash = h256[:40]
-        # Shield-icon (gouden vierkant met witte checkmark)
         shield_x = 22 * mm
-        shield_y = foot_h - 8 * mm
+        shield_y = foot_h - 7 * mm
+        # Gouden shield shape (approx polygon)
         canvas.setFillColor(gold)
-        canvas.roundRect(shield_x, shield_y - 12 * mm, 12 * mm, 14 * mm,
-                         radius=2 * mm, fill=1, stroke=0)
+        sh = canvas.beginPath()
+        sh.moveTo(shield_x, shield_y)
+        sh.lineTo(shield_x + 12 * mm, shield_y)
+        sh.lineTo(shield_x + 12 * mm, shield_y - 8 * mm)
+        sh.curveTo(shield_x + 12 * mm, shield_y - 12 * mm,
+                   shield_x + 6 * mm, shield_y - 15 * mm,
+                   shield_x + 6 * mm, shield_y - 15 * mm)
+        sh.curveTo(shield_x + 6 * mm, shield_y - 15 * mm,
+                   shield_x, shield_y - 12 * mm,
+                   shield_x, shield_y - 8 * mm)
+        sh.close()
+        canvas.drawPath(sh, fill=1, stroke=0)
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 14)
+        canvas.setFont(_LUX_SANS_BOLD, 12)
         canvas.drawCentredString(shield_x + 6 * mm, shield_y - 8 * mm, "✓")
-        # Tekst rechts van shield
+
+        # Verificatie-tekst
         text_x = shield_x + 18 * mm
         canvas.setFillColor(gold)
-        canvas.setFont("Helvetica-Bold", 10)
-        canvas.drawString(text_x, foot_h - 10 * mm, "GEVERIFIEERD ORIGINEEL")
-        canvas.setFillColor(gold)
-        canvas.drawString(text_x, foot_h - 14 * mm, "AUTHENTIEK DOCUMENT")
+        canvas.setFont(_LUX_SANS_BOLD, 10)
+        canvas.drawString(text_x, foot_h - 9 * mm, "GEVERIFIEERD ORIGINEEL")
+        canvas.drawString(text_x, foot_h - 13 * mm, "AUTHENTIEK DOCUMENT")
         canvas.setFillColor(colors.HexColor("#B8B8B8"))
-        canvas.setFont("Helvetica", 7)
-        canvas.drawString(text_x, foot_h - 19 * mm, "Document-hash (SHA-256):")
+        canvas.setFont(_LUX_SANS, 7)
+        canvas.drawString(text_x, foot_h - 18 * mm, "Document-hash (SHA-256):")
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica", 7)
-        canvas.drawString(text_x, foot_h - 22 * mm, short_hash)
-        # Onderste regel: bedrijf • adres • docnr
-        parts = [p for p in [company_name_hp, company_address_hp, doc_number] if p]
+        canvas.setFont(_LUX_SANS, 7)
+        canvas.drawString(text_x, foot_h - 21 * mm, short_hash)
+        parts = [p for p in [company_name_hp,
+                              (company_address_hp or "").replace("\n", ", "),
+                              doc_number] if p]
         canvas.setFillColor(colors.HexColor("#B8B8B8"))
-        canvas.setFont("Helvetica", 7)
-        canvas.drawString(text_x, foot_h - 28 * mm, " • ".join(parts))
+        canvas.setFont(_LUX_SANS, 7)
+        canvas.drawString(text_x, foot_h - 26 * mm, " • ".join(parts))
+
+        # === Skyline-silhouette rechts in de footer — donkere gebouwen op
+        # de dark-footer, met kleine gouden puntjes voor verlichte ramen ===
+        sky_x = w * 0.66
+        sky_base = 2 * mm
+        # Iets lichtere tint van dark voor de gebouwen zodat ze subtiel te
+        # zien zijn op de dark footer.
+        building_tint = colors.Color(
+            min(1.0, dark.red + (1 - dark.red) * 0.12),
+            min(1.0, dark.green + (1 - dark.green) * 0.12),
+            min(1.0, dark.blue + (1 - dark.blue) * 0.12),
+        )
+        canvas.setFillColor(building_tint)
+        canvas.rect(sky_x, sky_base, 22 * mm, 18 * mm, fill=1, stroke=0)
+        canvas.rect(sky_x + 24 * mm, sky_base, 16 * mm, 22 * mm, fill=1, stroke=0)
+        canvas.rect(sky_x + 42 * mm, sky_base, 14 * mm, 15 * mm, fill=1, stroke=0)
+        # Verlichte ramen — kleine gouden vierkantjes, verspreid (niet volle grid)
+        canvas.setFillColor(gold)
+        import random as _r
+        _r.seed(42)
+        for bx, bw, bh in [(sky_x, 22, 18), (sky_x + 24 * mm, 16, 22), (sky_x + 42 * mm, 14, 15)]:
+            for _ in range(int(bw * bh / 15)):
+                rx = bx + _r.uniform(1, bw - 1) * mm
+                ry = sky_base + _r.uniform(1, bh - 1) * mm
+                canvas.rect(rx, ry, 0.8 * mm, 0.8 * mm, fill=1, stroke=0)
+
         canvas.restoreState()
     return _canvas
 
@@ -720,22 +907,23 @@ def _lux_header_placeholder(el):
 
 
 def _lux_title(el, title: str, doc_number: str, palette: dict):
-    """Groot gecentreerd elegant title-blok met crown-ornament + gold underline."""
+    """Groot gecentreerd elegant serif-title-blok met crown-ornament boven en
+    goud document-nummer eronder tussen 2 horizontale streepjes."""
     dark = palette["dark"]
     gold = palette["gold"]
     title_style = ParagraphStyle(
-        name="LuxTitle", fontName="Times-Bold", fontSize=32,
-        textColor=dark, leading=36, alignment=1, spaceBefore=2, spaceAfter=2,
+        name="LuxTitle", fontName=_LUX_SERIF, fontSize=36,
+        textColor=dark, leading=40, alignment=1, spaceBefore=0, spaceAfter=4,
     )
     ornament_style = ParagraphStyle(
-        name="LuxOrnament", fontName="Helvetica", fontSize=12,
-        textColor=gold, leading=14, alignment=1, spaceAfter=2,
+        name="LuxOrnament", fontName=_LUX_SANS, fontSize=14,
+        textColor=gold, leading=16, alignment=1, spaceAfter=0,
     )
     num_style = ParagraphStyle(
-        name="LuxDocNum", fontName="Helvetica-Bold", fontSize=10,
-        textColor=gold, leading=13, alignment=1, spaceAfter=10,
+        name="LuxDocNum", fontName=_LUX_SANS_BOLD, fontSize=10.5,
+        textColor=gold, leading=13, alignment=1, spaceAfter=8,
     )
-    # ♛ crown-ornament
+    # Echte crown (♛ U+265B) — met DejaVuSans rendert dit correct.
     el.append(Paragraph("♛", ornament_style))
     el.append(Paragraph(title.upper(), title_style))
     if doc_number:
@@ -748,15 +936,14 @@ def _lux_icon_chip(icon_char: str, palette: dict):
     """Klein donker afgerond vierkant met wit iconkarakter erin — gerenderd
     als 1-cel table met dark background. Wordt links van elke kv-rij geplaatst."""
     dark = palette["dark"]
-    gold = palette["gold"]
-    chip = Table([[Paragraph(f'<font color="white" size="8">{icon_char}</font>',
-                             ParagraphStyle(name="LuxChipIcon", alignment=1))]],
-                 colWidths=[7 * mm], rowHeights=[7 * mm])
+    chip = Table([[Paragraph(f'<font color="white" size="10" name="{_LUX_SANS_BOLD}">{icon_char}</font>',
+                             ParagraphStyle(name="LuxChipIcon", alignment=1, fontName=_LUX_SANS_BOLD))]],
+                 colWidths=[9 * mm], rowHeights=[9 * mm])
     chip.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("BACKGROUND", (0, 0), (-1, -1), dark),
-        ("BOX", (0, 0), (-1, -1), 0.6, gold),
+        ("ROUNDEDCORNERS", [2 * mm, 2 * mm, 2 * mm, 2 * mm]),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -765,27 +952,39 @@ def _lux_icon_chip(icon_char: str, palette: dict):
     return chip
 
 
-# Mapping van kv-labels naar iconkarakters. Onbekende labels krijgen "•".
+# Icoon-mapping voor detail-chips — kleine Unicode symbolen die door
+# DejaVuSans goed worden gerenderd (geen emoji, geen exotische characters).
 _LUX_ICON_MAP = {
-    "datum": "📅", "huurder": "👤", "appartement": "🏠", "type betaling": "💳",
-    "betaling voor": "🗓", "betalingswijze": "💰", "notitie": "🔔",
-    "factuurnummer": "#", "periode": "🗓", "vervaldatum": "⏰",
-    "openstaand": "⚠", "openstaand na betaling": "⚠", "totaal openstaand": "⚠",
-    "totaal": "∑", "subtotaal": "∑", "btw": "%",
+    "datum":            "◷",   # klok/schijf
+    "huurder":          "◉",
+    "appartement":      "⌂",   # huisje
+    "type betaling":    "◆",
+    "betaling voor":    "▦",   # brick wall
+    "betalingswijze":   "◈",
+    "notitie":          "!",
+    "factuurnummer":    "#",
+    "periode":          "▦",
+    "vervaldatum":      "◐",
+    "openstaand":       "!",
+    "openstaand na betaling": "!",
+    "totaal openstaand": "!",
+    "totaal":           "∑",
+    "subtotaal":        "∑",
+    "btw":              "%",
 }
 
 
 def _lux_kv_block(el, rows, palette):
-    """Detail-blok: elke rij heeft [chip-icon][label][waarde]. Rijen worden
-    gescheiden door een 8%-tinted hairline. Lege values worden geskipped."""
+    """Detail-blok in een WITTE ROUNDED-corner card met soft-gold border.
+    Elke rij: [chip-icon][label][waarde]."""
     dark = palette["dark"]
     gold = palette["gold"]
     label_style = ParagraphStyle(
-        name="LuxKVLabel", fontName="Helvetica-Bold", fontSize=8.5,
+        name="LuxKVLabel", fontName=_LUX_SANS_BOLD, fontSize=9,
         textColor=dark, leading=11, spaceAfter=0,
     )
     value_style = ParagraphStyle(
-        name="LuxKVValue", fontName="Helvetica", fontSize=10,
+        name="LuxKVValue", fontName=_LUX_SANS, fontSize=10,
         textColor=dark, leading=13, spaceAfter=0,
     )
     data = []
@@ -801,75 +1000,111 @@ def _lux_kv_block(el, rows, palette):
         ])
     if not data:
         return
-    # Kolommen: chip 10mm, label 45mm, value rest
     total_w = 170 * mm
-    t = Table(data, colWidths=[10 * mm, 45 * mm, total_w - 55 * mm])
-    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.35)
+    t = Table(data, colWidths=[12 * mm, 45 * mm, total_w - 57 * mm])
+    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.25)
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LINEBELOW", (1, 0), (-1, -2), 0.3, line_color),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (1, 0), (-1, -2), 0.4, line_color),
+        # Witte card met soft-gold border
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.6, line_color),
+        ("ROUNDEDCORNERS", [3 * mm, 3 * mm, 3 * mm, 3 * mm]),
     ]))
     el.append(t)
     el.append(Spacer(1, 8))
 
 
 def _lux_amount_bar(el, label: str, amount: float, currency: str, palette: dict):
-    """Bicolor bedrag-bar: donker links met label + kleine wallet-icoon,
-    goud rechts met bedrag groot."""
+    """Bicolor bedrag-bar met DIAGONALE overgang van dark naar gold.
+    Links: label wit-op-donker. Rechts: bedrag donker-op-goud.
+    De diagonale streep wordt via een custom Flowable getekend op canvas."""
+    from reportlab.platypus import Flowable
+
     dark = palette["dark"]
     gold = palette["gold"]
-    label_style = ParagraphStyle(
-        name="LuxAmtLabel", fontName="Helvetica-Bold", fontSize=11.5,
-        textColor=colors.white, leading=14, alignment=0,
-    )
-    amt_style = ParagraphStyle(
-        name="LuxAmtValue", fontName="Helvetica-Bold", fontSize=22,
-        textColor=dark, leading=26, alignment=1,
-    )
-    left_cell = [
-        Paragraph(label.upper(), label_style),
-    ]
-    right_cell = [Paragraph(_fmt_money(amount, currency), amt_style)]
-    t = Table([[left_cell, right_cell]], colWidths=[85 * mm, 85 * mm], rowHeights=[18 * mm])
-    t.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("BACKGROUND", (0, 0), (0, 0), dark),
-        ("BACKGROUND", (1, 0), (1, 0), gold),
-        ("LEFTPADDING", (0, 0), (0, 0), 14),
-        ("LEFTPADDING", (1, 0), (1, 0), 10),
-        ("RIGHTPADDING", (0, 0), (0, 0), 10),
-        ("RIGHTPADDING", (1, 0), (1, 0), 14),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    el.append(t)
-    el.append(Spacer(1, 8))
+
+    class DiagonalAmountBar(Flowable):
+        def __init__(self, label_txt, amount_txt, width, height):
+            super().__init__()
+            self.label_txt = label_txt
+            self.amount_txt = amount_txt
+            self.width = width
+            self.height = height
+
+        def wrap(self, avail_w, avail_h):
+            return (self.width, self.height)
+
+        def draw(self):
+            c = self.canv
+            w_ = self.width
+            h_ = self.height
+            r = 5 * mm   # rounded corners
+            # Splitpunt (~52% van links, met diagonale offset)
+            split_x = w_ * 0.52
+            slant = 8 * mm
+            # === DARK LEFT (rounded left corners, diagonaal rechts-op naar links-onder) ===
+            c.setFillColor(dark)
+            p = c.beginPath()
+            p.moveTo(r, 0)
+            p.lineTo(split_x + slant / 2, 0)
+            p.lineTo(split_x - slant / 2, h_)
+            p.lineTo(r, h_)
+            p.curveTo(r * 0.4, h_, 0, h_ - r * 0.4, 0, h_ - r)
+            p.lineTo(0, r)
+            p.curveTo(0, r * 0.4, r * 0.4, 0, r, 0)
+            p.close()
+            c.drawPath(p, fill=1, stroke=0)
+            # === GOLD RIGHT (rounded right corners) ===
+            c.setFillColor(gold)
+            p2 = c.beginPath()
+            p2.moveTo(split_x + slant / 2 + 1.5 * mm, 0)  # kleine gap tussen 2 shapes
+            p2.lineTo(w_ - r, 0)
+            p2.curveTo(w_ - r * 0.4, 0, w_, r * 0.4, w_, r)
+            p2.lineTo(w_, h_ - r)
+            p2.curveTo(w_, h_ - r * 0.4, w_ - r * 0.4, h_, w_ - r, h_)
+            p2.lineTo(split_x - slant / 2 + 1.5 * mm, h_)
+            p2.close()
+            c.drawPath(p2, fill=1, stroke=0)
+            # === Tekst ===
+            c.setFillColor(colors.white)
+            c.setFont(_LUX_SANS_BOLD, 11.5)
+            c.drawString(12 * mm, h_ / 2 - 2, self.label_txt.upper())
+            c.setFillColor(dark)
+            c.setFont(_LUX_SANS_BOLD, 22)
+            # Center within right section
+            right_center = (split_x + w_) / 2 + 2 * mm
+            c.drawCentredString(right_center, h_ / 2 - 6, self.amount_txt)
+
+    bar = DiagonalAmountBar(label, _fmt_money(amount, currency), 170 * mm, 20 * mm)
+    el.append(bar)
+    el.append(Spacer(1, 10))
 
 
 def _lux_status_block(el, rows, palette):
-    """Status-rijen ("Openstaand na betaling", "Totaal openstaand") — elke rij
-    met chevron-chip links, label midden, bedrag rechts (rood als open, groen
-    als voldaan)."""
+    """Status-rijen in een witte rounded card met soft-gold border, elke rij
+    met chevron-chip links, label midden, bedrag rechts."""
     dark = palette["dark"]
     gold = palette["gold"]
     label_style = ParagraphStyle(
-        name="LuxStatusLabel", fontName="Helvetica-Bold", fontSize=9.5,
+        name="LuxStatusLabel", fontName=_LUX_SANS_BOLD, fontSize=9.5,
         textColor=dark, leading=12,
     )
     open_style = ParagraphStyle(
-        name="LuxStatusOpen", fontName="Helvetica-Bold", fontSize=11.5,
+        name="LuxStatusOpen", fontName=_LUX_SANS_BOLD, fontSize=11.5,
         textColor=colors.HexColor("#B91C1C"), alignment=2, leading=14,
     )
     paid_style = ParagraphStyle(
-        name="LuxStatusPaid", fontName="Helvetica-Bold", fontSize=11.5,
+        name="LuxStatusPaid", fontName=_LUX_SANS_BOLD, fontSize=11.5,
         textColor=SUCCESS, alignment=2, leading=14,
     )
     data = []
     for label, value, is_paid in rows:
+        # Chevron als ronde chip (donker + wit ">")
         chip = _lux_icon_chip("›", palette)
         val_style = paid_style if is_paid else open_style
         data.append([
@@ -880,37 +1115,48 @@ def _lux_status_block(el, rows, palette):
     if not data:
         return
     total_w = 170 * mm
-    t = Table(data, colWidths=[10 * mm, 90 * mm, total_w - 100 * mm])
-    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.35)
+    t = Table(data, colWidths=[12 * mm, 90 * mm, total_w - 102 * mm])
+    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.25)
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LINEBELOW", (1, 0), (-1, -2), 0.3, line_color),
+        ("LINEBELOW", (1, 0), (-1, -2), 0.4, line_color),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.6, line_color),
+        ("ROUNDEDCORNERS", [3 * mm, 3 * mm, 3 * mm, 3 * mm]),
     ]))
     el.append(t)
     el.append(Spacer(1, 6))
 
 
 def _lux_note(el, note_text: str, palette: dict):
-    """Notitie-blok — soft gold-tinted box met bell-icon en tekst."""
+    """Notitie-blok — soft cream-gold-tinted box met bell-icon (in gold)
+    en rounded corners."""
     if not note_text:
         return
     gold = palette["gold"]
     soft = palette["soft"]
     style = ParagraphStyle(
-        name="LuxNote", fontName="Helvetica", fontSize=9.5,
+        name="LuxNote", fontName=_LUX_SANS, fontSize=9.5,
         textColor=palette["dark"], leading=13,
     )
-    label = Paragraph('<font color="#0000">🔔</font> <b>Notitie:</b> ' + note_text, style)
-    t = Table([[label]], colWidths=[170 * mm])
+    bell_style = ParagraphStyle(
+        name="LuxNoteBell", fontName=_LUX_SANS, fontSize=14,
+        textColor=gold, leading=16, alignment=1,
+    )
+    bell_cell = Paragraph("!", bell_style)
+    text_cell = Paragraph(f'<b>Notitie:</b> {note_text}', style)
+    t = Table([[bell_cell, text_cell]], colWidths=[10 * mm, 160 * mm])
+    soft_gold = colors.Color(gold.red, gold.green, gold.blue, alpha=0.3)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), soft),
-        ("BOX", (0, 0), (-1, -1), 0.5, gold),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("BOX", (0, 0), (-1, -1), 0.6, soft_gold),
+        ("ROUNDEDCORNERS", [3 * mm, 3 * mm, 3 * mm, 3 * mm]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -921,51 +1167,81 @@ def _lux_note(el, note_text: str, palette: dict):
 
 def _lux_signature_block(el, received_by: str, company_name: str,
                          signature_data: str, palette: dict):
-    """Onderaan (net boven footer): twee handtekening-kolommen. Links huurder,
-    rechts bedrijf. Ondertekend met gouden krul-ornament in het midden."""
+    """Signature block in een WITTE ROUNDED-corner card met soft-gold border,
+    twee kolommen: links huurder-handtekening, midden gouden LAUREL-G-LAUREL
+    ornament, rechts bedrijfs-handtekening. Onderaan een dunne gouden lijn
+    en 'Handtekening huurder' / 'Handtekening / Stempel'."""
     dark = palette["dark"]
     gold = palette["gold"]
     label_style = ParagraphStyle(
-        name="LuxSigLabel", fontName="Helvetica-Bold", fontSize=8.5,
+        name="LuxSigLabel", fontName=_LUX_SANS_BOLD, fontSize=8.5,
         textColor=dark, leading=11, spaceAfter=2,
     )
     name_style = ParagraphStyle(
-        name="LuxSigName", fontName="Helvetica", fontSize=9.5,
-        textColor=dark, leading=12, spaceAfter=8,
+        name="LuxSigName", fontName=_LUX_SANS, fontSize=9.5,
+        textColor=dark, leading=12, spaceAfter=6,
     )
     small_style = ParagraphStyle(
-        name="LuxSigSmall", fontName="Helvetica", fontSize=7.5,
+        name="LuxSigSmall", fontName=_LUX_SANS, fontSize=7.5,
         textColor=MUTED, leading=9,
     )
+    # Signature line via kleine gouden onderstreping
+    line = Table([[""]], colWidths=[55 * mm], rowHeights=[0.6],
+                 style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), gold)]))
 
-    # Links: ontvangen door + signatuur-lijn
     left = [
         Paragraph("ONTVANGEN DOOR", label_style),
         Paragraph(received_by or "—", name_style),
-        Table([[""]], colWidths=[60 * mm], rowHeights=[0.6],
-              style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), dark)])),
+        Spacer(1, 8),
+        line,
         Spacer(1, 2),
         Paragraph("Handtekening huurder", small_style),
     ]
 
-    # Midden: gouden "G"-ornament (bedrijfslogo look) — enkel wanneer geen
-    # echte signature is meegegeven, anders vervangt de sig image dit.
-    mid = []
-    if not signature_data:
-        crown = ParagraphStyle(
-            name="LuxCrown", fontName="Helvetica-Bold", fontSize=20,
-            textColor=gold, leading=24, alignment=1,
-        )
-        letter_style = ParagraphStyle(
-            name="LuxMidLetter", fontName="Helvetica-Bold", fontSize=22,
-            textColor=gold, leading=26, alignment=1, spaceAfter=0,
-        )
-        mid = [
-            Paragraph("♛", crown),
-            Paragraph((company_name[:1] or "S").upper(), letter_style),
-        ]
+    # Midden — laurel-krans met gouden "G" (of eerste letter bedrijf)
+    from reportlab.platypus import Flowable
 
-    # Rechts: goedgekeurd door + bedrijfsnaam + sig image (indien aanwezig)
+    class LaurelOrnament(Flowable):
+        def __init__(self, letter, w=30 * mm, h=22 * mm):
+            super().__init__()
+            self.letter = letter
+            self.w = w
+            self.h = h
+
+        def wrap(self, aw, ah):
+            return (self.w, self.h)
+
+        def draw(self):
+            c = self.canv
+            cx = self.w / 2
+            cy = self.h / 2
+            # Laurel — 2 rijen met kleine gouden bladeren (elk als klein
+            # ovaal), 6 per zijde.
+            c.setFillColor(gold)
+            for side in (-1, 1):
+                for i in range(6):
+                    angle_offset = 20 + i * 15  # graden
+                    import math
+                    theta = math.radians(angle_offset * side + (90 if side > 0 else -90))
+                    lx = cx + side * (10 * mm + i * 0.4 * mm)
+                    ly = cy - 6 * mm + i * 2 * mm
+                    c.saveState()
+                    c.translate(lx, ly)
+                    c.rotate(-30 * side + i * 8 * side)
+                    c.ellipse(-1.4 * mm, -0.6 * mm, 1.4 * mm, 0.6 * mm, fill=1, stroke=0)
+                    c.restoreState()
+            # Grote gouden "G" letter in midden — serif font
+            c.setFillColor(gold)
+            c.setFont(_LUX_SERIF, 26)
+            c.drawCentredString(cx, cy - 4 * mm, (self.letter or "S").upper())
+            # Klein crown-tje boven de letter
+            c.setFillColor(gold)
+            c.setFont(_LUX_SANS, 9)
+            c.drawCentredString(cx, cy + 7 * mm, "♛")
+
+    mid = [LaurelOrnament(company_name[:1] if company_name else "S")]
+
+    # Rechts
     approved_label = f"GOEDGEKEURD DOOR {company_name.upper()}" if company_name else "GOEDGEKEURD DOOR"
     right = [Paragraph(approved_label, label_style),
              Paragraph(company_name or "—", name_style)]
@@ -974,24 +1250,31 @@ def _lux_signature_block(el, received_by: str, company_name: str,
         try:
             raw = signature_data.split(",", 1)[1] if "," in signature_data else signature_data
             img_bytes = base64.b64decode(raw)
-            sig_img = Image(io.BytesIO(img_bytes), width=55 * mm, height=18 * mm)
+            sig_img = Image(io.BytesIO(img_bytes), width=50 * mm, height=16 * mm)
         except Exception:
             sig_img = None
     if sig_img:
         right.append(sig_img)
+    else:
+        right.append(Spacer(1, 4))
     right.extend([
-        Table([[""]], colWidths=[60 * mm], rowHeights=[0.6],
-              style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), dark)])),
+        line,
         Spacer(1, 2),
         Paragraph("Handtekening / Stempel", small_style),
     ])
 
     data = [[left, mid, right]]
     t = Table(data, colWidths=[65 * mm, 40 * mm, 65 * mm])
+    soft_gold = colors.Color(gold.red, gold.green, gold.blue, alpha=0.25)
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.6, soft_gold),
+        ("ROUNDEDCORNERS", [3 * mm, 3 * mm, 3 * mm, 3 * mm]),
     ]))
     el.append(Spacer(1, 4))
     el.append(t)
@@ -1039,15 +1322,13 @@ def _lux_footer_marker(el, doc_number: str, company_name: str,
 
 
 def _build_lux(doc_elements, palette, doc_meta, hash_payload=None):
-    """Bouwt luxury A4 PDF met wit-canvas + dark ribbons + brand-header +
-    footer marker (allemaal via canvas callback, NIET als flowables). Zo
-    passen zowel details als signature op 1 pagina zonder overflow.
-    topMargin=52mm (ribbon 46mm + 6mm ademruimte). bottomMargin=44mm
-    (footer 34mm + 10mm ademruimte)."""
+    """Bouwt luxury A4 PDF. topMargin en bottomMargin zijn dusdanig ingesteld
+    dat de flowable content past tussen de dark ribbons (header 52mm hoog,
+    footer 30mm hoog) én dat de kwitantie op 1 pagina staat."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=20 * mm, rightMargin=20 * mm,
-        topMargin=52 * mm, bottomMargin=44 * mm)
+        topMargin=56 * mm, bottomMargin=36 * mm)
     cb = _lux_bg_canvas_factory(palette, doc_meta, hash_payload)
     doc.build(doc_elements, onFirstPage=cb, onLaterPages=cb)
     buf.seek(0)

@@ -79,6 +79,39 @@ function PdfTemplatePicker({ value, onChange }) {
 }
 
 
+function PdfPreviewButton({ template, customDark }) {
+  const [busy, setBusy] = useState(false);
+  const openPreview = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const qs = new URLSearchParams();
+      if (template) qs.set('template', template);
+      if (customDark) qs.set('custom_dark', customDark);
+      // Fetch als blob via axios (met auth-header) → open in nieuwe tab.
+      // Kan niet gewoon window.open() gebruiken want die stuurt geen
+      // Bearer-token mee → 401.
+      const resp = await api.get(`/companies/me/branding/preview-pdf?${qs}`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(resp.data);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" onClick={openPreview} disabled={busy}
+      data-testid="pdf-preview-btn"
+      className="h-8 px-3 rounded-lg text-[11px] font-extrabold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 inline-flex items-center gap-1.5 shrink-0">
+      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+      Preview PDF
+    </button>
+  );
+}
+
+
 function LogoUploader({ value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -151,6 +184,7 @@ export default function Branding() {
         logo_url: b.logo_url || '',
         tagline: b.tagline || '',
         pdf_template: b.pdf_template || 'midnight_gold',
+        pdf_custom_dark: b.pdf_custom_dark || '',
       });
       setB((prev) => ({ ...prev, ...data }));
       applyBranding(data);
@@ -239,9 +273,39 @@ export default function Branding() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="text-sm font-extrabold text-slate-900 mb-1">Kwitantie & Factuur sjabloon</h3>
-            <p className="text-[11px] text-slate-500 mb-3">Kies de kleuren van uw PDF-kwitanties en facturen. Alle sjablonen combineren een donkere achtergrond met gouden accenten voor een premium look.</p>
-            <PdfTemplatePicker value={b.pdf_template || 'midnight_gold'} onChange={(v) => upd('pdf_template', v)} />
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">Kwitantie & Factuur sjabloon</h3>
+                <p className="text-[11px] text-slate-500">Kies de kleuren van uw PDF-kwitanties en facturen — dark + goud accenten.</p>
+              </div>
+              <PdfPreviewButton template={b.pdf_template || 'midnight_gold'} customDark={b.pdf_custom_dark || ''} />
+            </div>
+            <div className="mt-3">
+              <PdfTemplatePicker value={b.pdf_template || 'midnight_gold'} onChange={(v) => upd('pdf_template', v)} />
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <label className="block">
+                <span className="block text-xs font-bold text-slate-700 mb-1">Custom hoofdkleur (optioneel)</span>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={b.pdf_custom_dark || '#0B1F3A'}
+                    onChange={(e) => upd('pdf_custom_dark', e.target.value)}
+                    data-testid="pdf-custom-dark-picker"
+                    className="h-10 w-12 cursor-pointer rounded border border-slate-200" />
+                  <input type="text" value={b.pdf_custom_dark || ''}
+                    onChange={(e) => upd('pdf_custom_dark', e.target.value)}
+                    placeholder="Laat leeg voor standaard sjabloon-kleur"
+                    data-testid="pdf-custom-dark-hex"
+                    className="h-10 flex-1 px-3 border-2 border-slate-200 rounded-lg font-mono text-xs focus:border-slate-900 focus:outline-none" />
+                  {b.pdf_custom_dark && (
+                    <button type="button" onClick={() => upd('pdf_custom_dark', '')}
+                      className="h-10 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">
+                      Wissen
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">Overschrijft de dark-kleur van het gekozen sjabloon. Goud blijft goud.</p>
+              </label>
+            </div>
           </div>
 
           <LandlordSignatureSection value={b.landlord_signature_url} signedAt={b.landlord_signature_signed_at} onReload={load} />
