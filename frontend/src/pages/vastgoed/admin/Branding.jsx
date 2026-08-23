@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Palette, Save, Loader2, Upload, Check, AlertCircle, Eye, RotateCcw, Building2, Mail, Phone, MapPin, Landmark } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { resolveLogoUrl, applyBranding } from '../../../lib/branding';
-import MyUrlCard from '../../../components/MyUrlCard';
 
 const PRESET_COLORS = [
   '#FF5C00', '#1e88e5', '#7c3aed', '#059669',
@@ -228,8 +227,6 @@ export default function Branding() {
 
       {err && <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-lg p-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{err}</div>}
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg p-3 flex items-center gap-2"><Check className="w-4 h-4" />{msg}</div>}
-
-      <MyUrlCard />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* LEFT: form */}
