@@ -7716,7 +7716,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
     #  • Bij pending_approval: koppelen we NIET automatisch — pas bij goedkeuring.
     matched_invoice = None
     explicit_invoice_ids = list(body.invoice_ids or [])
-    if body.category == "huur" and status == "approved":
+    if body.category in ("huur", "vooruitbetaling") and status == "approved":
         inv_q = {"tenant_id": body.tenant_id, "status": {"$ne": "paid"}}
         if company_id:
             inv_q["company_id"] = company_id
@@ -7807,10 +7807,13 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
         "approved_at": approved_at,
         "approved_by_user_id": approved_by_user_id,
     }
-    # Vooruitbetaling: bewaar het bedrag als beschikbaar krediet zodat de
-    # volgende factuur-generatie het automatisch kan verrekenen (FIFO oudst
-    # eerst). Wordt alleen bij approved status meegerekend.
-    if body.category == "vooruitbetaling" and status == "approved":
+    # Vooruitbetaling zonder gekoppelde factuur: bewaar het bedrag als
+    # beschikbaar krediet zodat de volgende factuur-generatie het automatisch
+    # kan verrekenen (FIFO oudst eerst). MET gekoppelde factuur (frontend geeft
+    # `invoice_ids` mee voor de doelmaand, of de factuur wordt auto-created)
+    # loopt het bedrag door de reguliere allocatie hieronder — de overflow-
+    # logica zet dan zelf `credit_remaining` als er nog iets overblijft.
+    if body.category == "vooruitbetaling" and status == "approved" and not matched_invoice:
         doc["credit_remaining"] = float(body.amount or 0)
         doc["credit_applied_at"] = None
     await db.payments.insert_one(doc)

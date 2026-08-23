@@ -650,8 +650,13 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
       const payload = {
         ...data,
         amount: parseFloat(data.amount),
-        period_month: data.category === 'huur' ? parseInt(data.period_month) : null,
-        period_year: data.category === 'huur' ? parseInt(data.period_year) : null,
+        // Huur én Vooruitbetaling zijn periode-gebonden zodat kwitantie/e-mail
+        // en factuur-allocatie de doelmaand kennen. Overige categorieën
+        // (borg, boete, servicekosten) hebben geen periode.
+        period_month: (data.category === 'huur' || data.category === 'vooruitbetaling')
+          ? parseInt(data.period_month) : null,
+        period_year: (data.category === 'huur' || data.category === 'vooruitbetaling')
+          ? parseInt(data.period_year) : null,
       };
       const { data: r } = await api.post('/payments', payload);
       onSaved(r);
@@ -741,7 +746,7 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               </select>
             </div>
           </div>
-          {data.category === 'huur' && (
+          {(data.category === 'huur' || data.category === 'vooruitbetaling') && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Maand</label>

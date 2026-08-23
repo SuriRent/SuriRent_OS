@@ -867,18 +867,40 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
 
   const handleNext = () => {
     if (!canProceed) return;
-    // Vooruitbetaling: huurder heeft niets openstaand maar betaalt vooruit.
-    // Wordt opgeslagen met category=vooruitbetaling zodat het als krediet
-    // bewaard wordt voor de volgende factuur (auto-generatie verrekent het
-    // automatisch FIFO).
+    // Vooruitbetaling: huurder heeft (bijna) niets openstaand maar betaalt
+    // vooruit. We willen nu weten VOOR WELKE MAAND en direct verrekenen met
+    // die factuur zodat het saldo van die maand meteen omlaag gaat.
+    //  1. Als er al een `future_invoices[0]` bestaat (auto-gegenereerd door
+    //     de maandelijkse billing tick) → gebruik díe factuur + periode.
+    //  2. Anders → doel = eerstvolgende kalendermaand na huidige. Backend
+    //     maakt dan automatisch een factuur voor die maand aan (bestaande
+    //     "auto-create on payment" logica) en past de 500 partial toe.
     if (isAdvance && hasCustom) {
+      let targetMonth;
+      let targetYear;
+      let targetInvoiceId = null;
+      if (futureInvoices.length > 0) {
+        targetMonth = futureInvoices[0].period_month;
+        targetYear = futureInvoices[0].period_year;
+        targetInvoiceId = futureInvoices[0].id;
+      } else {
+        // Val terug op eerstvolgende kalendermaand.
+        const now = new Date();
+        let m = now.getMonth() + 2; // +1 voor 1-indexed, +1 voor next
+        let y = now.getFullYear();
+        if (m > 12) { m -= 12; y += 1; }
+        targetMonth = m;
+        targetYear = y;
+      }
+      const monthLabel = MONTHS_NL[targetMonth - 1];
       onConfirm({
         tenant_id: tenant.id, apartment_id: apt.id,
         amount: parseFloat(custom), currency: cur,
         category: 'vooruitbetaling', method: 'contant',
-        period_month: null, period_year: null,
-        note: `Vooruitbetaling — wordt verrekend met volgende factuur`,
+        period_month: targetMonth, period_year: targetYear,
+        note: `Vooruitbetaling voor ${monthLabel} ${targetYear}`,
         plan_items: [], plain_amount: parseFloat(custom),
+        invoice_ids: targetInvoiceId ? [targetInvoiceId] : [],
       });
       return;
     }
