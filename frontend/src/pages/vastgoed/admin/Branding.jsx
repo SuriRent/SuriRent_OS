@@ -34,6 +34,51 @@ function ColorPicker({ value, onChange }) {
   );
 }
 
+// =====================================================================
+// PDF template picker — 4 luxe kleurcombinaties voor kwitantie/factuur
+// =====================================================================
+const PDF_TEMPLATES = [
+  { key: 'midnight_gold',  label: 'Midnight Gold',  dark: '#0B1F3A', gold: '#C9A24A', desc: 'Donkerblauw + goud' },
+  { key: 'charcoal_gold',  label: 'Charcoal Gold',  dark: '#0F0F10', gold: '#C9A24A', desc: 'Zwart + goud' },
+  { key: 'forest_gold',    label: 'Forest Gold',    dark: '#0F3B2E', gold: '#C9A24A', desc: 'Groen + goud' },
+  { key: 'sunset_gold',    label: 'Sunset Gold',    dark: '#8A2B0F', gold: '#F0B34A', desc: 'Oranje + goud' },
+];
+
+function PdfTemplatePicker({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-2.5" data-testid="branding-pdf-template-picker">
+      {PDF_TEMPLATES.map((tmpl) => {
+        const active = value === tmpl.key;
+        return (
+          <button key={tmpl.key} type="button" onClick={() => onChange(tmpl.key)}
+            data-testid={`pdf-template-${tmpl.key}`}
+            className={`relative overflow-hidden rounded-xl border-2 text-left transition ${active ? 'border-slate-900 scale-[1.02] shadow-lg' : 'border-slate-200 hover:border-slate-300'}`}>
+            {/* Mini kwitantie-preview */}
+            <div className="h-16 relative" style={{ backgroundColor: tmpl.dark }}>
+              <div className="absolute right-0 top-0 h-full w-16"
+                style={{ background: `linear-gradient(135deg, transparent 40%, ${tmpl.gold} 40%)` }} />
+              <div className="absolute bottom-0 inset-x-0 h-1" style={{ backgroundColor: tmpl.gold }} />
+              <div className="px-2.5 py-2 text-white text-[10px] font-black tracking-wider">
+                UW BEDRIJF
+              </div>
+            </div>
+            <div className="bg-white px-3 py-2">
+              <p className="text-xs font-black text-slate-900">{tmpl.label}</p>
+              <p className="text-[10px] text-slate-500">{tmpl.desc}</p>
+            </div>
+            {active && (
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-900 flex items-center justify-center">
+                <Check className="w-3 h-3 text-white" />
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+
 function LogoUploader({ value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -105,6 +150,7 @@ export default function Branding() {
         primary_color: b.primary_color || '',
         logo_url: b.logo_url || '',
         tagline: b.tagline || '',
+        pdf_template: b.pdf_template || 'midnight_gold',
       });
       setB((prev) => ({ ...prev, ...data }));
       applyBranding(data);
@@ -190,6 +236,12 @@ export default function Branding() {
                 data-testid="branding-tagline"
                 className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
             </label>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+            <h3 className="text-sm font-extrabold text-slate-900 mb-1">Kwitantie & Factuur sjabloon</h3>
+            <p className="text-[11px] text-slate-500 mb-3">Kies de kleuren van uw PDF-kwitanties en facturen. Alle sjablonen combineren een donkere achtergrond met gouden accenten voor een premium look.</p>
+            <PdfTemplatePicker value={b.pdf_template || 'midnight_gold'} onChange={(v) => upd('pdf_template', v)} />
           </div>
 
           <LandlordSignatureSection value={b.landlord_signature_url} signedAt={b.landlord_signature_signed_at} onReload={load} />

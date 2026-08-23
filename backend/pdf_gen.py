@@ -27,6 +27,64 @@ PAGE_BG = colors.HexColor("#F8F8F8")           # Lichte grijze pagina-achtergron
 HAIRLINE = colors.HexColor("#E5E5E5")
 SUCCESS = colors.HexColor("#16a34a")           # "VOLDAAN" status groen
 
+# =====================================================================
+# Luxueuze PDF template palettes — kwitantie/factuur "premium" ontwerp
+# =====================================================================
+# 4 kleurthema's die de tenant kan kiezen in Instellingen → Facturatie →
+# PDF-sjabloon. Elk palet bevat:
+#   `dark`  — hoofdkleur voor header/footer ribbons + iconen chips
+#   `gold`  — accent voor bedrag-blok, onderstreping, iconen highlights
+#   `soft`  — 8% dark-tint voor rij-hairlines
+#   `label` — muted tekstkleur voor kv-labels
+_TEMPLATES = {
+    "midnight_gold": {   # Donkerblauw + goud (default — referentie ontwerp)
+        "dark":  colors.HexColor("#0B1F3A"),
+        "gold":  colors.HexColor("#C9A24A"),
+        "soft":  colors.HexColor("#EFEBE0"),
+        "label": colors.HexColor("#0B1F3A"),
+    },
+    "charcoal_gold": {   # Antraciet/zwart + goud
+        "dark":  colors.HexColor("#0F0F10"),
+        "gold":  colors.HexColor("#C9A24A"),
+        "soft":  colors.HexColor("#EDECEA"),
+        "label": colors.HexColor("#0F0F10"),
+    },
+    "forest_gold": {     # Diep groen + goud
+        "dark":  colors.HexColor("#0F3B2E"),
+        "gold":  colors.HexColor("#C9A24A"),
+        "soft":  colors.HexColor("#E7EEE9"),
+        "label": colors.HexColor("#0F3B2E"),
+    },
+    "sunset_gold": {     # Diep oranje/brique + goud
+        "dark":  colors.HexColor("#8A2B0F"),
+        "gold":  colors.HexColor("#F0B34A"),
+        "soft":  colors.HexColor("#F5E7DE"),
+        "label": colors.HexColor("#8A2B0F"),
+    },
+}
+_DEFAULT_TEMPLATE = "midnight_gold"
+
+
+def _palette(doc: dict) -> dict:
+    """Kies palet uit doc-dict (`company_pdf_template`). Ongeldige waarden
+    vallen terug op midnight_gold. Als de company een custom `company_primary_
+    color` heeft ingesteld, wordt dat de `dark` waarde (goud blijft, hairline
+    wordt herberekend) — zo respecteren we back-compat branding."""
+    key = ((doc or {}).get("company_pdf_template") or "").strip().lower()
+    palette = dict(_TEMPLATES.get(key, _TEMPLATES[_DEFAULT_TEMPLATE]))
+    # Legacy override: als er een primary_color is en géén template gekozen,
+    # gebruik de primary als dark maar behoud goud.
+    raw = (doc or {}).get("company_primary_color") or ""
+    if key not in _TEMPLATES and raw and isinstance(raw, str):
+        s = raw.strip().lower()
+        if s.startswith("#") and len(s) in (4, 7):
+            try:
+                palette["dark"] = colors.HexColor(s)
+                palette["label"] = palette["dark"]
+            except Exception:
+                pass
+    return palette
+
 MONTHS_NL = ["januari", "februari", "maart", "april", "mei", "juni",
              "juli", "augustus", "september", "oktober", "november", "december"]
 
@@ -509,6 +567,494 @@ def _build(doc_elements, *, with_bg: bool = True):
     return buf.getvalue()
 
 
+# =====================================================================
+# LUXURY / PREMIUM PDF template — donker ribbon, gouden accenten,
+# icoon-chips per detailrij, 2-toon bedrag-bar, dark footer met SHA hash.
+# Gebruikt voor kwitantie + factuur PDFs. Andere documenten (contract,
+# betalingsregeling, loonstrook) blijven de oude minimalistische helpers
+# gebruiken zodat we niet per ongeluk daar layouts breken.
+# =====================================================================
+
+def _lux_bg_canvas_factory(palette, doc_meta, hash_payload=None):
+    """Genereert een onFirstPage/onLaterPages callback met dit palet + doc-
+    metadata voor logo/brand/contact rendering direct op de canvas. Zo hoeven
+    we niet met platypus-topMargins te vechten en krijgen we een echte
+    "ribbon met content erin" look. `hash_payload` is een dict met
+    doc_number/company_name/company_address/hash_extras die op de FOOTER
+    ribbon getekend worden."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    brand_name = (doc_meta.get("company_name") or "SuriRent").upper()
+    tagline = (doc_meta.get("company_tagline") or "").strip().upper()
+    address = doc_meta.get("company_address") or ""
+    phone = doc_meta.get("company_phone") or ""
+    whatsapp = doc_meta.get("company_whatsapp") or phone
+    email = doc_meta.get("company_email") or ""
+    logo_bytes = doc_meta.get("company_logo_bytes")
+    hp = hash_payload or {}
+
+    def _canvas(canvas, doc):
+        canvas.saveState()
+        w, h = doc.pagesize
+        # Witte achtergrond
+        canvas.setFillColor(colors.white)
+        canvas.rect(0, 0, w, h, fill=1, stroke=0)
+        # === Header ribbon (dark full-width, ~46mm) ===
+        ribbon_h = 46 * mm
+        canvas.setFillColor(dark)
+        canvas.rect(0, h - ribbon_h, w, ribbon_h, fill=1, stroke=0)
+        # Gouden diagonaal-wig in de rechter-onderkant
+        canvas.setFillColor(gold)
+        p = canvas.beginPath()
+        p.moveTo(w * 0.55, h - ribbon_h)
+        p.lineTo(w * 0.94, h - ribbon_h)
+        p.lineTo(w, h - ribbon_h + 6 * mm)
+        p.lineTo(w * 0.60, h - ribbon_h + 6 * mm)
+        p.close()
+        canvas.drawPath(p, fill=1, stroke=0)
+        # Dunne gouden strook direct onder de header
+        canvas.rect(0, h - ribbon_h - 1.2 * mm, w, 1.2 * mm, fill=1, stroke=0)
+
+        # === Header content — links: logo + brand-name ===
+        left_x = 20 * mm
+        top_y = h - 16 * mm
+        # Logo (indien aanwezig) — max 14mm hoog
+        logo_w_used = 0
+        if logo_bytes:
+            try:
+                from reportlab.lib.utils import ImageReader
+                reader = ImageReader(io.BytesIO(logo_bytes))
+                iw, ih = reader.getSize()
+                max_h = 14 * mm
+                max_w = 16 * mm
+                scale = min(max_w / iw, max_h / ih)
+                lw, lh = iw * scale, ih * scale
+                canvas.drawImage(reader, left_x, top_y - lh + 2 * mm,
+                                 width=lw, height=lh, mask="auto")
+                logo_w_used = lw + 4 * mm
+            except Exception:
+                logo_w_used = 0
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 22)
+        canvas.drawString(left_x + logo_w_used, top_y - 4 * mm, brand_name)
+        if tagline:
+            canvas.setFillColor(gold)
+            canvas.setFont("Helvetica", 8)
+            canvas.drawString(left_x + logo_w_used, top_y - 9 * mm, tagline)
+        # Kleine gouden separator-lijn onder brand
+        canvas.setFillColor(gold)
+        canvas.rect(left_x + logo_w_used, top_y - 12 * mm, 22 * mm, 1.2, fill=1, stroke=0)
+
+        # === Header content — rechts: contact-stack ===
+        right_x = w - 20 * mm  # rechtermarge
+        line_y = h - 12 * mm
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica", 9)
+        for icon, val in [("Adres:", address), ("Tel:", phone),
+                          ("WhatsApp:", whatsapp if whatsapp and whatsapp != phone else ""),
+                          ("Email:", email)]:
+            if not val:
+                continue
+            canvas.setFillColor(colors.white)
+            text_w = canvas.stringWidth(val, "Helvetica", 9)
+            canvas.drawString(right_x - text_w, line_y, val)
+            canvas.setFillColor(gold)
+            canvas.setFont("Helvetica-Bold", 8)
+            icon_w = canvas.stringWidth(icon, "Helvetica-Bold", 8)
+            canvas.drawString(right_x - text_w - icon_w - 3, line_y, icon)
+            canvas.setFont("Helvetica", 9)
+            line_y -= 5.5 * mm
+
+        # === Footer ribbon (dark, ~34mm, gouden top-lijn) ===
+        foot_h = 34 * mm
+        canvas.setFillColor(gold)
+        canvas.rect(0, foot_h, w, 1.2 * mm, fill=1, stroke=0)
+        canvas.setFillColor(dark)
+        canvas.rect(0, 0, w, foot_h, fill=1, stroke=0)
+
+        # === Footer content: shield-icoon + verifikatie + hash ===
+        doc_number = hp.get("doc_number") or ""
+        company_name_hp = hp.get("company_name") or ""
+        company_address_hp = hp.get("company_address") or ""
+        # Bereken hash
+        try:
+            h256 = _doc_hash(doc_number, *hp.get("extras", []))
+        except Exception:
+            h256 = ""
+        short_hash = h256[:40]
+        # Shield-icon (gouden vierkant met witte checkmark)
+        shield_x = 22 * mm
+        shield_y = foot_h - 8 * mm
+        canvas.setFillColor(gold)
+        canvas.roundRect(shield_x, shield_y - 12 * mm, 12 * mm, 14 * mm,
+                         radius=2 * mm, fill=1, stroke=0)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.drawCentredString(shield_x + 6 * mm, shield_y - 8 * mm, "✓")
+        # Tekst rechts van shield
+        text_x = shield_x + 18 * mm
+        canvas.setFillColor(gold)
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawString(text_x, foot_h - 10 * mm, "GEVERIFIEERD ORIGINEEL")
+        canvas.setFillColor(gold)
+        canvas.drawString(text_x, foot_h - 14 * mm, "AUTHENTIEK DOCUMENT")
+        canvas.setFillColor(colors.HexColor("#B8B8B8"))
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(text_x, foot_h - 19 * mm, "Document-hash (SHA-256):")
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(text_x, foot_h - 22 * mm, short_hash)
+        # Onderste regel: bedrijf • adres • docnr
+        parts = [p for p in [company_name_hp, company_address_hp, doc_number] if p]
+        canvas.setFillColor(colors.HexColor("#B8B8B8"))
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(text_x, foot_h - 28 * mm, " • ".join(parts))
+        canvas.restoreState()
+    return _canvas
+
+
+def _lux_header_placeholder(el):
+    """(No-op — behouden voor backwards compat, header wordt in canvas
+    callback getekend.)"""
+    return
+
+
+def _lux_title(el, title: str, doc_number: str, palette: dict):
+    """Groot gecentreerd elegant title-blok met crown-ornament + gold underline."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    title_style = ParagraphStyle(
+        name="LuxTitle", fontName="Times-Bold", fontSize=32,
+        textColor=dark, leading=36, alignment=1, spaceBefore=2, spaceAfter=2,
+    )
+    ornament_style = ParagraphStyle(
+        name="LuxOrnament", fontName="Helvetica", fontSize=12,
+        textColor=gold, leading=14, alignment=1, spaceAfter=2,
+    )
+    num_style = ParagraphStyle(
+        name="LuxDocNum", fontName="Helvetica-Bold", fontSize=10,
+        textColor=gold, leading=13, alignment=1, spaceAfter=10,
+    )
+    # ♛ crown-ornament
+    el.append(Paragraph("♛", ornament_style))
+    el.append(Paragraph(title.upper(), title_style))
+    if doc_number:
+        el.append(Paragraph(f"— {doc_number} —", num_style))
+    else:
+        el.append(Spacer(1, 8))
+
+
+def _lux_icon_chip(icon_char: str, palette: dict):
+    """Klein donker afgerond vierkant met wit iconkarakter erin — gerenderd
+    als 1-cel table met dark background. Wordt links van elke kv-rij geplaatst."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    chip = Table([[Paragraph(f'<font color="white" size="8">{icon_char}</font>',
+                             ParagraphStyle(name="LuxChipIcon", alignment=1))]],
+                 colWidths=[7 * mm], rowHeights=[7 * mm])
+    chip.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BACKGROUND", (0, 0), (-1, -1), dark),
+        ("BOX", (0, 0), (-1, -1), 0.6, gold),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return chip
+
+
+# Mapping van kv-labels naar iconkarakters. Onbekende labels krijgen "•".
+_LUX_ICON_MAP = {
+    "datum": "📅", "huurder": "👤", "appartement": "🏠", "type betaling": "💳",
+    "betaling voor": "🗓", "betalingswijze": "💰", "notitie": "🔔",
+    "factuurnummer": "#", "periode": "🗓", "vervaldatum": "⏰",
+    "openstaand": "⚠", "openstaand na betaling": "⚠", "totaal openstaand": "⚠",
+    "totaal": "∑", "subtotaal": "∑", "btw": "%",
+}
+
+
+def _lux_kv_block(el, rows, palette):
+    """Detail-blok: elke rij heeft [chip-icon][label][waarde]. Rijen worden
+    gescheiden door een 8%-tinted hairline. Lege values worden geskipped."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    label_style = ParagraphStyle(
+        name="LuxKVLabel", fontName="Helvetica-Bold", fontSize=8.5,
+        textColor=dark, leading=11, spaceAfter=0,
+    )
+    value_style = ParagraphStyle(
+        name="LuxKVValue", fontName="Helvetica", fontSize=10,
+        textColor=dark, leading=13, spaceAfter=0,
+    )
+    data = []
+    for k, v in rows:
+        if v in (None, "", "—"):
+            continue
+        icon = _LUX_ICON_MAP.get(str(k).strip().lower(), "•")
+        chip = _lux_icon_chip(icon, palette)
+        data.append([
+            chip,
+            Paragraph(str(k).upper(), label_style),
+            Paragraph(str(v), value_style),
+        ])
+    if not data:
+        return
+    # Kolommen: chip 10mm, label 45mm, value rest
+    total_w = 170 * mm
+    t = Table(data, colWidths=[10 * mm, 45 * mm, total_w - 55 * mm])
+    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.35)
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (1, 0), (-1, -2), 0.3, line_color),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 8))
+
+
+def _lux_amount_bar(el, label: str, amount: float, currency: str, palette: dict):
+    """Bicolor bedrag-bar: donker links met label + kleine wallet-icoon,
+    goud rechts met bedrag groot."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    label_style = ParagraphStyle(
+        name="LuxAmtLabel", fontName="Helvetica-Bold", fontSize=11.5,
+        textColor=colors.white, leading=14, alignment=0,
+    )
+    amt_style = ParagraphStyle(
+        name="LuxAmtValue", fontName="Helvetica-Bold", fontSize=22,
+        textColor=dark, leading=26, alignment=1,
+    )
+    left_cell = [
+        Paragraph(label.upper(), label_style),
+    ]
+    right_cell = [Paragraph(_fmt_money(amount, currency), amt_style)]
+    t = Table([[left_cell, right_cell]], colWidths=[85 * mm, 85 * mm], rowHeights=[18 * mm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (0, 0), dark),
+        ("BACKGROUND", (1, 0), (1, 0), gold),
+        ("LEFTPADDING", (0, 0), (0, 0), 14),
+        ("LEFTPADDING", (1, 0), (1, 0), 10),
+        ("RIGHTPADDING", (0, 0), (0, 0), 10),
+        ("RIGHTPADDING", (1, 0), (1, 0), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 8))
+
+
+def _lux_status_block(el, rows, palette):
+    """Status-rijen ("Openstaand na betaling", "Totaal openstaand") — elke rij
+    met chevron-chip links, label midden, bedrag rechts (rood als open, groen
+    als voldaan)."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    label_style = ParagraphStyle(
+        name="LuxStatusLabel", fontName="Helvetica-Bold", fontSize=9.5,
+        textColor=dark, leading=12,
+    )
+    open_style = ParagraphStyle(
+        name="LuxStatusOpen", fontName="Helvetica-Bold", fontSize=11.5,
+        textColor=colors.HexColor("#B91C1C"), alignment=2, leading=14,
+    )
+    paid_style = ParagraphStyle(
+        name="LuxStatusPaid", fontName="Helvetica-Bold", fontSize=11.5,
+        textColor=SUCCESS, alignment=2, leading=14,
+    )
+    data = []
+    for label, value, is_paid in rows:
+        chip = _lux_icon_chip("›", palette)
+        val_style = paid_style if is_paid else open_style
+        data.append([
+            chip,
+            Paragraph(label.upper(), label_style),
+            Paragraph(str(value).upper(), val_style),
+        ])
+    if not data:
+        return
+    total_w = 170 * mm
+    t = Table(data, colWidths=[10 * mm, 90 * mm, total_w - 100 * mm])
+    line_color = colors.Color(gold.red, gold.green, gold.blue, alpha=0.35)
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (1, 0), (-1, -2), 0.3, line_color),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 6))
+
+
+def _lux_note(el, note_text: str, palette: dict):
+    """Notitie-blok — soft gold-tinted box met bell-icon en tekst."""
+    if not note_text:
+        return
+    gold = palette["gold"]
+    soft = palette["soft"]
+    style = ParagraphStyle(
+        name="LuxNote", fontName="Helvetica", fontSize=9.5,
+        textColor=palette["dark"], leading=13,
+    )
+    label = Paragraph('<font color="#0000">🔔</font> <b>Notitie:</b> ' + note_text, style)
+    t = Table([[label]], colWidths=[170 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), soft),
+        ("BOX", (0, 0), (-1, -1), 0.5, gold),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 8))
+
+
+def _lux_signature_block(el, received_by: str, company_name: str,
+                         signature_data: str, palette: dict):
+    """Onderaan (net boven footer): twee handtekening-kolommen. Links huurder,
+    rechts bedrijf. Ondertekend met gouden krul-ornament in het midden."""
+    dark = palette["dark"]
+    gold = palette["gold"]
+    label_style = ParagraphStyle(
+        name="LuxSigLabel", fontName="Helvetica-Bold", fontSize=8.5,
+        textColor=dark, leading=11, spaceAfter=2,
+    )
+    name_style = ParagraphStyle(
+        name="LuxSigName", fontName="Helvetica", fontSize=9.5,
+        textColor=dark, leading=12, spaceAfter=8,
+    )
+    small_style = ParagraphStyle(
+        name="LuxSigSmall", fontName="Helvetica", fontSize=7.5,
+        textColor=MUTED, leading=9,
+    )
+
+    # Links: ontvangen door + signatuur-lijn
+    left = [
+        Paragraph("ONTVANGEN DOOR", label_style),
+        Paragraph(received_by or "—", name_style),
+        Table([[""]], colWidths=[60 * mm], rowHeights=[0.6],
+              style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), dark)])),
+        Spacer(1, 2),
+        Paragraph("Handtekening huurder", small_style),
+    ]
+
+    # Midden: gouden "G"-ornament (bedrijfslogo look) — enkel wanneer geen
+    # echte signature is meegegeven, anders vervangt de sig image dit.
+    mid = []
+    if not signature_data:
+        crown = ParagraphStyle(
+            name="LuxCrown", fontName="Helvetica-Bold", fontSize=20,
+            textColor=gold, leading=24, alignment=1,
+        )
+        letter_style = ParagraphStyle(
+            name="LuxMidLetter", fontName="Helvetica-Bold", fontSize=22,
+            textColor=gold, leading=26, alignment=1, spaceAfter=0,
+        )
+        mid = [
+            Paragraph("♛", crown),
+            Paragraph((company_name[:1] or "S").upper(), letter_style),
+        ]
+
+    # Rechts: goedgekeurd door + bedrijfsnaam + sig image (indien aanwezig)
+    approved_label = f"GOEDGEKEURD DOOR {company_name.upper()}" if company_name else "GOEDGEKEURD DOOR"
+    right = [Paragraph(approved_label, label_style),
+             Paragraph(company_name or "—", name_style)]
+    sig_img = None
+    if signature_data and isinstance(signature_data, str):
+        try:
+            raw = signature_data.split(",", 1)[1] if "," in signature_data else signature_data
+            img_bytes = base64.b64decode(raw)
+            sig_img = Image(io.BytesIO(img_bytes), width=55 * mm, height=18 * mm)
+        except Exception:
+            sig_img = None
+    if sig_img:
+        right.append(sig_img)
+    right.extend([
+        Table([[""]], colWidths=[60 * mm], rowHeights=[0.6],
+              style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), dark)])),
+        Spacer(1, 2),
+        Paragraph("Handtekening / Stempel", small_style),
+    ])
+
+    data = [[left, mid, right]]
+    t = Table(data, colWidths=[65 * mm, 40 * mm, 65 * mm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    el.append(Spacer(1, 4))
+    el.append(t)
+
+
+def _lux_footer_marker(el, doc_number: str, company_name: str,
+                      company_address: str, palette: dict, *hash_payload):
+    """Content bovenop het donker footer-ribbon: shield-icoon + 2 regels tekst
+    (GEVERIFIEERD ORIGINEEL / AUTHENTIEK DOCUMENT) + hash + company line."""
+    gold = palette["gold"]
+    title_style = ParagraphStyle(
+        name="LuxFootTitle", fontName="Helvetica-Bold", fontSize=10,
+        textColor=gold, leading=13, spaceAfter=1,
+    )
+    body_style = ParagraphStyle(
+        name="LuxFootBody", fontName="Helvetica", fontSize=8,
+        textColor=colors.white, leading=11,
+    )
+    shield_style = ParagraphStyle(
+        name="LuxFootShield", fontName="Helvetica", fontSize=22,
+        textColor=gold, leading=26, alignment=1,
+    )
+    # Push naar bottom door zichzelf te wrappen in een tabel met vaste hoogte
+    h = _doc_hash(doc_number, *hash_payload)
+    short_hash = f"{h[:32]}"
+    left_cell = [Paragraph("🛡", shield_style)]
+    right_cell = [
+        Paragraph("GEVERIFIEERD ORIGINEEL", title_style),
+        Paragraph("AUTHENTIEK DOCUMENT", title_style),
+        Spacer(1, 2),
+        Paragraph(f'<font color="#B8B8B8">Document-hash (SHA-256):</font><br/>{short_hash}', body_style),
+    ]
+    company_line_parts = [p for p in [company_name, company_address, doc_number] if p]
+    right_cell.append(Spacer(1, 2))
+    right_cell.append(Paragraph(" • ".join(company_line_parts), body_style))
+
+    t = Table([[left_cell, right_cell]], colWidths=[18 * mm, 152 * mm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    el.append(Spacer(1, 14))
+    el.append(t)
+
+
+def _build_lux(doc_elements, palette, doc_meta, hash_payload=None):
+    """Bouwt luxury A4 PDF met wit-canvas + dark ribbons + brand-header +
+    footer marker (allemaal via canvas callback, NIET als flowables). Zo
+    passen zowel details als signature op 1 pagina zonder overflow.
+    topMargin=52mm (ribbon 46mm + 6mm ademruimte). bottomMargin=44mm
+    (footer 34mm + 10mm ademruimte)."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+        leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=52 * mm, bottomMargin=44 * mm)
+    cb = _lux_bg_canvas_factory(palette, doc_meta, hash_payload)
+    doc.build(doc_elements, onFirstPage=cb, onLaterPages=cb)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+
 def _build_a6(doc_elements):
     """A6 (105 x 148mm) print — ideaal voor stickers naast de voordeur."""
     buf = io.BytesIO()
@@ -610,13 +1156,15 @@ def payment_plan_pdf(plan: dict) -> bytes:
 
 
 def receipt_pdf(payment: dict) -> bytes:
-    """Genereert de gestilte SuriRent kwitantie met grijze achtergrond,
-    centrale titel, two-col details, groot bedrag, status + signature blok,
-    en geverifieerde footer met SHA-256 hash."""
+    """Genereert de luxury kwitantie: dark-ribbon header met brand+contact,
+    grote gecentreerde serif-titel met crown-ornament + gouden nummer,
+    icoon-chip detailrijen, 2-toon bedrag-bar (dark+gold), status-rijen,
+    optionele notitie-box, twee-koloms signature blok, en dark-footer met
+    shield-icoon + SHA-256 hash."""
     el = []
-    accent = _accent_color(payment)
-    _brand_header(el, payment)
-    _brand_title(el, "Kwitantie", payment.get("receipt_number", ""))
+    palette = _palette(payment)
+
+    _lux_title(el, "Kwitantie", payment.get("receipt_number", ""), palette)
 
     period = ""
     if payment.get("period_month") and payment.get("period_year"):
@@ -631,53 +1179,52 @@ def receipt_pdf(payment: dict) -> bytes:
     if period:
         rows.append(("Betaling voor", period))
     rows.append(("Betalingswijze", (payment.get("method") or "").capitalize() or "Contant"))
-    _two_col_block(el, rows, label_col_mm=48, gap_after=14, accent=accent)
+    _lux_kv_block(el, rows, palette)
 
-    # Ontvangen bedrag — groot blok
     amount = float(payment.get("amount") or 0)
     currency = payment.get("currency") or "SRD"
-    _amount_block(el, "Ontvangen bedrag", amount, currency, accent=accent)
-    el.append(Spacer(1, 6))
+    _lux_amount_bar(el, "Ontvangen bedrag", amount, currency, palette)
 
-    # Status — VOLDAAN of openstaand bedrag
+    # Status — VOLDAAN of openstaand bedrag (2 rijen)
     outstanding_after = float(payment.get("outstanding_after") or 0)
     if outstanding_after <= 0.01:
-        _status_row(el, "Openstaand na betaling", "VOLDAAN", is_paid=True, accent=accent)
-        _status_row(el, "Totaal openstaand", "VOLDAAN", is_paid=True, accent=accent)
+        status_rows = [
+            ("Openstaand na betaling", "VOLDAAN", True),
+            ("Totaal openstaand", "VOLDAAN", True),
+        ]
     else:
-        _status_row(el, "Openstaand na betaling", _fmt_money(outstanding_after, currency),
-                    is_paid=False, accent=accent)
-        _status_row(el, "Totaal openstaand", _fmt_money(outstanding_after, currency),
-                    is_paid=False, accent=accent)
+        status_rows = [
+            ("Openstaand na betaling", _fmt_money(outstanding_after, currency), False),
+            ("Totaal openstaand", _fmt_money(outstanding_after, currency), False),
+        ]
+    _lux_status_block(el, status_rows, palette)
 
-    # Notitie (optioneel — niet in alle kwitanties)
     if payment.get("note"):
-        s = _styles()
-        el.append(Spacer(1, 10))
-        el.append(Paragraph(f"<b>Notitie:</b> {payment['note']}", s["Body"]))
+        _lux_note(el, payment["note"], palette)
 
-    # Signature blok
-    received = payment.get("received_by") or ""
-    if received and payment.get("kiosk_employee_name"):
-        received = f"{payment['kiosk_employee_name']}  ·  KIOSK MEDEWERKER"
-    approved = payment.get("approved_by") or payment.get("company_name") or ""
-    _signature_block(
+    # Signature blok — huurder links, bedrijf rechts
+    received = payment.get("received_by") or payment.get("tenant_name") or ""
+    if payment.get("kiosk_employee_name"):
+        received = payment["kiosk_employee_name"]
+    _lux_signature_block(
         el,
-        received_by=received or payment.get("tenant_name") or "",
-        approved_by=approved,
+        received_by=received,
         company_name=payment.get("company_name") or "",
         signature_data=payment.get("signature_data") or "",
+        palette=palette,
     )
 
-    # Geverifieerde footer
-    _verification_footer(
-        el,
-        payment.get("receipt_number", ""),
-        payment.get("company_name") or "",
-        payment.get("company_address") or "",
-        amount, currency, payment.get("tenant_id", ""),
-    )
-    return _build(el)
+    # Footer marker wordt via canvas callback op de dark ribbon getekend,
+    # dus we voegen hem NIET meer toe aan de flowable-stream. Dat voorkomt
+    # dat de kwitantie naar pagina 2 overflowt en dat wit-op-wit text
+    # onzichtbaar is boven de ribbon.
+    hash_payload = {
+        "doc_number": payment.get("receipt_number", ""),
+        "company_name": payment.get("company_name") or "",
+        "company_address": payment.get("company_address") or "",
+        "extras": [amount, currency, payment.get("tenant_id", "")],
+    }
+    return _build_lux(el, palette, payment, hash_payload)
 
 
 # ============== Contract PDF ==============
@@ -1098,70 +1645,93 @@ def contract_pdf(contract: dict, tenant: dict, apartment: dict,
 
 # ============== Invoice PDF ==============
 def invoice_pdf(invoice: dict, tenant: dict, apartment: dict, payments: list) -> bytes:
-    s = _styles()
+    """Luxury factuur — zelfde design-taal als kwitantie: dark-ribbon header,
+    gouden accenten, icoon-chip detailrijen, 2-toon bedrag-bar, en dark footer
+    met hash."""
     el = []
-    accent = _accent_color(invoice)
-    _brand_header(el, invoice)
-    _brand_title(el, "Factuur", invoice.get("invoice_number", ""))
+    palette = _palette(invoice)
+    dark = palette["dark"]
+
+    _lux_title(el, "Factuur", invoice.get("invoice_number", ""), palette)
 
     cur = apartment.get("currency", invoice.get("currency", "SRD"))
     period = ""
     if invoice.get("period_month") and invoice.get("period_year"):
         period = f"{MONTHS_NL[invoice['period_month'] - 1]} {invoice['period_year']}"
 
-    _two_col_block(el, [
+    _lux_kv_block(el, [
         ("Factuurdatum", _fmt_date_nl(invoice.get("created_at"))),
         ("Huurder", tenant.get("name", "")),
         ("Appartement", apartment.get("number", "")),
         ("Periode", period),
-    ], gap_after=14, accent=accent)
+    ], palette)
 
-    # Specificatie — eenvoudige twee-koloms zonder oranje header
-    el.append(Paragraph("SPECIFICATIE", s["SectionHead"]))
-    el.append(Spacer(1, 4))
-    spec_data = [[
-        Paragraph(f"Maandhuur appartement {apartment.get('number', '')}", s["Body"]),
-        Paragraph(_fmt_money(invoice.get("amount", 0), cur), s["AmountValue"]),
-    ]]
+    # Specificatie — luxe table met dark header
+    section_style = ParagraphStyle(
+        name="LuxSpecHead", fontName="Helvetica-Bold", fontSize=9,
+        textColor=colors.white, leading=12, alignment=0,
+    )
+    row_label_style = ParagraphStyle(
+        name="LuxSpecRow", fontName="Helvetica", fontSize=10,
+        textColor=dark, leading=13,
+    )
+    row_amount_style = ParagraphStyle(
+        name="LuxSpecAmt", fontName="Helvetica-Bold", fontSize=11,
+        textColor=dark, leading=14, alignment=2,
+    )
+    spec_data = [
+        [Paragraph("OMSCHRIJVING", section_style), Paragraph("BEDRAG", section_style)],
+        [
+            Paragraph(f"Maandhuur appartement {apartment.get('number', '')}", row_label_style),
+            Paragraph(_fmt_money(invoice.get("amount", 0), cur), row_amount_style),
+        ],
+    ]
+    line_color = colors.Color(palette["gold"].red, palette["gold"].green,
+                              palette["gold"].blue, alpha=0.35)
     t = Table(spec_data, colWidths=[120 * mm, 50 * mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.4, _hairline_color(accent)),
+        ("BACKGROUND", (0, 0), (-1, 0), dark),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, 0), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("TOPPADDING", (0, 1), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 10),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.4, line_color),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
     ]))
     el.append(t)
-    el.append(Spacer(1, 14))
+    el.append(Spacer(1, 12))
 
     # Totalen
     total = float(invoice.get("amount", 0) or 0)
     paid = sum(float(p.get("amount", 0) or 0) for p in (payments or []))
     due = max(total - paid, 0)
-    _amount_block(el, "Totaal", total, cur, accent=accent)
-    el.append(Spacer(1, 4))
+    _lux_amount_bar(el, "Totaal", total, cur, palette)
+
+    status_rows = []
     if paid > 0:
-        _status_row(el, "Reeds betaald", _fmt_money(paid, cur), is_paid=True, accent=accent)
+        status_rows.append(("Reeds betaald", _fmt_money(paid, cur), True))
     if due > 0.01:
-        _status_row(el, "Nog te betalen", _fmt_money(due, cur), is_paid=False, accent=accent)
+        status_rows.append(("Nog te betalen", _fmt_money(due, cur), False))
     else:
-        _status_row(el, "Status", "VOLDAAN", is_paid=True, accent=accent)
+        status_rows.append(("Status", "VOLDAAN", True))
+    _lux_status_block(el, status_rows, palette)
 
-    el.append(Spacer(1, 16))
-    el.append(Paragraph(
-        "Gelieve dit bedrag binnen 14 dagen te voldoen via de kiosk of bankoverschrijving.",
-        s["Small"]
-    ))
+    if due > 0.01:
+        _lux_note(el,
+                  "Gelieve dit bedrag binnen 14 dagen te voldoen via de kiosk of bankoverschrijving.",
+                  palette)
 
-    _verification_footer(
-        el,
-        invoice.get("invoice_number", ""),
-        invoice.get("company_name") or "",
-        invoice.get("company_address") or "",
-        total, cur, tenant.get("id", ""),
-    )
-    return _build(el)
+    # Footer marker via canvas callback (zie _lux_bg_canvas_factory).
+    hash_payload = {
+        "doc_number": invoice.get("invoice_number", ""),
+        "company_name": invoice.get("company_name") or "",
+        "company_address": invoice.get("company_address") or "",
+        "extras": [total, cur, tenant.get("id", "")],
+    }
+    return _build_lux(el, palette, invoice, hash_payload)
 
 
 # ============== SaaS subscription invoice PDF ==============

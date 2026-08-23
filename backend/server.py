@@ -3627,8 +3627,13 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
         "primary_color": _hex_color(b.get("primary_color")),
         "logo_url": b.get("logo_url") or "",
         "tagline": b.get("tagline") or "",
+        # PDF-sjabloon voor kwitantie/factuur: midnight_gold (default),
+        # charcoal_gold, forest_gold, sunset_gold. Tenant kiest in
+        # Instellingen → Facturatie → PDF-sjabloon.
+        "pdf_template": b.get("pdf_template") or "midnight_gold",
         "contact_email": c.get("contact_email") or "",
         "contact_phone": c.get("contact_phone") or "",
+        "whatsapp_number": c.get("whatsapp_number") or c.get("contact_phone") or "",
         "address": c.get("address") or "",
         "kkf_number": c.get("kkf_number") or "",
         "bank_account_sr": c.get("bank_account_sr") or "",
@@ -3765,6 +3770,8 @@ class BrandingIn(BaseModel):
     primary_color: Optional[str] = None
     logo_url: Optional[str] = None
     tagline: Optional[str] = None
+    # Kwitantie/factuur luxury sjabloon-keuze
+    pdf_template: Optional[str] = None
 
 
 @api.put("/companies/me/branding")
@@ -3780,6 +3787,10 @@ async def put_my_branding(body: BrandingIn, user=Depends(require_role("admin")))
         "branding.updated_at": iso(now_utc()),
         "branding.updated_by": user.get("email"),
     }
+    # Alleen geldige sjabloon-keys accepteren zodat de PDF-generator niet crasht.
+    allowed_templates = {"midnight_gold", "charcoal_gold", "forest_gold", "sunset_gold"}
+    if body.pdf_template and body.pdf_template.strip().lower() in allowed_templates:
+        update["branding.pdf_template"] = body.pdf_template.strip().lower()
     await db.companies.update_one({"id": cid}, {"$set": update})
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
     return _company_branding_response(c, include_private=True)
@@ -7374,8 +7385,16 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         "company_address": co.get("address") or "",
         "company_phone": co.get("contact_phone") or "",
         "company_email": co.get("contact_email") or "",
+        "company_whatsapp": co.get("whatsapp_number") or co.get("contact_phone") or "",
+        "company_tagline": co.get("tagline") or "",
         "company_logo_bytes": logo_bytes,
         "company_primary_color": (co.get("branding") or {}).get("primary_color") or "#FF5C00",
+        # PDF-template keuze (luxury design) — tenant kiest in Instellingen →
+        # Facturatie. Valt terug op midnight_gold (donkerblauw + goud) wanneer
+        # niet gezet. Toegestane keys: midnight_gold, charcoal_gold,
+        # forest_gold, sunset_gold.
+        "company_pdf_template": (co.get("branding") or {}).get("pdf_template")
+            or co.get("pdf_template") or "midnight_gold",
         "signature_data": settings.get("signature_data") or "",
         # Verhuurder-persoonsgegevens t.b.v. huurcontracten. Fallback op
         # de bedrijfsnaam wanneer geen aparte verhuurder-naam is ingesteld.
