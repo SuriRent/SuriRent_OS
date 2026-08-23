@@ -643,187 +643,162 @@ def _lux_bg_canvas_factory(palette, doc_meta, hash_payload=None):
         canvas.setFillColor(colors.white)
         canvas.rect(0, 0, w, h, fill=1, stroke=0)
 
-        # === HEADER — rounded dark shape links (~55% breed, ~50mm hoog) ===
-        hdr_h = 52 * mm
-        hdr_w = w * 0.56
-        # Rounded rect met alleen bottom-right rounded corner effect (via
-        # canvas.roundRect met radius). Hij loopt tot aan de linker/boven-kant.
+        # === HEADER — POLYGON dark shape (linksboven met angulaire cut) ===
+        # Match template: dark shape gaat van top-left tot ~55% breed op top,
+        # dan diagonaal naar beneden-rechts tot ~35% breed op onderkant.
+        hdr_top_w = w * 0.55        # breedte top
+        hdr_bot_w = w * 0.36        # breedte bottom van header shape
+        hdr_h = 48 * mm
         canvas.setFillColor(dark)
-        # Grote rounded rect die van links-boven doorloopt; extra path zorgt
-        # voor de diagonale afsnijding rechts-onder.
         p = canvas.beginPath()
-        r = 12 * mm  # radius bottom-right
-        p.moveTo(0, h)                            # top-left
-        p.lineTo(hdr_w, h)                        # top-right
-        p.lineTo(hdr_w, h - hdr_h + r)            # rechter-zijkant tot bocht
-        # Rounded bottom-right corner via 2 curves
-        p.curveTo(hdr_w, h - hdr_h + r * 0.4,
-                  hdr_w - r * 0.4, h - hdr_h,
-                  hdr_w - r, h - hdr_h)
-        p.lineTo(0, h - hdr_h)                    # bottom-left
+        p.moveTo(0, h)
+        p.lineTo(hdr_top_w, h)
+        p.lineTo(hdr_bot_w, h - hdr_h)
+        p.lineTo(0, h - hdr_h)
         p.close()
         canvas.drawPath(p, fill=1, stroke=0)
 
-        # Gouden diagonale streep die loopt van onderkant dark shape naar
-        # rechtsboven — geeft dat "curve met goud" effect.
+        # Twee parallelle gouden diagonale strepen onder de dark shape,
+        # volgen dezelfde helling.
         canvas.setFillColor(gold)
-        stripe = canvas.beginPath()
-        stripe.moveTo(0, h - hdr_h - 2 * mm)
-        stripe.lineTo(hdr_w - r, h - hdr_h - 2 * mm)
-        stripe.curveTo(hdr_w - r * 0.4, h - hdr_h - 2 * mm,
-                       hdr_w, h - hdr_h + r * 0.4 - 2 * mm,
-                       hdr_w, h - hdr_h + r - 2 * mm)
-        stripe.lineTo(hdr_w, h - hdr_h + r - 2 * mm + 1.5 * mm)
-        stripe.curveTo(hdr_w, h - hdr_h + r * 0.4 - 2 * mm + 1.5 * mm,
-                       hdr_w - r * 0.4, h - hdr_h - 2 * mm + 1.5 * mm,
-                       hdr_w - r, h - hdr_h - 2 * mm + 1.5 * mm)
-        stripe.lineTo(0, h - hdr_h - 2 * mm + 1.5 * mm)
-        stripe.close()
-        canvas.drawPath(stripe, fill=1, stroke=0)
+        for offset, thickness in [(2 * mm, 1.6 * mm), (5 * mm, 0.6 * mm)]:
+            slope_delta = (hdr_top_w - hdr_bot_w) / hdr_h * offset  # x-shift langs helling
+            sp = canvas.beginPath()
+            sp.moveTo(0, h - hdr_h - offset)
+            sp.lineTo(hdr_bot_w - slope_delta, h - hdr_h - offset)
+            sp.lineTo(hdr_bot_w - slope_delta - (thickness * (hdr_top_w - hdr_bot_w) / hdr_h),
+                      h - hdr_h - offset - thickness)
+            sp.lineTo(0, h - hdr_h - offset - thickness)
+            sp.close()
+            canvas.drawPath(sp, fill=1, stroke=0)
 
-        # Gouden driehoekige accent rechts van de dark shape
+        # Kleine gouden accent-driehoek rechts van de dark shape (referentie)
         canvas.setFillColor(gold)
         tri = canvas.beginPath()
-        tri.moveTo(hdr_w + 2 * mm, h - 20 * mm)
-        tri.lineTo(hdr_w + 24 * mm, h - 20 * mm)
-        tri.lineTo(hdr_w + 12 * mm, h - 32 * mm)
+        tri.moveTo(hdr_top_w + 4 * mm, h - 4 * mm)
+        tri.lineTo(hdr_top_w + 26 * mm, h - 4 * mm)
+        tri.lineTo(hdr_top_w + 4 * mm, h - 26 * mm)
         tri.close()
         canvas.drawPath(tri, fill=1, stroke=0)
 
-        # === Header content — links: logo + GOPI-style stacked brand ===
-        left_x = 18 * mm
-        # Logo (kleine huisje-icon) - wanneer geen upload aanwezig, teken
-        # generic huisje via canvas.
-        top_y = h - 15 * mm
+        # === Header logo — prominent gouden dak (roof + windows) ===
+        left_x = 22 * mm
+        top_y = h - 12 * mm
         logo_h_used = 0
         if logo_bytes:
             try:
                 from reportlab.lib.utils import ImageReader
                 reader = ImageReader(io.BytesIO(logo_bytes))
                 iw, ih = reader.getSize()
-                max_h = 14 * mm
-                max_w = 20 * mm
+                max_h = 20 * mm
+                max_w = 30 * mm
                 scale = min(max_w / iw, max_h / ih)
                 lw, lh = iw * scale, ih * scale
                 canvas.drawImage(reader, left_x, top_y - lh,
                                  width=lw, height=lh, mask="auto")
-                logo_h_used = lh + 2 * mm
+                logo_h_used = lh + 3 * mm
             except Exception:
                 logo_h_used = 0
         else:
-            # Teken een klein gouden huisje-symbool (dak driehoek + kleine
-            # deur+raam onder) — 12mm breed x 10mm hoog.
-            hx, hy = left_x + 3, top_y - 12 * mm
+            # Groot gouden dak-icoon: brede driehoek + 2 kleine dak-vensters
             canvas.setFillColor(gold)
-            roof = canvas.beginPath()
-            roof.moveTo(hx + 6 * mm, hy + 10 * mm)     # top
-            roof.lineTo(hx, hy + 5 * mm)               # left
-            roof.lineTo(hx + 1.5 * mm, hy + 5 * mm)
-            roof.lineTo(hx + 1.5 * mm, hy + 2 * mm)
-            roof.lineTo(hx + 10.5 * mm, hy + 2 * mm)
-            roof.lineTo(hx + 10.5 * mm, hy + 5 * mm)
-            roof.lineTo(hx + 12 * mm, hy + 5 * mm)
-            roof.close()
-            canvas.drawPath(roof, fill=1, stroke=0)
-            # Raam
+            roof_x = left_x
+            roof_base = top_y - 18 * mm
+            # Driehoek dak
+            r = canvas.beginPath()
+            r.moveTo(roof_x + 18 * mm, roof_base + 16 * mm)  # top point
+            r.lineTo(roof_x, roof_base + 4 * mm)              # left base
+            r.lineTo(roof_x + 5 * mm, roof_base + 4 * mm)     # inner left
+            r.lineTo(roof_x + 18 * mm, roof_base + 12 * mm)   # dip
+            r.lineTo(roof_x + 31 * mm, roof_base + 4 * mm)    # inner right
+            r.lineTo(roof_x + 36 * mm, roof_base + 4 * mm)    # right base
+            r.close()
+            canvas.drawPath(r, fill=1, stroke=0)
+            # 2 kleine dak-vensters/schoorstenen
             canvas.setFillColor(dark)
-            canvas.rect(hx + 5 * mm, hy + 5 * mm, 2 * mm, 3 * mm, fill=1, stroke=0)
-            logo_h_used = 13 * mm
+            canvas.rect(roof_x + 14 * mm, roof_base + 6 * mm, 3 * mm, 3 * mm, fill=1, stroke=0)
+            canvas.rect(roof_x + 19 * mm, roof_base + 6 * mm, 3 * mm, 3 * mm, fill=1, stroke=0)
+            logo_h_used = 22 * mm
 
-        # Brand naam — SERIF (Playfair-look) BIG, wit — fontSize dynamisch
-        # zodat lange namen niet overlopen buiten de dark shape.
+        # Brand naam — SERIF wit, kleiner om binnen het polygonshape te passen
         canvas.setFillColor(colors.white)
-        # Bereken max fontSize die past binnen (hdr_w - left_x - 10mm)
-        max_brand_w = hdr_w - left_x - 12 * mm
-        fs = 28
-        while fs > 14 and canvas.stringWidth(brand_name, _LUX_SERIF, fs) > max_brand_w:
+        max_brand_w = hdr_bot_w - left_x - 8 * mm
+        fs = 22
+        while fs > 12 and canvas.stringWidth(brand_name, _LUX_SERIF, fs) > max_brand_w:
             fs -= 1
         canvas.setFont(_LUX_SERIF, fs)
-        brand_y = top_y - logo_h_used - 2 * mm
-        canvas.drawString(left_x, brand_y, brand_name)
-        # Kleine gouden separator onder brand naam
-        canvas.setFillColor(gold)
-        sep_w = min(26 * mm, canvas.stringWidth(brand_name, _LUX_SERIF, fs) * 0.4)
-        canvas.rect(left_x, brand_y - 3 * mm, sep_w, 1.5, fill=1, stroke=0)
-        if tagline:
-            canvas.setFont(_LUX_SANS, 8)
-            canvas.drawString(left_x, brand_y - 8 * mm, tagline)
+        brand_y = top_y - logo_h_used
+        # Alleen brand naam tonen als er GENOEG ruimte is (polygon is smal)
+        if fs >= 14:
+            canvas.drawString(left_x, brand_y, brand_name)
+            canvas.setFillColor(gold)
+            sep_w = min(20 * mm, canvas.stringWidth(brand_name, _LUX_SERIF, fs) * 0.35)
+            canvas.rect(left_x, brand_y - 2.5 * mm, sep_w, 1.2, fill=1, stroke=0)
+            if tagline:
+                canvas.setFont(_LUX_SANS, 7)
+                canvas.drawString(left_x, brand_y - 7 * mm, tagline)
 
-        # === Header content — rechts: contact-stack met echte Unicode symbolen ===
-        # DejaVuSans ondersteunt ✆ (phone), ⌂ (house/pin fallback), ✉ (email).
-        # WhatsApp gebruikt ⚇ als benadering. Zwart-tekst op de witte
-        # rechterkant, gouden ronde dot met wit symbool.
-        right_x = w - 18 * mm
-        line_y = h - 15 * mm
-        contact_items = [
+        # === Contact stack RECHTS — 4 verticaal gestapelde gouden cirkels
+        # met icoon + verticale gouden hairline aan de rechterkant, met
+        # tekst-placeholders links van de cirkels. Match referentie template. ===
+        contact_x = w - 32 * mm         # x-positie van gouden cirkels
+        contact_top = h - 15 * mm       # y-positie eerste cirkel
+        gap = 10 * mm                   # verticale afstand tussen cirkels
+        icons_and_vals = [
             ("⌂", address),
             ("✆", phone),
-            ("⚇", whatsapp if whatsapp and whatsapp != phone else ""),
+            ("W", whatsapp if whatsapp and whatsapp != phone else ""),
             ("✉", email),
         ]
-        for icon_char, val in contact_items:
-            if not val:
-                continue
-            lines = [ln.strip() for ln in str(val).split("\n") if ln.strip()]
-            if not lines:
-                continue
-            line_h = 4.5 * mm
-            block_h = line_h * len(lines)
-            dot_x = right_x - 78 * mm
+        # Verticale gouden hairline rechts van de cirkels (visuele separator)
+        canvas.setFillColor(gold)
+        canvas.rect(contact_x + 5 * mm, contact_top - 4 * mm - 3 * gap - 3 * mm,
+                    0.4, 4 * gap - 2 * mm, fill=1, stroke=0)
+        # Cirkels + tekst
+        for idx, (icon_char, val) in enumerate(icons_and_vals):
+            cy = contact_top - idx * gap
             canvas.setFillColor(gold)
-            canvas.circle(dot_x + 3 * mm, line_y - 2 * mm, 3 * mm, fill=1, stroke=0)
+            canvas.circle(contact_x, cy, 3 * mm, fill=1, stroke=0)
             canvas.setFillColor(colors.white)
             canvas.setFont(_LUX_SANS_BOLD, 9)
-            canvas.drawCentredString(dot_x + 3 * mm, line_y - 3.5 * mm, icon_char)
-            canvas.setFillColor(dark)
-            canvas.setFont(_LUX_SANS, 10)
-            for i, ln in enumerate(lines):
-                canvas.drawString(dot_x + 9 * mm, line_y - 3 * mm - i * line_h, ln)
-            line_y -= (block_h + 2 * mm)
+            canvas.drawCentredString(contact_x, cy - 1.5 * mm, icon_char)
+            # Tekst links van cirkel — donker
+            if val:
+                canvas.setFillColor(dark)
+                canvas.setFont(_LUX_SANS, 8.5)
+                # Splits over meerdere regels indien "\n"
+                lines = [ln.strip() for ln in str(val).split("\n") if ln.strip()]
+                for li, ln in enumerate(lines[:2]):  # max 2 regels om overflow te voorkomen
+                    text_w = canvas.stringWidth(ln, _LUX_SANS, 8.5)
+                    canvas.drawString(contact_x - 8 * mm - text_w,
+                                      cy - 1 * mm + li * (-3.5 * mm), ln)
 
-        # === FOOTER — rounded dark shape onderaan ===
-        foot_h = 30 * mm
-        foot_w = w
+        # === FOOTER — dark navy shape onderaan met rounded LEFT corner
+        # (grote rounded corner links, klein rechts) + gouden accent-lijnen ===
+        foot_h = 28 * mm
         canvas.setFillColor(dark)
-        # Rounded top corners
-        fr = 14 * mm
         fp = canvas.beginPath()
         fp.moveTo(0, 0)
-        fp.lineTo(foot_w, 0)
-        fp.lineTo(foot_w, foot_h - fr)
-        fp.curveTo(foot_w, foot_h - fr * 0.4,
-                   foot_w - fr * 0.4, foot_h,
-                   foot_w - fr, foot_h)
-        fp.lineTo(fr, foot_h)
-        fp.curveTo(fr * 0.4, foot_h,
-                   0, foot_h - fr * 0.4,
-                   0, foot_h - fr)
+        fp.lineTo(w, 0)
+        fp.lineTo(w, foot_h - 4 * mm)
+        fp.lineTo(w - 4 * mm, foot_h)                        # kleine hoek rechts
+        # Diagonale bovenkant loopt van rechts-boven omlaag naar links-onder
+        fp.lineTo(w * 0.32, foot_h)
+        fp.lineTo(0, foot_h - 14 * mm)                       # angulaire linkerkant
         fp.close()
         canvas.drawPath(fp, fill=1, stroke=0)
-        # Gouden top-lijn boven de dark footer
+        # 2 parallelle gouden strepen die de diagonale bovenkant volgen
         canvas.setFillColor(gold)
-        gp = canvas.beginPath()
-        gp.moveTo(fr, foot_h + 1.5 * mm)
-        gp.lineTo(foot_w - fr, foot_h + 1.5 * mm)
-        gp.curveTo(foot_w - fr * 0.4, foot_h + 1.5 * mm,
-                   foot_w, foot_h + 1.5 * mm - fr * 0.4,
-                   foot_w, foot_h + 1.5 * mm - fr)
-        gp.lineTo(foot_w, foot_h - fr)
-        gp.curveTo(foot_w, foot_h - fr * 0.4,
-                   foot_w - fr * 0.4, foot_h,
-                   foot_w - fr, foot_h)
-        gp.lineTo(fr, foot_h)
-        gp.curveTo(fr * 0.4, foot_h,
-                   0, foot_h - fr * 0.4,
-                   0, foot_h - fr)
-        gp.lineTo(0, foot_h + 1.5 * mm - fr)
-        gp.curveTo(0, foot_h + 1.5 * mm - fr * 0.4,
-                   fr * 0.4, foot_h + 1.5 * mm,
-                   fr, foot_h + 1.5 * mm)
-        gp.close()
-        canvas.drawPath(gp, fill=1, stroke=0)
+        for offset, thick in [(2 * mm, 1.2 * mm), (5 * mm, 0.5 * mm)]:
+            gp = canvas.beginPath()
+            gp.moveTo(w * 0.32 + offset * 0.7, foot_h + offset)
+            gp.lineTo(w - 4 * mm - offset * 0.3, foot_h + offset)
+            gp.lineTo(w - 4 * mm - offset * 0.3, foot_h + offset - thick)
+            gp.lineTo(w * 0.32 + offset * 0.7 + thick, foot_h + offset - thick)
+            gp.close()
+            canvas.drawPath(gp, fill=1, stroke=0)
 
-        # === Footer content: shield-icoon (gouden hex met witte checkmark) ===
+        # === Footer content: shield-icoon (gouden outline) links + hash midden ===
         doc_number = hp.get("doc_number") or ""
         company_name_hp = hp.get("company_name") or ""
         company_address_hp = hp.get("company_address") or ""
@@ -832,68 +807,91 @@ def _lux_bg_canvas_factory(palette, doc_meta, hash_payload=None):
         except Exception:
             h256 = ""
         short_hash = h256[:40]
-        shield_x = 22 * mm
-        shield_y = foot_h - 7 * mm
-        # Gouden shield shape (approx polygon)
-        canvas.setFillColor(gold)
+        # Shield-outline (transparant met gouden lijn)
+        shield_x = 18 * mm
+        shield_y = 15 * mm
+        canvas.setStrokeColor(gold)
+        canvas.setLineWidth(1.2)
         sh = canvas.beginPath()
-        sh.moveTo(shield_x, shield_y)
-        sh.lineTo(shield_x + 12 * mm, shield_y)
-        sh.lineTo(shield_x + 12 * mm, shield_y - 8 * mm)
-        sh.curveTo(shield_x + 12 * mm, shield_y - 12 * mm,
-                   shield_x + 6 * mm, shield_y - 15 * mm,
-                   shield_x + 6 * mm, shield_y - 15 * mm)
-        sh.curveTo(shield_x + 6 * mm, shield_y - 15 * mm,
-                   shield_x, shield_y - 12 * mm,
-                   shield_x, shield_y - 8 * mm)
+        sh.moveTo(shield_x, shield_y + 8 * mm)
+        sh.lineTo(shield_x + 8 * mm, shield_y + 8 * mm)
+        sh.lineTo(shield_x + 8 * mm, shield_y - 1 * mm)
+        sh.curveTo(shield_x + 8 * mm, shield_y - 5 * mm,
+                   shield_x + 4 * mm, shield_y - 7 * mm,
+                   shield_x + 4 * mm, shield_y - 7 * mm)
+        sh.curveTo(shield_x + 4 * mm, shield_y - 7 * mm,
+                   shield_x, shield_y - 5 * mm,
+                   shield_x, shield_y - 1 * mm)
         sh.close()
-        canvas.drawPath(sh, fill=1, stroke=0)
-        canvas.setFillColor(colors.white)
-        canvas.setFont(_LUX_SANS_BOLD, 12)
-        canvas.drawCentredString(shield_x + 6 * mm, shield_y - 8 * mm, "✓")
-
-        # Verificatie-tekst
-        text_x = shield_x + 18 * mm
+        canvas.drawPath(sh, fill=0, stroke=1)
         canvas.setFillColor(gold)
-        canvas.setFont(_LUX_SANS_BOLD, 10)
-        canvas.drawString(text_x, foot_h - 9 * mm, "GEVERIFIEERD ORIGINEEL")
-        canvas.drawString(text_x, foot_h - 13 * mm, "AUTHENTIEK DOCUMENT")
-        canvas.setFillColor(colors.HexColor("#B8B8B8"))
-        canvas.setFont(_LUX_SANS, 7)
-        canvas.drawString(text_x, foot_h - 18 * mm, "Document-hash (SHA-256):")
-        canvas.setFillColor(colors.white)
-        canvas.setFont(_LUX_SANS, 7)
-        canvas.drawString(text_x, foot_h - 21 * mm, short_hash)
-        parts = [p for p in [company_name_hp,
-                              (company_address_hp or "").replace("\n", ", "),
-                              doc_number] if p]
-        canvas.setFillColor(colors.HexColor("#B8B8B8"))
-        canvas.setFont(_LUX_SANS, 7)
-        canvas.drawString(text_x, foot_h - 26 * mm, " • ".join(parts))
+        canvas.setFont(_LUX_SANS_BOLD, 9)
+        canvas.drawCentredString(shield_x + 4 * mm, shield_y + 1 * mm, "✓")
 
-        # === Skyline-silhouette rechts in de footer — donkere gebouwen op
-        # de dark-footer, met kleine gouden puntjes voor verlichte ramen ===
-        sky_x = w * 0.66
-        sky_base = 2 * mm
-        # Iets lichtere tint van dark voor de gebouwen zodat ze subtiel te
-        # zien zijn op de dark footer.
-        building_tint = colors.Color(
-            min(1.0, dark.red + (1 - dark.red) * 0.12),
-            min(1.0, dark.green + (1 - dark.green) * 0.12),
-            min(1.0, dark.blue + (1 - dark.blue) * 0.12),
+        # Verificatie-tekst (compacter, want de skyline neemt rechts ruimte in)
+        text_x = shield_x + 14 * mm
+        canvas.setFillColor(gold)
+        canvas.setFont(_LUX_SANS_BOLD, 8.5)
+        canvas.drawString(text_x, foot_h - 8 * mm, "GEVERIFIEERD ORIGINEEL")
+        canvas.drawString(text_x, foot_h - 12 * mm, "AUTHENTIEK DOCUMENT")
+        canvas.setFillColor(colors.HexColor("#B8B8B8"))
+        canvas.setFont(_LUX_SANS, 6.5)
+        canvas.drawString(text_x, foot_h - 16 * mm, "Document-hash (SHA-256):")
+        canvas.setFillColor(colors.white)
+        canvas.setFont(_LUX_SANS, 6.5)
+        canvas.drawString(text_x, foot_h - 19 * mm, short_hash)
+        parts = [pp for pp in [company_name_hp,
+                                (company_address_hp or "").replace("\n", ", "),
+                                doc_number] if pp]
+        canvas.setFillColor(colors.HexColor("#B8B8B8"))
+        canvas.setFont(_LUX_SANS, 6.5)
+        canvas.drawString(text_x, foot_h - 23 * mm, " • ".join(parts))
+
+        # === Skyline-silhouette RECHTS in de footer + boven de foot_h grens ===
+        # Match referentie: gebouwen die BOVEN de dark footer uitsteken tot in
+        # de rechter-kolom (subtiel, semi-transparant grijs op wit-rechts, en
+        # met warm-gouden ramen).
+        sky_x = w * 0.63
+        # Gebouwen strekken van onder de dark footer tot boven de footer-lijn
+        sky_bottom = 0
+        sky_top = foot_h + 30 * mm
+        # Kolom-strook (lichte tint van dark voor "gebouw silhouette" boven
+        # het footer-vlak en donker binnen het footer-vlak).
+        light_bldg = colors.Color(0.85, 0.85, 0.85)
+        dark_bldg = colors.Color(
+            min(1.0, dark.red + (1 - dark.red) * 0.15),
+            min(1.0, dark.green + (1 - dark.green) * 0.15),
+            min(1.0, dark.blue + (1 - dark.blue) * 0.15),
         )
-        canvas.setFillColor(building_tint)
-        canvas.rect(sky_x, sky_base, 22 * mm, 18 * mm, fill=1, stroke=0)
-        canvas.rect(sky_x + 24 * mm, sky_base, 16 * mm, 22 * mm, fill=1, stroke=0)
-        canvas.rect(sky_x + 42 * mm, sky_base, 14 * mm, 15 * mm, fill=1, stroke=0)
-        # Verlichte ramen — kleine gouden vierkantjes, verspreid (niet volle grid)
+        # Gebouw 1
+        b1x, b1w, b1h = sky_x, 22 * mm, 46 * mm
+        # 2 splitsen: onder-deel in footer (dark_bldg), boven-deel op wit (light_bldg)
+        canvas.setFillColor(light_bldg)
+        canvas.rect(b1x, foot_h, b1w, b1h - foot_h, fill=1, stroke=0)
+        canvas.setFillColor(dark_bldg)
+        canvas.rect(b1x, sky_bottom, b1w, foot_h, fill=1, stroke=0)
+        # Gebouw 2
+        b2x, b2w, b2h = sky_x + 24 * mm, 18 * mm, 34 * mm
+        canvas.setFillColor(light_bldg)
+        canvas.rect(b2x, foot_h, b2w, b2h - foot_h, fill=1, stroke=0)
+        canvas.setFillColor(dark_bldg)
+        canvas.rect(b2x, sky_bottom, b2w, foot_h, fill=1, stroke=0)
+        # Gebouw 3
+        b3x, b3w, b3h = sky_x + 44 * mm, 20 * mm, 40 * mm
+        canvas.setFillColor(light_bldg)
+        canvas.rect(b3x, foot_h, b3w, b3h - foot_h, fill=1, stroke=0)
+        canvas.setFillColor(dark_bldg)
+        canvas.rect(b3x, sky_bottom, b3w, foot_h, fill=1, stroke=0)
+        # Warme gouden verlichte ramen — alleen in het footer-deel (donker)
         canvas.setFillColor(gold)
         import random as _r
         _r.seed(42)
-        for bx, bw, bh in [(sky_x, 22, 18), (sky_x + 24 * mm, 16, 22), (sky_x + 42 * mm, 14, 15)]:
-            for _ in range(int(bw * bh / 15)):
-                rx = bx + _r.uniform(1, bw - 1) * mm
-                ry = sky_base + _r.uniform(1, bh - 1) * mm
+        for bx, bw, bh in [(b1x, b1w, foot_h),
+                           (b2x, b2w, foot_h),
+                           (b3x, b3w, foot_h)]:
+            for _ in range(int(bw * bh / (25 * mm))):
+                rx = bx + _r.uniform(1, bw / mm - 1) * mm
+                ry = _r.uniform(2, bh / mm - 2) * mm
                 canvas.rect(rx, ry, 0.8 * mm, 0.8 * mm, fill=1, stroke=0)
 
         canvas.restoreState()
@@ -907,29 +905,55 @@ def _lux_header_placeholder(el):
 
 
 def _lux_title(el, title: str, doc_number: str, palette: dict):
-    """Groot gecentreerd elegant serif-title-blok met crown-ornament boven en
-    goud document-nummer eronder tussen 2 horizontale streepjes."""
+    """Referentie template heeft GEEN grote titel — alleen een gouden divider
+    met crown-ornament in het midden. Titel + documentnummer verschijnen
+    kort erboven en eronder in kleinere serif-tekst voor herkenning.
+    """
+    from reportlab.platypus import Flowable
+
     dark = palette["dark"]
     gold = palette["gold"]
-    title_style = ParagraphStyle(
-        name="LuxTitle", fontName=_LUX_SERIF, fontSize=36,
-        textColor=dark, leading=40, alignment=1, spaceBefore=0, spaceAfter=4,
-    )
-    ornament_style = ParagraphStyle(
-        name="LuxOrnament", fontName=_LUX_SANS, fontSize=14,
-        textColor=gold, leading=16, alignment=1, spaceAfter=0,
-    )
-    num_style = ParagraphStyle(
-        name="LuxDocNum", fontName=_LUX_SANS_BOLD, fontSize=10.5,
-        textColor=gold, leading=13, alignment=1, spaceAfter=8,
-    )
-    # Echte crown (♛ U+265B) — met DejaVuSans rendert dit correct.
-    el.append(Paragraph("♛", ornament_style))
-    el.append(Paragraph(title.upper(), title_style))
-    if doc_number:
-        el.append(Paragraph(f"— {doc_number} —", num_style))
-    else:
-        el.append(Spacer(1, 8))
+
+    class CrownDivider(Flowable):
+        def __init__(self, title_txt, num_txt, width=170 * mm, height=22 * mm):
+            super().__init__()
+            self.title_txt = title_txt
+            self.num_txt = num_txt
+            self.width = width
+            self.height = height
+
+        def wrap(self, aw, ah):
+            return (self.width, self.height)
+
+        def draw(self):
+            c = self.canv
+            w_ = self.width
+            h_ = self.height
+            # Grote gecentreerde title bovenaan in serif
+            c.setFillColor(dark)
+            c.setFont(_LUX_SERIF, 20)
+            c.drawCentredString(w_ / 2, h_ - 6 * mm, (self.title_txt or "").upper())
+            # Horizontale gouden hairline met crown in midden
+            c.setStrokeColor(gold)
+            c.setLineWidth(0.6)
+            gap = 6 * mm
+            line_y = h_ / 2 - 4 * mm
+            # Links line
+            c.line(w_ * 0.32, line_y, w_ / 2 - gap, line_y)
+            # Rechts line
+            c.line(w_ / 2 + gap, line_y, w_ * 0.68, line_y)
+            # Crown character in midden
+            c.setFillColor(gold)
+            c.setFont(_LUX_SANS, 12)
+            c.drawCentredString(w_ / 2, line_y - 1.5 * mm, "♛")
+            # Document nummer onderaan
+            if self.num_txt:
+                c.setFillColor(gold)
+                c.setFont(_LUX_SANS_BOLD, 9)
+                c.drawCentredString(w_ / 2, 2 * mm, f"— {self.num_txt} —")
+
+    el.append(CrownDivider(title, doc_number))
+    el.append(Spacer(1, 6))
 
 
 def _lux_icon_chip(icon_char: str, palette: dict):
