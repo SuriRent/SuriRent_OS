@@ -162,6 +162,23 @@ export default function LiveLandingEditor() {
     }
   };
 
+  const [migrating, setMigrating] = useState(false);
+  const migrateWebP = async () => {
+    if (!window.confirm('Converteer alle bestaande landing-afbeeldingen naar WebP-formaat? Dit kan even duren, maar de laadtijd van de landing-pagina wordt dan flink sneller.')) return;
+    setMigrating(true);
+    setErr('');
+    try {
+      const { data } = await api.post('/superadmin/landing/migrate-webp');
+      const beforeMB = (data.bytes_before / 1024 / 1024).toFixed(2);
+      const afterMB = (data.bytes_after / 1024 / 1024).toFixed(2);
+      showToast(`${data.converted} afbeeldingen → WebP · ${beforeMB} MB → ${afterMB} MB (-${data.reduction_pct}%)`);
+    } catch (e) {
+      setErr(formatError(e));
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   const uploadImage = async (file) => {
     if (!file || !imageReq) return;
     setUploadingImg(true);
@@ -230,6 +247,16 @@ export default function LiveLandingEditor() {
             <span className="text-emerald-700 font-bold flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Live = Concept</span>
           )}
         </div>
+
+        <button onClick={migrateWebP} disabled={migrating}
+          data-testid="landing-migrate-webp"
+          title="Converteer alle bestaande landing-afbeeldingen naar WebP"
+          className="h-9 px-3 rounded-lg border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center gap-1.5 disabled:opacity-50">
+          {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+            <span className="text-[9px] font-black px-1 py-0.5 bg-emerald-100 rounded">WebP</span>
+          )}
+          Migreer
+        </button>
 
         <button onClick={discard} title="Concept resetten naar live"
           data-testid="landing-discard"
