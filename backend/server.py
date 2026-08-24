@@ -3167,6 +3167,56 @@ async def upload_landing_asset(file: UploadFile = File(...),
     return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}"}
 
 
+@api.post("/superadmin/landing/migrate-webp")
+async def migrate_landing_assets_to_webp(user=Depends(require_role("superadmin"))):
+    """Eenmalige migratie: converteert ALLE bestaande landing_assets die nog
+    niet WebP zijn naar WebP formaat. Loopt idempotent — assets die al
+    `image/webp` zijn worden overgeslagen. Retourneert per-asset resultaat.
+
+    Nodig omdat pre-existing uploads (jpeg/png) van vóór de auto-webp
+    upgrade nog originele bytes hebben. Deze endpoint kan de user 1x
+    triggeren vanuit de Superadmin → Landing editor."""
+    stats = {"total": 0, "converted": 0, "skipped_webp": 0, "failed": 0, "bytes_before": 0, "bytes_after": 0}
+    cursor = db.landing_assets.find({}, {"id": 1, "content_type": 1, "data_b64": 1, "size": 1})
+    async for doc in cursor:
+        stats["total"] += 1
+        ctype = (doc.get("content_type") or "").lower()
+        if ctype == "image/webp":
+            stats["skipped_webp"] += 1
+            continue
+        try:
+            raw = base64.b64decode(doc.get("data_b64") or "")
+            if not raw:
+                stats["failed"] += 1
+                continue
+            stats["bytes_before"] += len(raw)
+            new_bytes, new_ctype = _to_webp_bytes(raw, ctype)
+            if new_ctype != "image/webp":
+                # Conversie faalde stilzwijgend → skip zodat we niet
+                # per ongeluk corrupte bytes overschrijven.
+                stats["failed"] += 1
+                continue
+            stats["bytes_after"] += len(new_bytes)
+            await db.landing_assets.update_one(
+                {"id": doc["id"]},
+                {"$set": {
+                    "content_type": "image/webp",
+                    "data_b64": base64.b64encode(new_bytes).decode("ascii"),
+                    "size": len(new_bytes),
+                    "migrated_to_webp_at": iso(now_utc()),
+                }},
+            )
+            stats["converted"] += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"[migrate-webp] {doc.get('id')}: {e}")
+            stats["failed"] += 1
+    reduction_pct = 0
+    if stats["bytes_before"]:
+        reduction_pct = round((1 - stats["bytes_after"] / stats["bytes_before"]) * 100, 1)
+    stats["reduction_pct"] = reduction_pct
+    return stats
+
+
 @api.get("/landing/asset/{asset_id}")
 async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
     """Serve een geüploade image asset. Assets zijn UUID-gekeyed en NOOIT

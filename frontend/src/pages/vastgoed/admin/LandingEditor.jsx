@@ -219,6 +219,21 @@ export default function LandingEditor() {
     } catch (e) { setErr(formatError(e)); }
   };
 
+  const [migrating, setMigrating] = useState(false);
+  const migrateWebP = async () => {
+    if (!window.confirm('Converteer alle bestaande landing-afbeeldingen naar WebP-formaat? Dit versnelt de laadtijd en bespaart bandbreedte. Kan even duren bij veel afbeeldingen.')) return;
+    setMigrating(true);
+    setErr('');
+    try {
+      const { data } = await api.post('/superadmin/landing/migrate-webp');
+      const beforeMB = (data.bytes_before / 1024 / 1024).toFixed(2);
+      const afterMB = (data.bytes_after / 1024 / 1024).toFixed(2);
+      setMsg(`${data.converted} afbeeldingen geconverteerd (${beforeMB} MB → ${afterMB} MB, -${data.reduction_pct}%). Overgeslagen: ${data.skipped_webp}, mislukt: ${data.failed}.`);
+      setTimeout(() => setMsg(''), 8000);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setMigrating(false); }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#FF5C00]" /></div>;
   }
@@ -255,6 +270,13 @@ export default function LandingEditor() {
             </span>
           )}
         </div>
+        <button type="button" onClick={migrateWebP} disabled={migrating}
+          data-testid="btn-migrate-webp"
+          title="Converteer alle bestaande landing-afbeeldingen naar WebP"
+          className="h-9 px-3 rounded-lg text-xs font-bold text-emerald-700 hover:bg-emerald-50 inline-flex items-center gap-1.5 disabled:opacity-60">
+          {migrating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span className="text-[10px] font-black px-1.5 py-0.5 bg-emerald-100 rounded">WebP</span>}
+          Migreer
+        </button>
         <button type="button" onClick={discard} className="h-9 px-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 inline-flex items-center gap-1.5"
           data-testid="btn-discard">
           <RotateCcw className="w-3.5 h-3.5" /> Reset
