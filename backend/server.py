@@ -2991,6 +2991,50 @@ async def sumup_saas_webhook(request: Request):
 MAX_LANDING_ASSET_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
 
 
+def _to_webp_bytes(raw: bytes, content_type: str) -> tuple[bytes, str]:
+    """Converteer geüploade afbeelding automatisch naar WebP. Behoud
+    beeldkwaliteit zo hoog mogelijk (quality=92) en respecteer transparantie.
+
+    Retourneert `(bytes, content_type)`. Bij SVG's, ongeldige afbeeldingen of
+    conversie-fouten geven we het origineel ongewijzigd terug zodat de upload
+    nooit hard faalt op een edge-case.
+
+    NOTE: we slaan het origineel NIET op — alleen het WebP-resultaat, per
+    user request.
+    """
+    ctype = (content_type or "").lower()
+    # SVG's blijven vector — WebP-conversie zou ze rasteriseren
+    if "svg" in ctype:
+        return raw, ctype
+    # Als het al WebP is: alleen doorlaten
+    if ctype == "image/webp":
+        return raw, "image/webp"
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(raw))
+        # EXIF-oriëntatie respecteren zodat portret-foto's van iPhone niet
+        # gedraaid opgeslagen worden.
+        img = ImageOps.exif_transpose(img)
+        # Bewaar animated gifs als animated webp (slechts eerste frame is
+        # normaal genoeg voor foto's — Pillow zorgt automatisch).
+        buf = io.BytesIO()
+        # RGBA modus behouden voor transparantie (bv. logo's met alpha).
+        save_kwargs = {"format": "WEBP", "quality": 92, "method": 6}
+        if img.mode == "RGBA" or img.mode == "LA" or ("A" in img.mode):
+            img.save(buf, **save_kwargs)
+        elif img.mode == "P" and "transparency" in img.info:
+            img.convert("RGBA").save(buf, **save_kwargs)
+        else:
+            # Converteer naar RGB voor onbekende modes (CMYK, YCbCr etc.)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.save(buf, **save_kwargs)
+        return buf.getvalue(), "image/webp"
+    except Exception as e:  # noqa: BLE001
+        print(f"[webp] conversion failed ({ctype}): {e}, keeping original")
+        return raw, ctype
+
+
 @api.get("/landing/content")
 async def get_landing_content(response: Response):
     """Public — returns the *published* landing content merged with defaults."""
@@ -3109,6 +3153,7 @@ async def upload_landing_asset(file: UploadFile = File(...),
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    raw, ctype = _to_webp_bytes(raw, ctype)
     asset_id = new_id()
     await db.landing_assets.insert_one({
         "id": asset_id,
@@ -3969,6 +4014,7 @@ async def upload_branding_asset(file: UploadFile = File(...),
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    raw, ctype = _to_webp_bytes(raw, ctype)
     cid = company_id_of(user)
     asset_id = new_id()
     await db.landing_assets.insert_one({
@@ -4000,6 +4046,7 @@ async def upload_landlord_signature(file: UploadFile = File(...),
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    raw, ctype = _to_webp_bytes(raw, ctype)
     asset_id = new_id()
     now = now_utc()
     await db.landing_assets.insert_one({
@@ -7017,6 +7064,7 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    raw, ctype = _to_webp_bytes(raw, ctype)
     asset_id = new_id()
     await db.landing_assets.insert_one({
         "id": asset_id,
@@ -7056,6 +7104,7 @@ async def upload_tenant_id_photo_back(tenant_id: str, file: UploadFile = File(..
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
+    raw, ctype = _to_webp_bytes(raw, ctype)
     asset_id = new_id()
     await db.landing_assets.insert_one({
         "id": asset_id,
