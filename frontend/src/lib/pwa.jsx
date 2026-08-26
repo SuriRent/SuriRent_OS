@@ -177,7 +177,7 @@ export function InstallPrompt() {
       data-testid="pwa-install-prompt">
       <div className="flex items-start gap-3">
         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5 shrink-0">
-          <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
+          <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-black text-slate-900 leading-tight">Installeer SuriRent</p>

@@ -132,7 +132,7 @@ function LogoUploader({ value, onChange }) {
     <div data-testid="branding-logo">
       {preview && (
         <div className="mb-2 flex items-center gap-2">
-          <img src={preview} alt="logo preview" className="w-20 h-20 object-contain rounded-lg border border-slate-200 bg-white p-2" />
+          <img loading="lazy" src={preview} alt="logo preview" className="w-20 h-20 object-contain rounded-lg border border-slate-200 bg-white p-2" />
           <button type="button" onClick={() => onChange('')}
             data-testid="branding-logo-clear"
             className="text-xs text-rose-600 font-semibold hover:underline">verwijderen</button>
@@ -315,7 +315,7 @@ export default function Branding() {
             <div className="w-full h-32 flex items-center px-6 gap-3"
               style={{ background: `linear-gradient(135deg, ${previewColor} 0%, ${previewColor}DD 100%)` }}>
               {b.logo_url ? (
-                <img src={resolveLogoUrl(b.logo_url)} alt="logo" className="w-14 h-14 rounded-xl bg-white p-2 object-contain" />
+                <img loading="lazy" src={resolveLogoUrl(b.logo_url)} alt="logo" className="w-14 h-14 rounded-xl bg-white p-2 object-contain" />
               ) : (
                 <div className="w-14 h-14 rounded-xl bg-white/95 flex items-center justify-center text-2xl font-black"
                   style={{ color: previewColor }}>
@@ -569,7 +569,7 @@ function LandlordSignatureSection({ value, signedAt, onReload }) {
       ) : (
         <>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <img src={src} alt="Verhuurder handtekening" className="w-full max-h-32 object-contain" data-testid="landlord-signature-image" />
+            <img loading="lazy" src={src} alt="Verhuurder handtekening" className="w-full max-h-32 object-contain" data-testid="landlord-signature-image" />
           </div>
           <div className="flex gap-2 mt-3">
             <button type="button" onClick={() => setRedraw(true)}

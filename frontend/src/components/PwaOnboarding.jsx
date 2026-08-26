@@ -96,7 +96,7 @@ export default function PwaOnboarding({ onChoice, primary = '#FF5C00' }) {
           }}>
           <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #FFF6D6 0%, #F8C260 60%, #D4A037 100%)' }}>
-            <img src="/kiosk-icons/kiosk-512.png" alt="SuriRent"
+            <img loading="lazy" src="/kiosk-icons/kiosk-512.png" alt="SuriRent"
               className="w-[70%] h-[70%] object-contain drop-shadow-md" />
           </div>
         </div>

@@ -157,7 +157,7 @@ function ApartmentsGrid({ company, apartments }) {
                 className="bg-white rounded-2xl overflow-hidden border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all group">
                 <div className="aspect-[4/3] bg-slate-100 overflow-hidden relative">
                   {apt.photo_url ? (
-                    <img src={apt.photo_url} alt={apt.number}
+                    <img loading="lazy" src={apt.photo_url} alt={apt.number}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

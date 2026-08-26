@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { useBadge } from '../../lib/pwa';
@@ -24,16 +24,23 @@ import OnboardingModal from '../../components/OnboardingModal';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
-import Contracts from './admin/Contracts';
-import Invoices from './admin/Invoices';
-import Payments from './admin/Payments';
-import Employees from './admin/Employees';
-import Deposits from './admin/Deposits';
-import Maintenance from './admin/Maintenance';
-import Kasgeld from './admin/Kasgeld';
-import Notifications from './admin/Notifications';
-import PaymentPlans from './admin/PaymentPlans';
-import Companies from './admin/Companies';
+
+// ─────────────────────────────────────────────────────────────────────
+// LAZY-LOADED TAB COMPONENTEN
+// Iedere admin-tab is een aparte code-chunk. React laadt de JS pas
+// wanneer de user de tab daadwerkelijk opent → drastisch kleinere
+// initial bundle (Overzicht laadt zonder Facturen/Betalingen/etc code).
+// ─────────────────────────────────────────────────────────────────────
+const Contracts = lazy(() => import('./admin/Contracts'));
+const Invoices = lazy(() => import('./admin/Invoices'));
+const Payments = lazy(() => import('./admin/Payments'));
+const Employees = lazy(() => import('./admin/Employees'));
+const Deposits = lazy(() => import('./admin/Deposits'));
+const Maintenance = lazy(() => import('./admin/Maintenance'));
+const Kasgeld = lazy(() => import('./admin/Kasgeld'));
+const Notifications = lazy(() => import('./admin/Notifications'));
+const PaymentPlans = lazy(() => import('./admin/PaymentPlans'));
+const Companies = lazy(() => import('./admin/Companies'));
 
 // =====================================================================
 // SaasPlaceholder — tijdelijke pagina met beheerder-look voor SaaS tabs
@@ -359,14 +366,14 @@ function SaasNotifications() {
 }
 
 
-import InstellingenHub from './admin/InstellingenHub';
-import Locations from './admin/Locations';
-import Subscriptions from './admin/Subscriptions';
-import SaasOverview from './admin/SaasOverview';
-import SaasKasregister from './admin/SaasKasregister';
-import SaasSettings from './admin/SaasSettings';
-import LandingEditor from './admin/LiveLandingEditor';
-import PlansAdmin from './admin/PlansAdmin';
+const InstellingenHub = lazy(() => import('./admin/InstellingenHub'));
+const Locations = lazy(() => import('./admin/Locations'));
+const Subscriptions = lazy(() => import('./admin/Subscriptions'));
+const SaasOverview = lazy(() => import('./admin/SaasOverview'));
+const SaasKasregister = lazy(() => import('./admin/SaasKasregister'));
+const SaasSettings = lazy(() => import('./admin/SaasSettings'));
+const LandingEditor = lazy(() => import('./admin/LiveLandingEditor'));
+const PlansAdmin = lazy(() => import('./admin/PlansAdmin'));
 import SetupWizardSheet from './admin/SetupWizardSheet';
 import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
@@ -488,13 +495,13 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
         {resolvedLogo ? (
           <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 p-1.5 shadow-[0_8px_18px_-6px_rgba(15,23,42,0.10)] shrink-0 overflow-hidden"
             data-testid="sidebar-company-logo">
-            <img src={resolvedLogo} alt={fullName}
+            <img loading="lazy" src={resolvedLogo} alt={fullName}
               className="w-full h-full object-contain"
               onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
         ) : (
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5 shadow-[0_8px_18px_-6px_rgba(255,92,0,0.45)] shrink-0">
-            <img src="/kiosk-icons/mark-white.png" alt="Logo" className="w-full h-full object-contain" />
+            <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
         )}
         <div className="min-w-0">
@@ -632,7 +639,7 @@ function MobileTopLogo({ user, activeCompany }) {
       data-testid="mobile-top-logo">
       <div className="px-4 md:px-8 py-3 md:py-4 landscape:py-1.5 flex items-center gap-3.5 md:gap-4 landscape:gap-2 max-w-4xl md:mx-auto md:w-full">
         <div className="w-14 h-14 md:w-14 md:h-14 landscape:w-9 landscape:h-9 rounded-2xl landscape:rounded-xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-2 md:p-2 landscape:p-1 shadow-[0_6px_14px_-4px_rgba(255,92,0,0.45)] shrink-0">
-          <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
+          <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xl md:text-2xl landscape:text-sm font-black tracking-tight leading-tight truncate text-slate-900" data-testid="mobile-top-name">
@@ -671,7 +678,7 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
         {/* HEADER — company name + Live + Kiosk-shortcut + close */}
         <div className="px-5 md:px-6 pt-2 pb-3 md:pb-4 flex items-center gap-3 md:gap-4">
           <div className="w-11 h-11 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5 md:p-2 shadow-md shrink-0">
-            <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
+            <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -2857,7 +2864,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
       )}
       {pendingFile && (
         <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 relative">
-          <img src={previewUrl} alt="ID scan"
+          <img loading="lazy" src={previewUrl} alt="ID scan"
             className="w-full max-h-40 object-contain bg-slate-50 cursor-pointer"
             onClick={() => setPreview(true)} />
           <button type="button" onClick={() => { onFile(null); setOcrResult(null); }}
@@ -2892,7 +2899,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
       {preview && (
         <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setPreview(false)}>
-          <img src={previewUrl} alt="ID scan groot" className="max-w-full max-h-full rounded-xl" />
+          <img loading="lazy" src={previewUrl} alt="ID scan groot" className="max-w-full max-h-full rounded-xl" />
         </div>
       )}
     </div>
@@ -3488,7 +3495,7 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
         {idPhotoSrc ? (
           <div className="relative rounded-xl overflow-hidden bg-slate-100 cursor-pointer"
             onClick={() => setPreview(true)} data-testid="tenant-id-preview">
-            <img src={idPhotoSrc} alt="ID-kaart"
+            <img loading="lazy" src={idPhotoSrc} alt="ID-kaart"
               className="w-full max-h-64 object-contain bg-slate-100" />
             <span className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-lg text-[10px] font-bold text-slate-700">
               Klik om te vergroten
@@ -3563,7 +3570,7 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
       {preview && idPhotoSrc && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setPreview(false)} data-testid="tenant-id-fullpreview">
-          <img src={idPhotoSrc} alt="ID-kaart" className="max-w-full max-h-full rounded-xl shadow-2xl" />
+          <img loading="lazy" src={idPhotoSrc} alt="ID-kaart" className="max-w-full max-h-full rounded-xl shadow-2xl" />
           <button onClick={() => setPreview(false)}
             className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 text-slate-900 flex items-center justify-center">
             <X className="w-5 h-5" />
@@ -3743,7 +3750,7 @@ function SignatureModal({ tenant: t, open, onClose, onReload }) {
             <>
               <p className="text-sm text-slate-600">Ondertekend op {(t.signature_signed_at || '').slice(0, 10)}.</p>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <img src={src} alt="Handtekening" className="w-full max-h-40 object-contain" data-testid="tenant-signature-image" />
+                <img loading="lazy" src={src} alt="Handtekening" className="w-full max-h-40 object-contain" data-testid="tenant-signature-image" />
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setRedraw(true)} data-testid="tenant-signature-redraw"
@@ -4181,6 +4188,7 @@ export default function AdminDashboard() {
         <ImpersonationBanner />
         <TrialBanner />
         <main className="flex-1 p-5 md:px-6 md:py-5 lg:px-8 lg:pt-3 pb-32 md:pb-8 w-full">
+          <Suspense fallback={<ListSkeleton />}>
           {tab === 'companies' && <Companies />}
           {tab === 'subscriptions' && <Subscriptions />}
           {tab === 'saas_overview' && <SaasOverview />}
@@ -4211,6 +4219,7 @@ export default function AdminDashboard() {
           {tab === 'employees' && <Employees />}
           {tab === 'notifications' && <Notifications />}
           {tab === 'instellingen' && <InstellingenHub />}
+          </Suspense>
         </main>
       </div>
       <MobileTabBar active={tab} onChange={handleSetTab} tabs={tabs} user={user}

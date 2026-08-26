@@ -16,6 +16,7 @@ from typing import List, Optional, Literal
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -692,6 +693,12 @@ async def _overdue_push_loop():
 
 
 app = FastAPI(title="Vastgoed Kiosk API", lifespan=lifespan)
+
+# GZip compressie voor alle responses >= 500 bytes. Reduceert bandbreedte
+# gemiddeld 60-80% op JSON. Brotli is nog beter maar vereist een extra
+# package; gzip is sufficient en universeel ondersteund.
+# minimum_size=500 → voorkomt compressie-overhead op kleine responses.
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*")
 if cors_origins == "*":

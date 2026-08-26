@@ -166,7 +166,7 @@ function SetupPinView({ branding, tenantSetup, onSetupComplete }) {
         className="w-full max-w-md flex flex-col items-center text-center">
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5">
           {branding?.logo_url ? (
-            <img src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
+            <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
           ) : (
             <HomeIcon className="w-10 h-10 text-[color:var(--brand-primary,#FF5C00)]" strokeWidth={2.4} />
           )}
@@ -347,7 +347,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
         {/* Logo */}
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5">
           {branding?.logo_url ? (
-            <img src={resolveLogoUrl(branding.logo_url)} alt="logo"
+            <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo"
               className="w-full h-full object-contain" />
           ) : (
             <HomeIcon className="w-10 h-10 text-[color:var(--brand-primary,#FF5C00)]" strokeWidth={2.4} />

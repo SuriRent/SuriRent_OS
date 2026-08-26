@@ -106,7 +106,7 @@ export default function TenantSignaturePage() {
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-3 mb-4 px-1">
           {info.logo_url ? (
-            <img src={info.logo_url} alt={info.brand_name} className="h-10 max-w-[140px] object-contain" />
+            <img loading="lazy" src={info.logo_url} alt={info.brand_name} className="h-10 max-w-[140px] object-contain" />
           ) : (
             <div className="h-10 px-4 rounded-xl text-white font-black flex items-center" style={{ backgroundColor: color }}>
               {info.brand_name}

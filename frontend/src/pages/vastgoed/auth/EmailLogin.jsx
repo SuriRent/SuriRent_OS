@@ -257,7 +257,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-12 lg:mb-16">
               <span className="w-12 h-12 rounded-2xl bg-white p-2 shadow-lg">
-                <img src="/kiosk-icons/mark-orange.png" alt="SuriRent" className="w-full h-full object-contain"
+                <img loading="lazy" src="/kiosk-icons/mark-orange.png" alt="SuriRent" className="w-full h-full object-contain"
                   onError={(e) => { e.currentTarget.src = '/kiosk-icons/mark-white.png'; e.currentTarget.style.filter = 'brightness(0) invert(0.2)'; }} />
               </span>
               <span className="text-3xl lg:text-4xl font-black tracking-tight">SURIRENT</span>

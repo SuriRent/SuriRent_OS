@@ -1020,7 +1020,7 @@ export default function MarketingLandingV2() {
       <div className="min-h-screen bg-white flex items-center justify-center" data-testid="marketing-skeleton">
         <div className="flex flex-col items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#FF5C00] flex items-center justify-center shadow-lg animate-pulse">
-            <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-9 h-9" />
+            <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-9 h-9" />
           </div>
           <div className="h-2 w-24 rounded-full bg-orange-100 overflow-hidden">
             <div className="h-full bg-[#FF5C00] w-1/2 animate-[loader_1.2s_ease-in-out_infinite]" />

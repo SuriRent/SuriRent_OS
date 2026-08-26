@@ -3,7 +3,7 @@
 // • `useLandingContent()`        — fetch published content + defaults uit /api/landing/content
 // • `<EditableProvider>`         — provides edit state (off/draft/publish) + collected patches
 // • `<EditableText path=…>`      — toont tekst, in editMode contenteditable + autosave via postMessage
-// • `<EditableImage path=…>`     — toont <img>, in editMode klikbaar voor uploaden
+// • `<EditableImage path=…>`     — toont <img loading="lazy">, in editMode klikbaar voor uploaden
 // • PostMessage protocol:        { type: 'landing-edit-patch', path, value }
 //
 // De landing page draait in een iframe binnen LiveLandingEditor; parent collect
@@ -147,7 +147,7 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
 }
 
 /**
- * EditableImage — bestaand <img> dat in editMode een upload-overlay toont.
+ * EditableImage — bestaand <img loading="lazy"> dat in editMode een upload-overlay toont.
  *
  * Vereenvoudigde versie: bij klik in editMode triggeren we een postMessage
  * naar de parent. De parent toont de Asset Library / file picker en stuurt
@@ -177,7 +177,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
   };
 
   if (!editMode) {
-    return <img src={src} alt={alt} className={className} {...imgProps} />;
+    return <img loading="lazy" src={src} alt={alt} className={className} {...imgProps} />;
   }
 
   return (
@@ -185,7 +185,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
       className="relative inline-block group cursor-pointer"
       data-edit-path={path}
       title="Klik om afbeelding te wijzigen">
-      <img src={src} alt={alt} className={className} {...imgProps} />
+      <img loading="lazy" src={src} alt={alt} className={className} {...imgProps} />
       <span className="absolute inset-0 bg-orange-500/0 group-hover:bg-orange-500/30 transition-colors flex items-center justify-center">
         <span className="opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur-sm text-xs font-extrabold text-orange-700 px-3 py-1.5 rounded-md transition-opacity">
           Wijzig afbeelding

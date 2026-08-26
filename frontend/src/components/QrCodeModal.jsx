@@ -99,7 +99,7 @@ export default function QrCodeModal({ open, onClose, kind, label, url, brandColo
               </div>
             )}
             {!busy && !err && src && (
-              <img src={src} alt={`QR ${kind}`} className="w-[300px] h-[300px] block"
+              <img loading="lazy" src={src} alt={`QR ${kind}`} className="w-[300px] h-[300px] block"
                 data-testid="qr-modal-image" />
             )}
           </div>

@@ -36,7 +36,7 @@ function Header({ branding }) {
       <div className="flex items-center" style={{ gap: 'clamp(8px, 2vw, 16px)' }}>
         <div className="rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center overflow-hidden"
           style={{ width: 'clamp(32px, 5vh, 56px)', height: 'clamp(32px, 5vh, 56px)', padding: '4px' }}>
-          <img src={logo} alt={appName} className="w-full h-full object-contain" data-testid="login-header-logo" />
+          <img loading="lazy" src={logo} alt={appName} className="w-full h-full object-contain" data-testid="login-header-logo" />
         </div>
         <div className="min-w-0">
           <h1 className="font-bold text-white tracking-tight leading-tight truncate" style={{ fontSize: 'clamp(13px, 2vh, 20px)' }} data-testid="login-header-name">{appName}</h1>

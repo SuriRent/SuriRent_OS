@@ -399,7 +399,7 @@ export default function MijnLanding() {
               </button>
             </div>
             {imageReq.current && (
-              <img src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+              <img loading="lazy" src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
             )}
             <input type="file" accept="image/*"
               onChange={(e) => uploadImage(e.target.files?.[0])}

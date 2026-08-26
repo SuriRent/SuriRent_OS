@@ -1191,7 +1191,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
                 <iframe src={previewStmt.url} title="Bankafschrift PDF"
                   className="w-full h-[80vh] rounded-lg bg-white border border-slate-200" />
               ) : (
-                <img src={previewStmt.url} alt="Bankafschrift"
+                <img loading="lazy" src={previewStmt.url} alt="Bankafschrift"
                   className="max-w-full mx-auto rounded-lg shadow-md" />
               )}
             </div>

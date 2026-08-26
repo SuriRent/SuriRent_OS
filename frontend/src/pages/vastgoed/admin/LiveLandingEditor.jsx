@@ -332,7 +332,7 @@ export default function LiveLandingEditor() {
             </div>
             <p className="text-xs text-slate-500 font-mono mb-3 truncate">{imageReq.path}</p>
             {imageReq.current && (
-              <img src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+              <img loading="lazy" src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
             )}
             <label className="block">
               <input type="file" accept="image/*"

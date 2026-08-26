@@ -66,7 +66,7 @@ function ImageUploader({ value, onChange, testid }) {
     <div data-testid={testid}>
       {preview && (
         <div className="mb-2 flex items-start gap-2">
-          <img src={preview} alt="preview" className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
+          <img loading="lazy" src={preview} alt="preview" className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
           <button type="button" onClick={() => onChange('')} data-testid={`${testid}-clear`}
             className="text-xs text-rose-600 font-semibold hover:underline">verwijderen</button>
         </div>

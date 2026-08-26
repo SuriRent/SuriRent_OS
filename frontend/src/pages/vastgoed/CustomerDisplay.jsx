@@ -35,7 +35,7 @@ function IdleScreen({ branding }) {
         className="rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-4 mb-6"
         style={{ width: clamp(96, 18, 200), height: clamp(96, 18, 200) }}>
         {branding?.logo_url ? (
-          <img src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
+          <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
         ) : (
           <HomeIcon style={{ width: '60%', height: '60%', color: branding?.primary_color || '#FF5C00' }} strokeWidth={2.4} />
         )}
@@ -73,7 +73,7 @@ function GreetScreen({ state, branding }) {
       <div className="rounded-2xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5"
         style={{ width: clamp(72, 12, 140), height: clamp(72, 12, 140) }}>
         {branding?.logo_url ? (
-          <img src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
+          <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
         ) : (
           <HomeIcon style={{ width: '60%', height: '60%', color: branding?.primary_color || '#FF5C00' }} strokeWidth={2.4} />
         )}

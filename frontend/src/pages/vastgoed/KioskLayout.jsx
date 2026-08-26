@@ -149,7 +149,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit }) {
                   className="bg-white/90 backdrop-blur-sm flex flex-col items-center text-center rounded-2xl p-6 sm:p-8 hover:-translate-y-1 hover:bg-white transition shadow-lg border-2 border-transparent hover:border-orange-500">
                   {loc.photo_url ? (
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden mb-3 bg-slate-100">
-                      <img src={loc.photo_url} alt={loc.name} className="w-full h-full object-cover"
+                      <img loading="lazy" src={loc.photo_url} alt={loc.name} className="w-full h-full object-cover"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     </div>
                   ) : (

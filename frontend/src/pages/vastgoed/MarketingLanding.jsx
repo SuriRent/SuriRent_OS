@@ -71,7 +71,7 @@ function TopNav({ onLogin, c = {} }) {
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} data-testid="nav-logo"
             className="flex items-center gap-3 group">
             <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#FF8A3D] via-[#FF5C00] to-[#C74600] flex items-center justify-center p-1.5 overflow-hidden shadow-[0_8px_20px_-5px_rgba(255,92,0,0.55)]">
-              <img src={resolveAsset(brand.logo_url) || '/kiosk-icons/kiosk-512.png'} alt={brand.name || 'logo'} className="w-full h-full object-contain drop-shadow" />
+              <img loading="lazy" src={resolveAsset(brand.logo_url) || '/kiosk-icons/kiosk-512.png'} alt={brand.name || 'logo'} className="w-full h-full object-contain drop-shadow" />
             </div>
             <div className="text-left leading-none">
               <p className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">{brand.name || 'SuriRent'}</p>
@@ -169,7 +169,7 @@ function Hero({ onLogin, c = {} }) {
             <div className="absolute -inset-10 bg-gradient-to-br from-[#FF5C00]/40 via-amber-400/30 to-transparent blur-3xl rounded-full" />
             {previewImg ? (
               <div className="relative rounded-[2rem] overflow-hidden shadow-[0_40px_80px_-20px_rgba(255,92,0,0.6)] transform lg:-rotate-1 hover:rotate-0 transition-transform duration-700">
-                <img src={previewImg} alt="Preview" className="w-full h-auto block" />
+                <img loading="lazy" src={previewImg} alt="Preview" className="w-full h-auto block" />
               </div>
             ) : (
               <div className="relative bg-gradient-to-br from-[#FF6B1A] via-[#FF5C00] to-[#C74600] rounded-[2rem] p-5 shadow-[0_40px_80px_-20px_rgba(255,92,0,0.6)] transform lg:-rotate-1 hover:rotate-0 transition-transform duration-700">
@@ -180,7 +180,7 @@ function Hero({ onLogin, c = {} }) {
                 <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-inner">
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-2 shadow-lg">
-                      <img src={resolveAsset((c.brand || {}).logo_url) || '/kiosk-icons/kiosk-512.png'} alt="logo" className="w-full h-full object-contain" />
+                      <img loading="lazy" src={resolveAsset((c.brand || {}).logo_url) || '/kiosk-icons/kiosk-512.png'} alt="logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
                       <p className="text-sm font-black text-slate-900">{h.preview_caption || 'Selfservice Terminal'}</p>
@@ -315,7 +315,7 @@ function InstallSection({ c = {} }) {
             <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-orange-100/60 blur-3xl pointer-events-none" />
             <div className="relative flex items-center gap-6 md:gap-8">
               <div className="shrink-0 rounded-2xl bg-white border-2 border-orange-100 p-2 shadow-[0_8px_25px_-10px_rgba(255,92,0,0.4)]">
-                <img src={resolveAsset(qr.qr_image_url) || '/kiosk-icons/install-qr.svg'} alt="QR code installatie" className="w-32 h-32 md:w-40 md:h-40 block" data-testid="install-qr-img" />
+                <img loading="lazy" src={resolveAsset(qr.qr_image_url) || '/kiosk-icons/install-qr.svg'} alt="QR code installatie" className="w-32 h-32 md:w-40 md:h-40 block" data-testid="install-qr-img" />
               </div>
               <div className="flex-1 min-w-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-[#FF5C00] text-[10px] font-black uppercase tracking-[0.2em]">
@@ -713,7 +713,7 @@ function Footer({ onLogin, c = {} }) {
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5 shadow-[0_8px_20px_-5px_rgba(255,92,0,0.55)]">
-                <img src={resolveAsset(brand.logo_url) || '/kiosk-icons/kiosk-512.png'} alt={brand.name || 'SuriRent'} className="w-full h-full object-contain" />
+                <img loading="lazy" src={resolveAsset(brand.logo_url) || '/kiosk-icons/kiosk-512.png'} alt={brand.name || 'SuriRent'} className="w-full h-full object-contain" />
               </div>
               <div>
                 <p className="text-lg font-black text-slate-900 tracking-tight">{brand.name || 'SuriRent'}</p>

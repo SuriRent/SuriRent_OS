@@ -313,7 +313,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
               style={{
                 background: `linear-gradient(135deg, #FFF6D6 0%, #F8C260 60%, #D4A037 100%)`,
               }}>
-              <img src={logoUrl} alt="logo"
+              <img loading="lazy" src={logoUrl} alt="logo"
                 className="w-[70%] h-[70%] object-contain drop-shadow-md"
                 data-testid="pin-profile-photo" />
             </div>

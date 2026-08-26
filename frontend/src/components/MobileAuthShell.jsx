@@ -137,7 +137,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
             }}>
             <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg, #FFF6D6 0%, #F8C260 60%, #D4A037 100%)' }}>
-              <img src={logoUrl} alt={appName} className="w-[70%] h-[70%] object-contain drop-shadow-md" />
+              <img loading="lazy" src={logoUrl} alt={appName} className="w-[70%] h-[70%] object-contain drop-shadow-md" />
             </div>
           </div>
           <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white bg-emerald-400 shadow-md" />
@@ -373,7 +373,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
             zodat het niet met de step-titel concurreert. */}
         <div className="flex items-center gap-2 select-none pointer-events-none">
           <div className="w-8 h-8 rounded-xl bg-white/95 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center">
-            <img src="/kiosk-icons/kiosk-192.png" alt="SuriRent"
+            <img loading="lazy" src="/kiosk-icons/kiosk-192.png" alt="SuriRent"
               className="w-6 h-6 object-contain"
               onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
