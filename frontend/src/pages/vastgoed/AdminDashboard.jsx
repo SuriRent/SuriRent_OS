@@ -4177,16 +4177,43 @@ export default function AdminDashboard() {
     // Alle logouts (demo of echt) sturen we terug naar de marketing landing,
     // niet naar /login. Op productie staat de landing op een ander domein
     // (surirent.sr) — publicMarketingUrl() geeft de juiste absolute URL.
-    // Op preview/hybrid returnt hij de huidige origin, dus `/` = landing.
-    // Hard nav gebruiken zodat we NA logout() gaan (anders redirect
-    // <Protected> nog naar /login omdat user state pas na hard nav weg is).
-    await logout();
+    // Op preview/hybrid returnt hij de huidige origin.
+    //
+    // BELANGRIJK: hard-nav MOET plaatsvinden vóór `logout()`'s `setUser(null)`
+    // anders re-rendert React, ziet <Protected> user=null en flitst
+    // <Navigate to="/login" /> in beeld vóór de browser weg-navigeert.
+    // Volgorde:
+    //   1) Best-effort server-logout (fire-and-forget, geen await)
+    //   2) Synchroon localStorage/sessionStorage opruimen
+    //   3) window.location.replace() — browser start hard nav
+    //   4) setUser(null) via logout() vervangen door lokale cleanup (skippen
+    //      dus, omdat de nieuwe pagina toch fresh AuthProvider laadt).
+    const wasDemo = (() => {
+      try { return localStorage.getItem('is_demo_session') === '1'; }
+      catch { return false; }
+    })();
+    // Fire-and-forget server logout — cookies worden op backend gewist.
+    try { api.post('/auth/logout'); } catch { /* noop */ }
+    // localStorage synchroon opruimen zodat volgende bezoeker geen resten ziet.
     try {
-      const target = `${publicMarketingUrl()}/`;
-      window.location.replace(target);
-    } catch {
-      window.location.replace('/');
-    }
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('kiosk_token');
+      localStorage.removeItem('active_company_id');
+      localStorage.removeItem('pwa_preferred_role');
+      localStorage.removeItem('kiosk_company');
+      localStorage.removeItem('is_demo_session');
+      // Demo → ook slug wissen (anders redirect LoginPage naar branded PIN).
+      // Echte gebruikers behouden pwa_company_slug voor branded PIN-login.
+      if (wasDemo) localStorage.removeItem('pwa_company_slug');
+    } catch { /* noop */ }
+    try {
+      sessionStorage.removeItem('kiosk_emp_id');
+      sessionStorage.removeItem('kiosk_emp_name');
+      sessionStorage.removeItem('kiosk_emp_pin');
+    } catch { /* noop */ }
+    // Hard nav — GEEN setUser(null) hiervoor triggeren.
+    const target = `${publicMarketingUrl()}/`;
+    window.location.replace(target);
   };
 
   // Hard-blocken bij billing-issues is verwijderd — klanten mogen de app
