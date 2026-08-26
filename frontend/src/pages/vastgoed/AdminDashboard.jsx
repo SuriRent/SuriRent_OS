@@ -30,17 +30,55 @@ import { useLivePulse } from '../../lib/live-pulse';
 // Iedere admin-tab is een aparte code-chunk. React laadt de JS pas
 // wanneer de user de tab daadwerkelijk opent → drastisch kleinere
 // initial bundle (Overzicht laadt zonder Facturen/Betalingen/etc code).
+//
+// ANTI-FLICKER: we exporteren de import-loaders zodat AdminDashboard
+// ze bij mount kan prefetchen (zie `prefetchAdminChunks` hieronder).
+// Tegen de tijd dat de user een tab aanklikt is de chunk al geladen
+// → geen Suspense-fallback flash bij tabwissel.
 // ─────────────────────────────────────────────────────────────────────
-const Contracts = lazy(() => import('./admin/Contracts'));
-const Invoices = lazy(() => import('./admin/Invoices'));
-const Payments = lazy(() => import('./admin/Payments'));
-const Employees = lazy(() => import('./admin/Employees'));
-const Deposits = lazy(() => import('./admin/Deposits'));
-const Maintenance = lazy(() => import('./admin/Maintenance'));
-const Kasgeld = lazy(() => import('./admin/Kasgeld'));
-const Notifications = lazy(() => import('./admin/Notifications'));
-const PaymentPlans = lazy(() => import('./admin/PaymentPlans'));
-const Companies = lazy(() => import('./admin/Companies'));
+const loadContracts = () => import('./admin/Contracts');
+const loadInvoices = () => import('./admin/Invoices');
+const loadPayments = () => import('./admin/Payments');
+const loadEmployees = () => import('./admin/Employees');
+const loadDeposits = () => import('./admin/Deposits');
+const loadMaintenance = () => import('./admin/Maintenance');
+const loadKasgeld = () => import('./admin/Kasgeld');
+const loadNotifications = () => import('./admin/Notifications');
+const loadPaymentPlans = () => import('./admin/PaymentPlans');
+const loadCompanies = () => import('./admin/Companies');
+const Contracts = lazy(loadContracts);
+const Invoices = lazy(loadInvoices);
+const Payments = lazy(loadPayments);
+const Employees = lazy(loadEmployees);
+const Deposits = lazy(loadDeposits);
+const Maintenance = lazy(loadMaintenance);
+const Kasgeld = lazy(loadKasgeld);
+const Notifications = lazy(loadNotifications);
+const PaymentPlans = lazy(loadPaymentPlans);
+const Companies = lazy(loadCompanies);
+
+const ADMIN_TAB_LOADERS = [
+  loadContracts, loadInvoices, loadPayments, loadEmployees, loadDeposits,
+  loadMaintenance, loadKasgeld, loadNotifications, loadPaymentPlans, loadCompanies,
+];
+
+/**
+ * prefetchAdminChunks — laadt alle admin-tab chunks in de achtergrond zodra
+ * de browser idle is. Gebruikt requestIdleCallback wanneer beschikbaar,
+ * anders een korte setTimeout. Zo is er GEEN Suspense-fallback flash
+ * bij de eerste tabwissel — de JS staat al in het cache-geheugen.
+ */
+function prefetchAdminChunks() {
+  const runAll = () => ADMIN_TAB_LOADERS.forEach((l) => {
+    try { l(); } catch { /* niet-fataal */ }
+  });
+  if (typeof window === 'undefined') return;
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(runAll, { timeout: 2000 });
+  } else {
+    setTimeout(runAll, 300);
+  }
+}
 
 // =====================================================================
 // SaasPlaceholder — tijdelijke pagina met beheerder-look voor SaaS tabs
@@ -366,14 +404,26 @@ function SaasNotifications() {
 }
 
 
-const InstellingenHub = lazy(() => import('./admin/InstellingenHub'));
-const Locations = lazy(() => import('./admin/Locations'));
-const Subscriptions = lazy(() => import('./admin/Subscriptions'));
-const SaasOverview = lazy(() => import('./admin/SaasOverview'));
-const SaasKasregister = lazy(() => import('./admin/SaasKasregister'));
-const SaasSettings = lazy(() => import('./admin/SaasSettings'));
-const LandingEditor = lazy(() => import('./admin/LiveLandingEditor'));
-const PlansAdmin = lazy(() => import('./admin/PlansAdmin'));
+const loadInstellingenHub = () => import('./admin/InstellingenHub');
+const loadLocations = () => import('./admin/Locations');
+const loadSubscriptions = () => import('./admin/Subscriptions');
+const loadSaasOverview = () => import('./admin/SaasOverview');
+const loadSaasKasregister = () => import('./admin/SaasKasregister');
+const loadSaasSettings = () => import('./admin/SaasSettings');
+const loadLandingEditor = () => import('./admin/LiveLandingEditor');
+const loadPlansAdmin = () => import('./admin/PlansAdmin');
+const InstellingenHub = lazy(loadInstellingenHub);
+const Locations = lazy(loadLocations);
+const Subscriptions = lazy(loadSubscriptions);
+const SaasOverview = lazy(loadSaasOverview);
+const SaasKasregister = lazy(loadSaasKasregister);
+const SaasSettings = lazy(loadSaasSettings);
+const LandingEditor = lazy(loadLandingEditor);
+const PlansAdmin = lazy(loadPlansAdmin);
+ADMIN_TAB_LOADERS.push(
+  loadInstellingenHub, loadLocations, loadSubscriptions, loadSaasOverview,
+  loadSaasKasregister, loadSaasSettings, loadLandingEditor, loadPlansAdmin,
+);
 import SetupWizardSheet from './admin/SetupWizardSheet';
 import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
@@ -3932,6 +3982,13 @@ export default function AdminDashboard() {
     [isAdmin]
   );
 
+  // JS-CHUNK PREFETCH bij dashboard mount — laadt alle lazy tab-componenten
+  // in de achtergrond zodra de browser idle is. Zo voelt elke tabwissel
+  // instant aan, zonder Suspense-fallback flash.
+  useEffect(() => {
+    if (isAdmin) prefetchAdminChunks();
+  }, [isAdmin]);
+
   // Live-sync SSE — luister naar /api/admin/events en dispatch een window
   // event zodra een andere admin-tab/-apparaat iets muteert. Alle pagina's
   // die useAutoRefresh gebruiken herladen dan onmiddellijk.
@@ -4188,7 +4245,7 @@ export default function AdminDashboard() {
         <ImpersonationBanner />
         <TrialBanner />
         <main className="flex-1 p-5 md:px-6 md:py-5 lg:px-8 lg:pt-3 pb-32 md:pb-8 w-full">
-          <Suspense fallback={<ListSkeleton />}>
+          <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           {tab === 'companies' && <Companies />}
           {tab === 'subscriptions' && <Subscriptions />}
           {tab === 'saas_overview' && <SaasOverview />}
