@@ -832,8 +832,23 @@ function Footer({ onLogin }) {
             <p className="text-xs text-white/40">© {new Date().getFullYear()} SuriRent. Alle rechten voorbehouden.</p>
             <div className="flex items-center gap-2" data-testid="footer-payment-logos">
               <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mr-1">Betaal met</span>
-              <span className="inline-flex items-center bg-white rounded-md px-3 py-1 shadow-sm">
-                <span className="text-xs font-semibold text-slate-700" data-testid="footer-payment-methods">Contant · Bankoverschrijving</span>
+              <span className="inline-flex items-center bg-white rounded-md px-2 py-1 shadow-sm">
+                <img
+                  src="/payment-logos/mope.webp"
+                  alt="Betaal met MOPÉ"
+                  className="h-5 w-auto object-contain"
+                  data-testid="footer-logo-mope"
+                  loading="lazy"
+                />
+              </span>
+              <span className="inline-flex items-center bg-white rounded-md px-2 py-1 shadow-sm">
+                <img
+                  src="/payment-logos/uni5pay.webp"
+                  alt="Uni5Pay"
+                  className="h-5 w-auto object-contain"
+                  data-testid="footer-logo-uni5pay"
+                  loading="lazy"
+                />
               </span>
             </div>
           </div>
