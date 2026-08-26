@@ -2530,12 +2530,9 @@ def _api_base_url() -> str:
 
 @api.get("/billing/me/checkout-options")
 async def billing_me_checkout_options(user=Depends(get_current_user)):
-    """Returns which gateways are configured for SaaS subscription payments,
-    plus the amount in the company's display currency.
-    Gateways are filtered by display currency:
-      - SRD companies: Mope only (SRD)
-      - EUR companies: SumUp only (EUR)
-    """
+    """Returns the SaaS subscription amount in the company's display currency.
+    Alle online-gateway integraties (Mope/SumUp/Uni5Pay) zijn verwijderd —
+    betalingen gaan alleen via handmatige bankoverschrijving of contant."""
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
@@ -2543,13 +2540,6 @@ async def billing_me_checkout_options(user=Depends(get_current_user)):
     plan = await _plan_for_company(c.get("plan", "starter"), c)
     display_currency = _company_display_currency(c)
     fx = await _get_eur_per_srd()
-    doc = await _saas_settings_doc()
-    mope = doc.get("mope") or {}
-    sumup = doc.get("sumup") or {}
-    mope_creds_ok = bool(mope.get("enabled")) and bool((mope.get("api_key") or "").strip())
-    sumup_creds_ok = (bool(sumup.get("enabled"))
-                      and bool((sumup.get("api_key") or "").strip())
-                      and bool((sumup.get("merchant_code") or "").strip()))
     return {
         "amount": plan["amount"],
         "currency": plan["currency"],
@@ -2558,21 +2548,13 @@ async def billing_me_checkout_options(user=Depends(get_current_user)):
         "eur_amount": plan["amount"] if display_currency == "EUR" else _convert_to_eur(plan["amount"], plan["currency"], fx["rate"]),
         "eur_per_srd": fx["rate"],
         "fx_source": fx["source"],
-        "mope": {
-            "enabled": mope_creds_ok and display_currency == "SRD",
-            "test_mode": bool(mope.get("test_mode", True)),
-        },
-        "sumup": {
-            "enabled": sumup_creds_ok and display_currency == "EUR",
-            "test_mode": bool(sumup.get("test_mode", True)),
-            "eur_amount": plan["amount"] if display_currency == "EUR" else _convert_to_eur(plan["amount"], plan["currency"], fx["rate"]),
-        },
     }
 
 
-class SaasCheckoutIn(BaseModel):
-    invoice_id: Optional[str] = None  # optional — falls back to first open invoice for this company
-    provider: Literal["mope", "sumup"]
+# NOTE: /billing/me/checkout endpoint (Mope + SumUp gateways) is verwijderd
+# omdat de app geen online betaalproviders meer ondersteunt. SaaS-facturen
+# worden nu uitsluitend via handmatige bankoverschrijving voldaan (zie
+# /superadmin/saas-payments).
 
 
 async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
@@ -2609,103 +2591,14 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
 
 
 @api.post("/billing/me/checkout")
-async def billing_me_checkout(body: SaasCheckoutIn, user=Depends(get_current_user)):
-    """Tenant-initiated checkout for the SaaS subscription invoice.
-    Provider: mope (SRD) or sumup (EUR). Returns the redirect URL."""
-    from payments_service import (
-        mope_create_payment_request, sumup_create_checkout, GatewayError,
+async def billing_me_checkout():
+    """Deprecated — online betaal-gateways (Mope/SumUp/Uni5Pay) zijn
+    verwijderd uit de app. Klanten betalen SaaS-facturen alleen nog via
+    handmatige bankoverschrijving."""
+    raise HTTPException(
+        status_code=410,
+        detail="Online betaal-gateways zijn verwijderd. Betaal via bankoverschrijving.",
     )
-    cid = company_id_of(user)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
-    c = await db.companies.find_one({"id": cid}, {"_id": 0})
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-
-    if body.invoice_id:
-        inv = await db.subscription_invoices.find_one({"id": body.invoice_id, "company_id": cid}, {"_id": 0})
-        if not inv:
-            raise HTTPException(status_code=404, detail="Factuur niet gevonden")
-        if inv.get("status") == "paid":
-            raise HTTPException(status_code=400, detail="Deze factuur is al voldaan")
-    else:
-        inv = await _ensure_open_invoice_for_company(c, user.get("email", ""))
-
-    doc = await _saas_settings_doc()
-    app_url = (doc.get("branding") or {}).get("app_url") or _app_base_url()
-    api_url = _api_base_url()
-    redirect_url = f"{app_url}/admin?tab=mijn_abonnement&checkout=done"
-    description = f"SuriRent abonnement — {(c.get('name') or '')[:40]}"
-
-    if body.provider == "mope":
-        cfg = (doc.get("mope") or {})
-        if not cfg.get("enabled") or not (cfg.get("api_key") or "").strip():
-            raise HTTPException(status_code=400, detail="Mope is niet ingeschakeld onder SaaS Instellingen.")
-        try:
-            res = await mope_create_payment_request(
-                cfg,
-                description=description,
-                amount=float(inv["amount"]),
-                currency=inv["currency"],
-                order_id=inv["id"],
-                redirect_url=redirect_url,
-            )
-        except GatewayError as e:
-            raise HTTPException(status_code=502, detail=str(e))
-        pr = {
-            "id": new_id(),
-            "invoice_id": inv["id"],
-            "company_id": cid,
-            "provider": "mope",
-            "provider_id": str(res["id"]),
-            "amount": float(inv["amount"]),
-            "currency": inv["currency"],
-            "url": res["url"],
-            "status": "open",
-            "created_at": iso(now_utc()),
-            "created_by": user.get("email"),
-        }
-        await db.saas_payment_requests.insert_one(pr)
-        pr.pop("_id", None)
-        return {"url": res["url"], "provider": "mope", "amount": pr["amount"], "currency": pr["currency"]}
-
-    # SumUp (EUR)
-    cfg = (doc.get("sumup") or {})
-    if not cfg.get("enabled") or not (cfg.get("api_key") or "").strip() or not (cfg.get("merchant_code") or "").strip():
-        raise HTTPException(status_code=400, detail="SumUp is niet ingeschakeld onder SaaS Instellingen.")
-    fx = await _get_eur_per_srd()
-    eur_amount = _convert_to_eur(inv["amount"], inv["currency"], fx["rate"])
-    if eur_amount <= 0:
-        raise HTTPException(status_code=400, detail="EUR-bedrag kon niet bepaald worden (wisselkoers ontbreekt).")
-    try:
-        res = await sumup_create_checkout(
-            cfg,
-            description=description,
-            amount_eur=eur_amount,
-            checkout_reference=f"saas_inv_{inv['id']}",
-            redirect_url=redirect_url,
-            return_url=f"{api_url}/api/webhooks/sumup-saas",
-        )
-    except GatewayError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    pr = {
-        "id": new_id(),
-        "invoice_id": inv["id"],
-        "company_id": cid,
-        "provider": "sumup",
-        "provider_id": str(res["id"]),
-        "amount": eur_amount,
-        "currency": "EUR",
-        "amount_srd_equivalent": float(inv["amount"]) if (inv["currency"] or "").upper() == "SRD" else None,
-        "eur_per_srd": fx["rate"],
-        "url": res["hosted_checkout_url"],
-        "status": "open",
-        "created_at": iso(now_utc()),
-        "created_by": user.get("email"),
-    }
-    await db.saas_payment_requests.insert_one(pr)
-    pr.pop("_id", None)
-    return {"url": res["hosted_checkout_url"], "provider": "sumup", "amount": eur_amount, "currency": "EUR"}
 
 
 
@@ -2975,85 +2868,9 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
     return pr
 
 
-@api.post("/webhooks/mope-saas")
-async def mope_saas_webhook(request: Request):
-    """Webhook for SaaS-level Mope payments (subscription billing).
-    Separate from the per-company kiosk Mope webhook at /api/webhooks/mope."""
-    from payments_service import mope_get_payment_request, GatewayError
-    try:
-        body = await request.json()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    pr_provider_id = (body or {}).get("id")
-    if not pr_provider_id:
-        raise HTTPException(status_code=400, detail="Missing id")
-    pr = await db.saas_payment_requests.find_one(
-        {"provider_id": str(pr_provider_id), "provider": "mope"}, {"_id": 0}
-    )
-    if not pr:
-        return {"ok": True, "ignored": True}
-    doc = await _saas_settings_doc()
-    cfg = doc.get("mope") or {}
-    expected_token = (cfg.get("api_key") or "").strip()
-    auth_header = request.headers.get("authorization", "")
-    sent_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
-    if expected_token and sent_token and sent_token != expected_token:
-        raise HTTPException(status_code=401, detail="Invalid webhook token")
-    try:
-        remote = await mope_get_payment_request(cfg, pr_provider_id)
-    except GatewayError:
-        return {"ok": True, "queued": True}
-    if (remote or {}).get("status") == "paid":
-        await _record_saas_payment_from_gateway(pr, remote)
-    else:
-        await db.saas_payment_requests.update_one(
-            {"id": pr["id"]}, {"$set": {"status": remote.get("status", pr["status"]), "gateway_meta": remote}}
-        )
-    return {"ok": True, "status": remote.get("status")}
-
-
-@api.post("/webhooks/sumup-saas")
-async def sumup_saas_webhook(request: Request):
-    """SumUp webhook for SaaS subscriptions. Payload: {event_type, id}.
-    See: https://developer.sumup.com/online-payments/webhooks/"""
-    from payments_service import sumup_get_checkout, GatewayError
-    try:
-        body = await request.json()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    event_type = (body or {}).get("event_type")
-    checkout_id = (body or {}).get("id")
-    if not checkout_id:
-        raise HTTPException(status_code=400, detail="Missing id")
-    if event_type and event_type != "CHECKOUT_STATUS_CHANGED":
-        return {"ok": True, "ignored": True}
-    pr = await db.saas_payment_requests.find_one(
-        {"provider_id": str(checkout_id), "provider": "sumup"}, {"_id": 0}
-    )
-    if not pr:
-        return {"ok": True, "ignored": True}
-    doc = await _saas_settings_doc()
-    cfg = doc.get("sumup") or {}
-    try:
-        remote = await sumup_get_checkout(cfg, str(checkout_id))
-    except GatewayError:
-        return {"ok": True, "queued": True}
-    status_val = (remote or {}).get("status", "").upper()
-    # Validate amount/currency match to prevent stale/forged webhook from auto-marking paid
-    try:
-        if status_val == "PAID":
-            if float(remote.get("amount") or 0) + 0.01 < float(pr["amount"]) - 0.01:
-                return {"ok": True, "ignored": True, "reason": "amount mismatch"}
-            if (remote.get("currency") or "").upper() != "EUR":
-                return {"ok": True, "ignored": True, "reason": "currency mismatch"}
-            await _record_saas_payment_from_gateway(pr, remote)
-        else:
-            await db.saas_payment_requests.update_one(
-                {"id": pr["id"]}, {"$set": {"status": status_val.lower() or pr["status"], "gateway_meta": remote}}
-            )
-    except Exception:
-        return {"ok": True, "error": True}
-    return {"ok": True, "status": status_val}
+# NOTE: /webhooks/mope-saas + /webhooks/sumup-saas endpoints zijn verwijderd.
+# De app ondersteunt geen online betaalproviders meer — alle SaaS-betalingen
+# gaan via handmatige bankoverschrijving die door superadmin wordt bevestigd.
 
 
 # =====================================================================
@@ -3805,8 +3622,6 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
         "kkf_number": c.get("kkf_number") or "",
         "bank_account_sr": c.get("bank_account_sr") or "",
         "bank_account_nl": c.get("bank_account_nl") or "",
-        "mope_account": c.get("mope_account") or "",
-        "uni5pay_account": c.get("uni5pay_account") or "",
     }
     # Verhuurder-persoonsgegevens zijn PRIVATE — alleen voor eigen admin
     # bewerkscherm, nooit voor publieke slug-lookups.
@@ -4018,8 +3833,6 @@ class CompanyProfileIn(BaseModel):
     kkf_number: Optional[str] = None
     bank_account_sr: Optional[str] = None
     bank_account_nl: Optional[str] = None
-    mope_account: Optional[str] = None
-    uni5pay_account: Optional[str] = None
     # Verhuurder-persoonsgegevens t.b.v. huurcontracten
     landlord_name: Optional[str] = None       # Volledige naam van de verhuurder
     landlord_birth_date: Optional[str] = None # YYYY-MM-DD
@@ -4054,10 +3867,6 @@ async def put_my_company_profile(
         update["bank_account_sr"] = body.bank_account_sr.strip()[:200]
     if body.bank_account_nl is not None:
         update["bank_account_nl"] = body.bank_account_nl.strip()[:200]
-    if body.mope_account is not None:
-        update["mope_account"] = body.mope_account.strip()[:200]
-    if body.uni5pay_account is not None:
-        update["uni5pay_account"] = body.uni5pay_account.strip()[:200]
     if body.landlord_name is not None:
         update["landlord_name"] = body.landlord_name.strip()[:200]
     if body.landlord_birth_date is not None:
@@ -4097,8 +3906,6 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
         bool((c.get("contact_phone") or "").strip())
     has_bank = bool((c.get("bank_account_sr") or "").strip()) or \
         bool((c.get("bank_account_nl") or "").strip())
-    has_wallet = bool((c.get("mope_account") or "").strip()) or \
-        bool((c.get("uni5pay_account") or "").strip())
 
     apt_count = await db.apartments.count_documents({"company_id": cid})
     tenant_count = await db.tenants.count_documents({"company_id": cid})
@@ -4106,7 +3913,6 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
     steps = [
         {"id": "profile", "label": "Bedrijfsgegevens", "done": bool(has_name and has_contact)},
         {"id": "bank", "label": "Bankrekening", "done": has_bank},
-        {"id": "wallet", "label": "Mobile wallet (Mope/Uni5Pay)", "done": has_wallet},
         {"id": "apartment", "label": "Eerste appartement", "done": apt_count > 0},
         {"id": "tenant", "label": "Eerste huurder", "done": tenant_count > 0},
     ]
@@ -4917,7 +4723,7 @@ class SubscriptionPaymentIn(BaseModel):
     company_id: str
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["bank", "mope", "contant", "overig"] = "bank"
+    method: Literal["bank", "contant", "overig"] = "bank"
     reference: Optional[str] = ""
     note: Optional[str] = ""
     paid_at: Optional[str] = None  # ISO date; defaults to now
@@ -5182,26 +4988,13 @@ async def stop_impersonating(response: Response, user=Depends(get_current_user))
 @api.get("/superadmin/settings")
 async def get_saas_settings(user=Depends(require_role("superadmin"))):
     doc = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0}) or {}
-    # Mask Mope/SMTP secrets in response — only return whether they're set
-    mope = doc.get("mope", {}) or {}
+    # Mask SMTP secrets in response — only return whether they're set
     smtp = doc.get("smtp", {}) or {}
     return {
         "banking": doc.get("banking", {
             "bank_name": "", "account_name": "", "account_number": "", "swift": "",
             "support_email": "", "whatsapp": "",
         }),
-        "mope": {
-            "enabled": bool(mope.get("enabled")),
-            "merchant_id": mope.get("merchant_id", ""),
-            "api_key_set": bool(mope.get("api_key")),
-            "test_mode": bool(mope.get("test_mode", True)),
-        },
-        "sumup": {
-            "enabled": bool((doc.get("sumup") or {}).get("enabled")),
-            "merchant_code": (doc.get("sumup") or {}).get("merchant_code", ""),
-            "api_key_set": bool((doc.get("sumup") or {}).get("api_key")),
-            "test_mode": bool((doc.get("sumup") or {}).get("test_mode", True)),
-        },
         "fx": {
             "mode": (doc.get("fx") or {}).get("mode", "auto"),
             "manual_eur_per_srd": (doc.get("fx") or {}).get("manual_eur_per_srd", 0),
@@ -5226,8 +5019,6 @@ async def get_saas_settings(user=Depends(require_role("superadmin"))):
 
 class SaasSettingsIn(BaseModel):
     banking: Optional[dict] = None
-    mope: Optional[dict] = None
-    sumup: Optional[dict] = None
     fx: Optional[dict] = None
     smtp: Optional[dict] = None
     branding: Optional[dict] = None
@@ -5241,24 +5032,6 @@ async def update_saas_settings(body: SaasSettingsIn, user=Depends(require_role("
         update["banking"] = body.banking
     if body.branding is not None:
         update["branding"] = body.branding
-    if body.mope is not None:
-        cur = existing.get("mope", {}) or {}
-        new_mope = {
-            "enabled": bool(body.mope.get("enabled", cur.get("enabled", False))),
-            "merchant_id": body.mope.get("merchant_id", cur.get("merchant_id", "")),
-            "test_mode": bool(body.mope.get("test_mode", cur.get("test_mode", True))),
-            "api_key": body.mope.get("api_key") if body.mope.get("api_key") else cur.get("api_key", ""),
-        }
-        update["mope"] = new_mope
-    if body.sumup is not None:
-        cur = existing.get("sumup", {}) or {}
-        new_sumup = {
-            "enabled": bool(body.sumup.get("enabled", cur.get("enabled", False))),
-            "merchant_code": body.sumup.get("merchant_code", cur.get("merchant_code", "")),
-            "test_mode": bool(body.sumup.get("test_mode", cur.get("test_mode", True))),
-            "api_key": body.sumup.get("api_key") if body.sumup.get("api_key") else cur.get("api_key", ""),
-        }
-        update["sumup"] = new_sumup
     if body.fx is not None:
         cur = existing.get("fx", {}) or {}
         new_fx = {
@@ -6402,7 +6175,7 @@ class TenantMaintenanceIn(BaseModel):
 class TenantPaymentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "mope", "sumup", "uni5pay"] = "contant"
+    method: Literal["contant", "bank"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None
@@ -6474,18 +6247,15 @@ async def tenant_portal_invoices(tenant=Depends(get_tenant_session)):
 async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get_tenant_session)):
     """Huurder registreert zelf een betaling via de Kiosk.
 
-    Bewijs-vereiste flow (bank, Mope, Uni5Pay):
-      • method == "bank|mope|uni5pay" → status = "pending_approval"
+    Bewijs-vereiste flow (alleen bank):
+      • method == "bank" → status = "pending_approval"
       • bank_statement_id is verplicht (geüpload via /bank-statement-upload)
-      • bank_country (alleen bij bank): "SR" of "NL"
+      • bank_country: "SR" of "NL"
       • Factuur blijft open tot OCR auto-approve of admin manual approve
     """
     is_bank = body.method == "bank"
-    needs_proof = body.method in ("bank", "mope", "uni5pay")
-    proof_label = {
-        "bank": "Bankafschrift", "mope": "Mope betaalbewijs",
-        "uni5pay": "Uni5Pay betaalbewijs",
-    }.get(body.method, "Betaalbewijs")
+    needs_proof = is_bank
+    proof_label = "Bankafschrift"
     if needs_proof:
         if not body.bank_statement_id:
             raise HTTPException(
@@ -6530,7 +6300,7 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         approved_by=tenant.get("name") or "Huurder Kiosk",
         status=payment_status,
     )
-    # Voeg bewijs-metadata toe (bank/mope/uni5pay)
+    # Voeg bewijs-metadata toe (bank)
     if needs_proof:
         await db.payments.update_one(
             {"id": doc["id"]},
@@ -6564,8 +6334,7 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     # Notify admins of the company about the self-service payment.
     try:
         if needs_proof:
-            method_label = {"bank": "Bankoverschrijving", "mope": "Mope-betaling",
-                            "uni5pay": "Uni5Pay-betaling"}.get(body.method, "Betaling")
+            method_label = "Bankoverschrijving"
             extra = ""
             if is_bank:
                 extra = f" ({'Suriname' if body.bank_country == 'SR' else 'Nederland'})"
@@ -8923,14 +8692,6 @@ async def update_customer_display(body: CustomerDisplayIn, request: Request):
                 new_payload["amount"] = existing_payload["amount"]
                 new_payload["currency"] = existing_payload.get("currency") or new_payload.get("currency")
                 new_payload["categories"] = existing_payload.get("categories") or new_payload.get("categories") or []
-    # Behoud Mope/Uni5Pay QR-velden ALLEEN wanneer we in een actieve betaalfase
-    # zitten (confirm/receipt) ÉN het geen sessie-reset is. Tijdens method-picken
-    # of idle/overview moeten oude QR-data NIET meer doorgegeven worden — anders
-    # blijft een stale QR eeuwig zichtbaar op het klantenscherm.
-    if not session_reset and new_step_lc in ("confirm", "receipt"):
-        for k in ("mope_qr", "mope_ref", "mope_mode", "mope_amount", "mope_currency", "mope_created_at", "mope_paid_at"):
-            if existing_payload.get(k) and not new_payload.get(k):
-                new_payload[k] = existing_payload[k]
     if new_payload:
         new_state["payload"] = new_payload
 
@@ -8972,28 +8733,6 @@ async def kiosk_get_customer_display(request: Request):
         raise HTTPException(status_code=401, detail="Niet ingelogd op kiosk")
     doc = await db.customer_display.find_one({"company_id": cid}, {"_id": 0})
     state = (doc or {}).get("state") or {"step": "idle"}
-    # Auto-refresh Mope status wanneer er een actief request_id is en geen paid_at.
-    payload = state.get("payload") or {}
-    req_id = payload.get("mope_request_id")
-    if req_id and not payload.get("mope_paid_at") and payload.get("mope_mode") in ("test", "live"):
-        company = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "integrations": 1})
-        api_key = await _mope_api_key_for_company(company)
-        if api_key:
-            try:
-                status_data = await _mope_get_payment_status(api_key, req_id)
-                new_status = status_data.get("status")
-                if new_status and new_status != payload.get("mope_status"):
-                    payload["mope_status"] = new_status
-                    if new_status == "paid":
-                        payload["mope_paid_at"] = iso(now_utc())
-                    state["payload"] = payload
-                    state["updated_at"] = iso(now_utc())
-                    await db.customer_display.update_one(
-                        {"company_id": cid},
-                        {"$set": {"state": state, "updated_at": state["updated_at"]}},
-                    )
-            except Exception as e:
-                print(f"[mope] poll status failed: {e}")
     return {"state": state}
 
 
@@ -9072,7 +8811,7 @@ async def clear_customer_display(request: Request):
 
 
 class CustomerMethodIn(BaseModel):
-    method: Literal["contant", "bank", "mope", "sumup", "uni5pay"]
+    method: Literal["contant", "bank"]
 
 
 def _generate_qr_data_url(payload: str, size_px: int = 480) -> str:
@@ -9082,253 +8821,10 @@ def _generate_qr_data_url(payload: str, size_px: int = 480) -> str:
     return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
-MOPE_API_BASE = "https://api.mope.sr/api"
-
-
-async def _mope_create_payment_request(api_key: str, amount: float, currency: str,
-                                       description: str, order_id: str, redirect_url: str):
-    """Create a payment request via Mope API. Returns (request_id, payment_url)."""
-    import httpx as _httpx
-    amount_cents = int(round(amount * 100))
-    async with _httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(
-            f"{MOPE_API_BASE}/shop/payment_request",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "description": description[:120],
-                "amount": amount_cents,
-                "order_id": order_id[:120],
-                "currency": currency,
-                "redirect_url": redirect_url[:255],
-            },
-        )
-        r.raise_for_status()
-        data = r.json()
-        return data["id"], data["url"]
-
-
-async def _mope_get_payment_status(api_key: str, request_id: str) -> dict:
-    import httpx as _httpx
-    async with _httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(
-            f"{MOPE_API_BASE}/shop/payment_request/{request_id}",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        r.raise_for_status()
-        return r.json()
-
-
-async def _mope_api_key_for_company(company: dict) -> str:
-    """Resolve Mope API key. Priority:
-    1. company_settings.mope.api_key (gezet via Instellingen UI)
-    2. company.integrations.mope.api_key (legacy)
-    3. env MOPE_API_KEY (globale fallback voor test)"""
-    cid = (company or {}).get("id")
-    if cid:
-        settings = await db.company_settings.find_one(
-            {"company_id": cid}, {"_id": 0, "mope": 1}
-        )
-        key = ((settings or {}).get("mope") or {}).get("api_key") or ""
-        if key:
-            return key
-    integrations = (company or {}).get("integrations") or {}
-    cfg = integrations.get("mope") or {}
-    return cfg.get("api_key") or os.environ.get("MOPE_API_KEY") or ""
-
-
-@api.post("/kiosk/mope/create-qr")
-async def kiosk_mope_create_qr(request: Request):
-    """Maakt een Mope payment_request via de echte Mope-API wanneer een
-    API-key beschikbaar is (env MOPE_API_KEY of company.integrations.mope.api_key).
-    De QR bevat `https://mope.sr/p/<id>` zodat de Mope-app hem herkent en
-    direct de betaal-flow opent. Zonder API-key: lokale mock-QR."""
-    cid = None
-    try:
-        ks = await get_kiosk_session(request)
-        cid = ks.get("company_id")
-    except HTTPException:
-        pass
-    if not cid:
-        try:
-            user = await get_current_user(request)
-            cid = company_id_of(user)
-        except HTTPException:
-            cid = None
-    if not cid:
-        raise HTTPException(status_code=401, detail="Niet ingelogd op kiosk")
-
-    doc = await db.customer_display.find_one({"company_id": cid}, {"_id": 0})
-    state = (doc or {}).get("state") or {}
-    payload = state.get("payload") or {}
-    if (payload.get("method") or "").lower() != "mope":
-        raise HTTPException(status_code=400, detail="Klant heeft Mope niet gekozen")
-    amount = float(payload.get("amount") or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Geen bedrag")
-    currency = payload.get("currency") or "SRD"
-
-    company = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "integrations": 1, "name": 1, "slug": 1})
-    api_key = await _mope_api_key_for_company(company)
-    order_id = f"KIOSK-{secrets.token_hex(4).upper()}"
-    redirect_url = _public_url(f"/kiosk/klant?c={(company or {}).get('slug', '')}")
-
-    mode = "mock"
-    request_id = None
-    qr_text = None
-    api_error = None
-    if api_key:
-        try:
-            request_id, qr_text = await _mope_create_payment_request(
-                api_key=api_key,
-                amount=amount,
-                currency=currency,
-                description=f"{(company or {}).get('name', 'Vastgoed')} kiosk",
-                order_id=order_id,
-                redirect_url=redirect_url,
-            )
-            mode = "test" if api_key.startswith("test_") else "live"
-        except Exception as e:
-            api_error = str(e)
-            print(f"[mope] create-qr API call failed, falling back to mock: {e}")
-
-    if not qr_text:
-        # Mock fallback — QR die de echte app NIET kan scannen, maar onze
-        # test-knop wel kan bevestigen.
-        request_id = f"MOCK-{secrets.token_hex(8)}"
-        qr_text = f"mope://pay?merchant={cid[:8]}&amount={amount:.2f}&currency={currency}&ref={request_id}"
-
-    qr_data_url = _generate_qr_data_url(qr_text, size_px=480)
-
-    payload["mope_qr"] = qr_data_url
-    payload["mope_qr_url"] = qr_text  # de URL zelf, zodat we 'em ook plain kunnen tonen
-    payload["mope_ref"] = order_id
-    payload["mope_request_id"] = request_id
-    payload["mope_mode"] = mode
-    payload["mope_amount"] = amount
-    payload["mope_currency"] = currency
-    payload["mope_created_at"] = iso(now_utc())
-    if api_error:
-        payload["mope_api_error"] = api_error[:200]
-    payload.pop("mope_paid_at", None)
-    state["payload"] = payload
-    state["updated_at"] = iso(now_utc())
-    await db.customer_display.update_one(
-        {"company_id": cid},
-        {"$set": {"state": state, "updated_at": state["updated_at"]}},
-        upsert=True,
-    )
-    return {
-        "ok": True, "mode": mode, "ref": order_id, "request_id": request_id,
-        "qr": qr_data_url, "qr_url": qr_text,
-        "amount": amount, "currency": currency,
-        **({"api_error": api_error} if api_error else {}),
-    }
-
-
-@api.post("/integrations/mope/webhook")
-async def mope_webhook(request: Request):
-    """Mope's webhook stuurt enkel het payment_request_id. Wij zoeken
-    in alle bedrijven naar een actieve customer_display met dit id en
-    refreshen de status via de Mope GET endpoint."""
-    body = {}
-    try:
-        body = await request.json()
-    except Exception:
-        pass
-    req_id = (body or {}).get("id")
-    if not req_id:
-        raise HTTPException(status_code=400, detail="Missing id")
-    docs = await db.customer_display.find(
-        {"state.payload.mope_request_id": req_id}, {"_id": 0}
-    ).to_list(10)
-    for doc in docs:
-        cid = doc.get("company_id")
-        company = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "integrations": 1})
-        api_key = await _mope_api_key_for_company(company)
-        if not api_key:
-            continue
-        try:
-            status_data = await _mope_get_payment_status(api_key, req_id)
-        except Exception:
-            continue
-        state = doc.get("state") or {}
-        payload = state.get("payload") or {}
-        payload["mope_status"] = status_data.get("status")
-        if status_data.get("status") == "paid" and not payload.get("mope_paid_at"):
-            payload["mope_paid_at"] = iso(now_utc())
-        state["payload"] = payload
-        state["updated_at"] = iso(now_utc())
-        await db.customer_display.update_one(
-            {"company_id": cid},
-            {"$set": {"state": state, "updated_at": state["updated_at"]}},
-        )
-    return Response(status_code=204)
-
-
-@api.post("/admin/integrations/mope")
-async def admin_set_mope_integration(request: Request, user=Depends(get_current_user)):
-    """Beheerder slaat Mope API-key op voor zijn bedrijf. Body:
-    `{api_key: str, merchant_id?: str}`. Token kan `test_` of `live_` prefix
-    hebben — wij detecteren het type automatisch."""
-    body = await request.json()
-    api_key = (body or {}).get("api_key", "").strip()
-    cid = company_id_of(user)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
-    company = await db.companies.find_one({"id": cid}, {"_id": 0})
-    integrations = company.get("integrations") or {}
-    integrations["mope"] = {
-        "api_key": api_key,
-        "merchant_id": (body or {}).get("merchant_id", ""),
-        "live": bool(api_key and not api_key.startswith("test_")),
-        "updated_at": iso(now_utc()),
-    }
-    await db.companies.update_one({"id": cid}, {"$set": {"integrations": integrations}})
-    return {"ok": True, "mode": "live" if integrations["mope"]["live"] else ("test" if api_key.startswith("test_") else "mock")}
-
-
-@api.get("/admin/integrations/mope")
-async def admin_get_mope_integration(user=Depends(get_current_user)):
-    cid = company_id_of(user)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
-    company = await db.companies.find_one({"id": cid}, {"_id": 0})
-    cfg = ((company or {}).get("integrations") or {}).get("mope") or {}
-    key = cfg.get("api_key") or ""
-    return {
-        "configured": bool(key),
-        "mode": "live" if cfg.get("live") else ("test" if key.startswith("test_") else ("mock" if not key else "unknown")),
-        # Mask key — show only last 4 chars
-        "api_key_preview": ("•" * max(0, len(key) - 4) + key[-4:]) if key else "",
-        "merchant_id": cfg.get("merchant_id", ""),
-        "updated_at": cfg.get("updated_at"),
-    }
-
-
-@api.post("/public/customer-display/{slug}/mope-confirm")
-async def public_mope_confirm(slug: str):
-    """Publiek — mock 'webhook' die de klant zelf triggert door op
-    'Ik heb betaald' te tikken op het klantenscherm. In LIVE-modus is dit
-    de echte Mope-webhook handler. Markeert de betaling als bevestigd zodat
-    de admin Kiosk er op verder kan."""
-    c = await db.companies.find_one({"slug": slug.lower()}, {"_id": 0, "id": 1})
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    doc = await db.customer_display.find_one({"company_id": c["id"]}, {"_id": 0})
-    state = (doc or {}).get("state") or {}
-    payload = state.get("payload") or {}
-    if not payload.get("mope_ref"):
-        raise HTTPException(status_code=409, detail="Geen actieve Mope-betaling")
-    if payload.get("mope_paid_at"):
-        return {"ok": True, "already": True}
-    payload["mope_paid_at"] = iso(now_utc())
-    state["payload"] = payload
-    state["updated_at"] = iso(now_utc())
-    await db.customer_display.update_one(
-        {"company_id": c["id"]},
-        {"$set": {"state": state, "updated_at": state["updated_at"]}},
-    )
-    return {"ok": True, "ref": payload.get("mope_ref")}
+# NOTE: Mope kiosk QR flow (MOPE_API_BASE, _mope_create_payment_request,
+# /kiosk/mope/create-qr, /integrations/mope/webhook, /admin/integrations/mope,
+# /public/customer-display/{slug}/mope-confirm) is verwijderd. De app
+# ondersteunt geen online betaalproviders meer — alleen contant + bank.
 
 
 @api.post("/public/customer-display/{slug}/select-method")
@@ -9419,8 +8915,7 @@ async def get_customer_display(slug: str, response: Response):
         {"slug": slug.lower()},
         {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1,
          "bank_account_sr": 1, "bank_account_nl": 1,
-         "contact_email": 1, "contact_phone": 1, "address": 1,
-         "mope_account": 1, "uni5pay_account": 1},
+         "contact_email": 1, "contact_phone": 1, "address": 1},
     )
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
@@ -10954,7 +10449,6 @@ async def _ensure_demo_company() -> dict:
                 "tagline": "Demo-omgeving — reset elke 30 min",
             },
             "bank_account_sr": "DSB Bank — 11.22.33.444 (Demo BV)",
-            "mope_account": "Demo BV +597 8000000",
             "demo_visits": 0,
         }
         await db.companies.insert_one(c)
@@ -11106,7 +10600,7 @@ async def _seed_demo_data(cid: str):
         "tenant_id": roy["id"], "tenant_name": roy["name"],
         "apartment_id": roy["apartment_id"],
         "amount": 4000, "currency": "SRD",
-        "category": "huur", "method": "mope",
+        "category": "huur", "method": "bank",
         "period_month": cur_m, "period_year": cur_y,
         "invoice_id": roy_inv_id, "receipt_number": f"D-KW-{inv_counter:05d}",
         "status": "approved", "note": "Deelbetaling van SRD 4.000",
@@ -12165,7 +11659,7 @@ async def push_notify_overdue(user=Depends(get_current_user)):
 
 
 # =====================================================================
-# Company settings (SMTP, Twilio, Mope, Uni5Pay, Shelly, custom domain)
+# Company settings (SMTP, Twilio, Shelly, custom domain, invoicing)
 # =====================================================================
 from settings_service import (
     empty_section as _empty_section,
@@ -12175,7 +11669,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "mope", "uni5pay", "shelly", "domain", "invoicing"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:
@@ -12288,30 +11782,6 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
             await send_sms(cfg, target, test_msg)
             return {"section": section, "ok": True, "detail": f"SMS testbericht verzonden naar {target}"}
         except TwilioError as e:
-            return {"section": section, "ok": False, "detail": str(e)}
-
-    if section in ("mope", "uni5pay"):
-        from payments_service import (
-            mope_create_payment_request, uni5pay_create_payment_request, GatewayError, is_mope_test_mode,
-        )
-        # Test by creating a TINY (1 cent) payment request — Mope test tokens return mock data.
-        # Production tokens will actually create a real request, so warn the user.
-        try:
-            if section == "mope":
-                if not is_mope_test_mode(cfg):
-                    return {"section": section, "ok": False,
-                            "detail": "Productie token gedetecteerd — test verbinding is alleen veilig met een test_ token. "
-                                      "Gebruik een sandbox-key om te testen."}
-                result = await mope_create_payment_request(
-                    cfg, description="SuriRent test", amount=1.00, currency="SRD",
-                    order_id=f"test-{new_id()[:8]}",
-                    redirect_url=cfg.get("callback_url") or "https://example.com/return",
-                )
-                return {"section": section, "ok": True,
-                        "detail": f"Mope test betaalverzoek aangemaakt: {result.get('url')}"}
-            await uni5pay_create_payment_request(cfg)
-            return {"section": section, "ok": True, "detail": "Uni5Pay test geslaagd"}
-        except GatewayError as e:
             return {"section": section, "ok": False, "detail": str(e)}
 
     if section == "shelly":
@@ -13782,98 +13252,7 @@ def _slug_aware_start_url(role: str, slug: str | None) -> str:
 
 
 
-# =====================================================================
-# Uni5Pay MOCK pay page
-#
-# Wanneer een klant de QR op de kiosk scant in mock-modus
-# (UNI5PAY_MOCK=1), komt zijn telefoon op deze pagina terecht. Hier ziet
-# de klant het bedrag en kan op "Ik heb betaald" tikken — wat een
-# bevestigings-scherm toont. De daadwerkelijke status-sync met de kiosk
-# komt later wanneer echte Uni5Pay webhooks beschikbaar zijn.
-# =====================================================================
-@app.get("/api/payments/mock-pay/{ref}", response_class=HTMLResponse)
-async def uni5pay_mock_pay_page(ref: str, amount: str = "0", currency: str = "SRD"):
-    safe_ref = (ref or "")[:64]
-    safe_amount = (amount or "0")[:16]
-    safe_currency = (currency or "SRD").upper()[:6]
-    if safe_currency not in ("SRD", "EUR", "USD"):
-        safe_currency = "SRD"
-    return f"""<!DOCTYPE html>
-<html lang="nl">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>Uni5Pay — Betaling</title>
-<style>
-  *,*::before,*::after {{ box-sizing: border-box; }}
-  body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-         background: #FF5C00; color: white; min-height: 100vh; display: flex; flex-direction: column;
-         align-items: center; justify-content: center; padding: 24px; -webkit-font-smoothing: antialiased; }}
-  .card {{ background: white; color: #0F0F0F; border-radius: 28px; padding: 32px 24px; max-width: 420px;
-          width: 100%; box-shadow: 0 30px 80px -20px rgba(0,0,0,0.4); text-align: center; }}
-  .badge {{ display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
-            background: #ECFDF5; color: #047857; font-size: 11px; font-weight: 800; letter-spacing: 0.15em;
-            text-transform: uppercase; margin-bottom: 12px; }}
-  .dot {{ width: 6px; height: 6px; border-radius: 50%; background: #10B981; animation: pulse 1.6s infinite; }}
-  @keyframes pulse {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
-  h1 {{ font-size: 22px; font-weight: 900; letter-spacing: -0.02em; margin: 4px 0 4px; }}
-  .ref {{ font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px;
-          color: #94A3B8; word-break: break-all; margin-bottom: 22px; }}
-  .amount {{ font-size: 44px; font-weight: 900; color: #FF5C00; letter-spacing: -0.02em; margin: 6px 0; }}
-  .amount span {{ font-size: 16px; color: #94A3B8; font-weight: 700; margin-left: 4px; }}
-  .label {{ font-size: 11px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
-            color: #94A3B8; margin-top: 6px; }}
-  hr {{ border: none; border-top: 1px solid #E2E8F0; margin: 22px 0; }}
-  button {{ width: 100%; height: 56px; border: none; border-radius: 14px; background: #FF5C00; color: white;
-            font-size: 17px; font-weight: 900; cursor: pointer; transition: transform 0.1s, background 0.2s; }}
-  button:active {{ transform: scale(0.97); background: #C74600; }}
-  button:disabled {{ background: #94A3B8; cursor: not-allowed; }}
-  .mock-note {{ font-size: 10px; color: #CBD5E1; margin-top: 16px; line-height: 1.4; }}
-  .success {{ display: none; }}
-  .success.show {{ display: block; animation: fadeIn 0.3s; }}
-  .pay-form.hide {{ display: none; }}
-  .success svg {{ width: 80px; height: 80px; margin: 8px auto 16px; display: block; }}
-  @keyframes fadeIn {{ from {{ opacity: 0; transform: scale(0.95); }} to {{ opacity: 1; transform: scale(1); }} }}
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="pay-form" id="payForm">
-      <span class="badge"><span class="dot"></span>UNI5PAY MOCK</span>
-      <h1>Betaling</h1>
-      <p class="ref">REF · {safe_ref}</p>
-      <p class="label">Bedrag</p>
-      <p class="amount">{safe_currency} {safe_amount}<span>/eenmalig</span></p>
-      <hr />
-      <button id="payBtn" onclick="completePay()">Ik heb betaald</button>
-      <p class="mock-note">
-        ⓘ Dit is een mock-betaalpagina. Bij integratie van de echte Uni5Pay API
-        zal deze pagina vervangen worden door de officiële Uni5Pay checkout.
-      </p>
-    </div>
-    <div class="success" id="success">
-      <svg viewBox="0 0 80 80" fill="none">
-        <circle cx="40" cy="40" r="36" fill="#ECFDF5" stroke="#10B981" stroke-width="3" />
-        <path d="M24 42 L36 54 L58 28" stroke="#10B981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <h1 style="color:#047857">Bedankt!</h1>
-      <p style="color:#475569;font-size:14px;margin:8px 0 0">Je betaling is geregistreerd. Je kunt dit venster sluiten.</p>
-    </div>
-  </div>
-  <script>
-    function completePay() {{
-      const btn = document.getElementById('payBtn');
-      btn.disabled = true;
-      btn.textContent = 'Bezig...';
-      setTimeout(() => {{
-        document.getElementById('payForm').classList.add('hide');
-        document.getElementById('success').classList.add('show');
-      }}, 600);
-    }}
-  </script>
-</body>
-</html>
-"""
+# NOTE: Uni5Pay mock pay page endpoint verwijderd — geen online providers meer.
 
 
 @app.get("/api/pwa/manifest")
@@ -13927,7 +13306,7 @@ async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
 
 
 class _TenantPayInstallmentIn(BaseModel):
-    method: Literal["contant", "mope", "uni5pay"] = "contant"
+    method: Literal["contant", "bank"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
 
@@ -13974,7 +13353,7 @@ async def kiosk_tenant_payment_plans(tenant_id: str, _session=Depends(get_kiosk_
 
 
 class _KioskPayInstallmentIn(BaseModel):
-    method: Literal["contant", "mope", "uni5pay"] = "contant"
+    method: Literal["contant", "bank"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
     employee_id: Optional[str] = None

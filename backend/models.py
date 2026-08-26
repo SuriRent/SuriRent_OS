@@ -123,7 +123,7 @@ class PaymentIn(BaseModel):
     apartment_id: Optional[str] = None
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "mope", "sumup", "uni5pay"] = "contant"
+    method: Literal["contant", "bank"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Loader2, Check, KeySquare, Mail, MessageCircle, CreditCard, Zap, Globe,
+  Loader2, Check, KeySquare, Mail, MessageCircle, Zap, Globe,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -8,8 +8,6 @@ import { api, formatError } from '../../../lib/api';
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
   { id: 'twilio', label: 'WhatsApp & SMS', icon: MessageCircle, desc: 'Twilio integratie voor WhatsApp- en SMS-meldingen.' },
-  { id: 'mope', label: 'Uni5Pay betalingen', icon: CreditCard, desc: 'Online betalingen via Uni5Pay (Suriname).' },
-  { id: 'uni5pay', label: 'Uni5Pay betalingen', icon: CreditCard, desc: 'Online betalingen via Uni5Pay.' },
   { id: 'shelly', label: 'Shelly elektriciteit', icon: Zap, desc: 'Smart breakers per appartement (Shelly Cloud).' },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, desc: 'Automatische maand-facturen na grace periode.' },
   { id: 'domain', label: 'Eigen domein', icon: Globe, desc: 'Koppel een eigen domein aan dit bedrijf.' },
@@ -140,53 +138,6 @@ export function TwilioForm({ initial }) {
         <TextField label="Auth Token" testid="twilio-token" type="password" value={d.auth_token ?? ''} onChange={(v) => s.onField('auth_token', v)} placeholder="••••• (laat leeg om huidige te behouden)" />
         <TextField label="WhatsApp afzender" testid="twilio-wa-from" value={d.whatsapp_from} onChange={(v) => s.onField('whatsapp_from', v)} placeholder="whatsapp:+14155238886" helper="Inclusief 'whatsapp:' prefix" />
         <TextField label="SMS afzender" testid="twilio-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)} placeholder="+597 xxx xxxx" />
-      </div>
-      <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled} />
-    </SectionShell>
-  );
-}
-
-export function PaymentGatewayForm({ section, initial }) {
-  const s = useSection(section, initial);
-  const d = s.data;
-  return (
-    <SectionShell msg={s.msg} err={s.err}>
-      <SwitchField label="Ingeschakeld" testid={`${section}-enabled`}
-        value={d.enabled} onChange={(v) => s.onField('enabled', v)}
-        desc="Wanneer aan kunnen huurders facturen online betalen." />
-      {section === 'mope' && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-slate-700">
-          <p className="font-black text-[#FF5C00] mb-1">Uni5Pay test/live-token aanvragen</p>
-          <p className="mb-2">
-            Voor een werkende QR-code (die de echte Uni5Pay-app herkent) heeft u een
-            API-token nodig van Mopé. Stuur een mail naar{' '}
-            <a href="mailto:info@mope.sr" className="text-[#FF5C00] font-bold underline">info@mope.sr</a>{' '}
-            of bezoek <a href="https://mope.sr/contact" target="_blank" rel="noreferrer"
-              className="text-[#FF5C00] font-bold underline">mope.sr/contact</a> en vraag een
-            webshop-token aan voor uw bedrijf (vereist business-account en bankbezoek).
-          </p>
-          <p className="text-xs text-slate-500">
-            Tokens met prefix <code className="bg-white px-1 rounded">test_</code> zijn voor testen
-            (bedrag 1,00 = open · 2,00 = gescand · 3,00 = niet bevestigd · ander = direct betaald).
-            Zonder token werkt het systeem in lokale mock-modus.
-          </p>
-        </div>
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextField label="Merchant ID" testid={`${section}-merchant`} value={d.merchant_id} onChange={(v) => s.onField('merchant_id', v)} placeholder="MERCH-xxxx" />
-        <div>
-          <FieldLabel>Omgeving</FieldLabel>
-          <select value={d.env} onChange={(e) => s.onField('env', e.target.value)} data-testid={`${section}-env`}
-            className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
-            <option value="sandbox">Sandbox (test)</option>
-            <option value="production">Productie (live)</option>
-          </select>
-        </div>
-        <TextField label="API key" testid={`${section}-apikey`} type="password" value={d.api_key ?? ''} onChange={(v) => s.onField('api_key', v)}
-          placeholder={section === 'mope' ? 'test_xxx... of live token van Mopé' : '••••• (laat leeg om huidige te behouden)'}
-          helper={section === 'mope' ? 'Plak hier het token dat u van Mopé heeft ontvangen.' : ''} />
-        <TextField label="Webhook secret" testid={`${section}-webhook`} type="password" value={d.webhook_secret ?? ''} onChange={(v) => s.onField('webhook_secret', v)} placeholder="••••• (laat leeg om huidige te behouden)" />
-        <TextField label="Callback URL" testid={`${section}-callback`} value={d.callback_url} onChange={(v) => s.onField('callback_url', v)} placeholder="https://jouw-bedrijf.com/payment-return" helper="Waar de gebruiker terugkeert na betalen" />
       </div>
       <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled} />
     </SectionShell>
@@ -545,8 +496,6 @@ export default function SettingsPage({ initialSection }) {
               </div>
               {section === 'smtp' && <SmtpForm initial={settings.smtp} />}
               {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
-              {section === 'mope' && <PaymentGatewayForm section="mope" initial={settings.mope} />}
-              {section === 'uni5pay' && <PaymentGatewayForm section="uni5pay" initial={settings.uni5pay} />}
               {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
               {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
               {section === 'domain' && <DomainForm initial={settings.domain} />}

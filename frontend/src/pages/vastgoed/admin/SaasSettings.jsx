@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Landmark, CreditCard, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, Euro, RefreshCw,
+  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
@@ -71,18 +71,6 @@ export default function SaasSettings() {
       const payload = {
         banking: data.banking,
         branding: data.branding,
-        mope: {
-          enabled: data.mope.enabled,
-          merchant_id: data.mope.merchant_id,
-          test_mode: data.mope.test_mode,
-          ...(data.mope.api_key ? { api_key: data.mope.api_key } : {}),
-        },
-        sumup: {
-          enabled: data.sumup?.enabled || false,
-          merchant_code: data.sumup?.merchant_code || '',
-          test_mode: data.sumup?.test_mode ?? true,
-          ...(data.sumup?.api_key ? { api_key: data.sumup.api_key } : {}),
-        },
         fx: {
           mode: data.fx?.mode || 'auto',
           manual_eur_per_srd: Number(data.fx?.manual_eur_per_srd) || 0,
@@ -129,7 +117,7 @@ export default function SaasSettings() {
       <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">SaaS Instellingen</h1>
-          <p className="text-sm text-slate-500 mt-1">Banking, betaalmethoden, e-mail en platform-branding voor het hele SaaS systeem.</p>
+          <p className="text-sm text-slate-500 mt-1">Banking, e-mail en platform-branding voor het hele SaaS systeem.</p>
         </div>
         <button onClick={save} disabled={saving} data-testid="saas-save"
           className="px-5 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-orange-500/25">
@@ -165,39 +153,6 @@ export default function SaasSettings() {
             onChange={(v) => upd('banking', { whatsapp: v })} testid="bank-whatsapp" />
         </Section>
 
-        <Section title="Uni5Pay online betalen" icon={CreditCard} accent="bg-emerald-100 text-emerald-600">
-          <Toggle label="Uni5Pay ingeschakeld" hint="Klanten kunnen direct online betalen via Uni5Pay"
-            value={data.mope?.enabled} onChange={(v) => upd('mope', { enabled: v })} testid="mope-enabled" />
-          <Field label="Merchant ID" value={data.mope?.merchant_id} mono
-            onChange={(v) => upd('mope', { merchant_id: v })} testid="mope-merchant-id" />
-          <Field label={data.mope?.api_key_set ? 'API Key (vervang om te wijzigen)' : 'API Key'} type="password"
-            value={data.mope?.api_key || ''} placeholder={data.mope?.api_key_set ? '••••••••••••' : ''}
-            onChange={(v) => upd('mope', { api_key: v })} testid="mope-api-key"
-            hint={data.mope?.api_key_set ? 'Een sleutel is opgeslagen. Laat leeg om de bestaande te behouden.' : 'Verkrijg deze bij uw Uni5Pay-account.'} />
-          <Toggle label="Test modus" hint="Gebruik de test-omgeving van Uni5Pay (geen echte betalingen)"
-            value={data.mope?.test_mode} onChange={(v) => upd('mope', { test_mode: v })} testid="mope-test-mode" />
-        </Section>
-
-        <Section title="SumUp online betalen (EUR)" icon={Euro} accent="bg-sky-100 text-sky-600">
-          <Toggle label="SumUp ingeschakeld" hint="Voor Nederlandse / EU klanten — betaal in euro"
-            value={data.sumup?.enabled} onChange={(v) => upd('sumup', { enabled: v })} testid="sumup-enabled" />
-          <Field label="Merchant code" value={data.sumup?.merchant_code} mono
-            placeholder="bv. MCXXXXXX" hint="Dashboard SumUp · linksboven bij uw naam of onder Business settings."
-            onChange={(v) => upd('sumup', { merchant_code: v })} testid="sumup-merchant-code" />
-          <Field label={data.sumup?.api_key_set ? 'API Key (vervang om te wijzigen)' : 'API Key'} type="password"
-            value={data.sumup?.api_key || ''} placeholder={data.sumup?.api_key_set ? '••••••••••••' : ''}
-            onChange={(v) => upd('sumup', { api_key: v })} testid="sumup-api-key"
-            hint={data.sumup?.api_key_set ? 'Een sleutel is opgeslagen. Laat leeg om de bestaande te behouden.' : 'me.sumup.com → Settings → For Developers → Toolkit → API Keys.'} />
-          <Toggle label="Test modus (sandbox)" hint="Gebruik een SumUp sandbox-account voor testen zonder echt geld."
-            value={data.sumup?.test_mode} onChange={(v) => upd('sumup', { test_mode: v })} testid="sumup-test-mode" />
-          <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-            Webhook URL voor SumUp dashboard:
-            <code className="block font-mono text-[10px] mt-1 text-slate-700 break-all">
-              {(typeof window !== 'undefined' ? window.location.origin : '')}/api/webhooks/sumup-saas
-            </code>
-          </div>
-        </Section>
-
         <Section title="Wisselkoers SRD → EUR" icon={RefreshCw} accent="bg-amber-100 text-amber-600">
           <div className="flex gap-2">
             {['auto', 'manual'].map((m) => (
@@ -224,7 +179,7 @@ export default function SaasSettings() {
             <Field label="Vaste koers — EUR per 1 SRD" type="number" mono
               value={data.fx?.manual_eur_per_srd || ''} placeholder="bv. 0.023"
               onChange={(v) => upd('fx', { manual_eur_per_srd: v })} testid="fx-manual-rate"
-              hint="Wordt gebruikt voor EUR-equivalent op SumUp-knoppen. Sla op om te activeren." />
+              hint="Wordt gebruikt voor EUR-equivalent op facturen. Sla op om te activeren." />
           )}
         </Section>
 

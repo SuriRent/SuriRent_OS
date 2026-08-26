@@ -87,7 +87,7 @@ def make_router(db, helpers):
         overdue_count: int = 0
 
     class PaidIn(BaseModel):
-        method: Literal["contant", "mope", "uni5pay"] = "contant"
+        method: Literal["contant", "bank"] = "contant"
         note: Optional[str] = ""
         # Bedrag is optioneel — als leeg gebruiken we het installment-bedrag.
         amount: Optional[float] = None

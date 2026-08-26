@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Check, Loader2, Banknote, CreditCard, Smartphone, FileText } from 'lucide-react';
+import { X, Check, Loader2, Banknote, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 
 // =====================================================================
@@ -8,11 +8,8 @@ import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 // bedrag; toont direct de kwitantie na succes.
 // =====================================================================
 const METHODS = [
-  { v: 'contant', l: 'Contant', icon: Banknote,   color: 'emerald' },
-  { v: 'bank',    l: 'Bank',    icon: FileText,   color: 'blue' },
-  { v: 'mope',    l: 'MoPe',    icon: Smartphone, color: 'orange' },
-  { v: 'sumup',   l: 'SumUp',   icon: CreditCard, color: 'slate' },
-  { v: 'uni5pay', l: 'Uni5Pay', icon: CreditCard, color: 'purple' },
+  { v: 'contant', l: 'Contant',           icon: Banknote, color: 'emerald' },
+  { v: 'bank',    l: 'Bankoverschrijving', icon: FileText, color: 'blue' },
 ];
 
 export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices = [], onClose, onSuccess }) {

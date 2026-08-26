@@ -39,10 +39,7 @@ function startOfDayUTC(d) {
 
 const METHOD_LABELS = {
   contant: 'Contant',
-  bank: 'Bank',
-  mope: 'Uni5Pay',
-  sumup: 'SumUp',
-  uni5pay: 'Uni5Pay',
+  bank: 'Bankoverschrijving',
 };
 
 const CATEGORY_LABELS = {
@@ -81,9 +78,6 @@ function MethodPill({ method }) {
   const tones = {
     contant: 'bg-emerald-50 text-emerald-700',
     bank: 'bg-blue-50 text-blue-700',
-    mope: 'bg-orange-50 text-[#FF5C00]',
-    sumup: 'bg-purple-50 text-purple-700',
-    uni5pay: 'bg-indigo-50 text-indigo-700',
   };
   const cls = tones[method] || 'bg-slate-100 text-slate-700';
   return (
@@ -98,9 +92,6 @@ function MethodPill({ method }) {
 const METHOD_PILL_CLASSES = {
   contant: 'bg-orange-50 text-[#C74600]',
   bank:    'bg-slate-100 text-slate-700',
-  mope:    'bg-purple-50 text-purple-700',
-  sumup:   'bg-pink-50 text-pink-700',
-  uni5pay: 'bg-blue-50 text-blue-700',
 };
 
 // =====================================================================
@@ -722,10 +713,7 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               <select value={data.method} onChange={(e) => setData({ ...data, method: e.target.value })} data-testid="pay-method"
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
                 <option value="contant">Contant</option>
-                <option value="bank">Bank</option>
-                <option value="mope">Uni5Pay</option>
-                <option value="sumup">SumUp</option>
-                <option value="uni5pay">Uni5Pay</option>
+                <option value="bank">Bankoverschrijving</option>
               </select>
             </div>
           </div>

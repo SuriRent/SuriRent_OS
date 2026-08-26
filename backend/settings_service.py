@@ -46,8 +46,6 @@ def decrypt(token: str | None) -> str | None:
 SECTION_SECRETS = {
     "smtp": ["password"],
     "twilio": ["auth_token"],
-    "mope": ["api_key", "webhook_secret"],
-    "uni5pay": ["api_key", "webhook_secret"],
     "shelly": ["cloud_token"],
     "domain": [],
     "invoicing": [],
@@ -61,10 +59,6 @@ def empty_section(section: str) -> dict:
                  "from_email": "", "from_name": "", "use_tls": True, "enabled": False},
         "twilio": {"account_sid": "", "auth_token": None,
                    "whatsapp_from": "", "sms_from": "", "enabled": False},
-        "mope": {"merchant_id": "", "api_key": None, "webhook_secret": None,
-                 "callback_url": "", "env": "sandbox", "enabled": False},
-        "uni5pay": {"merchant_id": "", "api_key": None, "webhook_secret": None,
-                    "callback_url": "", "env": "sandbox", "enabled": False},
         "shelly": {"cloud_token": None, "server": "shelly-cloud.shelly.cloud", "enabled": False},
         "domain": {"custom_domain": "", "dns_verified": False, "enabled": False},
         # Invoicing — automatische factuur-generatie + grace period

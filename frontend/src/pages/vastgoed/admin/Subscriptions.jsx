@@ -164,10 +164,9 @@ function PaymentRegistrationModal({ companies, defaultCompanyId, onClose, onSave
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Betaalmethode</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { v: 'bank', l: 'Bank', icon: Landmark },
-                { v: 'mope', l: 'Uni5Pay', icon: CreditCard },
+                { v: 'bank', l: 'Bankoverschrijving', icon: Landmark },
                 { v: 'contant', l: 'Contant', icon: Banknote },
                 { v: 'overig', l: 'Overig', icon: MoreVertical },
               ].map((m) => {

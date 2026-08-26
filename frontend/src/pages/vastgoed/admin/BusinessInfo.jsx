@@ -34,8 +34,6 @@ export default function BusinessInfo() {
         kkf_number: b.kkf_number || '',
         bank_account_sr: b.bank_account_sr || '',
         bank_account_nl: b.bank_account_nl || '',
-        mope_account: b.mope_account || '',
-        uni5pay_account: b.uni5pay_account || '',
         landlord_name: b.landlord_name || '',
         landlord_birth_date: b.landlord_birth_date || '',
         landlord_id_number: b.landlord_id_number || '',
@@ -164,34 +162,6 @@ export default function BusinessInfo() {
               placeholder="bv. FM008370" data-testid="bi-landlord-id"
               className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none uppercase" />
           </label>
-        </div>
-
-        {/* Mobile wallets */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 lg:col-span-2">
-          <h3 className="text-sm font-extrabold text-slate-900 mb-1 flex items-center gap-2">
-            📱 Mobile wallets (Uni5Pay & Uni5Pay)
-          </h3>
-          <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-            Huurders scannen een QR-code in hun Uni5Pay of Uni5Pay app, betalen, en uploaden een schermafdruk als bewijs. Het systeem controleert automatisch via OCR.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <label className="block">
-              <span className="block text-xs font-bold text-slate-700 mb-1">Uni5Pay rekening</span>
-              <input type="text" value={b.mope_account || ''} onChange={(e) => upd('mope_account', e.target.value)}
-                placeholder="bv. Uni5Pay ID of telefoonnummer +597 ..."
-                data-testid="bi-mope"
-                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-              <p className="text-[10px] text-slate-400 mt-0.5">Uni5Pay ID, merchant-code of telefoonnummer waarmee huurders kunnen betalen</p>
-            </label>
-            <label className="block">
-              <span className="block text-xs font-bold text-slate-700 mb-1">Uni5Pay rekening</span>
-              <input type="text" value={b.uni5pay_account || ''} onChange={(e) => upd('uni5pay_account', e.target.value)}
-                placeholder="bv. Uni5Pay ID of merchant code"
-                data-testid="bi-uni5pay"
-                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-              <p className="text-[10px] text-slate-400 mt-0.5">Uni5Pay ID of merchant-code</p>
-            </label>
-          </div>
         </div>
       </div>
     </div>

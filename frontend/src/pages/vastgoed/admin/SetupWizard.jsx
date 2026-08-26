@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Smartphone, Home, User, CheckCircle2, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
-  MessageCircle, CreditCard, Zap, Globe, KeySquare, FileText,
+  MessageCircle, Zap, Globe, KeySquare, FileText,
   Palette, UsersRound,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
-  SmtpForm, TwilioForm, PaymentGatewayForm, ShellyForm, DomainForm,
+  SmtpForm, TwilioForm, ShellyForm, DomainForm,
   InvoicingForm, KioskPinForm,
 } from './Settings';
 import Branding from './Branding';
@@ -25,8 +25,6 @@ const STEPS = [
   { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, settings: true },
   { id: 'twilio', label: 'WhatsApp & SMS', icon: MessageCircle, settings: true },
   { id: 'shelly', label: 'Shelly elektriciteit', icon: Zap, settings: true },
-  { id: 'mope', label: 'Uni5Pay betalingen', icon: CreditCard, settings: true },
-  { id: 'uni5pay', label: 'Uni5Pay betalingen', icon: CreditCard, settings: true },
   { id: 'locations', label: 'Locaties', icon: MapPin },
   { id: 'apartment', label: 'Appartementen', icon: Home },
   { id: 'tenant', label: 'Huurders', icon: User },
@@ -102,8 +100,6 @@ export default function SetupWizard() {
         address: profile.address || '',
         bank_account_sr: profile.bank_account_sr || '',
         bank_account_nl: profile.bank_account_nl || '',
-        mope_account: profile.mope_account || '',
-        uni5pay_account: profile.uni5pay_account || '',
       });
       await loadStatus();
       showOk('Opgeslagen!');
@@ -309,8 +305,6 @@ function SettingsSectionWrapper({ step, settings }) {
       </div>
       {step.id === 'smtp' && <SmtpForm initial={settings.smtp} />}
       {step.id === 'twilio' && <TwilioForm initial={settings.twilio} />}
-      {step.id === 'mope' && <PaymentGatewayForm section="mope" initial={settings.mope} />}
-      {step.id === 'uni5pay' && <PaymentGatewayForm section="uni5pay" initial={settings.uni5pay} />}
       {step.id === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {step.id === 'domain' && <DomainForm initial={settings.domain} />}

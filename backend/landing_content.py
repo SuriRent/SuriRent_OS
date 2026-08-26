@@ -133,7 +133,7 @@ LANDING_DEFAULTS: dict = {
          "desc": "Beheer huurders en koppel ze aan appartementen in één klik.",
          "featured": False},
         {"icon": "CreditCard", "title": "Meerdere betalingswijzen",
-         "desc": "Contant, bank, Mope en SumUp — flexibele opties.",
+         "desc": "Contant en bankoverschrijving — met OCR-verificatie.",
          "featured": False},
         {"icon": "Building2", "title": "Appartement overzicht",
          "desc": "Centraal beheer met bezettingsgraad en huurinkomsten.",

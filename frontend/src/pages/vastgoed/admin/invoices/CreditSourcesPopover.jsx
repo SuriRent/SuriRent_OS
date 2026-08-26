@@ -108,8 +108,7 @@ function SourceCard({ src }) {
     ? 'bg-amber-100 text-amber-700'
     : 'bg-emerald-100 text-emerald-700';
   const methodLabel = ({
-    contant: 'Contant', bank: 'Bank', card: 'Kaart',
-    mope: 'MoPe', sumup: 'SumUp', uni5pay: 'Uni5Pay',
+    contant: 'Contant', bank: 'Bankoverschrijving',
   })[src.method] || src.method || '—';
 
   return (

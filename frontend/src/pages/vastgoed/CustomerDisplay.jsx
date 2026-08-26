@@ -516,14 +516,11 @@ function MethodScreen({ state, slug, branding }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const ICONS = { contant: Banknote, bank: CreditCard, mope: QrCode, sumup: CreditCard };
-  const LABELS = { contant: 'Contant', bank: 'Bankoverschrijving', mope: 'Uni5Pay', sumup: 'SumUp' };
-  const SUBS = { contant: 'Betaal contant aan de balie', bank: 'Overschrijving naar bankrekening',
-    mope: 'Scan QR-code om te betalen', sumup: 'Kaart of contactloos' };
+  const ICONS = { contant: Banknote, bank: CreditCard };
+  const LABELS = { contant: 'Contant', bank: 'Bankoverschrijving' };
+  const SUBS = { contant: 'Betaal contant aan de balie', bank: 'Overschrijving naar bankrekening' };
 
   // Bankoverschrijving gegevens — komen uit de branding (admin-instellingen).
-  // We tonen ze altijd zichtbaar onder de bank-tegel en, als de klant/operator
-  // bank kiest, groot rechts in beeld i.p.v. de Uni5Pay QR.
   const bankSR = (branding?.bank_account_sr || '').trim();
   const bankNL = (branding?.bank_account_nl || '').trim();
   const hasBankDetails = !!(bankSR || bankNL);
@@ -531,8 +528,6 @@ function MethodScreen({ state, slug, branding }) {
 
   const METHODS = [
     { v: 'contant', accent: 'emerald' },
-    { v: 'mope', accent: 'emerald' }, // Uni5Pay (label & gateway); 'mope' = legacy DB-string
-    { v: 'sumup', accent: 'violet' },
     { v: 'bank', accent: 'amber' },
   ];
 
@@ -646,86 +641,14 @@ function MethodScreen({ state, slug, branding }) {
                 Toon uw overschrijvingsbewijs bij de balie
               </p>
             </div>
-          ) : (() => {
-            const ready = Boolean(payload.mope_qr) || amt > 0;
-            const statusBorder = ready ? 'ring-emerald-500' : 'ring-red-500';
-            const statusBg = ready ? 'bg-emerald-500' : 'bg-red-500';
-            const statusText = ready ? 'Klaar om te scannen' : 'Wacht op bedrag';
-            return (
-              <button
-                onClick={() => pick('mope')}
-                disabled={busy || !ready}
-                data-testid="cd-method-mope"
-                className={`bg-white rounded-3xl p-5 sm:p-6 lg:p-7 shadow-2xl flex items-center gap-5 sm:gap-7 transition disabled:opacity-90 text-left ring-4 ${statusBorder} ${
-                  customerChose && chosen === 'mope' ? 'ring-[#FF5C00]' : ''
-                } relative overflow-hidden`}
-              >
-                {/* QR met "+" logo overlay in midden */}
-                <div className="relative bg-white rounded-xl p-1.5 shrink-0"
-                  style={{ width: clamp(140, 18, 240), height: clamp(140, 18, 240) }}>
-                  {(() => {
-                    const fallbackUrl = `${(typeof window !== 'undefined' ? window.location.origin : '')}/api/payments/mock-pay/${payload.order_id || 'demo'}?amount=${amt}&currency=${cur}`;
-                    let qrValue = payload.mope_qr || fallbackUrl;
-                    if (typeof qrValue !== 'string') qrValue = String(qrValue || '');
-                    if (qrValue.length > 1000) qrValue = fallbackUrl;
-                    return (
-                      <QRCodeSVG
-                        value={qrValue}
-                        size={256}
-                        level="H"
-                        bgColor="#FFFFFF"
-                        fgColor="#0F0F0F"
-                        style={{ width: '100%', height: '100%' }}
-                      />
-                    );
-                  })()}
-                  {/* Center logo overlay */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center border-2 border-white bg-white shadow-lg"
-                    style={{ width: '18%', height: '18%' }}>
-                    <span className="font-black leading-none" style={{ fontSize: '1.4em', color: '#E40521' }}>+</span>
-                  </div>
-                  {/* ROOD overlay als niet ready */}
-                  {!ready && (
-                    <div className="absolute inset-1.5 bg-red-500/55 rounded-lg flex items-center justify-center">
-                      <span className="bg-white text-red-700 font-black px-3 py-1 rounded-full shadow-lg"
-                        style={{ fontSize: clamp(9, 0.95, 13) }}>Nog niet actief</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tekst rechts van QR */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-black uppercase tracking-[0.32em] text-slate-400"
-                    style={{ fontSize: clamp(9, 0.85, 12) }}>Snelle betaling</p>
-                  <p className="font-black text-slate-900 tracking-tight mt-1"
-                    style={{ fontSize: clamp(20, 2.2, 32) }}>Betaal met</p>
-                  <p className="font-black tracking-tight flex items-baseline gap-1 leading-none mt-0.5"
-                    style={{ fontSize: clamp(28, 3.4, 50), color: '#E40521' }}>
-                    UNI5PAY
-                    <span className="inline-flex items-center justify-center rounded-full text-white"
-                      style={{ fontSize: '0.6em', width: '1em', height: '1em', background: '#E40521', marginLeft: '0.1em' }}>+</span>
-                  </p>
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mt-3 text-white ${statusBg}`}
-                    style={{ fontSize: clamp(10, 0.95, 14) }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    <span className="font-black uppercase tracking-widest">{statusText}</span>
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 text-white mt-2 ml-2"
-                    style={{ fontSize: clamp(11, 1.05, 14) }}>
-                    <Smartphone style={{ width: clamp(12, 1.2, 16), height: clamp(12, 1.2, 16) }} />
-                    <span className="font-bold">scan QR met telefoon</span>
-                  </div>
-                </div>
-              </button>
-            );
-          })()}
+          ) : null}
 
           {/* BOTTOM — Andere methodes (horizontale grid) */}
           <div className="flex-1 min-h-0 overflow-auto">
             <p className="font-black uppercase tracking-[0.3em] text-white/70 mb-2 sm:mb-3"
               style={{ fontSize: clamp(10, 0.95, 13) }}>Of kies een andere methode</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-              {METHODS.filter((m) => m.v !== 'mope').map((m) => {
+              {METHODS.map((m) => {
                 const Icon = ICONS[m.v];
                 const selected = customerChose && chosen === m.v;
                 return (
@@ -888,8 +811,6 @@ export default function CustomerDisplay() {
         currency: newState?.payload?.currency,
         method: newState?.payload?.method,
         method_chosen_at: newState?.payload?.method_chosen_at,
-        mope_qr: newState?.payload?.mope_qr,
-        mope_paid_at: newState?.payload?.mope_paid_at,
         // Categorieën-lengte + labels meenemen zodat operator-aanvinkingen
         // (zelfs als ze het totaalbedrag onveranderd laten, bv. Internet=0)
         // het klantenscherm WEL re-renderen.
