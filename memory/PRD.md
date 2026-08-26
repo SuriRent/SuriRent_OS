@@ -37,6 +37,7 @@ Wanneer huurder een betaling doet via tenant-portal moet Admin > Betalingen live
 ```
 
 ## Completed
+- **Marketing footer payment logos (2026-02)**: MOPÉ + UNI5PAY logos toegevoegd naast copyright. Getrimd (transparente padding verwijderd) en opgeslagen als WebP in `/app/frontend/public/payment-logos/`.
 - SSE live-sync (fix: broadcasts nu ook zonder push-subs, en voor tenant-portal mutaties)
 - SWR caching + background prefetch (`requestIdleCallback`)
 - Emergent Google Auth met needs_onboarding modal
