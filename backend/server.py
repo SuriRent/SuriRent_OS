@@ -10950,8 +10950,8 @@ class DepositOut(BaseModel):
     amount: float
     currency: str
     status: str  # held | refunded
-    deduction: float
-    refund_amount: float
+    deduction: float = 0
+    refund_amount: float = 0
     refund_note: Optional[str] = ""
     note: Optional[str] = ""
     created_at: str

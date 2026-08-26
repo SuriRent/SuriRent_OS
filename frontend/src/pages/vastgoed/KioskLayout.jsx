@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
-  Smartphone, QrCode, ShieldCheck, Clock as ClockIcon, Printer, Download,
+  Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
