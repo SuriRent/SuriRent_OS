@@ -8,8 +8,8 @@
 //   • Data is instant zichtbaar bij tabwissel (SWR cachet per key)
 //   • Achtergrond-revalidate bij focus / reconnect (verse data zonder wachten)
 //   • Automatisch deduping als meerdere componenten dezelfde URL fetchen
-import useSWR, { mutate as globalMutate, preload as swrPreload } from 'swr';
-import { useEffect, useRef } from 'react';
+import useSWR, { mutate as globalMutate, preload as swrPreload, useSWRConfig } from 'swr';
+import { useEffect, useRef, useMemo } from 'react';
 import { api } from './api';
 
 // Fetcher — SWR key = API path (bv. '/tenants'). Retourneert `data` uit
@@ -46,9 +46,21 @@ const defaultConfig = {
 };
 
 export function useApiSWR(key, options) {
+  // FLICKER-FIX: bij een fresh mount van een tab-component checkt de hook
+  // eerst of SWR al data in de global cache heeft voor deze key. Zo ja,
+  // gebruiken we die als `fallbackData` zodat de eerste render meteen data
+  // toont i.p.v. eerst een skeleton en dán data (2 renders = "flash").
+  const { cache } = useSWRConfig();
+  const fallbackData = useMemo(() => {
+    if (!key) return undefined;
+    try {
+      const entry = cache.get(key);
+      return entry?.data;
+    } catch { return undefined; }
+  }, [key, cache]);
+  const merged = { ...defaultConfig, fallbackData, ...(options || {}) };
   // BUG FIX: SWR treats `useSWR(key, undefined, config)` as "no fetcher"
   // (resolve-args uses args[1] when 3 args provided). Pass fetcher explicitly.
-  const merged = { ...defaultConfig, ...(options || {}) };
   return useSWR(key, merged.fetcher, merged);
 }
 

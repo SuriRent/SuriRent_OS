@@ -878,7 +878,11 @@ export default function MarketingLandingV2() {
     } catch { return false; }
   })();
 
-  const { content: initialContent } = useLandingContent(editMode);
+  const { content: initialContent, loading: contentLoading, hasInstantContent } = useLandingContent(editMode);
+  // Toon niets op de eerste render als we geen cache/inline content hebben
+  // en de API nog laadt — voorkomt "oude/fallback tekst → juiste tekst"
+  // flicker bij een cold visit.
+  const showSkeleton = !editMode && !hasInstantContent && contentLoading;
 
   useEffect(() => {
     document.body.style.backgroundColor = '#FFFFFF';
@@ -1006,6 +1010,26 @@ export default function MarketingLandingV2() {
       window.parent?.postMessage({ type: 'landing-edit-ready' }, target);
     } catch (err) { console.error('landing-edit-ready postMessage failed', err); }
   }, [editMode]);
+
+  // Bij een cold visit (geen inline injectie én geen verse cache) tonen
+  // we heel kort een neutrale skeleton in plaats van de hardcoded fallback
+  // teksten. Zodra de API-content binnen is (~100-400ms) fade-in naar
+  // de echte landing — zonder "wrong text flash".
+  if (showSkeleton) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center" data-testid="marketing-skeleton">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#FF5C00] flex items-center justify-center shadow-lg animate-pulse">
+            <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-9 h-9" />
+          </div>
+          <div className="h-2 w-24 rounded-full bg-orange-100 overflow-hidden">
+            <div className="h-full bg-[#FF5C00] w-1/2 animate-[loader_1.2s_ease-in-out_infinite]" />
+          </div>
+        </div>
+        <style>{`@keyframes loader { 0%{transform:translateX(-100%)} 50%{transform:translateX(0)} 100%{transform:translateX(200%)} }`}</style>
+      </div>
+    );
+  }
 
   return (
     <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch}>

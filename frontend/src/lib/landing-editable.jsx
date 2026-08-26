@@ -11,7 +11,7 @@
 // `?edit=1` query param activeert edit mode; ouder dan dat checkt de iframe NIET
 // of er een superadmin-token is — de backend is de echte gatekeeper.
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 const EditableContext = createContext({
   editMode: false,
@@ -207,7 +207,12 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
  * waardoor React niet re-rendert en de fade-in animaties niet opnieuw
  * afspelen. Bij afwijking wordt cache overschreven.
  */
-const LANDING_CACHE_KEY = 'sr_landing_content_v1';
+const LANDING_CACHE_KEY = 'sr_landing_content_v2';
+// TTL: cache ouder dan 10 min wordt als "stale" beschouwd. Dan gebruiken
+// we hem NIET meer als initial state (voorkomt "oude tekst → juiste tekst"
+// flicker) — we tonen daarvoor in de plaats een subtiele skeleton totdat
+// de fresh API-response binnen is. Zo weinig mogelijk flash.
+const LANDING_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function readLandingCache(editMode) {
   // Edit-mode = draft, nooit cachen (superadmin wil altijd de laatste versie)
@@ -222,27 +227,38 @@ function readLandingCache(editMode) {
       return window.__LANDING_CONTENT__;
     }
   } catch { /* noop */ }
-  // 2) RUNTIME CACHE — vorig bezoek heeft content bewaard.
+  // 2) RUNTIME CACHE — vorig bezoek heeft content bewaard, MET TTL check.
   try {
     const raw = localStorage.getItem(LANDING_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!parsed._ts || (Date.now() - parsed._ts) > LANDING_CACHE_TTL_MS) return null;
+    return parsed.content || null;
   } catch { return null; }
 }
 
 function writeLandingCache(content) {
-  try { localStorage.setItem(LANDING_CACHE_KEY, JSON.stringify(content || {})); }
-  catch { /* quota / private mode — negeren */ }
+  try {
+    localStorage.setItem(LANDING_CACHE_KEY, JSON.stringify({
+      _ts: Date.now(),
+      content: content || {},
+    }));
+  } catch { /* quota / private mode — negeren */ }
 }
 
 export function useLandingContent(editMode = false) {
   // Init state direct met cache zodat de eerste render al de "juiste"
   // content laat zien i.p.v. hardcoded fallbacks (voorkomt de flicker
   // van fallback → server-content).
-  const [content, setContent] = useState(() => readLandingCache(editMode));
+  const initial = useMemo(() => readLandingCache(editMode), [editMode]);
+  const [content, setContent] = useState(() => initial);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  // `hasInstantContent` = true wanneer we bij mount al content hadden
+  // (inline injectie of verse localStorage cache < TTL). Zo weet de
+  // consumer of hij direct kan renderen of eerst een skeleton moet tonen.
+  const hasInstantContent = !!initial;
 
   useEffect(() => {
     let abort = false;
@@ -281,5 +297,5 @@ export function useLandingContent(editMode = false) {
     return () => { abort = true; };
   }, [editMode]);
 
-  return { content, loading, err };
+  return { content, loading, err, hasInstantContent };
 }
