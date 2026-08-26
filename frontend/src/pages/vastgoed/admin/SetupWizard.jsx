@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Smartphone, Home, User, CheckCircle2, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
-  MessageCircle, Zap, Globe, KeySquare, FileText,
+  KeySquare, FileText,
   Palette, UsersRound,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
-  SmtpForm, TwilioForm, ShellyForm, DomainForm,
+  SmtpForm,
   InvoicingForm, KioskPinForm,
 } from './Settings';
 import Branding from './Branding';
@@ -21,10 +21,7 @@ const STEPS = [
   { id: 'branding', label: 'Branding', icon: Palette },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
-  { id: 'domain', label: 'Eigen domein', icon: Globe, settings: true },
   { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, settings: true },
-  { id: 'twilio', label: 'WhatsApp & SMS', icon: MessageCircle, settings: true },
-  { id: 'shelly', label: 'Shelly elektriciteit', icon: Zap, settings: true },
   { id: 'locations', label: 'Locaties', icon: MapPin },
   { id: 'apartment', label: 'Appartementen', icon: Home },
   { id: 'tenant', label: 'Huurders', icon: User },
@@ -284,7 +281,7 @@ export default function SetupWizard() {
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
           <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Basis-setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-            Bedrijfsgegevens, eerste appartement en eerste huurder zijn ingesteld. Optionele integraties (e-mail, WhatsApp, Shelly...) kun je elk moment instellen.
+            Bedrijfsgegevens, eerste appartement en eerste huurder zijn ingesteld. Optionele integraties (e-mail, facturen automatisering...) kun je elk moment instellen.
           </p>
         </div>
       )}
@@ -304,10 +301,7 @@ function SettingsSectionWrapper({ step, settings }) {
         </h3>
       </div>
       {step.id === 'smtp' && <SmtpForm initial={settings.smtp} />}
-      {step.id === 'twilio' && <TwilioForm initial={settings.twilio} />}
-      {step.id === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
-      {step.id === 'domain' && <DomainForm initial={settings.domain} />}
       {step.id === 'kiosk' && <KioskPinForm />}
     </div>
   );

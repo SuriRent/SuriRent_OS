@@ -1,16 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Loader2, Check, KeySquare, Mail, MessageCircle, Zap, Globe,
+  Loader2, Check, KeySquare, Mail,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
-  { id: 'twilio', label: 'WhatsApp & SMS', icon: MessageCircle, desc: 'Twilio integratie voor WhatsApp- en SMS-meldingen.' },
-  { id: 'shelly', label: 'Shelly elektriciteit', icon: Zap, desc: 'Smart breakers per appartement (Shelly Cloud).' },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, desc: 'Automatische maand-facturen na grace periode.' },
-  { id: 'domain', label: 'Eigen domein', icon: Globe, desc: 'Koppel een eigen domein aan dit bedrijf.' },
   { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.' },
 ];
 

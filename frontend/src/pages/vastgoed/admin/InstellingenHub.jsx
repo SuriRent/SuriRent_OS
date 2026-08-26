@@ -53,7 +53,7 @@ const SECTIONS = [
   {
     id: 'integraties',
     label: 'Integraties',
-    desc: 'SMTP, Twilio, Shelly, Domein en Kiosk-PIN.',
+    desc: 'SMTP, Facturen automatisering en Kiosk-PIN.',
     icon: Plug,
     // initialSection laat we open — SettingsPage heeft zijn eigen sub-nav.
     render: (extra) => <SettingsPage initialSection={extra?.integrationsSection || undefined} />,
@@ -83,8 +83,8 @@ export default function InstellingenHub({ initialSection, integrationsSection })
     if (!initialSection) return null;
     const direct = SECTIONS.find((s) => s.id === initialSection);
     if (direct) return { section: direct.id };
-    // Integraties sub-sectie (smtp / twilio / shelly / invoicing / domain / kiosk).
-    const integrationIds = ['smtp', 'twilio', 'shelly', 'invoicing', 'domain', 'kiosk'];
+    // Integraties sub-sectie (smtp / invoicing / kiosk).
+    const integrationIds = ['smtp', 'invoicing', 'kiosk'];
     if (integrationIds.includes(initialSection)) {
       return { section: 'integraties', integrationsSection: initialSection };
     }
