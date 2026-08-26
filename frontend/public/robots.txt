@@ -1,0 +1,22 @@
+# SuriRent — robots.txt
+# Toestaan van indexering voor de publieke marketing-site.
+# Blokkeren van app-routes (login, admin, kiosk, tenant-portal) —
+# deze bevatten geen publieke SEO-waarde.
+
+User-agent: *
+Allow: /
+Allow: /over-surirent
+Allow: /kiosk-icons/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /kiosk
+Disallow: /kiosk/
+Disallow: /login
+Disallow: /huurder
+Disallow: /klant
+Disallow: /onderteken
+Disallow: /qr-link
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://surirent.sr/sitemap.xml

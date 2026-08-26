@@ -47,6 +47,7 @@ const MarketingLanding = lazyWithRetry(() => import(
 ));
 const TenantPublicLanding = lazyWithRetry(() => import('./pages/vastgoed/TenantPublicLanding'));
 const PublicLandingBySlug = lazyWithRetry(() => import('./pages/vastgoed/PublicLandingBySlug'));
+const OverSuriRent = lazyWithRetry(() => import('./pages/marketing/OverSuriRent'));
 const LoginPage = lazyWithRetry(() => import('./pages/vastgoed/LoginPage'));
 const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboard'));
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
@@ -114,6 +115,7 @@ function MarketingRoutes() {
   return (
     <Routes>
       <Route path="/" element={<MarketingLanding />} />
+      <Route path="/over-surirent" element={<OverSuriRent />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

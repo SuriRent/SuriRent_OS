@@ -7,8 +7,103 @@
     <!-- (specifieke variant zodat Android Chrome PWA dezelfde status-bar
          kleur gebruikt als de iPhone PWA standalone — brand cream voor de
          admin, oranje wordt dynamisch gezet door KioskLayout). -->
-    <meta name="description" content="SuriRent - Complete huurbeheer & kiosk oplossing voor vastgoed" />
+    <meta name="description" content="SuriRent — Digitaal vastgoedbeheer voor Suriname. Beheer vastgoed, huurders, contracten, facturen en betalingen vanuit één centraal platform. Eenvoudig, professioneel en digitaal." />
     <meta name="application-name" content="Beheer" />
+    <meta name="keywords" content="vastgoedbeheer Suriname, verhuursoftware, property management Suriname, huurderbeheer, huurcontracten, facturatie huur, betalingsherinneringen, appartementenbeheer, SuriRent" />
+    <meta name="author" content="SuriRent N.V." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://surirent.sr/" />
+
+    <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SuriRent" />
+    <meta property="og:title" content="SuriRent — Vastgoedbeheer eenvoudig, professioneel en digitaal" />
+    <meta property="og:description" content="Complete verhuur- en vastgoedbeheer-software voor Suriname. Vastgoed, huurders, contracten, facturen en betalingen in één platform." />
+    <meta property="og:url" content="https://surirent.sr/" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:image" content="https://surirent.sr/kiosk-icons/kiosk-512.png" />
+    <meta property="og:image:alt" content="SuriRent — Vastgoedbeheer Platform Suriname" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SuriRent — Vastgoedbeheer voor Suriname" />
+    <meta name="twitter:description" content="Beheer vastgoed, huurders, facturen en betalingen digitaal via SuriRent." />
+    <meta name="twitter:image" content="https://surirent.sr/kiosk-icons/kiosk-512.png" />
+
+    <!-- Gestructureerde data — Organization + SoftwareApplication zodat
+         Google, ChatGPT en andere AI-assistenten SuriRent herkennen als
+         bedrijf én als vastgoedbeheer-software voor Suriname. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://surirent.sr/#organization",
+          "name": "SuriRent N.V.",
+          "alternateName": "SuriRent",
+          "url": "https://surirent.sr",
+          "logo": "https://surirent.sr/kiosk-icons/kiosk-512.png",
+          "description": "SuriRent N.V. is een Surinaams technologiebedrijf gespecialiseerd in vastgoedbeheer- en verhuursoftware. Het platform digitaliseert vastgoedbeheer, huurderbeheer, contracten, facturatie en betalingsbeheer voor verhuurders in Suriname.",
+          "areaServed": { "@type": "Country", "name": "Suriname" },
+          "knowsAbout": ["Vastgoedbeheer", "Property Management", "Huurderbeheer", "Contractbeheer", "Facturatie", "Betalingsbeheer", "Verhuursoftware"],
+          "sameAs": ["https://app.surirent.sr"]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://surirent.sr/#software",
+          "name": "SuriRent",
+          "applicationCategory": "BusinessApplication",
+          "applicationSubCategory": "Property Management Software",
+          "operatingSystem": "Web, iOS, Android (PWA)",
+          "description": "Digitaal vastgoedbeheerplatform voor verhuurders, appartementencomplexen en property managers in Suriname. Beheer vastgoed, huurders, contracten, facturen, betalingen en betalingsherinneringen.",
+          "url": "https://app.surirent.sr",
+          "provider": { "@id": "https://surirent.sr/#organization" },
+          "featureList": [
+            "Vastgoedbeheer per gebouw, complex, verdieping en verhuureenheid",
+            "Huurderbeheer met contractkoppeling",
+            "Contractbeheer met huurprijs en looptijd",
+            "Automatische maandelijkse facturatie",
+            "Betalingsbeheer met status betaald/openstaand/achterstallig",
+            "Automatische betalingsherinneringen via WhatsApp en e-mail",
+            "Financiële rapportages en overzichten",
+            "PWA voor iPhone, iPad, Android en desktop"
+          ],
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Starter",
+              "price": "3000",
+              "priceCurrency": "SRD",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "3000",
+                "priceCurrency": "SRD",
+                "unitCode": "MON"
+              }
+            },
+            {
+              "@type": "Offer",
+              "name": "Professional",
+              "price": "5000",
+              "priceCurrency": "SRD",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "5000",
+                "priceCurrency": "SRD",
+                "unitCode": "MON"
+              }
+            }
+          ],
+          "audience": {
+            "@type": "BusinessAudience",
+            "audienceType": "Verhuurders, appartementencomplexen, vastgoedbeheerders, property managers, vastgoedbedrijven"
+          }
+        }
+      ]
+    }
+    </script>
+
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
