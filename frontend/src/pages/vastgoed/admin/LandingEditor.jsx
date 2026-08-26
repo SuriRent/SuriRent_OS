@@ -172,11 +172,16 @@ export default function LandingEditor() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Push live preview to iframe whenever draft changes
+  // Push live preview to iframe whenever draft changes.
+  // Message-type `landing-edit-reset` matcht wat EditableProvider (via
+  // useLandingContent) daadwerkelijk beluistert — vroeger stuurden we
+  // `landing-preview` maar die listener bestond niet meer.
   useEffect(() => {
     if (!draft || !previewRef.current?.contentWindow) return;
     try {
-      previewRef.current.contentWindow.postMessage({ type: 'landing-preview', content: draft }, '*');
+      previewRef.current.contentWindow.postMessage(
+        { type: 'landing-edit-reset', content: draft }, '*',
+      );
     } catch { /* ignore cross-origin */ }
   }, [draft]);
 
@@ -203,8 +208,9 @@ export default function LandingEditor() {
       setHasChanges(false);
       setMsg('Live! De landing page is geüpdatet.');
       setTimeout(() => setMsg(''), 4000);
-      // Force iframe to reload published content
-      if (previewRef.current) previewRef.current.src = previewRef.current.src.split('?')[0] + `?ts=${Date.now()}`;
+      // Force iframe to reload published content — gebruik dezelfde
+      // edit-mode URL zodat postMessage-communicatie behouden blijft.
+      if (previewRef.current) previewRef.current.src = `/?edit=1&landing=1&_t=${Date.now()}`;
     } catch (e) { setErr(formatError(e)); }
     finally { setPublishing(false); }
   };
@@ -241,7 +247,11 @@ export default function LandingEditor() {
     return <div className="text-sm text-rose-600">{err || 'Kon content niet laden.'}</div>;
   }
 
-  const previewUrl = `/?landing-preview=1#ts=${pub?.updated_at || ''}`;
+  // Preview iframe: laad de landing MET edit=1 zodat EditableProvider
+  // luistert naar patches en `landing=1` voorkomt auto-redirect naar
+  // /login. `_t=0` zolang we een draft hebben (voorkomt reload-race met
+  // postMessage); zonder draft gebruik timestamp voor cache-bust.
+  const previewUrl = `/?edit=1&landing=1&_t=${draft ? '0' : (pub?.updated_at || Date.now())}`;
   const sections = [
     { id: 'brand', label: 'Merk' },
     { id: 'nav', label: 'Navigatie' },

@@ -62,6 +62,13 @@ const ADMIN_TAB_LOADERS = [
   loadMaintenance, loadKasgeld, loadNotifications, loadPaymentPlans, loadCompanies,
 ];
 
+// Kiosk chunks — worden geprefetcht wanneer de beheerder inlogt, zodat
+// "Open Kiosk" instant opent zonder chunk-download te hoeven wachten.
+const KIOSK_LOADERS = [
+  () => import('./KioskLayout'),
+  () => import('./CustomerDisplay'),
+];
+
 /**
  * prefetchAdminChunks — laadt alle admin-tab chunks in de achtergrond zodra
  * de browser idle is. Gebruikt requestIdleCallback wanneer beschikbaar,
@@ -69,7 +76,7 @@ const ADMIN_TAB_LOADERS = [
  * bij de eerste tabwissel — de JS staat al in het cache-geheugen.
  */
 function prefetchAdminChunks() {
-  const runAll = () => ADMIN_TAB_LOADERS.forEach((l) => {
+  const runAll = () => [...ADMIN_TAB_LOADERS, ...KIOSK_LOADERS].forEach((l) => {
     try { l(); } catch { /* niet-fataal */ }
   });
   if (typeof window === 'undefined') return;
@@ -78,6 +85,28 @@ function prefetchAdminChunks() {
   } else {
     setTimeout(runAll, 300);
   }
+}
+
+/**
+ * KeepAliveTab — mount het `children` component éénmalig bij eerste
+ * activatie, en verberg het daarna met `display:none` in plaats van te
+ * unmounten. Voordelen:
+ *   • Geen re-fetch / re-mount bij tabwissel → geen skeleton flash
+ *   • React state, scroll-positie én SWR data blijven behouden
+ *   • Bij eerste bezoek van een tab wordt het component pas gemount
+ *     (dus geen upfront cost voor tabs die de user nooit opent)
+ */
+function KeepAliveTab({ active, tabId, currentTab, children }) {
+  const seenRef = useRef(false);
+  if (active) seenRef.current = true;
+  // Niet renderen totdat de tab minstens één keer actief is geweest.
+  if (!seenRef.current) return null;
+  const shown = currentTab === tabId;
+  return (
+    <div style={{ display: shown ? 'block' : 'none' }} aria-hidden={!shown}>
+      {children}
+    </div>
+  );
 }
 
 // =====================================================================
@@ -3947,13 +3976,6 @@ export default function AdminDashboard() {
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
   // bij eerste render zodat de PWA-launch direct in de juiste tab opent.
-  const [tab, setTab] = useState(() => {
-    if (user?.role === 'superadmin') return 'saas_overview';
-    try {
-      if (typeof window !== 'undefined' && window.innerWidth < 768) return 'payments';
-    } catch { /* SSR-safe noop */ }
-    return 'overview';
-  });
   // Filter de Overzicht-tab uit voor mobile MobileSheet zodat hij ook niet
   // in het "+"-menu opduikt. Desktop sidebar laat hem wel staan.
   const sheetTabs = tabs.filter((t) => t.id !== 'overview');
@@ -4065,6 +4087,24 @@ export default function AdminDashboard() {
   const location = useLocation();
   const { count: badgeCount } = useBadge();
 
+  // TAB-STATE = URL-derived (single source of truth). We lezen de actieve
+  // tab uit `location.pathname` — geen aparte useState meer die uit sync
+  // kon raken en dubbele renders veroorzaakte bij navigatie.
+  const tab = (() => {
+    if (user?.role === 'superadmin' && (!location.pathname || location.pathname === '/admin')) {
+      return 'saas_overview';
+    }
+    const seg = location.pathname.split('/').filter(Boolean);
+    const adminIdx = seg.indexOf('admin');
+    const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
+    if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
+    // Fallback: mobile → payments, anders overview
+    try {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) return 'payments';
+    } catch { /* SSR-safe */ }
+    return 'overview';
+  })();
+
   // Activeer de "ding-ding" sound bij binnenkomende pending-approval pushes.
   // Idempotent — meerdere mounts registreren maar één listener.
   useEffect(() => { installPendingApprovalDingListener(); }, []);
@@ -4086,14 +4126,14 @@ export default function AdminDashboard() {
   //  • Bookmarks / shared links
   //  • Legacy paden (mijn_abonnement, settings, branding, ...) blijven
   //    werken door ze te aliasen naar /admin/instellingen#<sectie>.
+  // URL → tab is nu impliciet omdat `tab` direct wordt afgeleid van
+  // location.pathname (zie boven). Deze useEffect handelt alleen nog
+  // LEGACY aliases af (oude tab-id's die naar de instellingen-hub moeten).
   useEffect(() => {
-    const path = location.pathname.replace(/\/+$/, '');
-    const seg = path.split('/').filter(Boolean);
-    // Pad kan zowel /admin/<tab> als /<slug>/admin/<tab> zijn (branded).
+    const seg = location.pathname.split('/').filter(Boolean);
     const adminIdx = seg.indexOf('admin');
     if (adminIdx === -1 || !seg[adminIdx + 1]) return;
     const wanted = seg[adminIdx + 1];
-    // Legacy aliases — map oude tab-id's naar de nieuwe Instellingen-hub.
     const LEGACY_TO_HUB = {
       mijn_abonnement: 'abonnement',
       mijn_landing: 'landing',
@@ -4105,31 +4145,12 @@ export default function AdminDashboard() {
     };
     if (Object.prototype.hasOwnProperty.call(LEGACY_TO_HUB, wanted)) {
       navigate(`/admin/instellingen#${LEGACY_TO_HUB[wanted]}`, { replace: true });
-      setTab('instellingen');
-      return;
     }
-    if (tabs.find((t) => t.id === wanted) && wanted !== tab) {
-      setTab(wanted);
-    }
-  }, [location.pathname, tabs, tab, navigate]);
+  }, [location.pathname, navigate]);
 
-  // tab → URL sync (zonder rerender storm). Update browser URL bij tab wissel.
+  // handleSetTab — alleen navigate, GEEN setTab meer (tab is URL-derived).
+  // Voorkomt de dubbele-setter render-storm die de flicker veroorzaakte.
   const handleSetTab = async (id) => {
-    // Speciale tab: `saas_kiosk` opent de SuriRent kiosk. Voor superadmin
-    // moet eerst een kiosk-token opgehaald worden via /auth/admin-to-kiosk
-    // (zelfde flow als de "Open Kiosk" knop). Zonder dit token toont de
-    // kiosk-pagina de PIN-login of blijft leeg.
-    if (id === 'saas_kiosk') {
-      // Superadmin-kiosk = SaaS Kasregister: bedrijven-overzicht met betaalstatus,
-      // NIET de huurder-kiosk (die is voor tenants die huur betalen).
-      setTab(id);
-      const target = `/admin/${id}`;
-      if (location.pathname !== target) {
-        navigate(target, { replace: false });
-      }
-      return;
-    }
-    setTab(id);
     const target = `/admin/${id}`;
     if (location.pathname !== target) {
       navigate(target, { replace: false });
@@ -4139,13 +4160,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     const handler = (e) => {
       const id = e.detail;
-      setTab(id);
       const target = `/admin/${id}`;
       if (window.location.pathname !== target) navigate(target);
     };
     window.addEventListener('go-tab', handler);
-    // Alias event zodat Snelle acties in SaasOverview kunnen navigeren
-    // zonder handleSetTab prop-drilling.
     const saasHandler = (e) => handler(e);
     window.addEventListener('saas-nav', saasHandler);
     return () => {
@@ -4246,36 +4264,36 @@ export default function AdminDashboard() {
         <TrialBanner />
         <main className="flex-1 p-5 md:px-6 md:py-5 lg:px-8 lg:pt-3 pb-32 md:pb-8 w-full">
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
-          {tab === 'companies' && <Companies />}
-          {tab === 'subscriptions' && <Subscriptions />}
-          {tab === 'saas_overview' && <SaasOverview />}
-          {tab === 'saas_pending' && <Subscriptions viewMode="pending" />}
-          {tab === 'saas_invoices' && <Subscriptions viewMode="invoices" />}
-          {tab === 'saas_payments' && <Subscriptions viewMode="payments" />}
-          {tab === 'saas_payment_plans' && <Subscriptions viewMode="payment_plans" />}
-          {tab === 'saas_kasgeld' && <Subscriptions viewMode="kasgeld" />}
-          {tab === 'saas_kiosk' && <SaasKasregister />}
-          {tab === 'saas_clients' && <SaasClients />}
-          {tab === 'saas_contracts' && <SaasContracts />}
-          {tab === 'saas_employees' && <SaasEmployees />}
-          {tab === 'saas_notifications' && <SaasNotifications />}
-          {tab === 'plans' && <PlansAdmin />}
-          {tab === 'saas_settings' && <SaasSettings />}
-          {tab === 'landing_editor' && <LandingEditor />}
-          {tab === 'overview' && <Overview />}
-          {tab === 'locations' && <Locations />}
-          {tab === 'apartments' && <Apartments />}
-          {tab === 'tenants' && <Tenants />}
-          {tab === 'contracts' && <Contracts />}
-          {tab === 'payments' && <Payments />}
-          {tab === 'invoices' && <Invoices />}
-          {tab === 'payment_plans' && <PaymentPlans />}
-          {tab === 'deposits' && <Deposits />}
-          {tab === 'maintenance' && <Maintenance />}
-          {tab === 'kasgeld' && <Kasgeld />}
-          {tab === 'employees' && <Employees />}
-          {tab === 'notifications' && <Notifications />}
-          {tab === 'instellingen' && <InstellingenHub />}
+          <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_overview'} tabId="saas_overview" currentTab={tab}><SaasOverview /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_pending'} tabId="saas_pending" currentTab={tab}><Subscriptions viewMode="pending" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_invoices'} tabId="saas_invoices" currentTab={tab}><Subscriptions viewMode="invoices" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_payments'} tabId="saas_payments" currentTab={tab}><Subscriptions viewMode="payments" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_payment_plans'} tabId="saas_payment_plans" currentTab={tab}><Subscriptions viewMode="payment_plans" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_kasgeld'} tabId="saas_kasgeld" currentTab={tab}><Subscriptions viewMode="kasgeld" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_kiosk'} tabId="saas_kiosk" currentTab={tab}><SaasKasregister /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_clients'} tabId="saas_clients" currentTab={tab}><SaasClients /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_employees'} tabId="saas_employees" currentTab={tab}><SaasEmployees /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_notifications'} tabId="saas_notifications" currentTab={tab}><SaasNotifications /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_settings'} tabId="saas_settings" currentTab={tab}><SaasSettings /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'landing_editor'} tabId="landing_editor" currentTab={tab}><LandingEditor /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'overview'} tabId="overview" currentTab={tab}><Overview /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'locations'} tabId="locations" currentTab={tab}><Locations /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'apartments'} tabId="apartments" currentTab={tab}><Apartments /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'tenants'} tabId="tenants" currentTab={tab}><Tenants /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'contracts'} tabId="contracts" currentTab={tab}><Contracts /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'payments'} tabId="payments" currentTab={tab}><Payments /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'invoices'} tabId="invoices" currentTab={tab}><Invoices /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'payment_plans'} tabId="payment_plans" currentTab={tab}><PaymentPlans /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'deposits'} tabId="deposits" currentTab={tab}><Deposits /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'maintenance'} tabId="maintenance" currentTab={tab}><Maintenance /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'kasgeld'} tabId="kasgeld" currentTab={tab}><Kasgeld /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'employees'} tabId="employees" currentTab={tab}><Employees /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'notifications'} tabId="notifications" currentTab={tab}><Notifications /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'instellingen'} tabId="instellingen" currentTab={tab}><InstellingenHub /></KeepAliveTab>
           </Suspense>
         </main>
       </div>

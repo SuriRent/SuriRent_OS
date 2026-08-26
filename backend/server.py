@@ -17,6 +17,7 @@ from typing import List, Optional, Literal
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from brotli_asgi import BrotliMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -694,10 +695,13 @@ async def _overdue_push_loop():
 
 app = FastAPI(title="Vastgoed Kiosk API", lifespan=lifespan)
 
-# GZip compressie voor alle responses >= 500 bytes. Reduceert bandbreedte
-# gemiddeld 60-80% op JSON. Brotli is nog beter maar vereist een extra
-# package; gzip is sufficient en universeel ondersteund.
+# COMPRESSIE — Brotli EN Gzip. Starlette kiest per request automatisch de
+# beste algoritme op basis van `Accept-Encoding` header van de client.
+# Brotli levert 15-25% kleinere payloads dan gzip op JSON responses.
+# Alle moderne browsers (Chrome/Safari/Firefox/Edge) sturen `br` in de
+# Accept-Encoding. Fallback naar gzip voor oude clients / curl.
 # minimum_size=500 → voorkomt compressie-overhead op kleine responses.
+app.add_middleware(BrotliMiddleware, quality=6, minimum_size=500)
 app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*")
