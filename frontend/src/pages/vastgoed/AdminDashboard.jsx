@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { publicMarketingUrl } from '../../lib/env';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
@@ -4173,18 +4174,19 @@ export default function AdminDashboard() {
   }, [user]);
 
   const doLogout = async () => {
-    const wasDemo = (() => { try { return localStorage.getItem('is_demo_session') === '1'; } catch { return false; } })();
-    if (wasDemo) {
-      // Voor demo-gebruikers: navigeer eerst naar marketing landing
-      // (via hard nav, anders fired <Protected> nog een <Navigate to="/demo/login"/>
-      // omdat user pas null wordt NA de logout() call). Hard nav reset
-      // sowieso de app state — schoner einde van demo-sessie.
-      await logout();
-      window.location.replace('/');
-      return;
-    }
+    // Alle logouts (demo of echt) sturen we terug naar de marketing landing,
+    // niet naar /login. Op productie staat de landing op een ander domein
+    // (surirent.sr) — publicMarketingUrl() geeft de juiste absolute URL.
+    // Op preview/hybrid returnt hij de huidige origin, dus `/` = landing.
+    // Hard nav gebruiken zodat we NA logout() gaan (anders redirect
+    // <Protected> nog naar /login omdat user state pas na hard nav weg is).
     await logout();
-    navigate('/login');
+    try {
+      const target = `${publicMarketingUrl()}/`;
+      window.location.replace(target);
+    } catch {
+      window.location.replace('/');
+    }
   };
 
   // Hard-blocken bij billing-issues is verwijderd — klanten mogen de app

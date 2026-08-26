@@ -37,6 +37,7 @@ Wanneer huurder een betaling doet via tenant-portal moet Admin > Betalingen live
 ```
 
 ## Completed
+- **Direct-login demo + marketing logout redirect (2026-02)**: "Bekijk de demo" navigeert nu zonder login-flash naar `/admin` (AuthProvider `refresh()` vóór SPA-navigate op hybrid; hard-nav op cross-domain productie). `doLogout()` in AdminDashboard stuurt zowel demo- als echte gebruikers direct naar `publicMarketingUrl()` (marketing landing) i.p.v. `/login`.
 - **Marketing footer payment logos (2026-02)**: MOPÉ + UNI5PAY logos toegevoegd naast copyright. Getrimd (transparente padding verwijderd) en opgeslagen als WebP in `/app/frontend/public/payment-logos/`.
 - SSE live-sync (fix: broadcasts nu ook zonder push-subs, en voor tenant-portal mutaties)
 - SWR caching + background prefetch (`requestIdleCallback`)

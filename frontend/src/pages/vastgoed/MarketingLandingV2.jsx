@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { appLink } from '../../lib/env';
+import { useAuth } from '../../lib/auth';
 import {
   Menu, X, Search, Lock, ChevronRight, ChevronDown, ChevronUp,
   LayoutDashboard, MapPin, Home as HomeIcon, Receipt, FileText, Users,
@@ -866,6 +867,7 @@ function Footer({ onLogin }) {
 // =============================================================================
 export default function MarketingLandingV2() {
   const navigate = useNavigate();
+  const { refresh: refreshAuth } = useAuth();
 
   // Edit mode wordt geactiveerd via ?edit=1 (alleen wanneer pagina in iframe
   // staat van de LiveLandingEditor superadmin tool).
@@ -962,15 +964,23 @@ export default function MarketingLandingV2() {
       // Navigeer naar het doel — gebruik window.location voor cross-route
       // hard nav (sommige doelen zitten onder app subdomain in productie).
       const t = appLink(target);
-      if (t.startsWith('http')) window.location.href = t;
-      else navigate(t);
+      if (t.startsWith('http')) {
+        // Cross-domain: cookie is al gezet op app-domein, target laadt fresh.
+        window.location.href = t;
+      } else {
+        // Same-origin (preview/hybrid): ververs AuthProvider ZODAT `user`
+        // niet null is als <Protected> straks matcht. Zonder deze refresh
+        // ziet Protected user=null en flitst /login kort in beeld.
+        try { await refreshAuth(); } catch { /* niet fataal */ }
+        navigate(t, { replace: true });
+      }
     } catch (e) {
       // Fallback: ga naar /login met demo intent zodat gebruiker handmatig kan inloggen
       const t = appLink('/login?demo=1');
       if (t.startsWith('http')) window.location.href = t;
       else navigate(t);
     }
-  }, [editMode, navigate]);
+  }, [editMode, navigate, refreshAuth]);
 
   const onDemo = () => launchDemo('/admin');
   const onWhatsApp = () => {
