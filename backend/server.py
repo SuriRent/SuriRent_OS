@@ -818,6 +818,32 @@ def _set_access_cookie(response: Response, token: str, name="access_token", minu
     )
 
 
+async def _invalidate_prior_sessions(request: Request, response: Response, *, keep: str = "access_token") -> None:
+    """Wist alle auth-cookies en server-side sessies BEHALVE het opgegeven
+    cookie. Roep dit aan bij élke fresh login zodat een oude sessie van
+    gebruiker A niet blijft plakken als gebruiker B inlogt op hetzelfde
+    apparaat.
+
+    `keep` is de cookie-naam die de aanroepende endpoint zojuist heeft
+    (her)uitgegeven — die willen we niet meteen weer wissen.
+    """
+    # Google session_token → invalideer DB rij + wis cookie (matchende attrs
+    # anders wist de browser 'm niet).
+    if keep != "session_token":
+        session_tok = request.cookies.get("session_token")
+        if session_tok:
+            try:
+                await db.user_sessions.delete_one({"session_token": session_tok})
+            except Exception:  # noqa: BLE001
+                pass
+        response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    # JWT-based cookies: geen DB rij, alleen cookie wissen.
+    for name in ("access_token", "kiosk_token", "tenant_token"):
+        if name == keep:
+            continue
+        response.delete_cookie(name, path="/")
+
+
 def _slugify(name: str) -> str:
     import re
     s = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
@@ -871,7 +897,7 @@ def _detect_country_currency(phone: str) -> tuple:
 
 
 @api.post("/auth/register")
-async def register(body: RegisterIn, response: Response):
+async def register(body: RegisterIn, request: Request, response: Response):
     email = body.email.lower().strip()
     existing = await db.users.find_one({"email": email})
     if existing:
@@ -970,6 +996,9 @@ async def register(body: RegisterIn, response: Response):
         "sub": user_doc["id"], "email": email, "type": "access",
         "company_id": company_id, "role": "admin",
     }, ACCESS_MIN)
+    # Wis eventuele oude sessies (bv. Google session_token van vorige
+    # gebruiker) VÓÓR de nieuwe cookie zetten — cross-account safety.
+    await _invalidate_prior_sessions(request, response, keep="access_token")
     _set_access_cookie(response, token)
 
     # Welcome email — best-effort, never fails registration
@@ -1073,7 +1102,7 @@ async def register(body: RegisterIn, response: Response):
 
 
 @api.post("/auth/login")
-async def login(body: LoginIn, response: Response):
+async def login(body: LoginIn, request: Request, response: Response):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email})
     # bcrypt is CPU-bound (~200-1000ms afhankelijk van pod-CPU) — wrap in
@@ -1088,6 +1117,10 @@ async def login(body: LoginIn, response: Response):
         "sub": user["id"], "email": email, "type": "access",
         "company_id": user.get("company_id"), "role": user.get("role", "admin"),
     }, ACCESS_MIN)
+    # Invalideer eventuele vorige sessies (bv. Google session_token van
+    # gebruiker A op hetzelfde apparaat) VÓÓR het nieuwe access_token wordt
+    # gezet. Voorkomt cross-account bleeding.
+    await _invalidate_prior_sessions(request, response, keep="access_token")
     _set_access_cookie(response, token)
     company = None
     if user.get("company_id"):
@@ -1106,12 +1139,27 @@ async def login(body: LoginIn, response: Response):
 
 
 @api.post("/auth/logout")
-async def logout(response: Response):
-    # Wis alle auth-cookies — admin, kiosk én tenant. Hierdoor kan een
-    # gebruiker via één centrale /auth/logout call alle sessies invalideren
-    # zonder dat we per role aparte endpoints hoeven aan te roepen.
+async def logout(request: Request, response: Response):
+    # Wis ALLE auth-cookies + server-side sessies. Kritiek voor gedeelde
+    # apparaten: als gebruiker A uitlogt mag gebruiker B in geen enkel
+    # geval nog in A's account belanden.
+    #
+    # Verwijderd:
+    #   - Emergent Google session_token cookie + rij in user_sessions
+    #   - JWT-based access_token, kiosk_token, tenant_token cookies
+    #
+    # LET OP: session_token is gezet met samesite="none" secure=True dus
+    # delete_cookie MOET dezelfde attributen krijgen anders wist de browser
+    # 'm niet en blijft de sessie geldig na "uitloggen".
+    session_tok = request.cookies.get("session_token")
+    if session_tok:
+        try:
+            await db.user_sessions.delete_one({"session_token": session_tok})
+        except Exception:  # noqa: BLE001
+            pass
     for name in ("access_token", "kiosk_token", "tenant_token"):
         response.delete_cookie(name, path="/")
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
 
 
@@ -1597,7 +1645,7 @@ class GoogleCallbackIn(BaseModel):
 
 
 @api.post("/auth/google/callback")
-async def google_auth_callback(body: GoogleCallbackIn, response: Response):
+async def google_auth_callback(body: GoogleCallbackIn, request: Request, response: Response):
     """Exchange Emergent session_id for our user + session_token cookie.
     Creates a new user record on first sign-in (role=admin) — auto-creates
     a company als slug ontbreekt of niet bestaat.
@@ -1725,6 +1773,22 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
 
     # Sla sessie op. Emergent session_token is 7 dagen geldig.
     expires_at = now_utc() + timedelta(days=7)
+    # Wis EERST alle stale sessies op dit apparaat:
+    #   1) Eventuele OUDE session_token cookie in de browser → DB rij weg
+    #      (behalve als het toevallig hetzelfde token is als het nieuwe).
+    #   2) Achtergelaten JWT access_token / kiosk_token / tenant_token cookies
+    #      van een vorige gebruiker.
+    # Zonder deze cleanup blijft `get_current_user()` de vorige sessie zien
+    # omdat session_token bovenaan wordt geprioriteerd.
+    stale_tok = request.cookies.get("session_token")
+    if stale_tok and stale_tok != session_token:
+        try:
+            await db.user_sessions.delete_one({"session_token": stale_tok})
+        except Exception:  # noqa: BLE001
+            pass
+    # Wis oude JWT-based cookies (access_token/kiosk_token/tenant_token) —
+    # keep="session_token" want die zetten we hierna zelf.
+    await _invalidate_prior_sessions(request, response, keep="session_token")
     await db.user_sessions.update_one(
         {"session_token": session_token},
         {"$set": {
@@ -1758,9 +1822,16 @@ async def google_auth_callback(body: GoogleCallbackIn, response: Response):
 
 @api.post("/auth/google/logout")
 async def google_auth_logout(request: Request, response: Response):
+    # Volledige cross-account cleanup: session_token DB + ALLE auth-cookies.
+    # Voorkomt dat gebruiker B in account van A belandt na uitloggen.
     tok = request.cookies.get("session_token")
     if tok:
-        await db.user_sessions.delete_one({"session_token": tok})
+        try:
+            await db.user_sessions.delete_one({"session_token": tok})
+        except Exception:  # noqa: BLE001
+            pass
+    for name in ("access_token", "kiosk_token", "tenant_token"):
+        response.delete_cookie(name, path="/")
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
 
