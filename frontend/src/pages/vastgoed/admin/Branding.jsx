@@ -229,7 +229,7 @@ export default function Branding() {
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg p-3 flex items-center gap-2"><Check className="w-4 h-4" />{msg}</div>}
 
       <div className="grid md:grid-cols-2 gap-4">
-        {/* LEFT: form */}
+        {/* LEFT: form — alles in één blok met dunne scheidslijnen tussen secties */}
         <div className="space-y-3">
           <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3">
             <p className="text-xs text-sky-800 leading-relaxed">
@@ -238,74 +238,89 @@ export default function Branding() {
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="text-sm font-extrabold text-slate-900 mb-3">Logo</h3>
-            <LogoUploader value={b.logo_url} onChange={(v) => upd('logo_url', v)} />
-            <p className="text-[11px] text-slate-400 mt-2">PNG/SVG met transparante achtergrond werkt het beste. Maximaal 5 MB.</p>
-          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 space-y-6" data-testid="branding-card">
+            {/* 1. Logo */}
+            <section>
+              <h3 className="text-sm font-extrabold text-slate-900 mb-3">Logo</h3>
+              <LogoUploader value={b.logo_url} onChange={(v) => upd('logo_url', v)} />
+              <p className="text-[11px] text-slate-400 mt-2">PNG/SVG met transparante achtergrond werkt het beste. Maximaal 5 MB.</p>
+            </section>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="text-sm font-extrabold text-slate-900 mb-3">Primaire kleur</h3>
-            <ColorPicker value={b.primary_color} onChange={(v) => upd('primary_color', v)} />
-            <p className="text-[11px] text-slate-400 mt-2">Wordt gebruikt voor knoppen en accenten op uw eigen login-pagina.</p>
-          </div>
+            <div className="border-t border-slate-100" />
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="text-sm font-extrabold text-slate-900 mb-3">Naam & tagline</h3>
-            <label className="block mb-3">
-              <span className="block text-xs font-bold text-slate-700 mb-1">App naam</span>
-              <input type="text" value={b.app_name || ''} onChange={(e) => upd('app_name', e.target.value)}
-                placeholder={b.name || 'Uw bedrijfsnaam'}
-                data-testid="branding-app-name"
-                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-              <p className="text-[11px] text-slate-400 mt-1">Verschijnt boven het PIN-veld op de login-pagina.</p>
-            </label>
-            <label className="block">
-              <span className="block text-xs font-bold text-slate-700 mb-1">Tagline (optioneel)</span>
-              <input type="text" value={b.tagline || ''} onChange={(e) => upd('tagline', e.target.value)}
-                placeholder="bv. Beheer & Kiosk toegang"
-                data-testid="branding-tagline"
-                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            </label>
-          </div>
+            {/* 2. Primaire kleur */}
+            <section>
+              <h3 className="text-sm font-extrabold text-slate-900 mb-3">Primaire kleur</h3>
+              <ColorPicker value={b.primary_color} onChange={(v) => upd('primary_color', v)} />
+              <p className="text-[11px] text-slate-400 mt-2">Wordt gebruikt voor knoppen en accenten op uw eigen login-pagina.</p>
+            </section>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Kwitantie & Factuur sjabloon</h3>
-                <p className="text-[11px] text-slate-500">Kies de kleuren van uw PDF-kwitanties en facturen — dark + goud accenten.</p>
-              </div>
-              <PdfPreviewButton template={b.pdf_template || 'midnight_gold'} customDark={b.pdf_custom_dark || ''} />
-            </div>
-            <div className="mt-3">
-              <PdfTemplatePicker value={b.pdf_template || 'midnight_gold'} onChange={(v) => upd('pdf_template', v)} />
-            </div>
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <label className="block">
-                <span className="block text-xs font-bold text-slate-700 mb-1">Custom hoofdkleur (optioneel)</span>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={b.pdf_custom_dark || '#0B1F3A'}
-                    onChange={(e) => upd('pdf_custom_dark', e.target.value)}
-                    data-testid="pdf-custom-dark-picker"
-                    className="h-10 w-12 cursor-pointer rounded border border-slate-200" />
-                  <input type="text" value={b.pdf_custom_dark || ''}
-                    onChange={(e) => upd('pdf_custom_dark', e.target.value)}
-                    placeholder="Laat leeg voor standaard sjabloon-kleur"
-                    data-testid="pdf-custom-dark-hex"
-                    className="h-10 flex-1 px-3 border-2 border-slate-200 rounded-lg font-mono text-xs focus:border-slate-900 focus:outline-none" />
-                  {b.pdf_custom_dark && (
-                    <button type="button" onClick={() => upd('pdf_custom_dark', '')}
-                      className="h-10 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">
-                      Wissen
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">Overschrijft de dark-kleur van het gekozen sjabloon. Goud blijft goud.</p>
+            <div className="border-t border-slate-100" />
+
+            {/* 3. Naam & tagline */}
+            <section>
+              <h3 className="text-sm font-extrabold text-slate-900 mb-3">Naam &amp; tagline</h3>
+              <label className="block mb-3">
+                <span className="block text-xs font-bold text-slate-700 mb-1">App naam</span>
+                <input type="text" value={b.app_name || ''} onChange={(e) => upd('app_name', e.target.value)}
+                  placeholder={b.name || 'Uw bedrijfsnaam'}
+                  data-testid="branding-app-name"
+                  className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+                <p className="text-[11px] text-slate-400 mt-1">Verschijnt boven het PIN-veld op de login-pagina.</p>
               </label>
-            </div>
-          </div>
+              <label className="block">
+                <span className="block text-xs font-bold text-slate-700 mb-1">Tagline (optioneel)</span>
+                <input type="text" value={b.tagline || ''} onChange={(e) => upd('tagline', e.target.value)}
+                  placeholder="bv. Beheer & Kiosk toegang"
+                  data-testid="branding-tagline"
+                  className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              </label>
+            </section>
 
-          <LandlordSignatureSection value={b.landlord_signature_url} signedAt={b.landlord_signature_signed_at} onReload={load} />
+            <div className="border-t border-slate-100" />
+
+            {/* 4. Kwitantie & Factuur sjabloon */}
+            <section>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Kwitantie &amp; Factuur sjabloon</h3>
+                  <p className="text-[11px] text-slate-500">Kies de kleuren van uw PDF-kwitanties en facturen — dark + goud accenten.</p>
+                </div>
+                <PdfPreviewButton template={b.pdf_template || 'midnight_gold'} customDark={b.pdf_custom_dark || ''} />
+              </div>
+              <div className="mt-3">
+                <PdfTemplatePicker value={b.pdf_template || 'midnight_gold'} onChange={(v) => upd('pdf_template', v)} />
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                <label className="block">
+                  <span className="block text-xs font-bold text-slate-700 mb-1">Custom hoofdkleur (optioneel)</span>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={b.pdf_custom_dark || '#0B1F3A'}
+                      onChange={(e) => upd('pdf_custom_dark', e.target.value)}
+                      data-testid="pdf-custom-dark-picker"
+                      className="h-10 w-12 cursor-pointer rounded border border-slate-200" />
+                    <input type="text" value={b.pdf_custom_dark || ''}
+                      onChange={(e) => upd('pdf_custom_dark', e.target.value)}
+                      placeholder="Laat leeg voor standaard sjabloon-kleur"
+                      data-testid="pdf-custom-dark-hex"
+                      className="h-10 flex-1 px-3 border-2 border-slate-200 rounded-lg font-mono text-xs focus:border-slate-900 focus:outline-none" />
+                    {b.pdf_custom_dark && (
+                      <button type="button" onClick={() => upd('pdf_custom_dark', '')}
+                        className="h-10 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">
+                        Wissen
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">Overschrijft de dark-kleur van het gekozen sjabloon. Goud blijft goud.</p>
+                </label>
+              </div>
+            </section>
+
+            <div className="border-t border-slate-100" />
+
+            {/* 5. Verhuurder handtekening */}
+            <LandlordSignatureSection value={b.landlord_signature_url} signedAt={b.landlord_signature_signed_at} onReload={load} />
+          </div>
         </div>
 
         {/* RIGHT: live preview */}
@@ -518,7 +533,7 @@ function LandlordSignatureSection({ value, signedAt, onReload }) {
   const showCanvas = !value || redraw;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4" data-testid="landlord-signature-section">
+    <section data-testid="landlord-signature-section">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm font-extrabold text-slate-900">Verhuurder handtekening</h3>
@@ -586,6 +601,6 @@ function LandlordSignatureSection({ value, signedAt, onReload }) {
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }
