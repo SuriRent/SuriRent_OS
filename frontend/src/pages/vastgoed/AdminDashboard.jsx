@@ -3354,11 +3354,13 @@ function Tenants() {
     without_apt: bySearch.filter((t) => !t.apartment_number).length,
   };
   const missingAvatars = items.filter((t) => t.id_photo_url && !t.avatar_url).length;
-  const runBackfill = async () => {
-    if (!window.confirm(`Genereer pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s)? Dit duurt ~2s per huurder.`)) return;
+  const withAvatars = items.filter((t) => t.avatar_url).length;
+  const runBackfill = async (force = false) => {
+    const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
+    if (!window.confirm(`${label}? Dit duurt ~2s per huurder.`)) return;
     setBackfilling(true);
     try {
-      const { data } = await api.post('/tenants/backfill-avatars');
+      const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
       window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
       await load();
     } catch (e) {
@@ -3388,11 +3390,24 @@ function Tenants() {
           <p className="text-xs sm:text-sm text-slate-700 flex-1 min-w-0">
             <span className="font-black">{missingAvatars} huurder(s)</span> heeft een ID-kaart, maar nog geen pasfoto-avatar.
           </p>
-          <button onClick={runBackfill} disabled={backfilling}
+          <button onClick={() => runBackfill(false)} disabled={backfilling}
             data-testid="tenants-backfill-btn"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-xs font-bold disabled:opacity-50">
             {backfilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             {backfilling ? 'Bezig…' : 'Genereer nu'}
+          </button>
+        </div>
+      )}
+
+      {/* "Alles opnieuw" — verschijnt alleen als er al avatars bestaan.
+          Handig na een prompt-update zodat de admin de crop kan verstrakken. */}
+      {withAvatars > 0 && missingAvatars === 0 && (
+        <div className="flex justify-end">
+          <button onClick={() => runBackfill(true)} disabled={backfilling}
+            data-testid="tenants-regenerate-avatars-btn"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold disabled:opacity-50">
+            {backfilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {backfilling ? 'Bezig…' : `Alle ${withAvatars} pasfoto's opnieuw croppen`}
           </button>
         </div>
       )}

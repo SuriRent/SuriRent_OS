@@ -6983,9 +6983,15 @@ async def _extract_face_avatar_from_bytes(
         ).with_model("gemini", "gemini-2.5-flash")
         prompt = (
             "Op deze ID-kaart / paspoort / rijbewijs staat een pasfoto van de eigenaar. "
-            "Geef de bounding box (normalized 0..1) van ALLEEN het gezicht/pasfoto-vak. "
+            "Geef de bounding box (normalized 0..1) van UITSLUITEND HET GEZICHT — dat is:\n"
+            "- van de bovenkant van het HOOFDHAAR tot net onder de KIN\n"
+            "- van OOR tot OOR (of iets ruimer als het haar breed is)\n"
+            "STRIKT NIET meebrengen: de rand van de pasfoto-kader, tekst zoals namen/nummers, "
+            "de schouder-lijn onder de kin, de handtekening, of enig deel van de ID-kaart-achtergrond. "
+            "Alleen de bloot te zien HUID en HAAR van het gezicht.\n"
             'Retour uitsluitend JSON: {"x":<0..1>,"y":<0..1>,"w":<0..1>,"h":<0..1>,"found":true|false}. '
-            "x,y is de LINKERBOVENhoek. Als geen pasfoto zichtbaar: found=false. Geen markdown."
+            "x,y is de LINKERBOVENhoek van het gezicht. "
+            "Als geen gezicht zichtbaar: found=false. Geen markdown, geen uitleg."
         )
         msg = UserMessage(
             text=prompt,
@@ -7013,20 +7019,32 @@ async def _extract_face_avatar_from_bytes(
     w = max(0.01, min(1.0, float(bb.get("w", 0))))
     h = max(0.01, min(1.0, float(bb.get("h", 0))))
 
-    # PIL crop met 8% margin, maak vierkant crop rondom center
+    # PIL crop met minimale margin, vierkant rondom center van bbox.
+    # We houden het bewust STRAK zodat er geen tekst/rand van de ID-kaart
+    # meegecropt wordt. Gemini's bbox is doorgaans al iets ruim.
     try:
         img = Image.open(io.BytesIO(raw))
         img = ImageOps.exif_transpose(img)
         W, H = img.size
         cx = (x + w / 2.0) * W
         cy = (y + h / 2.0) * H
-        # Vierkant met zijde = max(w*W, h*H) * 1.16 (8% margin per kant)
-        side = max(w * W, h * H) * 1.16
+        # Vierkant met zijde = max(w, h) — GEEN extra margin. Zo mogelijk
+        # zelfs 4% inwaartse crop (0.96) om zeker geen randtekst mee te
+        # nemen, maar alleen als het gezicht groter is dan 50px.
+        raw_side = max(w * W, h * H)
+        tight_factor = 0.96 if raw_side > 80 else 1.0
+        side = raw_side * tight_factor
         left = max(0, int(cx - side / 2))
         top = max(0, int(cy - side / 2))
         right = min(W, int(cx + side / 2))
         bottom = min(H, int(cy + side / 2))
         if right - left < 40 or bottom - top < 40:
+            return None
+        # Sanity check: als bbox > 60% van hele plaatje is, heeft Gemini
+        # waarschijnlijk de hele pasfoto-doos of card meegepakt. Reject.
+        crop_area_ratio = ((right - left) * (bottom - top)) / (W * H)
+        if crop_area_ratio > 0.6:
+            print(f"[avatar] rejected: crop area ratio {crop_area_ratio:.2f} too large (likely full card)")
             return None
         crop = img.crop((left, top, right, bottom)).convert("RGB")
         # Downscale naar 256x256 max — genoeg voor avatar
@@ -7131,14 +7149,19 @@ async def generate_tenant_avatar(tenant_id: str, user=Depends(get_current_user))
 
 
 @api.post("/tenants/backfill-avatars")
-async def backfill_tenant_avatars(user=Depends(get_current_user)):
+async def backfill_tenant_avatars(force: bool = False, user=Depends(get_current_user)):
     """Genereer avatars voor alle huurders in deze company die wél een
-    ID-kaart hebben maar nog géén avatar. Alleen admins."""
+    ID-kaart hebben. Standaard alleen huurders zonder avatar; met
+    `?force=true` worden bestaande avatars vervangen door een nieuwe
+    (strakkere) crop. Alleen admins."""
     if user.get("role") not in ("owner", "admin"):
         raise HTTPException(status_code=403, detail="Alleen beheerders")
-    q = {**scope(user), "id_photo_url": {"$exists": True, "$ne": ""}, "$or": [
-        {"avatar_url": {"$exists": False}}, {"avatar_url": ""}, {"avatar_url": None},
-    ]}
+    if force:
+        q = {**scope(user), "id_photo_url": {"$exists": True, "$ne": ""}}
+    else:
+        q = {**scope(user), "id_photo_url": {"$exists": True, "$ne": ""}, "$or": [
+            {"avatar_url": {"$exists": False}}, {"avatar_url": ""}, {"avatar_url": None},
+        ]}
     todo = await db.tenants.find(q, {"_id": 0, "id": 1, "id_photo_url": 1, "name": 1}).to_list(500)
     done, failed = 0, 0
     for t in todo:
