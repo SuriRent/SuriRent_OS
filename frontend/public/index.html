@@ -371,6 +371,34 @@
   </head>
   <body style="background-color: #FFF7F0;">
     <noscript>JavaScript is vereist om deze app te gebruiken.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Splash screen — verdwijnt zodra React de eerste render doet
+           (React vervangt de content van #root). CSS-only fade-in en pulse
+           op het oranje SuriRent-huis. Cross-browser en werkt zelfs voordat
+           bundle.js geladen is → geen wit scherm meer bij PWA-opstart. -->
+      <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FFF7F0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;animation:__pwaSplashPulse 1.4s ease-in-out infinite;">
+          <svg width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="#FF5C00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
+            <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FF5C00" fill-opacity="0.08"/>
+          </svg>
+        </div>
+        <div style="margin-top:24px;display:flex;gap:6px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0s;"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.2s;"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.4s;"></span>
+        </div>
+        <p style="margin-top:20px;font-size:13px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:#FF5C00;opacity:0.75;">SuriRent</p>
+        <style>
+          @keyframes __pwaSplashPulse {
+            0%,100% { transform: scale(1); opacity: 1; }
+            50%     { transform: scale(1.06); opacity: 0.85; }
+          }
+          @keyframes __pwaSplashDot {
+            0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+            40%         { transform: scale(1);   opacity: 1;   }
+          }
+        </style>
+      </div>
+    </div>
   </body>
 </html>

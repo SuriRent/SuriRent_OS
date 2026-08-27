@@ -37,6 +37,7 @@ Wanneer huurder een betaling doet via tenant-portal moet Admin > Betalingen live
 ```
 
 ## Completed
+- **PWA splash screen (2026-02-27)**: In `frontend/public/index.html` een CSS/SVG-only splash toegevoegd binnen `<div id="root">` — verschijnt onmiddellijk bij PWA-opstart (nog vóór `bundle.js` geladen is) en wordt automatisch verwijderd wanneer React de eerste render doet. Bevat: oranje SuriRent-huis (Lucide-style SVG met `#FF5C00` stroke + 8% fill), 1.4s pulse-animatie, 3 pulserende oranje dots eronder (loading indicator), en "SURIRENT"-tekst in tracking-wide caps. Warme `#FFF7F0` background matched met brand-color. Geen white flash meer bij PWA-opstart op productie.
 - **PWA flikker + registreren-flow fixes (2026-02-27)**: Drie samenhangende issues op de geïnstalleerde PWA gefixt.
   1. **Marketing-flash bij openen**: `index.html` heeft nu een synchrone pre-React redirect: als `display-mode:standalone` én pathname is "/" → `window.location.replace('/login?source=pwa')` VOOR React mount. Geen marketing-glimp meer voordat de login/onboarding laadt.
   2. **"Ik heb een bedrijf" → inloggen**: `handleOnboardingChoice` in `LoginPage.jsx` navigeerde naar `publicMarketingUrl() + '/?register=1'` — op productie is dat een ANDER domein (surirent.sr) → val buiten PWA-scope → break. Nu `setView('register')` → `RegisterModal`/`MobileRegisterWizard` opent DIRECT in-page binnen PWA-scope.

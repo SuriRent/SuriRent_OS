@@ -20,6 +20,7 @@
     "WindowClient": "readonly",
     "clients": "readonly",
     "workbox": "readonly",
+    "define": "readonly",
     "_": "readonly",
     "describe": "readonly",
     "it": "readonly",
