@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle } from 'lucide-react';
+import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff } from 'lucide-react';
 import { api, formatError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { publicMarketingUrl } from '../../lib/env';
@@ -97,13 +97,42 @@ function Message({ role, content, actions }) {
 
 function ChatUI({ user }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: `Hallo ${user.name || 'daar'}! Ik ben je AI-assistent. Vraag me bijvoorbeeld:\n• "Huis 1A heeft SRD 5000 betaald"\n• "Wie heeft achterstand?"\n• "Maak een factuur van SRD 3500 voor Jan Pieterse"`, actions: [] },
+    { role: 'assistant', content: `Hallo ${user.name || 'daar'}! Ik ben je AI-assistent. Vraag me bijvoorbeeld:\n• "Huis 1A heeft SRD 5000 betaald"\n• "Wie heeft achterstand?"\n• "Maak een factuur van SRD 3500 voor Jan Pieterse"\n\nTip: druk op de microfoon om in te spreken.`, actions: [] },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
+  const recRef = useRef(null);
   const { logout } = useAuth();
+
+  // Voice input via Web Speech API. Chrome/Safari/Edge ondersteunen dit;
+  // Firefox helaas niet. We tonen de knop alleen wanneer beschikbaar.
+  const voiceSupported = typeof window !== 'undefined' &&
+    (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const toggleVoice = useCallback(() => {
+    if (!voiceSupported) return;
+    if (listening) {
+      try { recRef.current?.stop(); } catch { /* ignore */ }
+      setListening(false);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = 'nl-NL';
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      const txt = Array.from(e.results).map((r) => r[0].transcript).join('');
+      setInput(txt);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = (e) => { setListening(false); console.warn('speech error', e.error); };
+    recRef.current = rec;
+    try { rec.start(); setListening(true); } catch { setListening(false); }
+  }, [listening, voiceSupported]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -163,8 +192,19 @@ function ChatUI({ user }) {
       {/* Input */}
       <footer className="bg-white border-t border-slate-200 p-3 shrink-0">
         <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2 max-w-3xl mx-auto">
+          {voiceSupported && (
+            <button type="button" onClick={toggleVoice} data-testid="assistant-mic"
+              className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition ${
+                listening
+                  ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-300'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+              title={listening ? 'Stop opname' : 'Spreek in'}>
+              {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
           <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="Typ je vraag of opdracht…" disabled={busy}
+            placeholder={listening ? 'Luistert…' : 'Typ je vraag of opdracht…'} disabled={busy}
             data-testid="assistant-input"
             className="flex-1 h-12 px-4 rounded-2xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
           <button type="submit" disabled={busy || !input.trim()} data-testid="assistant-send"

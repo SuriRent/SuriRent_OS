@@ -1,4 +1,5 @@
 {
+  "id": "/assistent",
   "name": "SuriRent Assistent",
   "short_name": "Assistent",
   "description": "AI-assistent voor je vastgoed — vraag alles in gewone taal.",
@@ -10,7 +11,9 @@
   "theme_color": "#FF5C00",
   "lang": "nl-NL",
   "icons": [
-    {"src": "/kiosk-icons/mark-white.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "/kiosk-icons/mark-white.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {"src": "/kiosk-icons/assistent-72.png", "sizes": "72x72", "type": "image/png"},
+    {"src": "/kiosk-icons/assistent-144.png", "sizes": "144x144", "type": "image/png"},
+    {"src": "/kiosk-icons/assistent-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/kiosk-icons/assistent-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
   ]
 }

@@ -193,19 +193,21 @@
       (function () {
         try {
           var ROLES = {
-            beheer:  { name: 'Beheer',         theme: '#FFF7F0', icon: 'beheer'   },
-            kiosk:   { name: 'Kiosk',          theme: '#2563EB', icon: 'kioskpwa' },
-            huurder: { name: 'Huurder',        theme: '#10B981', icon: 'huurder'  },
-            klant:   { name: 'Klantenscherm',  theme: '#9333EA', icon: 'klant'    }
+            beheer:    { name: 'Beheer',         theme: '#FFF7F0', icon: 'beheer'    },
+            kiosk:     { name: 'Kiosk',          theme: '#2563EB', icon: 'kioskpwa'  },
+            huurder:   { name: 'Huurder',        theme: '#10B981', icon: 'huurder'   },
+            klant:     { name: 'Klantenscherm',  theme: '#9333EA', icon: 'klant'     },
+            assistent: { name: 'SuriRent Assistent', theme: '#FF5C00', icon: 'assistent' }
           };
           var p = (location.pathname || '').toLowerCase();
           var sub = p;
           if (p.indexOf('/c/') === 0) sub = '/' + p.split('/').slice(3).join('/');
           var role = 'beheer';
+          if (sub === '/assistent' || sub.indexOf('/assistent') === 0) role = 'assistent';
           // BELANGRIJK: specifieke routes EERST (kiosk/klant, kiosk/huurder)
           // VOORDAT we de algemene /kiosk match doen, anders worden
           // /kiosk/huurder en /kiosk/klant verkeerd als 'kiosk' herkend.
-          if (sub.indexOf('/admin') === 0) role = 'beheer';
+          else if (sub.indexOf('/admin') === 0) role = 'beheer';
           else if (sub.indexOf('/kiosk/klant') === 0) role = 'klant';
           else if (sub.indexOf('/kiosk/huurder') === 0) role = 'huurder';
           else if (sub === '/kiosk' || sub.indexOf('/kiosk/') === 0 || sub.indexOf('/kiosk') === 0) role = 'kiosk';
@@ -233,13 +235,20 @@
             slug = seg[0];
           }
           if (manifest) {
-            // Stabiele backend-URL met slug+role query — vervangt de oude
-            // blob-URL approach (die alleen tijdens document-sessie geldig
-            // was). Hierdoor kan een geïnstalleerde PWA de manifest later
-            // refresht en blijft `start_url` in het bedrijfs-context.
-            var manifestUrl = '/api/pwa/manifest?role=' + encodeURIComponent(role);
-            if (slug) manifestUrl += '&slug=' + encodeURIComponent(slug);
-            manifest.setAttribute('href', manifestUrl);
+            // Voor de aparte AI-assistent app gebruiken we het statische
+            // /assistent-manifest.json (aparte start_url + scope + icons).
+            // Zo installeert de gebruiker EEN aparte PWA vanuit /assistent.
+            if (role === 'assistent') {
+              manifest.setAttribute('href', '/assistent-manifest.json');
+            } else {
+              // Stabiele backend-URL met slug+role query — vervangt de oude
+              // blob-URL approach (die alleen tijdens document-sessie geldig
+              // was). Hierdoor kan een geïnstalleerde PWA de manifest later
+              // refresht en blijft `start_url` in het bedrijfs-context.
+              var manifestUrl = '/api/pwa/manifest?role=' + encodeURIComponent(role);
+              if (slug) manifestUrl += '&slug=' + encodeURIComponent(slug);
+              manifest.setAttribute('href', manifestUrl);
+            }
           }
           var t = document.querySelector('meta[name="apple-mobile-web-app-title"]');
           if (t) t.setAttribute('content', cfg.name);
