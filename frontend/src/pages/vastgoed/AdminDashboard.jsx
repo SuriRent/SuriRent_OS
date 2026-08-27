@@ -4301,19 +4301,23 @@ export default function AdminDashboard() {
     // inloggen. Tenants loggen zichzelf via TenantKioskLayout af en
     // blijven op hun eigen kiosk-omgeving.
     //
-    // BELANGRIJK: hard-nav MOET plaatsvinden vóór `logout()`'s `setUser(null)`
-    // anders re-rendert React, ziet <Protected> user=null en flitst
-    // <Navigate to="/login" /> in beeld vóór de browser weg-navigeert.
-    // Volgorde:
-    //   1) Best-effort server-logout (fire-and-forget, geen await)
-    //   2) Synchroon localStorage/sessionStorage opruimen
-    //   3) window.location.replace('/login') — browser start hard nav
+    // BELANGRIJK voor SAFARI (2026-02-27): fire-and-forget van
+    // `/auth/logout` gaf een race — Safari navigeerde voordat de
+    // Set-Cookie response was verwerkt, waardoor de auth-cookie op de
+    // vervolgpagina nog geldig was → AuthProvider hield gebruiker
+    // ingelogd → redirect terug naar admin. We AWAITEN nu de server-
+    // logout (met 2.5s timeout) VOORDAT we storage clearen en navigeren.
     const wasDemo = (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
     })();
-    // Fire-and-forget server logout — cookies worden op backend gewist.
-    try { api.post('/auth/logout'); } catch { /* noop */ }
+    // Server-logout: wachten tot cookies zijn gewist (Safari fix).
+    try {
+      await Promise.race([
+        api.post('/auth/logout').catch(() => {}),
+        new Promise((res) => setTimeout(res, 2500)),
+      ]);
+    } catch { /* noop */ }
     // localStorage synchroon opruimen zodat volgende bezoeker geen resten ziet.
     try {
       localStorage.removeItem('admin_token');
@@ -4334,12 +4338,14 @@ export default function AdminDashboard() {
     // Hard nav naar /login op huidige origin. Als een echte gebruiker een
     // company-slug heeft, stuur naar `/{slug}/login` zodat de branded
     // PIN-login direct opent (LoginPage handelt dit ook af, maar dit is
-    // sneller — geen redirect-hop).
-    let target = '/login';
+    // sneller — geen redirect-hop). Extra `?loggedout=1` query zodat
+    // LoginPage's AuthProvider niet per ongeluk auto-redirected op basis
+    // van een cached user (Safari extra veiligheid).
+    let target = '/login?loggedout=1';
     if (!wasDemo) {
       try {
         const slug = localStorage.getItem('pwa_company_slug');
-        if (slug) target = `/${slug}/login`;
+        if (slug) target = `/${slug}/login?loggedout=1`;
       } catch { /* noop */ }
     }
     window.location.replace(target);

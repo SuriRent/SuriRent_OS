@@ -152,7 +152,7 @@ def _nl_under_hundred(n: int) -> str:
 
 def _nl_under_thousand(n: int) -> str:
     if n < 100:
-        return _NL_under_hundred(n) if False else _nl_under_hundred(n)
+        return _nl_under_hundred(n)
     hundreds, rest = divmod(n, 100)
     h_word = "honderd" if hundreds == 1 else f"{_NL_UNITS[hundreds]}honderd"
     if rest == 0:

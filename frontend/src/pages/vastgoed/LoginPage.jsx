@@ -239,18 +239,35 @@ export default function LoginPage() {
     navigate(routeForRole(role), { replace: true });
   }, [navigate]);
 
+  // Bij ?loggedout=1 (uit doLogout) → forceer AuthProvider om /auth/me
+  // opnieuw op te halen. Als de cookies correct zijn gewist retourneert
+  // dat 401 → user=null en Safari kan geen "spookje" cached user tonen.
+  useEffect(() => {
+    if (searchParams.get('loggedout') === '1') {
+      try { refresh?.(); } catch { /* noop */ }
+    }
+    // Alleen bij eerste mount uitvoeren; dependency op de searchParams zorgt
+    // dat we niet in een loop komen wanneer AuthProvider zelf reagerend
+    // updatet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-redirect if already logged (but not when we're showing the success screen
   // OR wanneer er een pending QR claim is — de submit-handler zelf navigeert dan
   // naar /qr-link?token=... en deze useEffect zou dat anders overschrijven met
-  // /admin (race-conditie).
+  // /admin (race-conditie). OOK niet als ?loggedout=1 in de URL staat — dat is
+  // een signaal van doLogout dat Safari's cached auth-cookie mogelijk nog
+  // meekomt; forceer dat de gebruiker de login-form ziet i.p.v. terug te
+  // springen naar admin.
   useEffect(() => {
+    if (searchParams.get('loggedout') === '1') return;
     if (!loading && user && !skipRedirect) {
       let hasPendingQr = false;
       try { hasPendingQr = !!sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
       if (hasPendingQr) return;
       navigate('/admin', { replace: true });
     }
-  }, [user, loading, navigate, skipRedirect]);
+  }, [user, loading, navigate, skipRedirect, searchParams]);
 
   // ────────────────────────────────────────────────────────────────────
   // PWA Onboarding heeft voorrang op alle andere views — alleen voor

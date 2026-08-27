@@ -3188,7 +3188,7 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
                 )
             except Exception as e:
                 # PIL niet beschikbaar of image corrupt — fall back naar full-size.
-                logger.warning("Thumbnail generation failed for %s: %s", asset_id, e)
+                print(f"[assets] Thumbnail generation failed for {asset_id}: {e}")
 
     return StreamingResponse(
         io.BytesIO(data),
@@ -4465,6 +4465,17 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
     return {"ok": True, "invoice": inv}
 
 
+@api.post("/companies/me/cancel-subscription")
+async def company_self_cancel(user=Depends(get_current_user)):
+    """Alias-route: admin van een bedrijf kan zijn eigen abonnement opzeggen.
+    Wordt feitelijk afgehandeld door `_do_self_cancel`. Deze literal-prefix
+    route staat BOVEN de `/{cid}` variant om route-shadowing te vermijden."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    return await _do_self_cancel(cid, user)
+
+
 @api.post("/companies/{cid}/cancel-subscription")
 async def cancel_subscription(cid: str, user=Depends(get_current_user)):
     """Cancel een abonnement. Twee paden:
@@ -4581,19 +4592,6 @@ async def reactivate_subscription(cid: str, user=Depends(require_role("superadmi
         import logging as _logging
         _logging.getLogger("uvicorn.error").warning(f"Heractivatie email failed: {e}")
     return {"ok": True}
-
-
-@api.post("/companies/me/cancel-subscription")
-async def company_self_cancel(user=Depends(get_current_user)):
-    """Alias-route: admin van een bedrijf kan zijn eigen abonnement opzeggen.
-    Wordt feitelijk afgehandeld door `_do_self_cancel`. FastAPI route-matching
-    kan deze literal-prefix route boven de `/{cid}` variant pakken (definieer
-    deze daarom ook in server.py BOVEN de {cid} variant, of laat de {cid}
-    variant 'me' detecteren — beide werken)."""
-    cid = company_id_of(user)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
-    return await _do_self_cancel(cid, user)
 
 
 
@@ -9208,7 +9206,6 @@ async def get_customer_display(slug: str, response: Response):
 # _cd_publish() een event op de queue gezet en INSTANT doorgestuurd.
 # Cross-device latency: typisch <50ms ipv 250ms via polling.
 # Polling blijft als fallback voor PWA-clients zonder EventSource-support.
-from fastapi.responses import StreamingResponse
 
 
 @api.get("/public/customer-display/{slug}/stream")
