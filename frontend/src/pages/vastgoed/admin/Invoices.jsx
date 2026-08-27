@@ -90,6 +90,21 @@ export default function Invoices() {
     return g;
   }, [items]);
 
+  // Luister naar `focus-entity` uit de globale zoekbalk — open direct het
+  // detail-scherm voor de tenant-groep die deze factuur bevat.
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {};
+      if (d.type !== 'invoice') return;
+      const tid = d.tenant_id;
+      if (!tid) return;
+      const grp = groups.find((g) => g.tenant_id === tid);
+      if (grp) setDetail(grp);
+    };
+    window.addEventListener('focus-entity', handler);
+    return () => window.removeEventListener('focus-entity', handler);
+  }, [groups]);
+
   const allCount = groups.length;
   const openCount = useMemo(() => groups.filter((g) => (g.overdueCount || 0) > 0).length, [groups]);
   const paidCount = useMemo(() => groups.filter((g) => g.openCount === 0).length, [groups]);

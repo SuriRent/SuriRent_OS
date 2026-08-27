@@ -1110,10 +1110,18 @@ function GlobalSearch({ variant = 'quick' }) {
   };
   const totalResults = results.tenants.length + results.apartments.length + results.invoices.length;
 
-  const go = (tab) => {
+  const go = (tab, focus) => {
     setQ('');
     setOpen(false);
     window.dispatchEvent(new CustomEvent('go-tab', { detail: tab }));
+    // Na de tabwissel: signaleer welke entiteit geopend moet worden.
+    // De target-tab luistert op `focus-entity` en opent de detail-view.
+    // Kleine vertraging zodat de tab-component gemount is.
+    if (focus) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('focus-entity', { detail: focus }));
+      }, 60);
+    }
   };
 
   return (
@@ -1166,7 +1174,7 @@ function GlobalSearch({ variant = 'quick' }) {
                   <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Huurders</p>
                   {results.tenants.map((t) => (
                     <button key={t.id} onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => go('tenants')}
+                      onClick={() => go('tenants', { type: 'tenant', id: t.id })}
                       data-testid={`search-tenant-${t.id}`}
                       className="w-full text-left px-4 py-2.5 hover:bg-orange-50/60 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -1188,7 +1196,7 @@ function GlobalSearch({ variant = 'quick' }) {
                   <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Appartementen</p>
                   {results.apartments.map((a) => (
                     <button key={a.id} onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => go('apartments')}
+                      onClick={() => go('apartments', { type: 'apartment', id: a.id })}
                       data-testid={`search-apartment-${a.id}`}
                       className="w-full text-left px-4 py-2.5 hover:bg-orange-50/60 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
@@ -1208,7 +1216,7 @@ function GlobalSearch({ variant = 'quick' }) {
                   <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Facturen</p>
                   {results.invoices.map((i) => (
                     <button key={i.id} onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => go('invoices')}
+                      onClick={() => go('invoices', { type: 'invoice', id: i.id, tenant_id: i.tenant_id })}
                       data-testid={`search-invoice-${i.id}`}
                       className="w-full text-left px-4 py-2.5 hover:bg-orange-50/60 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
@@ -2041,6 +2049,17 @@ function Apartments() {
   // Stille polling — pauzeer wanneer een modal open is óf we in detail-view zitten.
   // POLLING VERWIJDERD (per user verzoek 2026-02-28): 45s useAutoRefresh
   // uitgeschakeld. SWR + SSE (/api/admin/events) dekken alle updates.
+
+  // Luister naar `focus-entity` uit de globale zoekbalk — open direct het
+  // gekozen appartement in de detail-view i.p.v. de hele lijst tonen.
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {};
+      if (d.type === 'apartment' && d.id) setDetailId(d.id);
+    };
+    window.addEventListener('focus-entity', handler);
+    return () => window.removeEventListener('focus-entity', handler);
+  }, []);
 
   const del = async (id) => {
     if (!window.confirm('Appartement verwijderen?')) return;
@@ -3260,6 +3279,17 @@ function Tenants() {
   const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
   // POLLING VERWIJDERD (per user verzoek 2026-02-28): SWR cache + SSE
   // dekken alle huurder-updates. Vroeger stond hier een 45s useAutoRefresh.
+
+  // Luister naar `focus-entity` uit de globale zoekbalk — open direct
+  // de gekozen huurder in de detail-view i.p.v. de hele lijst tonen.
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {};
+      if (d.type === 'tenant' && d.id) setDetailId(d.id);
+    };
+    window.addEventListener('focus-entity', handler);
+    return () => window.removeEventListener('focus-entity', handler);
+  }, []);
   const del = async (id) => {
     if (!window.confirm('Huurder verwijderen?')) return;
     await api.delete(`/tenants/${id}`);
