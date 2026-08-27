@@ -69,100 +69,108 @@ export default function BusinessInfo() {
       {msg && <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm font-bold"><Check className="w-4 h-4" />{msg}</div>}
       {err && <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-bold"><AlertCircle className="w-4 h-4" />{err}</div>}
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Contact */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 space-y-6" data-testid="business-info-card">
+        {/* 1. Contact & Adres */}
+        <section>
           <h3 className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4" /> Contact & Adres
+            <Building2 className="w-4 h-4" /> Contact &amp; Adres
           </h3>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1">Bedrijfsnaam</span>
-            <input type="text" value={b.name || ''} onChange={(e) => upd('name', e.target.value)}
-              placeholder="bv. SuriRent N.V." data-testid="bi-name"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            <p className="text-[11px] text-slate-400 mt-0.5">Verschijnt op kwitanties, contracten en de gouden QR-plaquette.</p>
-          </label>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Contact e-mail</span>
-            <input type="email" value={b.contact_email || ''} onChange={(e) => upd('contact_email', e.target.value)}
-              placeholder="info@bedrijf.sr" data-testid="bi-email"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-          </label>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Telefoonnummer</span>
-            <input type="tel" value={b.contact_phone || ''} onChange={(e) => upd('contact_phone', e.target.value)}
-              placeholder="+597 ..." data-testid="bi-phone"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Adres</span>
-            <input type="text" value={b.address || ''} onChange={(e) => upd('address', e.target.value)}
-              placeholder="Straat 123, Paramaribo" data-testid="bi-address"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-          </label>
-          <label className="block mt-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
-              <Landmark className="w-3.5 h-3.5" /> KKF-nummer
-            </span>
-            <input type="text" value={b.kkf_number || ''} onChange={(e) => upd('kkf_number', e.target.value)}
-              placeholder="bv. 173157" data-testid="bi-kkf"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            <p className="text-[11px] text-slate-400 mt-0.5">Kamer van Koophandel en Fabrieken registratienummer — verschijnt in de footer van uw publieke landing.</p>
-          </label>
-        </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1">Bedrijfsnaam</span>
+              <input type="text" value={b.name || ''} onChange={(e) => upd('name', e.target.value)}
+                placeholder="bv. SuriRent N.V." data-testid="bi-name"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              <p className="text-[11px] text-slate-400 mt-0.5">Verschijnt op kwitanties, contracten en de gouden QR-plaquette.</p>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Contact e-mail</span>
+              <input type="email" value={b.contact_email || ''} onChange={(e) => upd('contact_email', e.target.value)}
+                placeholder="info@bedrijf.sr" data-testid="bi-email"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Telefoonnummer</span>
+              <input type="tel" value={b.contact_phone || ''} onChange={(e) => upd('contact_phone', e.target.value)}
+                placeholder="+597 ..." data-testid="bi-phone"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Adres</span>
+              <input type="text" value={b.address || ''} onChange={(e) => upd('address', e.target.value)}
+                placeholder="Straat 123, Paramaribo" data-testid="bi-address"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5"><Landmark className="w-3.5 h-3.5" /> KKF-nummer</span>
+              <input type="text" value={b.kkf_number || ''} onChange={(e) => upd('kkf_number', e.target.value)}
+                placeholder="bv. 173157" data-testid="bi-kkf"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              <p className="text-[11px] text-slate-400 mt-0.5">Kamer van Koophandel en Fabrieken registratienummer — verschijnt in de footer van uw publieke landing.</p>
+            </label>
+          </div>
+        </section>
 
-        {/* Bankrekeningen */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <div className="border-t border-slate-100" />
+
+        {/* 2. Bankrekeningen */}
+        <section>
           <h3 className="text-sm font-extrabold text-slate-900 mb-1 flex items-center gap-2">
             <Landmark className="w-4 h-4" /> Bankrekeningen
           </h3>
           <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
             Huurders kiezen in de kiosk uit welk land ze betalen — de juiste rekening wordt automatisch getoond.
           </p>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">🇸🇷 Suriname</span>
-            <input type="text" value={b.bank_account_sr || ''} onChange={(e) => upd('bank_account_sr', e.target.value)}
-              placeholder="bv. DSB Bank — 12.34.56.789 (Bedrijfsnaam)" data-testid="bi-bank-sr"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            <p className="text-[10px] text-slate-400 mt-0.5">Bank + rekeningnummer + tenaamstelling</p>
-          </label>
-          <label className="block">
-            <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">🇳🇱 Nederland</span>
-            <input type="text" value={b.bank_account_nl || ''} onChange={(e) => upd('bank_account_nl', e.target.value)}
-              placeholder="bv. NL12RABO0123456789 (Bedrijfsnaam)" data-testid="bi-bank-nl"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            <p className="text-[10px] text-slate-400 mt-0.5">IBAN + tenaamstelling</p>
-          </label>
-        </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">🇸🇷 Suriname</span>
+              <input type="text" value={b.bank_account_sr || ''} onChange={(e) => upd('bank_account_sr', e.target.value)}
+                placeholder="bv. DSB Bank — 12.34.56.789 (Bedrijfsnaam)" data-testid="bi-bank-sr"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              <p className="text-[10px] text-slate-400 mt-0.5">Bank + rekeningnummer + tenaamstelling</p>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">🇳🇱 Nederland</span>
+              <input type="text" value={b.bank_account_nl || ''} onChange={(e) => upd('bank_account_nl', e.target.value)}
+                placeholder="bv. NL12RABO0123456789 (Bedrijfsnaam)" data-testid="bi-bank-nl"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              <p className="text-[10px] text-slate-400 mt-0.5">IBAN + tenaamstelling</p>
+            </label>
+          </div>
+        </section>
 
-        {/* Verhuurder persoonsgegevens t.b.v. huurcontracten */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <div className="border-t border-slate-100" />
+
+        {/* 3. Verhuurder (contract) */}
+        <section>
           <h3 className="text-sm font-extrabold text-slate-900 mb-1 flex items-center gap-2">
             <Building2 className="w-4 h-4" /> Verhuurder (contract)
           </h3>
           <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
             Deze persoonsgegevens worden automatisch ingevuld op elk huurcontract PDF. Laat leeg voor invulplekken.
           </p>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1">Volledige naam</span>
-            <input type="text" value={b.landlord_name || ''} onChange={(e) => upd('landlord_name', e.target.value)}
-              placeholder="bv. Bharat Kewalbansing" data-testid="bi-landlord-name"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-            <p className="text-[10px] text-slate-400 mt-0.5">Standaard = bedrijfsnaam wanneer leeg</p>
-          </label>
-          <label className="block mb-3">
-            <span className="block text-xs font-bold text-slate-700 mb-1">Geboortedatum</span>
-            <input type="date" value={b.landlord_birth_date || ''} onChange={(e) => upd('landlord_birth_date', e.target.value)}
-              data-testid="bi-landlord-dob"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-bold text-slate-700 mb-1">ID-nummer</span>
-            <input type="text" value={b.landlord_id_number || ''} onChange={(e) => upd('landlord_id_number', e.target.value.toUpperCase())}
-              placeholder="bv. FM008370" data-testid="bi-landlord-id"
-              className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none uppercase" />
-          </label>
-        </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1">Volledige naam</span>
+              <input type="text" value={b.landlord_name || ''} onChange={(e) => upd('landlord_name', e.target.value)}
+                placeholder="bv. Bharat Kewalbansing" data-testid="bi-landlord-name"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+              <p className="text-[10px] text-slate-400 mt-0.5">Standaard = bedrijfsnaam wanneer leeg</p>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1">Geboortedatum</span>
+              <input type="date" value={b.landlord_birth_date || ''} onChange={(e) => upd('landlord_birth_date', e.target.value)}
+                data-testid="bi-landlord-dob"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-bold text-slate-700 mb-1">ID-nummer</span>
+              <input type="text" value={b.landlord_id_number || ''} onChange={(e) => upd('landlord_id_number', e.target.value.toUpperCase())}
+                placeholder="bv. FM008370" data-testid="bi-landlord-id"
+                className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none uppercase" />
+            </label>
+          </div>
+        </section>
       </div>
     </div>
   );
