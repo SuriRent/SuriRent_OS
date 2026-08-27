@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff } from 'lucide-react';
 import { api, formatError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { publicMarketingUrl } from '../../lib/env';
@@ -97,33 +97,85 @@ function Message({ role, content, actions }) {
 
 function ChatUI({ user }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: `Hallo ${user.name || 'daar'}! Ik ben je AI-assistent. Vraag me bijvoorbeeld:\n• "Huis 1A heeft SRD 5000 betaald"\n• "Wie heeft achterstand?"\n• "Maak een factuur van SRD 3500 voor Jan Pieterse"\n\nTip: druk op de microfoon om in te spreken.`, actions: [] },
+    { role: 'assistant', content: `Hallo ${user.name || 'daar'}! Ik ben je AI-assistent. Vraag me bijvoorbeeld:\n• "Huis 1A heeft SRD 5000 betaald"\n• "Wie heeft achterstand?"\n• "Maak een factuur van SRD 3500 voor Jan Pieterse"\n\nTip: druk op de microfoon om in te spreken, of tik op het telefoon-icoon voor een live gesprek.`, actions: [] },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [interimText, setInterimText] = useState('');
   const [voiceOn, setVoiceOn] = useState(() => {
     try { return localStorage.getItem('assistant_tts_on') !== '0'; } catch { return true; }
   });
   const [speaking, setSpeaking] = useState(false);
+  const [convoMode, setConvoMode] = useState(false); // Gesprek-modus (hands-free loop)
   const scrollRef = useRef(null);
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const audioRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const vadRafRef = useRef(0);
+  const speechRecRef = useRef(null);
+  const convoModeRef = useRef(false);          // ref-mirror voor callbacks
+  const pendingAutosendRef = useRef(false);    // markeert: na transcriptie automatisch versturen
   const { logout } = useAuth();
 
   // MediaRecorder + getUserMedia — Emergent-managed Whisper via backend.
   const voiceSupported = typeof navigator !== 'undefined'
     && navigator.mediaDevices?.getUserMedia
     && typeof window !== 'undefined' && window.MediaRecorder;
+  // Web Speech API voor live preview-tekst (interim). Chrome/Safari/Edge.
+  const liveSupported = typeof window !== 'undefined'
+    && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   const stopStream = useCallback(() => {
     try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
     streamRef.current = null;
+    if (vadRafRef.current) { cancelAnimationFrame(vadRafRef.current); vadRafRef.current = 0; }
+    try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
+    analyserRef.current = null;
+    try { audioCtxRef.current?.close(); } catch { /* ignore */ }
+    audioCtxRef.current = null;
   }, []);
+
+  const stopLive = useCallback(() => {
+    try { speechRecRef.current?.stop(); } catch { /* ignore */ }
+    speechRecRef.current = null;
+  }, []);
+
+  // Roept mediaRecorder.stop() aan; de onstop-handler regelt uploaden.
+  const stopRecording = useCallback(() => {
+    stopLive();
+    try { mediaRecRef.current?.stop(); } catch { /* ignore */ }
+    setRecording(false);
+  }, [stopLive]);
+
+  // playReply — declared before startRecording zodat convo-loop hem kan bereiken.
+  const playReply = useCallback(async (text, onDone) => {
+    if (!voiceOn || !text) { onDone?.(); return; }
+    try {
+      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      setSpeaking(true);
+      const { data } = await api.post('/assistant/tts', { text, voice: 'nova' }, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(data);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      const finish = () => {
+        setSpeaking(false); URL.revokeObjectURL(url); onDone?.();
+      };
+      audio.onended = finish;
+      audio.onerror = finish;
+      await audio.play();
+    } catch (ex) {
+      console.warn('TTS failed', ex);
+      setSpeaking(false); onDone?.();
+    }
+  }, [voiceOn]);
 
   const uploadAndTranscribe = useCallback(async (blob) => {
     setTranscribing(true);
@@ -137,24 +189,100 @@ function ChatUI({ user }) {
       const { data } = await api.post('/assistant/stt', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (data?.text) setInput(data.text);
+      const finalText = (data?.text || '').trim();
+      if (finalText) setInput(finalText);
+      return finalText;
     } catch (ex) {
       console.warn('STT failed', ex);
       setMessages((m) => [...m, { role: 'assistant', content: `⚠️ Transcriptie mislukt: ${formatError(ex)}` }]);
+      return '';
     } finally { setTranscribing(false); }
   }, []);
 
-  const toggleVoice = useCallback(async () => {
-    if (!voiceSupported) return;
-    if (recording) {
-      try { mediaRecRef.current?.stop(); } catch { /* ignore */ }
-      setRecording(false);
-      return;
-    }
+  // Silence-detectie via Web Audio API AnalyserNode.
+  // Auto-stop na `silenceMs` stilte, mits minimaal `minSpeechMs` gesproken.
+  const startVAD = useCallback((stream) => {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      audioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      analyserRef.current = analyser;
+      const data = new Uint8Array(analyser.fftSize);
+      const started = Date.now();
+      let lastVoiceAt = Date.now();
+      let sawVoice = false;
+      const THRESH = 8;         // RMS-drempel (0-128 range) — laag om ruis te vermijden
+      const SILENCE_MS = 1500;  // 1,5s stilte → auto-stop
+      const MIN_SPEECH_MS = 700; // minimaal 0,7s spraak vereist voordat we mogen stoppen
+      const MAX_TOTAL_MS = 60_000; // veiligheidsplafond 60s
+
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyser.getByteTimeDomainData(data);
+        // Compute RMS deviatie van 128 (silence-center)
+        let sumSq = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = data[i] - 128;
+          sumSq += v * v;
+        }
+        const rms = Math.sqrt(sumSq / data.length);
+        const now = Date.now();
+        if (rms > THRESH) { lastVoiceAt = now; sawVoice = true; }
+        const totalMs = now - started;
+        const silenceMs = now - lastVoiceAt;
+        const speechMs = sawVoice ? (lastVoiceAt - started) : 0;
+
+        if (totalMs > MAX_TOTAL_MS) { stopRecording(); return; }
+        if (sawVoice && silenceMs >= SILENCE_MS && speechMs >= MIN_SPEECH_MS) {
+          // Genoeg gesproken en 1,5s stil → auto-verzenden
+          pendingAutosendRef.current = true;
+          stopRecording();
+          return;
+        }
+        vadRafRef.current = requestAnimationFrame(tick);
+      };
+      vadRafRef.current = requestAnimationFrame(tick);
+    } catch (e) { console.warn('VAD init failed', e); }
+  }, [stopRecording]);
+
+  const startLive = useCallback(() => {
+    if (!liveSupported) return;
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = 'nl-NL';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (e) => {
+        let interim = '';
+        let final_ = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) final_ += r[0].transcript;
+          else interim += r[0].transcript;
+        }
+        setInterimText((prev) => (final_ ? (prev + final_) : interim));
+      };
+      rec.onerror = () => { /* stil falen — Whisper is fallback */ };
+      rec.onend = () => { /* MediaRecorder blijft leidend */ };
+      speechRecRef.current = rec;
+      rec.start();
+    } catch (e) { console.warn('live STT init failed', e); }
+  }, [liveSupported]);
+
+  const startRecording = useCallback(async () => {
+    if (!voiceSupported || recording) return;
+    // Als TTS bezig is → eerst stoppen om feedback te voorkomen.
+    try { audioRef.current?.pause(); } catch { /* ignore */ }
+    setSpeaking(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      // Kies best-beschikbare mime — webm/opus in Chrome, mp4/aac in Safari.
       let mime = '';
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'];
       for (const c of candidates) {
@@ -162,44 +290,84 @@ function ChatUI({ user }) {
       }
       const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       chunksRef.current = [];
+      setInterimText('');
+      setInput('');
       rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
       rec.onstop = async () => {
         stopStream();
+        stopLive();
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
         chunksRef.current = [];
-        if (blob.size > 500) await uploadAndTranscribe(blob);
+        if (blob.size < 500) {
+          setInterimText('');
+          pendingAutosendRef.current = false;
+          return;
+        }
+        const finalText = await uploadAndTranscribe(blob);
+        setInterimText('');
+        // Auto-verzenden in gesprek-modus of wanneer VAD triggerde
+        if (pendingAutosendRef.current && finalText) {
+          pendingAutosendRef.current = false;
+          // send() kan niet direct — het leest input via state die net gezet is.
+          // Roep chat rechtstreeks aan om race condition met setState te vermijden.
+          setMessages((m) => [...m, { role: 'user', content: finalText }]);
+          setInput(''); setBusy(true);
+          try {
+            const { data } = await api.post('/assistant/chat', { message: finalText, session_id: sessionId });
+            if (data.session_id && !sessionId) setSessionId(data.session_id);
+            const reply = data.reply || '(geen antwoord)';
+            setMessages((m) => [...m, { role: 'assistant', content: reply, actions: data.actions || [] }]);
+            playReply(reply, () => {
+              // Herstart luisteren in gesprek-modus
+              if (convoModeRef.current) {
+                pendingAutosendRef.current = true;
+                setTimeout(() => startRecording(), 250);
+              }
+            });
+          } catch (ex) {
+            setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${formatError(ex)}`, error: true }]);
+          } finally { setBusy(false); }
+        } else {
+          pendingAutosendRef.current = false;
+        }
       };
-      rec.onerror = (e) => { console.warn('rec error', e); setRecording(false); stopStream(); };
+      rec.onerror = (e) => { console.warn('rec error', e); setRecording(false); stopStream(); stopLive(); };
       mediaRecRef.current = rec;
       rec.start();
       setRecording(true);
+      startLive();
+      if (convoModeRef.current) startVAD(stream);
     } catch (ex) {
       console.warn('mic permission denied', ex);
       setMessages((m) => [...m, { role: 'assistant', content: '⚠️ Geen microfoon-toegang. Sta toegang toe in je browser.' }]);
       setRecording(false);
+      convoModeRef.current = false;
+      setConvoMode(false);
     }
-  }, [recording, voiceSupported, uploadAndTranscribe, stopStream]);
+  }, [voiceSupported, recording, uploadAndTranscribe, stopStream, stopLive, startLive, startVAD, sessionId, playReply]);
 
-  const playReply = useCallback(async (text) => {
-    if (!voiceOn || !text) return;
-    try {
-      // Stop eventueel eerder spelend audio.
-      try { audioRef.current?.pause(); } catch { /* ignore */ }
-      setSpeaking(true);
-      const { data } = await api.post('/assistant/tts', { text, voice: 'nova' }, {
-        responseType: 'blob',
-      });
-      const url = URL.createObjectURL(data);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); };
-      audio.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); };
-      await audio.play();
-    } catch (ex) {
-      console.warn('TTS failed', ex);
-      setSpeaking(false);
-    }
-  }, [voiceOn]);
+  const toggleMic = useCallback(() => {
+    if (recording) { stopRecording(); return; }
+    pendingAutosendRef.current = false; // handmatige mic-klik → tekst in input, niet auto-send
+    startRecording();
+  }, [recording, startRecording, stopRecording]);
+
+  const toggleConvoMode = useCallback(() => {
+    setConvoMode((v) => {
+      const nv = !v;
+      convoModeRef.current = nv;
+      if (nv) {
+        pendingAutosendRef.current = true;
+        if (!recording) startRecording();
+      } else {
+        pendingAutosendRef.current = false;
+        try { audioRef.current?.pause(); } catch { /* ignore */ }
+        setSpeaking(false);
+        if (recording) stopRecording();
+      }
+      return nv;
+    });
+  }, [recording, startRecording, stopRecording]);
 
   const toggleTts = useCallback(() => {
     setVoiceOn((v) => {
@@ -220,9 +388,9 @@ function ChatUI({ user }) {
   // Cleanup bij unmount
   useEffect(() => () => {
     try { mediaRecRef.current?.stop(); } catch { /* ignore */ }
-    stopStream();
+    stopStream(); stopLive();
     try { audioRef.current?.pause(); } catch { /* ignore */ }
-  }, [stopStream]);
+  }, [stopStream, stopLive]);
 
   const send = useCallback(async () => {
     const q = input.trim();
@@ -234,7 +402,6 @@ function ChatUI({ user }) {
       if (data.session_id && !sessionId) setSessionId(data.session_id);
       const reply = data.reply || '(geen antwoord)';
       setMessages((m) => [...m, { role: 'assistant', content: reply, actions: data.actions || [] }]);
-      // Speel reply automatisch af (indien voice-out aan).
       playReply(reply);
     } catch (ex) {
       setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${formatError(ex)}`, error: true }]);
@@ -245,6 +412,16 @@ function ChatUI({ user }) {
     try { await logout(); } catch { /* ignore */ }
     window.location.replace(`${publicMarketingUrl()}/`);
   };
+
+  // Statusbanner boven input — gesprek-modus indicator
+  const statusBanner = (() => {
+    if (busy) return { label: 'Denkt na…', tone: 'thinking' };
+    if (speaking) return { label: 'Assistent praat…', tone: 'speaking' };
+    if (transcribing) return { label: 'Transcriberen met Whisper…', tone: 'thinking' };
+    if (recording) return { label: interimText ? `Ik hoor je: "${interimText}"` : 'Luistert… (spreek, ik stop automatisch bij 1,5s stilte)', tone: 'listening' };
+    if (convoMode) return { label: 'Gesprek-modus actief', tone: 'idle' };
+    return null;
+  })();
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
@@ -260,6 +437,13 @@ function ChatUI({ user }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={toggleConvoMode} data-testid="assistant-convo-toggle"
+            title={convoMode ? 'Gesprek-modus stoppen' : 'Start live gesprek (hands-free)'}
+            className={`h-9 w-9 rounded-lg flex items-center justify-center transition ${
+              convoMode ? 'bg-red-500 text-white shadow-lg shadow-red-300 animate-pulse' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}>
+            {convoMode ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+          </button>
           <button onClick={toggleTts} data-testid="assistant-tts-toggle"
             title={voiceOn ? 'Stemantwoord uitzetten' : 'Stemantwoord aanzetten'}
             className={`h-9 w-9 rounded-lg flex items-center justify-center transition ${
@@ -287,12 +471,30 @@ function ChatUI({ user }) {
         )}
       </main>
 
+      {/* Status-banner */}
+      {statusBanner && (
+        <div data-testid="assistant-status-banner"
+          className={`px-4 py-2 text-xs font-medium border-t shrink-0 ${
+            statusBanner.tone === 'listening' ? 'bg-red-50 text-red-700 border-red-100'
+            : statusBanner.tone === 'thinking' ? 'bg-slate-50 text-slate-600 border-slate-200'
+            : statusBanner.tone === 'speaking' ? 'bg-[#FF5C00]/10 text-[#FF5C00] border-[#FF5C00]/20'
+            : 'bg-slate-50 text-slate-500 border-slate-200'
+          }`}>
+          <div className="flex items-center gap-2 max-w-3xl mx-auto">
+            {statusBanner.tone === 'listening' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+            {statusBanner.tone === 'thinking' && <Loader2 className="w-3 h-3 animate-spin" />}
+            {statusBanner.tone === 'speaking' && <Volume2 className="w-3 h-3" />}
+            <span className="truncate">{statusBanner.label}</span>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <footer className="bg-white border-t border-slate-200 p-3 shrink-0">
         <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2 max-w-3xl mx-auto">
           {voiceSupported && (
-            <button type="button" onClick={toggleVoice} data-testid="assistant-mic"
-              disabled={transcribing || busy}
+            <button type="button" onClick={toggleMic} data-testid="assistant-mic"
+              disabled={transcribing || busy || speaking}
               className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition disabled:opacity-50 ${
                 recording
                   ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-300'
