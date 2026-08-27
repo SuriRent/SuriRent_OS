@@ -6951,11 +6951,118 @@ async def delete_tenant(tenant_id: str, user=Depends(get_current_user)):
     return {"ok": True}
 
 
+async def _extract_face_avatar_from_bytes(
+    raw: bytes, mime: str, tenant_id: str, uploaded_by: str | None = None,
+) -> str | None:
+    """Detecteer met Gemini 2.5 Flash de pasfoto op de ID-kaart, crop hem
+    en sla op als nieuw landing_asset. Retourneert de URL of None bij falen.
+
+    Werkwijze:
+    1. Stuur de ID-kaart-bytes naar Gemini met een strak JSON-prompt dat
+       normalized bbox coords (0..1) van de face/passport-photo teruggeeft.
+    2. Parse JSON, crop met PIL (met 8% margin), maak vierkant.
+    3. Sla op als WebP landing_asset. Retourneer de URL.
+    """
+    import os, io, json as _json, tempfile
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    from PIL import Image, ImageOps
+
+    api_key = os.getenv("EMERGENT_LLM_KEY")
+    if not api_key:
+        return None
+
+    # Suffix voor Gemini's file-based input
+    suffix = ".png" if "png" in mime else (".webp" if "webp" in mime else ".jpg")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(raw); tmp.close()
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"avatar-{new_id()[:8]}",
+            system_message="Je detecteert gezichten op ID-kaarten en geeft ALLEEN geldig JSON terug.",
+        ).with_model("gemini", "gemini-2.5-flash")
+        prompt = (
+            "Op deze ID-kaart / paspoort / rijbewijs staat een pasfoto van de eigenaar. "
+            "Geef de bounding box (normalized 0..1) van ALLEEN het gezicht/pasfoto-vak. "
+            'Retour uitsluitend JSON: {"x":<0..1>,"y":<0..1>,"w":<0..1>,"h":<0..1>,"found":true|false}. '
+            "x,y is de LINKERBOVENhoek. Als geen pasfoto zichtbaar: found=false. Geen markdown."
+        )
+        msg = UserMessage(
+            text=prompt,
+            file_contents=[FileContentWithMimeType(file_path=tmp.name, mime_type=mime)],
+        )
+        raw_text = await chat.send_message(msg)
+    finally:
+        try: os.unlink(tmp.name)
+        except Exception: pass
+
+    txt = (raw_text or "").strip()
+    if txt.startswith("```"):
+        parts = txt.split("```")
+        txt = parts[1] if len(parts) > 1 else txt
+        if txt.startswith("json"):
+            txt = txt[4:]
+    try:
+        bb = _json.loads(txt.strip())
+    except Exception:
+        return None
+    if not bb.get("found", False):
+        return None
+    x = max(0.0, min(1.0, float(bb.get("x", 0))))
+    y = max(0.0, min(1.0, float(bb.get("y", 0))))
+    w = max(0.01, min(1.0, float(bb.get("w", 0))))
+    h = max(0.01, min(1.0, float(bb.get("h", 0))))
+
+    # PIL crop met 8% margin, maak vierkant crop rondom center
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)
+        W, H = img.size
+        cx = (x + w / 2.0) * W
+        cy = (y + h / 2.0) * H
+        # Vierkant met zijde = max(w*W, h*H) * 1.16 (8% margin per kant)
+        side = max(w * W, h * H) * 1.16
+        left = max(0, int(cx - side / 2))
+        top = max(0, int(cy - side / 2))
+        right = min(W, int(cx + side / 2))
+        bottom = min(H, int(cy + side / 2))
+        if right - left < 40 or bottom - top < 40:
+            return None
+        crop = img.crop((left, top, right, bottom)).convert("RGB")
+        # Downscale naar 256x256 max — genoeg voor avatar
+        crop.thumbnail((256, 256), Image.LANCZOS)
+        out = io.BytesIO()
+        crop.save(out, format="WEBP", quality=88, method=6)
+        avatar_bytes = out.getvalue()
+    except Exception as e:
+        print(f"[avatar] PIL crop failed: {e}")
+        return None
+
+    asset_id = new_id()
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": f"avatar-{tenant_id[:8]}.webp",
+        "content_type": "image/webp",
+        "data_b64": base64.b64encode(avatar_bytes).decode("ascii"),
+        "size": len(avatar_bytes),
+        "uploaded_by": uploaded_by or "system",
+        "uploaded_at": iso(now_utc()),
+    })
+    return f"/api/landing/asset/{asset_id}"
+
+
 @api.post("/tenants/{tenant_id}/id-photo")
 async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
                                    user=Depends(get_current_user)):
     """Upload ID-kaart foto voor een huurder. Slaat op als landing_asset en
-    bewaart de URL op `tenant.id_photo_url` (multi-tenant safe via scope)."""
+    bewaart de URL op `tenant.id_photo_url` (multi-tenant safe via scope).
+
+    Direct na de upload probeert `_extract_face_avatar_from_asset` de
+    pasfoto uit de ID-kaart te croppen (Gemini vision → PIL) en op te slaan
+    als `tenant.avatar_url`, zodat huurderslijsten de foto tonen i.p.v.
+    initialen. Faalt de extractie stil (bv. Gemini-timeout), dan blijft de
+    huurder gewoon initialen tonen — geen blocker.
+    """
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
@@ -6978,7 +7085,79 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
     })
     url = f"/api/landing/asset/{asset_id}"
     await db.tenants.update_one({"id": tenant_id}, {"$set": {"id_photo_url": url}})
-    return {"id_photo_url": url}
+    # Face-crop async (best effort) — resultaat komt in tenant.avatar_url
+    avatar_url = None
+    try:
+        avatar_url = await _extract_face_avatar_from_bytes(
+            raw, ctype, tenant_id, uploaded_by=user.get("email"),
+        )
+        if avatar_url:
+            await db.tenants.update_one(
+                {"id": tenant_id}, {"$set": {"avatar_url": avatar_url}},
+            )
+    except Exception as e:  # noqa: BLE001
+        print(f"[avatar] face extract failed for tenant {tenant_id}: {e}")
+    return {"id_photo_url": url, "avatar_url": avatar_url}
+
+
+@api.post("/tenants/{tenant_id}/generate-avatar")
+async def generate_tenant_avatar(tenant_id: str, user=Depends(get_current_user)):
+    """Genereer (of hergenereer) de avatar-crop uit de bestaande ID-kaart
+    voor deze huurder. Handig voor huurders die al een ID-foto hebben
+    maar nog geen avatar."""
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    id_url = t.get("id_photo_url")
+    if not id_url:
+        raise HTTPException(status_code=400, detail="Deze huurder heeft nog geen ID-kaart.")
+    # asset ophalen (id_photo_url = /api/landing/asset/{id})
+    asset_id = id_url.rsplit("/", 1)[-1]
+    asset = await db.landing_assets.find_one({"id": asset_id}, {"_id": 0})
+    if not asset:
+        raise HTTPException(status_code=404, detail="ID-foto asset niet gevonden.")
+    try:
+        raw = base64.b64decode(asset["data_b64"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="ID-foto asset corrupt.")
+    mime = asset.get("content_type") or "image/webp"
+    avatar_url = await _extract_face_avatar_from_bytes(
+        raw, mime, tenant_id, uploaded_by=user.get("email"),
+    )
+    if not avatar_url:
+        raise HTTPException(status_code=422, detail="Kon geen pasfoto detecteren op deze ID-kaart.")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"avatar_url": avatar_url}})
+    return {"avatar_url": avatar_url}
+
+
+@api.post("/tenants/backfill-avatars")
+async def backfill_tenant_avatars(user=Depends(get_current_user)):
+    """Genereer avatars voor alle huurders in deze company die wél een
+    ID-kaart hebben maar nog géén avatar. Alleen admins."""
+    if user.get("role") not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Alleen beheerders")
+    q = {**scope(user), "id_photo_url": {"$exists": True, "$ne": ""}, "$or": [
+        {"avatar_url": {"$exists": False}}, {"avatar_url": ""}, {"avatar_url": None},
+    ]}
+    todo = await db.tenants.find(q, {"_id": 0, "id": 1, "id_photo_url": 1, "name": 1}).to_list(500)
+    done, failed = 0, 0
+    for t in todo:
+        try:
+            asset_id = t["id_photo_url"].rsplit("/", 1)[-1]
+            asset = await db.landing_assets.find_one({"id": asset_id}, {"_id": 0})
+            if not asset: failed += 1; continue
+            raw = base64.b64decode(asset["data_b64"])
+            mime = asset.get("content_type") or "image/webp"
+            avatar_url = await _extract_face_avatar_from_bytes(raw, mime, t["id"], uploaded_by=user.get("email"))
+            if avatar_url:
+                await db.tenants.update_one({"id": t["id"]}, {"$set": {"avatar_url": avatar_url}})
+                done += 1
+            else:
+                failed += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"[backfill-avatar] tenant {t.get('id')} failed: {e}")
+            failed += 1
+    return {"processed": len(todo), "done": done, "failed": failed}
 
 
 @api.delete("/tenants/{tenant_id}/id-photo")

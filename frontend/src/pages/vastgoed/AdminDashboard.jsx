@@ -12,6 +12,7 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
+  UserCircle, Sparkles,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -3277,6 +3278,7 @@ function Tenants() {
   const [detailId, setDetailId] = useState(null);  // huurder in detail-view
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
+  const [backfilling, setBackfilling] = useState(false);
   // POLLING VERWIJDERD (per user verzoek 2026-02-28): SWR cache + SSE
   // dekken alle huurder-updates. Vroeger stond hier een 45s useAutoRefresh.
 
@@ -3351,6 +3353,18 @@ function Tenants() {
     with_apt: bySearch.filter((t) => !!t.apartment_number).length,
     without_apt: bySearch.filter((t) => !t.apartment_number).length,
   };
+  const missingAvatars = items.filter((t) => t.id_photo_url && !t.avatar_url).length;
+  const runBackfill = async () => {
+    if (!window.confirm(`Genereer pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s)? Dit duurt ~2s per huurder.`)) return;
+    setBackfilling(true);
+    try {
+      const { data } = await api.post('/tenants/backfill-avatars');
+      window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
+      await load();
+    } catch (e) {
+      window.alert('Backfill mislukt: ' + (e?.response?.data?.detail || e.message));
+    } finally { setBackfilling(false); }
+  };
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="tenants-page">
       {/* Header — inline titel + subtitel + oranje "Nieuwe huurder" knop.
@@ -3365,6 +3379,23 @@ function Tenants() {
           <Plus className="w-4 h-4" /> Nieuwe huurder
         </button>
       </div>
+
+      {/* Backfill-banner — verschijnt alleen als er huurders zijn met een
+          ID-kaart maar zonder auto-gegenereerde pasfoto */}
+      {missingAvatars > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center gap-3 flex-wrap" data-testid="tenants-backfill-banner">
+          <UserCircle className="w-5 h-5 text-[#FF5C00] shrink-0" />
+          <p className="text-xs sm:text-sm text-slate-700 flex-1 min-w-0">
+            <span className="font-black">{missingAvatars} huurder(s)</span> heeft een ID-kaart, maar nog geen pasfoto-avatar.
+          </p>
+          <button onClick={runBackfill} disabled={backfilling}
+            data-testid="tenants-backfill-btn"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-xs font-bold disabled:opacity-50">
+            {backfilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {backfilling ? 'Bezig…' : 'Genereer nu'}
+          </button>
+        </div>
+      )}
 
       {/* Zoek + bron-filter pillen */}
       <div className="relative max-w-md">
@@ -3430,9 +3461,15 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
       className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-sm">
-        {initials}
-      </div>
+      {t.avatar_url ? (
+        <img src={t.avatar_url} alt={t.name || 'huurder'} loading="lazy"
+          data-testid={`tenant-avatar-${t.id}`}
+          className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-100 bg-slate-50" />
+      ) : (
+        <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-sm">
+          {initials}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Op verzoek gebruiker (2026-02-28): appartement-nummer als
@@ -3547,9 +3584,15 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
       {/* Hero */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-start gap-4 flex-wrap">
-          <div className="w-16 h-16 rounded-2xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-xl">
-            {initials}
-          </div>
+          {t.avatar_url ? (
+            <img src={t.avatar_url} alt={t.name || 'huurder'}
+              data-testid="tenant-detail-avatar"
+              className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-200 bg-slate-50" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-xl">
+              {initials}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Huurder</p>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 truncate">{t.name}</h1>

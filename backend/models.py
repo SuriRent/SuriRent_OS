@@ -92,6 +92,7 @@ class TenantIn(BaseModel):
     id_number: Optional[str] = ""    # bv. FM008370
     id_photo_url: Optional[str] = ""  # ID-kaart voorkant, /api/landing/asset/{id}
     id_photo_back_url: Optional[str] = ""  # ID-kaart achterkant
+    avatar_url: Optional[str] = ""  # Automatisch gecropte pasfoto uit ID-kaart
     signature_url: Optional[str] = ""  # Digitale handtekening (PNG)
     signature_signed_at: Optional[str] = ""
 
