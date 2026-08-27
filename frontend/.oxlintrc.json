@@ -1,8 +1,43 @@
 {
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true,
+    "es2024": true,
+    "node": true,
+    "serviceworker": true,
+    "worker": true
+  },
+  "globals": {
+    "FetchEvent": "readonly",
+    "ExtendableEvent": "readonly",
+    "ExtendableMessageEvent": "readonly",
+    "PushEvent": "readonly",
+    "NotificationEvent": "readonly",
+    "SyncEvent": "readonly",
+    "ServiceWorkerGlobalScope": "readonly",
+    "Clients": "readonly",
+    "Client": "readonly",
+    "WindowClient": "readonly",
+    "clients": "readonly",
+    "workbox": "readonly",
+    "_": "readonly",
+    "describe": "readonly",
+    "it": "readonly",
+    "beforeEach": "readonly",
+    "afterEach": "readonly",
+    "before": "readonly",
+    "after": "readonly",
+    "test": "readonly",
+    "expect": "readonly",
+    "jest": "readonly"
+  },
   "ignorePatterns": [
+    "**/node_modules/**",
     "node_modules/**",
-    "build/**",
-    "dist/**",
-    "coverage/**"
+    "frontend/node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/*.min.js"
   ]
 }

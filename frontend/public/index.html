@@ -190,6 +190,36 @@
     <title>App</title>
     <script>
       // ===========================================================
+      // PWA STANDALONE ROOT REDIRECT — draait ALS ALLERSTE, vóór React
+      // ===========================================================
+      // Als de gebruiker de PWA opent (display-mode: standalone) EN de
+      // pathname is de marketing landing ("/" of ""), redirecten we
+      // meteen synchroon naar /login?source=pwa. Zo ziet de gebruiker
+      // NOOIT eerst de marketing landing flitsen voordat de login of het
+      // onboarding-scherm laadt. Dit lost de "flikker bij openen"-bug op
+      // die ontstaat wanneer een installatie een oude start_url=/ had
+      // gecapturet vóór onze manifest-fix.
+      // ===========================================================
+      (function () {
+        try {
+          var isPWA = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+          if (!isPWA && window.navigator && window.navigator.standalone === true) isPWA = true;
+          if (!isPWA) return;
+          var p = window.location.pathname || '/';
+          // Alleen redirect als we op de marketing root of totaal leeg zitten
+          if (p === '/' || p === '') {
+            // Behoud query/hash zodat deep-links werken (bv. ?target=...)
+            var qs = window.location.search || '';
+            var hasSourcePwa = qs.indexOf('source=pwa') !== -1;
+            var target = '/login' + (qs || '?source=pwa');
+            if (qs && !hasSourcePwa) target = '/login' + qs + (qs.charAt(0) === '?' ? '&' : '?') + 'source=pwa';
+            window.location.replace(target + (window.location.hash || ''));
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
+    <script>
+      // ===========================================================
       // PWA-rol detectie — DRAAIT ALS EERSTE, vóór alle andere scripts
       // iOS Safari leest `<title>` en `apple-mobile-web-app-title` op het
       // moment van "Toevoegen aan beginscherm". Dit script zet ze meteen

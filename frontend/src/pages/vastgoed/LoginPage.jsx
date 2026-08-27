@@ -9,7 +9,6 @@ import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost, applyBranding,
   resolveLogoUrl, readCachedBranding, clearBrandingCache,
 } from '../../lib/branding';
-import { publicMarketingUrl } from '../../lib/env';
 import PinLanding from './auth/PinLogin';
 import PasswordView from './auth/EmailLogin';
 import RegisterModal from '../../components/RegisterModal';
@@ -59,6 +58,9 @@ export default function LoginPage() {
       const saved = localStorage.getItem(PWA_ONBOARDING_KEY);
       // Als al eerder gekozen, sla onboarding over.
       if (saved) return false;
+      // Na uitloggen (?loggedout=1) willen we NIET opnieuw onboarding tonen —
+      // de gebruiker weet inmiddels wat hij doet en wil direct inloggen.
+      if (searchParams.get('loggedout') === '1') return false;
       // ?view=login of ?view=register expliciet meegegeven? → sla onboarding over.
       const v = (searchParams.get('view') || '').toLowerCase();
       if (v) return false;
@@ -72,14 +74,14 @@ export default function LoginPage() {
   const handleOnboardingChoice = (choice) => {
     setShowOnboarding(false);
     if (choice === 'bedrijf') {
-      // BELANGRIJK: op split-domain productie (app.surirent.sr + surirent.sr)
-      // rendert `/` op het app-subdomein de LoginPage, NIET de marketing
-      // landing. We moeten dus expliciet naar het marketing-domein navigeren
-      // anders eindigt de gebruiker terug op het login scherm.
-      // publicMarketingUrl() geeft `https://surirent.sr` op productie en
-      // de huidige origin op preview/hybrid.
-      const target = `${publicMarketingUrl()}/?register=1`;
-      window.location.assign(target);
+      // Op productie is de marketing landing op een ANDER domein (surirent.sr)
+      // dan de app (app.surirent.sr). In een geïnstalleerde PWA valt navigatie
+      // naar dat externe domein buiten de PWA-scope → de browser opent hem
+      // extern of de standalone-modus breekt. We tonen daarom de
+      // registratie-wizard DIRECT in-page via `view=register` (die rendert
+      // dan RegisterModal → MobileRegisterWizard).
+      setView('register');
+      try { window.history.replaceState(null, '', `${window.location.pathname}?view=register`); } catch { /* noop */ }
     } else if (choice === 'huurder') {
       window.location.assign('/huurder');
     } else {
@@ -102,12 +104,11 @@ export default function LoginPage() {
     if (initialView !== 'register') return;
     try {
       const path = window.location.pathname || '';
-      // Plain /login → redirect. Branded /<slug>/login → laat zoals het is
-      // (de register view zal daar zelf de "alleen inloggen" mode forceren).
+      // Plain /login met initialView=register → toon in-page register wizard
+      // (RegisterModal). Branded /<slug>/login → laat zoals het is (register
+      // view forceert daar zelf "alleen inloggen" mode).
       if (/^\/login(\/|$)/i.test(path)) {
-        // Cross-domain safe: op productie (app.subdomein) is `/` LoginPage,
-        // dus we moeten naar het marketing-domein navigeren.
-        window.location.replace(`${publicMarketingUrl()}/?register=1`);
+        setView('register');
       }
     } catch { /* ignore */ }
   }, [initialView]);
