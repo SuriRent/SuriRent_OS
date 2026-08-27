@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck } from 'lucide-react';
+import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 
@@ -325,6 +325,25 @@ export default function Employees() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right space-x-1">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.put(`/assistant/employees/${e.id}/access`, {
+                              enabled: !e.ai_assistant_enabled,
+                            });
+                            await load();
+                          } catch (ex) { alert(formatError(ex)); }
+                        }}
+                        data-testid={`emp-ai-toggle-${e.id}`}
+                        title={e.ai_assistant_enabled ? 'AI-assistent uit' : 'AI-assistent aan'}
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${
+                          e.ai_assistant_enabled
+                            ? 'bg-orange-50 hover:bg-orange-100 text-[#FF5C00]'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </button>
                       {e.app_role === 'kiosk' && (
                         <button onClick={() => setPinFor(e)} data-testid={`emp-pin-${e.id}`}
                           title={e.has_kiosk_pin ? 'PIN wijzigen' : 'PIN instellen'}

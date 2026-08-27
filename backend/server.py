@@ -10754,6 +10754,7 @@ class EmployeeOut(EmployeeIn):
     id: str
     created_at: str
     has_kiosk_pin: bool = False
+    ai_assistant_enabled: bool = False
 
 
 class EmployeeKioskPinIn(BaseModel):
@@ -13000,6 +13001,10 @@ _route_deps.is_online = _is_online
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
+
+# AI-assistent — aparte router met eigen /api/assistant/* endpoints
+from ai_assistant import router as _assistant_router  # noqa: E402
+app.include_router(_assistant_router)
 
 async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
     """Stuur een korte WhatsApp/SMS bevestiging naar de huurder na een

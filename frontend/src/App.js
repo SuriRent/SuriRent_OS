@@ -57,6 +57,7 @@ const ContractSignPage = lazyWithRetry(() => import('./pages/vastgoed/ContractSi
 const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantSignaturePage'));
 const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback'));
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
+const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
 
 function RouteFallback() {
   return (
@@ -245,6 +246,7 @@ function HybridRoutes() {
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />
+      <Route path="/assistent" element={<AssistantPage />} />
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
       <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
