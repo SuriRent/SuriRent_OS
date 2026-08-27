@@ -764,6 +764,63 @@ function FAQSection() {
 }
 
 // =============================================================================
+// PersistentInstallBanner — slide-down sticky bovenaan de marketing landing
+// die verschijnt zodra `beforeinstallprompt` capturet is (Chrome/Edge/Android)
+// of op iOS Safari. Werkt exact als Chrome's eigen "install app"-strip.
+// Dismissible via ✕ (7 dagen niet meer tonen via localStorage).
+// =============================================================================
+const INSTALL_DISMISS_KEY = 'install_banner_dismissed_at';
+
+function PersistentInstallBanner({ deferredPrompt, platform, installed, onInstall }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      const at = parseInt(localStorage.getItem(INSTALL_DISMISS_KEY) || '0', 10);
+      if (!at) return false;
+      const days = (Date.now() - at) / 86_400_000;
+      return days < 7;
+    } catch { return false; }
+  });
+
+  if (installed || dismissed) return null;
+  // Toon alleen als er echt een prompt beschikbaar is OF iOS Safari.
+  const canInstall = !!deferredPrompt || platform === 'ios';
+  if (!canInstall) return null;
+
+  const handleDismiss = () => {
+    try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch { /* noop */ }
+    setDismissed(true);
+  };
+
+  return (
+    <div className="sticky top-0 z-50 bg-[#FF5C00] text-white shadow-lg"
+      data-testid="install-banner-sticky">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+          <Download className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm font-black leading-tight">
+            Installeer SuriRent als app
+          </p>
+          <p className="text-[10px] sm:text-xs text-white/85 leading-tight truncate">
+            {platform === 'ios' ? 'Voeg toe aan je beginscherm — direct openen zonder browser.' : 'Één tik → direct op je startscherm.'}
+          </p>
+        </div>
+        <button onClick={onInstall} data-testid="install-banner-btn"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-white text-[#FF5C00] font-black text-xs hover:bg-white/90 transition-all">
+          Installeer <ArrowRight className="w-3 h-3" />
+        </button>
+        <button onClick={handleDismiss} data-testid="install-banner-close"
+          aria-label="Verberg installatie-banner"
+          className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // InstallPwaSection — download-de-app knop met OS-detectie
 // =============================================================================
 // Op Chrome/Edge/Android capturet `beforeinstallprompt` een event dat we
@@ -792,12 +849,14 @@ function isStandalone() {
   } catch { return false; }
 }
 
-function InstallPwaSection() {
+// Gedeelde install-state — gebruikt door zowel de sticky banner bovenaan
+// als de "Download de app"-sectie onderaan. Zo werkt beide met dezelfde
+// `beforeinstallprompt`-event en delen ze de installed-state.
+function usePwaInstall() {
   const [platform] = useState(detectPlatform);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showIosModal, setShowIosModal] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
   const [installed, setInstalled] = useState(isStandalone);
+  const [showIosModal, setShowIosModal] = useState(false);
 
   useEffect(() => {
     const onPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); };
@@ -810,7 +869,7 @@ function InstallPwaSection() {
     };
   }, []);
 
-  const handleInstall = async () => {
+  const install = useCallback(async () => {
     if (installed) return;
     if (platform === 'ios') { setShowIosModal(true); return; }
     if (deferredPrompt) {
@@ -822,9 +881,16 @@ function InstallPwaSection() {
       setDeferredPrompt(null);
       return;
     }
-    setShowFallback(true);
-  };
+    // Geen prompt beschikbaar én niet iOS → toon iOS-stijl uitleg
+    // (Deel/menu → toevoegen). Voor Chrome zonder engagement-triggering
+    // is dit de vriendelijkste ervaring.
+    setShowIosModal(true);
+  }, [installed, platform, deferredPrompt]);
 
+  return { platform, deferredPrompt, installed, install, showIosModal, setShowIosModal };
+}
+
+function InstallPwaSection({ install, installed, platform, showIosModal, setShowIosModal }) {
   const label = installed ? 'App is geïnstalleerd' : (
     platform === 'ios' ? 'Installeer op iPhone / iPad' :
     platform === 'android' ? 'Installeer op Android' :
@@ -851,7 +917,7 @@ function InstallPwaSection() {
               className="text-base sm:text-lg text-white/70 leading-relaxed max-w-lg" />
 
             <div className="mt-8 flex flex-col sm:flex-row items-start gap-3">
-              <button onClick={handleInstall}
+              <button onClick={install}
                 data-testid="marketing-install-pwa-btn"
                 disabled={installed}
                 className="group inline-flex items-center gap-2.5 px-6 py-4 rounded-full bg-[#FF5C00] hover:bg-[#E64F00] disabled:bg-emerald-600 disabled:cursor-default text-white font-black text-sm shadow-[0_10px_40px_-10px_rgba(255,92,0,0.6)] transition-all">
@@ -908,7 +974,10 @@ function InstallPwaSection() {
         </div>
       </div>
 
-      {/* iOS-uitlegmodal — verschijnt bij iOS Safari (geen native prompt) */}
+      {/* Uitleg-modal — verschijnt bij iOS Safari of wanneer de browser
+          (nog) geen native install-prompt kon vuren (bv. desktop Safari
+          / Firefox / Chrome zonder engagement-heuristic). We hergebruiken
+          één modal met platform-slimme inhoud i.p.v. twee verschillende. */}
       {showIosModal && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 p-4"
           onClick={() => setShowIosModal(false)}
@@ -916,56 +985,56 @@ function InstallPwaSection() {
           <div onClick={(e) => e.stopPropagation()}
             className="bg-white text-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-start justify-between mb-4">
-              <h3 className="text-xl font-black">Installeer op iPhone / iPad</h3>
+              <h3 className="text-xl font-black">
+                {platform === 'ios' ? 'Installeer op iPhone / iPad' : 'Installeer via je browser-menu'}
+              </h3>
               <button onClick={() => setShowIosModal(false)}
                 data-testid="ios-install-close"
                 className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <ol className="space-y-3 text-sm">
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">1</span>
-                <span>Tik op de <Share2 className="w-4 h-4 inline mx-1 text-[#FF5C00]" /> <strong>Deel-knop</strong> onderaan Safari.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">2</span>
-                <span>Kies <strong>&quot;Zet op beginscherm&quot;</strong> <Plus className="w-4 h-4 inline mx-1 text-[#FF5C00]" /> uit de lijst.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">3</span>
-                <span>Tik rechtsboven op <strong>&quot;Voeg toe&quot;</strong>. De app verschijnt tussen je andere apps.</span>
-              </li>
-            </ol>
-            <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-              <strong className="block text-slate-900 mb-1">Let op:</strong>
-              Dit werkt alleen in <strong>Safari</strong>, niet in Chrome of andere browsers op iOS.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Fallback-modal — Firefox / desktop Safari */}
-      {showFallback && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 p-4"
-          onClick={() => setShowFallback(false)}
-          data-testid="fallback-install-modal">
-          <div onClick={(e) => e.stopPropagation()}
-            className="bg-white text-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl">
-            <div className="flex items-start justify-between mb-4">
-              <h3 className="text-xl font-black">Installeer via Chrome of Edge</h3>
-              <button onClick={() => setShowFallback(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-3">
-              Je huidige browser ondersteunt geen 1-klik installatie. Open deze pagina in <strong>Chrome</strong> of
-              <strong> Microsoft Edge</strong> en tik op het installatie-icoon rechts in de adresbalk.
-            </p>
-            <p className="text-xs text-slate-500">
-              Op mobiel werkt dit ook via het Chrome-menu → <em>&quot;App installeren&quot;</em>.
-            </p>
+            {platform === 'ios' ? (
+              <ol className="space-y-3 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">1</span>
+                  <span>Tik op de <Share2 className="w-4 h-4 inline mx-1 text-[#FF5C00]" /> <strong>Deel-knop</strong> onderaan Safari.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">2</span>
+                  <span>Kies <strong>&quot;Zet op beginscherm&quot;</strong> <Plus className="w-4 h-4 inline mx-1 text-[#FF5C00]" /> uit de lijst.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">3</span>
+                  <span>Tik rechtsboven op <strong>&quot;Voeg toe&quot;</strong>. De app verschijnt tussen je andere apps.</span>
+                </li>
+              </ol>
+            ) : (
+              <ol className="space-y-3 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">1</span>
+                  <span>Open het <strong>browser-menu</strong> (⋮ of ⋯ rechtsboven in Chrome/Edge).</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">2</span>
+                  <span>Kies <strong>&quot;App installeren&quot;</strong> of <strong>&quot;Installeer SuriRent&quot;</strong>.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-[#FF5C00] text-white flex items-center justify-center font-black text-xs shrink-0">3</span>
+                  <span>Bevestig <strong>&quot;Installeren&quot;</strong>. De app verschijnt tussen je programma&apos;s.</span>
+                </li>
+                <li className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  <strong className="block text-slate-900 mb-1">Zie je geen installeer-optie?</strong>
+                  Blader een paar seconden door de pagina en kom terug — sommige browsers wachten tot je actief bent voordat installeren beschikbaar wordt.
+                </li>
+              </ol>
+            )}
+            {platform === 'ios' && (
+              <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                <strong className="block text-slate-900 mb-1">Let op:</strong>
+                Dit werkt alleen in <strong>Safari</strong>, niet in Chrome of andere browsers op iOS.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1079,6 +1148,7 @@ function Footer({ onLogin }) {
 export default function MarketingLandingV2() {
   const navigate = useNavigate();
   const { refresh: refreshAuth } = useAuth();
+  const pwaInstall = usePwaInstall();
 
   // Edit mode wordt geactiveerd via ?edit=1 (alleen wanneer pagina in iframe
   // staat van de LiveLandingEditor superadmin tool).
@@ -1251,6 +1321,13 @@ export default function MarketingLandingV2() {
             ✏️ Bewerk modus actief — klik op een tekst om te bewerken
           </div>
         )}
+        {!editMode && (
+          <PersistentInstallBanner
+            deferredPrompt={pwaInstall.deferredPrompt}
+            platform={pwaInstall.platform}
+            installed={pwaInstall.installed}
+            onInstall={pwaInstall.install} />
+        )}
         <TopHeader onLogin={onLogin} onRegister={onRegister} />
         <SecondaryNav />
         <Hero onDemo={onDemo} onWhatsApp={onWhatsApp} />
@@ -1259,7 +1336,12 @@ export default function MarketingLandingV2() {
         <KioskSection />
         <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} />
         <FAQSection />
-        <InstallPwaSection />
+        <InstallPwaSection
+          install={pwaInstall.install}
+          installed={pwaInstall.installed}
+          platform={pwaInstall.platform}
+          showIosModal={pwaInstall.showIosModal}
+          setShowIosModal={pwaInstall.setShowIosModal} />
         <Footer onLogin={onLogin} />
       </div>
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
