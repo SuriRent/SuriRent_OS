@@ -7446,6 +7446,12 @@ async def _enrich_payment(p: dict) -> dict:
                 outstanding_after += max(0.0, inv_amt - float(paid or 0))
         except Exception:
             pass
+    # Defensive backfill: één corrupt legacy-doc (bv. AI-insert zonder
+    # receipt_number/paid_at) mag geen enkel endpoint meer crashen.
+    if not p.get("receipt_number"):
+        p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
+    if not p.get("paid_at"):
+        p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
     return {**p, "tenant_name": tenant_name, "apartment_number": apt_number,
             "location_name": location_name,
             "outstanding_after": round(outstanding_after, 2),
@@ -7518,7 +7524,11 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
                 + max(0.0, inv_amt - float(paid or 0))
             )
 
-    # Bouw de output
+    # Bouw de output. Defensive: één corrupt doc (bv. legacy AI-insert zonder
+    # `receipt_number` of `paid_at`) mag NOOIT meer de hele /api/payments
+    # response laten crashen met een ResponseValidationError. Vul missende
+    # verplichte PaymentOut-velden aan met veilige defaults en log een
+    # waarschuwing zodat admins/monitoring het kunnen zien en repareren.
     out = []
     for p in payments:
         tid = p.get("tenant_id")
@@ -7528,6 +7538,16 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
         a = apt_by_id.get(aid) if aid else None
         loc = loc_by_id.get(a.get("location_id")) if a and a.get("location_id") else None
         cur = p.get("currency") or "SRD"
+        # --- Defensive backfill voor verplichte PaymentOut-velden ---
+        _fixed = []
+        if not p.get("receipt_number"):
+            p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
+            _fixed.append("receipt_number")
+        if not p.get("paid_at"):
+            p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
+            _fixed.append("paid_at")
+        if _fixed:
+            print(f"[payments] backfilled missing fields {_fixed} for payment id={p.get('id')} company={cid}")
         out.append({
             **p,
             "tenant_name": t.get("name") if t else None,
