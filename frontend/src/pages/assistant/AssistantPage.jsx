@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff } from 'lucide-react';
 import { api, formatError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { publicMarketingUrl } from '../../lib/env';
 
 // AssistantPage — chat-UI voor de AI-assistent op /assistent.
 // Vereist login (email/password of PIN via bestaande auth). Beheerder
@@ -477,7 +476,14 @@ function ChatUI({ user }) {
 
   const doLogout = async () => {
     try { await logout(); } catch { /* ignore */ }
-    window.location.replace(`${publicMarketingUrl()}/`);
+    // Assistent is een beheerder-tool → terug naar login-scherm, niet
+    // naar de marketing-landing. Gebruik branded slug als beschikbaar.
+    let target = '/login';
+    try {
+      const slug = localStorage.getItem('pwa_company_slug');
+      if (slug) target = `/${slug}/login`;
+    } catch { /* noop */ }
+    window.location.replace(target);
   };
 
   // Statusbanner boven input — gesprek-modus indicator

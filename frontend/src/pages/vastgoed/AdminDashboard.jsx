@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { publicMarketingUrl } from '../../lib/env';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
@@ -4295,10 +4294,12 @@ export default function AdminDashboard() {
   }, [user]);
 
   const doLogout = async () => {
-    // Alle logouts (demo of echt) sturen we terug naar de marketing landing,
-    // niet naar /login. Op productie staat de landing op een ander domein
-    // (surirent.sr) — publicMarketingUrl() geeft de juiste absolute URL.
-    // Op preview/hybrid returnt hij de huidige origin.
+    // Beheerders (owner/admin/employee) worden na uitloggen doorgestuurd
+    // naar /login op de HUIDIGE origin — dus binnen de beheer-omgeving,
+    // niet naar de marketing landing (surirent.sr). Zo landen ze direct
+    // op de branded PIN-login of e-mail-login en kunnen ze meteen opnieuw
+    // inloggen. Tenants loggen zichzelf via TenantKioskLayout af en
+    // blijven op hun eigen kiosk-omgeving.
     //
     // BELANGRIJK: hard-nav MOET plaatsvinden vóór `logout()`'s `setUser(null)`
     // anders re-rendert React, ziet <Protected> user=null en flitst
@@ -4306,9 +4307,7 @@ export default function AdminDashboard() {
     // Volgorde:
     //   1) Best-effort server-logout (fire-and-forget, geen await)
     //   2) Synchroon localStorage/sessionStorage opruimen
-    //   3) window.location.replace() — browser start hard nav
-    //   4) setUser(null) via logout() vervangen door lokale cleanup (skippen
-    //      dus, omdat de nieuwe pagina toch fresh AuthProvider laadt).
+    //   3) window.location.replace('/login') — browser start hard nav
     const wasDemo = (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
@@ -4332,8 +4331,17 @@ export default function AdminDashboard() {
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
     } catch { /* noop */ }
-    // Hard nav — GEEN setUser(null) hiervoor triggeren.
-    const target = `${publicMarketingUrl()}/`;
+    // Hard nav naar /login op huidige origin. Als een echte gebruiker een
+    // company-slug heeft, stuur naar `/{slug}/login` zodat de branded
+    // PIN-login direct opent (LoginPage handelt dit ook af, maar dit is
+    // sneller — geen redirect-hop).
+    let target = '/login';
+    if (!wasDemo) {
+      try {
+        const slug = localStorage.getItem('pwa_company_slug');
+        if (slug) target = `/${slug}/login`;
+      } catch { /* noop */ }
+    }
     window.location.replace(target);
   };
 
