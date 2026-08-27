@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Crown, Sparkles, Briefcase, Palette, Database,
+  Crown, Briefcase, Palette, Database,
   Mail, FileText, KeySquare, Settings as Cog,
 } from 'lucide-react';
 import MijnAbonnement from './MijnAbonnement';
-import SetupWizard from './SetupWizard';
 import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
 import BackupRestore from './BackupRestore';
@@ -14,6 +13,9 @@ import SettingsPage from './Settings';
 // Volgorde exact zoals door gebruiker gevraagd. Elke entry rendert een
 // bestaande, gepolijste pagina — geen herontwerp van de inhoud.
 // "Mijn landing" is verwijderd op user-verzoek 2026-02-27.
+// "Setup wizard" tab is verwijderd op user-verzoek 2026-02-27 — de wizard
+// wordt automatisch via SetupWizardSheet na registratie getoond en hoeft
+// niet als losse tab beschikbaar te zijn.
 // De vroegere "Integraties" tab is opgesplitst in drie losse top-tabs
 // (SMTP, Facturen automatisering, Kiosk PIN) zodat elke integratie
 // direct één klik weg is i.p.v. genest in een sub-nav.
@@ -24,13 +26,6 @@ const SECTIONS = [
     desc: 'Bekijk en wijzig je plan, betalingen en facturen.',
     icon: Crown,
     render: () => <MijnAbonnement />,
-  },
-  {
-    id: 'setup',
-    label: 'Setup wizard',
-    desc: 'Stapsgewijze configuratie voor nieuwe bedrijven.',
-    icon: Sparkles,
-    render: () => <SetupWizard />,
   },
   {
     id: 'bedrijf',
