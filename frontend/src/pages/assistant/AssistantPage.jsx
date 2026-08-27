@@ -115,12 +115,16 @@ function ChatUI({ user }) {
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const audioRef = useRef(null);
+  const audioUnlockedRef = useRef(false);      // browser autoplay unlock
+  const pendingAudioRef = useRef(null);        // blob-URL wachtend op user-gesture
+  const [needsUnlock, setNeedsUnlock] = useState(false);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const vadRafRef = useRef(0);
   const speechRecRef = useRef(null);
   const convoModeRef = useRef(false);          // ref-mirror voor callbacks
   const pendingAutosendRef = useRef(false);    // markeert: na transcriptie automatisch versturen
+  const startRecordingRef = useRef(null);      // ref-mirror voor callbacks (voorkomt TDZ)
   const { logout } = useAuth();
 
   // MediaRecorder + getUserMedia — Emergent-managed Whisper via backend.
@@ -154,6 +158,28 @@ function ChatUI({ user }) {
   }, [stopLive]);
 
   // playReply — declared before startRecording zodat convo-loop hem kan bereiken.
+  // Autoplay-strategie: browsers blokkeren `audio.play()` na langere network-
+  // latency (Whisper+chat+TTS) omdat de "user gesture" verlopen is. We
+  // unlocken audio bij de eerste user-tap (unlockAudio()) door een geluidloze
+  // buffer te spelen; daarna werken alle vervolg-clips vrij. Als een play()
+  // toch nog rejectet met NotAllowedError, tonen we een "Tik om te horen"-
+  // knop met de wachtende blob-URL.
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    try {
+      // 0.1s stilte MP3 (base64) — universeel afspeelbaar
+      const silentSrc = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/zQsQAAADSAAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/zQsQZAABkAG//gAAAgAAA0gAAABERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERE=';
+      const a = new Audio(silentSrc);
+      a.volume = 0.01;
+      const p = a.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => { audioUnlockedRef.current = true; }).catch(() => { /* silent */ });
+      } else {
+        audioUnlockedRef.current = true;
+      }
+    } catch { /* silent */ }
+  }, []);
+
   const playReply = useCallback(async (text, onDone) => {
     if (!voiceOn || !text) { onDone?.(); return; }
     try {
@@ -170,12 +196,47 @@ function ChatUI({ user }) {
       };
       audio.onended = finish;
       audio.onerror = finish;
-      await audio.play();
+      try {
+        await audio.play();
+      } catch (playErr) {
+        // Autoplay geweigerd — sla blob-URL op en toon unlock-knop
+        // We roepen onDone NIET aan zodat de gesprek-modus-loop wacht
+        // tot de gebruiker de unlock-knop tikt (voorkomt dat de mic weer
+        // opent voordat het antwoord is gehoord).
+        console.warn('Autoplay blocked, waiting for tap', playErr);
+        pendingAudioRef.current = url;
+        setNeedsUnlock(true);
+        setSpeaking(false);
+      }
     } catch (ex) {
       console.warn('TTS failed', ex);
       setSpeaking(false); onDone?.();
     }
   }, [voiceOn]);
+
+  const manualPlayPending = useCallback(async () => {
+    const url = pendingAudioRef.current;
+    if (!url) { setNeedsUnlock(false); return; }
+    audioUnlockedRef.current = true;
+    try {
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setSpeaking(true);
+      const onEndOrErr = () => {
+        setSpeaking(false); URL.revokeObjectURL(url);
+        // Herstart gesprek-modus loop via ref (voorkomt TDZ)
+        if (convoModeRef.current && startRecordingRef.current) {
+          pendingAutosendRef.current = true;
+          setTimeout(() => startRecordingRef.current?.(), 250);
+        }
+      };
+      audio.onended = onEndOrErr;
+      audio.onerror = onEndOrErr;
+      await audio.play();
+    } catch (e) { console.warn('manual play failed', e); }
+    pendingAudioRef.current = null;
+    setNeedsUnlock(false);
+  }, []);
 
   const uploadAndTranscribe = useCallback(async (blob) => {
     setTranscribing(true);
@@ -346,13 +407,17 @@ function ChatUI({ user }) {
     }
   }, [voiceSupported, recording, uploadAndTranscribe, stopStream, stopLive, startLive, startVAD, sessionId, playReply]);
 
+  useEffect(() => { startRecordingRef.current = startRecording; }, [startRecording]);
+
   const toggleMic = useCallback(() => {
+    unlockAudio(); // Ontgrendel audio-autoplay bij eerste user-tap
     if (recording) { stopRecording(); return; }
     pendingAutosendRef.current = false; // handmatige mic-klik → tekst in input, niet auto-send
     startRecording();
-  }, [recording, startRecording, stopRecording]);
+  }, [recording, startRecording, stopRecording, unlockAudio]);
 
   const toggleConvoMode = useCallback(() => {
+    unlockAudio(); // Ontgrendel audio-autoplay bij eerste user-tap
     setConvoMode((v) => {
       const nv = !v;
       convoModeRef.current = nv;
@@ -367,9 +432,10 @@ function ChatUI({ user }) {
       }
       return nv;
     });
-  }, [recording, startRecording, stopRecording]);
+  }, [recording, startRecording, stopRecording, unlockAudio]);
 
   const toggleTts = useCallback(() => {
+    unlockAudio();
     setVoiceOn((v) => {
       const nv = !v;
       try { localStorage.setItem('assistant_tts_on', nv ? '1' : '0'); } catch { /* ignore */ }
@@ -379,7 +445,7 @@ function ChatUI({ user }) {
       }
       return nv;
     });
-  }, []);
+  }, [unlockAudio]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -393,6 +459,7 @@ function ChatUI({ user }) {
   }, [stopStream, stopLive]);
 
   const send = useCallback(async () => {
+    unlockAudio();
     const q = input.trim();
     if (!q || busy) return;
     setMessages((m) => [...m, { role: 'user', content: q }]);
@@ -406,7 +473,7 @@ function ChatUI({ user }) {
     } catch (ex) {
       setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${formatError(ex)}`, error: true }]);
     } finally { setBusy(false); }
-  }, [input, busy, sessionId, playReply]);
+  }, [input, busy, sessionId, playReply, unlockAudio]);
 
   const doLogout = async () => {
     try { await logout(); } catch { /* ignore */ }
@@ -470,6 +537,15 @@ function ChatUI({ user }) {
           </div>
         )}
       </main>
+
+      {/* Autoplay-fallback — verschijnt als browser TTS blokkeerde */}
+      {needsUnlock && (
+        <button onClick={manualPlayPending} data-testid="assistant-play-pending"
+          className="mx-4 mb-2 px-4 py-3 bg-[#FF5C00] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg animate-pulse">
+          <Volume2 className="w-4 h-4" />
+          Tik hier om het antwoord te horen
+        </button>
+      )}
 
       {/* Status-banner */}
       {statusBanner && (
