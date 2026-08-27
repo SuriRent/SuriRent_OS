@@ -11,9 +11,11 @@ import os
 import json
 from typing import Any, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import Response
 from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText, OpenAITextToSpeech
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"])
 
@@ -458,3 +460,135 @@ async def my_ai_status(request: Request):
         "ai_assistant_enabled": _has_ai_access(user),
         "company_id": user.get("company_id"),
     }
+
+
+# -----------------------------------------------------------------
+# Voice — STT (Whisper) + TTS (OpenAI TTS) via Emergent Universal Key
+# -----------------------------------------------------------------
+# Beide gebruiken de EMERGENT_LLM_KEY; geen aparte API-sleutel nodig.
+# STT: browser stuurt opname (webm/mp4) → transcriptie in Nederlands.
+# TTS: reply-tekst → mp3 audio bytes → frontend speelt direct af.
+# Let op: OpenAI TTS-voices zijn getraind op Engels; Nederlands wordt
+# begrepen (Whisper-taalset) maar houdt een lichte Engelse tongval —
+# dat is een provider-plafond, niet iets wat we hier kunnen tunen.
+# Voice "nova" klinkt in de praktijk het meest neutraal voor NL.
+
+
+@router.post("/stt")
+async def assistant_stt(
+    request: Request,
+    file: UploadFile = File(...),
+    language: str = Form("nl"),
+):
+    """Transcribeer een opname naar tekst (Whisper via Emergent LLM Key).
+
+    Frontend uploadt de MediaRecorder-blob als multipart/form-data.
+    Retourneert `{ text: "..." }`.
+    """
+    from server import get_current_user  # lokale import
+    user = await get_current_user(request)
+    if not _has_ai_access(user):
+        raise HTTPException(status_code=403, detail="Geen toegang tot AI-assistent")
+
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY ontbreekt.")
+
+    # Whisper ondersteunt max 25 MB. Lees veilig in.
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Lege audio-upload.")
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio te groot (max 25 MB).")
+
+    # Schrijf naar een temp file — de SDK verwacht een file-like object met
+    # een naam/extensie zodat OpenAI het format herkent. webm is de default
+    # van MediaRecorder in Chrome; Safari levert mp4/m4a.
+    import tempfile
+    suffix = ".webm"
+    ct = (file.content_type or "").lower()
+    if "mp4" in ct or "m4a" in ct or "aac" in ct:
+        suffix = ".m4a"
+    elif "wav" in ct:
+        suffix = ".wav"
+    elif "mpeg" in ct or "mp3" in ct:
+        suffix = ".mp3"
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
+            tmp.write(raw)
+            tmp.flush()
+            tmp.seek(0)
+            stt = OpenAISpeechToText(api_key=key)
+            with open(tmp.name, "rb") as af:
+                resp = await stt.transcribe(
+                    file=af,
+                    model="whisper-1",
+                    response_format="json",
+                    language=(language or "nl").strip().lower()[:2] or "nl",
+                )
+        text = getattr(resp, "text", None) or (resp.get("text") if isinstance(resp, dict) else "") or ""
+        return {"text": str(text).strip()}
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"STT-fout: {e}")
+
+
+class TtsIn(BaseModel):
+    text: str
+    voice: Optional[str] = "nova"  # nova klinkt het meest neutraal voor NL
+
+
+def _clean_for_tts(text: str) -> str:
+    """Strip emoji, markdown en URLs voor natuurlijk klinkende TTS."""
+    import re
+    t = text or ""
+    # Emoji-range weghalen (uitgebreide unicode)
+    t = re.sub(
+        r"[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F2FF]",
+        "", t,
+    )
+    t = re.sub(r"https?://\S+", "", t)          # URLs
+    t = re.sub(r"`{1,3}[^`]*`{1,3}", "", t)     # code-spans
+    t = re.sub(r"[*_#>~|]", "", t)               # markdown-tekens
+    return re.sub(r"\s+", " ", t).strip()
+
+
+@router.post("/tts")
+async def assistant_tts(body: TtsIn, request: Request):
+    """Zet tekst om naar mp3-audio (OpenAI TTS via Emergent LLM Key)."""
+    from server import get_current_user  # lokale import
+    user = await get_current_user(request)
+    if not _has_ai_access(user):
+        raise HTTPException(status_code=403, detail="Geen toegang tot AI-assistent")
+
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY ontbreekt.")
+
+    text = _clean_for_tts(body.text)
+    if not text:
+        raise HTTPException(status_code=400, detail="Lege tekst voor TTS.")
+    if len(text) > 4096:
+        text = text[:4093] + "..."
+
+    valid_voices = {"alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
+    voice = (body.voice or "nova").lower()
+    if voice not in valid_voices:
+        voice = "nova"
+
+    try:
+        tts = OpenAITextToSpeech(api_key=key)
+        audio_bytes = await tts.generate_speech(
+            text=text, model="tts-1", voice=voice, response_format="mp3",
+        )
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "no-store"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"TTS-fout: {e}")

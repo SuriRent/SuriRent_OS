@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff } from 'lucide-react';
+import { Send, Loader2, LogOut, Sparkles, Check, AlertCircle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { api, formatError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { publicMarketingUrl } from '../../lib/env';
@@ -102,41 +102,127 @@ function ChatUI({ user }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(() => {
+    try { return localStorage.getItem('assistant_tts_on') !== '0'; } catch { return true; }
+  });
+  const [speaking, setSpeaking] = useState(false);
   const scrollRef = useRef(null);
-  const recRef = useRef(null);
+  const mediaRecRef = useRef(null);
+  const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const audioRef = useRef(null);
   const { logout } = useAuth();
 
-  // Voice input via Web Speech API. Chrome/Safari/Edge ondersteunen dit;
-  // Firefox helaas niet. We tonen de knop alleen wanneer beschikbaar.
-  const voiceSupported = typeof window !== 'undefined' &&
-    (window.SpeechRecognition || window.webkitSpeechRecognition);
+  // MediaRecorder + getUserMedia — Emergent-managed Whisper via backend.
+  const voiceSupported = typeof navigator !== 'undefined'
+    && navigator.mediaDevices?.getUserMedia
+    && typeof window !== 'undefined' && window.MediaRecorder;
 
-  const toggleVoice = useCallback(() => {
+  const stopStream = useCallback(() => {
+    try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    streamRef.current = null;
+  }, []);
+
+  const uploadAndTranscribe = useCallback(async (blob) => {
+    setTranscribing(true);
+    try {
+      const fd = new FormData();
+      const ext = blob.type.includes('mp4') || blob.type.includes('m4a') ? 'm4a'
+        : blob.type.includes('wav') ? 'wav'
+        : blob.type.includes('mpeg') ? 'mp3' : 'webm';
+      fd.append('file', blob, `opname.${ext}`);
+      fd.append('language', 'nl');
+      const { data } = await api.post('/assistant/stt', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (data?.text) setInput(data.text);
+    } catch (ex) {
+      console.warn('STT failed', ex);
+      setMessages((m) => [...m, { role: 'assistant', content: `⚠️ Transcriptie mislukt: ${formatError(ex)}` }]);
+    } finally { setTranscribing(false); }
+  }, []);
+
+  const toggleVoice = useCallback(async () => {
     if (!voiceSupported) return;
-    if (listening) {
-      try { recRef.current?.stop(); } catch { /* ignore */ }
-      setListening(false);
+    if (recording) {
+      try { mediaRecRef.current?.stop(); } catch { /* ignore */ }
+      setRecording(false);
       return;
     }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = 'nl-NL';
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const txt = Array.from(e.results).map((r) => r[0].transcript).join('');
-      setInput(txt);
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = (e) => { setListening(false); console.warn('speech error', e.error); };
-    recRef.current = rec;
-    try { rec.start(); setListening(true); } catch { setListening(false); }
-  }, [listening, voiceSupported]);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      // Kies best-beschikbare mime — webm/opus in Chrome, mp4/aac in Safari.
+      let mime = '';
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'];
+      for (const c of candidates) {
+        if (window.MediaRecorder.isTypeSupported?.(c)) { mime = c; break; }
+      }
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stopStream();
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
+        chunksRef.current = [];
+        if (blob.size > 500) await uploadAndTranscribe(blob);
+      };
+      rec.onerror = (e) => { console.warn('rec error', e); setRecording(false); stopStream(); };
+      mediaRecRef.current = rec;
+      rec.start();
+      setRecording(true);
+    } catch (ex) {
+      console.warn('mic permission denied', ex);
+      setMessages((m) => [...m, { role: 'assistant', content: '⚠️ Geen microfoon-toegang. Sta toegang toe in je browser.' }]);
+      setRecording(false);
+    }
+  }, [recording, voiceSupported, uploadAndTranscribe, stopStream]);
+
+  const playReply = useCallback(async (text) => {
+    if (!voiceOn || !text) return;
+    try {
+      // Stop eventueel eerder spelend audio.
+      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      setSpeaking(true);
+      const { data } = await api.post('/assistant/tts', { text, voice: 'nova' }, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(data);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      await audio.play();
+    } catch (ex) {
+      console.warn('TTS failed', ex);
+      setSpeaking(false);
+    }
+  }, [voiceOn]);
+
+  const toggleTts = useCallback(() => {
+    setVoiceOn((v) => {
+      const nv = !v;
+      try { localStorage.setItem('assistant_tts_on', nv ? '1' : '0'); } catch { /* ignore */ }
+      if (!nv) {
+        try { audioRef.current?.pause(); } catch { /* ignore */ }
+        setSpeaking(false);
+      }
+      return nv;
+    });
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  // Cleanup bij unmount
+  useEffect(() => () => {
+    try { mediaRecRef.current?.stop(); } catch { /* ignore */ }
+    stopStream();
+    try { audioRef.current?.pause(); } catch { /* ignore */ }
+  }, [stopStream]);
 
   const send = useCallback(async () => {
     const q = input.trim();
@@ -146,11 +232,14 @@ function ChatUI({ user }) {
     try {
       const { data } = await api.post('/assistant/chat', { message: q, session_id: sessionId });
       if (data.session_id && !sessionId) setSessionId(data.session_id);
-      setMessages((m) => [...m, { role: 'assistant', content: data.reply || '(geen antwoord)', actions: data.actions || [] }]);
+      const reply = data.reply || '(geen antwoord)';
+      setMessages((m) => [...m, { role: 'assistant', content: reply, actions: data.actions || [] }]);
+      // Speel reply automatisch af (indien voice-out aan).
+      playReply(reply);
     } catch (ex) {
       setMessages((m) => [...m, { role: 'assistant', content: `⚠️ ${formatError(ex)}`, error: true }]);
     } finally { setBusy(false); }
-  }, [input, busy, sessionId]);
+  }, [input, busy, sessionId, playReply]);
 
   const doLogout = async () => {
     try { await logout(); } catch { /* ignore */ }
@@ -170,10 +259,19 @@ function ChatUI({ user }) {
             <p className="text-[10px] text-slate-500">{user.email}</p>
           </div>
         </div>
-        <button onClick={doLogout} data-testid="assistant-logout"
-          className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">
-          <LogOut className="w-4 h-4" /> Uitloggen
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleTts} data-testid="assistant-tts-toggle"
+            title={voiceOn ? 'Stemantwoord uitzetten' : 'Stemantwoord aanzetten'}
+            className={`h-9 w-9 rounded-lg flex items-center justify-center transition ${
+              voiceOn ? 'bg-[#FF5C00]/10 text-[#FF5C00]' : 'bg-slate-100 text-slate-400 hover:text-slate-700'
+            } ${speaking ? 'animate-pulse' : ''}`}>
+            {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button onClick={doLogout} data-testid="assistant-logout"
+            className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">
+            <LogOut className="w-4 h-4" /> Uitloggen
+          </button>
+        </div>
       </header>
 
       {/* Messages */}
@@ -194,17 +292,20 @@ function ChatUI({ user }) {
         <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2 max-w-3xl mx-auto">
           {voiceSupported && (
             <button type="button" onClick={toggleVoice} data-testid="assistant-mic"
-              className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition ${
-                listening
+              disabled={transcribing || busy}
+              className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition disabled:opacity-50 ${
+                recording
                   ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-300'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
-              title={listening ? 'Stop opname' : 'Spreek in'}>
-              {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              title={recording ? 'Stop opname' : 'Spreek in'}>
+              {transcribing ? <Loader2 className="w-5 h-5 animate-spin" />
+                : recording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
           )}
           <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder={listening ? 'Luistert…' : 'Typ je vraag of opdracht…'} disabled={busy}
+            placeholder={recording ? 'Luistert…' : transcribing ? 'Transcriberen…' : 'Typ je vraag of opdracht…'}
+            disabled={busy}
             data-testid="assistant-input"
             className="flex-1 h-12 px-4 rounded-2xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
           <button type="submit" disabled={busy || !input.trim()} data-testid="assistant-send"
