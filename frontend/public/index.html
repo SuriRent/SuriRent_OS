@@ -106,7 +106,12 @@
 
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <!-- Manifest wordt door de rol-detectie inline JS hieronder ingesteld
+         (naar /manifest.json OF /assistent-manifest.json OF een branded
+         /api/pwa/manifest?slug=…). Belangrijk: we starten met een LEGE
+         href zodat Chrome/Safari niet per ongeluk de generieke
+         /manifest.json capture'n voordat de swap uitvoert. -->
+    <link rel="manifest" href="" />
     <link rel="icon" href="/kiosk-icons/kiosk-favicon.ico" />
     <link rel="icon" type="image/png" sizes="192x192" href="/kiosk-icons/kiosk-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/kiosk-icons/kiosk-512.png" />
