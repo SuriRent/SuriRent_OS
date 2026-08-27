@@ -249,7 +249,7 @@ export default function LoginPage() {
     // Alleen bij eerste mount uitvoeren; dependency op de searchParams zorgt
     // dat we niet in een loop komen wanneer AuthProvider zelf reagerend
     // updatet.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, []);
 
   // Auto-redirect if already logged (but not when we're showing the success screen
