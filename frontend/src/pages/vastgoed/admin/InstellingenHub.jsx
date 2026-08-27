@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Crown, Paintbrush, Sparkles, Briefcase, Palette, Database,
-  Plug, Settings as Cog,
+  Crown, Sparkles, Briefcase, Palette, Database,
+  Mail, FileText, KeySquare, Settings as Cog,
 } from 'lucide-react';
 import MijnAbonnement from './MijnAbonnement';
-import MijnLanding from './MijnLanding';
 import SetupWizard from './SetupWizard';
 import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
@@ -14,6 +13,10 @@ import SettingsPage from './Settings';
 
 // Volgorde exact zoals door gebruiker gevraagd. Elke entry rendert een
 // bestaande, gepolijste pagina — geen herontwerp van de inhoud.
+// "Mijn landing" is verwijderd op user-verzoek 2026-02-27.
+// De vroegere "Integraties" tab is opgesplitst in drie losse top-tabs
+// (SMTP, Facturen automatisering, Kiosk PIN) zodat elke integratie
+// direct één klik weg is i.p.v. genest in een sub-nav.
 const SECTIONS = [
   {
     id: 'abonnement',
@@ -21,13 +24,6 @@ const SECTIONS = [
     desc: 'Bekijk en wijzig je plan, betalingen en facturen.',
     icon: Crown,
     render: () => <MijnAbonnement />,
-  },
-  {
-    id: 'landing',
-    label: 'Mijn landing',
-    desc: 'Pas je publieke landing-pagina en marketing-content aan.',
-    icon: Paintbrush,
-    render: () => <MijnLanding />,
   },
   {
     id: 'setup',
@@ -51,12 +47,25 @@ const SECTIONS = [
     render: () => <Branding />,
   },
   {
-    id: 'integraties',
-    label: 'Integraties',
-    desc: 'SMTP, Facturen automatisering en Kiosk-PIN.',
-    icon: Plug,
-    // initialSection laat we open — SettingsPage heeft zijn eigen sub-nav.
-    render: (extra) => <SettingsPage initialSection={extra?.integrationsSection || undefined} />,
+    id: 'smtp',
+    label: 'E-mail (SMTP)',
+    desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.',
+    icon: Mail,
+    render: () => <SettingsPage initialSection="smtp" hideSubNav />,
+  },
+  {
+    id: 'invoicing',
+    label: 'Facturen automatisering',
+    desc: 'Automatische maand-facturen na grace periode.',
+    icon: FileText,
+    render: () => <SettingsPage initialSection="invoicing" hideSubNav />,
+  },
+  {
+    id: 'kiosk',
+    label: 'Kiosk PIN',
+    desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.',
+    icon: KeySquare,
+    render: () => <SettingsPage initialSection="kiosk" hideSubNav />,
   },
   {
     id: 'backup',
@@ -67,7 +76,7 @@ const SECTIONS = [
   },
 ];
 
-export default function InstellingenHub({ initialSection, integrationsSection }) {
+export default function InstellingenHub({ initialSection }) {
   const location = useLocation();
 
   // URL hash → sectie. /admin/instellingen#branding opent direct Branding.
@@ -76,47 +85,40 @@ export default function InstellingenHub({ initialSection, integrationsSection })
     return SECTIONS.find((s) => s.id === h)?.id || null;
   }, [location.hash]);
 
-  // initialSection is een legacy alias (mapt op SettingsPage sectie-namen
-  // zoals 'smtp'). Als er een match is in onze hoofd-secties pakken we
-  // die, anders openen we Integraties met de juiste sub-sectie.
+  // initialSection is een legacy alias. In de oude opzet mapte 'smtp' /
+  // 'invoicing' / 'kiosk' naar de sub-nav van "Integraties"; die zijn nu
+  // top-level tabs, dus we mappen ze direct door.
   const legacyMatch = useMemo(() => {
     if (!initialSection) return null;
     const direct = SECTIONS.find((s) => s.id === initialSection);
     if (direct) return { section: direct.id };
-    // Integraties sub-sectie (smtp / invoicing / kiosk).
-    const integrationIds = ['smtp', 'invoicing', 'kiosk'];
-    if (integrationIds.includes(initialSection)) {
-      return { section: 'integraties', integrationsSection: initialSection };
-    }
+    // Legacy: 'integraties' → default naar SMTP tab
+    if (initialSection === 'integraties') return { section: 'smtp' };
     return null;
   }, [initialSection]);
 
   const [active, setActive] = useState(() =>
     hashSection || legacyMatch?.section || 'abonnement',
   );
-  const [intSection, setIntSection] = useState(
-    () => legacyMatch?.integrationsSection || integrationsSection || null,
-  );
 
   useEffect(() => {
     if (hashSection) setActive(hashSection);
   }, [hashSection]);
   useEffect(() => {
-    if (legacyMatch?.section) {
-      setActive(legacyMatch.section);
-      if (legacyMatch.integrationsSection) setIntSection(legacyMatch.integrationsSection);
-    }
+    if (legacyMatch?.section) setActive(legacyMatch.section);
   }, [legacyMatch]);
 
-  // Deep-link vanuit andere pagina's (bv. MijnLanding "Configureer eigen
-  // domein" knop). Dispatcher: window.dispatchEvent(new CustomEvent(
-  //   'go-instellingen-section', { detail: { section, integrationsSection } }))
+  // Deep-link vanuit andere pagina's — event dispatcher signature blijft:
+  //   window.dispatchEvent(new CustomEvent('go-instellingen-section',
+  //     { detail: { section } }))
   useEffect(() => {
     const onDeepLink = (ev) => {
-      const s = ev?.detail?.section;
+      let s = ev?.detail?.section;
+      // Legacy alias: sub-sectie van vroegere Integraties → nu top-tab
       const sub = ev?.detail?.integrationsSection;
+      if (s === 'integraties' && sub) s = sub;
+      else if (s === 'integraties') s = 'smtp';
       if (s) setActive(s);
-      if (sub) setIntSection(sub);
       if (s && typeof window !== 'undefined') {
         window.history.replaceState(null, '', `${window.location.pathname}#${s}`);
       }
@@ -134,9 +136,6 @@ export default function InstellingenHub({ initialSection, integrationsSection })
         window.history.replaceState(null, '', `${window.location.pathname}${next}`);
       }
     }
-    // Reset integraties sub-sectie wanneer je naar een andere hoofd-tab
-    // gaat, anders blijft een oude deep-link plakken.
-    if (id !== 'integraties') setIntSection(null);
   }, []);
 
   const current = SECTIONS.find((s) => s.id === active) || SECTIONS[0];
@@ -215,7 +214,7 @@ export default function InstellingenHub({ initialSection, integrationsSection })
             <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">{current.desc}</p>
           </div>
         </div>
-        {current.render({ integrationsSection: intSection })}
+        {current.render()}
       </div>
     </div>
   );

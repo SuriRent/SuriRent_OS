@@ -7047,10 +7047,19 @@ async def _extract_face_avatar_from_bytes(
             print(f"[avatar] rejected: crop area ratio {crop_area_ratio:.2f} too large (likely full card)")
             return None
         crop = img.crop((left, top, right, bottom)).convert("RGB")
-        # Downscale naar 256x256 max — genoeg voor avatar
-        crop.thumbnail((256, 256), Image.LANCZOS)
+        # Kwaliteit-first: bewaar native resolutie of upscale naar min 512px.
+        # Klein ID-kaart-crop = wazig; PIL LANCZOS verzacht dat merkbaar.
+        cw, ch = crop.size
+        MIN_SIDE = 512
+        MAX_SIDE = 1024   # veiligheidsplafond — anders wordt asset onnodig groot
+        if max(cw, ch) < MIN_SIDE:
+            scale = MIN_SIDE / max(cw, ch)
+            crop = crop.resize((int(cw * scale), int(ch * scale)), Image.LANCZOS)
+        elif max(cw, ch) > MAX_SIDE:
+            crop.thumbnail((MAX_SIDE, MAX_SIDE), Image.LANCZOS)
         out = io.BytesIO()
-        crop.save(out, format="WEBP", quality=88, method=6)
+        # Quality 95 met method=6 (langzaamste, best compressie) — near-lossless
+        crop.save(out, format="WEBP", quality=95, method=6)
         avatar_bytes = out.getvalue()
     except Exception as e:
         print(f"[avatar] PIL crop failed: {e}")

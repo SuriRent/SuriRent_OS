@@ -422,7 +422,7 @@ export function KioskPinForm() {
 }
 
 // ============== Main ==============
-export default function SettingsPage({ initialSection }) {
+export default function SettingsPage({ initialSection, hideSubNav = false }) {
   const [section, setSection] = useState(initialSection || 'smtp');
   useEffect(() => {
     if (initialSection) setSection(initialSection);
@@ -440,6 +440,39 @@ export default function SettingsPage({ initialSection }) {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Content-blok — hergebruikt in beide modes (met/zonder sub-nav).
+  const contentBlock = loading || !settings ? (
+    <div className="bg-white rounded-2xl border border-orange-100 p-10 flex items-center justify-center text-slate-400 text-sm">
+      <Loader2 className="w-4 h-4 animate-spin mr-2" /> Laden...
+    </div>
+  ) : (
+    <>
+      {!hideSubNav && (
+        <div className="mb-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{SECTIONS.find((s) => s.id === section)?.label}</p>
+          <p className="text-sm text-slate-600 mt-0.5">{SECTIONS.find((s) => s.id === section)?.desc}</p>
+        </div>
+      )}
+      {section === 'smtp' && <SmtpForm initial={settings.smtp} />}
+      {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
+      {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
+      {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
+      {section === 'domain' && <DomainForm initial={settings.domain} />}
+      {section === 'kiosk' && <KioskPinForm />}
+    </>
+  );
+
+  // Wanneer we in InstellingenHub geëmbed worden (hideSubNav=true), tonen
+  // we alleen de content — de hub levert de header + top-tabs zelf.
+  if (hideSubNav) {
+    return (
+      <div>
+        {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">{err}</p>}
+        {contentBlock}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -481,24 +514,7 @@ export default function SettingsPage({ initialSection }) {
 
         {/* Content */}
         <div className="min-w-0">
-          {loading || !settings ? (
-            <div className="bg-white rounded-2xl border border-orange-100 p-10 flex items-center justify-center text-slate-400 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Laden...
-            </div>
-          ) : (
-            <>
-              <div className="mb-4">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{SECTIONS.find((s) => s.id === section)?.label}</p>
-                <p className="text-sm text-slate-600 mt-0.5">{SECTIONS.find((s) => s.id === section)?.desc}</p>
-              </div>
-              {section === 'smtp' && <SmtpForm initial={settings.smtp} />}
-              {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
-              {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
-              {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
-              {section === 'domain' && <DomainForm initial={settings.domain} />}
-              {section === 'kiosk' && <KioskPinForm />}
-            </>
-          )}
+          {contentBlock}
         </div>
       </div>
     </div>
