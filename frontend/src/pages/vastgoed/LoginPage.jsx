@@ -43,6 +43,12 @@ export default function LoginPage() {
   })();
   const [view, setView] = useState(initialView);
   const [skipRedirect, setSkipRedirect] = useState(false);
+  // Als de PIN succesvol was gaan we in "authenticating"-mode: we tonen
+  // een oranje overlay met het huis-icoon + spinner totdat de navigatie
+  // naar /admin is afgerond. Zonder deze mask flitst de numpad tussen
+  // PIN-success en de router-transitie doordat AuthProvider's user-state
+  // pas op de volgende render cycle beschikbaar is.
+  const [authenticating, setAuthenticating] = useState(false);
 
   // ────────────────────────────────────────────────────────────────────
   // PWA Onboarding — eerste-keer welkom-scherm na PWA installatie.
@@ -320,6 +326,7 @@ export default function LoginPage() {
   // full page reload + spinner flash. We doen nu refresh() (vernieuw /auth/me
   // in dezelfde React tree) en daarna een soft navigate. Geen flash, instant.
   const onPinSuccess = async () => {
+    setAuthenticating(true); // mask numpad totdat navigate klaar is
     let hasAdmin = false;
     try { hasAdmin = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
     if (pwaTarget === 'admin' && hasAdmin) {
@@ -332,6 +339,30 @@ export default function LoginPage() {
       navigate('/kiosk', { replace: true });
     }
   };
+
+  // Wanneer authenticating aan staat, toon een oranje huis-splash i.p.v.
+  // PinLanding — voorkomt de numpad-flikker die de gebruiker meldde.
+  if (authenticating) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center z-50"
+        style={{ background: '#FFF7F0' }}
+        data-testid="pwa-auth-splash">
+        <div className="w-28 h-28 flex items-center justify-center animate-pulse">
+          <svg width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="#FF5C00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-label="Laden">
+            <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FF5C00" fillOpacity="0.08" />
+          </svg>
+        </div>
+        <div className="mt-6 flex gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#FF5C00] animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 rounded-full bg-[#FF5C00] animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 rounded-full bg-[#FF5C00] animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+        <p className="mt-5 text-xs font-black tracking-[0.24em] uppercase text-[#FF5C00]/75">
+          Inloggen…
+        </p>
+      </div>
+    );
+  }
 
   return (
     <PinLanding

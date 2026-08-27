@@ -1,0 +1,37 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "amd": true,
+    "node": true,
+    "serviceworker": true,
+    "worker": true,
+    "es2024": true
+  },
+  "globals": {
+    "define": "readonly",
+    "workbox": "readonly",
+    "FetchEvent": "readonly",
+    "ExtendableEvent": "readonly",
+    "clients": "readonly",
+    "self": "readonly",
+    "importScripts": "readonly",
+    "describe": "readonly",
+    "it": "readonly",
+    "beforeEach": "readonly",
+    "afterEach": "readonly",
+    "before": "readonly",
+    "after": "readonly",
+    "test": "readonly",
+    "expect": "readonly",
+    "jest": "readonly"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/*.min.js"
+  ]
+}
