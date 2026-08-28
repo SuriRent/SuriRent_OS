@@ -9,8 +9,7 @@ import { useApiSWR } from '../../../lib/swr';
 
 import { fmtAmount, fmtAmountWhole, groupByTenant, isUnpaid } from './invoices/helpers';
 import { Tab, MobileFilterPill, KpiCard, FilterMenu, Toast } from './invoices/kpi';
-import { TenantRow, MobileTenantCard, MobileTenantExpand } from './invoices/TenantRow';
-import PaidHistorySection from './invoices/PaidHistorySection';
+import { TenantRow, MobileTenantCard } from './invoices/TenantRow';
 import InvoiceForm from './invoices/InvoiceForm';
 import ReminderModal from './invoices/ReminderModal';
 import InvoiceDetailPage from './invoices/InvoiceDetailPage';
@@ -38,8 +37,7 @@ export default function Invoices() {
   const [tab, setTab] = useState('all');            // 'all' | 'open' | 'paid'
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [expanded, setExpanded] = useState(null);   // mobile expand (single tenant_id)
-  const [detail, setDetail] = useState(null);       // desktop dedicated detail page
+  const [detail, setDetail] = useState(null);       // dedicated detail page
   const [creditSourcesFor, setCreditSourcesFor] = useState(null); // {tenant_id, tenant_name} — popover trigger
   const [toast, setToast] = useState(null);
   const today = new Date();
@@ -142,10 +140,6 @@ export default function Invoices() {
       return true;
     });
   }, [groups, tab, filterSeverity, search]);
-
-  const toggleExpand = (id) => {
-    setExpanded((cur) => (cur === id ? null : id));
-  };
 
   const openReminder = (group, channel) => {
     setReminderChannel(channel);
@@ -250,22 +244,11 @@ export default function Invoices() {
           </div>
         ) : (
           <div className="space-y-2.5">
-            {filteredGroups.map((g) => {
-              const paidInvoices = (g.all || []).filter((i) => (i.status || '') === 'paid');
-              return (
-                <div key={g.tenant_id} data-testid={`mi-row-${g.tenant_id}`}>
-                  <MobileTenantCard group={g} credits={credits[g.tenant_id]} onClick={() => toggleExpand(g.tenant_id)} onCreditClick={() => openCreditSources(g)} onReminder={openReminder} tenants={tenants} />
-                  {expanded === g.tenant_id && g.openCount > 0 && (
-                    <MobileTenantExpand g={g} tenants={tenants} onReminder={openReminder} />
-                  )}
-                  {expanded === g.tenant_id && g.openCount === 0 && paidInvoices.length > 0 && (
-                    <div className="mt-2 mx-1" data-testid={`mi-paid-detail-${g.tenant_id}`}>
-                      <PaidHistorySection paidInvoices={paidInvoices} currency={g.currency} variant="inline" testidPrefix={`mi-paid-${g.tenant_id}`} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filteredGroups.map((g) => (
+              <div key={g.tenant_id} data-testid={`mi-row-${g.tenant_id}`}>
+                <MobileTenantCard group={g} credits={credits[g.tenant_id]} onClick={() => setDetail(g)} onCreditClick={() => openCreditSources(g)} onReminder={openReminder} tenants={tenants} />
+              </div>
+            ))}
           </div>
         )}
       </div>
