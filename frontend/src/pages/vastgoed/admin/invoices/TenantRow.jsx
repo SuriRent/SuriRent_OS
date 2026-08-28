@@ -46,47 +46,40 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick }) {
   const amtCls = sev === 'critical' ? 'text-red-600'
     : sev === 'late' ? 'text-orange-600'
     : 'text-slate-900';
+  const iconTint = sev === 'critical' ? 'bg-red-50 text-red-600'
+    : sev === 'late' ? 'bg-orange-50 text-[#FF5C00]'
+    : group.currentCount > 0 ? 'bg-amber-50 text-amber-700'
+    : group.upcomingCount > 0 ? 'bg-blue-50 text-blue-600'
+    : 'bg-emerald-50 text-emerald-700';
   return (
     <button onClick={onClick} type="button"
       data-testid={`mi-card-${group.tenant_id}`}
-      className="w-full text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] active:scale-[0.99] transition-transform"
-      style={{ padding: 'clamp(11px, 3.4vw, 16px) clamp(13px, 3.8vw, 18px)' }}>
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#FFB770] to-[#FF8A3D] text-white shadow-[0_2px_5px_-1px_rgba(255,140,40,0.35)]"
-          style={{ width: 'clamp(42px, 11vw, 52px)', height: 'clamp(42px, 11vw, 52px)' }}>
-          <FileText style={{ width: 'clamp(18px, 5vw, 22px)', height: 'clamp(18px, 5vw, 22px)' }} strokeWidth={2.4} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="font-extrabold text-slate-900 leading-tight truncate"
-              style={{ fontSize: 'clamp(15px, 4.2vw, 18px)' }}>
-              {group.tenant_name}
-            </p>
-            <CreditBadge credits={credits} variant="compact" onClick={onCreditClick} testid={`mi-credit-${group.tenant_id}`} />
-          </div>
-          <p className="text-slate-500 font-semibold truncate mt-0.5"
-            style={{ fontSize: 'clamp(11px, 3vw, 13px)' }}>
-            {sub}
+      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconTint}`}>
+        <FileText className="w-5 h-5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-black text-slate-900 truncate">
+            {group.tenant_name}
           </p>
-          <div className="mt-1.5">
-            <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
-          </div>
+          <CreditBadge credits={credits} variant="compact" onClick={onCreditClick} testid={`mi-credit-${group.tenant_id}`} />
+          <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
         </div>
-        <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
-          <p className={`font-black tracking-tight whitespace-nowrap ${amtCls}`}
-            data-testid={`mi-amount-${group.tenant_id}`}
-            style={{ fontSize: 'clamp(15px, 4.2vw, 19px)' }}>
-            {group.currency} {fmtAmountWhole(group.totalDue || group.totalOpen)}
+        <p className="text-xs text-slate-500 mt-0.5 truncate">
+          {sub}
+        </p>
+      </div>
+      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+        <p className={`text-base font-black tracking-tight whitespace-nowrap ${amtCls}`}
+          data-testid={`mi-amount-${group.tenant_id}`}>
+          {group.currency} {fmtAmountWhole(group.totalDue || group.totalOpen)}
+        </p>
+        {(group.dueCount || group.openCount) > 0 && (
+          <p className="text-[10px] text-slate-400 font-bold whitespace-nowrap">
+            {group.dueCount || group.openCount}× open
           </p>
-          {(group.dueCount || group.openCount) > 0 && (
-            <p className="text-slate-500 font-bold"
-              style={{ fontSize: 'clamp(10px, 2.8vw, 12px)' }}>
-              {group.dueCount || group.openCount}× open
-            </p>
-          )}
-          <ChevronRight className="text-slate-400/80 mt-0.5"
-            style={{ width: 'clamp(14px, 3.8vw, 18px)', height: 'clamp(14px, 3.8vw, 18px)' }} />
-        </div>
+        )}
       </div>
     </button>
   );
