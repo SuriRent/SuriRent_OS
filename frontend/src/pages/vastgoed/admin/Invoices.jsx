@@ -39,7 +39,6 @@ export default function Invoices() {
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [expanded, setExpanded] = useState(null);   // mobile expand (single tenant_id)
-  const [userToggled, setUserToggled] = useState(false);
   const [detail, setDetail] = useState(null);       // desktop dedicated detail page
   const [creditSourcesFor, setCreditSourcesFor] = useState(null); // {tenant_id, tenant_name} — popover trigger
   const [toast, setToast] = useState(null);
@@ -145,17 +144,8 @@ export default function Invoices() {
   }, [groups, tab, filterSeverity, search]);
 
   const toggleExpand = (id) => {
-    setUserToggled(true);
     setExpanded((cur) => (cur === id ? null : id));
   };
-
-  // Default: eerste huurder in filter altijd open op mobile. Zodra de
-  // gebruiker zelf iets aanklikt, respecteren we die keuze.
-  useEffect(() => {
-    if (userToggled) return;
-    const firstId = filteredGroups[0]?.tenant_id || null;
-    if (firstId && expanded !== firstId) setExpanded(firstId);
-  }, [filteredGroups, expanded, userToggled]);
 
   const openReminder = (group, channel) => {
     setReminderChannel(channel);
