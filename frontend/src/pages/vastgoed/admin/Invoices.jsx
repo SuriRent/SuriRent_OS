@@ -276,7 +276,7 @@ export default function Invoices() {
               const paidInvoices = (g.all || []).filter((i) => (i.status || '') === 'paid');
               return (
                 <div key={g.tenant_id} data-testid={`mi-row-${g.tenant_id}`}>
-                  <MobileTenantCard group={g} credits={credits[g.tenant_id]} onClick={() => toggleExpand(g.tenant_id)} onCreditClick={() => openCreditSources(g)} />
+                  <MobileTenantCard group={g} credits={credits[g.tenant_id]} onClick={() => toggleExpand(g.tenant_id)} onCreditClick={() => openCreditSources(g)} onReminder={openReminder} tenants={tenants} />
                   {expanded === g.tenant_id && g.openCount > 0 && (
                     <MobileTenantExpand g={g} tenants={tenants} onReminder={openReminder} />
                   )}

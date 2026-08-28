@@ -38,7 +38,7 @@ function buildReminderMessage(group, companyName) {
 // =====================================================================
 // MOBIELE POS-card — compacte rij per huurder voor telefoon-weergave
 // =====================================================================
-export function MobileTenantCard({ group, credits, onClick, onCreditClick }) {
+export function MobileTenantCard({ group, credits, onClick, onCreditClick, onReminder, tenants }) {
   const sev = group.severity;
   const sub = group.location_name && group.apartment_number
     ? `${group.location_name} · ${group.apartment_number}`
@@ -51,9 +51,13 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick }) {
     : group.currentCount > 0 ? 'bg-amber-50 text-amber-700'
     : group.upcomingCount > 0 ? 'bg-blue-50 text-blue-600'
     : 'bg-emerald-50 text-emerald-700';
+  const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
+  const hasOpen = (group.dueCount || group.openCount) > 0;
   return (
-    <button onClick={onClick} type="button"
+    <div onClick={onClick}
       data-testid={`mi-card-${group.tenant_id}`}
+      role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onClick(); }}
       className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconTint}`}>
         <FileText className="w-5 h-5" />
@@ -70,18 +74,42 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick }) {
           {sub}
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+      <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
         <p className={`text-base font-black tracking-tight whitespace-nowrap ${amtCls}`}
           data-testid={`mi-amount-${group.tenant_id}`}>
           {group.currency} {fmtAmountWhole(group.totalDue || group.totalOpen)}
         </p>
-        {(group.dueCount || group.openCount) > 0 && (
+        {hasOpen && onReminder && (
+          <div className="flex items-center gap-1">
+            <button onClick={stop(() => onReminder(group, 'email'))}
+              data-testid={`mi-email-${group.tenant_id}`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00]" title="E-mail herinnering">
+              <Mail className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={stop(() => onReminder(group, 'whatsapp'))}
+              data-testid={`mi-wa-twilio-${group.tenant_id}`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Twilio WhatsApp">
+              <MessageCircle className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={stop(() => {
+              const t = tenants?.find((x) => x.id === group.tenant_id);
+              const phone = (t?.phone || '').replace(/\D/g, '');
+              if (!phone) { alert(`${group.tenant_name} heeft geen telefoonnummer.`); return; }
+              openWhatsApp(phone, buildReminderMessage(group, ''));
+            })}
+              data-testid={`mi-wa-direct-${group.tenant_id}`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white" title="WhatsApp direct">
+              <MessageCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        {!hasOpen && (
           <p className="text-[10px] text-slate-400 font-bold whitespace-nowrap">
-            {group.dueCount || group.openCount}× open
+            Alles betaald
           </p>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
