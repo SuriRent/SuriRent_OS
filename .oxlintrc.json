@@ -30,7 +30,12 @@
     "after": "readonly",
     "test": "readonly",
     "expect": "readonly",
-    "jest": "readonly"
+    "jest": "readonly",
+    "publishTask": "readonly",
+    "desc": "readonly",
+    "task": "readonly",
+    "jake": "readonly",
+    "lockdown": "readonly"
   },
   "ignorePatterns": [
     "**/node_modules/**",

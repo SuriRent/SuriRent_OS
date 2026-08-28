@@ -367,6 +367,11 @@ function MobilePaymentCard({ p, onClick }) {
 // Payment row
 // =====================================================================
 function PaymentRow({ p, onOpen }) {
+  const tenantSub = (() => {
+    if (p.location_name && p.apartment_number) return `${p.location_name} · ${p.apartment_number}`;
+    if (p.apartment_number) return p.apartment_number;
+    return '—';
+  })();
   const date = new Date(p.paid_at);
   const dateShort = date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
   const statusBadge = (() => {
@@ -380,22 +385,14 @@ function PaymentRow({ p, onOpen }) {
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p); }}
       className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-sm">
+      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
         <Receipt className="w-5 h-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* 1:1 pariteit met TenantRow: appartement is de primaire titel,
-              huurdersnaam wordt de groene secundaire badge. Zo ziet de
-              lijst er identiek uit als Huurders. */}
           <p className="font-black text-slate-900 truncate">
-            {p.apartment_number || <span className="text-slate-400 italic">—</span>}
+            {p.tenant_name || 'Onbekende huurder'}
           </p>
-          {p.tenant_name && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
-              {p.tenant_name}
-            </span>
-          )}
           {statusBadge && (
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>
               {statusBadge.l}
@@ -404,13 +401,18 @@ function PaymentRow({ p, onOpen }) {
         </div>
         <p className="text-xs text-slate-500 mt-0.5 truncate">
           <span className="font-mono font-bold text-slate-700">{p.receipt_number}</span>
-          <span> · {dateShort}</span>
+          <span> · {tenantSub} · {dateShort}</span>
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
         <p className="text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
           {p.currency} {fmtAmountWhole(p.amount)}
         </p>
+        {p.period_month && (
+          <p className="text-[10px] text-slate-400 capitalize whitespace-nowrap">
+            {MONTHS_NL[p.period_month - 1].slice(0, 3)} {p.period_year}
+          </p>
+        )}
       </div>
     </div>
   );
