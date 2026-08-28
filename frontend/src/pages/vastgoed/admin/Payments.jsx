@@ -373,53 +373,51 @@ function PaymentRow({ p, onOpen }) {
     return '—';
   })();
   const date = new Date(p.paid_at);
-  const dateShort = date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dateShort = date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
   const statusBadge = (() => {
     const s = p.status || 'approved';
-    if (s === 'pending_approval') return { l: 'Wacht op goedkeuring', cls: 'bg-amber-100 text-amber-700' };
+    if (s === 'pending_approval') return { l: 'Wacht', cls: 'bg-amber-100 text-amber-700' };
     if (s === 'rejected') return { l: 'Afgekeurd', cls: 'bg-red-100 text-red-700' };
-    return { l: 'Ontvangen', cls: 'bg-emerald-100 text-emerald-700' };
+    return null; // "Ontvangen" is de default → geen extra badge nodig, houdt compact
   })();
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
-      data-testid={`payment-row-${p.id}`}>
-      {/* Card is een grote klikbare rij die de detail-pagina opent —
-          zelfde patroon als PlanRow → PlanDetail in Betalingsregelingen. */}
-      <button onClick={() => onOpen(p)}
-        className="w-full text-left hover:bg-slate-50 active:bg-slate-100 transition p-4 flex items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
-          <Receipt className="w-5 h-5" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-black text-slate-900 truncate">{p.tenant_name || 'Onbekende huurder'}</p>
+    <div onClick={() => onOpen(p)} data-testid={`payment-row-${p.id}`}
+      role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p); }}
+      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
+      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
+        <Receipt className="w-5 h-5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Zelfde stijl als TenantRow: primaire titel (huurdersnaam)
+              + één optionele statusbadge in kleur. Categorie- en methode-
+              badges zijn verplaatst naar de compacte subtitle-regel zodat
+              de card niet meer 3-regels wrapt op mobiel. */}
+          <p className="font-black text-slate-900 truncate">
+            {p.tenant_name || 'Onbekende huurder'}
+          </p>
+          {statusBadge && (
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>
               {statusBadge.l}
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
-              {CATEGORY_LABELS[p.category] || p.category}
-            </span>
-            <MethodPill method={p.method} />
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">
-            <span className="font-mono font-bold text-slate-700">{p.receipt_number}</span>
-            <span> · {tenantSub} · {dateShort}</span>
-          </p>
-        </div>
-
-        <div className="text-right shrink-0">
-          <p className="text-base font-black text-slate-900" data-testid={`payment-amount-${p.id}`}>
-            {p.currency} {fmtAmountWhole(p.amount)}
-          </p>
-          {p.period_month && (
-            <p className="text-[10px] text-slate-400 capitalize">
-              {MONTHS_NL[p.period_month - 1].slice(0, 3)} {p.period_year}
-            </p>
           )}
         </div>
-        <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-      </button>
+        <p className="text-xs text-slate-500 mt-0.5 truncate">
+          <span className="font-mono font-bold text-slate-700">{p.receipt_number}</span>
+          <span> · {tenantSub} · {dateShort}</span>
+        </p>
+      </div>
+      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+        <p className="text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
+          {p.currency} {fmtAmountWhole(p.amount)}
+        </p>
+        {p.period_month && (
+          <p className="text-[10px] text-slate-400 capitalize whitespace-nowrap">
+            {MONTHS_NL[p.period_month - 1].slice(0, 3)} {p.period_year}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
