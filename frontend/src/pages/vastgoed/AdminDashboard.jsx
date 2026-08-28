@@ -3507,7 +3507,7 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
         <p className="text-base font-black text-slate-900 whitespace-nowrap">
           {t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
         </p>
-        <div className="flex items-center gap-1">
+        <div className="hidden md:flex items-center gap-1">
           <button onClick={stop(onPin)} data-testid={`tenant-pin-${t.id}`}
             className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00]" title="Portal PIN instellen">
             <KeySquare className="w-3.5 h-3.5" />
