@@ -199,22 +199,22 @@ export default function Invoices() {
     <div data-testid="invoices-page">
       {/* ============= MOBILE (< md) — POS-stijl ============= */}
       <div className="md:hidden space-y-4" data-testid="invoices-mobile">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Facturen</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-sm text-slate-500 mt-0.5 truncate">
               {allCount} huurder{allCount !== 1 ? 's' : ''}{openCount > 0 ? ` · ${openCount} open` : ''}
               {totalOpenAmount > 0 ? ` · ${totalOpenCurrency} ${fmtAmountWhole(totalOpenAmount)}` : ''}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button onClick={generateMonth} disabled={generating} data-testid="mi-generate-btn" type="button"
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-orange-200 hover:bg-orange-50 text-[#FF6A1A] font-bold rounded-2xl text-sm">
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-              Genereer
+              title="Genereer maand-facturen"
+              className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white border-2 border-orange-200 hover:bg-orange-50 text-[#FF6A1A]">
+              {generating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
             </button>
             <button onClick={() => setCreating(true)} data-testid="mi-new-btn" type="button"
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
               <Plus className="w-4 h-4" /> Nieuwe
             </button>
           </div>
