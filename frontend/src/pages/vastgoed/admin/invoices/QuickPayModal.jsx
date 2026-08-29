@@ -117,120 +117,128 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-open modal-sheet-auto"
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 modal-open modal-sheet-auto"
       onClick={close} data-testid="quickpay-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-xl font-black text-slate-900">Snelle betaling</h3>
-          <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">
-          <b className="text-slate-900">{tenantName || invoice.tenant_name}</b>
-          {' · '}
-          {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
-          {' · '}
-          <span className="text-slate-400">{invoice.invoice_number}</span>
-        </p>
-
-        {/* Openstaand overzicht */}
-        <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
-          <div className="flex justify-between mb-1">
-            <span className="text-slate-500">Totaal factuur</span>
-            <span className="font-bold text-slate-700">{fmtMoney(invoice.amount, invoice.currency)}</span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span className="text-slate-500">Reeds betaald</span>
-            <span className="font-bold text-slate-700">{fmtMoney(invoice.paid_amount || 0, invoice.currency)}</span>
-          </div>
-          <div className="flex justify-between pt-2 border-t border-slate-200">
-            <span className="text-slate-900 font-bold">Nog te betalen</span>
-            <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">{fmtMoney(remaining, invoice.currency)}</span>
-          </div>
-        </div>
-
-        {error && <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="quickpay-error">{error}</div>}
-
-        {/* Bedrag */}
-        <div className="mb-4">
-          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
-          <div className="mt-1 relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">{invoice.currency}</span>
-            <input type="number" step="0.01" value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              data-testid="quickpay-amount"
-              className="w-full h-12 pl-16 pr-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-lg font-black" />
-          </div>
-          <div className="flex items-center justify-between mt-1.5">
-            <button type="button" onClick={() => setAmount(String(remaining))}
-              data-testid="quickpay-set-remaining"
-              className="text-[11px] font-bold text-[#FF5C00] hover:underline">
-              Volledig openstaand ({fmtMoney(remaining, invoice.currency)})
+      <div
+        className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px))' }}
+        onClick={(e) => e.stopPropagation()}>
+        {/* Sticky header */}
+        <div className="shrink-0 px-6 sm:px-8 pt-6 sm:pt-8 pb-3 bg-white">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xl font-black text-slate-900">Snelle betaling</h3>
+            <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+              <X className="w-4 h-4" />
             </button>
-            {otherOpenTotal > 0 && (
-              <button type="button" onClick={() => setAmount(String(remaining + otherOpenTotal))}
-                data-testid="quickpay-set-all-open"
-                className="text-[11px] font-bold text-emerald-700 hover:underline">
-                Alles openstaand ({fmtMoney(remaining + otherOpenTotal, invoice.currency)})
-              </button>
-            )}
           </div>
-          {/* Voorspelt hoe de betaling wordt gealloceerd. Backend spreidt
-              overflow FIFO over andere openstaande facturen; wat daarna nog
-              overblijft wordt krediet en verrekent automatisch met de
-              volgende maand. */}
-          {hasSurplus && (
-            <div className="mt-2 space-y-1" data-testid="quickpay-alloc-preview">
-              {goesToOtherMonths > 0 && (
-                <div className="flex items-start gap-1.5 text-[11px] font-bold text-emerald-700" data-testid="quickpay-alloc-other">
-                  <Check className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span>
-                    {fmtMoney(goesToOtherMonths, invoice.currency)} wordt afgerekend op {otherOpenInvoices.length} andere openstaande maand{otherOpenInvoices.length === 1 ? '' : 'en'}
-                  </span>
-                </div>
-              )}
-              {goesToCredit > 0 && (
-                <div className="flex items-start gap-1.5 text-[11px] font-bold text-amber-700" data-testid="quickpay-alloc-credit">
-                  <Check className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span>
-                    {fmtMoney(goesToCredit, invoice.currency)} wordt vooruitbetaling — automatisch verrekend met de volgende maand
-                  </span>
-                </div>
+          <p className="text-sm text-slate-500">
+            <b className="text-slate-900">{tenantName || invoice.tenant_name}</b>
+            {' · '}
+            {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
+            {' · '}
+            <span className="text-slate-400">{invoice.invoice_number}</span>
+          </p>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 sm:px-8 pb-3">
+          {/* Openstaand overzicht */}
+          <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
+            <div className="flex justify-between mb-1">
+              <span className="text-slate-500">Totaal factuur</span>
+              <span className="font-bold text-slate-700">{fmtMoney(invoice.amount, invoice.currency)}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span className="text-slate-500">Reeds betaald</span>
+              <span className="font-bold text-slate-700">{fmtMoney(invoice.paid_amount || 0, invoice.currency)}</span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-slate-200">
+              <span className="text-slate-900 font-bold">Nog te betalen</span>
+              <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">{fmtMoney(remaining, invoice.currency)}</span>
+            </div>
+          </div>
+
+          {error && <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="quickpay-error">{error}</div>}
+
+          {/* Bedrag */}
+          <div className="mb-4">
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
+            <div className="mt-1 relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">{invoice.currency}</span>
+              <input type="number" step="0.01" value={amount} inputMode="decimal"
+                onChange={(e) => setAmount(e.target.value)}
+                data-testid="quickpay-amount"
+                className="w-full h-12 pl-16 pr-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-lg font-black" />
+            </div>
+            <div className="flex items-center justify-between mt-1.5">
+              <button type="button" onClick={() => setAmount(String(remaining))}
+                data-testid="quickpay-set-remaining"
+                className="text-[11px] font-bold text-[#FF5C00] hover:underline">
+                Volledig openstaand ({fmtMoney(remaining, invoice.currency)})
+              </button>
+              {otherOpenTotal > 0 && (
+                <button type="button" onClick={() => setAmount(String(remaining + otherOpenTotal))}
+                  data-testid="quickpay-set-all-open"
+                  className="text-[11px] font-bold text-emerald-700 hover:underline">
+                  Alles openstaand ({fmtMoney(remaining + otherOpenTotal, invoice.currency)})
+                </button>
               )}
             </div>
-          )}
-        </div>
+            {hasSurplus && (
+              <div className="mt-2 space-y-1" data-testid="quickpay-alloc-preview">
+                {goesToOtherMonths > 0 && (
+                  <div className="flex items-start gap-1.5 text-[11px] font-bold text-emerald-700" data-testid="quickpay-alloc-other">
+                    <Check className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span>
+                      {fmtMoney(goesToOtherMonths, invoice.currency)} wordt afgerekend op {otherOpenInvoices.length} andere openstaande maand{otherOpenInvoices.length === 1 ? '' : 'en'}
+                    </span>
+                  </div>
+                )}
+                {goesToCredit > 0 && (
+                  <div className="flex items-start gap-1.5 text-[11px] font-bold text-amber-700" data-testid="quickpay-alloc-credit">
+                    <Check className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span>
+                      {fmtMoney(goesToCredit, invoice.currency)} wordt vooruitbetaling — automatisch verrekend met de volgende maand
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-        {/* Methode */}
-        <div className="mb-4">
-          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Methode</label>
-          <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-            {METHODS.map((m) => {
-              const sel = method === m.v;
-              return (
-                <button key={m.v} type="button" onClick={() => setMethod(m.v)}
-                  data-testid={`quickpay-method-${m.v}`}
-                  className={`py-2.5 rounded-xl border-2 font-bold text-xs flex flex-col items-center gap-0.5 transition ${
-                    sel ? 'border-[#FF5C00] bg-orange-50 text-[#FF5C00]' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'
-                  }`}>
-                  <m.icon className="w-4 h-4" /> {m.l}
-                </button>
-              );
-            })}
+          {/* Methode */}
+          <div className="mb-4">
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Methode</label>
+            <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+              {METHODS.map((m) => {
+                const sel = method === m.v;
+                return (
+                  <button key={m.v} type="button" onClick={() => setMethod(m.v)}
+                    data-testid={`quickpay-method-${m.v}`}
+                    className={`py-2.5 rounded-xl border-2 font-bold text-xs flex flex-col items-center gap-0.5 transition ${
+                      sel ? 'border-[#FF5C00] bg-orange-50 text-[#FF5C00]' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'
+                    }`}>
+                    <m.icon className="w-4 h-4" /> {m.l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Notitie */}
+          <div className="mb-4">
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Notitie (optioneel)</label>
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
+              data-testid="quickpay-note"
+              placeholder="Bijv. 'Contant ontvangen aan balie'"
+              className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
           </div>
         </div>
 
-        {/* Notitie */}
-        <div className="mb-5">
-          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Notitie (optioneel)</label>
-          <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
-            data-testid="quickpay-note"
-            placeholder="Bijv. 'Contant ontvangen aan balie'"
-            className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
-        </div>
-
-        <div className="flex gap-3">
+        {/* Sticky footer met acties — blijft boven toetsenbord dankzij dvh */}
+        <div
+          className="shrink-0 border-t border-slate-100 bg-white px-6 sm:px-8 py-3 flex gap-3"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <button onClick={close} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
           <button onClick={submit} disabled={loading || !isValid} data-testid="quickpay-submit"
             className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
