@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, Loader2, Banknote, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 
@@ -35,6 +36,13 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
+
+  // Lock body scroll while modal is open — voorkomt achtergrond-scroll op mobiel
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const parsedAmount = Number(String(amount).replace(',', '.'));
   const isValid = parsedAmount > 0 && !Number.isNaN(parsedAmount);
@@ -116,8 +124,9 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 sm:bg-white/30 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 modal-open"
+  return createPortal((
+    <div className="fixed inset-0 z-[9999] bg-black/40 sm:bg-white/30 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 modal-open"
+      style={{ height: '100dvh', width: '100vw' }}
       onClick={close} data-testid="quickpay-modal">
       <div
         className="absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full sm:max-w-md sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]"
@@ -247,5 +256,5 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
