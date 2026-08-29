@@ -132,7 +132,8 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
         className="absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full sm:max-w-md sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}>
         {/* Sticky header */}
-        <div className="shrink-0 px-6 sm:px-8 pt-6 sm:pt-8 pb-3 bg-white">
+        <div className="shrink-0 px-6 sm:px-8 pb-3 bg-white"
+          style={{ paddingTop: 'max(24px, env(safe-area-inset-top))' }}>
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-xl font-black text-slate-900">Snelle betaling</h3>
             <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
