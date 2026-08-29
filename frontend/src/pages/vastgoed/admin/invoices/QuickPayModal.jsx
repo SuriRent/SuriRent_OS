@@ -32,7 +32,6 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
 
   const [amount, setAmount] = useState(remaining > 0 ? String(remaining) : String(invoice.amount || 0));
   const [method, setMethod] = useState('contant');
-  const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
@@ -64,7 +63,7 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
         category: 'huur',
         period_month: invoice.period_month,
         period_year: invoice.period_year,
-        note: note || '',
+        note: '',
       });
       setReceipt(data);
     } catch (e) {
@@ -217,15 +216,6 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
                 );
               })}
             </div>
-          </div>
-
-          {/* Notitie */}
-          <div className="mb-4">
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Notitie (optioneel)</label>
-            <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
-              data-testid="quickpay-note"
-              placeholder="Bijv. 'Contant ontvangen aan balie'"
-              className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
           </div>
       </KeyboardSafeModal.Body>
 
