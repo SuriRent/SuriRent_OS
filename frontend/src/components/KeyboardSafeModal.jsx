@@ -72,11 +72,12 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
   return createPortal((
     <div
       className={`fixed inset-0 z-[9999] bg-black/40 sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
-      style={{ height: vh || '100vh', width: '100vw' }}
+      style={{ width: '100vw' }}
       onClick={onClose}
       data-testid={testId || 'ksm-modal'}>
       <div
-        className={`absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
+        className={`absolute top-0 left-0 right-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
+        style={{ height: vh ? `${vh}px` : '100vh' }}
         onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
