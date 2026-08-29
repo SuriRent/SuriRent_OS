@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo } from 'react';
 import { X, Check, Loader2, Banknote, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
+import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 
 // =====================================================================
 // QuickPayModal — één-klik betaling registreren vanuit de Facturen-detail
@@ -36,31 +36,6 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
-
-  // Lock body scroll while modal is open — voorkomt achtergrond-scroll op mobiel
-  // en voorkomt dat iOS Safari de hele pagina omhoog schuift wanneer het
-  // toetsenbord opent (visual viewport zou anders de layout viewport verschuiven).
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    const prevPosition = document.body.style.position;
-    document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    // Reset elke scroll-poging van iOS (bijv. bij input focus) — de modal
-    // blijft ALTIJD op top:0 staan, ongeacht toetsenbord.
-    const restore = () => window.scrollTo(0, 0);
-    const vv = window.visualViewport;
-    vv?.addEventListener('scroll', restore);
-    vv?.addEventListener('resize', restore);
-    window.scrollTo(0, 0);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.position = prevPosition;
-      document.body.style.width = '';
-      vv?.removeEventListener('scroll', restore);
-      vv?.removeEventListener('resize', restore);
-    };
-  }, []);
 
   const parsedAmount = Number(String(amount).replace(',', '.'));
   const isValid = parsedAmount > 0 && !Number.isNaN(parsedAmount);
@@ -142,33 +117,25 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
     );
   }
 
-  return createPortal((
-    <div className="fixed inset-0 z-[9999] bg-black/40 sm:bg-white/30 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 modal-open"
-      style={{ height: '100vh', width: '100vw' }}
-      onClick={close} data-testid="quickpay-modal">
-      <div
-        className="absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full sm:max-w-md sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}>
-        {/* Sticky header */}
-        <div className="shrink-0 px-6 sm:px-8 pb-3 bg-white"
-          style={{ paddingTop: 'max(24px, env(safe-area-inset-top))' }}>
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-xl font-black text-slate-900">Snelle betaling</h3>
-            <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <p className="text-sm text-slate-500">
-            <b className="text-slate-900">{tenantName || invoice.tenant_name}</b>
-            {' · '}
-            {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
-            {' · '}
-            <span className="text-slate-400">{invoice.invoice_number}</span>
-          </p>
+  return (
+    <KeyboardSafeModal onClose={close} testId="quickpay-modal">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-xl font-black text-slate-900">Snelle betaling</h3>
+          <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
         </div>
+        <p className="text-sm text-slate-500">
+          <b className="text-slate-900">{tenantName || invoice.tenant_name}</b>
+          {' · '}
+          {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
+          {' · '}
+          <span className="text-slate-400">{invoice.invoice_number}</span>
+        </p>
+      </KeyboardSafeModal.Header>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 sm:px-8 pb-3">
+      <KeyboardSafeModal.Body>
           {/* Openstaand overzicht */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
             <div className="flex justify-between mb-1">
@@ -260,20 +227,16 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
               placeholder="Bijv. 'Contant ontvangen aan balie'"
               className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
           </div>
-        </div>
+      </KeyboardSafeModal.Body>
 
-        {/* Sticky footer met acties — blijft boven toetsenbord dankzij dvh */}
-        <div
-          className="shrink-0 border-t border-slate-100 bg-white px-6 sm:px-8 py-3 flex gap-3"
-          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <button onClick={close} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={submit} disabled={loading || !isValid} data-testid="quickpay-submit"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Registreer
-          </button>
-        </div>
-      </div>
-    </div>
-  ), document.body);
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={close} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={submit} disabled={loading || !isValid} data-testid="quickpay-submit"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Registreer
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
+  );
 }
