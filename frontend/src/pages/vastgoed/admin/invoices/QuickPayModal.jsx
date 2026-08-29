@@ -38,10 +38,28 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   const [receipt, setReceipt] = useState(null);   // succes-view
 
   // Lock body scroll while modal is open — voorkomt achtergrond-scroll op mobiel
+  // en voorkomt dat iOS Safari de hele pagina omhoog schuift wanneer het
+  // toetsenbord opent (visual viewport zou anders de layout viewport verschuiven).
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    // Reset elke scroll-poging van iOS (bijv. bij input focus) — de modal
+    // blijft ALTIJD op top:0 staan, ongeacht toetsenbord.
+    const restore = () => window.scrollTo(0, 0);
+    const vv = window.visualViewport;
+    vv?.addEventListener('scroll', restore);
+    vv?.addEventListener('resize', restore);
+    window.scrollTo(0, 0);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.width = '';
+      vv?.removeEventListener('scroll', restore);
+      vv?.removeEventListener('resize', restore);
+    };
   }, []);
 
   const parsedAmount = Number(String(amount).replace(',', '.'));
@@ -126,7 +144,7 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
 
   return createPortal((
     <div className="fixed inset-0 z-[9999] bg-black/40 sm:bg-white/30 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 modal-open"
-      style={{ height: '100dvh', width: '100vw' }}
+      style={{ height: '100vh', width: '100vw' }}
       onClick={close} data-testid="quickpay-modal">
       <div
         className="absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full sm:max-w-md sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]"
