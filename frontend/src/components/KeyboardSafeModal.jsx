@@ -27,6 +27,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
       : (typeof window !== 'undefined' ? window.innerHeight : 0),
   );
   const [vTop, setVTop] = useState(0);
+  const [layoutH, setLayoutH] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0));
   const bodyStyleRef = useRef({});
 
   // Sync sheet-hoogte + top met visualViewport zodat modal automatisch mee
@@ -37,6 +38,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
     const sync = () => {
       setVh(vv.height);
       setVTop(vv.offsetTop || 0);
+      setLayoutH(window.innerHeight);
       // Reset window scroll — voorkomt dat iOS de layout viewport omhoog schuift.
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
@@ -80,7 +82,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
       data-testid={testId || 'ksm-modal'}>
       <div
         className={`absolute left-0 right-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
-        style={{ top: `${vTop}px`, height: `${vh}px` }}
+        style={{ top: `${vTop}px`, bottom: `${Math.max(0, layoutH - vTop - vh)}px` }}
         onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
