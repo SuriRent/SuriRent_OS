@@ -9,23 +9,16 @@ import { createPortal } from 'react-dom';
  * verschoven, geen slide-animaties. Alleen de body scrollt indien nodig.
  *
  * Werking:
- *  - Modal wordt via React Portal in `document.body` gerenderd, buiten
- *    elke parent-CSS context (transforms, overflow, position).
- *  - Op mobiel (<= sm): modal-hoogte = `window.visualViewport.height`.
- *    Wanneer het toetsenbord opent krimpt visualViewport → modal krimpt
- *    mee. Header blijft bovenaan, footer blijft direct boven het toetsen-
- *    bord, body scrollt binnen.
+ *  - Modal wordt via React Portal in `document.body` gerenderd.
+ *  - Op mobiel: outer wrapper = solid wit (geen dark overlay achter sheet)
+ *    zodat er nooit een andere kleur zichtbaar is achter de footer.
+ *  - Sheet-hoogte = `visualViewport.height`, positie = `visualViewport.offsetTop`.
+ *    Krimpt automatisch mee als toetsenbord opent; header blijft bovenaan,
+ *    footer blijft direct boven het toetsenbord.
+ *  - Body scroll-lock via `position: fixed` op body → voorkomt underlying
+ *    page scroll. `window.scrollTo(0,0)` blokkeert iOS auto-scroll-into-view.
  *  - Op desktop (>= sm breakpoint): gecentreerde card met max-width en
- *    max-height 90vh.
- *  - Body scroll-lock via `position: fixed` op body → voorkomt dat iOS
- *    de underlying page mee scrollt.
- *
- * Gebruik:
- *   <KeyboardSafeModal onClose={close} testId="my-modal">
- *     <KeyboardSafeModal.Header>...</KeyboardSafeModal.Header>
- *     <KeyboardSafeModal.Body>...</KeyboardSafeModal.Body>
- *     <KeyboardSafeModal.Footer>...</KeyboardSafeModal.Footer>
- *   </KeyboardSafeModal>
+ *    max-height 90vh boven een halfdoorzichtige donkere backdrop.
  */
 export default function KeyboardSafeModal({ onClose, testId, children, className = '', maxWidthClass = 'sm:max-w-md' }) {
   const [vh, setVh] = useState(() =>
@@ -33,14 +26,20 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
       ? window.visualViewport.height
       : (typeof window !== 'undefined' ? window.innerHeight : 0),
   );
+  const [vTop, setVTop] = useState(0);
   const bodyStyleRef = useRef({});
 
-  // Sync sheet-hoogte met visualViewport zodat modal automatisch krimpt
-  // wanneer het toetsenbord opent en groeit wanneer het sluit.
+  // Sync sheet-hoogte + top met visualViewport zodat modal automatisch mee
+  // krimpt/verplaatst als toetsenbord opent of iOS pinch-zoomt.
   useLayoutEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const sync = () => setVh(vv.height);
+    const sync = () => {
+      setVh(vv.height);
+      setVTop(vv.offsetTop || 0);
+      // Reset window scroll — voorkomt dat iOS de layout viewport omhoog schuift.
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
     sync();
     vv.addEventListener('resize', sync);
     vv.addEventListener('scroll', sync);
@@ -76,12 +75,12 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
 
   return createPortal((
     <div
-      className={`fixed inset-0 z-[9999] bg-black/50 sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
+      className={`fixed inset-0 z-[9999] bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
       onClick={onClose}
       data-testid={testId || 'ksm-modal'}>
       <div
-        className={`absolute top-0 left-0 right-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
-        style={{ height: `${vh}px` }}
+        className={`absolute left-0 right-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
+        style={{ top: `${vTop}px`, height: `${vh}px` }}
         onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
