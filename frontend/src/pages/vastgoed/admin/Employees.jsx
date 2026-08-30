@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
+import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -41,12 +42,14 @@ function EmployeeForm({ initial, onCancel, onSaved }) {
     { value: 'kiosk', label: 'Kiosk medewerker', desc: 'Betalingen via kiosk → goedkeuring vereist' },
   ];
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="employee-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="employee-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">{initial ? 'Werknemer bewerken' : 'Nieuwe werknemer'}</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -108,16 +111,16 @@ function EmployeeForm({ initial, onCancel, onSaved }) {
             Actief in dienst
           </label>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.name} data-testid="emp-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Opslaan
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.name} data-testid="emp-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Opslaan
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 
@@ -158,12 +161,14 @@ function SalaryForm({ employees, onCancel, onSaved }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="salary-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="salary-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Nieuwe loonstrook</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -221,16 +226,16 @@ function SalaryForm({ employees, onCancel, onSaved }) {
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.employee_id} data-testid="sal-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Loonstrook opslaan
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.employee_id} data-testid="sal-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Loonstrook opslaan
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 
@@ -470,10 +475,9 @@ function KioskPinModal({ employee, onCancel, onSaved }) {
     finally { setSaving(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto"
-      data-testid="kiosk-pin-modal" onClick={onCancel}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <KeyboardSafeModal onClose={onCancel} testId="kiosk-pin-modal" maxWidthClass="sm:max-w-sm">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center">
               <KeyRound className="w-5 h-5 text-amber-700" />
@@ -482,9 +486,11 @@ function KioskPinModal({ employee, onCancel, onSaved }) {
           </div>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
-        <p className="text-sm text-slate-500 mb-4">
+        <p className="text-sm text-slate-500 mt-2">
           PIN voor <span className="font-bold text-slate-900">{employee.name}</span> om in te loggen op de kiosk vóór elke betaling.
         </p>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         <div className="space-y-3">
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Nieuwe PIN (4-6 cijfers)</label>
@@ -500,14 +506,14 @@ function KioskPinModal({ employee, onCancel, onSaved }) {
           </div>
         </div>
         {err && <div className="mt-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{err}</div>}
-        <div className="mt-5 flex gap-2">
-          <button onClick={onCancel} className="px-4 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Annuleer</button>
-          <button onClick={submit} disabled={saving} data-testid="kiosk-pin-save"
-            className="flex-1 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ShieldCheck className="w-4 h-4" /> PIN opslaan</>}
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-2">
+        <button onClick={onCancel} className="px-4 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Annuleer</button>
+        <button onClick={submit} disabled={saving} data-testid="kiosk-pin-save"
+          className="flex-1 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ShieldCheck className="w-4 h-4" /> PIN opslaan</>}
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }

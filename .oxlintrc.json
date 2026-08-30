@@ -35,7 +35,12 @@
     "desc": "readonly",
     "task": "readonly",
     "jake": "readonly",
-    "lockdown": "readonly"
+    "lockdown": "readonly",
+    "chrome": "readonly",
+    "vsprintf": "readonly",
+    "sprintf": "readonly",
+    "angular": "readonly",
+    "AsyncIterator": "readonly"
   },
   "ignorePatterns": [
     "**/node_modules/**",

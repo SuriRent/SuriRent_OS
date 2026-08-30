@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Plus, X, Check, Loader2, Wrench, Trash2 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
+import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -30,12 +31,14 @@ function MaintenanceForm({ apartments, onCancel, onSaved }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="maint-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="maint-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Nieuw onderhoudsticket</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -71,7 +74,7 @@ function MaintenanceForm({ apartments, onCancel, onSaved }) {
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Kosten</label>
               <input type="number" step="0.01" value={data.cost} onChange={(e) => setData({ ...data, cost: e.target.value })}
-                data-testid="maint-cost"
+                data-testid="maint-cost" inputMode="decimal"
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
             <div>
@@ -83,16 +86,16 @@ function MaintenanceForm({ apartments, onCancel, onSaved }) {
             </div>
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.apartment_id || !data.title} data-testid="maint-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Ticket aanmaken
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.apartment_id || !data.title} data-testid="maint-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Ticket aanmaken
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 

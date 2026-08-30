@@ -3,6 +3,7 @@ import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, 
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { EmailDialog, SendDialog } from '../../../components/EmailDialog';
 import { ListSkeleton } from '../../../components/ListSkeleton';
+import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useApiSWR } from '../../../lib/swr';
 
@@ -67,12 +68,14 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="contract-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="contract-modal" maxWidthClass="sm:max-w-xl">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Nieuw contract</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -139,23 +142,23 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
               className="w-full mt-1 px-3 py-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none resize-none" />
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={openPreview}
-            disabled={previewing || !data.tenant_id || !data.apartment_id}
-            data-testid="contract-preview"
-            className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-black text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {previewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-            Preview PDF
-          </button>
-          <button onClick={save} disabled={loading || !data.tenant_id || !data.apartment_id} data-testid="contract-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Aanmaken
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={openPreview}
+          disabled={previewing || !data.tenant_id || !data.apartment_id}
+          data-testid="contract-preview"
+          className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-black text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {previewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+          Preview PDF
+        </button>
+        <button onClick={save} disabled={loading || !data.tenant_id || !data.apartment_id} data-testid="contract-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Aanmaken
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 

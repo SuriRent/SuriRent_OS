@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Check, Loader2 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../../../../lib/api';
+import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 
 // =====================================================================
 // Invoice creation modal — admin maakt nieuwe factuur voor 1 huurder
@@ -27,13 +28,14 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-open modal-sheet-auto"
-      data-testid="invoice-modal" onClick={onCancel}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="invoice-modal">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Nieuwe factuur</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -62,20 +64,20 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Jaar</label>
               <input type="number" value={data.period_year} onChange={(e) => setData({ ...data, period_year: e.target.value })}
-                data-testid="invoice-year"
+                data-testid="invoice-year" inputMode="numeric"
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.tenant_id} data-testid="invoice-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Aanmaken
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.tenant_id} data-testid="invoice-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Aanmaken
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }

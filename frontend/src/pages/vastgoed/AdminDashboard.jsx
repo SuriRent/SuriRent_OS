@@ -20,6 +20,7 @@ import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
+import KeyboardSafeModal from '../../components/KeyboardSafeModal';
 import OnboardingModal from '../../components/OnboardingModal';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
@@ -1944,12 +1945,14 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="apartment-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-slide-up">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="apartment-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">{initial ? 'Appartement bewerken' : 'Nieuw appartement'}</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -2007,17 +2010,17 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
             testId="apt-photo"
           />
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.number || !data.rent_amount}
-            data-testid="apt-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Opslaan
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.number || !data.rent_amount}
+          data-testid="apt-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Opslaan
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 
@@ -3073,12 +3076,14 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="tenant-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-slide-up">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="tenant-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">{initial ? 'Huurder bewerken' : 'Nieuwe huurder'}</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -3152,16 +3157,16 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
               birth_date: (!d.birth_date && ocr.birth_date) ? ocr.birth_date : d.birth_date,
             }))} />
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.name} data-testid="tenant-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Opslaan
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.name} data-testid="tenant-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Opslaan
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 
@@ -3190,14 +3195,16 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="tenant-pin-modal">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 animate-slide-up">
-        <div className="flex items-center justify-between mb-4">
+    <KeyboardSafeModal onClose={onCancel} testId="tenant-pin-modal">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">
             {savedPin ? 'PIN ingesteld' : `Portal PIN voor ${tenant.name}`}
           </h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {!savedPin ? (
           <>
             <p className="text-sm text-slate-500 mb-4">
@@ -3222,11 +3229,6 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
                   className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-2xl tracking-[0.5em] text-center font-bold" />
               </div>
             </div>
-            <button onClick={save} disabled={loading || !pin || !confirm} data-testid="tenant-pin-save"
-              className="w-full mt-5 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              PIN opslaan
-            </button>
           </>
         ) : (
           <>
@@ -3241,20 +3243,30 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
                 data-testid="tenant-pin-copy-link"
                 className="text-xs font-bold text-[#FF5C00] hover:underline shrink-0">Kopieer</button>
             </div>
-            <div className="flex gap-2">
-              <a href={kioskUrl} target="_blank" rel="noreferrer"
-                data-testid="tenant-pin-open-kiosk"
-                className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold inline-flex items-center justify-center gap-2 text-sm">
-                Open Huurder Kiosk
-              </a>
-              <button onClick={onSaved} className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
-                Sluiten
-              </button>
-            </div>
           </>
         )}
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className={savedPin ? 'flex gap-2' : ''}>
+        {!savedPin ? (
+          <button onClick={save} disabled={loading || !pin || !confirm} data-testid="tenant-pin-save"
+            className="w-full h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            PIN opslaan
+          </button>
+        ) : (
+          <>
+            <a href={kioskUrl} target="_blank" rel="noreferrer"
+              data-testid="tenant-pin-open-kiosk"
+              className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold inline-flex items-center justify-center gap-2 text-sm">
+              Open Huurder Kiosk
+            </a>
+            <button onClick={onSaved} className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
+              Sluiten
+            </button>
+          </>
+        )}
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 

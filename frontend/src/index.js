@@ -84,7 +84,7 @@ window.addEventListener('unhandledrejection', (e) => {
 // Probeer react-error-overlay programmatisch te stoppen (CRA dev tool).
 // Faalt stil als de module niet aanwezig is (productie build).
 try {
-  // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+  // eslint-disable-next-line global-require
   const overlay = require('react-error-overlay');
   if (overlay && typeof overlay.stopReportingRuntimeErrors === 'function') {
     overlay.stopReportingRuntimeErrors();

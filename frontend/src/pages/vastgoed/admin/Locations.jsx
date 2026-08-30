@@ -4,6 +4,7 @@ import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useApiSWR } from '../../../lib/swr';
 import PhotoUpload from '../../../components/PhotoUpload';
+import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 
 function LocationForm({ initial, onCancel, onSaved }) {
   const [data, setData] = useState(initial || { name: '', address: '', photo_url: '' });
@@ -32,13 +33,15 @@ function LocationForm({ initial, onCancel, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 animate-slide-up">
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel}>
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">{initial?.id ? 'Locatie bewerken' : 'Nieuwe locatie'}</h3>
           <button onClick={onCancel} data-testid="loc-form-close"
             className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Naam *</label>
@@ -61,17 +64,17 @@ function LocationForm({ initial, onCancel, onSaved }) {
           />
         </div>
         {error && <p className="text-sm text-red-600 mt-3" data-testid="loc-form-error">{error}</p>}
-        <div className="flex gap-2 mt-5">
-          <button onClick={onCancel} disabled={loading}
-            className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleer</button>
-          <button onClick={save} disabled={loading} data-testid="loc-form-save"
-            className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Opslaan
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-2">
+        <button onClick={onCancel} disabled={loading}
+          className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleer</button>
+        <button onClick={save} disabled={loading} data-testid="loc-form-save"
+          className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Opslaan
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 

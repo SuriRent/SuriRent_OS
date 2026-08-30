@@ -10,6 +10,7 @@ import { useAdminEvents } from '../../../lib/admin-events';
 import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
 import SignaturePad from '../../../components/SignaturePad';
+import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 import { playApproveConfirm, playErrorBuzz, playSwoosh } from '../../../lib/tap-sounds';
 
 // =====================================================================
@@ -162,18 +163,14 @@ function ApprovePaymentSheet({ payment, onCancel, onApproved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm md:bg-white/30 md:backdrop-blur-md flex items-end md:items-center justify-center md:p-4 modal-open"
-      data-testid="approve-modal" onClick={onCancel}>
-      <div className="bg-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl pt-3 pb-6 px-5 md:p-8 animate-slide-up-sheet md:animate-slide-up max-h-[92vh] overflow-auto"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}
-        onClick={(e) => e.stopPropagation()}>
-        <div className="md:hidden flex justify-center mb-3">
-          <span className="w-10 h-1.5 rounded-full bg-slate-200" />
-        </div>
-        <div className="flex items-center justify-between mb-4">
+    <KeyboardSafeModal onClose={onCancel} testId="approve-modal">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Goedkeuren</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 mb-4 space-y-1.5 text-[13px]">
           <DetailRow label="Huurder" value={<span className="font-bold text-slate-900">{payment.tenant_name}</span>} />
           <DetailRow label="Bedrag" value={<span className="font-bold text-slate-900">{payment.currency} {fmtAmountWhole(payment.amount)}</span>} />
@@ -288,8 +285,8 @@ function ApprovePaymentSheet({ payment, onCancel, onApproved }) {
             </div>
           </>
         )}
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+    </KeyboardSafeModal>
   );
 }
 
@@ -650,19 +647,14 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm md:bg-white/30 md:backdrop-blur-md flex items-end md:items-center justify-center md:p-4 modal-open animate-fade-in"
-      data-testid="payment-modal" onClick={onCancel}>
-      <div className="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl pt-3 pb-6 px-5 md:p-8 animate-slide-up-sheet md:animate-slide-up max-h-[92vh] overflow-auto"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}
-        onClick={(e) => e.stopPropagation()}>
-        {/* Drag-handle alleen op mobile, signaalt "swipe down to close" */}
-        <div className="md:hidden flex justify-center mb-3">
-          <span className="w-10 h-1.5 rounded-full bg-slate-200" />
-        </div>
-        <div className="flex items-center justify-between mb-5">
+    <KeyboardSafeModal onClose={onCancel} testId="payment-modal" maxWidthClass="sm:max-w-lg">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Nieuwe betaling</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -752,17 +744,17 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-          <button onClick={save} disabled={loading || !data.tenant_id || !data.amount}
-            data-testid="pay-save"
-            className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
-            Registreer betaling
-          </button>
-        </div>
-      </div>
-    </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={save} disabled={loading || !data.tenant_id || !data.amount}
+          data-testid="pay-save"
+          className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+          Registreer betaling
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
   );
 }
 

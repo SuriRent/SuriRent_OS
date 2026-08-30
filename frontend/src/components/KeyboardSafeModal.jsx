@@ -1,20 +1,24 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
  * KeyboardSafeModal
  * =================
- * Universele mobile-first modal wrapper die correct omgaat met het virtuele
- * toetsenbord op iOS en Android — zonder dat de content omhoog schuift.
+ * Universele modal wrapper die correct omgaat met het virtuele toetsenbord
+ * op iOS en Android. De modal blijft **op één plaats** — er wordt niets
+ * verschoven, geen slide-animaties. Alleen de body scrollt indien nodig.
  *
  * Werking:
- *  - Modal wordt via React Portal in document.body gerenderd.
- *  - Op mobiel: full-screen sheet met `height: 100dvh` (dynamic viewport).
- *    Wanneer het toetsenbord opent, krimpt de dvh automatisch → header
- *    blijft bovenaan, footer blijft boven het toetsenbord, body scrollt.
- *  - iOS-specifiek: body scroll-lock + reset van elke `window.scrollTo`
- *    poging → voorkomt dat iOS Safari het layout-viewport verschuift.
- *  - Op desktop (>= sm breakpoint): centered card met max-width en max-height.
+ *  - Modal wordt via React Portal in `document.body` gerenderd, buiten
+ *    elke parent-CSS context (transforms, overflow, position).
+ *  - Op mobiel (<= sm): modal-hoogte = `window.visualViewport.height`.
+ *    Wanneer het toetsenbord opent krimpt visualViewport → modal krimpt
+ *    mee. Header blijft bovenaan, footer blijft direct boven het toetsen-
+ *    bord, body scrollt binnen.
+ *  - Op desktop (>= sm breakpoint): gecentreerde card met max-width en
+ *    max-height 90vh.
+ *  - Body scroll-lock via `position: fixed` op body → voorkomt dat iOS
+ *    de underlying page mee scrollt.
  *
  * Gebruik:
  *   <KeyboardSafeModal onClose={close} testId="my-modal">
@@ -24,54 +28,60 @@ import { createPortal } from 'react-dom';
  *   </KeyboardSafeModal>
  */
 export default function KeyboardSafeModal({ onClose, testId, children, className = '', maxWidthClass = 'sm:max-w-md' }) {
-  const scrollLockRef = useRef({});
+  const [vh, setVh] = useState(() =>
+    typeof window !== 'undefined' && window.visualViewport
+      ? window.visualViewport.height
+      : (typeof window !== 'undefined' ? window.innerHeight : 0),
+  );
+  const bodyStyleRef = useRef({});
 
-  // Body-scroll lock — voorkomt dat iOS de hele pagina scrollt wanneer een
-  // input focust. Ook `overscroll-behavior` blokkeert scroll-chaining.
-  useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    scrollLockRef.current = {
-      htmlOverflow: html.style.overflow,
-      bodyOverflow: body.style.overflow,
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyWidth: body.style.width,
+  // Sync sheet-hoogte met visualViewport zodat modal automatisch krimpt
+  // wanneer het toetsenbord opent en groeit wanneer het sluit.
+  useLayoutEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => setVh(vv.height);
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
     };
-    const scrollY = window.scrollY;
-    html.style.overflow = 'hidden';
+  }, []);
+
+  // Body scroll-lock — voorkomt scrollen van de underlying page.
+  useEffect(() => {
+    const body = document.body;
+    bodyStyleRef.current = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    const y = window.scrollY;
     body.style.overflow = 'hidden';
     body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
+    body.style.top = `-${y}px`;
     body.style.width = '100%';
-
-    // iOS Safari kan alsnog de visual viewport scrollen bij input-focus.
-    // We forceren window.scrollTo(0,0) telkens iOS iets probeert.
-    const vv = window.visualViewport;
-    const restore = () => {
-      if (window.scrollY !== 0) window.scrollTo(0, 0);
-    };
-    vv?.addEventListener('scroll', restore);
-
     return () => {
-      const s = scrollLockRef.current;
-      html.style.overflow = s.htmlOverflow;
-      body.style.overflow = s.bodyOverflow;
-      body.style.position = s.bodyPosition;
-      body.style.top = s.bodyTop;
-      body.style.width = s.bodyWidth;
-      vv?.removeEventListener('scroll', restore);
-      window.scrollTo(0, scrollY);
+      const s = bodyStyleRef.current;
+      body.style.overflow = s.overflow;
+      body.style.position = s.position;
+      body.style.top = s.top;
+      body.style.width = s.width;
+      window.scrollTo(0, y);
     };
   }, []);
 
   return createPortal((
     <div
-      className={`ksm-root fixed inset-0 z-[9999] bg-black/50 sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
+      className={`fixed inset-0 z-[9999] bg-black/50 sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
       onClick={onClose}
       data-testid={testId || 'ksm-modal'}>
       <div
-        className={`ksm-sheet absolute inset-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
+        className={`absolute top-0 left-0 right-0 sm:static sm:inset-auto bg-white sm:w-full ${maxWidthClass} sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]`}
+        style={{ height: `${vh}px` }}
         onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
@@ -102,7 +112,7 @@ KeyboardSafeModal.Body = function KsmBody({ children, className = '' }) {
 };
 
 /** Sticky footer — blijft altijd zichtbaar boven het toetsenbord dankzij
- *  de dynamische viewport-hoogte van de sheet. */
+ *  de visualViewport-gedreven hoogte van de sheet. */
 KeyboardSafeModal.Footer = function KsmFooter({ children, className = '' }) {
   return (
     <div

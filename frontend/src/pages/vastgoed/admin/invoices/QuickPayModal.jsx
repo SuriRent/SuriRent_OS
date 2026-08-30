@@ -81,38 +81,47 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   };
 
   if (receipt) {
-    // Succes-scherm met kwitantienummer en PDF-download
+    // Succes-scherm met kwitantienummer en PDF-download — via KeyboardSafeModal
+    // zodat ook hier het toetsenbord-veilige patroon consistent blijft.
     return (
-      <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-open modal-sheet-auto"
-        onClick={close} data-testid="quickpay-success">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
-          <div className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-3">
-              <Check className="w-8 h-8 text-emerald-600" strokeWidth={3} />
-            </div>
+      <KeyboardSafeModal onClose={close} testId="quickpay-success">
+        <KeyboardSafeModal.Header>
+          <div className="flex items-center justify-between mb-1">
             <h3 className="text-xl font-black text-slate-900">Betaling geregistreerd</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              {receipt.currency} {Number(receipt.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })} van <b className="text-slate-900">{tenantName || receipt.tenant_name}</b>
-            </p>
-            <div className="mt-4 bg-slate-50 rounded-2xl px-4 py-3 w-full">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kwitantienummer</p>
-              <p className="font-mono text-lg font-black text-slate-900" data-testid="quickpay-receipt-nr">{receipt.receipt_number}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-5">
-            <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
-              target="_blank" rel="noreferrer"
-              data-testid="quickpay-download-pdf"
-              className="h-11 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-              <FileText className="w-4 h-4" /> Kwitantie PDF
-            </a>
-            <button onClick={close} data-testid="quickpay-close"
-              className="h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm">
-              Klaar
+            <button onClick={close} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+              <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      </div>
+          <p className="text-sm text-slate-500">
+            <b className="text-slate-900">{tenantName || receipt.tenant_name}</b>
+            {' · '}{receipt.currency} {Number(receipt.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+          </p>
+        </KeyboardSafeModal.Header>
+
+        <KeyboardSafeModal.Body className="text-center pt-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+            <Check className="w-8 h-8 text-emerald-600" strokeWidth={3} />
+          </div>
+          <p className="text-sm text-slate-500">Kwitantie succesvol aangemaakt</p>
+          <div className="mt-4 bg-slate-50 rounded-2xl px-4 py-3 inline-block">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kwitantienummer</p>
+            <p className="font-mono text-lg font-black text-slate-900" data-testid="quickpay-receipt-nr">{receipt.receipt_number}</p>
+          </div>
+        </KeyboardSafeModal.Body>
+
+        <KeyboardSafeModal.Footer className="grid grid-cols-2 gap-2">
+          <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
+            target="_blank" rel="noreferrer"
+            data-testid="quickpay-download-pdf"
+            className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
+            <FileText className="w-4 h-4" /> Kwitantie PDF
+          </a>
+          <button onClick={close} data-testid="quickpay-close"
+            className="h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm">
+            Klaar
+          </button>
+        </KeyboardSafeModal.Footer>
+      </KeyboardSafeModal>
     );
   }
 

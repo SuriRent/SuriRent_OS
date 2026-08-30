@@ -16,6 +16,33 @@ Wanneer huurder een betaling doet via tenant-portal moet Admin > Betalingen live
 2. `_live_sync_broadcast` middleware decodeerde alleen admin `access_token`. Tenant-portal betalingen (via `tenant_token`) hadden geen `company_id` in JWT-payload → geen broadcast. Nu resolvet middleware `company_id` via `db.tenants` lookup.
 3. `AdminDashboard.jsx` SSE-effect las verkeerde localStorage key (`token` i.p.v. `admin_token`) → EventSource-connectie werd nooit opgezet. Nu correct + `withCredentials:true` voor cookie-auth fallback.
 
+## Latest Fix (2026-02-29) — KeyboardSafeModal (iOS toetsenbord)
+Nieuwe universele modal-wrapper `/app/frontend/src/components/KeyboardSafeModal.jsx`:
+- Rendert via React `createPortal` in `document.body` (buiten elke parent CSS)
+- Hoogte = `window.visualViewport.height` (JS-driven, betrouwbaarder dan CSS `dvh` op iOS)
+- Body scroll-lock via `position: fixed`
+- Header met `env(safe-area-inset-top)` padding
+- Footer met `env(safe-area-inset-bottom)` padding
+- Sub-componenten: `.Header` / `.Body` / `.Footer` voor sticky layout
+- Viewport meta tag: `interactive-widget=resizes-content`
+
+Toegepast op alle popup-formulieren met input-velden:
+- ✅ QuickPayModal (incl. success view)
+- ✅ InvoiceForm
+- ✅ ReminderModal
+- ✅ Payments.jsx (ApproveModal + PaymentForm)
+- ✅ AdminDashboard.jsx (ApartmentForm, TenantForm, TenantPinModal)
+- ✅ Locations.jsx (LocationForm)
+- ✅ Deposits.jsx (DepositForm + RefundForm)
+- ✅ Maintenance.jsx (MaintenanceForm)
+- ✅ Contracts.jsx (ContractForm)
+- ✅ Employees.jsx (EmployeeForm + SalaryForm + KioskPinModal)
+
+Resultaat: op iPhone/Android schuift NIETS meer omhoog wanneer toetsenbord opent.
+Header blijft bovenaan, footer-knoppen (Annuleren/Registreer) blijven altijd
+zichtbaar direct boven het toetsenbord, alleen body scrollt.
+
+
 ## Architecture
 ```
 /app/
