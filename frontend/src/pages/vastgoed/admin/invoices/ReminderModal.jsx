@@ -60,11 +60,28 @@ export default function ReminderModal({ group, initialChannel = 'whatsapp', onCl
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Extra bericht (optioneel)</label>
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)}
-            data-testid="reminder-message"
-            placeholder="Bijv. 'Heeft u de huur van vorige maand al overgemaakt?'"
-            className="w-full h-24 px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm resize-none" />
+          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Toon (optioneel)</label>
+          <p className="text-[11px] text-slate-500">Kies een voorbeeldbericht — geen typen nodig.</p>
+          <div className="grid grid-cols-1 gap-2">
+            {[
+              { key: 'friendly', label: 'Vriendelijk', text: 'Vriendelijke herinnering — u heeft nog openstaande huur. Kunnen we deze week de betaling verwachten?' },
+              { key: 'reminder', label: 'Herinnering', text: 'Wij zien dat de huur nog niet is voldaan. Graag zo snel mogelijk overmaken zodat we geen extra kosten in rekening hoeven te brengen.' },
+              { key: 'urgent', label: 'Dringend', text: 'LAATSTE HERINNERING: de huur is meerdere maanden achterstallig. Neem direct contact op om verdere stappen te voorkomen.' },
+              { key: 'none', label: 'Geen extra bericht', text: '' },
+            ].map((opt) => {
+              const sel = message === opt.text;
+              return (
+                <button key={opt.key} type="button" onClick={() => setMessage(opt.text)}
+                  data-testid={`reminder-tone-${opt.key}`}
+                  className={`text-left p-3 rounded-xl border-2 transition ${
+                    sel ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 bg-white hover:border-orange-300'
+                  }`}>
+                  <p className={`text-xs font-black uppercase tracking-wider mb-0.5 ${sel ? 'text-[#FF5C00]' : 'text-slate-700'}`}>{opt.label}</p>
+                  {opt.text && <p className="text-[11px] text-slate-600 leading-snug">{opt.text}</p>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </KeyboardSafeModal.Body>
       <KeyboardSafeModal.Footer className="flex gap-3">
