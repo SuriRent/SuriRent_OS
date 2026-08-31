@@ -62,7 +62,7 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
         : { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Op tijd', Icon: Check };
 
   return (
-    <div className="space-y-4 pb-40 md:pb-6" data-testid={`invoice-detail-page-${g.tenant_id}`}>
+    <div className="space-y-4 pb-6" data-testid={`invoice-detail-page-${g.tenant_id}`}>
       {/* =============== Terug knop =============== */}
       <div>
         <button onClick={onBack}
@@ -73,42 +73,41 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
       </div>
 
       {/* =============== Huurder card — soft orange bg + status =============== */}
-      <div className="bg-orange-50/60 border border-orange-100 rounded-3xl p-3 flex items-center gap-3">
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white text-lg shrink-0 shadow-lg"
+      <div className="bg-orange-50/60 border border-orange-100 rounded-3xl p-4 flex items-center gap-3">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-white text-xl shrink-0 shadow-lg"
           style={{ background: 'linear-gradient(135deg, #FFB770 0%, #FF6A1A 100%)' }}>
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-black text-slate-900 truncate leading-tight">{g.tenant_name}</h1>
+          <h1 className="text-xl font-black text-slate-900 truncate leading-tight">{g.tenant_name}</h1>
           {g.apartment_number && (
-            <p className="text-xs text-slate-500 truncate mt-0.5">
+            <p className="text-[13px] text-slate-500 truncate mt-0.5">
               {g.location_name ? `${g.location_name} · ` : ''}{g.apartment_number}
             </p>
           )}
         </div>
-        <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg ${statusPill.bg} ${statusPill.text} shrink-0`}>
-          <statusPill.Icon className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{statusPill.label}</span>
-          <span className="sm:hidden">{statusPill.label.split(' ')[0]}</span>
+        <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl ${statusPill.bg} ${statusPill.text} shrink-0`}>
+          <statusPill.Icon className="w-4 h-4" />
+          {statusPill.label}
         </span>
       </div>
 
       {/* =============== Totaal openstaand — dark navy card =============== */}
-      <div className="rounded-3xl p-5 relative overflow-hidden"
+      <div className="rounded-3xl p-6 relative overflow-hidden min-h-[160px]"
         style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
-        <div className="absolute -right-10 -bottom-10 w-40 h-40 rounded-full bg-white/5" />
+        <div className="absolute -right-16 -bottom-16 w-52 h-52 rounded-full bg-white/5" />
         <div className="absolute right-5 top-5">
-          <span className="inline-block text-[10px] font-black uppercase tracking-wider text-white bg-white/15 backdrop-blur-sm rounded-full px-2.5 py-1">
+          <span className="inline-block text-[10px] font-black uppercase tracking-wider text-white bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5">
             {g.dueCount > 0 ? `${g.dueCount} maand${g.dueCount === 1 ? '' : 'en'}` : 'Op tijd'}
           </span>
         </div>
         <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Totaal openstaand</p>
-        <p className="text-4xl font-black tracking-tight text-white mt-1.5">
+        <p className="text-4xl font-black tracking-tight text-white mt-2">
           {fmtMoney(g.totalDue, currency)}
         </p>
-        <div className="absolute right-5 bottom-5">
-          <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-white/10 flex items-center justify-center">
-            <Receipt className="w-5 h-5 text-white" />
+        <div className="absolute right-6 bottom-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-800/80 border border-white/10 flex items-center justify-center">
+            <Receipt className="w-6 h-6 text-white" />
           </div>
         </div>
       </div>
@@ -206,10 +205,10 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
             ].map((c) => (
               <button key={c.id} type="button" onClick={() => onReminder(g, c.id)}
                 data-testid={`reminder-btn-${c.id}-${g.tenant_id}`}
-                className={`p-3 bg-white border border-slate-100 rounded-2xl shadow-sm transition active:scale-95 text-left ${c.hover}`}>
-                <div className="flex items-start justify-between mb-2.5">
-                  <div className={`w-11 h-11 rounded-2xl ${c.iconBg} flex items-center justify-center`}>
-                    <c.Icon className="w-5 h-5" />
+                className={`p-3.5 bg-white border border-slate-100 rounded-2xl shadow-sm transition active:scale-95 text-left ${c.hover}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-12 h-12 rounded-2xl ${c.iconBg} flex items-center justify-center`}>
+                    <c.Icon className="w-6 h-6" />
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
@@ -221,18 +220,17 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
         </div>
       )}
 
-      {/* =============== STICKY MOBILE CTA — gradient met subtitle =============== */}
+      {/* =============== Inline CTA — Registreer betaling gradient =============== */}
       {primaryOpen && (
-        <div className="md:hidden fixed left-0 right-0 z-40 px-4 pt-3 bg-gradient-to-t from-white via-white to-white/60"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 60px)', paddingBottom: '12px' }}>
+        <div>
           <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
             data-testid="quickpay-primary-btn"
-            className="w-full py-4 rounded-3xl text-white font-black inline-flex flex-col items-center justify-center gap-0.5 shadow-[0_14px_28px_-10px_rgba(255,92,0,0.55)] active:scale-[0.98] transition-transform"
+            className="w-full py-5 rounded-3xl text-white font-black inline-flex flex-col items-center justify-center gap-0.5 shadow-[0_14px_28px_-10px_rgba(255,92,0,0.55)] active:scale-[0.98] transition-transform"
             style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
-            <span className="inline-flex items-center gap-2 text-base">
-              <Banknote className="w-5 h-5" /> Registreer betaling
+            <span className="inline-flex items-center gap-2 text-lg">
+              <Banknote className="w-6 h-6" /> Registreer betaling
             </span>
-            <span className="text-[11px] font-medium text-white/85">Ontvang een betaling voor deze factuur</span>
+            <span className="text-[12px] font-medium text-white/90 mt-0.5">Ontvang een betaling voor deze factuur</span>
           </button>
         </div>
       )}
