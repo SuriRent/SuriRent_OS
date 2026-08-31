@@ -995,40 +995,19 @@ export default function Payments() {
           MOBILE (phone) — POS-terminal stijl. Verborgen vanaf md (>=768px).
           ================================================================= */}
       <div className="md:hidden space-y-4" data-testid="payments-mobile">
-        <div className="flex items-center justify-between gap-2.5">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-black text-slate-900 tracking-tight leading-[1.02]"
-              style={{ fontSize: 'clamp(32px, 11vw, 56px)' }}>
-              Betalingen
-            </h1>
-            <p className="text-slate-500 mt-1 font-bold"
-              style={{ fontSize: 'clamp(12px, 3.4vw, 15px)' }}>
-              {items.length} kwitanties
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Betalingen</h1>
+            <p className="text-sm text-slate-500 mt-0.5 truncate">
+              {items.length} kwitantie{items.length !== 1 ? 's' : ''}
+              {todaySum > 0 ? ` · Vandaag ${currency} ${fmtAmountWhole(todaySum)}` : ''}
             </p>
           </div>
-          <div className="bg-white rounded-2xl shadow-[0_8px_22px_-10px_rgba(0,0,0,0.18)] shrink-0"
-            style={{ padding: 'clamp(8px, 2.4vw, 12px) clamp(10px, 3vw, 14px)' }}
-            data-testid="mp-today-stat">
-            <p className="font-bold uppercase tracking-wider text-slate-500"
-              style={{ fontSize: 'clamp(9px, 2.4vw, 11px)' }}>
-              Vandaag
-            </p>
-            <p className="font-black text-slate-900 tracking-tight whitespace-nowrap leading-tight mt-0.5"
-              style={{ fontSize: 'clamp(14px, 4vw, 19px)' }}>
-              {currency} {fmtAmountWhole(todaySum)}
-            </p>
-            <p className="text-slate-400 font-bold mt-0.5 text-center"
-              style={{ fontSize: 'clamp(9px, 2.4vw, 11px)' }}>
-              {todayItems.length} betaling{todayItems.length !== 1 ? 'en' : ''}
-            </p>
-          </div>
+          <button onClick={() => setCreating(true)} data-testid="mp-new-btn" type="button"
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] shrink-0">
+            <Plus className="w-4 h-4" /> Nieuwe
+          </button>
         </div>
-
-        <button onClick={() => setCreating(true)} data-testid="mp-new-btn" type="button"
-          className="w-full rounded-2xl bg-[#FF6A1A] hover:bg-[#F05C0E] text-white font-black inline-flex items-center justify-center gap-2 shadow-[0_14px_28px_-10px_rgba(255,92,0,0.55)] active:scale-[0.985] transition-transform tracking-tight"
-          style={{ height: 'clamp(56px, 16vw, 72px)', fontSize: 'clamp(15px, 4.2vw, 19px)' }}>
-          <Plus className="stroke-[2.5]" style={{ width: 'clamp(20px, 5.5vw, 26px)', height: 'clamp(20px, 5.5vw, 26px)' }} /> Nieuwe betaling
-        </button>
 
         {tab === 'month' && (
           <MonthStepper year={selectedYear} month={selectedMonth}
