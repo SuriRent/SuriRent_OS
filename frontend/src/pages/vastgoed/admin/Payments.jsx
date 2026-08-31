@@ -11,6 +11,7 @@ import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
 import SignaturePad from '../../../components/SignaturePad';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
+import NumPad from '../../../components/NumPad';
 import { playApproveConfirm, playErrorBuzz, playSwoosh } from '../../../lib/tap-sounds';
 
 // =====================================================================
@@ -706,14 +707,17 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
-              <input type="number" step="0.01" value={data.amount} onChange={(e) => setData({ ...data, amount: e.target.value })} required
-                data-testid="pay-amount"
-                className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+              <div className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-[#FF5C00] bg-orange-50/40 flex items-center justify-between">
+                <span className="text-slate-400 font-bold text-sm">{data.currency}</span>
+                <span className="text-2xl font-black text-slate-900 tabular-nums" data-testid="pay-amount">
+                  {data.amount || '0'}
+                </span>
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Valuta</label>
               <select value={data.currency} onChange={(e) => setData({ ...data, currency: e.target.value })} data-testid="pay-currency"
-                className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
+                className="w-full mt-1 h-14 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
                 <option value="SRD">SRD</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -732,17 +736,21 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Jaar</label>
-                <input type="number" value={data.period_year} onChange={(e) => setData({ ...data, period_year: e.target.value })}
+                <select value={data.period_year} onChange={(e) => setData({ ...data, period_year: e.target.value })}
                   data-testid="pay-year"
-                  className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+                  className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
-          <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Notitie</label>
-            <input value={data.note} onChange={(e) => setData({ ...data, note: e.target.value })} data-testid="pay-note"
-              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
-          </div>
+          {/* Custom NumPad — geen native toetsenbord = geen viewport shift. */}
+          <NumPad
+            value={String(data.amount || '')}
+            onChange={(v) => setData({ ...data, amount: v })}
+            testIdPrefix="pay-npad" />
         </div>
       </KeyboardSafeModal.Body>
       <KeyboardSafeModal.Footer className="flex gap-3">
