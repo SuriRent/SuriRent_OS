@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, Check, Loader2, Banknote, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
+import NumPad from '../../../../components/NumPad';
 
 // =====================================================================
 // QuickPayModal — één-klik betaling registreren vanuit de Facturen-detail
@@ -162,15 +163,15 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
 
           {error && <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="quickpay-error">{error}</div>}
 
-          {/* Bedrag */}
-          <div className="mb-4">
+          {/* Bedrag — read-only display; input via custom numpad zodat het
+              iPhone toetsenbord NIET opent en de layout niet verschuift. */}
+          <div className="mb-3">
             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
-            <div className="mt-1 relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">{invoice.currency}</span>
-              <input type="number" step="0.01" value={amount} inputMode="decimal"
-                onChange={(e) => setAmount(e.target.value)}
-                data-testid="quickpay-amount"
-                className="w-full h-12 pl-16 pr-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-lg font-black" />
+            <div className="mt-1 h-14 px-4 rounded-xl border-2 border-[#FF5C00] bg-orange-50/40 flex items-center justify-between">
+              <span className="text-slate-400 font-bold text-sm">{invoice.currency}</span>
+              <span className="text-2xl font-black text-slate-900 tabular-nums" data-testid="quickpay-amount">
+                {amount || '0'}
+              </span>
             </div>
             <div className="flex items-center justify-between mt-1.5">
               <button type="button" onClick={() => setAmount(String(remaining))}
@@ -209,7 +210,7 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
           </div>
 
           {/* Methode */}
-          <div className="mb-4">
+          <div className="mb-3">
             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Methode</label>
             <div className="grid grid-cols-3 gap-1.5 mt-1.5">
               {METHODS.map((m) => {
@@ -226,6 +227,12 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
               })}
             </div>
           </div>
+
+          {/* Custom numpad — geen native toetsenbord = geen viewport-shift. */}
+          <NumPad
+            value={amount}
+            onChange={setAmount}
+            testIdPrefix="quickpay-npad" />
       </KeyboardSafeModal.Body>
 
       <KeyboardSafeModal.Footer className="flex gap-3">
