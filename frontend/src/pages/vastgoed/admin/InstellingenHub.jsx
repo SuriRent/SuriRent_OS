@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Crown, Briefcase, Palette, Database,
-  Mail, FileText, KeySquare, Settings as Cog,
+  Mail, FileText, KeySquare, Settings as Cog, Code2,
 } from 'lucide-react';
 import MijnAbonnement from './MijnAbonnement';
 import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
 import BackupRestore from './BackupRestore';
 import SettingsPage from './Settings';
+import ApiIntegration from './ApiIntegration';
 
 // Volgorde exact zoals door gebruiker gevraagd. Elke entry rendert een
 // bestaande, gepolijste pagina — geen herontwerp van de inhoud.
@@ -61,6 +62,13 @@ const SECTIONS = [
     desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.',
     icon: KeySquare,
     render: () => <SettingsPage initialSection="kiosk" hideSubNav />,
+  },
+  {
+    id: 'api',
+    label: 'API Integratie',
+    desc: 'Publieke endpoints voor externe websites en partnerintegraties.',
+    icon: Code2,
+    render: () => <ApiIntegration />,
   },
   {
     id: 'backup',

@@ -3645,6 +3645,64 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
     return out
 
 
+@api.get("/public/{slug}/landing")
+async def public_tenant_landing(slug: str):
+    """Publieke API — geef landingpagina data terug voor een specifieke
+    tenant. Zelfde shape als `/public/company-landing/by-slug/{slug}` maar
+    dan onder het overzichtelijker `/public/{slug}/landing` pad. Geen auth.
+
+    Endpoint: `GET /api/public/{slug}/landing`
+    Returnt `{found, company, content, apartments}`.
+    """
+    slug_norm = (slug or "").strip().lower()
+    if not slug_norm or len(slug_norm) > 80:
+        raise HTTPException(status_code=400, detail="Ongeldige slug")
+    company = await db.companies.find_one(
+        {"slug": slug_norm, "$or": [{"active": True}, {"active": {"$exists": False}}]},
+        {"_id": 0},
+    )
+    if not company:
+        return {"found": False}
+    landing_doc = await db.company_landings.find_one({"id": company["id"]}, {"_id": 0}) or {}
+    content = landing_doc.get("published") or {}
+    apartments = []
+    cursor = db.apartments.find(
+        {"company_id": company["id"], "status": {"$in": ["vacant", "available"]}},
+        {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
+         "currency": 1, "description": 1, "photo_url": 1, "status": 1},
+    ).sort("created_at", -1)
+    async for a in cursor:
+        apartments.append(a)
+    return {"found": True, "company": company, "content": content, "apartments": apartments}
+
+
+@api.get("/public/{slug}/login")
+async def public_tenant_login_info(slug: str):
+    """Publieke API — geef minimale login-instellingen terug (branding +
+    tenant metadata) zodat externe projecten hun eigen login-scherm kunnen
+    stylen en de gebruiker doorverwijzen naar de juiste bedrijfscontext.
+
+    Endpoint: `GET /api/public/{slug}/login`
+    Returnt `{company, login_url, portal_url, branding}` zonder gevoelige
+    data. `login_url` is de directe route om in te loggen op app.surirent.sr
+    voor dit specifieke bedrijf.
+    """
+    slug_norm = (slug or "").strip().lower()
+    if not slug_norm or len(slug_norm) > 80:
+        raise HTTPException(status_code=400, detail="Ongeldige slug")
+    company = await db.companies.find_one({"slug": slug_norm}, {"_id": 0})
+    if not company or company.get("active") is False:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    app_url = os.environ.get("APP_URL", "").rstrip("/") or "https://app.surirent.sr"
+    return {
+        "company": {"id": company["id"], "name": company.get("name"), "slug": company["slug"]},
+        "login_url": f"{app_url}/login?c={slug_norm}",
+        "portal_url": f"{app_url}/{slug_norm}",
+        "kiosk_url": f"{app_url}/{slug_norm}/kiosk",
+        "branding": _company_branding_response(company),
+    }
+
+
 @api.get("/public/{slug}/woningen")
 async def public_tenant_woningen(slug: str, request: Request):
     """Publieke API — geef alle beschikbare woningen (vacant/available) voor
