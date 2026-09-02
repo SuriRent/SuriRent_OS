@@ -3645,6 +3645,71 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
     return out
 
 
+@api.get("/public/{slug}/woningen")
+async def public_tenant_woningen(slug: str, request: Request):
+    """Publieke API — geef alle beschikbare woningen (vacant/available) voor
+    een specifieke tenant (bedrijf) op basis van de slug. Geen authenticatie
+    vereist. Handig voor externe websites, embedbare widgets of white-label
+    integraties.
+
+    Endpoint: `GET /api/public/{slug}/woningen`
+
+    Returnt `{company: {id, name, slug}, count, woningen: [...]}` waarbij
+    elke woning velden bevat: id, number, address, rent_amount, currency,
+    description, photo_url, location_name, bedrooms, bathrooms, size_m2,
+    features. Optionele query params:
+      - `?limit=N` (max 100, default 50)
+      - `?currency=SRD|USD|EUR` filter op valuta
+    """
+    slug_norm = (slug or "").strip().lower()
+    if not slug_norm or len(slug_norm) > 80:
+        raise HTTPException(status_code=400, detail="Ongeldige slug")
+
+    company = await db.companies.find_one({"slug": slug_norm}, {"_id": 0, "id": 1, "name": 1, "slug": 1, "active": 1})
+    if not company or company.get("active") is False:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+
+    # Query params: limit + currency filter
+    try:
+        limit = min(int(request.query_params.get("limit", "50")), 100)
+    except ValueError:
+        limit = 50
+    currency_filter = (request.query_params.get("currency") or "").upper()
+
+    q: dict = {
+        "company_id": company["id"],
+        "status": {"$in": ["vacant", "available"]},
+    }
+    if currency_filter in ("SRD", "USD", "EUR"):
+        q["currency"] = currency_filter
+
+    projection = {
+        "_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
+        "currency": 1, "description": 1, "photo_url": 1, "status": 1,
+        "location_id": 1, "bedrooms": 1, "bathrooms": 1, "size_m2": 1,
+        "features": 1, "created_at": 1,
+    }
+
+    woningen = []
+    # Lookup locations om location_name toe te voegen (nice-to-have voor externe consumers).
+    location_names: dict = {}
+    async for loc in db.locations.find({"company_id": company["id"]}, {"_id": 0, "id": 1, "name": 1}):
+        location_names[loc["id"]] = loc.get("name")
+
+    cursor = db.apartments.find(q, projection).sort("created_at", -1).limit(limit)
+    async for a in cursor:
+        loc_id = a.pop("location_id", None)
+        if loc_id and loc_id in location_names:
+            a["location_name"] = location_names[loc_id]
+        woningen.append(a)
+
+    return {
+        "company": {"id": company["id"], "name": company.get("name"), "slug": company["slug"]},
+        "count": len(woningen),
+        "woningen": woningen,
+    }
+
+
 @api.get("/public/companies/{slug}/branding")
 async def public_company_branding(slug: str):
     """Public — pre-login branding lookup by slug (no auth)."""

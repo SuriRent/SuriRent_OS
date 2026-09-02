@@ -704,26 +704,6 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
-              <div className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-[#FF5C00] bg-orange-50/40 flex items-center justify-between">
-                <span className="text-slate-400 font-bold text-sm">{data.currency}</span>
-                <span className="text-2xl font-black text-slate-900 tabular-nums" data-testid="pay-amount">
-                  {data.amount || '0'}
-                </span>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Valuta</label>
-              <select value={data.currency} onChange={(e) => setData({ ...data, currency: e.target.value })} data-testid="pay-currency"
-                className="w-full mt-1 h-14 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
-                <option value="SRD">SRD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
-            </div>
-          </div>
           {(data.category === 'huur' || data.category === 'vooruitbetaling') && (
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -746,6 +726,26 @@ function PaymentForm({ tenants, onCancel, onSaved, initialInvoice = null }) {
               </div>
             </div>
           )}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
+              <div className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-[#FF5C00] bg-orange-50/40 flex items-center justify-between">
+                <span className="text-slate-400 font-bold text-sm">{data.currency}</span>
+                <span className="text-2xl font-black text-slate-900 tabular-nums" data-testid="pay-amount">
+                  {data.amount || '0'}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Valuta</label>
+              <select value={data.currency} onChange={(e) => setData({ ...data, currency: e.target.value })} data-testid="pay-currency"
+                className="w-full mt-1 h-14 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
+                <option value="SRD">SRD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+          </div>
           {/* Custom NumPad — geen native toetsenbord = geen viewport shift. */}
           <NumPad
             value={String(data.amount || '')}
