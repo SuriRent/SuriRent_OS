@@ -17,7 +17,7 @@ export default function ApiIntegration() {
 
   useEffect(() => {
     let mounted = true;
-    api.get('/companies/me').then(({ data }) => {
+    api.get('/companies/me/branding').then(({ data }) => {
       if (mounted) setSlug(data?.slug || '');
     }).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
