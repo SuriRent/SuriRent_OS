@@ -110,9 +110,16 @@ function PendingPaymentCard({ p, onApprove }) {
         {initials(p.tenant_name)}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-extrabold text-slate-900 leading-tight truncate text-[15px]">
-          {p.tenant_name || '—'}
-        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-extrabold text-slate-900 leading-tight truncate text-[15px]">
+            {p.apartment_number || <span className="text-slate-400 italic">Geen appartement</span>}
+          </p>
+          {p.tenant_name && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[160px]">
+              {p.tenant_name}
+            </span>
+          )}
+        </div>
         <p className="text-slate-500 font-semibold truncate text-[11px] mt-0.5">
           Door <span className="text-slate-700 font-bold">{p.kiosk_employee_name || 'Kiosk'}</span> · {METHOD_LABELS[p.method] || p.method}
         </p>
@@ -297,11 +304,10 @@ function ApprovePaymentSheet({ payment, onCancel, onApproved }) {
 // =====================================================================
 function MobilePaymentCard({ p, onClick }) {
   const avatar = avatarColor(p.tenant_name);
-  const sub = (() => {
-    if (p.location_name && p.apartment_number) return `${p.location_name} · ${p.apartment_number}`;
-    if (p.apartment_number) return p.apartment_number;
-    return '—';
-  })();
+  // Op verzoek gebruiker (2026-02): appartement als hoofdtitel, huurder
+  // als groene badge. Sub-lijn toont locatie + methode-pill onderaan.
+  const aptTitle = p.apartment_number;
+  const location = p.location_name || '';
   const methodCls = METHOD_PILL_CLASSES[p.method] || 'bg-slate-100 text-slate-700';
   return (
     <button onClick={onClick} type="button"
@@ -320,14 +326,23 @@ function MobilePaymentCard({ p, onClick }) {
           {initials(p.tenant_name)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-extrabold text-slate-900 leading-tight truncate"
-            style={{ fontSize: 'clamp(15px, 4.2vw, 18px)' }}>
-            {p.tenant_name || '—'}
-          </p>
-          <p className="text-slate-500 font-semibold truncate mt-0.5"
-            style={{ fontSize: 'clamp(11px, 3vw, 13px)' }}>
-            {sub}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-extrabold text-slate-900 leading-tight truncate"
+              style={{ fontSize: 'clamp(15px, 4.2vw, 18px)' }}>
+              {aptTitle || <span className="text-slate-400 italic">Geen appartement</span>}
+            </p>
+            {p.tenant_name && (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[160px]">
+                {p.tenant_name}
+              </span>
+            )}
+          </div>
+          {location && (
+            <p className="text-slate-500 font-semibold truncate mt-0.5"
+              style={{ fontSize: 'clamp(11px, 3vw, 13px)' }}>
+              {location}
+            </p>
+          )}
           <div className="mt-1.5">
             <span className={`inline-block font-bold uppercase tracking-wider rounded-md ${methodCls}`}
               style={{
