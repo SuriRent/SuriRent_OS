@@ -299,18 +299,29 @@ async def dispatch_tool(name: str, args: dict, *, db, user: dict) -> dict:
             if not tenant:
                 return {"error": "Kan geen huurder vinden. Geef appartement-label of huurder-naam."}
             from datetime import timedelta
-            due = (datetime.now(timezone.utc) + timedelta(days=int(args.get("due_days", 14)))).date().isoformat()
+            due_dt = (datetime.now(timezone.utc) + timedelta(days=int(args.get("due_days", 14))))
+            due = due_dt.date().isoformat()
+            now_dt = now_utc()
+            # Zorg dat category-agnostisch altijd invoice_number + periode gezet
+            # wordt — voorkomt dat GET /api/invoices een 500 gooit op één slecht
+            # AI-gegenereerd document (RCA 2026-02).
+            category = (args.get("category") or "huur").lower()
+            inv_prefix = "BORG" if category in ("borg", "deposit") else "F"
+            inv_no = f"{inv_prefix}-{now_dt.strftime('%Y%m%d')}-{new_id()[:6].upper()}"
             inv = {
                 "id": new_id(), "company_id": cid,
+                "invoice_number": inv_no,
                 "tenant_id": tenant["id"], "tenant_name": tenant["name"],
                 "apartment_id": apt["id"] if apt else tenant.get("apartment_id"),
                 "apartment_label": apt["label"] if apt else "",
                 "amount": float(args["amount"]),
                 "balance": float(args["amount"]),
                 "currency": (args.get("currency") or "SRD").upper(),
-                "category": args.get("category") or "huur",
+                "category": category,
+                "period_month": int(args.get("period_month") or now_dt.month),
+                "period_year": int(args.get("period_year") or now_dt.year),
                 "due_date": due, "status": "open",
-                "created_at": iso(now_utc()), "created_by": user.get("email"),
+                "created_at": iso(now_dt), "created_by": user.get("email"),
                 "source": "ai_assistant",
             }
             await db.invoices.insert_one(inv)

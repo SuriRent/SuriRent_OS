@@ -10221,7 +10221,7 @@ class InvoicePlanRef(BaseModel):
 
 class InvoiceOut(BaseModel):
     id: str
-    invoice_number: str
+    invoice_number: Optional[str] = None
     tenant_id: str
     tenant_name: Optional[str] = None
     apartment_id: Optional[str] = None
@@ -10231,8 +10231,8 @@ class InvoiceOut(BaseModel):
     paid_amount: float = 0
     remaining_amount: float = 0
     currency: str
-    period_month: int
-    period_year: int
+    period_month: Optional[int] = None
+    period_year: Optional[int] = None
     status: str
     created_at: str
     paid_at: Optional[str] = None
@@ -10309,18 +10309,43 @@ async def list_invoices(user=Depends(get_current_user)):
     today_local = now_utc().date()
     out: list[dict] = []
     for d in docs:
-        enriched = await _enrich_invoice(d)
-        # Alleen bucket voor onbetaalde facturen — betaalde laten we leeg.
-        if (enriched.get("status") or "open") != "paid":
-            try:
-                enriched["bucket"] = _classify_invoice_bucket(
-                    int(enriched.get("period_month") or 0),
-                    int(enriched.get("period_year") or 0),
-                    today_local, grace_wd,
-                )
-            except Exception:  # noqa: BLE001
-                enriched["bucket"] = None
-        out.append(enriched)
+        try:
+            enriched = await _enrich_invoice(d)
+            # Defensief: als een corrupt/incompleet document per abuis in de
+            # collectie zit (bv. AI-assistent die borg-regels aanmaakte zonder
+            # invoice_number/period_*), vullen we defaults zodat pydantic
+            # niet failt en de hele lijst niet 500t.
+            if not enriched.get("invoice_number"):
+                enriched["invoice_number"] = f"AUTO-{str(enriched.get('id') or '')[:8]}"
+            if not enriched.get("period_month"):
+                try:
+                    created = enriched.get("created_at") or ""
+                    enriched["period_month"] = int(created[5:7]) if len(created) >= 7 else now_utc().month
+                except Exception:  # noqa: BLE001
+                    enriched["period_month"] = now_utc().month
+            if not enriched.get("period_year"):
+                try:
+                    created = enriched.get("created_at") or ""
+                    enriched["period_year"] = int(created[0:4]) if len(created) >= 4 else now_utc().year
+                except Exception:  # noqa: BLE001
+                    enriched["period_year"] = now_utc().year
+            # Alleen bucket voor onbetaalde facturen — betaalde laten we leeg.
+            if (enriched.get("status") or "open") != "paid":
+                try:
+                    enriched["bucket"] = _classify_invoice_bucket(
+                        int(enriched.get("period_month") or 0),
+                        int(enriched.get("period_year") or 0),
+                        today_local, grace_wd,
+                    )
+                except Exception:  # noqa: BLE001
+                    enriched["bucket"] = None
+            out.append(enriched)
+        except Exception as e:  # noqa: BLE001
+            # Laatste vangnet: als één document niet enrichable is, sla dat
+            # ene document over en log — nooit de hele lijst breken.
+            import logging as _logging
+            _logging.getLogger("uvicorn.error").warning("list_invoices: skipping bad doc id=%s err=%s", (d or {}).get("id"), e)
+            continue
     return out
 
 

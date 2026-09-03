@@ -40,7 +40,9 @@
     "vsprintf": "readonly",
     "sprintf": "readonly",
     "angular": "readonly",
-    "AsyncIterator": "readonly"
+    "AsyncIterator": "readonly",
+    "k": "readonly",
+    "v": "readonly"
   },
   "ignorePatterns": [
     "**/node_modules/**",
