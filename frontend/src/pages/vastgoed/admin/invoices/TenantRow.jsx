@@ -40,9 +40,11 @@ function buildReminderMessage(group, companyName) {
 // =====================================================================
 export function MobileTenantCard({ group, credits, onClick, onCreditClick, onReminder, tenants }) {
   const sev = group.severity;
-  const sub = group.location_name && group.apartment_number
-    ? `${group.location_name} · ${group.apartment_number}`
-    : group.apartment_number || 'Geen appartement';
+  // Op verzoek gebruiker (2026-02): appartement als hoofd-titel (net als
+  // op de Huurders-tab), huurdernaam als groene badge. Sub-lijn toont
+  // locatie of fallback zonder-appartement label.
+  const aptTitle = group.apartment_number;
+  const sub = group.location_name || (group.apartment_number ? '' : 'Geen appartement gekoppeld');
   const amtCls = sev === 'critical' ? 'text-red-600'
     : sev === 'late' ? 'text-orange-600'
     : 'text-slate-900';
@@ -65,14 +67,21 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-black text-slate-900 truncate">
-            {group.tenant_name}
+            {aptTitle || <span className="text-slate-400 italic">Geen appartement</span>}
           </p>
+          {group.tenant_name && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
+              {group.tenant_name}
+            </span>
+          )}
           <CreditBadge credits={credits} variant="compact" onClick={onCreditClick} testid={`mi-credit-${group.tenant_id}`} />
           <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
         </div>
-        <p className="text-xs text-slate-500 mt-0.5 truncate">
-          {sub}
-        </p>
+        {sub && (
+          <p className="text-xs text-slate-500 mt-0.5 truncate">
+            {sub}
+          </p>
+        )}
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
         <p className={`text-base font-black tracking-tight whitespace-nowrap ${amtCls}`}
@@ -146,17 +155,24 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="font-bold text-slate-900 text-sm sm:text-[15px] truncate">{group.tenant_name}</p>
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+              {/* Op verzoek gebruiker (2026-02): appartement als hoofd-titel
+                  identiek aan Huurders-tab; huurdernaam als groene badge. */}
+              <p className="font-bold text-slate-900 text-sm sm:text-[15px] truncate">
+                {group.apartment_number || <span className="text-slate-400 italic">Geen appartement</span>}
+              </p>
+              {group.tenant_name && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
+                  {group.tenant_name}
+                </span>
+              )}
               <CreditBadge credits={credits} onClick={onCreditClick} testid={`tenant-credit-${group.tenant_id}`} />
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate" data-testid={`tenant-apt-${group.tenant_id}`}>
-              {group.location_name && group.apartment_number
-                ? `${group.location_name} · ${group.apartment_number}`
-                : group.apartment_number
-                  ? group.apartment_number
-                  : 'Geen appartement'}
-            </p>
+            {group.location_name && (
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate" data-testid={`tenant-apt-${group.tenant_id}`}>
+                {group.location_name}
+              </p>
+            )}
             <div className="mt-1 md:hidden">
               <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
             </div>
