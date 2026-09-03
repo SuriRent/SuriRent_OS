@@ -1,0 +1,48 @@
+{
+  "summary": "Iteratie 57 — realtime live-sync (SSE) over alle admin modules getest. Backend: nieuwe pytest suite /app/backend/tests/test_iter57_live_sync_sse.py verifieert dat de _live_sync_broadcast middleware een {type:'change',path,method} event op /api/admin/events pusht voor companies branding/profile, locations (PUT), apartments (POST+PUT), tenants (POST+PUT), contracts (POST), invoices (POST), payments (POST) en settings smtp/invoicing (PUT), plus hygiene-tests (GET en 4xx-mutaties broadcasten NIET). 15 passed / 1 skipped (POST /api/locations kan niet: demo-plan cap 2 locaties). Frontend E2E: live-sync werkt op BusinessInfo (bi-name <4s), Branding (tagline), Huurders (SWR insert), Betalingen (SWR insert + delete) en cross-tab (2e sessie saved via UI → 1e tab updateerde binnen ~2s). Overzicht-regressie OK (kpi-apartments=5, hero-cash-balance, portfolio-card-mobile aanwezig). 12/13 sidebar-tabs renderen zonder crash. 2 defecten gevonden: (1) Instellingen → E-mail (SMTP) / Facturen automatisering sub-forms synchroniseren NIET live, (2) Notificaties-tab laat de renderer crashen (ook reproduceerbaar op HEAD zonder de useAutoRefresh-wijziging).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/locations", "issue": "Niet getest op broadcast: demo-account zit op plan-cap (max_locations=2) → 403 plan_limit_reached. Test skipt; PUT /api/locations/{id} broadcast is wel bevestigd."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "admin/Notifications.jsx (tab Notificaties)", "issue": "Renderer crasht (Playwright 'Target crashed' + page crash event) zodra de Notificaties-tab mount, zowel via sidebar-klik als via directe URL /admin/notifications. Reproduceerbaar 3/3. Ook gereproduceerd na git-revert van de useAutoRefresh-toevoeging → PRE-EXISTING, geen regressie van deze iteratie. Vermoedelijke oorzaak: pushManager/serviceWorker-toegang in headless Chromium (navigator.serviceWorker.ready + reg.pushManager.getSubscription()) of AudioContext-init; moet in een echte browser bevestigd worden. Live-sync op deze pagina kon hierdoor niet E2E getest worden.", "selector": "[data-testid=\"tab-notifications\"] / [data-testid=\"notifications-page\"]", "priority": "HIGH"},
+      {"component": "admin/BusinessInfo.jsx", "issue": "Geboortedatum-veld gebruikt de native browser date picker (mm/dd/yyyy) i.p.v. een shadcn/date-picker component — inconsistent met de rest van de UI en toont US-formaat aan NL/SR-gebruikers.", "selector": "[data-testid=\"bi-landlord-dob\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Live-sync Instellingen → E-mail (SMTP) / Facturen automatisering (Settings.jsx sub-forms)", "issue": "Externe PUT /api/settings/smtp (from_name → 'LiveSMTP_...') werd correct gepersisteerd (GET /api/settings bevestigt) en het SSE-event vuurt, maar het zichtbare veld bleef 8s+ op de oude waarde 'SuriRent'. RCA: useSection() in Settings.jsx doet `useState(initial)` en heeft GEEN useEffect die de lokale state resynct wanneer de `initial` prop verandert. useAutoRefresh(load) vernieuwt dus `settings` in SettingsPage, maar SmtpForm/InvoicingForm/TwilioForm/ShellyForm/DomainForm blijven de eerste snapshot tonen. Fix: sync via useEffect op `initial` (met dirty-guard zodat niet-opgeslagen invoer niet wordt overschreven) of remount met key={JSON.stringify(initial)}.", "affected_selectors": ["[data-testid=\"smtp-from-name\"]", "[data-testid=\"instellingen-content-smtp\"]", "[data-testid=\"instellingen-content-invoicing\"]"]},
+      {"flow": "Dashboard prefetch", "issue": "usePrefetchAdmin bevat '/setup-status' terwijl het endpoint /api/companies/me/setup-status is → 404 + onafgevangen pageerror ('Request failed with status code 404') op élke dashboard-load. Cosmetisch maar vervuilt de console en de prefetch-cache.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "Instellingen → Branding (demo-account)", "issues": ["Tagline van het demo-bedrijf staat nog op de testwaarde 'Live sync test' (residu van eerdere handmatige live-sync-test) en is zichtbaar in de live preview/login-pagina van de demo tenant."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter57_live_sync_sse.py",
+    "/app/test_reports/pytest/iter57_live_sync.xml"
+  ],
+  "action_items": [
+    "Settings.jsx: useSection() moet de lokale form-state resyncen wanneer de `initial` prop verandert (dirty-guard), anders werkt live-sync niet voor SMTP/Facturen automatisering/Twilio/Shelly/Domain.",
+    "Notificaties-tab crash onderzoeken (pre-existing, ook op HEAD): mount van Notifications.jsx crasht de renderer. Guard rond navigator.serviceWorker/pushManager + try/catch en verifieer in echte browser.",
+    "AdminDashboard.jsx usePrefetchAdmin: '/setup-status' → '/companies/me/setup-status' (verwijdert 404 + onafgevangen pageerror).",
+    "Demo-data opschonen: branding tagline 'Live sync test' terugzetten naar een nette waarde.",
+    "Optioneel: bi-landlord-dob native date input vervangen door de shadcn date picker."
+  ],
+  "critical_code_review_comments": [
+    "Settings.jsx useSection(): `useState(initial)` zonder sync-effect is een klassieke prop→state desync; alle live-sync/polling-refreshes worden hier stil weggegooid.",
+    "_live_sync_broadcast middleware: geen path/collectie-filter, elk non-GET request broadcast een event. Werkt, maar bulk-operaties (bijv. invoices/generate-month, backfill-avatars) veroorzaken een burst van globalMutate-revalidaties op alle tabs; overweeg debounce/coalescing in de frontend listener.",
+    "SSE-queues worden in-process bijgehouden (_sse_queues dict). Bij >1 uvicorn-worker/pod ontvangt alleen de worker die de mutatie verwerkt zijn eigen sessies → live-sync valt gedeeltelijk weg bij horizontaal scalen. Documenteer of gebruik een pub/sub (Mongo change stream / Redis).",
+    "AdminDashboard.jsx is >4200 regels — opsplitsen (tab-registry, SSE-hook, KPI-cards) conform de <700-regels richtlijn.",
+    "useAutoRefresh polling (45s) draait per gemounte pagina; met KeepAliveTab blijven meerdere tabs gemount → meerdere parallelle polls. Overweeg enabled: alleen actieve tab."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter57_live_sync_sse.py"],
+  "success_rate": {"backend": "100% (15/15 uitgevoerd, 1 skipped door plan-limiet)", "frontend": "80% (4/5 live-sync flows OK; Settings sub-forms falen; Notificaties-tab niet testbaar door renderer crash)"},
+  "seed_data_creation": "Tijdelijke TEST_LS_* huurder/appartement/contract/factuur/betaling via API aangemaakt en in fixture-teardown verwijderd (bevestigd: 0 leftovers). E2E-test maakte 'TEST_LiveSync Huurder' + betaling SRD 4321 aan en verwijderde die weer. Bedrijfsnaam/tagline/smtp from_name na elke test teruggezet naar originele waarde.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "demo@surirent.sr / demo1234 (demo admin), super@surirent.sr / super1234",
+  "context_for_next_testing_agent": "Backend SSE-regressie: `pytest /app/backend/tests/test_iter57_live_sync_sse.py -v -p no:randomly` (sync requests+thread, geen pytest-asyncio nodig). Frontend live-sync patroon dat werkt: log in, open tab, doe in dezelfde tab een fetch() PUT/POST met credentials:'include' + Bearer uit localStorage, en poll het invoerveld/lijst max 8s. LET OP: lijsten in Huurders worden via CSS uppercase gerenderd → vergelijk case-insensitive. Notificaties-tab NIET aanklikken: crasht de headless renderer (page crash) en beëindigt de sessie. Nog niet getest: MobileTabBar op 390px, Onderhoud/Werknemers/Borg/Kasgeld live-sync-updates (alleen render-smoke gedaan), tenant-portal → admin live-sync pad.",
+  "rca_of_the_issue": "1) Settings live-sync faalt door prop→state desync in useSection() (useState(initial) zonder resync-effect) — backend + SSE + useAutoRefresh werken correct, alleen de form-state wordt niet bijgewerkt. 2) Notificaties-crash is pre-existing (gereproduceerd na revert van de iteratie-diff) en treedt op bij mount van Notifications.jsx, waarschijnlijk door serviceWorker/pushManager-toegang in headless Chromium. 3) 404 pageerror komt van de prefetch-lijst met '/setup-status' i.p.v. '/companies/me/setup-status'."
+}

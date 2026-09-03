@@ -179,16 +179,31 @@ function CreatePlanSheet({ onClose, onCreated }) {
     api.get('/tenants').then((r) => setTenants((r.data || []).filter((t) => t.apartment_id))).catch(() => {});
   }, []);
 
-  // Wanneer huurder verandert → laad zijn openstaande facturen
+  // Wanneer huurder verandert → laad zijn openstaande facturen.
+  // NB: /api/invoices accepteert géén query params → we filteren client-side
+  // op tenant_id + status én remaining_amount > 0 (dus partieel-betaalde
+  // facturen tellen mee voor het RESTBEDRAG, niet het volledige bedrag).
   useEffect(() => {
     if (!tenantId) { setOpenInvoices([]); setSelectedInvIds(new Set()); return; }
-    api.get('/invoices', { params: { tenant_id: tenantId, status: 'open' } })
+    api.get('/invoices')
       .then((r) => {
-        const list = r.data || [];
-        setOpenInvoices(list);
-        // Pre-select alle openstaande facturen
-        setSelectedInvIds(new Set(list.map((x) => x.id)));
-        if (list[0]?.currency) setCurrency(list[0].currency);
+        const all = r.data || [];
+        const openOnly = all.filter((inv) => {
+          if (inv.tenant_id !== tenantId) return false;
+          const st = (inv.status || '').toLowerCase();
+          if (st === 'paid' || st === 'cancelled') return false;
+          // remaining_amount is verrijkt door _enrich_invoice; fallback op
+          // amount - paid_amount voor legacy responses.
+          const remaining = Number(
+            inv.remaining_amount != null
+              ? inv.remaining_amount
+              : Math.max(0, Number(inv.amount || 0) - Number(inv.paid_amount || 0)),
+          );
+          return remaining > 0.005;
+        });
+        setOpenInvoices(openOnly);
+        setSelectedInvIds(new Set(openOnly.map((x) => x.id)));
+        if (openOnly[0]?.currency) setCurrency(openOnly[0].currency);
       })
       .catch(() => setOpenInvoices([]));
   }, [tenantId]);
@@ -197,8 +212,17 @@ function CreatePlanSheet({ onClose, onCreated }) {
     openInvoices.filter((inv) => selectedInvIds.has(inv.id)),
     [openInvoices, selectedInvIds]);
 
+  // Sommeer op REMAINING (restbedrag) i.p.v. amount zodat een partieel
+  // betaalde factuur alleen zijn openstaande deel bijdraagt aan het plan.
   const totalFromInvoices = useMemo(() =>
-    selectedInvoices.reduce((s, inv) => s + Number(inv.amount || 0), 0),
+    selectedInvoices.reduce((s, inv) => {
+      const remaining = Number(
+        inv.remaining_amount != null
+          ? inv.remaining_amount
+          : Math.max(0, Number(inv.amount || 0) - Number(inv.paid_amount || 0)),
+      );
+      return s + remaining;
+    }, 0),
     [selectedInvoices]);
 
   const submit = async () => {
@@ -287,6 +311,12 @@ function CreatePlanSheet({ onClose, onCreated }) {
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {openInvoices.map((inv) => {
                     const sel = selectedInvIds.has(inv.id);
+                    const remaining = Number(
+                      inv.remaining_amount != null
+                        ? inv.remaining_amount
+                        : Math.max(0, Number(inv.amount || 0) - Number(inv.paid_amount || 0)),
+                    );
+                    const partial = Number(inv.paid_amount || 0) > 0;
                     return (
                       <button key={inv.id} type="button" data-testid={`plan-inv-${inv.id}`}
                         onClick={() => {
@@ -304,8 +334,13 @@ function CreatePlanSheet({ onClose, onCreated }) {
                           <span className="font-bold text-slate-800">
                             {inv.invoice_number || `${MONTHS_NL[(inv.period_month || 1) - 1]} ${inv.period_year || ''}`}
                           </span>
+                          {partial && (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded" title={`Al voldaan: ${fmtMoney(inv.paid_amount, inv.currency)}`}>
+                              partieel
+                            </span>
+                          )}
                         </div>
-                        <span className="font-extrabold text-slate-900">{fmtMoney(inv.amount, inv.currency)}</span>
+                        <span className="font-extrabold text-slate-900">{fmtMoney(remaining, inv.currency)}</span>
                       </button>
                     );
                   })}

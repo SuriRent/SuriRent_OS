@@ -1,5 +1,16 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
+## Latest Fix (2026-02-08) — Realtime Live-sync over ALLE admin modules
+Uitbreiding op de bestaande SSE (`_live_sync_broadcast` middleware + `/api/admin/events` stream). Vijf admin-facing pages die tot dusver direct `api.get()` gebruikten (zonder SWR of auto-refresh) syncten niet automatisch tussen apparaten. Opgelost door:
+
+1. **`BusinessInfo.jsx`**, **`Branding.jsx`**, **`Settings.jsx`**, **`MijnAbonnement.jsx`**, **`Notifications.jsx`**: `useAutoRefresh(load)` toegevoegd en `setLoading(true)` uit de `load`-functies verwijderd → silent refresh zonder spinner-flikkering.
+2. **`Settings.jsx > useSection()`**: prop→state desync gefixt met `useEffect`-sync op `initial` prop + `dirtyRef` guard zodat actieve invoer van een typende admin niet overschreven wordt door een SSE-refresh.
+3. **`AdminDashboard.jsx` prefetch-lijst**: `/setup-status` → `/companies/me/setup-status` (verwijdert 404 uncaught pageerror op elke dashboard-load).
+
+Backend testsuite `/app/backend/tests/test_live_sync_sse.py` + `/app/backend/tests/test_iter57_live_sync_sse.py` bewijzen dat de SSE-broadcast vuurt op alle major CRUD endpoints (branding, profile, tenants, apartments, contracts, invoices, payments, locations PUT, settings smtp/invoicing). E2E playwright verifieert dat BusinessInfo, Branding, SMTP-form, Huurders, Betalingen binnen 3-4s live updaten na externe mutatie zonder page reload.
+
+Bekende openstaande item: Notificaties-tab renderer crashed in headless chromium (pre-existing, ook op HEAD zonder deze wijziging — niet veroorzaakt door live-sync).
+
 ## Latest Fix (2026-02-08) — P0 Blank Overzicht Pagina op Productie
 Root cause: `_classify_invoice_bucket()` in `/app/backend/server.py` crashte met `calendar.IllegalMonthError` als een corrupte factuur (AI-gegenereerde borg-regels) `period_month=0` of `period_year=0` had. Dit caste `/api/admin/stats` → 500, waardoor de Overzicht-pagina permanent bleef laden.
 

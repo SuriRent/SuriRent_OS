@@ -3,6 +3,7 @@ import {
   Save, Loader2, Check, AlertCircle, Building2, Mail, Phone, MapPin, Landmark,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 export default function BusinessInfo() {
   const [b, setB] = useState({});
@@ -11,8 +12,12 @@ export default function BusinessInfo() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
+  // Live-sync: initial-load zet setLoading(true) niet meer — die is al
+  // true via useState. Bij een SSE-triggered refresh (andere admin op
+  // ander apparaat wijzigt bedrijfsgegevens) willen we juist GEEN
+  // spinner flash → daarom is setLoading(true) hier weg. Data wordt
+  // stil overschreven.
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const { data } = await api.get('/companies/me/branding');
       setB(data || {});
@@ -20,6 +25,7 @@ export default function BusinessInfo() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const upd = (k, v) => setB((prev) => ({ ...prev, [k]: v }));
 

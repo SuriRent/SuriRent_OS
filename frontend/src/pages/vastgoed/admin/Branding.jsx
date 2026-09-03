@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Palette, Save, Loader2, Upload, Check, AlertCircle, Eye, RotateCcw, Building2, Mail, Phone, MapPin, Landmark } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { resolveLogoUrl, applyBranding } from '../../../lib/branding';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 const PRESET_COLORS = [
   '#FF5C00', '#1e88e5', '#7c3aed', '#059669',
@@ -160,7 +161,6 @@ export default function Branding() {
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const { data } = await api.get('/companies/me/branding');
       setB(data);
@@ -168,6 +168,8 @@ export default function Branding() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Live-sync: refresh bij SSE-events (branding aangepast op ander apparaat).
+  useAutoRefresh(load);
 
   const upd = (k, v) => setB((prev) => ({ ...prev, [k]: v }));
 

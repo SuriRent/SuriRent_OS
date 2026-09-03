@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2, Check, KeySquare, Mail,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
@@ -75,12 +76,31 @@ function useSection(section, initial) {
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-  const onField = (k, v) => setData((p) => ({ ...p, [k]: v }));
+  // Live-sync: als de parent (SettingsPage) via useAutoRefresh een verse
+  // /settings-payload heeft opgehaald (bv. een andere admin heeft SMTP
+  // aangepast), krijgt deze form een NIEUWE `initial`-prop maar useState
+  // hield de oude snapshot. Dirty-guard: we overschrijven de lokale state
+  // alléén als de gebruiker géén ongesavede wijzigingen heeft. Anders zou
+  // een SSE-refresh de invoer van een actief typende admin wissen.
+  const initialRef = useRef(initial);
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    const prev = initialRef.current;
+    initialRef.current = initial;
+    if (dirtyRef.current) return;
+    if (JSON.stringify(prev) === JSON.stringify(initial)) return;
+    setData(initial);
+  }, [initial]);
+  const onField = (k, v) => {
+    dirtyRef.current = true;
+    setData((p) => ({ ...p, [k]: v }));
+  };
   const save = async () => {
     setErr(''); setMsg(''); setSaving(true);
     try {
       const { data: res } = await api.put(`/settings/${section}`, data);
       setData(res.data);
+      dirtyRef.current = false;
       setMsg('Instellingen opgeslagen.');
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
@@ -432,7 +452,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true); setErr('');
+    setErr('');
     try {
       const { data } = await api.get('/settings');
       setSettings(data);
@@ -440,6 +460,8 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Live-sync: settings van andere admin refreshen automatisch.
+  useAutoRefresh(load);
 
   // Content-blok — hergebruikt in beide modes (met/zonder sub-nav).
   const contentBlock = loading || !settings ? (

@@ -4098,7 +4098,7 @@ export default function AdminDashboard() {
       '/kasgeld/balance',
       '/maintenance', '/employees', '/salaries',
       '/payment-plans?status=active',
-      '/admin/stats', '/setup-status',
+      '/admin/stats', '/companies/me/setup-status',
     ] : [],
     [isAdmin]
   );

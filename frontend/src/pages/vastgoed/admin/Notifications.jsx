@@ -5,6 +5,7 @@ import { useBadge } from '../../../lib/pwa';
 import { playPendingApprovalDing } from '../../../lib/notify-sound';
 import { isTapSoundsEnabled, setTapSoundsEnabled, playClickTick } from '../../../lib/tap-sounds';
 import { playSuccessPing, playErrorBuzz, playSwoosh, playApproveConfirm } from '../../../lib/tap-sounds';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -65,6 +66,9 @@ export default function Notifications() {
     }).catch(() => {});
     refreshStatus();
   }, [refreshStatus]);
+  // Live-sync: apparaten van andere admin sessies (nieuw gekoppeld of
+  // verwijderd) refreshen automatisch zodra de SSE-broadcast binnenkomt.
+  useAutoRefresh(refreshStatus);
 
   // Doe de echte subscribe + opslaan naar backend. Wordt zowel gebruikt
   // voor "Activeer" als voor "Opnieuw registreren".

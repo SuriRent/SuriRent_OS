@@ -5,6 +5,7 @@ import {
   Upload, FileCheck2, ScanLine,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 const fmt = (n, c = 'SRD') => {
   const cur = (c || 'SRD').toUpperCase();
@@ -226,7 +227,6 @@ export default function MijnAbonnement() {
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const [m, p, b, inv, pay] = await Promise.all([
         api.get('/billing/me'),
@@ -240,6 +240,9 @@ export default function MijnAbonnement() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Live-sync: refresh abonnement + facturen zodra superadmin een
+  // wijziging maakt (plan-upgrade goedgekeurd, betaling verwerkt).
+  useAutoRefresh(load);
 
   // Detect return from gateway (?checkout=done) and surface a success-pending message
   useEffect(() => {
