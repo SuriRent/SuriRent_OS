@@ -1,5 +1,14 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
+## Latest Fix (2026-02-08) — P0 Blank Overzicht Pagina op Productie
+Root cause: `_classify_invoice_bucket()` in `/app/backend/server.py` crashte met `calendar.IllegalMonthError` als een corrupte factuur (AI-gegenereerde borg-regels) `period_month=0` of `period_year=0` had. Dit caste `/api/admin/stats` → 500, waardoor de Overzicht-pagina permanent bleef laden.
+
+Fixes toegepast:
+1. **`_classify_invoice_bucket`** (line ~10545): defensieve int-validatie + range-check (`1≤pm≤12`, `1900≤py≤3000`). Retourneert `"unknown"` bucket voor corrupte data i.p.v. te crashen. Try/except rond `_last_day_of_month + _add_workdays`.
+2. **`admin_stats` variable shadowing** (line ~9714): loop-variabele `outstanding = max(...)` overschreef de outer dict `outstanding = {}`. Hernoemd naar `remain`. `outstanding_by_currency` retourneert nu correct een dict per valuta i.p.v. een float.
+
+Getest lokaal met corrupte invoice `{period_month: 0, period_year: 0}` → `/api/admin/stats` geeft HTTP 200 en bucket wordt correct geskipt in overdue/current tellingen.
+
 ## Original Problem Statement
 Extract Vastgoed (Real Estate) + KIOSK functionaliteit uit legacy ERP en herbouw als multi-company SaaS platform met dual-domain architectuur (marketing landing + Kiosk/Admin/Tenant portal op subdomain), multi-tenant data-isolatie, SaaS superadmin billing, pixel-perfect kiosk-UI, PWA optimalisaties en hardware-integraties (Shelly smart breakers).
 

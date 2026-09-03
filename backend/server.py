@@ -9712,16 +9712,19 @@ async def admin_stats(user=Depends(get_current_user)):
         py = int(inv.get("period_year") or 0)
         pm = int(inv.get("period_month") or 0)
         bucket = _classify_invoice_bucket(pm, py, today_local, grace_wd)
-        outstanding = max(
+        # LET OP: NIET hergebruik variabele `outstanding` (dict boven) — hier
+        # gebruik lokale naam `remain` zodat de dict die naar de frontend gaat
+        # niet overschreven wordt door een float.
+        remain = max(
             float(inv.get("amount_due") or inv.get("amount") or 0) - float(inv.get("paid_amount") or 0),
             0,
         )
         if bucket == "overdue" and inv.get("tenant_id"):
             overdue_tenants_set.add(inv["tenant_id"])
-        if bucket == "current" and outstanding > 0:
+        if bucket == "current" and remain > 0:
             open_current_month_count += 1
             cur = inv.get("currency") or "SRD"
-            open_current_month_amount[cur] = open_current_month_amount.get(cur, 0) + outstanding
+            open_current_month_amount[cur] = open_current_month_amount.get(cur, 0) + remain
 
     # Bank/Kas balance per valuta — combineert handmatige kasmutaties met
     # alle approved payments (Betalingen / Facturen / Kiosk). Zelfde bron als
@@ -10545,15 +10548,29 @@ def _classify_invoice_bucket(period_month: int, period_year: int, today, grace_w
        - "current"  : periode == huidige kalendermaand, of vorige maand maar
                       nog binnen de grace-window (huurder mag nog betalen)
        - "future"   : periode is later dan de huidige kalendermaand
+       - "unknown"  : corrupt/incompleet doc (pm=0/py=0) — beller mag skippen.
     """
+    # Defensief: corrupte facturen (bv. AI-assistent borg-regels die vroeger
+    # zonder period_* werden aangemaakt) mogen NOOIT een 500 veroorzaken op
+    # dashboard-endpoints. Retourneer 'unknown' i.p.v. calendar.IllegalMonthError.
+    try:
+        pm = int(period_month or 0)
+        py = int(period_year or 0)
+    except (TypeError, ValueError):
+        return "unknown"
+    if pm < 1 or pm > 12 or py < 1900 or py > 3000:
+        return "unknown"
     cur_y, cur_m = today.year, today.month
-    if period_year > cur_y or (period_year == cur_y and period_month > cur_m):
+    if py > cur_y or (py == cur_y and pm > cur_m):
         return "future"
-    if period_year == cur_y and period_month == cur_m:
+    if py == cur_y and pm == cur_m:
         return "current"
     # Periode ligt VOOR de huidige maand → check grace
-    period_end = _last_day_of_month(period_year, period_month)
-    deadline = _add_workdays(period_end, max(0, int(grace_workdays or 0)))
+    try:
+        period_end = _last_day_of_month(py, pm)
+        deadline = _add_workdays(period_end, max(0, int(grace_workdays or 0)))
+    except Exception:  # noqa: BLE001
+        return "unknown"
     if today > deadline:
         return "overdue"
     return "current"
