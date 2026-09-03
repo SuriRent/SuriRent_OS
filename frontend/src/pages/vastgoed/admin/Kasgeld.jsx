@@ -155,14 +155,16 @@ function NewCashSheet({ onClose, onSaved }) {
       className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
       data-testid="cash-new-sheet" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}>
-        <div className="p-5 sm:p-6">
-          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4 sm:hidden" />
+        className="w-full sm:max-w-md bg-white sm:rounded-3xl shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-y-auto flex flex-col"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 0px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)',
+        }}>
+        <div className="p-5 sm:p-6 flex-1">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-black text-slate-900">Nieuwe mutatie</h2>
+            <h2 className="text-xl sm:text-lg font-black text-slate-900">Nieuwe mutatie</h2>
             <button onClick={onClose} data-testid="cash-sheet-close"
-              className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+              className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition"><X className="w-5 h-5" /></button>
           </div>
 
           {error && (
@@ -337,25 +339,46 @@ export default function Kasgeld() {
         </button>
       </div>
 
-      {/* Saldo cards — 3 kolommen op desktop, horizontaal scrollend op mobile */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+      {/* Saldo — mobiel: platte tekst; desktop: 3 saldo-cards.
+          Op verzoek gebruiker (2026-02): op de telefoon geen visueel
+          drukke card-grid maar één rustige tekstregel per valuta. */}
+      <div className="md:hidden mb-4" data-testid="cash-balance-mobile">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 divide-y divide-slate-100">
+          {['SRD', 'USD', 'EUR'].map((cur) => {
+            const bal = balances[cur] || 0;
+            const isNeg = bal < 0;
+            return (
+              <div key={cur} data-testid={`balance-${cur}`}
+                className="flex items-baseline justify-between py-2 first:pt-0 last:pb-0">
+                <span className="text-sm font-black uppercase tracking-widest text-slate-500">{cur}</span>
+                <span className={`text-lg font-black tracking-tight ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
+                  {fmtMoney(bal, cur)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Saldo cards — alleen desktop */}
+      <div className="hidden md:grid grid-cols-3 gap-4 mb-6">
         {['SRD', 'USD', 'EUR'].map((cur) => {
           const bal = balances[cur] || 0;
           const cnt = items.filter((i) => (i.currency || 'SRD') === cur).length;
           const isNeg = bal < 0;
           return (
-            <div key={cur} data-testid={`balance-${cur}`}
-              className={`rounded-2xl p-3 sm:p-5 border shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] ${
+            <div key={cur} data-testid={`balance-desktop-${cur}`}
+              className={`rounded-2xl p-5 border shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] ${
                 isNeg ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'
               }`}>
-              <div className="flex items-center justify-between gap-1 mb-1 sm:mb-2">
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <Wallet className={`w-4 h-4 sm:w-5 sm:h-5 ${isNeg ? 'text-red-500' : 'text-[#FF5C00]'}`} />
-                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">{cur}</p>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Wallet className={`w-5 h-5 ${isNeg ? 'text-red-500' : 'text-[#FF5C00]'}`} />
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{cur}</p>
                 </div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400">{cnt}</span>
+                <span className="text-[10px] font-bold text-slate-400">{cnt}</span>
               </div>
-              <p className={`text-base sm:text-3xl font-black tracking-tight leading-tight ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
+              <p className={`text-3xl font-black tracking-tight leading-tight ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
                 {fmtMoney(bal, cur)}
               </p>
             </div>
@@ -363,8 +386,11 @@ export default function Kasgeld() {
         })}
       </div>
 
-      {/* Inline invoer — vervangt de oude modal, altijd zichtbaar */}
-      <InlineCashForm onSaved={() => load()} />
+      {/* Inline invoer — desktop only (mobile heeft de "Nieuwe mutatie"
+          knop bovenaan die de full-screen NewCashSheet opent). */}
+      <div className="hidden md:block">
+        <InlineCashForm onSaved={() => load()} />
+      </div>
 
       {/* Filter per bron — Alles / Alleen handmatig / Alleen betalingen */}
       <div className="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1" data-testid="cash-source-filter">
