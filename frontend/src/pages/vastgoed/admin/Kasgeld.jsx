@@ -339,24 +339,25 @@ export default function Kasgeld() {
         </button>
       </div>
 
-      {/* Saldo — mobiel: platte tekst; desktop: 3 saldo-cards.
-          Op verzoek gebruiker (2026-02): op de telefoon geen visueel
-          drukke card-grid maar één rustige tekstregel per valuta. */}
+      {/* Saldo — mobiel: één card met 3 kolommen (SRD · USD · EUR naast
+          elkaar); desktop: klassieke 3 saldo-cards. */}
       <div className="md:hidden mb-4" data-testid="cash-balance-mobile">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 divide-y divide-slate-100">
-          {['SRD', 'USD', 'EUR'].map((cur) => {
-            const bal = balances[cur] || 0;
-            const isNeg = bal < 0;
-            return (
-              <div key={cur} data-testid={`balance-${cur}`}
-                className="flex items-baseline justify-between py-2 first:pt-0 last:pb-0">
-                <span className="text-sm font-black uppercase tracking-widest text-slate-500">{cur}</span>
-                <span className={`text-lg font-black tracking-tight ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
-                  {fmtMoney(bal, cur)}
-                </span>
-              </div>
-            );
-          })}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4">
+          <div className="grid grid-cols-3 divide-x divide-slate-100">
+            {['SRD', 'USD', 'EUR'].map((cur) => {
+              const bal = balances[cur] || 0;
+              const isNeg = bal < 0;
+              return (
+                <div key={cur} data-testid={`balance-${cur}`}
+                  className="flex flex-col items-center justify-center px-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{cur}</span>
+                  <span className={`text-[15px] font-black tracking-tight leading-none text-center whitespace-nowrap ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
+                    {fmtMoney(bal, cur)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
