@@ -883,8 +883,22 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
         targetMonth = futureInvoices[0].period_month;
         targetYear = futureInvoices[0].period_year;
         targetInvoiceId = futureInvoices[0].id;
+      } else if (balance.next_period && balance.next_period.month && balance.next_period.year) {
+        // BUG FIX (2026-02): Backend `next_period` wijst naar de eerst-
+        // volgende ONbetaalde maand vanaf contractstart. Voor huurders die
+        // in "arrears"-model werken (bv. "in september betalen we augustus")
+        // is dat exact de juiste doel-maand voor een vooruitbetaling.
+        //
+        // Oude fallback deed `now.getMonth() + 2` (= 2 maanden vooruit
+        // t.o.v. de kalender-index 0-based → soms 3 vooruit), waardoor
+        // vooruitbetaling in september op oktober terechtkwam terwijl
+        // september nog helemaal niet gefactureerd was.
+        targetMonth = balance.next_period.month;
+        targetYear = balance.next_period.year;
       } else {
-        // Val terug op eerstvolgende kalendermaand.
+        // Absolute laatste fallback: nieuwe huurder zonder enige factuur/
+        // betaling én zonder next_period → gebruik eerstvolgende
+        // kalendermaand als beste gok.
         const now = new Date();
         let m = now.getMonth() + 2; // +1 voor 1-indexed, +1 voor next
         let y = now.getFullYear();
