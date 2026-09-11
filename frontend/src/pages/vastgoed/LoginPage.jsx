@@ -137,7 +137,7 @@ export default function LoginPage() {
   // 1px doorlek aan de notch dezelfde kleur tonen.
   // NB: theme-color wordt NIET meer hier overschreven — dat gaf
   // flikkering op Android tussen /login → /admin. Centrale waarde
-  // (#C24A00 donker-oranje) staat in index.html.
+  // (#1E293B donker-oranje) staat in index.html.
   useEffect(() => {
     const primary = (branding?.primary_color || '#FF5C00');
     document.body.classList.add('login-mode');
