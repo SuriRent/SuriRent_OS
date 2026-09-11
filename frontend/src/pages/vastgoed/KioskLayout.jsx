@@ -719,6 +719,12 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   // een bedrag kan invoeren zonder eerst op "Ander bedrag invoeren" te klikken.
   const [showMobileKeypad, setShowMobileKeypad] = useState(true);
   const [planInstallments, setPlanInstallments] = useState([]);
+  // Set van invoice-ids die door een actieve regeling gedekt worden. Deze
+  // facturen filteren we uit `openInvoices`/`currentInvoices` zodat "Alles
+  // betalen" ze niet dubbel telt met de plan-termijnen (bug 2026-02:
+  // augustus-factuur SRD 8500 + 2× termijn SRD 4250 = SRD 17.000 terwijl
+  // het werkelijk openstaand SRD 8500 is).
+  const [planLinkedInvIds, setPlanLinkedInvIds] = useState(new Set());
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planSuccess, setPlanSuccess] = useState(null);  // {id, num_installments, total_amount}
 
@@ -726,7 +732,12 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
     api.get(`/kiosk/tenants/${tenant.id}/payment-plans`)
       .then((r) => {
         const out = [];
+        const linked = new Set();
         for (const p of r.data || []) {
+          // Alleen ACTIEVE regelingen — voltooide/geannuleerde regelingen
+          // koppelen we niet meer aan open facturen.
+          if (p.status !== 'active') continue;
+          for (const invId of (p.invoice_ids || [])) linked.add(invId);
           for (const inst of p.installments || []) {
             if (inst.status !== 'pending') continue;
             out.push({
@@ -737,16 +748,23 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
         }
         out.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
         setPlanInstallments(out);
+        setPlanLinkedInvIds(linked);
       })
-      .catch(() => setPlanInstallments([]));
+      .catch(() => { setPlanInstallments([]); setPlanLinkedInvIds(new Set()); });
   }, [tenant.id]);
 
   const planItemKey = (it) => `plan:${it.planId}:${it.seq}`;
   const invItemKey = (inv) => `inv:${inv.id}`;
   const synItemKey = () => 'syn:current';
-  const hasOpenInvoices = openInvoices.length >= 1;
-  const hasCurrentInvoices = currentInvoices.length >= 1 || !!syntheticCurrent;
-  const hasFutureInvoices = futureInvoices.length >= 1;
+  // Filter facturen die al door een actieve betalingsregeling worden
+  // gedekt uit alle bucket-listen. De plan-termijnen dekken die facturen,
+  // dus in "Alles betalen" tellen we ze niet dubbel mee.
+  const openInvoicesFiltered = openInvoices.filter((inv) => !planLinkedInvIds.has(inv.id));
+  const currentInvoicesFiltered = currentInvoices.filter((inv) => !planLinkedInvIds.has(inv.id));
+  const futureInvoicesFiltered = futureInvoices.filter((inv) => !planLinkedInvIds.has(inv.id));
+  const hasOpenInvoices = openInvoicesFiltered.length >= 1;
+  const hasCurrentInvoices = currentInvoicesFiltered.length >= 1 || !!syntheticCurrent;
+  const hasFutureInvoices = futureInvoicesFiltered.length >= 1;
 
   const toggle = (id) => {
     setSelected((cur) => {
@@ -763,8 +781,8 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   // Vooruit gefactureerd is OPT-IN (niet standaard mee-geselecteerd, want het is toekomst).
   const allSelectableKeys = [
     ...enabled.map((t) => t.id),
-    ...(hasOpenInvoices ? openInvoices.map(invItemKey) : []),
-    ...(currentInvoices.length > 0 ? currentInvoices.map(invItemKey) : (syntheticCurrent ? [synItemKey()] : [])),
+    ...(hasOpenInvoices ? openInvoicesFiltered.map(invItemKey) : []),
+    ...(currentInvoicesFiltered.length > 0 ? currentInvoicesFiltered.map(invItemKey) : (syntheticCurrent ? [synItemKey()] : [])),
     ...planInstallments.map(planItemKey),
   ];
   const allSelected = allSelectableKeys.length > 0
@@ -775,8 +793,9 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
     setCustom('');
   };
 
-  // Lookup: gebruik openInvoices + currentInvoices + futureInvoices (alle factuur-rijen)
-  const allInvoicesLookup = [...openInvoices, ...currentInvoices, ...futureInvoices];
+  // Lookup: gebruik gefilterde lijsten zodat plan-linked facturen ook uit
+  // de individuele klik-selectie worden geweerd.
+  const allInvoicesLookup = [...openInvoicesFiltered, ...currentInvoicesFiltered, ...futureInvoicesFiltered];
   const selectedPlanItems = [...selected].filter((k) => k.startsWith('plan:'))
     .map((k) => planInstallments.find((x) => planItemKey(x) === k))
     .filter(Boolean);
@@ -1035,8 +1054,8 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
               </div>
               <span className="text-sm sm:text-base font-semibold text-orange-600 whitespace-nowrap">
                 {fmt(enabled.reduce((s, t) => s + (amounts[t.id] || 0), 0)
-                  + openInvoices.reduce((s, x) => s + Number(x.outstanding || 0), 0)
-                  + currentInvoices.reduce((s, x) => s + Number(x.outstanding || 0), 0)
+                  + openInvoicesFiltered.reduce((s, x) => s + Number(x.outstanding || 0), 0)
+                  + currentInvoicesFiltered.reduce((s, x) => s + Number(x.outstanding || 0), 0)
                   + (syntheticCurrent ? Number(syntheticCurrent.outstanding || 0) : 0)
                   + planInstallments.reduce((s, p) => s + p.amount, 0))}
               </span>
@@ -1050,11 +1069,11 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
                 <div className="flex items-center gap-2 mt-1 mb-0.5 px-1">
                   <div className="h-px flex-1 bg-red-200" />
                   <span className="text-[10px] font-black uppercase tracking-widest text-red-600">
-                    Achterstallige huur · {openInvoices.length} {openInvoices.length === 1 ? 'maand' : 'maanden'}
+                    Achterstallige huur · {openInvoicesFiltered.length} {openInvoicesFiltered.length === 1 ? 'maand' : 'maanden'}
                   </span>
                   <div className="h-px flex-1 bg-red-200" />
                 </div>
-                {openInvoices.map((inv) => {
+                {openInvoicesFiltered.map((inv) => {
                   const key = invItemKey(inv);
                   const sel = selected.has(key);
                   return (
@@ -1106,7 +1125,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
                   </span>
                   <div className="h-px flex-1 bg-amber-200" />
                 </div>
-                {currentInvoices.map((inv) => {
+                {currentInvoicesFiltered.map((inv) => {
                   const key = invItemKey(inv);
                   const sel = selected.has(key);
                   return (
@@ -1208,7 +1227,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
                   </span>
                   <div className="h-px flex-1 bg-blue-200" />
                 </div>
-                {futureInvoices.map((inv) => {
+                {futureInvoicesFiltered.map((inv) => {
                   const key = invItemKey(inv);
                   const sel = selected.has(key);
                   return (
