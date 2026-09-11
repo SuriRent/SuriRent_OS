@@ -88,30 +88,9 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
           data-testid={`mi-amount-${group.tenant_id}`}>
           {group.currency} {fmtAmountWhole(group.totalDue || group.totalOpen)}
         </p>
-        {hasOpen && onReminder && (
-          <div className="flex items-center gap-1">
-            <button onClick={stop(() => onReminder(group, 'email'))}
-              data-testid={`mi-email-${group.tenant_id}`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00]" title="E-mail herinnering">
-              <Mail className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={stop(() => onReminder(group, 'whatsapp'))}
-              data-testid={`mi-wa-twilio-${group.tenant_id}`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Twilio WhatsApp">
-              <MessageCircle className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={stop(() => {
-              const t = tenants?.find((x) => x.id === group.tenant_id);
-              const phone = (t?.phone || '').replace(/\D/g, '');
-              if (!phone) { alert(`${group.tenant_name} heeft geen telefoonnummer.`); return; }
-              openWhatsApp(phone, buildReminderMessage(group, ''));
-            })}
-              data-testid={`mi-wa-direct-${group.tenant_id}`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white" title="WhatsApp direct">
-              <MessageCircle className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+        {/* Actie-knoppen (E-mail / Twilio WhatsApp / Direct WhatsApp)
+            verwijderd op verzoek gebruiker (2026-02): de reminder-knoppen
+            staan al op de facturen-detail pagina, dubbel is niet nodig. */}
         {!hasOpen && (
           <p className="text-[10px] text-slate-400 font-bold whitespace-nowrap">
             Alles betaald
@@ -324,39 +303,8 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="grid grid-cols-3 gap-2 mt-4">
-              <button onClick={(e) => { e.stopPropagation(); onReminder(group, 'whatsapp'); }}
-                data-testid={`reminder-whatsapp-${group.tenant_id}`}
-                className="inline-flex items-center justify-center gap-1.5 px-2 py-3 bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl text-xs sm:text-sm">
-                <MessageCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Twilio WA</span>
-                <span className="sm:hidden">Twilio</span>
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); onReminder(group, 'email'); }}
-                data-testid={`reminder-email-${group.tenant_id}`}
-                className="inline-flex items-center justify-center gap-1.5 px-2 py-3 bg-white border-2 border-orange-300 hover:bg-orange-50 text-[#FF5C00] font-bold rounded-xl text-xs sm:text-sm">
-                <Mail className="w-4 h-4" />
-                <span>E-mail</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const t = tenants?.find((x) => x.id === group.tenant_id);
-                  const phone = (t?.phone || '').replace(/\D/g, '');
-                  if (!phone) {
-                    alert(`${group.tenant_name} heeft geen telefoonnummer. Voeg toe via Huurders.`);
-                    return;
-                  }
-                  openWhatsApp(phone, buildReminderMessage(group, companyName));
-                }}
-                data-testid={`reminder-wa-manual-${group.tenant_id}`}
-                className="inline-flex items-center justify-center gap-1.5 px-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs sm:text-sm shadow-[0_6px_16px_-4px_rgba(16,185,129,0.5)]">
-                <MessageCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">WhatsApp</span>
-                <span className="sm:hidden">WA</span>
-              </button>
-            </div>
+            {/* Reminder action buttons verwijderd op verzoek gebruiker
+                (2026-02): staan al op de facturen-detail pagina. */}
 
             <div className="mt-3 flex flex-wrap gap-1.5">
               {group.open.map((inv) => (
@@ -459,24 +407,8 @@ export function MobileTenantExpand({ g, tenants, onReminder }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          <button onClick={(e) => { e.stopPropagation(); onReminder(g, 'email'); }}
-            data-testid={`mi-email-${g.tenant_id}`}
-            className="h-10 rounded-xl bg-white border border-orange-200 text-[#FF6A1A] font-bold text-[12px] inline-flex items-center justify-center gap-1.5">
-            <Mail className="w-3.5 h-3.5" /> E-mail
-          </button>
-          <button onClick={(e) => {
-            e.stopPropagation();
-            const t = tenants?.find((x) => x.id === g.tenant_id);
-            const phone = (t?.phone || '').replace(/\D/g, '');
-            if (!phone) { alert(`${g.tenant_name} heeft geen telefoonnummer.`); return; }
-            openWhatsApp(phone, buildReminderMessage(g, companyName));
-          }}
-            data-testid={`mi-wa-${g.tenant_id}`}
-            className="h-10 rounded-xl bg-emerald-500 text-white font-bold text-[12px] inline-flex items-center justify-center gap-1.5">
-            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-          </button>
-        </div>
+        {/* Reminder-knoppen verwijderd op verzoek gebruiker (2026-02):
+            staan al op de facturen-detail pagina. */}
 
         {/* Betalingsgeschiedenis onderaan de expand — ook bij achterstand. */}
         {paidInvoices.length > 0 && (

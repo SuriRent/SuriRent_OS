@@ -111,27 +111,10 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
         </div>
       </div>
 
-      {/* ================= SUB-CARD: OVERZICHT ================= */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Overzicht</h2>
-        </div>
-        <div className="p-4 space-y-1.5 text-sm">
-          <DetailRow label="Huurder" value={g.tenant_name || '—'} />
-          {g.apartment_number && (
-            <DetailRow label="Appartement" value={`${g.location_name ? `${g.location_name} · ` : ''}${g.apartment_number}`} />
-          )}
-          <DetailRow label="Achterstand" value={`${overdue.length} factu${overdue.length === 1 ? 'ur' : 'ren'}`} />
-          <DetailRow label="Lopende maand" value={`${current.length} factu${current.length === 1 ? 'ur' : 'ren'}`} />
-          <DetailRow label="Toekomstig" value={`${future.length} factu${future.length === 1 ? 'ur' : 'ren'}`} />
-          <DetailRow label="Betaald in totaal" value={`${paid.length} factu${paid.length === 1 ? 'ur' : 'ren'}`} />
-          {availableCredit > 0 && (
-            <DetailRow label="Tegoed beschikbaar" value={
-              <span className="text-emerald-600 font-black">{fmtMoney(availableCredit, currency)}</span>
-            } />
-          )}
-        </div>
-      </div>
+      {/* SUB-CARD "Overzicht" verwijderd op verzoek gebruiker (2026-02):
+          de KPI's (achterstand/lopend/toekomstig) zijn al zichtbaar via
+          de badges in de hoofdcard, en de facturenlijst hieronder toont
+          de details per regel. */}
 
       {/* ================= SUB-CARD: TEGOED VERREKENEN (indien) ================= */}
       {canApplyCredit && (
