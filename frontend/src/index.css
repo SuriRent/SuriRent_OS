@@ -83,25 +83,32 @@ body.kiosk-mode { background-color: #FF5C00; }
    Als de app-header wit is (zoals /admin) worden de witte klok/
    batterij/wifi-icons dan onzichtbaar op de witte content.
 
-   Oplossing: een vaste donkere strip PRECIES ter grootte van de
-   status-bar-inset (env(safe-area-inset-top)). Ze zit op z-index
-   hoger dan alle content — Android/iOS renderen hun icons EROP
-   in wit → altijd leesbaar.
+   Oplossing: een vaste donkere strip. Op iPhone met notch gebruikt
+   `env(safe-area-inset-top)` de systeem-inset (~44-54px). Op
+   Android is die vaak 0 → we forceren een minimum van 28px zodat
+   de klok/batterij altijd op een donkere achtergrond rendren, en
+   ook op landscape/kleiner scherm zichtbaar blijft.
 
-   Alleen op mobiel (< md) en alleen wanneer de app in standalone/
-   fullscreen display-mode draait (dus geen ingebouwde browser
-   URL-bar toont). We tonen 'm NIET in de normale mobiele browser
-   want daar heeft Chrome zelf al zijn eigen URL-bar boven.
+   Zit op maximale z-index zodat het NIET onder modals of headers
+   valt. Alleen actief in standalone/fullscreen display-mode zodat
+   in de gewone browser (met eigen URL-bar) geen dubbele band
+   verschijnt.
    ============================================================ */
 @media (display-mode: standalone), (display-mode: fullscreen) {
   body::before {
     content: '';
     position: fixed;
     top: 0; left: 0; right: 0;
-    height: env(safe-area-inset-top, 0px);
+    height: max(env(safe-area-inset-top, 0px), 28px);
     background: #1E293B;
-    z-index: 2147483647; /* boven alle app-content, ook modals */
+    z-index: 2147483647;
     pointer-events: none;
+  }
+  /* Push app-content omlaag zodat het niet onder de donkere strip
+     verdwijnt. Same max() zodat header etc. netjes onder de strip
+     beginnen. */
+  body {
+    padding-top: max(env(safe-area-inset-top, 0px), 28px);
   }
 }
 
