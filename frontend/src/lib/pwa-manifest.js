@@ -94,9 +94,14 @@ export function usePwaManifest() {
     }
     link.setAttribute('href', buildManifestUrl(role, slug));
 
-    // 2) theme-color meta — Android system UI tint
-    setMetaContent('meta[name="theme-color"]:not([media])', cfg.theme);
-    setMetaContent('meta[name="theme-color"]', cfg.theme); // fallback selector
+    // 2) theme-color meta — Android system UI tint.
+    //    OP VERZOEK GEBRUIKER (2026-02): geen per-route theme-color meer
+    //    zodat de Android-statusbalk niet meer flikkert. Alle routes gebruiken
+    //    dezelfde donker-oranje band (#C24A00 uit index.html). Deze regel
+    //    overschrijft dus NIET meer — pwa-manifest.js beheert nog wel de
+    //    install-time manifest (start_url/icon/naam) per rol.
+    // setMetaContent('meta[name="theme-color"]:not([media])', cfg.theme);
+    // setMetaContent('meta[name="theme-color"]', cfg.theme);
 
     // 3) iOS Safari title — "Toevoegen aan beginscherm" gebruikt deze
     setMetaContent('meta[name="apple-mobile-web-app-title"]', cfg.shortName);

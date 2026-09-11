@@ -52,9 +52,9 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
   }, []);
 
   // Body scroll-lock — voorkomt scrollen van de underlying page.
-  // Extra: html+body kleuren tijdelijk wit + meta theme-color wit, zodat de
-  // safe-area / home-indicator gebied op iPhone PWA nooit een andere kleur
-  // laat zien onderaan de modal.
+  // NB: theme-color wordt NIET meer per-modal overschreven — dat gaf
+  // flikker op Android. De centrale waarde (#C24A00) uit index.html
+  // blijft dus consistent.
   useEffect(() => {
     const body = document.body;
     const html = document.documentElement;
@@ -66,9 +66,6 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
       bodyBg: body.style.backgroundColor,
       htmlBg: html.style.backgroundColor,
     };
-    const themeMeta = document.querySelector('meta[name="theme-color"]');
-    const prevTheme = themeMeta?.getAttribute('content');
-    if (themeMeta) themeMeta.setAttribute('content', '#ffffff');
 
     const y = window.scrollY;
     body.style.overflow = 'hidden';
@@ -86,7 +83,6 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
       body.style.width = s.width;
       body.style.backgroundColor = s.bodyBg;
       html.style.backgroundColor = s.htmlBg;
-      if (themeMeta && prevTheme !== null) themeMeta.setAttribute('content', prevTheme);
       window.scrollTo(0, y);
     };
   }, []);

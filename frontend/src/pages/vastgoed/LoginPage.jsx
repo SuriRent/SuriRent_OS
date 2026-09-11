@@ -134,25 +134,21 @@ export default function LoginPage() {
 
   // Login is volledig brand-oranje. We zetten body+#root in PWA standalone
   // op oranje (via body class) zodat het home-indicator gebied en eventuele
-  // 1px doorlek aan de notch dezelfde kleur tonen. Ook updaten we de
-  // theme-color meta zodat de Android-statusbalk oranje wordt. Unmount
-  // (bv. navigatie naar /admin of /kiosk) herstelt automatisch.
+  // 1px doorlek aan de notch dezelfde kleur tonen.
+  // NB: theme-color wordt NIET meer hier overschreven — dat gaf
+  // flikkering op Android tussen /login → /admin. Centrale waarde
+  // (#C24A00 donker-oranje) staat in index.html.
   useEffect(() => {
     const primary = (branding?.primary_color || '#FF5C00');
     document.body.classList.add('login-mode');
     document.documentElement.classList.add('login-mode-html');
     document.body.style.setProperty('--login-bg', primary);
     document.documentElement.style.setProperty('--login-bg', primary);
-    const meta = document.querySelector('meta[name="theme-color"]:not([media])')
-      || document.querySelector('meta[name="theme-color"]');
-    const prev = meta?.getAttribute('content');
-    if (meta) meta.setAttribute('content', primary);
     return () => {
       document.body.classList.remove('login-mode');
       document.documentElement.classList.remove('login-mode-html');
       document.body.style.removeProperty('--login-bg');
       document.documentElement.style.removeProperty('--login-bg');
-      if (meta && prev) meta.setAttribute('content', prev);
     };
   }, [branding]);
 

@@ -2199,15 +2199,12 @@ export default function KioskLayout() {
     const prevBodyBg = document.body.style.backgroundColor;
     document.documentElement.style.backgroundColor = BRAND;
     document.body.style.backgroundColor = BRAND;
-    const meta = document.querySelector('meta[name="theme-color"]:not([media])')
-      || document.querySelector('meta[name="theme-color"]');
-    const prevColor = meta?.getAttribute('content');
-    if (meta) meta.setAttribute('content', BRAND);
+    // NB: theme-color wordt NIET meer per-route overschreven — dat gaf
+    // flikkering op Android. Centrale waarde staat in index.html.
     return () => {
       document.body.classList.remove('kiosk-mode');
       document.documentElement.style.backgroundColor = prevHtmlBg;
       document.body.style.backgroundColor = prevBodyBg;
-      if (meta && prevColor) meta.setAttribute('content', prevColor);
     };
   }, []);
 

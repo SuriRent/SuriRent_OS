@@ -4270,15 +4270,9 @@ export default function AdminDashboard() {
       window.removeEventListener('saas-nav', saasHandler);
     };
   }, [navigate]);
-  // Android PWA: zorg dat de status-bar wit is (matcht de witte admin
-  // mobile-header). Op iOS doet status-bar-style `black-translucent` zijn
-  // werk en lift hier mee. Bij unmount zet niets terug — KioskLayout
-  // overschrijft 'm zelf.
-  useEffect(() => {
-    const meta = document.querySelector('meta[name="theme-color"]:not([media])')
-      || document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', '#ffffff');
-  }, []);
+  // Status-bar kleur wordt centraal beheerd via index.html (meta
+  // theme-color = #C24A00). Geen per-mount override meer — dat
+  // veroorzaakte flikkering op Android tussen /admin en /kiosk.
 
   // Auto-open de Setup Wizard sheet voor nieuwe bedrijven. Draait alleen
   // voor gewone admins (niet superadmin) en alleen wanneer de admin de

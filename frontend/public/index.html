@@ -3,7 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#FFF7F0" />
+    <!-- STATUS-BAR KLEUR — consistent voor de HELE app zodat Android
+         geen kleur-flikkering meer laat zien tussen /login → /admin →
+         /kiosk. Bruine-oranje (donkerder dan de #FF5C00 brand-oranje)
+         geeft altijd een zichtbare band boven de content, ook wanneer
+         de content-achtergrond zelf oranje is. Android maakt de icons
+         (klok, batterij) automatisch WIT bij deze donkerte. -->
+    <meta name="theme-color" content="#C24A00" />
     <!-- (specifieke variant zodat Android Chrome PWA dezelfde status-bar
          kleur gebruikt als de iPhone PWA standalone — brand cream voor de
          admin, oranje wordt dynamisch gezet door KioskLayout). -->
@@ -228,11 +234,11 @@
       (function () {
         try {
           var ROLES = {
-            beheer:    { name: 'Beheer',         theme: '#FFF7F0', icon: 'beheer'    },
-            kiosk:     { name: 'Kiosk',          theme: '#2563EB', icon: 'kioskpwa'  },
-            huurder:   { name: 'Huurder',        theme: '#10B981', icon: 'huurder'   },
-            klant:     { name: 'Klantenscherm',  theme: '#9333EA', icon: 'klant'     },
-            assistent: { name: 'SuriRent Assistent', theme: '#FF5C00', icon: 'assistent' }
+            beheer:    { name: 'Beheer',         theme: '#C24A00', icon: 'beheer'    },
+            kiosk:     { name: 'Kiosk',          theme: '#C24A00', icon: 'kioskpwa'  },
+            huurder:   { name: 'Huurder',        theme: '#C24A00', icon: 'huurder'   },
+            klant:     { name: 'Klantenscherm',  theme: '#C24A00', icon: 'klant'     },
+            assistent: { name: 'SuriRent Assistent', theme: '#C24A00', icon: 'assistent' }
           };
           var p = (location.pathname || '').toLowerCase();
           var sub = p;
