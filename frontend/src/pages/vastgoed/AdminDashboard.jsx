@@ -2944,10 +2944,8 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
   return (
     <div>
       <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ID-kaart</label>
-      <p className="text-[11px] text-slate-400 mt-0.5 mb-2">
-        Scan met de camera of kies een foto. Naam / ID-nummer / geboortedatum worden automatisch gelezen.
-      </p>
-      <div className="grid grid-cols-2 gap-2">
+      {/* Instructie-tekst verwijderd op verzoek gebruiker (2026-02). */}
+      <div className="grid grid-cols-2 gap-2 mt-2">
         <button type="button" onClick={() => setCamOpen(true)}
           className="h-11 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer border-2 border-orange-100"
           data-testid="tenant-id-scan-btn">
