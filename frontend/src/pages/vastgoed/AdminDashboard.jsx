@@ -2165,17 +2165,21 @@ function Apartments() {
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="apartments-page">
       {/* Header — inline titel + subtitel + oranje "Nieuw" knop. Zelfde
-          patroon als Huurders/Betalingsregelingen. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Appartementen</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          patroon als Huurders/Betalingsregelingen. Op verzoek gebruiker
+          (2026-02): NAAST elkaar blijven ook op mobiel — dus flex-nowrap
+          en compacte "Nieuw" label op smalle schermen. */}
+      <div className="flex items-center justify-between gap-3 flex-nowrap">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Appartementen</h1>
+          <p className="text-sm text-slate-500 mt-0.5 truncate">
             {items.length} appartementen · {counts.occupied} bezet
           </p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="apt-new-btn"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
-          <Plus className="w-4 h-4" /> Nieuw appartement
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nieuw appartement</span>
+          <span className="sm:hidden">Nieuw</span>
         </button>
       </div>
 
@@ -3381,15 +3385,19 @@ function Tenants() {
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="tenants-page">
       {/* Header — inline titel + subtitel + oranje "Nieuwe huurder" knop.
-          Zelfde patroon als Betalingsregelingen zodat de app consistent voelt. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Huurders</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{items.length} huurders geregistreerd.</p>
+          Zelfde patroon als Betalingsregelingen zodat de app consistent voelt.
+          Op verzoek gebruiker (2026-02): flex-nowrap zodat knop óók op mobiel
+          naast de titel blijft; korte label op smal scherm. */}
+      <div className="flex items-center justify-between gap-3 flex-nowrap">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Huurders</h1>
+          <p className="text-sm text-slate-500 mt-0.5 truncate">{items.length} huurders geregistreerd.</p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="tenant-new-btn"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
-          <Plus className="w-4 h-4" /> Nieuwe huurder
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nieuwe huurder</span>
+          <span className="sm:hidden">Nieuw</span>
         </button>
       </div>
 

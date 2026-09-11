@@ -1137,16 +1137,18 @@ export default function Payments() {
           3xl-4xl titel + de knop op een aparte rij, wat "gedrongen"
           aanvoelde. Nu is het rustiger en consistent met de rest van de
           admin-app. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Betalingen</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+      <div className="flex items-center justify-between gap-3 flex-nowrap">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight truncate">Betalingen</h1>
+          <p className="text-sm text-slate-500 mt-0.5 truncate">
             {items.length} kwitantie{items.length === 1 ? '' : 's'} geregistreerd — beoordeel pending en registreer nieuwe betalingen.
           </p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="payment-new-btn"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
-          <Plus className="w-4 h-4" /> Nieuwe betaling
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nieuwe betaling</span>
+          <span className="sm:hidden">Nieuw</span>
         </button>
       </div>
 

@@ -66,14 +66,16 @@ export default function PaymentPlans() {
 
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="payment-plans-page">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Betalingsregelingen</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Maandelijkse of aangepaste termijn-plannen voor huurders met achterstand.</p>
+      <div className="flex items-center justify-between gap-3 flex-nowrap">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Betalingsregelingen</h1>
+          <p className="text-sm text-slate-500 mt-0.5 truncate">Maandelijkse of aangepaste termijn-plannen voor huurders met achterstand.</p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="plan-new-btn"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
-          <Plus className="w-4 h-4" /> Nieuwe regeling
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nieuwe regeling</span>
+          <span className="sm:hidden">Nieuw</span>
         </button>
       </div>
 
