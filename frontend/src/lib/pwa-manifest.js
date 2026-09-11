@@ -97,7 +97,7 @@ export function usePwaManifest() {
     // 2) theme-color meta — Android system UI tint.
     //    OP VERZOEK GEBRUIKER (2026-02): geen per-route theme-color meer
     //    zodat de Android-statusbalk niet meer flikkert. Alle routes gebruiken
-    //    dezelfde donker-oranje band (#1E293B uit index.html). Deze regel
+    //    dezelfde donker-oranje band (#FFFFFF uit index.html). Deze regel
     //    overschrijft dus NIET meer — pwa-manifest.js beheert nog wel de
     //    install-time manifest (start_url/icon/naam) per rol.
     // setMetaContent('meta[name="theme-color"]:not([media])', cfg.theme);

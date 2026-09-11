@@ -53,7 +53,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
 
   // Body scroll-lock — voorkomt scrollen van de underlying page.
   // NB: theme-color wordt NIET meer per-modal overschreven — dat gaf
-  // flikker op Android. De centrale waarde (#1E293B) uit index.html
+  // flikker op Android. De centrale waarde (#FFFFFF) uit index.html
   // blijft dus consistent.
   useEffect(() => {
     const body = document.body;

@@ -4271,7 +4271,7 @@ export default function AdminDashboard() {
     };
   }, [navigate]);
   // Status-bar kleur wordt centraal beheerd via index.html (meta
-  // theme-color = #1E293B). Geen per-mount override meer — dat
+  // theme-color = #FFFFFF). Geen per-mount override meer — dat
   // veroorzaakte flikkering op Android tussen /admin en /kiosk.
 
   // Auto-open de Setup Wizard sheet voor nieuwe bedrijven. Draait alleen
