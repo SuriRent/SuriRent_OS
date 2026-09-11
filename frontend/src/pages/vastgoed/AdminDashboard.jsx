@@ -3120,15 +3120,8 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
               ))}
             </select>
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Internet per maand (SRD)</label>
-            <input type="number" step="0.01" min="0"
-              value={data.internet_amount ?? 0}
-              onChange={(e) => setData({ ...data, internet_amount: e.target.value })}
-              data-testid="tenant-internet"
-              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
-            <p className="text-[11px] text-slate-400 mt-1">Vast maandelijks bedrag dat in de kiosk als regelpost "Internet" verschijnt. 0 = niet tonen.</p>
-          </div>
+          {/* "Internet per maand" veld verwijderd op verzoek gebruiker
+              (2026-02) — niet meer relevant in het nieuwe-huurder formulier. */}
           {/* Persoonsgegevens t.b.v. huurcontract PDF */}
           <div className="grid grid-cols-2 gap-3">
             <div>
