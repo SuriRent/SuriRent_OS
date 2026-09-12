@@ -64,7 +64,6 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
   const buildWaMessage = (r) => {
     const period = (r?.period_month && r?.period_year)
       ? `${MONTHS_NL[r.period_month - 1]} ${r.period_year}` : '';
-    const imgUrl = `${process.env.REACT_APP_BACKEND_URL}/api/payments/${r.id}/image`;
     const lines = [
       `Hallo ${tenantName || ''},`,
       '',
@@ -73,9 +72,31 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
       `Bedrag: ${r.currency} ${Number(r.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`,
     ];
     if (period) lines.push(`Periode: ${period}`);
-    lines.push('');
-    lines.push(`📷 Kwitantie foto: ${imgUrl}`);
     return lines.join('\n');
+  };
+
+  // Deel de kwitantie-JPG als bijlage via Web Share API (native share-sheet
+  // op iOS/Android → WhatsApp verschijnt als target zodat huurder de foto
+  // direct als afbeelding ontvangt, niet als link). Fallback bij oudere
+  // browsers: wa.me deeplink met tekst-only.
+  const shareReceipt = async (r) => {
+    const msg = buildWaMessage(r);
+    try {
+      const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payments/${r.id}/image`);
+      if (!resp.ok) throw new Error('image fetch failed');
+      const blob = await resp.blob();
+      const file = new File([blob], `kwitantie-${r.receipt_number}.jpg`, { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: msg, title: `Kwitantie ${r.receipt_number}` });
+        return true;
+      }
+    } catch (e) {
+      // Silent — Web Share niet beschikbaar of user cancelled → fallback
+      if (e && e.name === 'AbortError') return false;
+    }
+    // Fallback: wa.me met tekst-only (huurder ziet géén foto-preview)
+    if (hasPhone) openWhatsApp(phoneDigits, msg);
+    return false;
   };
 
   const submit = async () => {
@@ -99,12 +120,9 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
         note: '',
       });
       setReceipt(data);
-      // Auto-open WhatsApp met kwitantie-foto — alleen als toggle aan én
-      // huurder heeft telefoonnummer. iOS/Android openen de WhatsApp-app;
-      // desktop-browser opent web.whatsapp.com.
+      // Auto-share kwitantie-JPG via Web Share API of wa.me fallback.
       if (autoWa && hasPhone) {
-        try { openWhatsApp(phoneDigits, buildWaMessage(data)); }
-        catch { /* noop — user kan altijd nog handmatig openen vanuit succes-view */ }
+        try { await shareReceipt(data); } catch { /* noop */ }
       }
     } catch (e) {
       setError(formatError(e) || 'Kon betaling niet registreren');
@@ -149,7 +167,7 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
           </div>
           {autoWa && hasPhone && (
             <p className="mt-3 text-[11px] text-emerald-700 font-bold inline-flex items-center gap-1 justify-center" data-testid="quickpay-wa-sent">
-              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp geopend met kwitantie-foto
+              <MessageCircle className="w-3.5 h-3.5" /> Deel-scherm geopend met kwitantie-foto
             </p>
           )}
         </KeyboardSafeModal.Body>
@@ -157,10 +175,10 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
         <KeyboardSafeModal.Footer className="grid grid-cols-2 gap-2">
           {hasPhone ? (
             <button type="button"
-              onClick={() => openWhatsApp(phoneDigits, buildWaMessage(receipt))}
+              onClick={() => shareReceipt(receipt)}
               data-testid="quickpay-open-wa"
               className="h-12 rounded-xl bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-              <MessageCircle className="w-4 h-4" /> {autoWa ? 'Open opnieuw' : 'Open WhatsApp'}
+              <MessageCircle className="w-4 h-4" /> {autoWa ? 'Deel opnieuw' : 'Deel via WhatsApp'}
             </button>
           ) : (
             <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
@@ -265,13 +283,15 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
           {/* Methode-selectie verwijderd op verzoek gebruiker (2026-02):
               QuickPay registreert nu altijd als 'contant' (initial state). */}
 
-          {/* Auto-WhatsApp toggle: opent na Registreer automatisch WhatsApp
-              met kwitantie-foto. Voorkeur persistent in localStorage. */}
+          {/* Auto-share toggle: deelt na Registreer automatisch de
+              kwitantie-JPG via het native share-scherm (iOS/Android →
+              WhatsApp toont foto direct in chat, geen link). Voorkeur
+              persistent in localStorage. */}
           {hasPhone && (
             <label className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 cursor-pointer" data-testid="quickpay-auto-wa">
               <span className="flex items-center gap-2 text-xs font-bold text-emerald-800">
                 <MessageCircle className="w-4 h-4" />
-                Open WhatsApp direct na Registreer
+                Deel kwitantie-foto direct na Registreer
               </span>
               <input type="checkbox" checked={autoWa}
                 onChange={(e) => toggleAutoWa(e.target.checked)}
