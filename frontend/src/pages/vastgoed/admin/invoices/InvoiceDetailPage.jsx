@@ -280,10 +280,13 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
       </div>
 
       {/* QuickPay modal */}
-      {quickPayInv && (
+      {quickPayInv && (() => {
+        const t = tenants.find((x) => x.id === g.tenant_id) || {};
+        return (
         <QuickPayModal
           invoice={quickPayInv}
           tenantName={g.tenant_name}
+          tenantPhone={t.phone || ''}
           otherOpenInvoices={[...overdue, ...current].filter((i) => i.id !== quickPayInv.id)}
           onClose={() => setQuickPayInv(null)}
           onSuccess={(payment) => {
@@ -291,7 +294,8 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             if (onPaid) onPaid(payment);
           }}
         />
-      )}
+        );
+      })()}
     </div>
   );
 }

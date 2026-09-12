@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { X, Check, Loader2, FileText } from 'lucide-react';
+import { X, Check, Loader2, FileText, MessageCircle } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
+import { openWhatsApp } from '../../../../lib/external-link';
 import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 import NumPad from '../../../../components/NumPad';
 
@@ -10,9 +11,15 @@ import NumPad from '../../../../components/NumPad';
 // bedrag; toont direct de kwitantie na succes.
 // NB: methode-keuze verwijderd op verzoek gebruiker (2026-02) — snelle
 // registratie loopt altijd via 'contant'.
+// Sinds 2026-02: als de huurder een telefoonnummer heeft opent na
+// registratie automatisch WhatsApp met een voor-ingevuld bericht +
+// kwitantie-foto link, tenzij admin de toggle uitzet.
 // =====================================================================
 
-export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices = [], onClose, onSuccess }) {
+// LocalStorage key voor de "auto WhatsApp" voorkeur — persistent per apparaat.
+const AUTO_WA_KEY = 'quickpay:auto-whatsapp';
+
+export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', otherOpenInvoices = [], onClose, onSuccess }) {
   const remaining = useMemo(() => {
     const paid = Number(invoice.paid_amount || 0);
     const total = Number(invoice.amount || 0);
@@ -34,6 +41,16 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
+  const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
+  const hasPhone = phoneDigits.length >= 7;
+  const [autoWa, setAutoWa] = useState(() => {
+    try { return (localStorage.getItem(AUTO_WA_KEY) || '1') !== '0'; }
+    catch { return true; }
+  });
+  const toggleAutoWa = (v) => {
+    setAutoWa(v);
+    try { localStorage.setItem(AUTO_WA_KEY, v ? '1' : '0'); } catch { /* noop */ }
+  };
 
   const parsedAmount = Number(String(amount).replace(',', '.'));
   const isValid = parsedAmount > 0 && !Number.isNaN(parsedAmount);
@@ -43,6 +60,23 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   const goesToOtherMonths = Math.min(surplus, otherOpenTotal);
   const goesToCredit = Math.max(0, surplus - otherOpenTotal);
   const hasSurplus = surplus > 0.001;
+
+  const buildWaMessage = (r) => {
+    const period = (r?.period_month && r?.period_year)
+      ? `${MONTHS_NL[r.period_month - 1]} ${r.period_year}` : '';
+    const imgUrl = `${process.env.REACT_APP_BACKEND_URL}/api/payments/${r.id}/image`;
+    const lines = [
+      `Hallo ${tenantName || ''},`,
+      '',
+      'Uw betaling is succesvol geregistreerd.',
+      `Kwitantie: ${r.receipt_number}`,
+      `Bedrag: ${r.currency} ${Number(r.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`,
+    ];
+    if (period) lines.push(`Periode: ${period}`);
+    lines.push('');
+    lines.push(`📷 Kwitantie foto: ${imgUrl}`);
+    return lines.join('\n');
+  };
 
   const submit = async () => {
     if (!isValid) return;
@@ -65,6 +99,13 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
         note: '',
       });
       setReceipt(data);
+      // Auto-open WhatsApp met kwitantie-foto — alleen als toggle aan én
+      // huurder heeft telefoonnummer. iOS/Android openen de WhatsApp-app;
+      // desktop-browser opent web.whatsapp.com.
+      if (autoWa && hasPhone) {
+        try { openWhatsApp(phoneDigits, buildWaMessage(data)); }
+        catch { /* noop — user kan altijd nog handmatig openen vanuit succes-view */ }
+      }
     } catch (e) {
       setError(formatError(e) || 'Kon betaling niet registreren');
     } finally {
@@ -106,15 +147,29 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kwitantienummer</p>
             <p className="font-mono text-lg font-black text-slate-900" data-testid="quickpay-receipt-nr">{receipt.receipt_number}</p>
           </div>
+          {autoWa && hasPhone && (
+            <p className="mt-3 text-[11px] text-emerald-700 font-bold inline-flex items-center gap-1 justify-center" data-testid="quickpay-wa-sent">
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp geopend met kwitantie-foto
+            </p>
+          )}
         </KeyboardSafeModal.Body>
 
         <KeyboardSafeModal.Footer className="grid grid-cols-2 gap-2">
-          <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
-            target="_blank" rel="noreferrer"
-            data-testid="quickpay-download-pdf"
-            className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-            <FileText className="w-4 h-4" /> Kwitantie PDF
-          </a>
+          {hasPhone ? (
+            <button type="button"
+              onClick={() => openWhatsApp(phoneDigits, buildWaMessage(receipt))}
+              data-testid="quickpay-open-wa"
+              className="h-12 rounded-xl bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
+              <MessageCircle className="w-4 h-4" /> {autoWa ? 'Open opnieuw' : 'Open WhatsApp'}
+            </button>
+          ) : (
+            <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
+              target="_blank" rel="noreferrer"
+              data-testid="quickpay-download-pdf"
+              className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
+              <FileText className="w-4 h-4" /> Kwitantie PDF
+            </a>
+          )}
           <button onClick={close} data-testid="quickpay-close"
             className="h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm">
             Klaar
@@ -209,6 +264,21 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
 
           {/* Methode-selectie verwijderd op verzoek gebruiker (2026-02):
               QuickPay registreert nu altijd als 'contant' (initial state). */}
+
+          {/* Auto-WhatsApp toggle: opent na Registreer automatisch WhatsApp
+              met kwitantie-foto. Voorkeur persistent in localStorage. */}
+          {hasPhone && (
+            <label className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 cursor-pointer" data-testid="quickpay-auto-wa">
+              <span className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                <MessageCircle className="w-4 h-4" />
+                Open WhatsApp direct na Registreer
+              </span>
+              <input type="checkbox" checked={autoWa}
+                onChange={(e) => toggleAutoWa(e.target.checked)}
+                data-testid="quickpay-auto-wa-toggle"
+                className="w-5 h-5 rounded accent-emerald-600 cursor-pointer" />
+            </label>
+          )}
 
           {/* Custom numpad — geen native toetsenbord = geen viewport-shift. */}
           <NumPad
