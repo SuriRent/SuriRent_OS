@@ -97,16 +97,18 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
           </div>
         </div>
         {/* Badges op eigen regel zodat ze op mobiel naast elkaar staan
-            i.p.v. onder elkaar door beperkte breedte naast Openstaand-blok. */}
-        <div className="flex items-center gap-2 flex-wrap mt-3">
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
+            i.p.v. onder elkaar door beperkte breedte naast Openstaand-blok.
+            Compact sizing + whitespace-nowrap zodat alle 3 badges ook op
+            smalle Android-viewports op één regel blijven. */}
+        <div className="flex items-center gap-1.5 flex-wrap mt-3">
+          <span className={`text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded whitespace-nowrap ${statusBadge.cls}`}>{statusBadge.l}</span>
           {openCount > 0 && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
-              {openCount} maand{openCount === 1 ? '' : 'en'} open
+            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded whitespace-nowrap bg-orange-50 text-[#FF5C00]">
+              {openCount} mnd open
             </span>
           )}
           {overdue.length > 0 && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-50 text-red-700">
+            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded whitespace-nowrap bg-red-50 text-red-700">
               {overdue.length} achterstand
             </span>
           )}
