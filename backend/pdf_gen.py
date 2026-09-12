@@ -3302,22 +3302,64 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     if note_text:
         c.drawString(pad, note_y - 5 * mm, note_text[:180])
 
-    # ---- Handtekening-lijnen onderaan
+    # ---- Handtekening-lijn onderaan — ALLEEN verhuurder (op verzoek
+    # gebruiker feb 2026, huurder-handtekening is niet nodig omdat de
+    # kwitantie een bewijs is dat de VERHUURDER geld ontvangen heeft).
     sig_y = pad + 12 * mm
     sig_w = 90 * mm
     c.setStrokeColor(_BH_INK)
     c.setLineWidth(0.7)
     c.line(pad, sig_y, pad + sig_w, sig_y)
-    c.line(right_x - sig_w, sig_y, right_x, sig_y)
     c.setFillColor(_BH_INK)
     c.setFont(_LUX_SANS_BOLD, 9)
     c.drawString(pad, sig_y - 5 * mm, "Handtekening verhuurder")
-    c.drawString(right_x - sig_w, sig_y - 5 * mm, "Handtekening huurder")
+
+    # ---- BETAALD-stempel: schuine rode ovaal met dubbele rand, geplaatst
+    # rechtsonder over de kwitantie zoals een echte fysieke stempel.
+    _bh_paid_stamp(c, right_x - 65 * mm, sig_y + 6 * mm, 60 * mm, 24 * mm,
+                   date_str=_fmt_date_nl(payment.get("paid_at")))
 
     c.showPage()
     c.save()
     buf.seek(0)
     return buf.getvalue()
+
+
+def _bh_paid_stamp(c, cx, cy, w, h, date_str=""):
+    """Schijn-stempel 'BETAALD' — rood, dubbele elliptische rand, licht
+    geroteerd (-14°), semi-transparant zodat het over andere tekst kan.
+    Uitlijning: cx/cy = linkerbenedenhoek van de bounding box.
+    """
+    from reportlab.lib.colors import Color
+    STAMP_RED = Color(0.78, 0.11, 0.11, alpha=0.92)  # helder-rood met transparency
+    c.saveState()
+    # Roteer rond het midden van de bounding box
+    mx = cx + w / 2
+    my = cy + h / 2
+    c.translate(mx, my)
+    c.rotate(-14)
+    c.translate(-w / 2, -h / 2)
+    c.setStrokeColor(STAMP_RED)
+    c.setFillColor(colors.transparent if False else Color(1, 1, 1, alpha=0))  # geen fill
+    # Buitenste ellips
+    c.setLineWidth(2.6)
+    c.ellipse(0, 0, w, h, stroke=1, fill=0)
+    # Binnenste ellips (dubbel-rand effect)
+    inset = 2.2 * mm
+    c.setLineWidth(1.2)
+    c.ellipse(inset, inset, w - inset, h - inset, stroke=1, fill=0)
+    # "BETAALD" tekst gecentreerd
+    c.setFillColor(STAMP_RED)
+    c.setFont(_LUX_SANS_BOLD, 20)
+    txt = "BETAALD"
+    tw = c.stringWidth(txt, _LUX_SANS_BOLD, 20)
+    c.drawString(w / 2 - tw / 2, h / 2 - 1.5 * mm, txt)
+    # Kleine datum onder de tekst
+    if date_str:
+        c.setFont(_LUX_SANS, 8)
+        dw = c.stringWidth(date_str, _LUX_SANS, 8)
+        c.drawString(w / 2 - dw / 2, h / 2 - 7 * mm, date_str)
+    c.restoreState()
 
 
 
