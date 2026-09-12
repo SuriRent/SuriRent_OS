@@ -89,27 +89,28 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
                 {g.location_name ? `${g.location_name} · ` : ''}Appt. {g.apartment_number}
               </p>
             )}
-            {/* Badges: compact + nowrap zodat ze ook op smalle Android-schermen
-                op één regel blijven. Verkorte teksten en gap-1.5. */}
-            <div className="flex items-center gap-1.5 flex-wrap mt-3">
-              <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wide px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap ${statusBadge.cls}`}>{statusBadge.l}</span>
-              {openCount > 0 && (
-                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap bg-orange-50 text-[#FF5C00]">
-                  {openCount} <span className="sm:hidden">mnd</span><span className="hidden sm:inline">maand{openCount === 1 ? '' : 'en'}</span> open
-                </span>
-              )}
-              {overdue.length > 0 && (
-                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap bg-red-50 text-red-700">
-                  {overdue.length} achterstand
-                </span>
-              )}
-            </div>
           </div>
           <div className="text-right shrink-0">
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>
             <p className="text-base sm:text-2xl font-black text-slate-900 whitespace-nowrap">{fmtMoney(totalOpen, currency)}</p>
             <p className="text-[10px] sm:text-[11px] text-slate-500">totaal saldo</p>
           </div>
+        </div>
+        {/* Badges op eigen regel = volledige kaartbreedte. Ultracompact
+            (`text-[9px]`, `px-1.5`, `gap-1`) + verkorte labels zodat alle 3
+            ook op een smalle Android-viewport (~320px) op één regel passen. */}
+        <div className="flex items-center gap-1 flex-wrap mt-3">
+          <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap ${statusBadge.cls}`}>{statusBadge.l}</span>
+          {openCount > 0 && (
+            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap bg-orange-50 text-[#FF5C00]">
+              {openCount}× open
+            </span>
+          )}
+          {overdue.length > 0 && (
+            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap bg-red-50 text-red-700">
+              {overdue.length}× laat
+            </span>
+          )}
         </div>
       </div>
 
