@@ -158,6 +158,7 @@ export default function Invoices() {
         <InvoiceDetailPage
           group={g}
           credits={credits[g.tenant_id]}
+          tenants={tenants}
           onBack={() => { setDetail(null); load(); }}
           onReminder={openReminder}
           onCreditClick={() => openCreditSources(g)}

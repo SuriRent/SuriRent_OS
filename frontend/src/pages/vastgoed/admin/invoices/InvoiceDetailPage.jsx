@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
-  ChevronRight, Mail, PiggyBank, Loader2, MessageCircle, Phone,
+  ChevronRight, Mail, PiggyBank, Loader2, MessageCircle,
   Calendar, AlertTriangle, Clock, Check, Receipt, Banknote,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
+import { openWhatsApp } from '../../../../lib/external-link';
 import PaidHistorySection from './PaidHistorySection';
 import QuickPayModal from './QuickPayModal';
 
@@ -14,9 +15,9 @@ import QuickPayModal from './QuickPayModal';
 //   • Sub-card "Overzicht" (DetailRow lijst met aantal maanden etc.)
 //   • Sub-card "Openstaande facturen" (klikbare rijen → QuickPay)
 //   • Sub-card "Betalingsgeschiedenis"
-//   • Sub-card "Acties" (WhatsApp / E-mail / SMS herinnering + Registreer)
+//   • Sub-card "Acties" (E-mail herinnering + WhatsApp deeplink + Registreer)
 // =====================================================================
-export default function InvoiceDetailPage({ group, credits, onBack, onReminder, onPaid, onCreditClick: _onCreditClick }) {
+export default function InvoiceDetailPage({ group, credits, tenants = [], onBack, onReminder, onPaid, onCreditClick: _onCreditClick }) {
   const g = group;
   const overdue = (g.overdue || []).filter((i) => (i.status || '') !== 'paid');
   const current = (g.current || []).filter((i) => (i.status || '') !== 'paid');
@@ -230,22 +231,36 @@ export default function InvoiceDetailPage({ group, credits, onBack, onReminder, 
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
         </div>
         <div className="p-4 space-y-3">
-          {/* Reminder-knoppen alleen als er open facturen zijn */}
-          {openCount > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'whatsapp', label: 'WhatsApp', border: 'border-emerald-300', text: 'text-emerald-700', hover: 'hover:bg-emerald-50', Icon: MessageCircle },
-                { id: 'email',    label: 'E-mail',   border: 'border-blue-300',    text: 'text-blue-700',    hover: 'hover:bg-blue-50',    Icon: Mail },
-                { id: 'sms',      label: 'SMS',      border: 'border-purple-300',  text: 'text-purple-700',  hover: 'hover:bg-purple-50',  Icon: Phone },
-              ].map((c) => (
-                <button key={c.id} type="button" onClick={() => onReminder(g, c.id)}
-                  data-testid={`reminder-btn-${c.id}-${g.tenant_id}`}
-                  className={`inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 ${c.border} ${c.hover} ${c.text} font-bold rounded-xl text-xs sm:text-sm transition`}>
-                  <c.Icon className="w-4 h-4" /> {c.label}
+          {/* Actie-knoppen: E-mail herinnering (via Twilio/SMTP) + directe
+              WhatsApp-deeplink naar huurder (opent gewoon de chat).
+              WhatsApp/SMS via Twilio zijn bewust verwijderd — de deeplink
+              werkt zonder API-configuratie. */}
+          {openCount > 0 && (() => {
+            const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
+            const phoneDigits = String(tenant.phone || '').replace(/\D/g, '');
+            const hasPhone = phoneDigits.length >= 7;
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onClick={() => onReminder(g, 'email')}
+                  data-testid={`reminder-btn-email-${g.tenant_id}`}
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-xs sm:text-sm transition">
+                  <Mail className="w-4 h-4" /> E-mail herinnering
                 </button>
-              ))}
-            </div>
-          )}
+                <button type="button"
+                  disabled={!hasPhone}
+                  onClick={() => {
+                    if (!hasPhone) return;
+                    const msg = `Hallo ${tenant.name || ''}, dit is een herinnering vanuit ${g.company_name || ''} over uw openstaande huur.`;
+                    openWhatsApp(phoneDigits, msg.trim());
+                  }}
+                  data-testid={`open-whatsapp-${g.tenant_id}`}
+                  title={hasPhone ? `Open WhatsApp-chat met ${tenant.name}` : 'Huurder heeft geen telefoonnummer'}
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl text-xs sm:text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">
+                  <MessageCircle className="w-4 h-4" /> Open WhatsApp met huurder
+                </button>
+              </div>
+            );
+          })()}
           {/* Primary CTA */}
           {primaryOpen && (
             <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
