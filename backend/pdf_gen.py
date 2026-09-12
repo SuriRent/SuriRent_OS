@@ -3335,10 +3335,11 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
             from reportlab.lib.utils import ImageReader
             img = ImageReader(io.BytesIO(sig_bytes))
             iw, ih = img.getSize()
-            # Grote handtekening (max 18mm hoog, breedte proportioneel).
-            target_h = 18 * mm
-            target_w = min(sig_w * 0.8, iw * (target_h / ih))
-            c.drawImage(img, pad + 3 * mm, sig_y + 1,
+            # 12mm hoog — genoeg groot om leesbaar te zijn maar zonder de
+            # Opmerking-sectie erboven te overlappen.
+            target_h = 12 * mm
+            target_w = min(sig_w * 0.7, iw * (target_h / ih))
+            c.drawImage(img, pad + 2 * mm, sig_y + 1,
                         target_w, target_h,
                         preserveAspectRatio=True, mask="auto")
         except Exception:
