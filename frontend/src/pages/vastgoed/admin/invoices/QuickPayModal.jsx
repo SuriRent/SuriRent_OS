@@ -11,13 +11,10 @@ import NumPad from '../../../../components/NumPad';
 // bedrag; toont direct de kwitantie na succes.
 // NB: methode-keuze verwijderd op verzoek gebruiker (2026-02) — snelle
 // registratie loopt altijd via 'contant'.
-// Sinds 2026-02: als de huurder een telefoonnummer heeft opent na
-// registratie automatisch WhatsApp met een voor-ingevuld bericht +
-// kwitantie-foto link, tenzij admin de toggle uitzet.
+// Na succes: grote "Deel kwitantie foto" knop die via de Web Share API
+// de JPG als bijlage naar WhatsApp/andere apps stuurt. Fallback op wa.me
+// deeplink als het apparaat file-share niet ondersteunt.
 // =====================================================================
-
-// LocalStorage key voor de "auto WhatsApp" voorkeur — persistent per apparaat.
-const AUTO_WA_KEY = 'quickpay:auto-whatsapp';
 
 export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', otherOpenInvoices = [], onClose, onSuccess }) {
   const remaining = useMemo(() => {
@@ -41,16 +38,10 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
+  const [sharing, setSharing] = useState(false);
+  const [shareStatus, setShareStatus] = useState(''); // '' | 'ok' | 'fallback' | 'error'
   const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
   const hasPhone = phoneDigits.length >= 7;
-  const [autoWa, setAutoWa] = useState(() => {
-    try { return (localStorage.getItem(AUTO_WA_KEY) || '1') !== '0'; }
-    catch { return true; }
-  });
-  const toggleAutoWa = (v) => {
-    setAutoWa(v);
-    try { localStorage.setItem(AUTO_WA_KEY, v ? '1' : '0'); } catch { /* noop */ }
-  };
 
   const parsedAmount = Number(String(amount).replace(',', '.'));
   const isValid = parsedAmount > 0 && !Number.isNaN(parsedAmount);
@@ -78,25 +69,39 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
   // Deel de kwitantie-JPG als bijlage via Web Share API (native share-sheet
   // op iOS/Android → WhatsApp verschijnt als target zodat huurder de foto
   // direct als afbeelding ontvangt, niet als link). Fallback bij oudere
-  // browsers: wa.me deeplink met tekst-only.
+  // browsers of desktop: wa.me deeplink met tekst-only.
+  //
+  // BELANGRIJK: `navigator.share({files})` vereist "transient user activation"
+  // (een verse click/tap). Daarom mag deze functie ALLEEN vanuit een direct
+  // gebruikers-klik worden aangeroepen — nooit automatisch na een async
+  // netwerkcall (dan is de activation al verlopen en faalt de share stil).
   const shareReceipt = async (r) => {
+    setSharing(true); setShareStatus('');
     const msg = buildWaMessage(r);
     try {
       const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payments/${r.id}/image`);
-      if (!resp.ok) throw new Error('image fetch failed');
+      if (!resp.ok) throw new Error(`image HTTP ${resp.status}`);
       const blob = await resp.blob();
       const file = new File([blob], `kwitantie-${r.receipt_number}.jpg`, { type: 'image/jpeg' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text: msg, title: `Kwitantie ${r.receipt_number}` });
+        setShareStatus('ok');
         return true;
       }
+      // Geen file-share support (desktop Chrome, oude iOS) → fallback wa.me
+      if (hasPhone) openWhatsApp(phoneDigits, msg);
+      setShareStatus('fallback');
+      return false;
     } catch (e) {
-      // Silent — Web Share niet beschikbaar of user cancelled → fallback
-      if (e && e.name === 'AbortError') return false;
+      if (e && e.name === 'AbortError') { setShareStatus(''); return false; }
+      // eslint-disable-next-line no-console
+      console.warn('[quickpay] share fout:', e);
+      if (hasPhone) openWhatsApp(phoneDigits, msg);
+      setShareStatus('fallback');
+      return false;
+    } finally {
+      setSharing(false);
     }
-    // Fallback: wa.me met tekst-only (huurder ziet géén foto-preview)
-    if (hasPhone) openWhatsApp(phoneDigits, msg);
-    return false;
   };
 
   const submit = async () => {
@@ -120,10 +125,9 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
         note: '',
       });
       setReceipt(data);
-      // Auto-share kwitantie-JPG via Web Share API of wa.me fallback.
-      if (autoWa && hasPhone) {
-        try { await shareReceipt(data); } catch { /* noop */ }
-      }
+      // Silent auto-share is bewust verwijderd — de browser eist een verse
+      // user-tap voor navigator.share({files}), anders faalt hij stil.
+      // Admin moet nu op de grote "Deel kwitantie foto" knop tikken.
     } catch (e) {
       setError(formatError(e) || 'Kon betaling niet registreren');
     } finally {
@@ -165,29 +169,41 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kwitantienummer</p>
             <p className="font-mono text-lg font-black text-slate-900" data-testid="quickpay-receipt-nr">{receipt.receipt_number}</p>
           </div>
-          {autoWa && hasPhone && (
-            <p className="mt-3 text-[11px] text-emerald-700 font-bold inline-flex items-center gap-1 justify-center" data-testid="quickpay-wa-sent">
-              <MessageCircle className="w-3.5 h-3.5" /> Deel-scherm geopend met kwitantie-foto
+
+          {/* Grote deel-knop — direct in de user-tap zodat navigator.share
+              werkt (silent auto-share tijdens submit faalt door verlopen
+              user-activation, dus admin moet zélf één keer tikken). */}
+          {hasPhone && (
+            <button type="button"
+              onClick={() => shareReceipt(receipt)}
+              disabled={sharing}
+              data-testid="quickpay-share-jpg"
+              className="mt-5 w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black inline-flex items-center justify-center gap-2 shadow-[0_8px_16px_-6px_rgba(16,185,129,0.6)] active:scale-[0.98] transition disabled:opacity-60">
+              {sharing
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Foto delen…</>
+                : <><MessageCircle className="w-5 h-5" /> Deel kwitantie foto</>}
+            </button>
+          )}
+
+          {shareStatus === 'ok' && (
+            <p className="mt-2 text-[11px] text-emerald-700 font-bold inline-flex items-center gap-1 justify-center" data-testid="quickpay-share-ok">
+              <Check className="w-3.5 h-3.5" /> Foto succesvol gedeeld
+            </p>
+          )}
+          {shareStatus === 'fallback' && (
+            <p className="mt-2 text-[11px] text-amber-700 font-bold inline-flex items-center gap-1 justify-center" data-testid="quickpay-share-fallback">
+              WhatsApp geopend met kwitantie-link (foto-delen niet ondersteund op dit apparaat)
             </p>
           )}
         </KeyboardSafeModal.Body>
 
         <KeyboardSafeModal.Footer className="grid grid-cols-2 gap-2">
-          {hasPhone ? (
-            <button type="button"
-              onClick={() => shareReceipt(receipt)}
-              data-testid="quickpay-open-wa"
-              className="h-12 rounded-xl bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-              <MessageCircle className="w-4 h-4" /> {autoWa ? 'Deel opnieuw' : 'Deel via WhatsApp'}
-            </button>
-          ) : (
-            <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
-              target="_blank" rel="noreferrer"
-              data-testid="quickpay-download-pdf"
-              className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-              <FileText className="w-4 h-4" /> Kwitantie PDF
-            </a>
-          )}
+          <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
+            target="_blank" rel="noreferrer"
+            data-testid="quickpay-download-pdf"
+            className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
+            <FileText className="w-4 h-4" /> Kwitantie PDF
+          </a>
           <button onClick={close} data-testid="quickpay-close"
             className="h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm">
             Klaar
@@ -281,24 +297,10 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
           </div>
 
           {/* Methode-selectie verwijderd op verzoek gebruiker (2026-02):
-              QuickPay registreert nu altijd als 'contant' (initial state). */}
-
-          {/* Auto-share toggle: deelt na Registreer automatisch de
-              kwitantie-JPG via het native share-scherm (iOS/Android →
-              WhatsApp toont foto direct in chat, geen link). Voorkeur
-              persistent in localStorage. */}
-          {hasPhone && (
-            <label className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 cursor-pointer" data-testid="quickpay-auto-wa">
-              <span className="flex items-center gap-2 text-xs font-bold text-emerald-800">
-                <MessageCircle className="w-4 h-4" />
-                Deel kwitantie-foto direct na Registreer
-              </span>
-              <input type="checkbox" checked={autoWa}
-                onChange={(e) => toggleAutoWa(e.target.checked)}
-                data-testid="quickpay-auto-wa-toggle"
-                className="w-5 h-5 rounded accent-emerald-600 cursor-pointer" />
-            </label>
-          )}
+              QuickPay registreert nu altijd als 'contant' (initial state).
+              Auto-share toggle verwijderd — de browser vereist een verse
+              user-tap voor navigator.share({files}), dus er verschijnt nu
+              een grote deel-knop op het succes-scherm. */}
 
           {/* Custom numpad — geen native toetsenbord = geen viewport-shift. */}
           <NumPad
