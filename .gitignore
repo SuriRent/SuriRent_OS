@@ -5,3 +5,8 @@ credentials.json
 *.pem
 *.key
 .credentials
+node_modules/
+**/node_modules/
+build/
+dist/
+coverage/

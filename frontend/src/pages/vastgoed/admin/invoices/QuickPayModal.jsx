@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Check, Loader2, Banknote, FileText } from 'lucide-react';
+import { X, Check, Loader2, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 import NumPad from '../../../../components/NumPad';
@@ -8,11 +8,9 @@ import NumPad from '../../../../components/NumPad';
 // QuickPayModal — één-klik betaling registreren vanuit de Facturen-detail
 // zonder eerst naar Betalingen te navigeren. Prefilled met openstaand
 // bedrag; toont direct de kwitantie na succes.
+// NB: methode-keuze verwijderd op verzoek gebruiker (2026-02) — snelle
+// registratie loopt altijd via 'contant'.
 // =====================================================================
-const METHODS = [
-  { v: 'contant', l: 'Contant',           icon: Banknote, color: 'emerald' },
-  { v: 'bank',    l: 'Bankoverschrijving', icon: FileText, color: 'blue' },
-];
 
 export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices = [], onClose, onSuccess }) {
   const remaining = useMemo(() => {
@@ -32,7 +30,7 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
   );
 
   const [amount, setAmount] = useState(remaining > 0 ? String(remaining) : String(invoice.amount || 0));
-  const [method, setMethod] = useState('contant');
+  const method = 'contant';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);   // succes-view
@@ -209,24 +207,8 @@ export default function QuickPayModal({ invoice, tenantName, otherOpenInvoices =
             )}
           </div>
 
-          {/* Methode */}
-          <div className="mb-3">
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Methode</label>
-            <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-              {METHODS.map((m) => {
-                const sel = method === m.v;
-                return (
-                  <button key={m.v} type="button" onClick={() => setMethod(m.v)}
-                    data-testid={`quickpay-method-${m.v}`}
-                    className={`py-2.5 rounded-xl border-2 font-bold text-xs flex flex-col items-center gap-0.5 transition ${
-                      sel ? 'border-[#FF5C00] bg-orange-50 text-[#FF5C00]' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'
-                    }`}>
-                    <m.icon className="w-4 h-4" /> {m.l}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Methode-selectie verwijderd op verzoek gebruiker (2026-02):
+              QuickPay registreert nu altijd als 'contant' (initial state). */}
 
           {/* Custom numpad — geen native toetsenbord = geen viewport-shift. */}
           <NumPad

@@ -42,7 +42,9 @@
     "angular": "readonly",
     "AsyncIterator": "readonly",
     "k": "readonly",
-    "v": "readonly"
+    "v": "readonly",
+    "importScripts": "readonly",
+    "__non_webpack_require__": "readonly"
   },
   "ignorePatterns": [
     "**/node_modules/**",

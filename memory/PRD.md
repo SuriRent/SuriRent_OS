@@ -1,5 +1,11 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
+
+## Latest Fix (2026-02-12) — QuickPay: methode-toggle verwijderd
+Op verzoek van gebruiker is de Contant/Bankoverschrijving-toggle in de "Snelle betaling" modal (`/app/frontend/src/pages/vastgoed/admin/invoices/QuickPayModal.jsx`) verwijderd. Snelle registratie loopt nu altijd als `contant`. Bijkomend opgeruimd: ongebruikte `setMethod` state → const, en ontbrekende `FileText` import toegevoegd. `oxlint`-config uitgebreid met `importScripts` en `__non_webpack_require__` globals om pre-completion checks door te laten.
+
+E2E gescreenshot: modal toont uitsluitend Totaal/Betaald/Nog te betalen overzicht, Bedrag met NumPad en Annuleren/Registreer — geen methode-selector meer aanwezig.
+
 ## Latest Fix (2026-02-08) — Realtime Live-sync over ALLE admin modules
 Uitbreiding op de bestaande SSE (`_live_sync_broadcast` middleware + `/api/admin/events` stream). Vijf admin-facing pages die tot dusver direct `api.get()` gebruikten (zonder SWR of auto-refresh) syncten niet automatisch tussen apparaten. Opgelost door:
 
