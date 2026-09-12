@@ -1,4 +1,4 @@
-import { Trash2, Calendar, Check } from 'lucide-react';
+import { Trash2, Calendar, Check, History } from 'lucide-react';
 import { fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { fmtAmountWhole } from './helpers';
 
@@ -50,12 +50,17 @@ export function MobileInvoiceLine({ inv, bucket }) {
   const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) * 0.95);
   const canDelete = (bucket === 'future' || bucket === 'current') && !isPartial;
   return (
-    <div className="flex items-center justify-between gap-2 text-[12px]"
-      data-testid={`mi-invoice-${inv.id}`}>
+    <div className="flex flex-col gap-0.5" data-testid={`mi-invoice-${inv.id}`}>
+      <div className="flex items-center justify-between gap-2 text-[12px]">
       <div className="flex items-center gap-1.5 min-w-0 flex-1">
         <span className="text-slate-700 capitalize truncate">
           {MONTHS_NL[inv.period_month - 1]} {inv.period_year}
         </span>
+        {inv.is_historical && (
+          <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-violet-100 text-violet-700 uppercase inline-flex items-center gap-0.5">
+            <History className="w-2.5 h-2.5" /> Hist
+          </span>
+        )}
         {bucket === 'future' && (
           <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Komt nog</span>
         )}
@@ -82,6 +87,12 @@ export function MobileInvoiceLine({ inv, bucket }) {
           <Trash2 className="w-3 h-3" />
         </button>
       )}
+      </div>
+      {inv.is_historical && inv.description && (
+        <p className="text-[10px] text-slate-500 italic pl-1 truncate" data-testid={`mi-invoice-desc-${inv.id}`}>
+          {inv.description}
+        </p>
+      )}
     </div>
   );
 }
@@ -98,11 +109,16 @@ export function InvoiceRow({ inv, bucket, severity }) {
     : severity === 'critical' ? 'bg-red-500'
     : 'bg-orange-500';
   return (
-    <div className="flex items-center justify-between gap-2 text-sm"
-      data-testid={`invoice-row-${inv.id}`}>
+    <div className="flex flex-col gap-0.5" data-testid={`invoice-row-${inv.id}`}>
+      <div className="flex items-center justify-between gap-2 text-sm">
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCls}`} />
         <span className="text-slate-700 capitalize truncate">{MONTHS_NL[inv.period_month - 1]} {inv.period_year}</span>
+        {inv.is_historical && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 uppercase tracking-wider inline-flex items-center gap-1">
+            <History className="w-2.5 h-2.5" /> Historisch
+          </span>
+        )}
         {bucket === 'future' && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wider">Komt nog</span>
         )}
@@ -189,6 +205,12 @@ export function InvoiceRow({ inv, bucket, severity }) {
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
+      )}
+      </div>
+      {inv.is_historical && inv.description && (
+        <p className="text-[11px] text-slate-500 italic pl-4" data-testid={`invoice-row-desc-${inv.id}`}>
+          {inv.description}
+        </p>
       )}
     </div>
   );

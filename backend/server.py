@@ -10215,6 +10215,17 @@ class InvoiceCreate(BaseModel):
     period_year: int
 
 
+class HistoricalInvoiceCreate(BaseModel):
+    """Historische factuur voor onboarding — vrij bedrag, vrije datum,
+    vrije omschrijving. Bedoeld om achterstanden van vóór ingebruikname
+    van de app in te voeren zodat het openstaande saldo klopt."""
+    tenant_id: str
+    amount: float = Field(gt=0)
+    date: str          # ISO date (YYYY-MM-DD) — bepaalt period_month/year + created_at
+    description: str = Field(min_length=1, max_length=200)
+    currency: Optional[str] = None   # default: valuta van appartement
+
+
 class InvoicePlanRef(BaseModel):
     id: str
     status: str
@@ -10245,6 +10256,8 @@ class InvoiceOut(BaseModel):
     plans: List[InvoicePlanRef] = []
     bucket: Optional[str] = None  # 'overdue' | 'current' | 'future' (alleen voor open facturen relevant)
     auto_created_from_payment: Optional[bool] = None  # audit-trail: factuur is aangemaakt door kiosk-betaling voordat maand-generatie plaatsvond
+    is_historical: Optional[bool] = None  # true = onboarding-achterstand met vrije datum/bedrag
+    description: Optional[str] = None     # vrije omschrijving voor historische facturen
 
 
 async def _enrich_invoice(i: dict) -> dict:
@@ -10386,6 +10399,50 @@ async def create_invoice(body: InvoiceCreate, user=Depends(get_current_user)):
         "period_year": body.period_year,
         "status": "open",
         "created_at": iso(now_utc()),
+    }
+    await db.invoices.insert_one(doc)
+    doc.pop("_id", None)
+    return await _enrich_invoice(doc)
+
+
+@api.post("/invoices/historical", response_model=InvoiceOut)
+async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(get_current_user)):
+    """Maak een historische factuur aan met vrij bedrag, datum en omschrijving.
+    Gebruikt bij onboarding om bestaande achterstanden in te voeren zonder
+    dat de duplicate-check per periode blokkeert (meerdere historische
+    facturen per maand mogen). Telt gewoon mee in openstaand saldo."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    t = await db.tenants.find_one({"id": body.tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    apt_id = t.get("apartment_id")
+    apt = await db.apartments.find_one({"id": apt_id, **scope(user)}, {"_id": 0}) if apt_id else None
+    # Parse datum robuust (accepteert 'YYYY-MM-DD' of ISO).
+    try:
+        dt = datetime.fromisoformat(body.date.replace("Z", "+00:00")).replace(tzinfo=timezone.utc) if "T" in body.date else datetime.fromisoformat(body.date).replace(tzinfo=timezone.utc)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ongeldige datum (verwacht YYYY-MM-DD)")
+    if dt > now_utc() + timedelta(days=1):
+        raise HTTPException(status_code=400, detail="Datum mag niet in de toekomst liggen")
+    currency = (body.currency or (apt or {}).get("currency") or "SRD").upper()
+    year = dt.year
+    seq = await _next_seq(f"invoice_hist_{year}")
+    doc = {
+        "id": new_id(),
+        "company_id": cid,
+        "invoice_number": f"H{year}-{seq:05d}",
+        "tenant_id": body.tenant_id,
+        "apartment_id": apt_id,
+        "amount": round(float(body.amount), 2),
+        "currency": currency,
+        "period_month": dt.month,
+        "period_year": dt.year,
+        "status": "open",
+        "created_at": iso(dt),
+        "is_historical": True,
+        "description": body.description.strip(),
     }
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)

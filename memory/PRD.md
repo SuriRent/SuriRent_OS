@@ -1,6 +1,17 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-02-12) — Historische Facturen (Onboarding Achterstanden)
+Nieuwe endpoint `POST /api/invoices/historical` waarmee beheerders bij onboarding een historische factuur kunnen aanmaken met:
+- Vrij bedrag (`amount > 0`) + valuta (default = valuta van appartement)
+- Vrije datum in het verleden (`YYYY-MM-DD`, geen future dates)
+- Vrije omschrijving (1-200 karakters, zichtbaar in overzicht)
+
+De factuur krijgt `is_historical: true`, invoice-number prefix `H{year}-` en telt gewoon mee in het openstaand saldo van de huurder. Duplicate-check op (tenant, period) is bewust gedrophed voor historische zodat meerdere entries per maand mogen (bv. "borg", "achterstand", "reparatiekost"). Frontend: `InvoiceForm.jsx` heeft nu een segmented toggle "Nieuwe factuur / Historische achterstand". In `InvoiceRow.jsx` + `MobileInvoiceLine` verschijnt een violet "Historisch"-badge + de omschrijving eronder.
+
+Backend regressietests: `/app/backend/tests/test_historical_invoice.py` (5 tests: create + reject-future + reject-zero + reject-invalid-date + allow-multiple-per-period, allemaal groen).
+
+
 ## Latest Fix (2026-02-12) — QuickPay: methode-toggle verwijderd
 Op verzoek van gebruiker is de Contant/Bankoverschrijving-toggle in de "Snelle betaling" modal (`/app/frontend/src/pages/vastgoed/admin/invoices/QuickPayModal.jsx`) verwijderd. Snelle registratie loopt nu altijd als `contant`. Bijkomend opgeruimd: ongebruikte `setMethod` state → const, en ontbrekende `FileText` import toegevoegd. `oxlint`-config uitgebreid met `importScripts` en `__non_webpack_require__` globals om pre-completion checks door te laten.
 
