@@ -3333,7 +3333,22 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     if sig_bytes:
         try:
             from reportlab.lib.utils import ImageReader
-            img = ImageReader(io.BytesIO(sig_bytes))
+            from PIL import Image as _PIL
+            # Verwijder witte achtergrond zodat de handtekening transparant
+            # over de Opmerking-tekst valt. Elke pixel waar R,G,B allemaal
+            # > 240 zijn (bijna-wit van geüploade JPG's/PNG's zonder alpha)
+            # krijgt alpha=0. Bestaande alpha-kanaal blijft behouden.
+            _im = _PIL.open(io.BytesIO(sig_bytes)).convert("RGBA")
+            _pixels = _im.load()
+            for _y in range(_im.height):
+                for _x in range(_im.width):
+                    r, g, b, a = _pixels[_x, _y]
+                    if r > 240 and g > 240 and b > 240:
+                        _pixels[_x, _y] = (r, g, b, 0)
+            _out = io.BytesIO()
+            _im.save(_out, format="PNG")
+            _out.seek(0)
+            img = ImageReader(_out)
             iw, ih = img.getSize()
             # 12mm hoog — genoeg groot om leesbaar te zijn maar zonder de
             # Opmerking-sectie erboven te overlappen.
