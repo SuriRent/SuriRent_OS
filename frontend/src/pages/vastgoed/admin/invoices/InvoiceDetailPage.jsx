@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
   ChevronRight, Mail, PiggyBank, Loader2, MessageCircle,
-  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote,
+  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote, Share2,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { openWhatsApp } from '../../../../lib/external-link';
+import { SendDialog } from '../../../../components/EmailDialog';
 import PaidHistorySection from './PaidHistorySection';
 import QuickPayModal from './QuickPayModal';
 
@@ -25,6 +26,8 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
   const paid = (g.all || []).filter((i) => (i.status || '') === 'paid');
   const sev = g.severity;
   const [quickPayInv, setQuickPayInv] = useState(null);
+  const [sendInv, setSendInv] = useState(null);
+  const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
   const [applyingCredit, setApplyingCredit] = useState(false);
 
   const primaryOpen = overdue[0] || current[0] || future[0] || null;
@@ -166,33 +169,45 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
               );
               const partial = Number(inv.paid_amount || 0) > 0;
               return (
-                <button key={inv.id} type="button"
-                  onClick={() => canPay && setQuickPayInv(inv)}
-                  disabled={!canPay}
-                  data-testid={`inv-card-${inv.id}`}
-                  className={`w-full text-left px-4 py-3 flex items-center gap-3 ${canPay ? 'hover:bg-slate-50 active:bg-slate-100' : 'opacity-70 cursor-default'} transition`}>
-                  <div className={`w-9 h-9 rounded-xl ${cfg.iconBg} flex items-center justify-center shrink-0`}>
-                    <cfg.Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-sm truncate">
-                      {monthName} {inv.period_year}
-                      <span className={`ml-2 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.chip}`}>
-                        {cfg.label}
-                      </span>
-                      {partial && (
-                        <span className="ml-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                          partieel
+                <div key={inv.id} className="flex items-center gap-2 px-4 py-3 hover:bg-slate-50 transition"
+                  data-testid={`inv-row-${inv.id}`}>
+                  <button type="button"
+                    onClick={() => canPay && setQuickPayInv(inv)}
+                    disabled={!canPay}
+                    data-testid={`inv-card-${inv.id}`}
+                    className={`flex-1 min-w-0 text-left flex items-center gap-3 ${canPay ? '' : 'opacity-70 cursor-default'}`}>
+                    <div className={`w-9 h-9 rounded-xl ${cfg.iconBg} flex items-center justify-center shrink-0`}>
+                      <cfg.Icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate">
+                        {monthName} {inv.period_year}
+                        <span className={`ml-2 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.chip}`}>
+                          {cfg.label}
                         </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">{inv.invoice_number}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-black text-slate-900 text-sm whitespace-nowrap">{fmtMoney(remaining, inv.currency)}</p>
-                    <p className="text-[10px] text-slate-400">{canPay ? 'nog open' : 'toekomst'}</p>
-                  </div>
-                </button>
+                        {partial && (
+                          <span className="ml-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                            partieel
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">{inv.invoice_number}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-slate-900 text-sm whitespace-nowrap">{fmtMoney(remaining, inv.currency)}</p>
+                      <p className="text-[10px] text-slate-400">{canPay ? 'nog open' : 'toekomst'}</p>
+                    </div>
+                  </button>
+                  {/* Deel-knop: opent SendDialog voor deze specifieke factuur —
+                      admin kan factuur-JPG via WhatsApp of e-mail versturen. */}
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); setSendInv(inv); }}
+                    data-testid={`inv-share-${inv.id}`}
+                    title="Deel deze factuur via WhatsApp of E-mail"
+                    className="shrink-0 w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95">
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -235,7 +250,6 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
               WhatsApp-deeplink naar huurder (opent gewoon de chat) met
               gedetailleerde tekst + JPG-bijlage via Web Share API. */}
           {openCount > 0 && (() => {
-            const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
             const phoneDigits = String(tenant.phone || '').replace(/\D/g, '');
             const hasPhone = phoneDigits.length >= 7;
             const openInvs = [...overdue, ...current];
@@ -317,13 +331,11 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
       </div>
 
       {/* QuickPay modal */}
-      {quickPayInv && (() => {
-        const t = tenants.find((x) => x.id === g.tenant_id) || {};
-        return (
+      {quickPayInv && (
         <QuickPayModal
           invoice={quickPayInv}
           tenantName={g.tenant_name}
-          tenantPhone={t.phone || ''}
+          tenantPhone={tenant.phone || ''}
           otherOpenInvoices={[...overdue, ...current].filter((i) => i.id !== quickPayInv.id)}
           onClose={() => setQuickPayInv(null)}
           onSuccess={(payment) => {
@@ -331,8 +343,21 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             if (onPaid) onPaid(payment);
           }}
         />
-        );
-      })()}
+      )}
+
+      {/* Send factuur dialog — E-mail of WhatsApp met JPG-bijlage */}
+      {sendInv && (
+        <SendDialog
+          documentType="invoice"
+          documentId={sendInv.id}
+          documentLabel="factuur"
+          title={`Factuur ${sendInv.invoice_number} verzenden`}
+          tenantEmail={tenant.email || ''}
+          tenantPhone={tenant.phone || ''}
+          tenantName={g.tenant_name}
+          onClose={() => setSendInv(null)}
+        />
+      )}
     </div>
   );
 }
