@@ -59,10 +59,11 @@ export function SendDialog({
     }
   };
 
-  // Voor payments én overdue-reminders bestaat een JPG-endpoint dat via
-  // Web Share API als foto-bijlage naar WhatsApp gestuurd kan worden.
+  // Voor payments/invoices/overdue-reminders bestaat een JPG-endpoint dat
+  // via Web Share API als foto-bijlage naar WhatsApp gestuurd kan worden.
   const imageEndpoint = (() => {
     if (documentType === 'payment') return `/api/payments/${documentId}/image`;
+    if (documentType === 'invoice') return `/api/invoices/${documentId}/image`;
     if (documentType === 'overdue-reminder') return `/api/tenants/${documentId}/reminder-image`;
     return null;
   })();

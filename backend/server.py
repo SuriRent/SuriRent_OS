@@ -11260,6 +11260,40 @@ async def invoice_pdf_endpoint(invoice_id: str):
     return _pdf_response(pdf, f"factuur-{inv['invoice_number']}.pdf")
 
 
+@api.get("/invoices/{invoice_id}/image")
+async def invoice_image_endpoint(invoice_id: str):
+    """Render de factuur-PDF als JPG-foto voor WhatsApp Web Share.
+    Publieke variant zonder auth zodat gedeelde links buiten de app ook
+    werken (analoog aan /payments/{id}/image)."""
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    t = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0}) or {}
+    a = await db.apartments.find_one({"id": inv.get("apartment_id")}, {"_id": 0}) or {}
+    location_name = None
+    if a.get("location_id"):
+        loc = await db.locations.find_one({"id": a["location_id"]}, {"_id": 0, "name": 1})
+        if loc:
+            location_name = loc.get("name")
+    brand = await _company_brand_info(inv.get("company_id"))
+    inv2 = {**inv, **brand, "location_name": location_name}
+    pdf_bytes = await asyncio.to_thread(invoice_pdf, inv2, t, a, [])
+    try:
+        import pymupdf
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(2.5, 2.5))
+        jpg = pix.tobytes("jpeg", jpg_quality=85)
+        doc.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image render fout: {e}")
+    from fastapi.responses import Response as _Resp
+    return _Resp(
+        content=jpg,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'inline; filename="factuur-{inv["invoice_number"]}.jpg"'},
+    )
+
+
 # =====================================================================
 # Employees & Salaries
 # =====================================================================
