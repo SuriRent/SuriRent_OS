@@ -6,9 +6,13 @@
  * - Bypass /api/* (always go to network)
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v89';
+const CACHE_VERSION = 'surirent-v90';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+// Aparte cache voor bestanden ontvangen via Web Share Target
+// (foto's van bankafschriften, screenshots etc.) — leest de React-app
+// vervolgens uit via /deel-ontvangst?received=1.
+const SHARE_CACHE = `${CACHE_VERSION}-share`;
 
 const PRECACHE = [
   '/',
@@ -75,8 +79,48 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  // ==========================================================
+  // Web Share Target — POST /deel-ontvangst met multipart file
+  // Wordt aangeroepen zodra huurder in een andere app kiest voor
+  // "Deel naar → SuriRent Beheer". We slaan de bijlage(n) op in
+  // een aparte cache-storage en redirecten naar de React-page.
+  // ==========================================================
+  if (req.method === 'POST' && url.pathname === '/deel-ontvangst') {
+    event.respondWith((async () => {
+      try {
+        const form = await req.formData();
+        const files = form.getAll('shared_file').filter((f) => f && f.size > 0);
+        const meta = {
+          title: form.get('title') || '',
+          text: form.get('text') || '',
+          url: form.get('url') || '',
+          count: files.length,
+          received_at: new Date().toISOString(),
+          types: files.map((f) => f.type || 'application/octet-stream'),
+          names: files.map((f) => f.name || 'gedeeld-bestand'),
+        };
+        const cache = await caches.open(SHARE_CACHE);
+        // Verwijder eerdere shares zodat er geen stale bestanden achterblijven
+        for (const k of await cache.keys()) await cache.delete(k);
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const buf = await f.arrayBuffer();
+          const res = new Response(buf, { headers: { 'Content-Type': f.type || 'application/octet-stream' } });
+          await cache.put(`/__share/${i}`, res);
+        }
+        await cache.put('/__share/meta.json',
+          new Response(JSON.stringify(meta), { headers: { 'Content-Type': 'application/json' } }));
+      } catch (e) {
+        console.error('[sw] share-target opslaan mislukt', e);
+      }
+      return Response.redirect('/deel-ontvangst?received=1', 303);
+    })());
+    return;
+  }
+
+  if (req.method !== 'GET') return;
 
   // Never intercept API calls — always network, no caching.
   if (url.pathname.startsWith('/api/')) return;

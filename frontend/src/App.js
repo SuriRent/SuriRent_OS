@@ -58,6 +58,7 @@ const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantS
 const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback'));
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
+const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
 
 function RouteFallback() {
   return (
@@ -78,6 +79,7 @@ function BrandedRouteTree() {
         <Route path="" element={<LoginPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="admin/*" element={<Protected><AdminDashboard /></Protected>} />
+        <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
         <Route path="kiosk/huurder" element={<TenantKioskLayout />} />
         <Route path="kiosk/klant" element={<CustomerDisplay />} />
@@ -209,6 +211,9 @@ function AppRoutes() {
       <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
+      {/* Web Share Target endpoint — ontvangt bestanden gedeeld vanuit
+          andere apps (WhatsApp, camera, foto's) via de PWA share-sheet. */}
+      <Route path="/deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />
       <Route path="/huurder/portaal" element={<Navigate to="/kiosk/huurder" replace />} />
@@ -255,6 +260,9 @@ function HybridRoutes() {
           crasht de flow met "Onbekend bedrijf 404". */}
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/qr-link" element={<QrLinkPage />} />
+      {/* Web Share Target endpoint — ontvangt bestanden gedeeld vanuit
+          andere apps via de PWA share-sheet (foto's, PDF's). */}
+      <Route path="/deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
       {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
       <Route path="/huurder" element={<Navigate to="/kiosk/huurder" replace />} />
       <Route path="/huurder/portaal" element={<Navigate to="/kiosk/huurder" replace />} />
