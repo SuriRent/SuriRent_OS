@@ -30,7 +30,8 @@ import json
 
 from pdf_gen import (
     receipt_pdf_blue_house as receipt_pdf,
-    contract_pdf, invoice_pdf, deposit_refund_pdf, payslip_pdf,
+    invoice_pdf_blue_house as invoice_pdf,
+    contract_pdf, deposit_refund_pdf, payslip_pdf,
     payment_plan_pdf,
     onboarding_pdf, _make_qr_png,
     reminder_pdf_blue_house,
@@ -7695,6 +7696,7 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         {"_id": 0, "name": 1, "contact_email": 1, "contact_phone": 1,
          "whatsapp_number": 1, "tagline": 1,
          "address": 1, "branding": 1,
+         "bank_account_sr": 1, "bank_account_nl": 1,
          "landlord_name": 1, "landlord_birth_date": 1, "landlord_id_number": 1},
     ) or {}
     settings = await db.company_settings.find_one(
@@ -7734,8 +7736,12 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         # Verhuurder-persoonsgegevens t.b.v. huurcontracten. Fallback op
         # de bedrijfsnaam wanneer geen aparte verhuurder-naam is ingesteld.
         "landlord": co.get("landlord_name") or co.get("name") or "",
+        "landlord_name": co.get("landlord_name") or co.get("name") or "",
         "landlord_dob": co.get("landlord_birth_date") or "",
         "landlord_id": co.get("landlord_id_number") or "",
+        "contact_email": co.get("contact_email") or "",
+        "bank_account_sr": co.get("bank_account_sr") or "",
+        "bank_account_nl": co.get("bank_account_nl") or "",
     }
 
 
@@ -11236,6 +11242,11 @@ async def invoice_pdf_endpoint(invoice_id: str):
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
     t = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0}) or {}
     a = await db.apartments.find_one({"id": inv.get("apartment_id")}, {"_id": 0}) or {}
+    location_name = None
+    if a.get("location_id"):
+        loc = await db.locations.find_one({"id": a["location_id"]}, {"_id": 0, "name": 1})
+        if loc:
+            location_name = loc.get("name")
     # Find related huur payments
     payments = await db.payments.find({
         "tenant_id": inv["tenant_id"],
@@ -11243,7 +11254,8 @@ async def invoice_pdf_endpoint(invoice_id: str):
         "period_month": inv["period_month"],
         "period_year": inv["period_year"],
     }, {"_id": 0}).to_list(50)
-    inv = {**inv, **(await _company_brand_info(inv.get("company_id")))}
+    brand = await _company_brand_info(inv.get("company_id"))
+    inv = {**inv, **brand, "location_name": location_name}
     pdf = await asyncio.to_thread(invoice_pdf, inv, t, a, payments)
     return _pdf_response(pdf, f"factuur-{inv['invoice_number']}.pdf")
 

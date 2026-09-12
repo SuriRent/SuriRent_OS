@@ -3509,3 +3509,325 @@ def reminder_pdf_blue_house(reminder: dict) -> bytes:
 
     c.showPage(); c.save(); buf.seek(0)
     return buf.getvalue()
+
+
+
+# =====================================================================
+# Nieuwe huurfactuur: "Blue House" ontwerp (op verzoek gebruiker, feb 2026).
+# A4 landscape — huisje-icoon + HUURFACTUUR titel, Van/Aan-blokken met
+# lichtblauwe headers, Omschrijving/Periode/Bedrag-tabel met donkerblauwe
+# kop, Betalingsgegevens links + "Let op:" vervaldatum-kader rechts,
+# tekening handtekeningen onderaan.
+# =====================================================================
+def _bh_hbar(c, x, y, w, h, text, radius=6, fill=None, text_color=None, font_size=11):
+    """Lichtblauwe rounded header-bar met titel — herhaald in Van/Aan/
+    Overzicht/Betalingsgegevens blokken."""
+    fill = fill or _BH_BAND
+    text_color = text_color or _BH_INK
+    c.saveState()
+    c.setFillColor(fill); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.roundRect(x, y, w, h, radius, stroke=1, fill=1)
+    c.setFillColor(text_color); c.setFont(_LUX_SANS_BOLD, font_size)
+    c.drawString(x + 4 * mm, y + h / 2 - font_size / 3.2, text)
+    c.restoreState()
+
+
+def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _payments: list) -> bytes:
+    """Huurfactuur in blauw huisje-ontwerp, matching kwitantie-stijl."""
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.utils import ImageReader
+
+    PAGE_W, PAGE_H = landscape(A4)  # 842 × 595 pt
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
+    c.setTitle(f"Factuur {invoice.get('invoice_number', '')}")
+
+    margin = 12 * mm
+    c.setStrokeColor(_BH_INK); c.setLineWidth(1.5)
+    c.rect(margin, margin, PAGE_W - 2 * margin, PAGE_H - 2 * margin, stroke=1, fill=0)
+
+    pad = margin + 8 * mm
+    right_x = PAGE_W - pad
+    header_top = PAGE_H - pad - 3
+
+    # ---- Header
+    icon_size = 20 * mm
+    logo_bytes = invoice.get("company_logo_bytes")
+    if logo_bytes:
+        try:
+            c.drawImage(ImageReader(io.BytesIO(logo_bytes)),
+                        pad, header_top - icon_size, icon_size, icon_size,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+    else:
+        _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+
+    title_x = pad + icon_size + 6 * mm
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 26)
+    c.drawString(title_x, header_top - 6 * mm, "HUURFACTUUR")
+    c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(title_x, header_top - 11 * mm, "Appartement / Woning")
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.HexColor("#3A5A85"))
+    c.drawString(title_x, header_top - 16 * mm, "Betreft: huurbetaling voor het gehuurde appartement")
+
+    # ---- Rechter info-kader
+    box_w = 88 * mm; box_h = 22 * mm
+    box_x = right_x - box_w
+    box_y = header_top - box_h + 3
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.roundRect(box_x, box_y, box_w, box_h, 4, stroke=1, fill=1)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 10)
+    lines = [
+        ("Factuurnummer:", invoice.get("invoice_number") or "—"),
+        ("Factuurdatum:", _fmt_date_nl(invoice.get("created_at")) or _fmt_date_nl(datetime.utcnow().isoformat())),
+        ("Vervaldatum:", _fmt_date_nl(invoice.get("due_date")) or f"15 {MONTHS_NL[(invoice.get('period_month') or 1) - 1]} {invoice.get('period_year')}"),
+    ]
+    for i, (label, value) in enumerate(lines):
+        row_y = box_y + box_h - 6 * mm - i * 6 * mm
+        c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 9.5)
+        c.drawString(box_x + 4 * mm, row_y, label)
+        c.setFillColor(colors.black); c.setFont(_LUX_SANS, 10)
+        c.drawString(box_x + 40 * mm, row_y, str(value))
+
+    # Divider onder header
+    div_y = header_top - 22 * mm
+    c.setStrokeColor(_BH_INK); c.setLineWidth(0.5)
+    c.line(pad, div_y, right_x, div_y)
+
+    # ---- Van / Aan blokken
+    party_top = div_y - 4 * mm
+    col_w = (PAGE_W - 2 * pad - 6 * mm) / 2
+    left_col_x = pad
+    right_col_x = pad + col_w + 6 * mm
+
+    _bh_hbar(c, left_col_x, party_top - 8 * mm, col_w, 8 * mm, "Van (verhuurder):")
+    _bh_hbar(c, right_col_x, party_top - 8 * mm, col_w, 8 * mm, "Aan (huurder):")
+
+    # Split company/tenant address across lines (max 2 for company, 3 for tenant)
+    company_addr_lines = [ln for ln in (invoice.get("company_address") or "").split("\n") if ln.strip()][:2]
+    if not company_addr_lines:
+        company_addr_lines = ["—"]
+    apt_addr_lines = []
+    if apartment.get("number"):
+        apt_addr_lines.append(f"Appartement {apartment['number']}")
+    if invoice.get("location_name"):
+        apt_addr_lines.append(str(invoice["location_name"]))
+    elif apartment.get("address"):
+        apt_addr_lines.append(str(apartment["address"]))
+    if not apt_addr_lines:
+        apt_addr_lines = ["—"]
+
+    def _kv_block(x, y, rows):
+        c.setFont(_LUX_SANS, 10)
+        for i, (label, values) in enumerate(rows):
+            row_y = y - i * 5.5 * mm
+            c.setFillColor(_BH_INK); c.drawString(x + 2, row_y, label)
+            c.drawString(x + 24 * mm, row_y, ":")
+            c.setFillColor(colors.black)
+            if isinstance(values, list):
+                for j, v in enumerate(values):
+                    c.drawString(x + 27 * mm, row_y - j * 4.5 * mm, str(v))
+            else:
+                c.drawString(x + 27 * mm, row_y, str(values) or "—")
+
+    verhuurder_name = invoice.get("landlord_name") or invoice.get("company_name") or "—"
+    verhuurder_rows = [
+        ("Naam", verhuurder_name),
+        ("Adres", company_addr_lines),
+    ]
+    # Push telefoon/email after multi-line adres
+    base_y = party_top - 14 * mm
+    _kv_block(left_col_x, base_y, verhuurder_rows)
+    # Manual placement for phone + email so they line up under the address block
+    addr_lines = len(company_addr_lines)
+    phone_y = base_y - (1 * 5.5 * mm) - (addr_lines - 1) * 4.5 * mm - 5.5 * mm
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS, 10)
+    c.drawString(left_col_x + 2, phone_y, "Telefoon")
+    c.drawString(left_col_x + 24 * mm, phone_y, ":")
+    c.setFillColor(colors.black)
+    c.drawString(left_col_x + 27 * mm, phone_y, invoice.get("company_phone") or invoice.get("company_whatsapp") or "—")
+    email_y = phone_y - 5.5 * mm
+    c.setFillColor(_BH_INK); c.drawString(left_col_x + 2, email_y, "E-mail")
+    c.drawString(left_col_x + 24 * mm, email_y, ":")
+    c.setFillColor(colors.black)
+    c.drawString(left_col_x + 27 * mm, email_y, invoice.get("contact_email") or "—")
+
+    huurder_rows = [
+        ("Naam", tenant.get("name") or "—"),
+        ("Adres", apt_addr_lines[:3]),
+    ]
+    _kv_block(right_col_x, base_y, huurder_rows)
+    apt_lines = len(apt_addr_lines[:3])
+    r_phone_y = base_y - (1 * 5.5 * mm) - (apt_lines - 1) * 4.5 * mm - 5.5 * mm
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS, 10)
+    c.drawString(right_col_x + 2, r_phone_y, "Telefoon")
+    c.drawString(right_col_x + 24 * mm, r_phone_y, ":")
+    c.setFillColor(colors.black)
+    c.drawString(right_col_x + 27 * mm, r_phone_y, tenant.get("phone") or "—")
+
+    # ---- Overzicht factuur titel
+    ov_y = base_y - 30 * mm
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 14)
+    c.drawString(pad, ov_y, "Overzicht factuur")
+
+    # ---- Tabel Omschrijving | Periode | Bedrag
+    tbl_top = ov_y - 4 * mm
+    tbl_x = pad; tbl_w = PAGE_W - 2 * pad
+    row_h = 8 * mm
+    omsch_col_w = tbl_w * 0.45
+    per_col_w = tbl_w * 0.30
+    bedr_col_x = tbl_x + omsch_col_w + per_col_w
+
+    # Header — donkerblauw met witte tekst
+    c.setFillColor(_BH_INK); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.rect(tbl_x, tbl_top - row_h, tbl_w, row_h, stroke=1, fill=1)
+    c.setFillColor(colors.white); c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(tbl_x + 4 * mm, tbl_top - row_h + 2.5 * mm, "Omschrijving")
+    c.drawString(tbl_x + omsch_col_w + 4 * mm, tbl_top - row_h + 2.5 * mm, "Periode")
+    # "Bedrag" rechts-uitlijnen
+    txt = "Bedrag"
+    tw = c.stringWidth(txt, _LUX_SANS_BOLD, 10)
+    c.drawString(tbl_x + tbl_w - 4 * mm - tw, tbl_top - row_h + 2.5 * mm, txt)
+
+    period_lbl = ""
+    if invoice.get("period_month") and invoice.get("period_year"):
+        try:
+            period_lbl = f"{MONTHS_NL[int(invoice['period_month']) - 1].capitalize()} {invoice['period_year']}"
+        except Exception:
+            pass
+    currency = invoice.get("currency") or "SRD"
+    amount = float(invoice.get("amount") or 0)
+    service = float(invoice.get("service_charge") or 0)
+    huur_amount = amount - service if service > 0 else amount
+
+    rows = []
+    # Historische facturen hebben vrije omschrijving — gebruik die als eerste regel
+    if invoice.get("is_historical") and invoice.get("description"):
+        rows.append((invoice["description"], period_lbl, huur_amount))
+    else:
+        rows.append(("Huur appartement", period_lbl, huur_amount))
+    rows.append(("Servicekosten (indien van toepassing)", period_lbl, service))
+
+    for i, (label, period, bedrag) in enumerate(rows):
+        row_y = tbl_top - (i + 2) * row_h
+        # Alternating fill
+        c.setFillColor(colors.white if i % 2 == 0 else _BH_ROW_FILL)
+        c.setStrokeColor(_BH_INK); c.setLineWidth(0.4)
+        c.rect(tbl_x, row_y, tbl_w, row_h, stroke=1, fill=1)
+        c.setFillColor(colors.black); c.setFont(_LUX_SANS, 10)
+        c.drawString(tbl_x + 4 * mm, row_y + 2.5 * mm, label)
+        c.drawString(tbl_x + omsch_col_w + 4 * mm, row_y + 2.5 * mm, period)
+        bedr_txt = _bh_fmt_money(bedrag, currency)
+        bw = c.stringWidth(bedr_txt, _LUX_SANS, 10)
+        c.drawString(tbl_x + tbl_w - 4 * mm - bw, row_y + 2.5 * mm, bedr_txt)
+
+    # Totaal-rij (lichtblauw, dikke rand boven)
+    tot_y = tbl_top - (len(rows) + 2) * row_h
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.rect(tbl_x, tot_y, tbl_w, row_h, stroke=1, fill=1)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 12)
+    c.drawString(tbl_x + 4 * mm, tot_y + 2.5 * mm, "Totaal te betalen")
+    tot_txt = _bh_fmt_money(amount, currency)
+    tw2 = c.stringWidth(tot_txt, _LUX_SANS_BOLD, 12)
+    c.drawString(tbl_x + tbl_w - 4 * mm - tw2, tot_y + 2.5 * mm, tot_txt)
+
+    # ---- Bottom: Betalingsgegevens links + Let-op-kader rechts
+    bot_top = tot_y - 8 * mm
+    bg_w = (tbl_w - 6 * mm) * 0.60
+    lp_w = (tbl_w - 6 * mm) * 0.40
+    bg_x = pad
+    lp_x = pad + bg_w + 6 * mm
+
+    _bh_hbar(c, bg_x, bot_top - 8 * mm, bg_w, 8 * mm, "Betalingsgegevens:")
+    # Bank + rekeningnr uit `bank_account_sr` extraheren als beste-guess
+    bank_raw = (invoice.get("bank_account_sr") or invoice.get("bank_account_nl") or "").strip()
+    bank_name = ""
+    rek_nr = ""
+    rek_naam = invoice.get("landlord_name") or invoice.get("company_name") or ""
+    if bank_raw:
+        # Format: "DSB Bank — 11.22.33.444 (Demo BV)" of vrije tekst
+        parts = bank_raw.replace("—", "-").split("-")
+        if len(parts) >= 2:
+            bank_name = parts[0].strip()
+            rest = parts[1].strip()
+            if "(" in rest:
+                rek_nr, holder = rest.split("(", 1)
+                rek_nr = rek_nr.strip()
+                rek_naam = holder.rstrip(") ").strip() or rek_naam
+            else:
+                rek_nr = rest
+        else:
+            bank_name = bank_raw
+    bg_rows = [
+        ("Bank", bank_name or "—"),
+        ("Rekeningnummer", rek_nr or "—"),
+        ("Naam rekeninghouder", rek_naam or "—"),
+        ("Betalingskenmerk", f"Huur {period_lbl}" + (f" — {apartment.get('number')}" if apartment.get("number") else "")),
+    ]
+    c.setFont(_LUX_SANS, 10)
+    kv_y = bot_top - 14 * mm
+    for i, (lab, val) in enumerate(bg_rows):
+        row_y = kv_y - i * 5.5 * mm
+        c.setFillColor(_BH_INK); c.drawString(bg_x + 2, row_y, lab)
+        c.drawString(bg_x + 44 * mm, row_y, ":")
+        c.setFillColor(colors.black); c.drawString(bg_x + 47 * mm, row_y, str(val))
+
+    # Let-op kader
+    lp_h = 34 * mm
+    lp_y = bot_top - lp_h - 2 * mm
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.roundRect(lp_x, lp_y, lp_w, lp_h, 4, stroke=1, fill=1)
+    # Calendar icon
+    ic_x = lp_x + 5 * mm; ic_y = lp_y + lp_h - 10 * mm; ic_sz = 6 * mm
+    c.setFillColor(_BH_INK)
+    c.rect(ic_x, ic_y, ic_sz, ic_sz * 0.85, stroke=0, fill=1)
+    c.setFillColor(colors.white)
+    c.rect(ic_x + 0.8, ic_y + 0.8, ic_sz - 1.6, ic_sz * 0.55, stroke=0, fill=1)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 12)
+    c.drawString(lp_x + 14 * mm, lp_y + lp_h - 8 * mm, "Let op:")
+    c.setFont(_LUX_SANS, 9.5)
+    due_txt = _fmt_date_nl(invoice.get("due_date")) or f"15 {MONTHS_NL[(invoice.get('period_month') or 1) - 1]} {invoice.get('period_year')}"
+    c.drawString(lp_x + 5 * mm, lp_y + lp_h - 14 * mm, "De huur dient uiterlijk op")
+    c.setFont(_LUX_SANS_BOLD, 10.5)
+    c.drawString(lp_x + 5 * mm, lp_y + lp_h - 19 * mm, due_txt)
+    c.setFont(_LUX_SANS, 9.5)
+    c.drawString(lp_x + 5 * mm, lp_y + lp_h - 24 * mm, "op onze rekening te staan.")
+    c.setFont("Helvetica-Oblique", 8.5); c.setFillColor(colors.HexColor("#3A5A85"))
+    c.drawString(lp_x + 5 * mm, lp_y + lp_h - 29 * mm, "Bij niet tijdige betaling brengen wij rente en")
+    c.drawString(lp_x + 5 * mm, lp_y + lp_h - 32 * mm, "incassokosten in rekening.")
+
+    # ---- Bedankje + handtekening-lijnen onderaan
+    thank_y = lp_y - 4 * mm
+    c.setFillColor(colors.black); c.setFont(_LUX_SANS, 9)
+    c.drawString(pad, thank_y, "Alvast bedankt voor uw tijdige betaling.")
+    c.drawString(pad, thank_y - 4 * mm, "Met vriendelijke groet,")
+    c.setFont(_LUX_SANS_BOLD, 9)
+    c.drawString(pad, thank_y - 8 * mm, verhuurder_name)
+    c.setFont(_LUX_SANS, 8); c.setFillColor(colors.HexColor("#3A5A85"))
+    c.drawString(pad, thank_y - 12 * mm, "Verhuurder")
+
+    # Signatures
+    sig_w = 65 * mm
+    sig_y = thank_y - 10 * mm
+    sig1_x = PAGE_W / 2 + 10 * mm
+    sig2_x = right_x - sig_w
+    c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.line(sig1_x, sig_y, sig1_x + sig_w, sig_y)
+    c.line(sig2_x, sig_y, sig2_x + sig_w, sig_y)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS, 8.5)
+    c.drawString(sig1_x, sig_y - 4 * mm, "Handtekening verhuurder")
+    c.drawString(sig2_x, sig_y - 4 * mm, "Handtekening huurder")
+
+    # Centered italic footer
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.HexColor("#3A5A85"))
+    foot_txt = "Samen zorgen we voor een prettige huurovereenkomst."
+    fw = c.stringWidth(foot_txt, "Helvetica-Oblique", 9)
+    c.drawString(PAGE_W / 2 - fw / 2, margin + 4 * mm, foot_txt)
+
+    c.showPage(); c.save(); buf.seek(0)
+    return buf.getvalue()
