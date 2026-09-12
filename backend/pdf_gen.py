@@ -2991,3 +2991,330 @@ async def luxury_plate_pdf_ai(*, tenant_name: str, apartment_number: str,
     c.save()
     pdf_buf.seek(0)
     return pdf_buf.getvalue()
+
+
+
+# =====================================================================
+# Nieuwe kwitantie: "Blue House" ontwerp (op verzoek gebruiker, feb 2026).
+# Volledig canvas-gebaseerd voor pixel-perfecte layout. A4 landscape zodat
+# de brede tabel + betaalwijze-checkboxes op één pagina passen.
+# =====================================================================
+_BH_INK = colors.HexColor("#0D3B7A")      # Deep navy blue — borders/text
+_BH_BAND = colors.HexColor("#DCE7F5")     # Light blue fill for header box + table row
+_BH_ROW_FILL = colors.HexColor("#E9F0F9")  # Alt light blue for line-item row
+
+
+def _bh_fmt_money(amount: float, currency: str = "SRD") -> str:
+    """Nederlandse notatie: `5600` → `SRD 5.600,00`."""
+    try:
+        s = f"{float(amount):,.2f}"
+        # ',' → '.' voor duizend, '.' → ',' voor decimaal
+        s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{currency} {s}"
+    except Exception:
+        return f"{currency} {amount}"
+
+
+def _bh_house_icon(c, x, y, size):
+    """Teken een simpele blauwe huisje-icoon (dak + gevel + venster) als
+    linker-logo. Als het bedrijf een eigen logo heeft, wordt dat gebruikt
+    ipv deze fallback."""
+    c.saveState()
+    c.setStrokeColor(_BH_INK)
+    c.setFillColor(_BH_INK)
+    c.setLineWidth(1.5)
+    # Dak (driehoek)
+    p = c.beginPath()
+    p.moveTo(x, y + size * 0.55)
+    p.lineTo(x + size * 0.5, y + size)
+    p.lineTo(x + size, y + size * 0.55)
+    p.close()
+    c.drawPath(p, stroke=1, fill=1)
+    # Gevel (rechthoek)
+    body_h = size * 0.55
+    c.rect(x + size * 0.1, y, size * 0.8, body_h, stroke=1, fill=1)
+    # Venster (wit)
+    c.setFillColor(colors.white)
+    win_size = size * 0.22
+    c.rect(x + size * 0.28, y + size * 0.12, win_size, win_size, stroke=0, fill=1)
+    c.rect(x + size * 0.55, y + size * 0.12, win_size, win_size, stroke=0, fill=1)
+    # Vensterkruis
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.8)
+    c.line(x + size * 0.28 + win_size / 2, y + size * 0.12,
+           x + size * 0.28 + win_size / 2, y + size * 0.12 + win_size)
+    c.line(x + size * 0.28, y + size * 0.12 + win_size / 2,
+           x + size * 0.28 + win_size, y + size * 0.12 + win_size / 2)
+    c.line(x + size * 0.55 + win_size / 2, y + size * 0.12,
+           x + size * 0.55 + win_size / 2, y + size * 0.12 + win_size)
+    c.line(x + size * 0.55, y + size * 0.12 + win_size / 2,
+           x + size * 0.55 + win_size, y + size * 0.12 + win_size / 2)
+    c.restoreState()
+
+
+def _bh_checkbox(c, x, y, size, checked=False):
+    """Teken een vierkant checkbox-icoon; indien checked, teken een dikke
+    blauwe vinkje binnenin."""
+    c.saveState()
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(1.2)
+    c.setFillColor(colors.white)
+    c.rect(x, y, size, size, stroke=1, fill=1)
+    if checked:
+        c.setStrokeColor(_BH_INK)
+        c.setLineWidth(2.2)
+        c.setLineCap(1)
+        c.line(x + size * 0.18, y + size * 0.48,
+               x + size * 0.42, y + size * 0.22)
+        c.line(x + size * 0.42, y + size * 0.22,
+               x + size * 0.85, y + size * 0.72)
+    c.restoreState()
+
+
+def receipt_pdf_blue_house(payment: dict) -> bytes:
+    """Nieuwe kwitantie in blauw huisje-ontwerp — één A4 landscape pagina.
+
+    Layout:
+      • Dikke blauwe dubbele-rand rond de hele pagina
+      • Header: huisje-icoon + KWITANTIE-titel + subtitel + italic tagline;
+        rechts een lichtblauw kader met "Kwitantie nr.:" en "Datum:"
+      • Twee-koloms Verhuurder | Huurder met verticale scheidingslijn
+      • Tabel Omschrijving | Bedrag + Totaal ontvangen-rij (blauwe kop)
+      • Betaalwijze-rij: 3 checkboxes (Contant/Bankoverschrijving/Anders)
+      • Verklaring-paragraaf + Opmerking-sectie
+      • Twee handtekeningen-lijnen onderaan
+    """
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.utils import ImageReader
+
+    PAGE_W, PAGE_H = landscape(A4)  # 842 × 595 pt
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
+    c.setTitle(f"Kwitantie {payment.get('receipt_number', '')}")
+
+    # ---- Dubbele blauwe pagina-rand
+    margin = 14 * mm
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(2.5)
+    c.rect(margin, margin, PAGE_W - 2 * margin, PAGE_H - 2 * margin, stroke=1, fill=0)
+    c.setLineWidth(0.6)
+    inner = margin + 3
+    c.rect(inner, inner, PAGE_W - 2 * inner, PAGE_H - 2 * inner, stroke=1, fill=0)
+
+    # ---- Content area binnen dubbele rand
+    pad = margin + 10 * mm
+    right_x = PAGE_W - pad
+
+    # ---- Header: logo/huisje + titel-blok links; kwitantie-info kader rechts
+    header_top = PAGE_H - pad - 5
+    icon_size = 38 * mm / 1.8  # ~21mm
+    logo_bytes = payment.get("company_logo_bytes")
+    if logo_bytes:
+        try:
+            c.drawImage(ImageReader(io.BytesIO(logo_bytes)),
+                        pad, header_top - icon_size, icon_size, icon_size,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+    else:
+        _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+
+    title_x = pad + icon_size + 8 * mm
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 30)
+    c.drawString(title_x, header_top - 7 * mm, "KWITANTIE")
+    c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(title_x, header_top - 13 * mm, "HUURBETALING / HUUROVEREENKOMST")
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.HexColor("#3A5A85"))
+    c.drawString(title_x, header_top - 19 * mm, "Ontvangen betaling voor de huur van het appartement.")
+
+    # Rechter info-kader
+    box_w = 78 * mm
+    box_h = 24 * mm
+    box_x = right_x - box_w
+    box_y = header_top - box_h + 3
+    c.setFillColor(_BH_BAND)
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.6)
+    c.rect(box_x, box_y, box_w, box_h, stroke=1, fill=1)
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(box_x + 5 * mm, box_y + box_h - 8 * mm, "Kwitantie nr.:")
+    c.drawString(box_x + 5 * mm, box_y + box_h - 16 * mm, "Datum:")
+    c.setFont(_LUX_SANS, 10)
+    c.drawString(box_x + 32 * mm, box_y + box_h - 8 * mm, payment.get("receipt_number", "—"))
+    c.drawString(box_x + 32 * mm, box_y + box_h - 16 * mm, _fmt_date_nl(payment.get("paid_at")))
+
+    # ---- Verhuurder / Huurder blok
+    info_top = header_top - 27 * mm
+    col_w = (PAGE_W - 2 * pad - 6 * mm) / 2
+    left_col_x = pad
+    right_col_x = pad + col_w + 6 * mm
+
+    def _party_block(x, y, title, rows):
+        c.setFillColor(_BH_INK)
+        c.setFont(_LUX_SANS_BOLD, 12)
+        c.drawString(x, y, title)
+        c.setLineWidth(0.4)
+        c.setStrokeColor(_BH_INK)
+        c.line(x, y - 3, x + 26 * mm, y - 3)
+        c.setFont(_LUX_SANS, 10)
+        for i, (label, value) in enumerate(rows):
+            row_y = y - 8 * mm - i * 6 * mm
+            c.setFillColor(_BH_INK)
+            c.drawString(x + 2, row_y, label)
+            c.drawString(x + 24 * mm, row_y, ":")
+            c.setFillColor(colors.black)
+            c.drawString(x + 27 * mm, row_y, value or "—")
+
+    # Verhuurder-data uit company brand info
+    landlord_name = payment.get("landlord") or payment.get("company_name") or "—"
+    landlord_addr = payment.get("company_address") or "—"
+    landlord_phone = payment.get("company_whatsapp") or payment.get("company_phone") or "—"
+
+    # Huurder-data — appartement als "adres"
+    tenant_name = payment.get("tenant_name") or "—"
+    tenant_addr = ""
+    if payment.get("apartment_number"):
+        tenant_addr = f"Appartement {payment['apartment_number']}"
+        if payment.get("location_name"):
+            tenant_addr = f"{tenant_addr} — {payment['location_name']}"
+    tenant_phone = payment.get("tenant_phone") or "—"
+
+    _party_block(left_col_x, info_top, "Verhuurder:", [
+        ("Naam", landlord_name),
+        ("Adres", landlord_addr),
+        ("Telefoon", landlord_phone),
+    ])
+    _party_block(right_col_x, info_top, "Huurder:", [
+        ("Naam", tenant_name),
+        ("Adres", tenant_addr or "—"),
+        ("Telefoon", tenant_phone),
+    ])
+
+    # Verticale scheidingslijn tussen kolommen
+    div_x = pad + col_w + 3 * mm
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.5)
+    c.line(div_x, info_top - 24 * mm, div_x, info_top + 3)
+
+    # ---- Tabel: Omschrijving | Bedrag
+    tbl_top = info_top - 34 * mm
+    tbl_x = pad
+    tbl_w = PAGE_W - 2 * pad
+    row_h = 9 * mm
+    # Header rij (lichtblauw)
+    c.setFillColor(_BH_BAND)
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.6)
+    c.rect(tbl_x, tbl_top - row_h, tbl_w, row_h, stroke=1, fill=1)
+    # Vertical splitter for Bedrag-column
+    amt_col_w = 55 * mm
+    c.line(tbl_x + tbl_w - amt_col_w, tbl_top - row_h, tbl_x + tbl_w - amt_col_w, tbl_top)
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(tbl_x + 5 * mm, tbl_top - row_h + 2.5 * mm, "Omschrijving")
+    c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - row_h + 2.5 * mm, "Bedrag")
+
+    # Regel: omschrijving
+    period_lbl = ""
+    if payment.get("period_month") and payment.get("period_year"):
+        period_lbl = f"{MONTHS_NL[payment['period_month'] - 1]} {payment['period_year']}"
+    category = (payment.get("category") or "huur").lower()
+    if category == "huur" and period_lbl:
+        omschrijving = f"Huur maand {period_lbl}"
+    elif category:
+        omschrijving = f"{category.capitalize()}" + (f" — {period_lbl}" if period_lbl else "")
+    else:
+        omschrijving = payment.get("note") or "Huurbetaling"
+
+    amount = float(payment.get("amount") or 0)
+    currency = payment.get("currency") or "SRD"
+
+    c.setStrokeColor(_BH_INK)
+    c.setFillColor(colors.white)
+    c.rect(tbl_x, tbl_top - 2 * row_h, tbl_w, row_h, stroke=1, fill=1)
+    c.line(tbl_x + tbl_w - amt_col_w, tbl_top - 2 * row_h, tbl_x + tbl_w - amt_col_w, tbl_top - row_h)
+    c.setFillColor(colors.black)
+    c.setFont(_LUX_SANS, 11)
+    c.drawString(tbl_x + 5 * mm, tbl_top - 2 * row_h + 2.5 * mm, omschrijving)
+    c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 2 * row_h + 2.5 * mm, _bh_fmt_money(amount, currency))
+
+    # Totaal-rij (lichtblauw)
+    c.setFillColor(_BH_BAND)
+    c.rect(tbl_x, tbl_top - 3 * row_h, tbl_w, row_h, stroke=1, fill=1)
+    c.line(tbl_x + tbl_w - amt_col_w, tbl_top - 3 * row_h, tbl_x + tbl_w - amt_col_w, tbl_top - 2 * row_h)
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(tbl_x + 5 * mm, tbl_top - 3 * row_h + 2.5 * mm, "Totaal ontvangen")
+    c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 3 * row_h + 2.5 * mm, _bh_fmt_money(amount, currency))
+
+    # ---- Betaalwijze checkboxes
+    bw_y = tbl_top - 3 * row_h - 10 * mm
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(pad, bw_y, "Betaalwijze:")
+    method = (payment.get("method") or "contant").lower()
+    box_size = 4 * mm
+    positions = [
+        ("Contant", method == "contant"),
+        ("Bankoverschrijving", method in ("bank", "bankoverschrijving", "overschrijving", "transfer")),
+        ("Anders", method not in ("contant", "bank", "bankoverschrijving", "overschrijving", "transfer")),
+    ]
+    cx = pad + 30 * mm
+    for label, checked in positions:
+        _bh_checkbox(c, cx, bw_y - 1, box_size, checked=checked)
+        c.setFillColor(_BH_INK)
+        c.setFont(_LUX_SANS, 10)
+        c.drawString(cx + box_size + 2 * mm, bw_y, label)
+        cx += box_size + 2 * mm + c.stringWidth(label, _LUX_SANS, 10) + 8 * mm
+
+    # Fill-in line na "Anders:"
+    line_x = cx - 6 * mm
+    line_end_x = right_x
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.5)
+    c.line(line_x, bw_y - 1.5, line_end_x, bw_y - 1.5)
+
+    # ---- Verklaring-paragraaf
+    decl_y = bw_y - 11 * mm
+    c.setFillColor(colors.black)
+    c.setFont(_LUX_SANS, 10)
+    decl_text = (
+        f"Hierbij verklaart de verhuurder dat hij/zij van de huurder het bedrag van "
+        f"{_bh_fmt_money(amount, currency)} heeft ontvangen"
+    )
+    c.drawString(pad, decl_y, decl_text)
+    c.drawString(pad, decl_y - 5 * mm, "voor de huur van het hierboven genoemde appartement.")
+
+    # ---- Opmerking-sectie
+    note_y = decl_y - 14 * mm
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(pad, note_y, "Opmerking:")
+    note_text = payment.get("note") or ""
+    if not note_text and period_lbl:
+        note_text = f"Deze betaling betreft uitsluitend de huur over {period_lbl}."
+    c.setFillColor(colors.black)
+    c.setFont(_LUX_SANS, 10)
+    if note_text:
+        c.drawString(pad, note_y - 5 * mm, note_text[:180])
+
+    # ---- Handtekening-lijnen onderaan
+    sig_y = pad + 12 * mm
+    sig_w = 90 * mm
+    c.setStrokeColor(_BH_INK)
+    c.setLineWidth(0.7)
+    c.line(pad, sig_y, pad + sig_w, sig_y)
+    c.line(right_x - sig_w, sig_y, right_x, sig_y)
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 9)
+    c.drawString(pad, sig_y - 5 * mm, "Handtekening verhuurder")
+    c.drawString(right_x - sig_w, sig_y - 5 * mm, "Handtekening huurder")
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf.getvalue()

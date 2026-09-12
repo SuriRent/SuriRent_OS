@@ -29,7 +29,8 @@ import asyncio
 import json
 
 from pdf_gen import (
-    receipt_pdf, contract_pdf, invoice_pdf, deposit_refund_pdf, payslip_pdf,
+    receipt_pdf_blue_house as receipt_pdf,
+    contract_pdf, invoice_pdf, deposit_refund_pdf, payslip_pdf,
     payment_plan_pdf,
     onboarding_pdf, _make_qr_png,
 )
@@ -3951,7 +3952,7 @@ async def preview_branding_pdf(
         "tenant_id": "preview",
         **pdf_meta,
     }
-    from pdf_gen import receipt_pdf as _rp
+    from pdf_gen import receipt_pdf_blue_house as _rp
     pdf_bytes = await asyncio.to_thread(_rp, demo_payment)
     return Response(
         content=pdf_bytes, media_type="application/pdf",
@@ -7740,11 +7741,14 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
 
 async def _enrich_payment(p: dict) -> dict:
     tenant_name = None
+    tenant_phone = None
     apt_number = None
     location_name = None
     if p.get("tenant_id"):
-        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
-        tenant_name = t["name"] if t else None
+        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1, "phone": 1})
+        if t:
+            tenant_name = t.get("name")
+            tenant_phone = t.get("phone") or None
     if p.get("apartment_id"):
         a = await db.apartments.find_one(
             {"id": p["apartment_id"]}, {"_id": 0, "number": 1, "location_id": 1}
@@ -7784,7 +7788,8 @@ async def _enrich_payment(p: dict) -> dict:
         p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
     if not p.get("paid_at"):
         p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
-    return {**p, "tenant_name": tenant_name, "apartment_number": apt_number,
+    return {**p, "tenant_name": tenant_name, "tenant_phone": tenant_phone,
+            "apartment_number": apt_number,
             "location_name": location_name,
             "outstanding_after": round(outstanding_after, 2),
             **company_info}
