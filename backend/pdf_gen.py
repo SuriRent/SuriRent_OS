@@ -3326,6 +3326,23 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     # kwitantie een bewijs is dat de VERHUURDER geld ontvangen heeft).
     sig_y = pad + 12 * mm
     sig_w = 90 * mm
+    # Verhuurder-handtekening als afbeelding boven de lijn (indien geüpload
+    # in Instellingen → Verhuurder → Handtekening). Zonder achtergrond
+    # zodat hij transparant over de lijn valt.
+    sig_bytes = payment.get("landlord_signature_bytes")
+    if sig_bytes:
+        try:
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(io.BytesIO(sig_bytes))
+            iw, ih = img.getSize()
+            # Grote handtekening (max 18mm hoog, breedte proportioneel).
+            target_h = 18 * mm
+            target_w = min(sig_w * 0.8, iw * (target_h / ih))
+            c.drawImage(img, pad + 3 * mm, sig_y + 1,
+                        target_w, target_h,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
     c.setStrokeColor(_BH_INK)
     c.setLineWidth(0.7)
     c.line(pad, sig_y, pad + sig_w, sig_y)

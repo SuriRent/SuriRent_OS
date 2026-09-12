@@ -7697,7 +7697,8 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
          "whatsapp_number": 1, "tagline": 1,
          "address": 1, "branding": 1,
          "bank_account_sr": 1, "bank_account_nl": 1, "kkf_number": 1,
-         "landlord_name": 1, "landlord_birth_date": 1, "landlord_id_number": 1},
+         "landlord_name": 1, "landlord_birth_date": 1, "landlord_id_number": 1,
+         "landlord_signature_url": 1},
     ) or {}
     settings = await db.company_settings.find_one(
         {"company_id": company_id}, {"_id": 0, "signature_data": 1},
@@ -7715,6 +7716,16 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
                     logo_bytes = base64.b64decode(doc["data_b64"])
         except Exception:
             logo_bytes = None
+    # Verhuurder-handtekening bytes: geladen uit uploaded landing-asset (via
+    # Instellingen → Verhuurder → Handtekening upload). Zet dit boven de
+    # "Handtekening verhuurder" lijn op kwitantie / contract.
+    landlord_signature_bytes = None
+    landlord_sig_url = (co.get("landlord_signature_url") or "").strip()
+    if landlord_sig_url:
+        try:
+            landlord_signature_bytes = await _load_landing_asset_bytes(landlord_sig_url)
+        except Exception:
+            landlord_signature_bytes = None
     return {
         "company_name": co.get("name") or "",
         "company_address": co.get("address") or "",
@@ -7743,6 +7754,7 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         "bank_account_sr": co.get("bank_account_sr") or "",
         "bank_account_nl": co.get("bank_account_nl") or "",
         "kkf_number": co.get("kkf_number") or "",
+        "landlord_signature_bytes": landlord_signature_bytes,
     }
 
 
