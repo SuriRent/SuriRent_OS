@@ -1,57 +1,40 @@
 import { useState } from 'react';
-import { Mail, X, Loader2, Send, AlertCircle, Check, MessageCircle, Phone } from 'lucide-react';
+import { Mail, X, Loader2, Send, AlertCircle, Check, MessageCircle } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 import { openWhatsApp } from '../lib/external-link';
 
-const CHANNELS = [
-  { id: 'email', label: 'E-mail', icon: Mail, contact: 'email', endpointKey: 'email' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, contact: 'phone', endpointKey: 'message' },
-  { id: 'sms', label: 'SMS', icon: Phone, contact: 'phone', endpointKey: 'message' },
-];
-
 /**
- * Reusable send dialog supporting e-mail, WhatsApp, and SMS.
+ * SendDialog — E-mail-only versie (WhatsApp/SMS tabs verwijderd op verzoek
+ * gebruiker feb 2026). Bovenaan zit een grote "Verzenden per e-mail" knop
+ * en onderaan een aparte "Open WhatsApp met huurder"-knop die via de Web
+ * Share API de bijbehorende JPG-foto (voor payments) direct als bijlage
+ * naar WhatsApp stuurt. Bij overige document-types valt hij terug op de
+ * wa.me deeplink met PDF-link.
  *
  * Props:
  *  - documentType: 'payment' | 'invoice' | 'contract' | 'overdue-reminder'
- *  - documentId: the id used in the API URL
- *  - documentLabel: e.g. "kwitantie", "factuur", "contract", "herinnering"
- *  - title: shown in modal header (e.g. "Kwitantie KW2026-001 verzenden")
- *  - tenantEmail / tenantPhone: prefilled contact
- *  - tenantName: shown subtitle
- *  - availableChannels: list of channel ids to show, default all 3
+ *  - documentId
+ *  - documentLabel: e.g. "kwitantie", "factuur"
+ *  - title
+ *  - tenantEmail / tenantPhone / tenantName
  *  - onClose, onSent
  */
 export function SendDialog({
   documentType, documentId, documentLabel, title,
   tenantEmail = '', tenantPhone = '', tenantName = '',
-  availableChannels = ['email', 'whatsapp', 'sms'],
+  // availableChannels genegeerd — enkel e-mail + WhatsApp-deeplink onderaan
   onClose, onSent,
 }) {
-  const channels = CHANNELS.filter((c) => availableChannels.includes(c.id));
-  const [channel, setChannel] = useState(channels[0]?.id || 'email');
-  const cur = channels.find((c) => c.id === channel);
-  const initialTo = cur?.contact === 'email' ? tenantEmail : tenantPhone;
-  const [to, setTo] = useState(initialTo);
+  const [to, setTo] = useState(tenantEmail);
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const [waSharing, setWaSharing] = useState(false);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
 
-  const switchChannel = (id) => {
-    setChannel(id);
-    const next = channels.find((c) => c.id === id);
-    setTo(next?.contact === 'email' ? tenantEmail : tenantPhone);
-    setErr(''); setOk('');
-  };
-
-  const validate = () => {
-    if (cur.contact === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+  const validateEmail = () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
       setErr('Voer een geldig e-mailadres in');
-      return false;
-    }
-    if (cur.contact === 'phone' && to.replace(/\D/g, '').length < 7) {
-      setErr('Voer een geldig telefoonnummer in (inclusief landcode)');
       return false;
     }
     return true;
@@ -59,20 +42,14 @@ export function SendDialog({
 
   const send = async () => {
     setErr(''); setOk('');
-    if (!validate()) return;
+    if (!validateEmail()) return;
     setSending(true);
     try {
-      let endpoint;
-      let body;
-      if (channel === 'email') {
-        endpoint = `/email/${documentType}/${documentId}`;
-        body = { to: to.trim(), message: msg.trim() };
-      } else {
-        endpoint = `/message/${documentType}/${documentId}`;
-        body = { to: to.trim(), message: msg.trim(), channel };
-      }
-      const { data } = await api.post(endpoint, body);
-      setOk(`Verzonden naar ${data.sent_to} via ${cur.label}`);
+      const { data } = await api.post(
+        `/email/${documentType}/${documentId}`,
+        { to: to.trim(), message: msg.trim() },
+      );
+      setOk(`Verzonden naar ${data.sent_to} via e-mail`);
       if (onSent) onSent(data);
       setTimeout(() => onClose?.(), 1500);
     } catch (e) {
@@ -80,6 +57,50 @@ export function SendDialog({
     } finally {
       setSending(false);
     }
+  };
+
+  // Voor payments én overdue-reminders bestaat een JPG-endpoint dat via
+  // Web Share API als foto-bijlage naar WhatsApp gestuurd kan worden.
+  const imageEndpoint = (() => {
+    if (documentType === 'payment') return `/api/payments/${documentId}/image`;
+    if (documentType === 'overdue-reminder') return `/api/tenants/${documentId}/reminder-image`;
+    return null;
+  })();
+
+  const openWa = async () => {
+    if (!tenantPhone) return;
+    const phone = tenantPhone.replace(/\D/g, '');
+    if (!phone) return;
+    const greeting = `Beste ${tenantName || 'huurder'},`;
+    const intro = msg.trim() || `Hierbij uw ${documentLabel}.`;
+    // Probeer eerst Web Share met JPG-bijlage — huurder ziet dan de foto
+    // direct in de chat, niet als link (gevraagd door gebruiker).
+    if (imageEndpoint) {
+      setWaSharing(true);
+      try {
+        const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}${imageEndpoint}`);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const file = new File([blob], `${documentLabel}-${documentId.slice(0, 8)}.jpg`, { type: 'image/jpeg' });
+          const shareText = `${greeting}\n\n${intro}`;
+          if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], text: shareText, title });
+            setWaSharing(false);
+            return;
+          }
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') { setWaSharing(false); return; }
+        // eslint-disable-next-line no-console
+        console.warn('[SendDialog] share fout, fallback wa.me', e);
+      }
+      setWaSharing(false);
+    }
+    // Fallback: wa.me deeplink met PDF-link
+    const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
+    const pdfUrl = `${apiBase}/${documentType === 'overdue-reminder' ? 'tenants' : documentType + 's'}/${documentId}/pdf`;
+    const fullMsg = `${greeting}\n\n${intro}\n\n${pdfUrl}\n\nMet vriendelijke groet,\nSuriRent`;
+    openWhatsApp(phone, fullMsg);
   };
 
   return (
@@ -101,35 +122,15 @@ export function SendDialog({
           </button>
         </div>
         <div className="p-5 space-y-4">
-          {channels.length > 1 && (
-            <div className="grid grid-cols-3 gap-2" role="tablist">
-              {channels.map((c) => {
-                const Icon = c.icon;
-                const isActive = channel === c.id;
-                return (
-                  <button key={c.id} onClick={() => switchChannel(c.id)}
-                    data-testid={`send-channel-${c.id}`}
-                    className={`flex items-center justify-center gap-1.5 h-10 rounded-xl text-xs font-bold transition-all ${
-                      isActive ? 'bg-[#FF5C00] text-white shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}>
-                    <Icon className="w-3.5 h-3.5" /> {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">
-              {cur.contact === 'email' ? 'Ontvanger e-mail' : 'Telefoonnummer (incl. landcode)'}
-            </label>
-            <input type={cur.contact === 'email' ? 'email' : 'tel'} value={to} onChange={(e) => setTo(e.target.value)}
-              placeholder={cur.contact === 'email' ? 'huurder@voorbeeld.com' : '+597 8xx xxxx'}
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Ontvanger e-mail</label>
+            <input type="email" value={to} onChange={(e) => setTo(e.target.value)}
+              placeholder="huurder@voorbeeld.com"
               data-testid="send-to"
               className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
-            {!initialTo && (
+            {!tenantEmail && (
               <p className="text-[11px] text-amber-700 mt-1">
-                ⚠️ Huurder heeft geen {cur.contact === 'email' ? 'e-mailadres' : 'telefoonnummer'} in profiel — voer handmatig in.
+                ⚠️ Huurder heeft geen e-mailadres in profiel — voer handmatig in.
               </p>
             )}
           </div>
@@ -157,35 +158,23 @@ export function SendDialog({
             </button>
             <button onClick={send} disabled={sending || !to} data-testid="send-submit"
               className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Verzenden
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Versturen
             </button>
           </div>
 
-          {/* WhatsApp handmatig — opent chat met juiste huurder + bericht
-              met PDF-link. Huurder kan direct op de link tikken om de PDF
-              te openen/downloaden. Geen Twilio nodig, gratis. */}
+          {/* WhatsApp deel — stuurt bij payments/reminders de JPG-foto als
+              bijlage via Web Share API zodat de huurder de foto direct in
+              de chat ziet (geen link). Fallback: wa.me met PDF-link. */}
           {tenantPhone && (
-            <>
-              <button
-                onClick={() => {
-                  const phone = tenantPhone.replace(/\D/g, '');
-                  if (!phone) return;
-                  const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
-                  const pdfUrl = `${apiBase}/${documentType}s/${documentId}/pdf`;
-                  const greeting = `Beste ${tenantName || 'huurder'},`;
-                  const intro = msg.trim() || `Hierbij uw ${documentLabel}.`;
-                  const fullMsg = `${greeting}\n\n${intro}\n\n${pdfUrl}\n\nMet vriendelijke groet,\nSuriRent`;
-                  openWhatsApp(phone, fullMsg);
-                }}
-                data-testid="send-whatsapp-open"
-                className="w-full h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 transition shadow-[0_8px_20px_-5px_rgba(16,185,129,0.5)]">
-                <MessageCircle className="w-4 h-4" />
-                Open WhatsApp met huurder
-              </button>
-              <p className="text-[10px] text-slate-400 text-center -mt-2 leading-snug">
-                Opent WhatsApp met {tenantName || 'huurder'} en bericht met PDF-link klaar om te versturen
-              </p>
-            </>
+            <button
+              onClick={openWa}
+              disabled={waSharing}
+              data-testid="send-whatsapp-open"
+              className="w-full h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 transition shadow-[0_8px_20px_-5px_rgba(16,185,129,0.5)] disabled:opacity-70">
+              {waSharing
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Foto delen…</>
+                : <><MessageCircle className="w-4 h-4" /> Open WhatsApp met huurder</>}
+            </button>
           )}
         </div>
       </div>
@@ -195,7 +184,6 @@ export function SendDialog({
 
 // ============== Backwards-compat: keep EmailDialog signature ==============
 export function EmailDialog({ endpoint, subject, defaultTo, tenantName, documentLabel, onClose, onSent }) {
-  // Derive documentType + id from endpoint like "/email/payment/{id}"
   const m = (endpoint || '').match(/\/email\/([^/]+)\/(.+)/);
   if (!m) return null;
   return (
@@ -206,7 +194,6 @@ export function EmailDialog({ endpoint, subject, defaultTo, tenantName, document
       title={subject}
       tenantEmail={defaultTo || ''}
       tenantName={tenantName}
-      availableChannels={['email']}
       onClose={onClose}
       onSent={onSent}
     />

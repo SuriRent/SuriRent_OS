@@ -1005,16 +1005,30 @@ export default function Payments() {
 
   // Detail-page routing: bij klik op een betaling openen we een aparte
   // pagina (analoog aan PlanDetail in Betalingsregelingen). Terug-knop
-  // sluit en herlaadt.
+  // sluit en herlaadt. Verzenden/Verwijderen-modals staan buiten deze
+  // if-branch zodat ze ook geopend kunnen worden vanuit de detail-view.
   if (detailPayment) {
     return (
-      <PaymentDetail
-        payment={detailPayment}
-        onBack={() => { setDetailPayment(null); load(); }}
-        onEmail={(item) => setEmailing(item)}
-        onDelete={(item) => setDeleting(item)}
-        apiBase={apiBase}
-      />
+      <>
+        <PaymentDetail
+          payment={detailPayment}
+          onBack={() => { setDetailPayment(null); load(); }}
+          onEmail={(item) => setEmailing(item)}
+          onDelete={(item) => setDeleting(item)}
+          apiBase={apiBase}
+        />
+        {emailing && (
+          <SendDialog
+            documentType="payment"
+            documentId={emailing.id}
+            documentLabel="kwitantie"
+            title={`Kwitantie ${emailing.receipt_number} verzenden`}
+            tenantEmail={tenants.find((t) => t.id === emailing.tenant_id)?.email || ''}
+            tenantPhone={tenants.find((t) => t.id === emailing.tenant_id)?.phone || ''}
+            tenantName={emailing.tenant_name}
+            onClose={() => setEmailing(null)} />
+        )}
+      </>
     );
   }
 
