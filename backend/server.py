@@ -9603,7 +9603,8 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
         f"Bedrag: {p_enriched['currency']} {p_enriched['amount']:.2f}\n"
         f"{period_line}"
         f"Methode: {p_enriched.get('method', '')}\n\n"
-        f"📄 Kwitantie PDF: {pdf_link}"
+        f"📷 De kwitantie is als foto meegestuurd — bewaar hem in uw galerij.\n"
+        f"📄 PDF-versie: {pdf_link}"
     )
 
     # Probeer WhatsApp eerst (als geconfigureerd), val terug op SMS.
@@ -13016,7 +13017,8 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
         f"• Bedrag: {p['currency']} {p['amount']:.2f}\n"
         f"• Datum: {p.get('paid_at', '')[:10]}\n"
         f"• Methode: {p.get('method', '')}\n\n"
-        f"📄 Kwitantie PDF: {_public_url(f'/api/payments/{payment_id}/pdf')}\n\n"
+        f"📷 De kwitantie is als foto meegestuurd — bewaar hem in uw galerij.\n"
+        f"📄 PDF-versie: {_public_url(f'/api/payments/{payment_id}/pdf')}\n\n"
         f"— {brand_name}"
     )
     # Voor WhatsApp: stuur JPG kwitantie als media-bijlage (inline preview).
