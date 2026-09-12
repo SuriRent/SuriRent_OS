@@ -673,7 +673,7 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
 // Top 4 tabs always visible on the mobile bottom bar. The "Meer" button opens
 // a full drawer that exposes every other tab. Superadmins keep "Bedrijven"
 // on the bottom bar so they always have access to the company switcher.
-const MOBILE_PRIMARY_IDS = ['payments', 'invoices', 'tenants', 'apartments'];
+const MOBILE_PRIMARY_IDS = ['invoices', 'payments', 'tenants', 'apartments'];
 
 /**
  * Eigen iconenkeuze voor de mobiele bottom-tabbar — de sidebar/icoon op de
@@ -4196,9 +4196,10 @@ export default function AdminDashboard() {
     const adminIdx = seg.indexOf('admin');
     const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
     if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
-    // Fallback: mobile → payments, anders overview
+    // Fallback: mobile → invoices (facturen als landingpagina op verzoek
+    // gebruiker feb 2026), anders overview.
     try {
-      if (typeof window !== 'undefined' && window.innerWidth < 768) return 'payments';
+      if (typeof window !== 'undefined' && window.innerWidth < 768) return 'invoices';
     } catch { /* SSR-safe */ }
     return 'overview';
   })();
