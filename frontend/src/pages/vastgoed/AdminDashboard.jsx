@@ -3121,23 +3121,23 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           {/* "Internet per maand" veld verwijderd op verzoek gebruiker
               (2026-02) — niet meer relevant in het nieuwe-huurder formulier. */}
           {/* Persoonsgegevens t.b.v. huurcontract PDF */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="min-w-0">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Geboortedatum</label>
               <input type="date"
                 value={data.birth_date || ''}
                 onChange={(e) => setData({ ...data, birth_date: e.target.value })}
                 data-testid="tenant-birth-date"
-                className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+                className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none appearance-none bg-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ID-nummer</label>
               <input type="text"
                 value={data.id_number || ''}
                 onChange={(e) => setData({ ...data, id_number: e.target.value.toUpperCase() })}
                 data-testid="tenant-id-number"
                 placeholder="bv. FM008370"
-                className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none uppercase" />
+                className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none uppercase" />
             </div>
           </div>
           {/* ID-kaart scanner — opent camera op mobiel en fallback file-picker
