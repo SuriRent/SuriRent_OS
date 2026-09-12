@@ -76,11 +76,6 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
             <History className="w-3.5 h-3.5" /> Historische achterstand
           </button>
         </div>
-        {isHist && (
-          <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-            Gebruik dit alleen bij <b>onboarding</b> om bestaande achterstanden in te voeren met een vrij bedrag, datum en omschrijving. De factuur telt gewoon mee in het openstaand saldo.
-          </p>
-        )}
       </KeyboardSafeModal.Header>
 
       <KeyboardSafeModal.Body>
