@@ -3251,8 +3251,27 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     c.drawString(tbl_x + 5 * mm, tbl_top - 3 * row_h + 2.5 * mm, "Totaal ontvangen")
     c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 3 * row_h + 2.5 * mm, _bh_fmt_money(amount, currency))
 
+    # Nog openstaand-rij: transparant blauw met accent, toont resterend
+    # saldo van deze huurder ná deze betaling. `outstanding_after` wordt
+    # meegegeven door _enrich_payment (server.py). Volledig betaald → 0.
+    outstanding = float(payment.get("outstanding_after") or 0)
+    c.setFillColor(colors.white)
+    c.rect(tbl_x, tbl_top - 4 * row_h, tbl_w, row_h, stroke=1, fill=1)
+    c.line(tbl_x + tbl_w - amt_col_w, tbl_top - 4 * row_h, tbl_x + tbl_w - amt_col_w, tbl_top - 3 * row_h)
+    c.setFont(_LUX_SANS_BOLD, 11)
+    if outstanding <= 0.001:
+        c.setFillColor(colors.HexColor("#0F7A44"))  # groen — volledig voldaan
+        c.drawString(tbl_x + 5 * mm, tbl_top - 4 * row_h + 2.5 * mm, "Nog openstaand")
+        c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 4 * row_h + 2.5 * mm,
+                     f"{currency} 0,00  ✓ volledig voldaan")
+    else:
+        c.setFillColor(colors.HexColor("#B91C1C"))  # rood accent — nog open
+        c.drawString(tbl_x + 5 * mm, tbl_top - 4 * row_h + 2.5 * mm, "Nog openstaand")
+        c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 4 * row_h + 2.5 * mm,
+                     _bh_fmt_money(outstanding, currency))
+
     # ---- Betaalwijze checkboxes
-    bw_y = tbl_top - 3 * row_h - 10 * mm
+    bw_y = tbl_top - 4 * row_h - 10 * mm
     c.setFillColor(_BH_INK)
     c.setFont(_LUX_SANS_BOLD, 11)
     c.drawString(pad, bw_y, "Betaalwijze:")
