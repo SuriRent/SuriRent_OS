@@ -182,3 +182,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - `GET /api/admin/events` — SSE stream (auth via cookie of `?token=`)
 - `GET /api/invoices/{id}/pdf/jpg` — inline WhatsApp preview
 - `POST /api/companies/me/onboarding` — post Google-login slug/naam
+- `GET /api/superadmin/account` — huidig superadmin-profiel (naam, email)
+- `PUT /api/superadmin/account` — wijzig eigen naam / inlog-email / wachtwoord (direct actief)
+
+## Session Log — 2026-02-08
+- Superadmin "Mijn Account" sectie toegevoegd binnen SaaS Instellingen: superadmin kan eigen naam, inlog-email en wachtwoord wijzigen zonder extra bevestiging (per MVP-keus). Backend endpoints `GET/PUT /api/superadmin/account` met validaties (email-formaat, min 6 tekens wachtwoord, uniek email).
+

@@ -5218,6 +5218,77 @@ async def test_saas_smtp(user=Depends(require_role("superadmin"))):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Superadmin — Mijn Account (eigen inloggegevens beheren)
+# ---------------------------------------------------------------------------
+class SuperadminAccountIn(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+@api.get("/superadmin/account")
+async def get_superadmin_account(user=Depends(require_role("superadmin"))):
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    if not me:
+        raise HTTPException(status_code=404, detail="Account niet gevonden")
+    return {
+        "id": me.get("id"),
+        "email": me.get("email", ""),
+        "name": me.get("name", ""),
+        "role": me.get("role"),
+        "password_updated_at": me.get("password_updated_at"),
+    }
+
+
+@api.put("/superadmin/account")
+async def update_superadmin_account(
+    body: SuperadminAccountIn, user=Depends(require_role("superadmin"))
+):
+    """Superadmin kan zijn/haar eigen naam, e-mail en wachtwoord wijzigen."""
+    update: dict = {}
+
+    if body.name is not None:
+        new_name = body.name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Naam mag niet leeg zijn")
+        update["name"] = new_name[:120]
+
+    if body.email is not None:
+        new_email = body.email.strip().lower()
+        if "@" not in new_email or "." not in new_email or len(new_email) < 5:
+            raise HTTPException(status_code=400, detail="Ongeldig e-mailadres")
+        # Check op uniciteit — behalve op de eigen record.
+        clash = await db.users.find_one(
+            {"email": new_email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1},
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail="E-mailadres is al in gebruik")
+        update["email"] = new_email
+
+    if body.password is not None and body.password != "":
+        if len(body.password) < 6:
+            raise HTTPException(
+                status_code=400, detail="Wachtwoord moet minstens 6 tekens bevatten",
+            )
+        update["password_hash"] = hash_password(body.password)
+        update["password_updated_at"] = iso(now_utc())
+
+    if not update:
+        raise HTTPException(status_code=400, detail="Geen wijzigingen ontvangen")
+
+    update["updated_at"] = iso(now_utc())
+    await db.users.update_one({"id": user["id"]}, {"$set": update})
+
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return {
+        "ok": True,
+        "email": (me or {}).get("email"),
+        "name": (me or {}).get("name"),
+        "password_updated_at": (me or {}).get("password_updated_at"),
+    }
+
+
 @api.post("/companies", response_model=CompanyOut)
 async def create_company(body: CompanyIn, user=Depends(require_role("superadmin"))):
     slug = _validate_slug_or_raise(body.slug)

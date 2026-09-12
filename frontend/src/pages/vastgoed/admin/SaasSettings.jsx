@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw,
+  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
@@ -53,11 +53,26 @@ export default function SaasSettings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // --- Mijn Account (superadmin login-gegevens) ---
+  const [account, setAccount] = useState(null);
+  const [accName, setAccName] = useState('');
+  const [accEmail, setAccEmail] = useState('');
+  const [accPassword, setAccPassword] = useState('');
+  const [accSaving, setAccSaving] = useState(false);
+  const [accError, setAccError] = useState('');
+  const [accSuccess, setAccSuccess] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: r } = await api.get('/superadmin/settings');
+      const [{ data: r }, { data: acc }] = await Promise.all([
+        api.get('/superadmin/settings'),
+        api.get('/superadmin/account'),
+      ]);
       setData(r);
+      setAccount(acc);
+      setAccName(acc.name || '');
+      setAccEmail(acc.email || '');
     } catch (e) {
       setError(formatError(e));
     } finally { setLoading(false); }
@@ -106,6 +121,35 @@ export default function SaasSettings() {
     } finally { setTesting(false); }
   };
 
+  const saveAccount = async () => {
+    setAccSaving(true); setAccError(''); setAccSuccess('');
+    try {
+      const payload = {};
+      if (accName !== (account?.name || '')) payload.name = accName;
+      if (accEmail.toLowerCase() !== (account?.email || '').toLowerCase()) {
+        payload.email = accEmail;
+      }
+      if (accPassword) payload.password = accPassword;
+      if (Object.keys(payload).length === 0) {
+        setAccError('Geen wijzigingen om op te slaan.');
+        setAccSaving(false);
+        return;
+      }
+      const { data: r } = await api.put('/superadmin/account', payload);
+      setAccPassword('');
+      setAccount((prev) => ({
+        ...prev,
+        email: r.email,
+        name: r.name,
+        password_updated_at: r.password_updated_at,
+      }));
+      setAccSuccess('Account-instellingen opgeslagen.');
+      setTimeout(() => setAccSuccess(''), 4000);
+    } catch (e) {
+      setAccError(formatError(e));
+    } finally { setAccSaving(false); }
+  };
+
   if (loading || !data) {
     return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
   }
@@ -138,6 +182,39 @@ export default function SaasSettings() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
+        <Section title="Mijn Account" icon={UserCog} accent="bg-emerald-100 text-emerald-600">
+          <p className="text-xs text-slate-500 -mt-1">
+            Wijzig je eigen inlog e-mail en wachtwoord. Wijzigingen zijn direct actief.
+          </p>
+          <Field label="Naam" value={accName} placeholder="bv. Superadmin"
+            onChange={setAccName} testid="acc-name" />
+          <Field label="Inlog e-mailadres" type="email" value={accEmail}
+            placeholder="bv. jij@bedrijf.sr"
+            onChange={setAccEmail} testid="acc-email"
+            hint="Dit is het adres waarmee je inlogt op het superadmin-portaal." />
+          <Field label="Nieuw wachtwoord" type="password" value={accPassword}
+            placeholder="Laat leeg om ongewijzigd te laten"
+            onChange={setAccPassword} testid="acc-password"
+            hint={account?.password_updated_at
+              ? `Laatst gewijzigd: ${new Date(account.password_updated_at).toLocaleString('nl-NL')}`
+              : 'Minstens 6 tekens.'} />
+          {accError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2.5 text-xs flex items-center gap-2" data-testid="acc-error">
+              <AlertCircle className="w-4 h-4 shrink-0" /> {accError}
+            </div>
+          )}
+          {accSuccess && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-2.5 text-xs flex items-center gap-2" data-testid="acc-success">
+              <Check className="w-4 h-4 shrink-0" /> {accSuccess}
+            </div>
+          )}
+          <button type="button" onClick={saveAccount} disabled={accSaving} data-testid="acc-save"
+            className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+            {accSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Account opslaan
+          </button>
+        </Section>
+
         <Section title="Bankoverschrijving" icon={Landmark}>
           <Field label="Banknaam" value={data.banking?.bank_name} placeholder="bv. DSB Bank N.V."
             onChange={(v) => upd('banking', { bank_name: v })} testid="bank-name" />
