@@ -232,13 +232,54 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
         </div>
         <div className="p-4 space-y-3">
           {/* Actie-knoppen: E-mail herinnering (via Twilio/SMTP) + directe
-              WhatsApp-deeplink naar huurder (opent gewoon de chat).
-              WhatsApp/SMS via Twilio zijn bewust verwijderd — de deeplink
-              werkt zonder API-configuratie. */}
+              WhatsApp-deeplink naar huurder (opent gewoon de chat) met
+              gedetailleerde tekst + JPG-bijlage via Web Share API. */}
           {openCount > 0 && (() => {
             const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
             const phoneDigits = String(tenant.phone || '').replace(/\D/g, '');
             const hasPhone = phoneDigits.length >= 7;
+            const openInvs = [...overdue, ...current];
+            const buildText = () => {
+              const lines = [
+                `Hallo ${tenant.name || ''},`,
+                '',
+                'Vriendelijke herinnering — de volgende huurbetalingen staan nog open:',
+                '',
+              ];
+              openInvs.forEach((inv) => {
+                const period = `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}`;
+                const rem = Number(inv.remaining_amount != null ? inv.remaining_amount : Math.max(0, (inv.amount || 0) - (inv.paid_amount || 0)));
+                lines.push(`• ${period}: ${inv.currency} ${rem.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
+              });
+              lines.push('');
+              lines.push(`Totaal openstaand: ${currency} ${totalOpen.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
+              lines.push('');
+              lines.push('Wij verzoeken u vriendelijk het openstaande saldo z.s.m. te voldoen.');
+              return lines.join('\n');
+            };
+            const openWa = async () => {
+              if (!hasPhone) return;
+              const text = buildText();
+              // Probeer eerst Web Share met JPG-bijlage — huurder ziet dan
+              // de foto direct in de chat, niet als link.
+              try {
+                const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tenants/${g.tenant_id}/reminder-image`);
+                if (resp.ok) {
+                  const blob = await resp.blob();
+                  const file = new File([blob], `herinnering-${(tenant.name || 'huurder').replace(/\s+/g, '-').toLowerCase()}.jpg`, { type: 'image/jpeg' });
+                  if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], text, title: 'Betalingsherinnering' });
+                    return;
+                  }
+                }
+              } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                // eslint-disable-next-line no-console
+                console.warn('[reminder] share fout, fallback wa.me', err);
+              }
+              // Fallback: wa.me deeplink met volledige tekst
+              openWhatsApp(phoneDigits, text);
+            };
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button type="button" onClick={() => onReminder(g, 'email')}
@@ -248,13 +289,9 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
                 </button>
                 <button type="button"
                   disabled={!hasPhone}
-                  onClick={() => {
-                    if (!hasPhone) return;
-                    const msg = `Hallo ${tenant.name || ''}, dit is een herinnering vanuit ${g.company_name || ''} over uw openstaande huur.`;
-                    openWhatsApp(phoneDigits, msg.trim());
-                  }}
+                  onClick={openWa}
                   data-testid={`open-whatsapp-${g.tenant_id}`}
-                  title={hasPhone ? `Open WhatsApp-chat met ${tenant.name}` : 'Huurder heeft geen telefoonnummer'}
+                  title={hasPhone ? `Deel herinnering-foto via WhatsApp met ${tenant.name}` : 'Huurder heeft geen telefoonnummer'}
                   className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl text-xs sm:text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">
                   <MessageCircle className="w-4 h-4" /> Open WhatsApp met huurder
                 </button>

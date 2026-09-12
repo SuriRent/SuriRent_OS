@@ -3318,3 +3318,194 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     c.save()
     buf.seek(0)
     return buf.getvalue()
+
+
+
+# =====================================================================
+# Reminder PDF (Blue House ontwerp) — samenvattingsblad met ALLE open
+# facturen van één huurder. Wordt gerenderd naar JPG voor WhatsApp-share.
+# =====================================================================
+def reminder_pdf_blue_house(reminder: dict) -> bytes:
+    """Genereer een betalingsherinnering-PDF met alle open facturen.
+
+    Verwacht dict-velden:
+      - company_name, company_address, company_phone, company_logo_bytes
+      - tenant_name, tenant_phone, apartment_number, location_name
+      - invoices: [{ period_month, period_year, amount, paid_amount, remaining_amount,
+                     currency, invoice_number, is_historical, description }]
+      - currency, total_open (float)
+      - reference_date (ISO string, default = today)
+    """
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.utils import ImageReader
+
+    PAGE_W, PAGE_H = landscape(A4)
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
+    c.setTitle("Betalingsherinnering")
+
+    margin = 14 * mm
+    c.setStrokeColor(_BH_INK); c.setLineWidth(2.5)
+    c.rect(margin, margin, PAGE_W - 2 * margin, PAGE_H - 2 * margin, stroke=1, fill=0)
+    c.setLineWidth(0.6)
+    inner = margin + 3
+    c.rect(inner, inner, PAGE_W - 2 * inner, PAGE_H - 2 * inner, stroke=1, fill=0)
+
+    pad = margin + 10 * mm
+    right_x = PAGE_W - pad
+    header_top = PAGE_H - pad - 5
+
+    # Logo/huisje
+    icon_size = 38 * mm / 1.8
+    logo_bytes = reminder.get("company_logo_bytes")
+    if logo_bytes:
+        try:
+            c.drawImage(ImageReader(io.BytesIO(logo_bytes)),
+                        pad, header_top - icon_size, icon_size, icon_size,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+    else:
+        _bh_house_icon(c, pad, header_top - icon_size, icon_size)
+
+    title_x = pad + icon_size + 8 * mm
+    c.setFillColor(_BH_INK)
+    c.setFont(_LUX_SANS_BOLD, 26)
+    c.drawString(title_x, header_top - 7 * mm, "BETALINGSHERINNERING")
+    c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(title_x, header_top - 13 * mm, "OVERZICHT OPENSTAANDE HUUR")
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.HexColor("#3A5A85"))
+    c.drawString(title_x, header_top - 19 * mm, "Vriendelijk verzoek om de openstaande huur zo spoedig mogelijk te voldoen.")
+
+    # Info-kader rechts: datum
+    box_w = 78 * mm; box_h = 18 * mm
+    box_x = right_x - box_w
+    box_y = header_top - box_h + 3
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.rect(box_x, box_y, box_w, box_h, stroke=1, fill=1)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 10)
+    c.drawString(box_x + 5 * mm, box_y + box_h - 8 * mm, "Datum:")
+    c.setFont(_LUX_SANS, 10)
+    c.drawString(box_x + 22 * mm, box_y + box_h - 8 * mm, _fmt_date_nl(reminder.get("reference_date")) or _fmt_date_nl(datetime.utcnow().isoformat()))
+
+    # Verhuurder / Huurder blok
+    info_top = header_top - 27 * mm
+    col_w = (PAGE_W - 2 * pad - 6 * mm) / 2
+    left_col_x = pad
+    right_col_x = pad + col_w + 6 * mm
+
+    def _party(x, y, title, rows):
+        c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 12)
+        c.drawString(x, y, title)
+        c.setLineWidth(0.4); c.setStrokeColor(_BH_INK)
+        c.line(x, y - 3, x + 26 * mm, y - 3)
+        c.setFont(_LUX_SANS, 10)
+        for i, (label, value) in enumerate(rows):
+            row_y = y - 8 * mm - i * 6 * mm
+            c.setFillColor(_BH_INK); c.drawString(x + 2, row_y, label)
+            c.drawString(x + 24 * mm, row_y, ":")
+            c.setFillColor(colors.black); c.drawString(x + 27 * mm, row_y, value or "—")
+
+    tenant_addr = ""
+    if reminder.get("apartment_number"):
+        tenant_addr = f"Appartement {reminder['apartment_number']}"
+        if reminder.get("location_name"):
+            tenant_addr = f"{tenant_addr} — {reminder['location_name']}"
+    _party(left_col_x, info_top, "Verhuurder:", [
+        ("Naam", reminder.get("company_name") or "—"),
+        ("Adres", reminder.get("company_address") or "—"),
+        ("Telefoon", reminder.get("company_phone") or "—"),
+    ])
+    _party(right_col_x, info_top, "Huurder:", [
+        ("Naam", reminder.get("tenant_name") or "—"),
+        ("Adres", tenant_addr or "—"),
+        ("Telefoon", reminder.get("tenant_phone") or "—"),
+    ])
+
+    div_x = pad + col_w + 3 * mm
+    c.setStrokeColor(_BH_INK); c.setLineWidth(0.5)
+    c.line(div_x, info_top - 24 * mm, div_x, info_top + 3)
+
+    # ---- Tabel: Periode | Factuur nr | Bedrag
+    invoices = list(reminder.get("invoices") or [])
+    tbl_top = info_top - 34 * mm
+    tbl_x = pad
+    tbl_w = PAGE_W - 2 * pad
+    row_h = 8.5 * mm
+    period_col_x = tbl_x
+    nr_col_x = tbl_x + 55 * mm
+    amt_col_w = 50 * mm
+    amt_col_x = tbl_x + tbl_w - amt_col_w
+
+    # Header
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.rect(tbl_x, tbl_top - row_h, tbl_w, row_h, stroke=1, fill=1)
+    c.line(nr_col_x, tbl_top - row_h, nr_col_x, tbl_top)
+    c.line(amt_col_x, tbl_top - row_h, amt_col_x, tbl_top)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(period_col_x + 5 * mm, tbl_top - row_h + 2.5 * mm, "Periode")
+    c.drawString(nr_col_x + 5 * mm, tbl_top - row_h + 2.5 * mm, "Factuurnummer")
+    c.drawString(amt_col_x + 5 * mm, tbl_top - row_h + 2.5 * mm, "Openstaand")
+
+    currency = reminder.get("currency") or "SRD"
+    max_rows = 8   # A4 landscape → maximaal ~8 regels netjes zichtbaar
+    total = 0.0
+    for i, inv in enumerate(invoices[:max_rows]):
+        row_y = tbl_top - (i + 2) * row_h
+        c.setFillColor(colors.white); c.setStrokeColor(_BH_INK); c.setLineWidth(0.5)
+        c.rect(tbl_x, row_y, tbl_w, row_h, stroke=1, fill=1)
+        c.line(nr_col_x, row_y, nr_col_x, row_y + row_h)
+        c.line(amt_col_x, row_y, amt_col_x, row_y + row_h)
+        period_lbl = ""
+        if inv.get("period_month") and inv.get("period_year"):
+            try:
+                period_lbl = f"{MONTHS_NL[int(inv['period_month']) - 1]} {inv['period_year']}"
+            except Exception:
+                period_lbl = ""
+        remaining = float(inv.get("remaining_amount")
+                          if inv.get("remaining_amount") is not None
+                          else max(0.0, float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)))
+        total += remaining
+        c.setFillColor(colors.black); c.setFont(_LUX_SANS, 10)
+        c.drawString(period_col_x + 5 * mm, row_y + 2.5 * mm, period_lbl or "—")
+        c.drawString(nr_col_x + 5 * mm, row_y + 2.5 * mm, inv.get("invoice_number") or "—")
+        c.setFont(_LUX_SANS_BOLD, 10)
+        c.drawString(amt_col_x + 5 * mm, row_y + 2.5 * mm, _bh_fmt_money(remaining, inv.get("currency") or currency))
+        if inv.get("is_historical"):
+            c.setFillColor(colors.HexColor("#7C3AED"))
+            c.setFont(_LUX_SANS_BOLD, 7)
+            c.drawString(period_col_x + 5 * mm, row_y + 6.2 * mm, "HISTORISCH")
+
+    # "meer regels" hint
+    if len(invoices) > max_rows:
+        hint_y = tbl_top - (max_rows + 2) * row_h + 4
+        c.setFillColor(_BH_INK); c.setFont("Helvetica-Oblique", 9)
+        c.drawString(tbl_x + 5 * mm, hint_y, f"+ nog {len(invoices) - max_rows} openstaande facturen …")
+
+    # Totaal-rij
+    total_open = float(reminder.get("total_open") or total)
+    total_y = tbl_top - (min(len(invoices), max_rows) + 2) * row_h
+    c.setFillColor(_BH_BAND); c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
+    c.rect(tbl_x, total_y, tbl_w, row_h, stroke=1, fill=1)
+    c.line(amt_col_x, total_y, amt_col_x, total_y + row_h)
+    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 11)
+    c.drawString(tbl_x + 5 * mm, total_y + 2.5 * mm, "Totaal openstaand")
+    c.drawString(amt_col_x + 5 * mm, total_y + 2.5 * mm, _bh_fmt_money(total_open, currency))
+
+    # Verklaring + Opmerking
+    decl_y = total_y - 12 * mm
+    c.setFillColor(colors.black); c.setFont(_LUX_SANS, 10)
+    c.drawString(pad, decl_y, "Wij verzoeken u vriendelijk het openstaande saldo z.s.m. te voldoen.")
+    c.drawString(pad, decl_y - 5 * mm, "Bij vragen kunt u ons bereiken via bovenstaand telefoonnummer.")
+
+    note_y = decl_y - 14 * mm
+    if reminder.get("note"):
+        c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 11)
+        c.drawString(pad, note_y, "Opmerking:")
+        c.setFillColor(colors.black); c.setFont(_LUX_SANS, 10)
+        c.drawString(pad, note_y - 5 * mm, str(reminder["note"])[:180])
+
+    c.showPage(); c.save(); buf.seek(0)
+    return buf.getvalue()

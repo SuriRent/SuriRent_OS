@@ -33,6 +33,7 @@ from pdf_gen import (
     contract_pdf, invoice_pdf, deposit_refund_pdf, payslip_pdf,
     payment_plan_pdf,
     onboarding_pdf, _make_qr_png,
+    reminder_pdf_blue_house,
 )
 from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
@@ -9952,6 +9953,65 @@ async def payment_image(payment_id: str):
         content=jpg,
         media_type="image/jpeg",
         headers={"Content-Disposition": f'inline; filename="kwitantie-{p["receipt_number"]}.jpg"'},
+    )
+
+
+@api.get("/tenants/{tenant_id}/reminder-image")
+async def tenant_reminder_image(tenant_id: str):
+    """Genereer een betalingsherinnering als JPG-foto voor WhatsApp-share.
+    Toont ALLE openstaande facturen van de huurder in het blauwe huisje-
+    ontwerp. Public endpoint zodat de foto ook via een gedeelde link
+    bekeken kan worden zonder auth."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    apt = None
+    location_name = None
+    if t.get("apartment_id"):
+        apt = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0}) or {}
+        if apt.get("location_id"):
+            loc = await db.locations.find_one({"id": apt["location_id"]}, {"_id": 0, "name": 1})
+            if loc:
+                location_name = loc.get("name")
+    # Open facturen sorteren op period_year, period_month desc → recent eerst
+    open_invoices = []
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, "status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0}
+    ):
+        paid = inv.get("paid_amount") or await _invoice_currently_paid(inv["id"])
+        rem = max(0.0, float(inv.get("amount") or 0) - float(paid or 0))
+        if rem > 0.001:
+            open_invoices.append({**inv, "paid_amount": float(paid or 0), "remaining_amount": rem})
+    open_invoices.sort(key=lambda i: (i.get("period_year") or 0, i.get("period_month") or 0), reverse=True)
+    total_open = sum(i["remaining_amount"] for i in open_invoices)
+    currency = (open_invoices[0].get("currency") if open_invoices else (apt or {}).get("currency")) or "SRD"
+    brand = await _company_brand_info(t.get("company_id"))
+    reminder = {
+        **brand,
+        "tenant_name": t.get("name") or "",
+        "tenant_phone": t.get("phone") or "",
+        "apartment_number": (apt or {}).get("number"),
+        "location_name": location_name,
+        "invoices": open_invoices,
+        "currency": currency,
+        "total_open": round(total_open, 2),
+        "reference_date": iso(now_utc()),
+    }
+    pdf_bytes = await asyncio.to_thread(reminder_pdf_blue_house, reminder)
+    try:
+        import pymupdf
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[0]
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(2.5, 2.5))
+        jpg = pix.tobytes("jpeg", jpg_quality=85)
+        doc.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image render fout: {e}")
+    from fastapi.responses import Response as _Resp
+    return _Resp(
+        content=jpg,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'inline; filename="herinnering-{tenant_id[:8]}.jpg"'},
     )
 
 
