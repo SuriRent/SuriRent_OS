@@ -3639,10 +3639,10 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
         ("Naam", verhuurder_name),
         ("Adres", company_addr_lines),
     ]
-    # Push telefoon/email after multi-line adres
+    # Push telefoon/email/kkf after multi-line adres
     base_y = party_top - 14 * mm
     _kv_block(left_col_x, base_y, verhuurder_rows)
-    # Manual placement for phone + email so they line up under the address block
+    # Manual placement for phone + email + kkf so they line up under the address block
     addr_lines = len(company_addr_lines)
     phone_y = base_y - (1 * 5.5 * mm) - (addr_lines - 1) * 4.5 * mm - 5.5 * mm
     c.setFillColor(_BH_INK); c.setFont(_LUX_SANS, 10)
@@ -3655,6 +3655,12 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
     c.drawString(left_col_x + 24 * mm, email_y, ":")
     c.setFillColor(colors.black)
     c.drawString(left_col_x + 27 * mm, email_y, invoice.get("contact_email") or "—")
+    # KKF-nummer — verplichte Surinaamse bedrijfsregistratie op factuur.
+    kkf_y = email_y - 5.5 * mm
+    c.setFillColor(_BH_INK); c.drawString(left_col_x + 2, kkf_y, "KKF-nr")
+    c.drawString(left_col_x + 24 * mm, kkf_y, ":")
+    c.setFillColor(colors.black)
+    c.drawString(left_col_x + 27 * mm, kkf_y, invoice.get("kkf_number") or "—")
 
     huurder_rows = [
         ("Naam", tenant.get("name") or "—"),
@@ -3812,13 +3818,8 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
 
     # Signatures — bewust weggelaten voor huurfactuur (op verzoek gebruiker
     # feb 2026: geen handtekeningen op factuur, alleen op contract/kwitantie).
-
-    # Centered italic footer
-    c.setFont("Helvetica-Oblique", 9)
-    c.setFillColor(colors.HexColor("#3A5A85"))
-    foot_txt = "Samen zorgen we voor een prettige huurovereenkomst."
-    fw = c.stringWidth(foot_txt, "Helvetica-Oblique", 9)
-    c.drawString(PAGE_W / 2 - fw / 2, margin + 4 * mm, foot_txt)
+    # Footer-tekst "Samen zorgen we voor een prettige huurovereenkomst." ook
+    # verwijderd op verzoek gebruiker.
 
     c.showPage(); c.save(); buf.seek(0)
     return buf.getvalue()

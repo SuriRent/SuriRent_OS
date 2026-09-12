@@ -7696,7 +7696,7 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         {"_id": 0, "name": 1, "contact_email": 1, "contact_phone": 1,
          "whatsapp_number": 1, "tagline": 1,
          "address": 1, "branding": 1,
-         "bank_account_sr": 1, "bank_account_nl": 1,
+         "bank_account_sr": 1, "bank_account_nl": 1, "kkf_number": 1,
          "landlord_name": 1, "landlord_birth_date": 1, "landlord_id_number": 1},
     ) or {}
     settings = await db.company_settings.find_one(
@@ -7742,6 +7742,7 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
         "contact_email": co.get("contact_email") or "",
         "bank_account_sr": co.get("bank_account_sr") or "",
         "bank_account_nl": co.get("bank_account_nl") or "",
+        "kkf_number": co.get("kkf_number") or "",
     }
 
 
