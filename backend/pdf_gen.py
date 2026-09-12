@@ -3810,17 +3810,8 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
     c.setFont(_LUX_SANS, 8); c.setFillColor(colors.HexColor("#3A5A85"))
     c.drawString(pad, thank_y - 12 * mm, "Verhuurder")
 
-    # Signatures
-    sig_w = 65 * mm
-    sig_y = thank_y - 10 * mm
-    sig1_x = PAGE_W / 2 + 10 * mm
-    sig2_x = right_x - sig_w
-    c.setStrokeColor(_BH_INK); c.setLineWidth(0.6)
-    c.line(sig1_x, sig_y, sig1_x + sig_w, sig_y)
-    c.line(sig2_x, sig_y, sig2_x + sig_w, sig_y)
-    c.setFillColor(_BH_INK); c.setFont(_LUX_SANS, 8.5)
-    c.drawString(sig1_x, sig_y - 4 * mm, "Handtekening verhuurder")
-    c.drawString(sig2_x, sig_y - 4 * mm, "Handtekening huurder")
+    # Signatures — bewust weggelaten voor huurfactuur (op verzoek gebruiker
+    # feb 2026: geen handtekeningen op factuur, alleen op contract/kwitantie).
 
     # Centered italic footer
     c.setFont("Helvetica-Oblique", 9)
