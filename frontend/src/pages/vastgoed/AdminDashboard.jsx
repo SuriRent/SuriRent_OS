@@ -25,6 +25,7 @@ import OnboardingModal from '../../components/OnboardingModal';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
+import { useAdminEvents, closeAdminEvents } from '../../lib/admin-events';
 
 // ─────────────────────────────────────────────────────────────────────
 // LAZY-LOADED TAB COMPONENTEN
@@ -4109,83 +4110,49 @@ export default function AdminDashboard() {
     if (isAdmin) prefetchAdminChunks();
   }, [isAdmin]);
 
-  // Live-sync SSE — luister naar /api/admin/events en dispatch een window
-  // event zodra een andere admin-tab/-apparaat iets muteert. Alle pagina's
-  // die useAutoRefresh gebruiken herladen dan onmiddellijk.
-  useEffect(() => {
-    if (!user || (user.role !== 'admin' && user.role !== 'employee')) return undefined;
-    // Admin JWT wordt opgeslagen onder 'admin_token' (Bearer legacy) OF
-    // via httpOnly cookie (Google Auth). EventSource ondersteunt geen
-    // headers → token via query param wanneer aanwezig, anders alleen
-    // via cookie (withCredentials). Voorheen las deze effect
-    // `localStorage.getItem('token')` → altijd leeg → SSE-connectie werd
-    // nooit gemaakt → geen live-sync/pulse en geen globale SWR-invalidatie.
-    const token = localStorage.getItem('admin_token') || '';
-    const base = process.env.REACT_APP_BACKEND_URL || '';
-    const url = token
-      ? `${base}/api/admin/events?token=${encodeURIComponent(token)}`
-      : `${base}/api/admin/events`;
-    let es;
+  // Live-sync SSE — één GEDEELDE EventSource (singleton in admin-events.js).
+  // Voorheen opende deze effect zijn EIGEN EventSource; samen met de 4 hooks
+  // in Bells/Payments werden er 5 parallelle SSE-connecties opgezet per tab.
+  // Browsers/proxies limiten dat aantal (max 6 per domein incl. overige HTTP),
+  // waardoor sommige connecties bytes niet doorkregen en events uitbleven.
+  // Nu abonneren we ons op dezelfde singleton — 1 connectie voor de hele UI.
+  useAdminEvents((data) => {
+    if (data?.type !== 'change' && data?.type !== 'notification') return;
+    window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data }));
+    // Invalideer alle SWR-caches waarvan de key onder het gemuteerde
+    // API-pad valt. Voorbeeld: mutation op `/api/tenants/abc` triggert
+    // revalidate van SWR-key `/tenants`, `/tenants/abc`, etc.
     try {
-      es = new EventSource(url, { withCredentials: true });
-    } catch {
-      return undefined;
-    }
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data?.type === 'change' || data?.type === 'notification') {
-          window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data }));
-          // Invalideer alle SWR-caches waarvan de key onder het gemuteerde
-          // API-pad valt. Voorbeeld: mutation op `/api/tenants/abc` triggert
-          // revalidate van SWR-key `/tenants`, `/tenants/abc`, etc.
-          // Werkt over álle admin-lijsten (Huurders/Appartementen/Contracten
-          // /Facturen/Betalingen/Locaties) zonder dat elk scherm expliciet
-          // hoeft te luisteren.
-          try {
-            const rawPath = String(data?.path || '');
-            if (rawPath.startsWith('/api/')) {
-              const swrKey = rawPath.slice(4); // strip '/api'
-              // 1) exacte key + eventuele detail-endpoints eronder
-              swrGlobalMutate(
-                (k) => typeof k === 'string' && (k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?')),
-                undefined,
-                { revalidate: true }
-              );
-              // 2) cross-collectie invalidatie voor typische afhankelijkheden:
-              //    - payments → invoices status verandert
-              //    - payments → payment-plans (linked plan installments +
-              //      total_amount worden bijgesteld door auto-herverdeling)
-              //    - assign-tenant → tenants + apartments beide
-              //    - iedere mutation → /admin/stats (aggregaat op Overzicht)
-              const crossInvalidate = ['/admin/stats'];
-              if (swrKey.startsWith('/payments')) {
-                crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active');
-              }
-              if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
-                crossInvalidate.push('/tenants', '/apartments');
-              }
-              if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
-              if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
-                crossInvalidate.push('/payment-plans?status=active');
-              }
-              crossInvalidate.forEach((base) => {
-                swrGlobalMutate(
-                  (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
-                  undefined,
-                  { revalidate: true }
-                );
-              });
-            }
-          } catch { /* noop */ }
-        }
-      } catch { /* noop */ }
-    };
-    es.onerror = () => {
-      // Browser doet zelf reconnect; log niet in productie.
-    };
-    return () => { try { es.close(); } catch { /* noop */ } };
-  }, [user]);
+      const rawPath = String(data?.path || '');
+      if (!rawPath.startsWith('/api/')) return;
+      const swrKey = rawPath.slice(4);
+      // 1) exacte key + eventuele detail-endpoints eronder
+      swrGlobalMutate(
+        (k) => typeof k === 'string' && (k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?')),
+        undefined,
+        { revalidate: true },
+      );
+      // 2) cross-collectie invalidatie voor typische afhankelijkheden
+      const crossInvalidate = ['/admin/stats'];
+      if (swrKey.startsWith('/payments')) {
+        crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active', '/tenants');
+      }
+      if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
+        crossInvalidate.push('/tenants', '/apartments');
+      }
+      if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
+      if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
+        crossInvalidate.push('/payment-plans?status=active', '/payment-plans');
+      }
+      crossInvalidate.forEach((base) => {
+        swrGlobalMutate(
+          (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
+          undefined,
+          { revalidate: true },
+        );
+      });
+    } catch { /* noop */ }
+  }, { enabled: !!user && (user.role === 'admin' || user.role === 'employee') });
   const location = useLocation();
   const { count: badgeCount } = useBadge();
 
@@ -4329,6 +4296,11 @@ export default function AdminDashboard() {
       ]);
     } catch { /* noop */ }
     // localStorage synchroon opruimen zodat volgende bezoeker geen resten ziet.
+    try {
+      // Sluit ook de gedeelde SSE-connectie — anders blijft die met stale
+      // token hangen tot de pagina hard-navigate.
+      closeAdminEvents();
+    } catch { /* noop */ }
     try {
       localStorage.removeItem('admin_token');
       localStorage.removeItem('kiosk_token');
