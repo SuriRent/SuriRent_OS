@@ -8783,17 +8783,24 @@ async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
     cid = company_id_of(user)
     doc = await _create_payment_doc(body, cid, approved_by=user.get("name") or user.get("email"))
     enriched = await _enrich_payment(doc)
-    # Push notificatie naar andere admins van dezelfde company
-    try:
-        cur = enriched.get('currency', '')
-        amt = float(enriched.get('amount', 0))
-        await _notify_company_admins(
-            cid, f"Betaling {cur} {amt:,.2f}",
-            f"{enriched.get('tenant_name', 'Onbekend')} via {enriched.get('method', '')}",
-            {"kind": "payment", "url": "/admin/payments", "payment_id": enriched.get("id"), "badge_inc": 1},
-        )
-    except Exception as e:
-        print(f"[push] admin payment notify failed: {e}")
+    # Push-notificatie naar andere admins van deze company. FIRE-AND-FORGET:
+    # WebPush kan 500-2000ms per subscription duren; wij mogen daar NIET op
+    # wachten want dat vertraagt óók de live-sync SSE-broadcast (die pas
+    # nádat deze handler klaar is uitgaat via de middleware) — met als
+    # gevolg dat Betalingsregelingen "traag" refresht na een factuurbetaling.
+    async def _bg_notify():
+        try:
+            cur = enriched.get("currency", "")
+            amt = float(enriched.get("amount", 0))
+            await _notify_company_admins(
+                cid, f"Betaling {cur} {amt:,.2f}",
+                f"{enriched.get('tenant_name', 'Onbekend')} via {enriched.get('method', '')}",
+                {"kind": "payment", "url": "/admin/payments",
+                 "payment_id": enriched.get("id"), "badge_inc": 1},
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[push] admin payment notify failed: {e}")
+    asyncio.create_task(_bg_notify())
     return enriched
 
 

@@ -4154,10 +4154,14 @@ export default function AdminDashboard() {
               );
               // 2) cross-collectie invalidatie voor typische afhankelijkheden:
               //    - payments → invoices status verandert
+              //    - payments → payment-plans (linked plan installments +
+              //      total_amount worden bijgesteld door auto-herverdeling)
               //    - assign-tenant → tenants + apartments beide
               //    - iedere mutation → /admin/stats (aggregaat op Overzicht)
               const crossInvalidate = ['/admin/stats'];
-              if (swrKey.startsWith('/payments')) crossInvalidate.push('/invoices');
+              if (swrKey.startsWith('/payments')) {
+                crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active');
+              }
               if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
                 crossInvalidate.push('/tenants', '/apartments');
               }

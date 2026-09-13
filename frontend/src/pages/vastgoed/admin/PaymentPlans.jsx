@@ -481,6 +481,25 @@ function PlanDetail({ planId, onBack }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Live-refresh: wanneer een betaling/factuur elders wordt geregistreerd
+  // (bijv. via Facturen-pagina op een ander tabblad OF door dezelfde
+  // admin), dispatchen we vanuit AdminDashboard een `surirent:live-change`
+  // event. Laten we die pakken en de detail-view direct herladen — anders
+  // ziet de admin de bijgestelde termijnen pas na handmatige refresh.
+  useEffect(() => {
+    const handler = (e) => {
+      const path = String(e?.detail?.path || '');
+      if (!path) return;
+      if (path.startsWith('/api/payments')
+          || path.startsWith('/api/invoices')
+          || path.startsWith(`/api/payment-plans/${planId}`)) {
+        load();
+      }
+    };
+    window.addEventListener('surirent:live-change', handler);
+    return () => window.removeEventListener('surirent:live-change', handler);
+  }, [load, planId]);
+
   const payTermijn = async (seq) => {
     if (!window.confirm(`Markeer termijn ${seq} als betaald (contant)?`)) return;
     setBusy(true); setErr('');

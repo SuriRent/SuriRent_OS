@@ -202,4 +202,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Nieuwe helper `_redistribute_pending_installments` in `server.py`, aangeroepen vanuit `_sync_plan_installments_with_invoice`. Rondingsverschillen komen in de laatste termijn zodat de som exact op het factuur-openstaand uitkomt.
 - Regressietest `/app/backend/tests/test_payment_plan_redistribute.py`.
 
+## Session Log — 2026-02-08 (instant sync na betaling)
+- **Backend**: `_notify_company_admins` (WebPush + SSE) verplaatst naar `asyncio.create_task` in `create_payment` — voorheen wachtte de response 1-2s op trage WebPush-endpoints, waardoor de live-sync SSE-broadcast ook uitgesteld werd. Nu: response in ~130ms (gemeten).
+- **Frontend**: SSE cross-invalidation uitgebreid — `/payments` mutatie invalideert nu ook `/payment-plans` (en `?status=active`) zodat de Betalingsregelingen-lijst instant refresht. Detail-view registreert nu een `surirent:live-change` handler die de plan-detail ook automatisch herlaadt.
+
+
 
