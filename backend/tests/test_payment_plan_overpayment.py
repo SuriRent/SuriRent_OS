@@ -47,15 +47,37 @@ def demo_headers():
 
 @pytest.fixture(scope="module")
 def roy_and_plan(demo_headers):
-    # Locate Roy tenant + zijn actieve regeling
+    """Zet een verse 2-termijn regeling op voor Roy (annuleert eventuele
+    bestaande regelingen zodat de test onafhankelijk van andere tests is).
+    """
     tenants = requests.get(f"{API}/tenants", headers=demo_headers, timeout=15).json()
     roy = next((t for t in tenants if "Roy" in t.get("name", "")), None)
     assert roy, "Demo tenant Roy niet gevonden — is _seed_demo_data uitgevoerd?"
-    plans = requests.get(f"{API}/payment-plans?status=active",
-                         headers=demo_headers, timeout=15).json()
-    plan = next((p for p in plans if p["tenant_id"] == roy["id"]), None)
-    assert plan, "Demo regeling voor Roy niet gevonden"
-    return roy, plan
+    # Annuleer bestaande actieve regelingen
+    active = requests.get(f"{API}/payment-plans?status=active",
+                          headers=demo_headers, timeout=15).json()
+    for p in active:
+        if p["tenant_id"] == roy["id"]:
+            requests.post(f"{API}/payment-plans/{p['id']}/cancel",
+                          headers=demo_headers, timeout=15)
+    # Zoek Roy's factuur + bepaal openstaand bedrag
+    invs = requests.get(f"{API}/invoices", headers=demo_headers, timeout=15).json()
+    inv = next((i for i in invs if i.get("tenant_id") == roy["id"]), None)
+    assert inv, "Roy heeft geen factuur"
+    total_open = float(inv["amount"]) - float(inv.get("paid_amount") or 0)
+    assert total_open > 0, "Roy's factuur is al volledig betaald"
+    # 2-termijn regeling
+    r = requests.post(f"{API}/payment-plans", headers=demo_headers,
+                      json={"tenant_id": roy["id"],
+                            "invoice_ids": [inv["id"]],
+                            "total_amount": total_open,
+                            "currency": inv.get("currency", "SRD"),
+                            "num_installments": 2,
+                            "start_date": "2026-10-01",
+                            "frequency": "monthly"},
+                      timeout=15)
+    assert r.status_code == 200, r.text
+    return roy, r.json()
 
 
 def test_overpayment_adjustment_caps_remaining(demo_headers, roy_and_plan):
@@ -83,20 +105,21 @@ def test_overpayment_adjustment_caps_remaining(demo_headers, roy_and_plan):
     )
     assert r2.status_code == 200, r2.text
 
-    # Stap 3 — Regeling moet nu gecapte remaining tonen.
+    # Stap 3 — Regeling moet nu in sync zijn met openstaande factuur.
+    # Door de auto-herverdeling wordt de pending termijn direct verlaagd,
+    # dus overpayment_adjustment blijft False.
     r3 = requests.get(f"{API}/payment-plans/{plan['id']}",
                       headers=demo_headers, timeout=15)
     assert r3.status_code == 200, r3.text
     p = r3.json()
-    assert p["overpayment_adjustment"] is True, p
-    # De volgende termijn is 1500 gepland maar mag nooit meer dan het open
-    # factuurbedrag zijn.
-    assert p["next_due_amount"] <= p["linked_invoice_open"] + 0.01, p
-    assert p["remaining_amount"] <= p["linked_invoice_open"] + 0.01, p
+    # remaining_amount == som van pending termijnen == openstaand factuurbedrag
+    assert abs(p["remaining_amount"] - p["linked_invoice_open"]) < 0.02, p
+    pending_sum = sum(i["amount"] for i in p["installments"] if i["status"] == "pending")
+    assert abs(pending_sum - p["linked_invoice_open"]) < 0.02, p
 
-    # Stap 4 — Termijn 2 betalen wordt gecapd; plan wordt "completed".
+    # Stap 4 — Termijn 2 betalen. Bedrag is al herverdeeld, dus 1-op-1
+    # tot 0 en het plan wordt "completed".
     seq = next(i["sequence"] for i in p["installments"] if i["status"] == "pending")
-    expected_cap = p["next_due_amount"]
     r4 = requests.post(
         f"{API}/payment-plans/{p['id']}/installments/{seq}/pay",
         headers=demo_headers, json={"method": "contant"}, timeout=15,
@@ -104,5 +127,3 @@ def test_overpayment_adjustment_caps_remaining(demo_headers, roy_and_plan):
     assert r4.status_code == 200, r4.text
     final = r4.json()
     assert final["status"] == "completed", final
-    paid_seq = next(i for i in final["installments"] if i["sequence"] == seq)
-    assert abs(paid_seq["amount"] - expected_cap) < 0.02, paid_seq

@@ -520,10 +520,12 @@ def _build_pay_core(db, helpers):
         }
         # Als het termijnbedrag naar beneden bijgesteld is (want factuur
         # heeft minder open dan gepland), leggen we dat vast zodat de UI
-        # en historie correct blijven.
+        # en historie correct blijven. Overschrijf `original_amount` niet
+        # als redistributie dat al gezet heeft.
         if _round2(amt) != _round2(inst.get("amount") or 0):
             inst_update["amount"] = amt
-            inst_update["original_amount"] = _round2(inst.get("amount") or 0)
+            if inst.get("original_amount") is None:
+                inst_update["original_amount"] = _round2(inst.get("amount") or 0)
         await db.payment_plan_installments.update_one(
             {"plan_id": plan["id"], "sequence": seq},
             {"$set": inst_update},

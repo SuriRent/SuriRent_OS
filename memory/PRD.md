@@ -197,3 +197,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## Session Log — 2026-02-08
 - Superadmin "Mijn Account" sectie toegevoegd binnen SaaS Instellingen: superadmin kan eigen naam, inlog-email en wachtwoord wijzigen zonder extra bevestiging (per MVP-keus). Backend endpoints `GET/PUT /api/superadmin/account` met validaties (email-formaat, min 6 tekens wachtwoord, uniek email).
 
+## Session Log — 2026-02-08 (auto-herverdeling termijnen)
+- Wanneer een betaling binnenkomt die de gekoppelde factuur méér reduceert dan de plan-progressie voorspelt, verdeelt de backend het nieuwe openstaande bedrag **gelijkmatig** over alle nog pending termijnen. De looptijd (aantal termijnen) blijft gelijk, alleen de bedragen per termijn zakken. `plan.total_amount` schuift mee.
+- Nieuwe helper `_redistribute_pending_installments` in `server.py`, aangeroepen vanuit `_sync_plan_installments_with_invoice`. Rondingsverschillen komen in de laatste termijn zodat de som exact op het factuur-openstaand uitkomt.
+- Regressietest `/app/backend/tests/test_payment_plan_redistribute.py`.
+
+

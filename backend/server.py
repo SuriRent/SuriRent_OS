@@ -8114,6 +8114,100 @@ async def _sync_plan_installments_with_invoice(invoice_id: str) -> None:
             update["completed_at"] = iso(now_utc())
         await db.payment_plans.update_one({"id": plan["id"]}, {"$set": update})
 
+        # --- Herverdeling van pending termijnen ---
+        # Wanneer er buiten de regeling om is bijbetaald (of extra minder),
+        # verdelen we het nog openstaande factuurbedrag GELIJKMATIG over
+        # de nog openstaande termijnen. Zo blijft de LOOPTIJD gelijk
+        # (aantal termijnen) maar past het BEDRAG per termijn aan.
+        if update.get("status") != "completed":
+            await _redistribute_pending_installments(plan["id"])
+
+
+async def _redistribute_pending_installments(plan_id: str) -> None:
+    """Verdeel het nog openstaande factuurbedrag gelijkmatig over de
+    resterende pending termijnen. Wordt aangeroepen na elke wijziging
+    op de gekoppelde factuur (of na een termijnbetaling).
+
+    Rondingsverschil valt in de LAATSTE pending termijn zodat de som
+    exact overeenkomt met het openstaande bedrag.
+    """
+    plan = await db.payment_plans.find_one({"id": plan_id}, {"_id": 0})
+    if not plan or plan.get("status") == "completed":
+        return
+    inv_ids = plan.get("invoice_ids") or []
+    if not inv_ids:
+        return  # niet-gekoppelde regelingen laten we ongemoeid
+    # Som van nog openstaande factuurbedragen
+    invoice_open = 0.0
+    async for inv in db.invoices.find(
+        {"id": {"$in": inv_ids}}, {"_id": 0, "amount": 1, "paid_amount": 1},
+    ):
+        invoice_open += max(0.0, float(inv.get("amount") or 0)
+                            - float(inv.get("paid_amount") or 0))
+    invoice_open = round(invoice_open + 1e-9, 2)
+
+    # Pending termijnen (FIFO op sequence)
+    pending = await db.payment_plan_installments.find(
+        {"plan_id": plan_id, "status": "pending"}, {"_id": 0},
+    ).sort("sequence", 1).to_list(500)
+    n = len(pending)
+    if n == 0:
+        # Niets meer te verdelen. Als factuur ook nul is → plan completed.
+        if invoice_open <= 0.01:
+            await db.payment_plans.update_one(
+                {"id": plan_id},
+                {"$set": {"status": "completed",
+                          "completed_at": iso(now_utc())}},
+            )
+        return
+
+    if invoice_open <= 0.01:
+        # Factuur is helemaal betaald → cancel resterende pending termijnen
+        # en sluit het plan.
+        await db.payment_plan_installments.update_many(
+            {"plan_id": plan_id, "status": "pending"},
+            {"$set": {"status": "cancelled",
+                      "cancelled_at": iso(now_utc()),
+                      "cancelled_reason": "invoice_fully_paid"}},
+        )
+        await db.payment_plans.update_one(
+            {"id": plan_id},
+            {"$set": {"status": "completed", "completed_at": iso(now_utc())}},
+        )
+        return
+
+    per = round(invoice_open / n + 1e-9, 2)
+    running = 0.0
+    for idx, inst in enumerate(pending):
+        cur_amt = round(float(inst.get("amount") or 0) + 1e-9, 2)
+        if idx < n - 1:
+            new_amt = per
+            running = round(running + per, 2)
+        else:
+            # Laatste termijn vangt afrondingsverschil
+            new_amt = round(invoice_open - running + 1e-9, 2)
+        if abs(new_amt - cur_amt) < 0.01:
+            continue
+        set_fields: dict = {"amount": new_amt, "redistributed_at": iso(now_utc())}
+        # Bewaar het OORSPRONKELIJK geplande bedrag één keer voor de audit.
+        if inst.get("original_amount") is None:
+            set_fields["original_amount"] = cur_amt
+        await db.payment_plan_installments.update_one(
+            {"id": inst["id"]}, {"$set": set_fields},
+        )
+
+    # Herbereken plan.total_amount = paid_termijnen_sum + invoice_open
+    paid_sum = 0.0
+    async for pinst in db.payment_plan_installments.find(
+        {"plan_id": plan_id, "status": "paid"}, {"_id": 0, "amount": 1},
+    ):
+        paid_sum += float(pinst.get("amount") or 0)
+    new_total = round(paid_sum + invoice_open + 1e-9, 2)
+    if abs(new_total - float(plan.get("total_amount") or 0)) >= 0.01:
+        await db.payment_plans.update_one(
+            {"id": plan_id}, {"$set": {"total_amount": new_total}},
+        )
+
 
 async def _allocate_payment_to_invoices(
     invoice_ids: List[str], amount: float, payment_id: Optional[str],
