@@ -298,6 +298,11 @@ async def lifespan(app: FastAPI):
     await db.contracts.create_index([("company_id", 1), ("tenant_id", 1)])
     await db.sent_trial_warnings.create_index("_key", unique=True)
     await db.sent_invoice_reminders.create_index("invoice_id", unique=True)
+    # Idempotency-index voor upcoming (vóór due_date) reminders — één record
+    # per (invoice_id, days_bucket) zodat 09:00-loop niet dubbele mails stuurt.
+    await db.sent_upcoming_invoice_reminders.create_index(
+        [("invoice_id", 1), ("days_bucket", 1)], unique=True,
+    )
     await db.payment_plan_installments.create_index([("plan_id", 1), ("status", 1)])
     await db.contracts.create_index("id")
     await db.contracts.create_index("company_id")
@@ -14521,6 +14526,180 @@ async def kiosk_payment_plan_pdf(plan_id: str):
 
 
 # ---------- Background — Achterstallige termijnen WhatsApp/Email ----------
+async def _send_upcoming_invoice_reminders():
+    """1× per dag per huurder: stuur een herinnering voor facturen waarvan
+    de vervaldatum binnen `invoicing.reminder_days_before` dagen valt.
+
+    Idempotent via `sent_upcoming_invoice_reminders` collectie
+    (dedup per invoice_id + days_bucket) zodat we niet spammen.
+    """
+    from datetime import date as _date, timedelta as _td
+    today = _date.today()
+    today_iso = today.isoformat()
+
+    # Doorloop per company zodat we de correcte reminder_days_before + kanalen
+    # kunnen ophalen.
+    async for cs in db.company_settings.find({}, {"_id": 0, "company_id": 1, "invoicing": 1}):
+        cid = cs.get("company_id")
+        if not cid:
+            continue
+        inv_cfg = cs.get("invoicing") or {}
+        try:
+            days_before = int(inv_cfg.get("reminder_days_before") or 0)
+        except (TypeError, ValueError):
+            days_before = 0
+        if days_before <= 0:
+            continue  # uitgeschakeld voor dit bedrijf
+        # Facturen met due_date tussen morgen en (today + days_before)
+        min_due = (today + _td(days=1)).isoformat()
+        max_due = (today + _td(days=days_before)).isoformat()
+        # Huur-facturen (F/H prefix) die nog niet volledig betaald zijn.
+        async for inv in db.invoices.find({
+            "company_id": cid,
+            "status": {"$nin": ["paid", "cancelled"]},
+            "due_date": {"$gte": min_due, "$lte": max_due},
+        }, {"_id": 0}):
+            try:
+                remaining = float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)
+            except (TypeError, ValueError):
+                remaining = 0.0
+            if remaining <= 0.01:
+                continue
+            due_iso = inv.get("due_date")
+            try:
+                due = _date.fromisoformat(str(due_iso))
+                days_until = max(0, (due - today).days)
+            except Exception:
+                continue
+            # Bucket-key: (invoice_id, days_until) — 1 reminder per drempel.
+            marker = await db.sent_upcoming_invoice_reminders.find_one({
+                "invoice_id": inv["id"], "days_bucket": days_until,
+            }, {"_id": 0})
+            if marker:
+                continue
+
+            tenant = await db.tenants.find_one(
+                {"id": inv.get("tenant_id")}, {"_id": 0},
+            ) or {}
+            if not tenant:
+                continue
+            currency = inv.get("currency") or "SRD"
+            phone = (tenant.get("phone") or "").strip()
+            email = (tenant.get("email") or "").strip()
+
+            # Bericht opbouwen — zowel WhatsApp/SMS als Email content.
+            co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+            brand = co.get("name") or "Vastgoed"
+            due_nl = due.strftime("%d-%m-%Y")
+            wa_msg = (
+                f"Hallo {tenant.get('name', 'huurder')},\n\n"
+                f"Vriendelijke herinnering — uw huurfactuur "
+                f"{inv.get('invoice_number', '')} vervalt "
+                f"{'morgen' if days_until == 1 else f'over {days_until} dagen'} "
+                f"({due_nl}).\n\n"
+                f"Bedrag: *{currency} {remaining:.2f}*\n\n"
+                f"Gelieve op tijd te betalen om onnodige kosten te voorkomen.\n"
+                f"— {brand}"
+            )
+
+            # 1) WhatsApp / SMS
+            twilio_cfg = await get_company_section(cid, "twilio")
+            wa_ok = False
+            if twilio_cfg.get("enabled") and phone:
+                try:
+                    channel = "whatsapp" if twilio_cfg.get("whatsapp_number") else "sms"
+                    await _twilio_send(twilio_cfg, channel, phone, wa_msg)
+                    wa_ok = True
+                except Exception as e:  # noqa: BLE001
+                    print(f"[reminder-upcoming] twilio fail inv={inv['id'][:8]}: {e}")
+
+            # 2) Email
+            smtp_cfg = await get_company_section(cid, "smtp")
+            email_ok = False
+            if smtp_cfg.get("enabled") and email:
+                try:
+                    from email_service import send_email, wrap_template
+                    brand_kwargs = await _tenant_email_brand(cid)
+                    content = f"""
+                        <h1>Uw factuur vervalt binnenkort</h1>
+                        <p>Beste {tenant.get('name', 'huurder')},<br />
+                        Vriendelijke herinnering: uw huurfactuur
+                        <b>{inv.get('invoice_number', '')}</b> vervalt
+                        {'morgen' if days_until == 1 else f'over <b>{days_until}</b> dagen'}
+                        ({due_nl}).</p>
+                        <p><b>Openstaand bedrag:</b> {currency} {remaining:.2f}</p>
+                        <p>Gelieve op tijd te betalen om onnodige kosten te voorkomen.</p>
+                    """
+                    await send_email(smtp_cfg, email,
+                                     f"Herinnering: factuur {inv.get('invoice_number','')} vervalt binnenkort",
+                                     wrap_template(content, **brand_kwargs))
+                    email_ok = True
+                except Exception as e:  # noqa: BLE001
+                    print(f"[reminder-upcoming] smtp fail inv={inv['id'][:8]}: {e}")
+
+            # 3) Push naar de admin (info) + interne tab notificatie
+            try:
+                await _notify_company_admins(
+                    cid,
+                    f"Reminder verzonden — {tenant.get('name', 'huurder')}",
+                    f"Factuur {inv.get('invoice_number','')} vervalt {due_nl}",
+                    {"kind": "invoice_reminder", "url": "/admin/invoices",
+                     "invoice_id": inv["id"]},
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            # Marker altijd wegschrijven — ook bij deel-fouten — om
+            # dubbele bezorging te voorkomen bij een volgende poging vandaag.
+            await db.sent_upcoming_invoice_reminders.insert_one({
+                "invoice_id": inv["id"],
+                "company_id": cid,
+                "tenant_id": tenant.get("id"),
+                "days_bucket": days_until,
+                "due_date": due_iso,
+                "sent_at": iso(now_utc()),
+                "wa_ok": wa_ok,
+                "email_ok": email_ok,
+            })
+
+
+async def _upcoming_invoice_reminder_loop():
+    """Achtergrond-loop: probeert elke 30 min, maar stuurt alleen tussen 09:00
+    en 10:00 lokale tijd (UTC-3 Suriname) — max 1× per drempel per factuur.
+    """
+    import asyncio as _aio
+    while True:
+        try:
+            hour_local = (now_utc().hour - 3) % 24
+            if 9 <= hour_local < 10:
+                await _send_upcoming_invoice_reminders()
+        except Exception as e:  # noqa: BLE001
+            print(f"[reminder-upcoming] loop fail: {e}")
+        await _aio.sleep(30 * 60)
+
+
+@app.post("/api/superadmin/run-upcoming-invoice-reminders")
+async def manual_run_upcoming_invoice_reminders(user=Depends(require_role("superadmin"))):
+    """Manueel triggeren — handig om de cron-flow te testen."""
+    await _send_upcoming_invoice_reminders()
+    return {"ok": True}
+
+
+@app.post("/api/admin/run-upcoming-invoice-reminders")
+async def admin_run_upcoming_invoice_reminders(user=Depends(get_current_user)):
+    """Admin kan zelf de reminder-cyclus triggeren voor zijn/haar eigen
+    bedrijf. Handig na het aanpassen van `reminder_days_before` in
+    Instellingen om direct te testen zonder te wachten op de 09:00-loop.
+    LET OP: `@app.post` (niet `@api.post`) omdat deze declaratie ná
+    `app.include_router(api)` staat — zonder deze bypass zou de route
+    stil niet geregistreerd worden.
+    """
+    if (user.get("role") or "") not in ("admin", "employee", "superadmin"):
+        raise HTTPException(status_code=403, detail="Onvoldoende rechten")
+    await _send_upcoming_invoice_reminders()
+    return {"ok": True}
+
+
 async def _send_overdue_installment_reminders():
     """1x per dag per huurder: stuur een herinnering voor achterstallige
     termijnen van betalingsregelingen. Tracking via plan.last_inst_reminder
@@ -14648,3 +14827,6 @@ async def _start_installment_reminder_loop():
     if os.environ.get("DISABLE_INSTALLMENT_REMINDERS") == "1":
         return
     _aio_outer.create_task(_installment_reminder_loop())
+    # Ook de upcoming-invoice reminder loop opstarten. Delen dezelfde
+    # env-toggle zodat één schakelaar volstaat.
+    _aio_outer.create_task(_upcoming_invoice_reminder_loop())

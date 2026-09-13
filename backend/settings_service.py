@@ -81,6 +81,11 @@ def empty_section(section: str) -> dict:
             # en vervaldatum. Bepaalt zowel de "Vervaldatum" op de PDF als
             # wanneer een factuur naar "achterstand" (overdue) verhuist.
             "payment_term_days": 14,
+            # Aantal dagen VÓÓR de vervaldatum waarop een huurder een
+            # herinnering ontvangt (WhatsApp/SMS via Twilio + Email via SMTP,
+            # indien geconfigureerd). 0 = uit. Idempotent: max 1 herinnering
+            # per factuur per drempel-passage.
+            "reminder_days_before": 3,
             "last_auto_run": None,
             "enabled": False,
         },

@@ -237,3 +237,11 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - **Na de fix**: `invoice_date` en `due_date` worden bij aanmaak in de invoice-doc opgeslagen, berekend via nieuwe helper `_compute_invoice_dates()`. Beide velden staan in `InvoiceOut` en worden gebruikt door de PDF-renderer + `_classify_invoice_bucket` (met legacy-fallback).
 - Nieuw setting-veld: `invoicing.payment_term_days` (default 14). UI: extra kolom "Betaaltermijn (dagen)" in de tab.
 - Voorbeelden verifieerd via curl + PDF-render: grace=10/term=14 → aug 2026 factuur → **14 aug** / **28 aug**. fixed=5/term=7 → nov 2026 factuur → **5 nov** / **12 nov**.
+
+
+## Session Log — 2026-02-08 (upcoming-invoice reminders)
+- Nieuwe achtergrond-flow: elke dag rond 09:00 (Suriname UTC-3) wordt `_send_upcoming_invoice_reminders` aangeroepen. Voor elke company: pak factuur met `due_date` binnen `invoicing.reminder_days_before` dagen; stuur WhatsApp/SMS (Twilio) + email (SMTP) + push naar admins.
+- Idempotency via `sent_upcoming_invoice_reminders` collectie (unique-index op `invoice_id + days_bucket`). 2× triggeren op dezelfde dag = 0 nieuwe reminders.
+- Manual trigger: `POST /api/admin/run-upcoming-invoice-reminders` — geregistreerd via `@app.post` (bypass omdat `app.include_router(api)` al gebeurd is).
+- Frontend Settings: nieuw veld "Herinnering (dagen vóór vervaldatum)" (default 3, 0 = uit) + paars info-paneel met **"Test nu"**-knop voor handmatige trigger.
+- End-to-end verifieerd via curl (4 reminders aangemaakt in de demo, 2e trigger idempotent).

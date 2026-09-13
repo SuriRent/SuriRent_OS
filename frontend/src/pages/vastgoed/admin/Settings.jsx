@@ -114,7 +114,7 @@ function useSection(section, initial) {
     } catch (e) { setErr(formatError(e)); }
     finally { setTesting(false); }
   };
-  return { data, setData, onField, save, test, saving, testing, msg, err };
+  return { data, setData, onField, save, test, saving, testing, msg, err, setMsg, setErr };
 }
 
 // ============== Per-section forms ==============
@@ -422,6 +422,11 @@ export function InvoicingForm({ initial }) {
           value={d.payment_term_days} onChange={(v) => s.onField('payment_term_days', Math.max(0, Math.min(180, parseInt(v, 10) || 0)))}
           placeholder="14"
           helper="Aantal KALENDERdagen tussen factuurdatum en vervaldatum. De factuur wordt overdue zodra deze datum is verstreken." />
+        <TextField label="Herinnering (dagen vóór vervaldatum)" testid="invoicing-reminder-days"
+          type="number"
+          value={d.reminder_days_before} onChange={(v) => s.onField('reminder_days_before', Math.max(0, Math.min(14, parseInt(v, 10) || 0)))}
+          placeholder="3"
+          helper="Aantal dagen vóór vervaldatum waarop een herinnering (WhatsApp/SMS + email) wordt gestuurd. 0 = uit. Bericht wordt max. 1× per drempel verstuurd." />
         <div>
           <FieldLabel>Laatst uitgevoerd</FieldLabel>
           <input type="text" value={d.last_auto_run || '—'} disabled
@@ -430,6 +435,29 @@ export function InvoicingForm({ initial }) {
           <p className="text-[11px] text-slate-400 mt-1">Read-only: laatste keer dat de auto-generatie liep.</p>
         </div>
       </div>
+      {(d.reminder_days_before || 0) > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-slate-700 flex items-start gap-2"
+          data-testid="invoicing-reminder-info">
+          <span className="text-purple-600 text-lg leading-none">🔔</span>
+          <div className="flex-1">
+            <b className="text-purple-800">Automatische reminder actief:</b>{' '}
+            huurders krijgen <b>{d.reminder_days_before}</b> dag{Number(d.reminder_days_before) === 1 ? '' : 'en'} vóór de vervaldatum
+            een WhatsApp/SMS-bericht + email (mits kanaal is ingeschakeld en huurder een telefoon/email heeft).
+            De loop draait dagelijks om 09:00 (Suriname-tijd).
+          </div>
+          <button type="button"
+            onClick={async () => {
+              try {
+                await api.post('/admin/run-upcoming-invoice-reminders');
+                s.setMsg('Reminder-cyclus handmatig uitgevoerd. Controleer WhatsApp/mail-log voor bezorging.');
+              } catch (e) { s.setErr(formatError(e)); }
+            }}
+            data-testid="invoicing-reminder-run-now"
+            className="shrink-0 h-8 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold">
+            Test nu
+          </button>
+        </div>
+      )}
       {(d.next_auto_run || d.billing_day_of_month) && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4"
           data-testid="invoicing-next-run-info">
