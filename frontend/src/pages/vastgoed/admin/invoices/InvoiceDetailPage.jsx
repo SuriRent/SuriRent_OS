@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   ChevronRight, Mail, PiggyBank, Loader2, MessageCircle,
-  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote, Share2,
+  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote, Share2, Trash2,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { openWhatsApp } from '../../../../lib/external-link';
@@ -207,6 +207,24 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
                     className="shrink-0 w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95">
                     <Share2 className="w-4 h-4" />
                   </button>
+                  {/* Verwijder-knop: alleen zichtbaar voor onbetaalde
+                      facturen zonder gekoppelde betalingsregeling. Backend
+                      blokkeert zelf ook wanneer er payments/plans aanhangen
+                      met een duidelijke NL-error. */}
+                  {!partial && !(inv.plans && inv.plans.length > 0) && (
+                    <button type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const periodLabel = `${monthName} ${inv.period_year}`;
+                        if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+                        window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
+                      }}
+                      data-testid={`inv-delete-${inv.id}`}
+                      title="Factuur verwijderen"
+                      className="shrink-0 w-9 h-9 rounded-xl bg-red-50 hover:bg-red-500 hover:text-white text-red-500 inline-flex items-center justify-center transition active:scale-95">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               );
             })}
