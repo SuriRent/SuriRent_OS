@@ -220,3 +220,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - **Delete-knop verruimd**: was alleen zichtbaar op `current`/`future` facturen. Nu op **elke** onbetaalde factuur (past/current/future) mits niet partial-paid én geen actieve regeling. Zelfde regel in mobile + desktop InvoiceRow.
 - **Backend guardrails** in `DELETE /api/invoices/{id}`: blokkeert delete wanneer er goedgekeurde payments aan de factuur hangen (audit-trail) of een niet-geannuleerde `payment_plan` gekoppeld is. Geeft duidelijke NL error i.p.v. silently orphan-payments.
 - **Historische factuur form**: `Datum`-veld vervangen door **Maand + Jaar** dropdowns; klant boekt achterstanden per maand. Backend endpoint blijft compatibel (frontend stuurt `YYYY-MM-01`).
+
+
+## Session Log — 2026-02-08 (facturen-automatisering: volgende run zichtbaar)
+- Backend `GET /api/settings` verrijkt de `invoicing`-sectie met berekende velden `next_auto_run` (ISO-datum) en `billing_day_of_month` op basis van `grace_workdays` + `last_auto_run`. Logica: einde vorige/huidige maand + grace werkdagen (weekenden overslaan). Update bij elke settings-fetch, geen persistentie nodig.
+- Frontend `Settings.jsx` → tab "Facturen automatisering": nieuw blauw info-paneel toont **"14 september 2026 (= dag 14 van de maand)"** met uitleg dat verlaging van grace de facturatie eerder in de maand plaatst.

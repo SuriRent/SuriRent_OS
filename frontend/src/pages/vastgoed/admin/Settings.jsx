@@ -381,6 +381,28 @@ export function InvoicingForm({ initial }) {
           <p className="text-[11px] text-slate-400 mt-1">Read-only: laatste keer dat de auto-generatie liep.</p>
         </div>
       </div>
+      {(d.next_auto_run || d.billing_day_of_month) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4"
+          data-testid="invoicing-next-run-info">
+          <p className="text-[11px] font-black uppercase tracking-widest text-blue-700 mb-1">Volgende automatische run</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="text-2xl font-black text-slate-900">
+              {d.next_auto_run
+                ? new Date(d.next_auto_run).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+                : '—'}
+            </span>
+            {d.billing_day_of_month && (
+              <span className="text-xs text-slate-600">
+                (= dag <b>{d.billing_day_of_month}</b> van de maand)
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Berekend uit: einde vorige maand + {d.grace_workdays || 10} werkdagen (weekenden overslaan).
+            Verlaag de grace-periode om eerder in de maand te factureren, verhoog voor later.
+          </p>
+        </div>
+      )}
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-slate-700">
         <p className="font-bold text-emerald-800 mb-1">Hoe werkt het?</p>
         <ol className="list-decimal pl-5 space-y-1">

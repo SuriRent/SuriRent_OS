@@ -12488,6 +12488,37 @@ async def get_settings(user=Depends(get_current_user)):
     out = {"company_id": cid}
     for s in VALID_SETTINGS_SECTIONS:
         out[s] = _mask_section(s, doc.get(s) or {})
+    # Verrijk de invoicing-sectie met berekende velden zodat de admin ziet
+    # wanneer de volgende auto-run staat gepland op basis van grace_workdays.
+    try:
+        inv = out.get("invoicing") or {}
+        from datetime import date as _date
+        today = _date.today()
+        try:
+            grace = int(inv.get("grace_workdays") or 10)
+        except (TypeError, ValueError):
+            grace = 10
+        # Deadline voor DEZE maand (op basis van vorige maand + grace)
+        prev_year = today.year if today.month > 1 else today.year - 1
+        prev_month = today.month - 1 if today.month > 1 else 12
+        prev_last = _last_day_of_month(prev_year, prev_month)
+        deadline_this = _add_workdays(prev_last, grace)
+        # Als vandaag al voorbij deadline én al gedraaid → volgende maand.
+        last_run = inv.get("last_auto_run")
+        already_ran_this_cycle = (
+            last_run == today.isoformat() or today >= deadline_this
+        ) if last_run else (today >= deadline_this)
+        if already_ran_this_cycle:
+            # Volgende deadline = einde HUIDIGE maand + grace
+            cur_last = _last_day_of_month(today.year, today.month)
+            next_run = _add_workdays(cur_last, grace)
+        else:
+            next_run = deadline_this
+        inv["next_auto_run"] = next_run.isoformat()
+        inv["billing_day_of_month"] = next_run.day
+        out["invoicing"] = inv
+    except Exception as _e:  # noqa: BLE001
+        print(f"[settings] next_auto_run compute failed: {_e}")
     return out
 
 
