@@ -10734,8 +10734,183 @@ async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(
         "description": body.description.strip(),
     }
     await db.invoices.insert_one(doc)
+    # Verreken automatisch eventueel openstaand krediet (overflow van een
+    # eerdere betaling die groter was dan de toen-openstaande factuur, of
+    # een expliciete vooruitbetaling). Zonder deze stap zou een historische
+    # factuur die NA een grote betaling wordt aangemaakt "open" blijven
+    # terwijl er tegoed staat — precies wat er misging bij de klant.
+    try:
+        await _apply_tenant_credit_to_invoice(body.tenant_id, doc["id"], cid)
+    except Exception as e:  # noqa: BLE001
+        print(f"[historical-invoice] credit apply failed: {e}")
+    doc = await db.invoices.find_one({"id": doc["id"]}, {"_id": 0}) or doc
     doc.pop("_id", None)
     return await _enrich_invoice(doc)
+
+
+@api.get("/tenants/{tenant_id}/payment-audit")
+async def tenant_payment_audit(tenant_id: str, user=Depends(get_current_user)):
+    """Diagnose-endpoint: geeft alle betalingen + facturen van een huurder terug
+    met daarbij hoeveel van elke betaling daadwerkelijk aan facturen is
+    toegewezen (via paid_amount) versus wat als tegoed openstaat. Handig om
+    te achterhalen waar overschot van een grotere betaling naartoe is gegaan.
+    """
+    cid = company_id_of(user)
+    q = {"id": tenant_id}
+    if cid:
+        q["company_id"] = cid
+    t = await db.tenants.find_one(q, {"_id": 0, "id": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+
+    payments = []
+    total_credit = 0.0
+    async for p in db.payments.find(
+        {"tenant_id": tenant_id, **({"company_id": cid} if cid else {})},
+        {"_id": 0},
+    ).sort("paid_at", 1):
+        credit = float(p.get("credit_remaining") or 0)
+        total_credit += credit
+        payments.append({
+            "id": p.get("id"),
+            "receipt_number": p.get("receipt_number"),
+            "amount": float(p.get("amount") or 0),
+            "currency": p.get("currency"),
+            "category": p.get("category"),
+            "method": p.get("method"),
+            "status": p.get("status"),
+            "period": f"{p.get('period_month')}/{p.get('period_year')}"
+                if p.get("period_month") else None,
+            "invoice_id": p.get("invoice_id"),
+            "invoice_number": p.get("invoice_number"),
+            "credit_remaining": credit,
+            "credit_origin": p.get("credit_origin"),
+            "paid_at": p.get("paid_at"),
+        })
+
+    invoices = []
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, **({"company_id": cid} if cid else {})},
+        {"_id": 0},
+    ).sort([("period_year", 1), ("period_month", 1)]):
+        amt = float(inv.get("amount") or 0)
+        paid = float(inv.get("paid_amount") or 0)
+        invoices.append({
+            "id": inv.get("id"),
+            "invoice_number": inv.get("invoice_number"),
+            "period": f"{inv.get('period_month')}/{inv.get('period_year')}",
+            "amount": amt,
+            "paid_amount": paid,
+            "remaining": round(max(0.0, amt - paid), 2),
+            "overshoot": round(max(0.0, paid - amt), 2),
+            "status": inv.get("status"),
+            "is_historical": bool(inv.get("is_historical")),
+        })
+
+    return {
+        "tenant_id": tenant_id,
+        "tenant_name": t.get("name"),
+        "payments": payments,
+        "invoices": invoices,
+        "total_credit_remaining": round(total_credit, 2),
+        "total_paid_amount": round(sum(p["amount"] for p in payments if p["status"] == "approved"), 2),
+    }
+
+
+@api.post("/tenants/{tenant_id}/rebalance-credits")
+async def rebalance_tenant_credits(tenant_id: str, user=Depends(get_current_user)):
+    """Herverdeelt alle openstaande tegoeden (payments.credit_remaining) FIFO
+    over de openstaande facturen van deze huurder. Ook: als een factuur
+    `paid_amount > amount` heeft (oude overshoot-bug) wordt het overschot
+    eerst terug op de betaling gezet als credit, en daarna FIFO verrekend
+    over volgende openstaande facturen.
+
+    Returns: {credit_before, applied, credit_after, invoices_updated}
+    """
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
+    q = {"id": tenant_id, "company_id": cid}
+    t = await db.tenants.find_one(q, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+
+    # STAP 1: Corrigeer eventuele overshoot-facturen. Trek het teveel af,
+    # zet status terug naar 'paid' (op amount), en voeg het overschot toe
+    # aan credit_remaining van de laatst gekoppelde betaling.
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, "company_id": cid,
+         "$expr": {"$gt": ["$paid_amount", "$amount"]}},
+        {"_id": 0},
+    ):
+        amt = float(inv.get("amount") or 0)
+        paid = float(inv.get("paid_amount") or 0)
+        excess = round(paid - amt, 2)
+        if excess <= 0:
+            continue
+        await db.invoices.update_one(
+            {"id": inv["id"]},
+            {"$set": {"paid_amount": amt, "status": "paid"}},
+        )
+        # Zoek een gekoppelde approved payment om het overschot op te zetten
+        target_pay = await db.payments.find_one(
+            {"tenant_id": tenant_id, "company_id": cid,
+             "status": "approved",
+             "$or": [{"invoice_id": inv["id"]},
+                     {"period_month": inv.get("period_month"),
+                      "period_year": inv.get("period_year")}]},
+            {"_id": 0, "id": 1, "credit_remaining": 1},
+            sort=[("paid_at", -1)],
+        )
+        if target_pay:
+            cur_credit = float(target_pay.get("credit_remaining") or 0)
+            await db.payments.update_one(
+                {"id": target_pay["id"]},
+                {"$set": {"credit_remaining": round(cur_credit + excess, 2),
+                          "credit_origin": target_pay.get("credit_origin") or "rebalance"}},
+            )
+
+    # STAP 2: Bereken totaal openstaand tegoed VOOR verrekening
+    credit_before = 0.0
+    async for p in db.payments.find(
+        {"tenant_id": tenant_id, "company_id": cid,
+         "credit_remaining": {"$gt": 0}, "status": "approved"},
+        {"_id": 0, "credit_remaining": 1},
+    ):
+        credit_before += float(p.get("credit_remaining") or 0)
+
+    # STAP 3: FIFO verrekent tegoed met openstaande facturen (oudst eerst)
+    applied_total = 0.0
+    invoices_updated: list = []
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, "company_id": cid,
+         "status": {"$nin": ["paid", "cancelled"]}},
+        {"_id": 0, "id": 1, "invoice_number": 1},
+    ).sort([("period_year", 1), ("period_month", 1)]):
+        applied = await _apply_tenant_credit_to_invoice(tenant_id, inv["id"], cid)
+        if applied > 0:
+            applied_total += applied
+            invoices_updated.append({
+                "invoice_id": inv["id"],
+                "invoice_number": inv.get("invoice_number"),
+                "applied": round(applied, 2),
+            })
+
+    # STAP 4: Recomputeer resterend tegoed
+    credit_after = 0.0
+    async for p in db.payments.find(
+        {"tenant_id": tenant_id, "company_id": cid,
+         "credit_remaining": {"$gt": 0}, "status": "approved"},
+        {"_id": 0, "credit_remaining": 1},
+    ):
+        credit_after += float(p.get("credit_remaining") or 0)
+
+    return {
+        "credit_before": round(credit_before, 2),
+        "applied": round(applied_total, 2),
+        "credit_after": round(credit_after, 2),
+        "invoices_updated": invoices_updated,
+    }
 
 
 class GenerateMonthIn(BaseModel):

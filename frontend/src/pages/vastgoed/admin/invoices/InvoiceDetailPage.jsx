@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   ChevronRight, Mail, PiggyBank, Loader2, MessageCircle,
-  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote, Share2, Trash2,
+  Calendar, AlertTriangle, Clock, Check, Receipt, Banknote, Share2, Trash2, RefreshCw,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { openWhatsApp } from '../../../../lib/external-link';
@@ -29,6 +29,8 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
   const [sendInv, setSendInv] = useState(null);
   const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
   const [applyingCredit, setApplyingCredit] = useState(false);
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceMsg, setRebalanceMsg] = useState('');
 
   const primaryOpen = overdue[0] || current[0] || future[0] || null;
   const currency = g.currency || primaryOpen?.currency || 'SRD';
@@ -70,6 +72,42 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
       alert(formatError(e) || 'Kon tegoed niet verrekenen');
     } finally {
       setApplyingCredit(false);
+    }
+  };
+
+  // Herverdeelt ALLE openstaande tegoeden (payment.credit_remaining) én
+  // corrigeert overshoot-facturen FIFO over de openstaande facturen. Handig
+  // wanneer een grote betaling van vroeger nog niet volledig is doorgezet
+  // naar later aangemaakte (historische) facturen.
+  const rebalanceCredits = async () => {
+    if (rebalancing) return;
+    setRebalancing(true);
+    setRebalanceMsg('');
+    try {
+      const { data } = await api.post(`/tenants/${g.tenant_id}/rebalance-credits`);
+      const applied = Number(data.applied || 0);
+      const before = Number(data.credit_before || 0);
+      const after = Number(data.credit_after || 0);
+      if (applied > 0) {
+        setRebalanceMsg(`${fmtMoney(applied, currency)} verrekend over ${data.invoices_updated.length} factu${data.invoices_updated.length === 1 ? 'ur' : 'ren'}`);
+        if (onPaid) {
+          onPaid({
+            receipt_number: 'herverdeling',
+            amount: applied,
+            currency,
+            _credit_applied: true,
+            _message: `${fmtMoney(applied, currency)} tegoed herverdeeld`,
+          });
+        }
+      } else if (before === 0 && after === 0) {
+        setRebalanceMsg('Geen openstaand tegoed gevonden — alles klopt al.');
+      } else {
+        setRebalanceMsg(`${fmtMoney(after, currency)} tegoed staat nog open (geen passende factuur).`);
+      }
+    } catch (e) {
+      setRebalanceMsg(formatError(e) || 'Herverdeling mislukt');
+    } finally {
+      setRebalancing(false);
     }
   };
 
@@ -241,6 +279,37 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             </div>
             <p className="text-lg font-black text-emerald-900">Alles op tijd</p>
             <p className="text-sm text-emerald-700 mt-1">Geen openstaande facturen — deze huurder loopt netjes bij.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ================= SUB-CARD: TEGOED HERVERDELEN ================= */}
+      {/* Altijd zichtbaar wanneer er openstaande facturen zijn — óók als het
+          `credits`-object leeg is. Reden: oude betalingen die groter waren
+          dan de toen-openstaande factuur kunnen nog niet-verrekend tegoed
+          hebben zitten dat de badge niet toont. Deze knop draait dan
+          `/rebalance-credits` op de tenant zodat FIFO alles doorschuift. */}
+      {openCount > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden" data-testid="rebalance-card">
+          <div className="px-4 py-3 border-b border-blue-100">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Tegoeden herverdelen</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Overloop van eerdere grote betalingen doorschuiven naar openstaande maanden (FIFO — oudste eerst).
+            </p>
+          </div>
+          <div className="p-4 space-y-2">
+            <button type="button" onClick={rebalanceCredits} disabled={rebalancing}
+              data-testid="rebalance-credits-btn"
+              className="w-full h-11 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
+              {rebalancing
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Herverdelen…</>
+                : <><RefreshCw className="w-4 h-4" /> Herverdeel alle tegoeden</>}
+            </button>
+            {rebalanceMsg && (
+              <p className="text-[11px] font-bold text-slate-700 text-center" data-testid="rebalance-msg">
+                {rebalanceMsg}
+              </p>
+            )}
           </div>
         </div>
       )}

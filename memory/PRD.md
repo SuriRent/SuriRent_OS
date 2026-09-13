@@ -1,6 +1,21 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-13) — Tegoed-herverdeling na Snelle Betaling / Historische Facturen
+Wanneer een huurder een grotere betaling deed dan het toen-openstaande factuurbedrag terwijl andere facturen NOG NIET bestonden (of pas later historisch werden aangemaakt), bleef het overschot als `payments.credit_remaining` staan zonder automatisch te verrekenen bij nieuwe historische facturen. Rapport gebruiker: 15.000 SRD op mei 7.000 → alleen mei betaald, juni/juli/aug (later historisch aangemaakt) bleven volledig open.
+
+**Backend fixes** (`server.py`):
+- `create_historical_invoice` roept nu `_apply_tenant_credit_to_invoice` aan na insert → verrekent openstaand tegoed direct met de nieuwe historische factuur.
+- Nieuw `GET /api/tenants/{tenant_id}/payment-audit` — diagnose-endpoint met alle payments (amount, credit_remaining, invoice-koppeling) + alle facturen (amount, paid_amount, overshoot, status).
+- Nieuw `POST /api/tenants/{tenant_id}/rebalance-credits` — corrigeert eerst overshoot-facturen (paid_amount > amount) door het teveel terug op de betaling te zetten als credit, en verrekent daarna alle `credit_remaining > 0` FIFO oudst-eerst met openstaande facturen.
+
+**Frontend** (`InvoiceDetailPage.jsx`):
+- Nieuwe sub-card "Tegoeden herverdelen" met knop `RefreshCw` "Herverdeel alle tegoeden" die `POST /rebalance-credits` triggert en de payment history + open invoices ververst. Zichtbaar zodra er openstaande facturen zijn.
+- Toast-melding toont exact hoeveel is verrekend over welk aantal facturen.
+
+Regressietest: `/app/backend/tests/test_rebalance_credits.py` bewijst FIFO-verdeling van 8000 credit over juni (7000, paid), juli (1000, partial), aug (blijft 0/8500 open).
+
+
 ## Latest Feature (2026-02-12) — Historische Facturen (Onboarding Achterstanden)
 Nieuwe endpoint `POST /api/invoices/historical` waarmee beheerders bij onboarding een historische factuur kunnen aanmaken met:
 - Vrij bedrag (`amount > 0`) + valuta (default = valuta van appartement)
