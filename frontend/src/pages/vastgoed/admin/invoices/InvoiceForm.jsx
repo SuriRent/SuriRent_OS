@@ -21,7 +21,12 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
   });
   const [hist, setHist] = useState({
     amount: '',
-    date: today.toISOString().slice(0, 10),
+    // Historische facturen worden per MAAND geboekt (niet per specifieke
+    // dag) — we sturen naar de backend altijd de 1e van de gekozen maand
+    // zodat het endpoint (dat een `date` verwacht) `period_month`/`period_year`
+    // correct afleidt.
+    period_month: today.getMonth() + 1,
+    period_year: today.getFullYear(),
     description: '',
     currency: '',
   });
@@ -33,10 +38,13 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
     try {
       if (mode === 'historical') {
         const amt = Number(String(hist.amount).replace(',', '.'));
+        // Bouw ISO-datum uit maand+jaar (1e van de maand)
+        const mm = String(hist.period_month).padStart(2, '0');
+        const isoDate = `${hist.period_year}-${mm}-01`;
         const { data: r } = await api.post('/invoices/historical', {
           tenant_id: data.tenant_id,
           amount: amt,
-          date: hist.date,
+          date: isoDate,
           description: hist.description.trim(),
           currency: hist.currency || undefined,
         });
@@ -54,7 +62,8 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
   };
 
   const isHist = mode === 'historical';
-  const canSave = data.tenant_id && (!isHist || (Number(String(hist.amount).replace(',', '.')) > 0 && hist.description.trim() && hist.date));
+  const canSave = data.tenant_id
+    && (!isHist || (Number(String(hist.amount).replace(',', '.')) > 0 && hist.description.trim() && hist.period_month && hist.period_year));
 
   return (
     <KeyboardSafeModal onClose={onCancel} testId="invoice-modal">
@@ -121,33 +130,44 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
-                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Datum *</label>
-                  <input type="date"
-                    value={hist.date}
-                    max={today.toISOString().slice(0, 10)}
-                    onChange={(e) => setHist({ ...hist, date: e.target.value })}
-                    data-testid="hist-date"
-                    className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none appearance-none bg-white" />
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Maand *</label>
+                  <select
+                    value={hist.period_month}
+                    onChange={(e) => setHist({ ...hist, period_month: parseInt(e.target.value) })}
+                    data-testid="hist-month"
+                    className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
+                    {MONTHS_NL.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
                 </div>
                 <div className="min-w-0">
-                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
-                  <div className="flex mt-1 gap-1.5">
-                    <select value={hist.currency}
-                      onChange={(e) => setHist({ ...hist, currency: e.target.value })}
-                      data-testid="hist-currency"
-                      className="w-20 h-12 px-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white text-sm font-bold">
-                      <option value="">Auto</option>
-                      <option value="SRD">SRD</option>
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                    </select>
-                    <input type="text" inputMode="decimal"
-                      value={hist.amount}
-                      onChange={(e) => setHist({ ...hist, amount: e.target.value.replace(/[^0-9.,]/g, '') })}
-                      placeholder="0,00"
-                      data-testid="hist-amount"
-                      className="flex-1 min-w-0 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none tabular-nums" />
-                  </div>
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Jaar *</label>
+                  <input type="number"
+                    value={hist.period_year}
+                    max={today.getFullYear()}
+                    min={2000}
+                    onChange={(e) => setHist({ ...hist, period_year: parseInt(e.target.value) || today.getFullYear() })}
+                    data-testid="hist-year" inputMode="numeric"
+                    className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none tabular-nums" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Bedrag *</label>
+                <div className="flex mt-1 gap-1.5">
+                  <select value={hist.currency}
+                    onChange={(e) => setHist({ ...hist, currency: e.target.value })}
+                    data-testid="hist-currency"
+                    className="w-24 h-12 px-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white text-sm font-bold">
+                    <option value="">Auto</option>
+                    <option value="SRD">SRD</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                  <input type="text" inputMode="decimal"
+                    value={hist.amount}
+                    onChange={(e) => setHist({ ...hist, amount: e.target.value.replace(/[^0-9.,]/g, '') })}
+                    placeholder="0,00"
+                    data-testid="hist-amount"
+                    className="flex-1 min-w-0 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none tabular-nums" />
                 </div>
               </div>
               <div>

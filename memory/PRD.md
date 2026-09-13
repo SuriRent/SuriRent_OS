@@ -214,3 +214,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - **Root cause**: elke React hook die `useAdminEvents` gebruikte opende zijn EIGEN EventSource → 4-5 parallelle SSE-connecties per tab (Bells + Payments + AdminDashboard). Browsers/proxies throttlen op 6 concurrente HTTP-connecties per domein → sommige SSE-streams kregen bytes niet door → events "leken traag" of misten.
 - **Fix**: `admin-events.js` herschreven naar module-level singleton met pub/sub — één gedeelde EventSource waar álle hooks zich op abonneren. Aparte EventSource in `AdminDashboard.jsx` verwijderd; gebruikt nu dezelfde singleton. `closeAdminEvents()` wordt geroepen bij logout.
 - **Result**: 1 SSE-connectie i.p.v. 5. Live-sync in de hele beheerder werkt binnen **~300ms** (gemeten browser-side: POST → SWR-invalidate → DOM update).
+
+
+## Session Log — 2026-02-08 (facturen delete + historisch maand-picker)
+- **Delete-knop verruimd**: was alleen zichtbaar op `current`/`future` facturen. Nu op **elke** onbetaalde factuur (past/current/future) mits niet partial-paid én geen actieve regeling. Zelfde regel in mobile + desktop InvoiceRow.
+- **Backend guardrails** in `DELETE /api/invoices/{id}`: blokkeert delete wanneer er goedgekeurde payments aan de factuur hangen (audit-trail) of een niet-geannuleerde `payment_plan` gekoppeld is. Geeft duidelijke NL error i.p.v. silently orphan-payments.
+- **Historische factuur form**: `Datum`-veld vervangen door **Maand + Jaar** dropdowns; klant boekt achterstanden per maand. Backend endpoint blijft compatibel (frontend stuurt `YYYY-MM-01`).

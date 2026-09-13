@@ -11414,9 +11414,33 @@ async def _demo_reset_loop():
 
 @api.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
-    res = await db.invoices.delete_one({"id": invoice_id, **scope(user)})
-    if res.deleted_count == 0:
+    inv = await db.invoices.find_one({"id": invoice_id, **scope(user)}, {"_id": 0})
+    if not inv:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    # Veiligheid: blokkeer verwijderen wanneer er goedgekeurde betalingen
+    # aan hangen — anders raken die betalingen hun context kwijt en klopt
+    # het openstaand saldo van de huurder niet meer. Admin moet de betaling
+    # eerst verwijderen of de factuur voor 100% als betaald markeren.
+    linked_pay = await db.payments.find_one({
+        "invoice_id": invoice_id, "status": {"$ne": "rejected"},
+    }, {"_id": 0, "id": 1})
+    if linked_pay:
+        raise HTTPException(
+            status_code=400,
+            detail=("Factuur heeft nog gekoppelde betalingen. Verwijder eerst "
+                    "de betaling(en) of markeer de factuur op 0 openstaand."),
+        )
+    # Blokkeer óók wanneer de factuur onderdeel is van een actieve regeling.
+    linked_plan = await db.payment_plans.find_one({
+        "invoice_ids": invoice_id, "status": {"$ne": "cancelled"},
+    }, {"_id": 0, "id": 1})
+    if linked_plan:
+        raise HTTPException(
+            status_code=400,
+            detail=("Factuur is gekoppeld aan een betalingsregeling. "
+                    "Annuleer eerst de regeling."),
+        )
+    await db.invoices.delete_one({"id": invoice_id, **scope(user)})
     return {"ok": True}
 
 

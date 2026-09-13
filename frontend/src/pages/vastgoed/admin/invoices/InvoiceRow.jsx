@@ -48,7 +48,8 @@ export function StatusPill({ severity, overdueCount, currentCount, upcomingCount
 // =====================================================================
 export function MobileInvoiceLine({ inv, bucket }) {
   const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) * 0.95);
-  const canDelete = (bucket === 'future' || bucket === 'current') && !isPartial;
+  // Verwijderen mag voor élke onbetaalde factuur zonder gekoppelde regeling.
+  const canDelete = !isPartial && !(inv.plans && inv.plans.length > 0);
   return (
     <div className="flex flex-col gap-0.5" data-testid={`mi-invoice-${inv.id}`}>
       <div className="flex items-center justify-between gap-2 text-[12px]">
@@ -187,11 +188,10 @@ export function InvoiceRow({ inv, bucket, severity }) {
           <Check className="w-3.5 h-3.5" strokeWidth={3} />
         </button>
       )}
-      {/* Verwijder-knop: alleen voor onbetaalde HUIDIGE maand en VOORUIT gefactureerde
-          facturen. Achterstand kan NIET verwijderd worden — moet eerst betaald
-          of via een credit-actie afgeschreven worden. Partial-paid facturen
-          ook niet (anders verlies van betaling-spoor). */}
-      {(bucket === 'future' || bucket === 'current') && !isPartial && (
+      {/* Verwijder-knop: onbetaalde facturen kunnen altijd verwijderd worden
+          (admin discretion). Partial-paid facturen NIET — anders verlies je
+          het betalingsspoor. Ook facturen met een gekoppelde regeling niet. */}
+      {!isPartial && !(inv.plans && inv.plans.length > 0) && (
         <button
           onClick={(e) => {
             e.stopPropagation();
