@@ -8,11 +8,25 @@ import { fmtAmountWhole } from './helpers';
 // voor 1 huurder. Toont datum, ontvangstnummer en methode zodra beschikbaar.
 // Sorteert nieuwste-eerst, groepeert per jaar en biedt "Toon meer" wanneer
 // er meer dan 12 items zijn zodat oude data niet direct de kaart vult.
+//
+// Jaren zijn STANDAARD INGEKLAPT (collapsed) — admin klikt op een jaar-header
+// om de maanden ervoor open te vouwen. Voorkomt lange scroll bij huurders
+// met veel betalingsgeschiedenis (bv. 2 jaar × 12 maanden = 24 regels).
 // =====================================================================
 const INITIAL_LIMIT = 12;
 
 export default function PaidHistorySection({ paidInvoices, currency, testidPrefix = 'paid', variant = 'card' }) {
   const [expanded, setExpanded] = useState(false);
+  // Set van jaren die momenteel open zijn (default = leeg = alles ingeklapt).
+  const [openYears, setOpenYears] = useState(() => new Set());
+
+  const toggleYear = (year) => {
+    setOpenYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) next.delete(year); else next.add(year);
+      return next;
+    });
+  };
 
   // Sorteer nieuwste eerst (één keer) en houd ook een gelimiteerde variant klaar.
   const sortedAll = useMemo(
@@ -54,22 +68,37 @@ export default function PaidHistorySection({ paidInvoices, currency, testidPrefi
   const hasMore = paidInvoices.length > INITIAL_LIMIT;
 
   const rows = (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {shownGrouped.map(([year, invs]) => {
         const yearTotal = invs.reduce((s, i) => s + Number(i.amount || 0), 0);
+        const isOpen = openYears.has(year);
         return (
-          <div key={year} data-testid={`${testidPrefix}-year-${year}`}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{year}</p>
-              <p className="text-[10px] font-bold text-emerald-700">
+          <div key={year} data-testid={`${testidPrefix}-year-${year}`}
+            className="rounded-xl border border-slate-100 overflow-hidden bg-white">
+            {/* Jaar-header = klikbare toggle. Standaard ingeklapt zodat de
+                lijst compact blijft — pas na klik verschijnen de maanden. */}
+            <button type="button"
+              onClick={() => toggleYear(year)}
+              data-testid={`${testidPrefix}-year-toggle-${year}`}
+              aria-expanded={isOpen}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-slate-50 transition text-left">
+              <div className="flex items-center gap-2 min-w-0">
+                {isOpen
+                  ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                  : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                <p className="text-sm font-black uppercase tracking-wider text-slate-900">{year}</p>
+              </div>
+              <p className="text-[10px] font-bold text-emerald-700 shrink-0 whitespace-nowrap">
                 {invs.length} maand{invs.length === 1 ? '' : 'en'} · {fmtMoney(yearTotal, currency)}
               </p>
-            </div>
-            <div className="space-y-1.5">
-              {invs.map((inv) => (
-                <PaidInvoiceRow key={inv.id} inv={inv} testid={`${testidPrefix}-row-${inv.id}`} />
-              ))}
-            </div>
+            </button>
+            {isOpen && (
+              <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-slate-100">
+                {invs.map((inv) => (
+                  <PaidInvoiceRow key={inv.id} inv={inv} testid={`${testidPrefix}-row-${inv.id}`} />
+                ))}
+              </div>
+            )}
           </div>
         );
       })}

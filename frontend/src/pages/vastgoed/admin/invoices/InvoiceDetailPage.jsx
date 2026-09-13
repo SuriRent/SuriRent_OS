@@ -190,6 +190,19 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Openstaande facturen</h2>
             <span className="text-[10px] font-bold text-slate-400">{overdue.length + current.length + future.length} factu{(overdue.length + current.length + future.length) === 1 ? 'ur' : 'ren'}</span>
           </div>
+          {/* Snelle "Registreer betaling" bovenaan de lijst — zodat admins
+              niet naar beneden hoeven scrollen voorbij de betalingshistorie.
+              De grote CTA onderaan in "Acties" blijft óók zichtbaar. */}
+          {primaryOpen && (
+            <div className="px-4 py-3 border-b border-slate-100 bg-orange-50/40">
+              <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
+                data-testid="quickpay-top-btn"
+                className="w-full py-2.5 rounded-xl text-white font-black inline-flex items-center justify-center gap-2 shadow-[0_8px_16px_-8px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
+                style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
+                <Banknote className="w-4 h-4" /> Registreer betaling
+              </button>
+            </div>
+          )}
           <div className="divide-y divide-slate-100">
             {[...overdue, ...current, ...future].map((inv) => {
               const bucket = overdue.includes(inv) ? 'overdue' : current.includes(inv) ? 'current' : 'future';
@@ -207,62 +220,67 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
               );
               const partial = Number(inv.paid_amount || 0) > 0;
               return (
-                <div key={inv.id} className="flex items-center gap-2 px-4 py-3 hover:bg-slate-50 transition"
+                <div key={inv.id} className="px-4 py-3 hover:bg-slate-50 transition"
                   data-testid={`inv-row-${inv.id}`}>
+                  {/* Regel 1: klikbare kern (icoon + maand + bedrag rechts) */}
                   <button type="button"
                     onClick={() => canPay && setQuickPayInv(inv)}
                     disabled={!canPay}
                     data-testid={`inv-card-${inv.id}`}
-                    className={`flex-1 min-w-0 text-left flex items-center gap-3 ${canPay ? '' : 'opacity-70 cursor-default'}`}>
+                    className={`w-full text-left flex items-center gap-3 ${canPay ? '' : 'opacity-70 cursor-default'}`}>
                     <div className={`w-9 h-9 rounded-xl ${cfg.iconBg} flex items-center justify-center shrink-0`}>
                       <cfg.Icon className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-slate-900 text-sm truncate">
                         {monthName} {inv.period_year}
-                        <span className={`ml-2 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.chip}`}>
-                          {cfg.label}
-                        </span>
-                        {partial && (
-                          <span className="ml-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                            partieel
-                          </span>
-                        )}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">{inv.invoice_number}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5 font-mono truncate">{inv.invoice_number}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-black text-slate-900 text-sm whitespace-nowrap">{fmtMoney(remaining, inv.currency)}</p>
                       <p className="text-[10px] text-slate-400">{canPay ? 'nog open' : 'toekomst'}</p>
                     </div>
                   </button>
-                  {/* Deel-knop: opent SendDialog voor deze specifieke factuur —
-                      admin kan factuur-JPG via WhatsApp of e-mail versturen. */}
-                  <button type="button"
-                    onClick={(e) => { e.stopPropagation(); setSendInv(inv); }}
-                    data-testid={`inv-share-${inv.id}`}
-                    title="Deel deze factuur via WhatsApp of E-mail"
-                    className="shrink-0 w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95">
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  {/* Verwijder-knop: alleen zichtbaar voor onbetaalde
-                      facturen zonder gekoppelde betalingsregeling. Backend
-                      blokkeert zelf ook wanneer er payments/plans aanhangen
-                      met een duidelijke NL-error. */}
-                  {!partial && !(inv.plans && inv.plans.length > 0) && (
-                    <button type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const periodLabel = `${monthName} ${inv.period_year}`;
-                        if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`)) return;
-                        window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
-                      }}
-                      data-testid={`inv-delete-${inv.id}`}
-                      title="Factuur verwijderen"
-                      className="shrink-0 w-9 h-9 rounded-xl bg-red-50 hover:bg-red-500 hover:text-white text-red-500 inline-flex items-center justify-center transition active:scale-95">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  {/* Regel 2: badges links + acties rechts — eigen regel zodat
+                      niks wordt afgekapt op smalle iPhone-viewport. */}
+                  <div className="mt-2 flex items-center justify-between gap-2 pl-12">
+                    <div className="flex items-center gap-1 flex-wrap min-w-0">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap ${cfg.chip}`}>
+                        {cfg.label}
+                      </span>
+                      {partial && (
+                        <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">
+                          partieel
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Deel-knop: opent SendDialog voor deze specifieke factuur */}
+                      <button type="button"
+                        onClick={(e) => { e.stopPropagation(); setSendInv(inv); }}
+                        data-testid={`inv-share-${inv.id}`}
+                        title="Deel deze factuur via WhatsApp of E-mail"
+                        className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95">
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                      {/* Verwijder-knop: alleen onbetaalde facturen zonder plan */}
+                      {!partial && !(inv.plans && inv.plans.length > 0) && (
+                        <button type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const periodLabel = `${monthName} ${inv.period_year}`;
+                            if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+                            window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
+                          }}
+                          data-testid={`inv-delete-${inv.id}`}
+                          title="Factuur verwijderen"
+                          className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-500 hover:text-white text-red-500 inline-flex items-center justify-center transition active:scale-95">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })}

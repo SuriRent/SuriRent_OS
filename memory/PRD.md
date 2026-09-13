@@ -1,6 +1,13 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest UX Fixes (2026-02-13) — InvoiceDetailPage Leesbaarheid
+Op basis van gebruikersfeedback (Gopi Appartements, iPhone smalle viewport):
+1. **Openstaande facturen rij is nu 2-regelig**: bedrag + factuurnr op regel 1, badges (Te laat/Deze maand/Partieel) + acties (Share, Delete) op regel 2. Voorheen werden badges + bedrag afgekapt door de 3 knoppen op één regel. Op iPhone-viewport blijft niks meer verborgen achter een ellipsis.
+2. **"Registreer betaling" knop bovenaan** in de Openstaande Facturen sub-card toegevoegd (`data-testid="quickpay-top-btn"`) — direct zichtbaar zonder scrollen. De grote CTA onderaan in "Acties" blijft ook bestaan.
+3. **Betalingsgeschiedenis jaren gevouwd**: `PaidHistorySection.jsx` toont jaar-headers als klikbare toggles die standaard ingeklapt zijn (ChevronRight → ChevronDown na klik). Voorkomt lange scroll bij huurders met > 6 betaalde maanden. Alleen bij klik openen de maanden per jaar.
+
+
 ## Latest Fix (2026-02-13) — Tegoed-herverdeling na Snelle Betaling / Historische Facturen
 Wanneer een huurder een grotere betaling deed dan het toen-openstaande factuurbedrag terwijl andere facturen NOG NIET bestonden (of pas later historisch werden aangemaakt), bleef het overschot als `payments.credit_remaining` staan zonder automatisch te verrekenen bij nieuwe historische facturen. Rapport gebruiker: 15.000 SRD op mei 7.000 → alleen mei betaald, juni/juli/aug (later historisch aangemaakt) bleven volledig open.
 
