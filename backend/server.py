@@ -11242,14 +11242,14 @@ async def _auto_invoice_tick():
 
 
 async def _auto_invoice_loop():
-    """Achtergrond-loop: roept _auto_invoice_tick elke 6 uur aan zodat we
-    altijd binnen 6h reageren op een deadline-overschrijding."""
+    """Achtergrond-loop: roept _auto_invoice_tick elke 1 uur aan zodat we
+    altijd binnen 1h reageren op een deadline-overschrijding."""
     while True:
         try:
             await _auto_invoice_tick()
         except Exception as e:  # noqa: BLE001
             print(f"[auto-invoice] tick failed: {e}")
-        await asyncio.sleep(6 * 3600)  # 6 uur
+        await asyncio.sleep(3600)  # 1 uur
 
 
 # ============================================================

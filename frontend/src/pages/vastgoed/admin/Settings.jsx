@@ -499,7 +499,7 @@ export function InvoicingForm({ initial }) {
             </>
           )}
         </ol>
-        <p className="mt-2 text-slate-500">De achtergrond-taak loopt elke 6 uur — meestal binnen 1 dag na de deadline staat alles klaar.</p>
+        <p className="mt-2 text-slate-500">De achtergrond-taak loopt elk uur — meestal binnen 1 uur na de deadline staat alles klaar.</p>
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
