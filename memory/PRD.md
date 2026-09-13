@@ -225,3 +225,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## Session Log — 2026-02-08 (facturen-automatisering: volgende run zichtbaar)
 - Backend `GET /api/settings` verrijkt de `invoicing`-sectie met berekende velden `next_auto_run` (ISO-datum) en `billing_day_of_month` op basis van `grace_workdays` + `last_auto_run`. Logica: einde vorige/huidige maand + grace werkdagen (weekenden overslaan). Update bij elke settings-fetch, geen persistentie nodig.
 - Frontend `Settings.jsx` → tab "Facturen automatisering": nieuw blauw info-paneel toont **"14 september 2026 (= dag 14 van de maand)"** met uitleg dat verlaging van grace de facturatie eerder in de maand plaatst.
+
+
+## Session Log — 2026-02-08 (vaste factuurdag als alternatief voor grace)
+- Nieuw veld `invoicing.mode` (`grace_workdays` | `fixed_day`) + `invoicing.billing_day` (1–31). Backend `_auto_invoice_tick` en `next_auto_run`-berekening in `GET /settings` respecteren beide modi. Bij `fixed_day` wordt de dag geclamped naar de laatste dag van korte maanden (bv. 31 → 28/29 in feb).
+- Frontend UI: 2 radio-tegels om modus te kiezen; het aangepaste veld (grace of vaste dag) toont conditioneel + de "Hoe werkt het?" uitleg schakelt mee. Testcurl: fixed_day=5 → next_auto_run=2026-10-05; fixed_day=31 → 2026-09-30 (clamp).

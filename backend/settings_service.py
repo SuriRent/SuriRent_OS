@@ -71,7 +71,12 @@ def empty_section(section: str) -> dict:
         # gedraaid voor deze company, gebruikt om idempotent te blijven.
         "invoicing": {
             "auto_generate": False,
+            # Modus voor het bepalen van de factuur-datum:
+            #  - "grace_workdays" (default): einde vorige maand + N werkdagen
+            #  - "fixed_day"                : vaste dag van de HUIDIGE maand (bv. 5)
+            "mode": "grace_workdays",
             "grace_workdays": 10,
+            "billing_day": 1,
             "last_auto_run": None,
             "enabled": False,
         },

@@ -11077,10 +11077,13 @@ async def apply_credit_to_invoice(invoice_id: str, user=Depends(get_current_user
 async def _auto_invoice_tick():
     """Eén keer per dag uitgevoerde achtergrond-taak.
     Voor elk bedrijf met `invoicing.auto_generate=true`:
-      - bepaalt deadline = laatste dag VORIGE maand + grace_workdays
-      - als vandaag >= deadline en huidige maand-factuur nog niet bestaat,
-        genereer hem nu + verreken krediet
-      - markeer last_auto_run = vandaag zodat we niet 2× per dag draaien
+      Twee modi (`invoicing.mode`):
+        1. `grace_workdays` (default) — deadline = laatste dag VORIGE maand + grace_workdays.
+        2. `fixed_day`                — deadline = `billing_day` van HUIDIGE maand
+                                        (clamped naar de laatste dag als bv. 31 in februari).
+      Als vandaag >= deadline en de huidige maand-factuur nog niet bestaat,
+      genereer hem nu + verreken krediet. Markeer last_auto_run = vandaag
+      zodat we niet 2× per dag draaien.
     """
     from datetime import date
     today = date.today()
@@ -11091,16 +11094,30 @@ async def _auto_invoice_tick():
             continue
         if cfg.get("last_auto_run") == today_iso:
             continue
-        try:
-            grace = int(cfg.get("grace_workdays") or 10)
-        except (TypeError, ValueError):
-            grace = 10
         company_id = cs["company_id"]
-        # Deadline van vorige maand verloopt: einde vorige maand + grace werkdagen
-        prev_year = today.year if today.month > 1 else today.year - 1
-        prev_month = today.month - 1 if today.month > 1 else 12
-        prev_last = _last_day_of_month(prev_year, prev_month)
-        deadline = _add_workdays(prev_last, grace)
+        mode = (cfg.get("mode") or "grace_workdays").strip()
+        try:
+            if mode == "fixed_day":
+                try:
+                    fixed_day = int(cfg.get("billing_day") or 1)
+                except (TypeError, ValueError):
+                    fixed_day = 1
+                fixed_day = max(1, min(31, fixed_day))
+                last_of_month = _last_day_of_month(today.year, today.month)
+                effective_day = min(fixed_day, last_of_month.day)
+                deadline = today.replace(day=effective_day)
+            else:  # grace_workdays
+                try:
+                    grace = int(cfg.get("grace_workdays") or 10)
+                except (TypeError, ValueError):
+                    grace = 10
+                prev_year = today.year if today.month > 1 else today.year - 1
+                prev_month = today.month - 1 if today.month > 1 else 12
+                prev_last = _last_day_of_month(prev_year, prev_month)
+                deadline = _add_workdays(prev_last, grace)
+        except Exception as e:  # noqa: BLE001
+            print(f"[auto-invoice] deadline calc failed for {company_id}: {e}")
+            continue
         if today < deadline:
             continue
         # Genereer huidige maand
@@ -12489,31 +12506,48 @@ async def get_settings(user=Depends(get_current_user)):
     for s in VALID_SETTINGS_SECTIONS:
         out[s] = _mask_section(s, doc.get(s) or {})
     # Verrijk de invoicing-sectie met berekende velden zodat de admin ziet
-    # wanneer de volgende auto-run staat gepland op basis van grace_workdays.
+    # wanneer de volgende auto-run staat gepland (afhankelijk van mode).
     try:
         inv = out.get("invoicing") or {}
         from datetime import date as _date
         today = _date.today()
-        try:
-            grace = int(inv.get("grace_workdays") or 10)
-        except (TypeError, ValueError):
-            grace = 10
-        # Deadline voor DEZE maand (op basis van vorige maand + grace)
-        prev_year = today.year if today.month > 1 else today.year - 1
-        prev_month = today.month - 1 if today.month > 1 else 12
-        prev_last = _last_day_of_month(prev_year, prev_month)
-        deadline_this = _add_workdays(prev_last, grace)
-        # Als vandaag al voorbij deadline én al gedraaid → volgende maand.
+        mode = (inv.get("mode") or "grace_workdays").strip()
         last_run = inv.get("last_auto_run")
+
+        def _deadline_grace(t):
+            try:
+                grace = int(inv.get("grace_workdays") or 10)
+            except (TypeError, ValueError):
+                grace = 10
+            prev_year = t.year if t.month > 1 else t.year - 1
+            prev_month = t.month - 1 if t.month > 1 else 12
+            prev_last = _last_day_of_month(prev_year, prev_month)
+            return _add_workdays(prev_last, grace)
+
+        def _deadline_fixed(t):
+            try:
+                fixed_day = int(inv.get("billing_day") or 1)
+            except (TypeError, ValueError):
+                fixed_day = 1
+            fixed_day = max(1, min(31, fixed_day))
+            last_of_m = _last_day_of_month(t.year, t.month)
+            return t.replace(day=min(fixed_day, last_of_m.day))
+
+        def _deadline_for(t):
+            return _deadline_fixed(t) if mode == "fixed_day" else _deadline_grace(t)
+
+        deadline_this = _deadline_for(today)
         already_ran_this_cycle = (
             last_run == today.isoformat() or today >= deadline_this
         ) if last_run else (today >= deadline_this)
         if already_ran_this_cycle:
-            # Volgende deadline = einde HUIDIGE maand + grace
-            cur_last = _last_day_of_month(today.year, today.month)
-            next_run = _add_workdays(cur_last, grace)
+            # Volgende maand
+            nm_year = today.year if today.month < 12 else today.year + 1
+            nm_month = today.month + 1 if today.month < 12 else 1
+            next_run = _deadline_for(today.replace(year=nm_year, month=nm_month, day=1))
         else:
             next_run = deadline_this
+        inv["mode"] = mode
         inv["next_auto_run"] = next_run.isoformat()
         inv["billing_day_of_month"] = next_run.day
         out["invoicing"] = inv

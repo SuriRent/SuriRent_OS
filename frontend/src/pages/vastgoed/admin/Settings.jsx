@@ -359,6 +359,7 @@ function StatusStep({ label, ok }) {
 export function InvoicingForm({ initial }) {
   const s = useSection('invoicing', initial);
   const d = s.data;
+  const mode = d.mode || 'grace_workdays';
   return (
     <SectionShell msg={s.msg} err={s.err}>
       <SwitchField label="Ingeschakeld" testid="invoicing-enabled"
@@ -366,13 +367,56 @@ export function InvoicingForm({ initial }) {
         desc="Wanneer aan, kan het systeem automatisch maandelijkse huur-facturen aanmaken." />
       <SwitchField label="Automatisch genereren" testid="invoicing-auto"
         value={d.auto_generate} onChange={(v) => s.onField('auto_generate', v)}
-        desc="Genereer facturen automatisch voor elke bewoonde woning na het verlopen van de grace-periode." />
+        desc="Genereer facturen automatisch voor elke bewoonde woning na het verlopen van de deadline." />
+
+      {/* Modus-keuze */}
+      <div>
+        <FieldLabel>Factuur-datum bepalen op basis van</FieldLabel>
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {[
+            {
+              id: 'grace_workdays',
+              title: 'Grace-periode (werkdagen)',
+              desc: 'Na einde vorige maand + N werkdagen. Slaat weekenden over.',
+            },
+            {
+              id: 'fixed_day',
+              title: 'Vaste dag van de maand',
+              desc: 'Altijd op een specifieke dag (bv. de 5e). 31 wordt indien nodig teruggezet naar de laatste van de maand.',
+            },
+          ].map((opt) => (
+            <button type="button" key={opt.id}
+              onClick={() => s.onField('mode', opt.id)}
+              data-testid={`invoicing-mode-${opt.id}`}
+              className={`text-left rounded-xl border-2 p-3 transition ${
+                mode === opt.id
+                  ? 'border-[#FF5C00] bg-orange-50'
+                  : 'border-slate-200 hover:border-slate-300 bg-white'
+              }`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`w-4 h-4 rounded-full border-2 ${mode === opt.id ? 'border-[#FF5C00] bg-[#FF5C00]' : 'border-slate-300'}`} />
+                <span className="font-bold text-sm text-slate-900">{opt.title}</span>
+              </div>
+              <p className="text-[11px] text-slate-500">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextField label="Grace periode (werkdagen)" testid="invoicing-grace"
-          type="number"
-          value={d.grace_workdays} onChange={(v) => s.onField('grace_workdays', parseInt(v, 10) || 0)}
-          placeholder="10"
-          helper="Aantal werkdagen na einde van de maand voordat de volgende factuur automatisch wordt aangemaakt." />
+        {mode === 'fixed_day' ? (
+          <TextField label="Vaste factuurdag (1–31)" testid="invoicing-billing-day"
+            type="number"
+            value={d.billing_day} onChange={(v) => s.onField('billing_day', Math.max(1, Math.min(31, parseInt(v, 10) || 1)))}
+            placeholder="5"
+            helper="De dag van elke maand waarop de facturen worden aangemaakt. 30/31 wordt indien nodig naar de laatste dag verplaatst." />
+        ) : (
+          <TextField label="Grace periode (werkdagen)" testid="invoicing-grace"
+            type="number"
+            value={d.grace_workdays} onChange={(v) => s.onField('grace_workdays', parseInt(v, 10) || 0)}
+            placeholder="10"
+            helper="Aantal werkdagen na einde van de maand voordat de volgende factuur automatisch wordt aangemaakt." />
+        )}
         <div>
           <FieldLabel>Laatst uitgevoerd</FieldLabel>
           <input type="text" value={d.last_auto_run || '—'} disabled
@@ -398,18 +442,29 @@ export function InvoicingForm({ initial }) {
             )}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            Berekend uit: einde vorige maand + {d.grace_workdays || 10} werkdagen (weekenden overslaan).
-            Verlaag de grace-periode om eerder in de maand te factureren, verhoog voor later.
+            {mode === 'fixed_day'
+              ? <>Vaste factuurdag: <b>dag {d.billing_day || 1}</b> van elke maand. Wijzig hierboven om eerder of later te factureren.</>
+              : <>Berekend uit: einde vorige maand + {d.grace_workdays || 10} werkdagen (weekenden overslaan). Verlaag om eerder in de maand te factureren.</>}
           </p>
         </div>
       )}
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-slate-700">
         <p className="font-bold text-emerald-800 mb-1">Hoe werkt het?</p>
         <ol className="list-decimal pl-5 space-y-1">
-          <li>Aan het einde van elke maand wordt de huidige huur als verlopen beschouwd.</li>
-          <li>De huurder krijgt <b>{d.grace_workdays || 10}</b> werkdagen om alsnog te betalen.</li>
-          <li>Daarna genereert het systeem automatisch de volgende factuur voor elke bewoonde woning.</li>
-          <li>Eventueel vooruitbetaald saldo (positief saldo van de huurder) wordt automatisch verrekend.</li>
+          {mode === 'fixed_day' ? (
+            <>
+              <li>Op dag <b>{d.billing_day || 1}</b> van elke maand genereert het systeem de facturen voor alle bewoonde woningen.</li>
+              <li>Valt de dag niet in de maand (bv. 31 februari) → laatste dag van die maand.</li>
+              <li>Eventueel vooruitbetaald saldo wordt automatisch verrekend.</li>
+            </>
+          ) : (
+            <>
+              <li>Aan het einde van elke maand wordt de huidige huur als verlopen beschouwd.</li>
+              <li>De huurder krijgt <b>{d.grace_workdays || 10}</b> werkdagen om alsnog te betalen.</li>
+              <li>Daarna genereert het systeem automatisch de volgende factuur voor elke bewoonde woning.</li>
+              <li>Eventueel vooruitbetaald saldo wordt automatisch verrekend.</li>
+            </>
+          )}
         </ol>
         <p className="mt-2 text-slate-500">De achtergrond-taak loopt elke 6 uur — meestal binnen 1 dag na de deadline staat alles klaar.</p>
       </div>
