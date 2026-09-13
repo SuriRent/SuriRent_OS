@@ -9085,7 +9085,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             continue
         py = inv.get("period_year") or 0
         pm = inv.get("period_month") or 0
-        bucket = _classify_invoice_bucket(pm, py, today_local, grace_wd)
+        bucket = _classify_invoice_bucket(pm, py, today_local, grace_wd, due_date=inv.get("due_date"))
         item = {
             "id": inv["id"],
             "invoice_number": inv.get("invoice_number") or "",
@@ -9905,11 +9905,11 @@ async def admin_stats(user=Depends(get_current_user)):
     async for inv in db.invoices.find(
         {**sc, "status": {"$nin": ["paid", "cancelled"]}},
         {"_id": 0, "tenant_id": 1, "period_month": 1, "period_year": 1,
-         "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1},
+         "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1, "due_date": 1},
     ):
         py = int(inv.get("period_year") or 0)
         pm = int(inv.get("period_month") or 0)
-        bucket = _classify_invoice_bucket(pm, py, today_local, grace_wd)
+        bucket = _classify_invoice_bucket(pm, py, today_local, grace_wd, due_date=inv.get("due_date"))
         # LET OP: NIET hergebruik variabele `outstanding` (dict boven) — hier
         # gebruik lokale naam `remain` zodat de dict die naar de frontend gaat
         # niet overschreven wordt door een float.
@@ -10515,6 +10515,8 @@ class InvoiceOut(BaseModel):
     auto_created_from_payment: Optional[bool] = None  # audit-trail: factuur is aangemaakt door kiosk-betaling voordat maand-generatie plaatsvond
     is_historical: Optional[bool] = None  # true = onboarding-achterstand met vrije datum/bedrag
     description: Optional[str] = None     # vrije omschrijving voor historische facturen
+    invoice_date: Optional[str] = None    # ISO YYYY-MM-DD — factuurdatum op de PDF
+    due_date: Optional[str] = None        # ISO YYYY-MM-DD — vervaldatum op de PDF, bepaalt ook overdue-punt
 
 
 async def _enrich_invoice(i: dict) -> dict:
@@ -10609,6 +10611,7 @@ async def list_invoices(user=Depends(get_current_user)):
                         int(enriched.get("period_month") or 0),
                         int(enriched.get("period_year") or 0),
                         today_local, grace_wd,
+                        due_date=enriched.get("due_date"),
                     )
                 except Exception:  # noqa: BLE001
                     enriched["bucket"] = None
@@ -10644,6 +10647,14 @@ async def create_invoice(body: InvoiceCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Factuur voor deze periode bestaat al")
     year = body.period_year
     seq = await _next_seq(f"invoice_{year}")
+    # invoice_date + due_date afleiden uit invoicing-settings zodat de PDF
+    # en bucket-logica consistent zijn met wat de admin ziet in Instellingen.
+    cs = await db.company_settings.find_one(
+        {"company_id": cid}, {"_id": 0, "invoicing": 1},
+    ) or {}
+    inv_date_iso, due_date_iso = _compute_invoice_dates(
+        body.period_month, body.period_year, cs.get("invoicing") or {},
+    )
     doc = {
         "id": new_id(),
         "company_id": cid,
@@ -10654,6 +10665,8 @@ async def create_invoice(body: InvoiceCreate, user=Depends(get_current_user)):
         "currency": apt.get("currency", "SRD"),
         "period_month": body.period_month,
         "period_year": body.period_year,
+        "invoice_date": inv_date_iso,
+        "due_date": due_date_iso,
         "status": "open",
         "created_at": iso(now_utc()),
     }
@@ -10686,6 +10699,18 @@ async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(
     currency = (body.currency or (apt or {}).get("currency") or "SRD").upper()
     year = dt.year
     seq = await _next_seq(f"invoice_hist_{year}")
+    # Voor historische facturen is de gekozen datum de factuurdatum.
+    # Vervaldatum = factuurdatum + payment_term_days (default 14).
+    cs = await db.company_settings.find_one(
+        {"company_id": cid}, {"_id": 0, "invoicing": 1},
+    ) or {}
+    try:
+        term = int((cs.get("invoicing") or {}).get("payment_term_days") or 14)
+    except (TypeError, ValueError):
+        term = 14
+    term = max(0, min(180, term))
+    invoice_date_iso = dt.date().isoformat()
+    due_date_iso = (dt.date() + timedelta(days=term)).isoformat()
     doc = {
         "id": new_id(),
         "company_id": cid,
@@ -10696,6 +10721,8 @@ async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(
         "currency": currency,
         "period_month": dt.month,
         "period_year": dt.year,
+        "invoice_date": invoice_date_iso,
+        "due_date": due_date_iso,
         "status": "open",
         "created_at": iso(dt),
         "is_historical": True,
@@ -10856,17 +10883,19 @@ def _last_day_of_month(year: int, month: int):
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
-def _classify_invoice_bucket(period_month: int, period_year: int, today, grace_workdays: int = 10) -> str:
+def _classify_invoice_bucket(period_month: int, period_year: int, today, grace_workdays: int = 10, due_date=None) -> str:
     """Bepaal in welke bucket een (open) factuur valt:
-       - "overdue"  : periode eindigde + grace-werkdagen geleden (achterstand)
+       - "overdue"  : de vervaldatum is verstreken
        - "current"  : periode == huidige kalendermaand, of vorige maand maar
-                      nog binnen de grace-window (huurder mag nog betalen)
+                      voor de vervaldatum
        - "future"   : periode is later dan de huidige kalendermaand
        - "unknown"  : corrupt/incompleet doc (pm=0/py=0) — beller mag skippen.
+
+    Als `due_date` (ISO YYYY-MM-DD) is meegegeven, wordt die gebruikt als
+    autoriteit voor het overdue-punt. Anders valt terug op de legacy-formule
+    einde-periode + grace_workdays voor compatibiliteit met oude facturen
+    die dit veld nog niet opgeslagen hebben.
     """
-    # Defensief: corrupte facturen (bv. AI-assistent borg-regels die vroeger
-    # zonder period_* werden aangemaakt) mogen NOOIT een 500 veroorzaken op
-    # dashboard-endpoints. Retourneer 'unknown' i.p.v. calendar.IllegalMonthError.
     try:
         pm = int(period_month or 0)
         py = int(period_year or 0)
@@ -10879,15 +10908,62 @@ def _classify_invoice_bucket(period_month: int, period_year: int, today, grace_w
         return "future"
     if py == cur_y and pm == cur_m:
         return "current"
-    # Periode ligt VOOR de huidige maand → check grace
+    # Periode ligt VOOR de huidige maand → check deadline
     try:
-        period_end = _last_day_of_month(py, pm)
-        deadline = _add_workdays(period_end, max(0, int(grace_workdays or 0)))
+        if due_date:
+            from datetime import date as _date
+            y, m, d = str(due_date).split("-")
+            deadline = _date(int(y), int(m), int(d))
+        else:
+            period_end = _last_day_of_month(py, pm)
+            deadline = _add_workdays(period_end, max(0, int(grace_workdays or 0)))
     except Exception:  # noqa: BLE001
         return "unknown"
     if today > deadline:
         return "overdue"
     return "current"
+
+
+def _compute_invoice_dates(period_month: int, period_year: int, cfg: dict) -> tuple[str, str]:
+    """Bereken (invoice_date_iso, due_date_iso) op basis van invoicing-config.
+
+    - invoice_date: de datum die "factuurdatum" heet op de PDF. Komt overeen
+      met de dag waarop het systeem de factuur AUTOMATISCH zou genereren:
+        · mode=grace_workdays → einde vorige maand + grace_workdays (werkdagen)
+        · mode=fixed_day       → vaste dag in de periode-maand (clamped)
+    - due_date: invoice_date + `payment_term_days` KALENDERdagen (default 14).
+
+    Zo blijft de factuurdatum consistent voor zowel handmatig als automatisch
+    aangemaakte facturen — en de vervaldatum matcht 1-op-1 het moment waarop
+    de factuur naar "achterstand" verhuist in de beheerder.
+    """
+    from datetime import date as _date, timedelta
+    mode = (cfg.get("mode") or "grace_workdays").strip()
+    if mode == "fixed_day":
+        try:
+            day = int(cfg.get("billing_day") or 1)
+        except (TypeError, ValueError):
+            day = 1
+        day = max(1, min(31, day))
+        last_day = _last_day_of_month(period_year, period_month)
+        invoice_date = _date(period_year, period_month, min(day, last_day.day))
+    else:
+        try:
+            grace = int(cfg.get("grace_workdays") or 10)
+        except (TypeError, ValueError):
+            grace = 10
+        # Einde van de vorige maand t.o.v. de periode + grace werkdagen
+        prev_y = period_year if period_month > 1 else period_year - 1
+        prev_m = period_month - 1 if period_month > 1 else 12
+        prev_last = _last_day_of_month(prev_y, prev_m)
+        invoice_date = _add_workdays(prev_last, grace)
+    try:
+        term = int(cfg.get("payment_term_days") or 14)
+    except (TypeError, ValueError):
+        term = 14
+    term = max(0, min(180, term))
+    due_date = invoice_date + timedelta(days=term)
+    return (invoice_date.isoformat(), due_date.isoformat())
 
 
 def _next_month(year: int, month: int) -> tuple[int, int]:
@@ -10953,7 +11029,19 @@ async def _generate_month_invoices_for_company(
     company_id: str, period_month: int, period_year: int, *, scope_user=None
 ) -> dict:
     """Gedeelde factuur-generatie. Maakt facturen voor elk bewoond appartement,
-    skipt duplicates, en verrekent automatisch eventueel krediet."""
+    skipt duplicates, en verrekent automatisch eventueel krediet.
+
+    invoice_date en due_date worden bewust berekend uit de invoicing-settings
+    van het bedrijf (mode + grace_workdays/billing_day + payment_term_days)
+    zodat de PDF én de bucket-logica in de UI consistent zijn — niet meer
+    afhankelijk van het toevallige moment waarop de tick liep."""
+    # Laad invoicing-settings één keer per company (nul-alloc voor alle apts)
+    cs = await db.company_settings.find_one(
+        {"company_id": company_id}, {"_id": 0, "invoicing": 1},
+    ) or {}
+    inv_cfg = (cs.get("invoicing") or {})
+    invoice_date_iso, due_date_iso = _compute_invoice_dates(period_month, period_year, inv_cfg)
+
     q = {"company_id": company_id, "status": "occupied"}
     apts = await db.apartments.find(q, {"_id": 0}).to_list(1000)
     created = 0
@@ -10986,6 +11074,8 @@ async def _generate_month_invoices_for_company(
             "amount": a["rent_amount"], "currency": a.get("currency", "SRD"),
             "paid_amount": 0.0,
             "period_month": period_month, "period_year": period_year,
+            "invoice_date": invoice_date_iso,
+            "due_date": due_date_iso,
             "status": "open", "created_at": iso(now_utc()),
         })
         # Verreken positief saldo van deze huurder met de nieuwe factuur

@@ -230,3 +230,10 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## Session Log — 2026-02-08 (vaste factuurdag als alternatief voor grace)
 - Nieuw veld `invoicing.mode` (`grace_workdays` | `fixed_day`) + `invoicing.billing_day` (1–31). Backend `_auto_invoice_tick` en `next_auto_run`-berekening in `GET /settings` respecteren beide modi. Bij `fixed_day` wordt de dag geclamped naar de laatste dag van korte maanden (bv. 31 → 28/29 in feb).
 - Frontend UI: 2 radio-tegels om modus te kiezen; het aangepaste veld (grace of vaste dag) toont conditioneel + de "Hoe werkt het?" uitleg schakelt mee. Testcurl: fixed_day=5 → next_auto_run=2026-10-05; fixed_day=31 → 2026-09-30 (clamp).
+
+
+## Session Log — 2026-02-08 (invoice_date + due_date opgeslagen)
+- **Voor de fix**: Factuurdatum = `created_at` (dag van aanmaak, dynamisch/inconsistent). Vervaldatum = hardcoded "15e van periode-maand". Losstaand van de admin's grace/mode-instelling.
+- **Na de fix**: `invoice_date` en `due_date` worden bij aanmaak in de invoice-doc opgeslagen, berekend via nieuwe helper `_compute_invoice_dates()`. Beide velden staan in `InvoiceOut` en worden gebruikt door de PDF-renderer + `_classify_invoice_bucket` (met legacy-fallback).
+- Nieuw setting-veld: `invoicing.payment_term_days` (default 14). UI: extra kolom "Betaaltermijn (dagen)" in de tab.
+- Voorbeelden verifieerd via curl + PDF-render: grace=10/term=14 → aug 2026 factuur → **14 aug** / **28 aug**. fixed=5/term=7 → nov 2026 factuur → **5 nov** / **12 nov**.

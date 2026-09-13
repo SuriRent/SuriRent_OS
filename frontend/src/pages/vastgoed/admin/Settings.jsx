@@ -403,7 +403,7 @@ export function InvoicingForm({ initial }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {mode === 'fixed_day' ? (
           <TextField label="Vaste factuurdag (1–31)" testid="invoicing-billing-day"
             type="number"
@@ -417,6 +417,11 @@ export function InvoicingForm({ initial }) {
             placeholder="10"
             helper="Aantal werkdagen na einde van de maand voordat de volgende factuur automatisch wordt aangemaakt." />
         )}
+        <TextField label="Betaaltermijn (dagen)" testid="invoicing-payment-term"
+          type="number"
+          value={d.payment_term_days} onChange={(v) => s.onField('payment_term_days', Math.max(0, Math.min(180, parseInt(v, 10) || 0)))}
+          placeholder="14"
+          helper="Aantal KALENDERdagen tussen factuurdatum en vervaldatum. De factuur wordt overdue zodra deze datum is verstreken." />
         <div>
           <FieldLabel>Laatst uitgevoerd</FieldLabel>
           <input type="text" value={d.last_auto_run || '—'} disabled

@@ -77,6 +77,10 @@ def empty_section(section: str) -> dict:
             "mode": "grace_workdays",
             "grace_workdays": 10,
             "billing_day": 1,
+            # Betaaltermijn in KALENDERdagen: aantal dagen tussen factuurdatum
+            # en vervaldatum. Bepaalt zowel de "Vervaldatum" op de PDF als
+            # wanneer een factuur naar "achterstand" (overdue) verhuist.
+            "payment_term_days": 14,
             "last_auto_run": None,
             "enabled": False,
         },

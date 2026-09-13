@@ -3677,8 +3677,16 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
     c.setFillColor(_BH_INK); c.setFont(_LUX_SANS_BOLD, 10)
     lines = [
         ("Factuurnummer:", invoice.get("invoice_number") or "—"),
-        ("Factuurdatum:", _fmt_date_nl(invoice.get("created_at")) or _fmt_date_nl(datetime.utcnow().isoformat())),
-        ("Vervaldatum:", _fmt_date_nl(invoice.get("due_date")) or f"15 {MONTHS_NL[(invoice.get('period_month') or 1) - 1]} {invoice.get('period_year')}"),
+        # Factuurdatum: gebruik het opgeslagen `invoice_date` (afgeleid uit
+        # invoicing-settings zodat het overeenkomt met wanneer de factuur
+        # daadwerkelijk verzonden wordt). Fallback naar `created_at` voor
+        # legacy-facturen die dit veld nog niet hebben.
+        ("Factuurdatum:", _fmt_date_nl(invoice.get("invoice_date"))
+            or _fmt_date_nl(invoice.get("created_at"))
+            or _fmt_date_nl(datetime.utcnow().isoformat())),
+        # Vervaldatum: `due_date` uit DB, fallback naar de 15e (legacy).
+        ("Vervaldatum:", _fmt_date_nl(invoice.get("due_date"))
+            or f"15 {MONTHS_NL[(invoice.get('period_month') or 1) - 1]} {invoice.get('period_year')}"),
     ]
     for i, (label, value) in enumerate(lines):
         row_y = box_y + box_h - 6 * mm - i * 6 * mm
