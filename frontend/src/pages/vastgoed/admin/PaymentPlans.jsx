@@ -536,6 +536,21 @@ function PlanDetail({ planId, onBack }) {
 
       {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="plan-detail-error">{err}</div>}
 
+      {plan.overpayment_adjustment && plan.status === 'active' && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-sm flex items-start gap-2"
+          data-testid="plan-overpayment-notice">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+          <div>
+            <p className="font-bold">Bijstelling — factuur heeft minder open dan gepland</p>
+            <p className="text-xs mt-0.5">
+              Op de gekoppelde factuur staat nog {fmtMoney(plan.linked_invoice_open || 0, plan.currency)} open,
+              minder dan de geplande termijnen. De volgende termijn wordt automatisch verlaagd
+              zodat er niet te veel wordt betaald.
+            </p>
+          </div>
+        </div>
+      )}
+
       {linkedInvoices.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="plan-linked-invoices">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -595,9 +610,16 @@ function PlanDetail({ planId, onBack }) {
           )}
         </div>
         <div className="divide-y divide-slate-100">
-          {plan.installments.map((i) => {
+          {plan.installments.map((i, idx) => {
             const today = new Date().toISOString().slice(0, 10);
             const isOverdue = i.status === 'pending' && i.due_date < today;
+            // Bepaal de eerst-openstaande termijn; alleen die krijgt de
+            // effectieve (gecapte) bedrag-weergave.
+            const firstPendingIdx = plan.installments.findIndex((x) => x.status === 'pending');
+            const isNext = idx === firstPendingIdx;
+            const effAmount = isNext && plan.next_due_amount != null
+              ? plan.next_due_amount : i.amount;
+            const capped = isNext && Number(effAmount) < Number(i.amount) - 0.01;
             return (
               <div key={i.sequence} className="px-4 py-3 flex items-center gap-3"
                 data-testid={`plan-inst-row-${i.sequence}`}>
@@ -613,9 +635,17 @@ function PlanDetail({ planId, onBack }) {
                     : <Clock className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-900 text-sm">Termijn {i.sequence} · {fmtMoney(i.amount, plan.currency)}</p>
+                  <p className="font-bold text-slate-900 text-sm">
+                    Termijn {i.sequence} · {fmtMoney(effAmount, plan.currency)}
+                    {capped && (
+                      <span className="ml-2 text-[10px] font-bold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 uppercase">
+                        Bijgesteld
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-slate-500">
                     Vervaldatum: {i.due_date}
+                    {capped && <> · gepland: {fmtMoney(i.amount, plan.currency)}</>}
                     {i.paid_at && ` · Betaald ${new Date(i.paid_at).toLocaleDateString('nl-NL')}`}
                   </p>
                 </div>

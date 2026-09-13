@@ -85,6 +85,11 @@ def make_router(db, helpers):
         next_due_date: Optional[str] = None
         next_due_amount: Optional[float] = None
         overdue_count: int = 0
+        # True wanneer de linked invoice minder open heeft dan de som van
+        # openstaande termijnen — dan is remaining_amount al bijgesteld en
+        # is next_due_amount evt. lager dan het geplande termijnbedrag.
+        overpayment_adjustment: bool = False
+        linked_invoice_open: Optional[float] = None
 
     class PaidIn(BaseModel):
         method: Literal["contant", "bank"] = "contant"
@@ -105,6 +110,25 @@ def make_router(db, helpers):
 
     def _round2(x: float) -> float:
         return round(float(x) + 1e-9, 2)
+
+    async def _linked_invoice_open_sum(invoice_ids: list) -> float:
+        """Som van openstaande (nog niet betaalde) bedragen op de gekoppelde
+        facturen. Wordt gebruikt om plan.remaining_amount + next_due te
+        cappen zodat de regeling nooit meer laat betalen dan er nog echt
+        openstaat op de factuur (bv. wanneer buiten de regeling om al een
+        extra deelbetaling is geregistreerd).
+        """
+        if not invoice_ids:
+            return 0.0
+        total = 0.0
+        async for inv in db.invoices.find(
+            {"id": {"$in": list(invoice_ids)}},
+            {"_id": 0, "amount": 1, "paid_amount": 1},
+        ):
+            amt = float(inv.get("amount") or 0)
+            paid = float(inv.get("paid_amount") or 0)
+            total += max(0.0, amt - paid)
+        return round(total + 1e-9, 2)
 
     async def _enrich_plan(plan: dict) -> dict:
         # tenant + apartment naam ophalen voor UI gemak.
@@ -131,7 +155,18 @@ def make_router(db, helpers):
                 "payment_id": inst.get("payment_id"),
             })
         paid_amount = sum(i["amount"] for i in installments if i["status"] == "paid")
-        remaining = _round2(plan.get("total_amount", 0) - paid_amount)
+        installments_remaining = _round2(plan.get("total_amount", 0) - paid_amount)
+        # Cap tegen wat er ECHT nog open staat op de gekoppelde factuur.
+        invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+        # Als de plan-restant groter is dan wat er nog openstaat op de
+        # factuur (bijv. omdat er buiten de regeling om al een deelbetaling
+        # is gedaan), dan is de "echte" restant het factuur-openstaande.
+        if plan.get("invoice_ids"):
+            remaining = min(installments_remaining, invoice_open)
+        else:
+            remaining = installments_remaining
+        remaining = _round2(remaining)
+        overpayment_adjustment = _round2(installments_remaining - remaining) > 0.01
         # Next due + overdue count
         today = now_utc().date().isoformat()
         next_due = None
@@ -144,7 +179,13 @@ def make_router(db, helpers):
                 overdue_count += 1
             if next_due is None:
                 next_due = i["due_date"]
-                next_due_amt = i["amount"]
+                # Cap volgende termijn-bedrag ook aan wat er nog echt open
+                # staat op de factuur — zodat de UI en Markeer-betaald-flow
+                # niet meer suggereren dan werkelijk verschuldigd is.
+                if plan.get("invoice_ids"):
+                    next_due_amt = _round2(min(i["amount"], max(0.0, remaining)))
+                else:
+                    next_due_amt = i["amount"]
         return {
             "id": plan["id"],
             "tenant_id": plan["tenant_id"],
@@ -164,6 +205,8 @@ def make_router(db, helpers):
             "next_due_date": next_due,
             "next_due_amount": next_due_amt,
             "overdue_count": overdue_count,
+            "overpayment_adjustment": overpayment_adjustment,
+            "linked_invoice_open": invoice_open,
         }
 
     # ---------- Endpoints ----------
@@ -320,6 +363,19 @@ def _build_pay_core(db, helpers):
 
     def _round2(x): return round(float(x) + 1e-9, 2)
 
+    async def _linked_invoice_open_sum(invoice_ids: list) -> float:
+        if not invoice_ids:
+            return 0.0
+        total = 0.0
+        async for inv in db.invoices.find(
+            {"id": {"$in": list(invoice_ids)}},
+            {"_id": 0, "amount": 1, "paid_amount": 1},
+        ):
+            amt = float(inv.get("amount") or 0)
+            paid = float(inv.get("paid_amount") or 0)
+            total += max(0.0, amt - paid)
+        return round(total + 1e-9, 2)
+
     async def enrich_plan(plan: dict) -> dict:
         tenant_name = plan.get("tenant_name") or ""
         apt_number = ""
@@ -345,7 +401,13 @@ def _build_pay_core(db, helpers):
                 "payment_id": inst.get("payment_id"),
             })
         paid_amount = sum(i["amount"] for i in installments if i["status"] == "paid")
-        remaining = _round2(plan.get("total_amount", 0) - paid_amount)
+        installments_remaining = _round2(plan.get("total_amount", 0) - paid_amount)
+        invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+        if plan.get("invoice_ids"):
+            remaining = _round2(min(installments_remaining, invoice_open))
+        else:
+            remaining = installments_remaining
+        overpayment_adjustment = _round2(installments_remaining - remaining) > 0.01
         today = now_utc().date().isoformat()
         next_due, next_due_amt, overdue_count = None, None, 0
         for i in installments:
@@ -355,7 +417,10 @@ def _build_pay_core(db, helpers):
                 overdue_count += 1
             if next_due is None:
                 next_due = i["due_date"]
-                next_due_amt = i["amount"]
+                if plan.get("invoice_ids"):
+                    next_due_amt = _round2(min(i["amount"], max(0.0, remaining)))
+                else:
+                    next_due_amt = i["amount"]
         return {
             "id": plan["id"],
             "tenant_id": plan["tenant_id"],
@@ -375,6 +440,8 @@ def _build_pay_core(db, helpers):
             "next_due_date": next_due,
             "next_due_amount": next_due_amt,
             "overdue_count": overdue_count,
+            "overpayment_adjustment": overpayment_adjustment,
+            "linked_invoice_open": invoice_open,
         }
 
     async def pay_installment_for(
@@ -396,7 +463,22 @@ def _build_pay_core(db, helpers):
             from fastapi import HTTPException
             raise HTTPException(status_code=400, detail="Termijn is al betaald")
 
-        amt = _round2(amount if amount is not None else inst["amount"])
+        # Cap het bedrag aan wat er nog ECHT openstaat op de gekoppelde
+        # facturen. Voorkomt over-betaling wanneer buiten de regeling om al
+        # een deelbetaling is gedaan.
+        raw_amt = _round2(amount if amount is not None else inst["amount"])
+        invoice_open = 0.0
+        if plan.get("invoice_ids"):
+            invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+            if invoice_open <= 0.01:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=400,
+                    detail="Gekoppelde factuur is al volledig betaald — regeling wordt afgesloten.",
+                )
+            amt = _round2(min(raw_amt, invoice_open))
+        else:
+            amt = raw_amt
         receipt = await next_receipt_number()
         cid = plan.get("company_id")
         company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
@@ -431,13 +513,20 @@ def _build_pay_core(db, helpers):
         # Only mark as paid when status is approved. For pending_approval we
         # still mark it as paid because the installment is tied to the
         # specific payment_id — admin's approval/decline will update both.
+        inst_update = {
+            "status": "paid" if status == "approved" else "pending_payment",
+            "paid_at": now_iso,
+            "payment_id": payment_doc["id"],
+        }
+        # Als het termijnbedrag naar beneden bijgesteld is (want factuur
+        # heeft minder open dan gepland), leggen we dat vast zodat de UI
+        # en historie correct blijven.
+        if _round2(amt) != _round2(inst.get("amount") or 0):
+            inst_update["amount"] = amt
+            inst_update["original_amount"] = _round2(inst.get("amount") or 0)
         await db.payment_plan_installments.update_one(
             {"plan_id": plan["id"], "sequence": seq},
-            {"$set": {
-                "status": "paid" if status == "approved" else "pending_payment",
-                "paid_at": now_iso,
-                "payment_id": payment_doc["id"],
-            }},
+            {"$set": inst_update},
         )
 
         if status == "approved":
@@ -451,6 +540,20 @@ def _build_pay_core(db, helpers):
                     )
                 except Exception as e:  # noqa: BLE001
                     print(f"[plan] allocate-to-invoices failed: {e}")
+            # Als de factuur na deze betaling volledig gedekt is, cancel
+            # eventuele nog openstaande termijnen — anders blijft de UI
+            # "Markeer betaald" tonen terwijl er niets meer verschuldigd is.
+            new_invoice_open = 0.0
+            if plan.get("invoice_ids"):
+                new_invoice_open = await _linked_invoice_open_sum(
+                    plan.get("invoice_ids") or [],
+                )
+            if new_invoice_open <= 0.01 and plan.get("invoice_ids"):
+                await db.payment_plan_installments.update_many(
+                    {"plan_id": plan["id"], "status": "pending"},
+                    {"$set": {"status": "cancelled", "cancelled_at": now_iso,
+                              "cancelled_reason": "invoice_fully_paid"}},
+                )
             remaining_pending = await db.payment_plan_installments.count_documents(
                 {"plan_id": plan["id"], "status": {"$in": ["pending"]}}
             )

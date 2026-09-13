@@ -185,6 +185,15 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - `GET /api/superadmin/account` — huidig superadmin-profiel (naam, email)
 - `PUT /api/superadmin/account` — wijzig eigen naam / inlog-email / wachtwoord (direct actief)
 
+
+## Session Log — 2026-02-08 (bug fix Betalingsregelingen)
+- **Bug**: Regeling toonde meer "resterend" dan er nog echt open stond op de gekoppelde factuur wanneer buiten de regeling om al was bijbetaald → risico op over-betaling van de factuur.
+- **Fix in `/app/backend/payment_plans.py`**:
+  - `_enrich_plan` en `enrich_plan` cappen nu `remaining_amount` + `next_due_amount` aan `sum(open op linked invoices)`. Nieuwe response-velden: `overpayment_adjustment`, `linked_invoice_open`.
+  - `pay_installment_for` capt de betaling zelf ook (bewaart `original_amount` op de installment). Als de factuur na de betaling volledig gedekt is → resterende pending termijnen worden gemarkeerd als `cancelled` (reason=`invoice_fully_paid`) en het plan wordt `completed`.
+- **Frontend `PaymentPlans.jsx`**: Amber "Bijstelling"-banner + "BIJGESTELD"-badge op de eerst-openstaande termijn wanneer die is verlaagd t.o.v. gepland.
+- **Regressietest**: `/app/backend/tests/test_payment_plan_overpayment.py` — verifieert cap + auto-completion na factuur-vulling.
+
 ## Session Log — 2026-02-08
 - Superadmin "Mijn Account" sectie toegevoegd binnen SaaS Instellingen: superadmin kan eigen naam, inlog-email en wachtwoord wijzigen zonder extra bevestiging (per MVP-keus). Backend endpoints `GET/PUT /api/superadmin/account` met validaties (email-formaat, min 6 tekens wachtwoord, uniek email).
 
