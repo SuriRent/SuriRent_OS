@@ -12,6 +12,40 @@ function CompanyForm({ initial, onCancel, onSaved }) {
   const [seedAdmin, setSeedAdmin] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  // Dynamische plans uit de SaaS Pakketten catalog (endpoint
+  // `/superadmin/plans`). Voorheen was de dropdown hardcoded op
+  // free/starter/pro terwijl de superadmin in Pakketten andere plans kan
+  // aanmaken — waardoor selectie hier niet klopte met de echte pakketten.
+  const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get('/superadmin/plans');
+        if (!alive) return;
+        const list = Array.isArray(data) ? data : [];
+        setPlans(list);
+        // Als het huidige plan van de company niet meer in de catalog staat
+        // (bv. hernoemd/verwijderd), val terug op het eerste actieve plan
+        // zodat we geen "ghost" waarde in de dropdown houden.
+        if (list.length > 0) {
+          const hasCurrent = list.some((p) => p.id === form.plan);
+          if (!hasCurrent) {
+            const firstActive = list.find((p) => p.active !== false) || list[0];
+            if (firstActive) setForm((f) => ({ ...f, plan: firstActive.id }));
+          }
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[companies] kon plans niet laden', e);
+      } finally {
+        if (alive) setPlansLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []); // eslint-disable-line
 
   const submit = async () => {
     setErr(''); setLoading(true);
@@ -76,14 +110,34 @@ function CompanyForm({ initial, onCancel, onSaved }) {
                 className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Plan</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                Plan {plansLoading && <span className="text-slate-400">(laden…)</span>}
+              </label>
               <select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })}
                 data-testid="company-plan"
-                className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
-                <option value="free">Gratis</option>
-                <option value="starter">Starter</option>
-                <option value="pro">Pro</option>
+                disabled={plansLoading}
+                className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white disabled:opacity-60">
+                {plans.length === 0 && !plansLoading && (
+                  <option value={form.plan}>{form.plan}</option>
+                )}
+                {plans.map((p) => {
+                  const price = p.amount != null
+                    ? ` — ${p.currency || 'SRD'} ${Number(p.amount).toLocaleString('nl-NL')}${p.interval ? '/' + p.interval : ''}`
+                    : '';
+                  const inactiveTag = p.active === false ? ' (inactief)' : '';
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {(p.name || p.id) + price + inactiveTag}
+                    </option>
+                  );
+                })}
               </select>
+              {plans.length > 0 && (() => {
+                const cur = plans.find((p) => p.id === form.plan);
+                return cur?.description ? (
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">{cur.description}</p>
+                ) : null;
+              })()}
             </div>
             <div className="flex items-center gap-3 pt-6">
               <input type="checkbox" id="company-active" checked={form.active}
@@ -138,6 +192,10 @@ export default function Companies() {
   const [err, setErr] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  // Plan-catalog ook op lijst-niveau ophalen zodat we op elke bedrijfskaart
+  // de LEESBARE plan-naam kunnen tonen i.p.v. de plan_id ("professional"
+  // → "Professional"). Voorkomt verwarring met de SaaS Pakketten labels.
+  const [planMap, setPlanMap] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -149,6 +207,20 @@ export default function Companies() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get('/superadmin/plans');
+        if (!alive) return;
+        const map = {};
+        (Array.isArray(data) ? data : []).forEach((p) => { map[p.id] = p; });
+        setPlanMap(map);
+      } catch (_) { /* stil falen — kaart valt terug op id */ }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const onDelete = async (c) => {
     if (!window.confirm(`Bedrijf "${c.name}" verwijderen?\n\nDit kan alleen als er geen data (appartementen, huurders, etc.) meer is.`)) return;
@@ -208,7 +280,7 @@ export default function Companies() {
                         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inactief</span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 truncate">/{c.slug} • {c.plan}</p>
+                    <p className="text-xs text-slate-500 truncate">/{c.slug} • {planMap[c.plan]?.name || c.plan}</p>
                     {c.contact_email && <p className="text-xs text-slate-400 truncate mt-0.5">{c.contact_email}</p>}
                   </div>
                 </div>
