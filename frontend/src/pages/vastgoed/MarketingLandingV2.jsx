@@ -591,6 +591,7 @@ function formatAmount(n) {
 function PricingSection({ onDemo, onWhatsApp }) {
   const [plans, setPlans] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [showEnterprise, setShowEnterprise] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -703,7 +704,7 @@ function PricingSection({ onDemo, onWhatsApp }) {
               <p className={`mt-3 text-sm leading-relaxed ${p.highlight ? 'text-white/70' : 'text-slate-600'}`}>
                 {p.desc}
               </p>
-              <button onClick={p.name === 'Enterprise' ? onWhatsApp : onDemo}
+              <button onClick={p.name === 'Enterprise' ? () => setShowEnterprise(true) : onDemo}
                 data-testid={`plan-cta-${p.name.toLowerCase()}`}
                 className={`mt-6 w-full h-12 rounded-md text-sm font-black transition-colors flex items-center justify-center gap-2 ${
                   p.highlight
@@ -771,7 +772,138 @@ function PricingSection({ onDemo, onWhatsApp }) {
           ))}
         </div>
       </div>
+      {showEnterprise && (
+        <EnterpriseLeadModal onClose={() => setShowEnterprise(false)} />
+      )}
     </section>
+  );
+}
+
+// =====================================================================
+// EnterpriseLeadModal — contact-formulier voor Custom / Enterprise plan.
+// Bezoekers vullen bedrijfsgegevens + gewenste quota in; POST'ed naar
+// /api/public/enterprise-lead. Superadmin krijgt een e-mail én de lead
+// verschijnt in `enterprise_leads` collectie voor opvolging.
+// =====================================================================
+function EnterpriseLeadModal({ onClose }) {
+  const [form, setForm] = useState({
+    name: '', company: '', email: '', phone: '',
+    apartments: '', tenants: '', locations: '', employees: '', message: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const submit = async () => {
+    if (!form.name.trim() || !form.company.trim() || !form.email.trim()) {
+      setError('Vul minimaal naam, bedrijf en e-mail in.');
+      return;
+    }
+    setSubmitting(true); setError('');
+    try {
+      const backend = (typeof process !== 'undefined' && process.env?.REACT_APP_BACKEND_URL) || '';
+      const payload = {
+        name: form.name, company: form.company, email: form.email, phone: form.phone,
+        message: form.message,
+        apartments: form.apartments ? parseInt(form.apartments, 10) : null,
+        tenants: form.tenants ? parseInt(form.tenants, 10) : null,
+        locations: form.locations ? parseInt(form.locations, 10) : null,
+        employees: form.employees ? parseInt(form.employees, 10) : null,
+      };
+      const res = await fetch(`${backend}/api/public/enterprise-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || 'Aanvraag mislukt');
+      }
+      setDone(true);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose} data-testid="enterprise-modal">
+      <div onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <button onClick={onClose} data-testid="enterprise-close"
+          className="absolute top-3 right-3 w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-500 flex items-center justify-center z-10">
+          <X className="w-5 h-5" />
+        </button>
+        {done ? (
+          <div className="p-8 text-center" data-testid="enterprise-success">
+            <div className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8" strokeWidth={3} />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-2">Aanvraag ontvangen</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Bedankt! We nemen binnen 1 werkdag contact op met een pakket-op-maat voor uw portfolio.
+            </p>
+            <button onClick={onClose} data-testid="enterprise-success-close"
+              className="h-11 px-6 rounded-lg bg-[#0F0F0F] hover:bg-[#FF5C00] text-white font-black">
+              Sluiten
+            </button>
+          </div>
+        ) : (
+          <div className="p-6">
+            <p className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-2">Enterprise · Custom</p>
+            <h3 className="text-2xl font-black text-slate-900 mb-1">Vraag uw pakket-op-maat aan</h3>
+            <p className="text-sm text-slate-500 mb-5">
+              Vul uw gewenste quota in — wij bellen u binnen 1 werkdag met een voorstel.
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Naam *"><input value={form.name} onChange={(e) => set('name', e.target.value)} data-testid="ent-input-name" className={INPUT_CLS} /></FormField>
+                <FormField label="Bedrijf *"><input value={form.company} onChange={(e) => set('company', e.target.value)} data-testid="ent-input-company" className={INPUT_CLS} /></FormField>
+                <FormField label="E-mail *"><input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} data-testid="ent-input-email" className={INPUT_CLS} /></FormField>
+                <FormField label="Telefoon"><input value={form.phone} onChange={(e) => set('phone', e.target.value)} data-testid="ent-input-phone" className={INPUT_CLS} placeholder="+597 …" /></FormField>
+              </div>
+              <div className="pt-2">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">Gewenste limieten (optioneel)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Appartementen"><input type="number" min="0" value={form.apartments} onChange={(e) => set('apartments', e.target.value)} data-testid="ent-input-apartments" className={INPUT_CLS} placeholder="bv. 1000" /></FormField>
+                  <FormField label="Huurders"><input type="number" min="0" value={form.tenants} onChange={(e) => set('tenants', e.target.value)} data-testid="ent-input-tenants" className={INPUT_CLS} placeholder="bv. 1500" /></FormField>
+                  <FormField label="Locaties"><input type="number" min="0" value={form.locations} onChange={(e) => set('locations', e.target.value)} data-testid="ent-input-locations" className={INPUT_CLS} placeholder="bv. 20" /></FormField>
+                  <FormField label="Medewerkers"><input type="number" min="0" value={form.employees} onChange={(e) => set('employees', e.target.value)} data-testid="ent-input-employees" className={INPUT_CLS} placeholder="bv. 50" /></FormField>
+                </div>
+              </div>
+              <FormField label="Boodschap / vereisten"><textarea rows={3} value={form.message} onChange={(e) => set('message', e.target.value)} data-testid="ent-input-message" className={INPUT_CLS + ' resize-none'} placeholder="Bijvoorbeeld: SLA-eisen, integraties, tijdlijn…" /></FormField>
+              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="ent-error">{error}</p>}
+              <div className="flex gap-2 pt-2">
+                <button onClick={onClose} data-testid="ent-cancel" className="flex-1 h-11 rounded-lg border-2 border-slate-200 text-slate-700 font-black hover:bg-slate-50">Annuleren</button>
+                <button onClick={submit} disabled={submitting} data-testid="ent-submit" className="flex-1 h-11 rounded-lg bg-[#0F0F0F] hover:bg-[#FF5C00] text-white font-black inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                  {submitting ? 'Versturen…' : (<>Verstuur aanvraag <ArrowRight className="w-4 h-4" /></>)}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const INPUT_CLS = 'w-full h-10 px-3 rounded-lg border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm';
+
+function FormField({ label, children }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">{label}</span>
+      {children}
+    </label>
   );
 }
 

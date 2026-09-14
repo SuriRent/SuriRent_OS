@@ -3666,6 +3666,96 @@ async def update_lead_status(lead_id: str, body: dict, user=Depends(get_current_
 
 
 # =====================================================================
+# Enterprise leads — publieke aanvraag vanaf de SaaS-marketing landing
+# page. Bezoekers die "Custom" pakket willen (grotere quota, custom
+# integraties) vullen een formulier in. Wordt door superadmin opgevolgd.
+# =====================================================================
+class EnterpriseLeadIn(BaseModel):
+    name: str
+    company: str
+    email: str
+    phone: Optional[str] = ""
+    apartments: Optional[int] = None
+    tenants: Optional[int] = None
+    locations: Optional[int] = None
+    employees: Optional[int] = None
+    message: Optional[str] = ""
+
+
+@api.post("/public/enterprise-lead")
+async def submit_enterprise_lead(body: EnterpriseLeadIn):
+    """Publieke intake — Enterprise "Custom" aanvraag vanaf de landingpage.
+    Geen auth zodat leads met minimum wrijving kunnen aanvragen.
+    Slaat op in `enterprise_leads` collectie en informeert superadmin.
+    """
+    if not body.name.strip() or not body.company.strip() or not body.email.strip():
+        raise HTTPException(status_code=400, detail="Naam, bedrijf en e-mail zijn verplicht")
+    doc = {
+        "id": new_id(),
+        "name": body.name.strip()[:120],
+        "company": body.company.strip()[:120],
+        "email": body.email.strip().lower()[:160],
+        "phone": (body.phone or "").strip()[:40],
+        "wanted_apartments": int(body.apartments) if body.apartments and body.apartments > 0 else None,
+        "wanted_tenants": int(body.tenants) if body.tenants and body.tenants > 0 else None,
+        "wanted_locations": int(body.locations) if body.locations and body.locations > 0 else None,
+        "wanted_employees": int(body.employees) if body.employees and body.employees > 0 else None,
+        "message": (body.message or "").strip()[:3000],
+        "status": "new",
+        "created_at": iso(now_utc()),
+    }
+    await db.enterprise_leads.insert_one(doc)
+    # Best-effort e-mail naar SaaS-superadmins zodat ze meteen kunnen bellen.
+    try:
+        from email_service import send_platform_email, wrap_template
+        summary_rows = "".join(
+            f"<tr><td>{lbl}</td><td>{val}</td></tr>"
+            for lbl, val in [
+                ("Naam", doc["name"]), ("Bedrijf", doc["company"]),
+                ("E-mail", doc["email"]), ("Telefoon", doc["phone"] or "—"),
+                ("Appartementen", doc["wanted_apartments"] or "—"),
+                ("Huurders", doc["wanted_tenants"] or "—"),
+                ("Locaties", doc["wanted_locations"] or "—"),
+                ("Medewerkers", doc["wanted_employees"] or "—"),
+            ]
+        )
+        html = wrap_template(
+            f"<h1>Nieuwe Enterprise aanvraag</h1>"
+            f"<table class='kv'>{summary_rows}</table>"
+            + (f"<p style='margin-top:12px'>{doc['message']}</p>" if doc["message"] else ""),
+            footer="SuriRent SaaS · Enterprise Lead"
+        )
+        supers = await db.users.find({"role": "superadmin"}, {"_id": 0, "email": 1}).to_list(20)
+        for s in supers:
+            if s.get("email"):
+                await send_platform_email(to=s["email"],
+                    subject=f"Enterprise aanvraag — {doc['company']}", body_html=html)
+    except Exception as _e:
+        print(f"[enterprise-lead] mail warn: {_e}")
+    return {"ok": True, "lead_id": doc["id"]}
+
+
+@api.get("/superadmin/enterprise-leads")
+async def list_enterprise_leads(user=Depends(require_role("superadmin"))):
+    leads = await db.enterprise_leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return leads
+
+
+@api.post("/superadmin/enterprise-leads/{lead_id}/status")
+async def update_enterprise_lead_status(lead_id: str, body: dict, user=Depends(require_role("superadmin"))):
+    status = (body or {}).get("status", "new")
+    if status not in ("new", "contacted", "won", "lost"):
+        raise HTTPException(status_code=400, detail="Ongeldige status")
+    res = await db.enterprise_leads.update_one(
+        {"id": lead_id},
+        {"$set": {"status": status, "updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lead niet gevonden")
+    return {"ok": True}
+
+
+# =====================================================================
 # Per-company branding (Logo + primary color + display name for PWA/login)
 # =====================================================================
 def _hex_color(v: Optional[str]) -> str:
