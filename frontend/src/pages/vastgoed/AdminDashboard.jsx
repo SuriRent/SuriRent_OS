@@ -2356,28 +2356,9 @@ function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShel
         )}
       </div>
 
-      {/* Stroom (Shelly) */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Stroom</p>
-          <button onClick={onShelly} data-testid="apt-detail-shelly"
-            className={`h-9 px-3 rounded-lg font-bold text-xs flex items-center gap-1.5 ${
-              a.shelly?.device_id
-                ? 'bg-orange-50 hover:bg-orange-100 text-[#FF5C00]'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}>
-            <Zap className="w-3.5 h-3.5" /> {a.shelly?.device_id ? 'Bewerk' : 'Koppel'}
-          </button>
-        </div>
-        {a.shelly?.device_id ? (
-          <div>
-            <p className="text-sm font-bold text-slate-900">{a.shelly.label || a.shelly.device_id}</p>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">{a.shelly.device_id}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">Nog geen slim relais gekoppeld.</p>
-        )}
-      </div>
+      {/* Stroom (Shelly) — sectie verwijderd op verzoek gebruiker (2026-02).
+          De koppeling blijft functioneel via de kaartweergave (kiosk-modaal),
+          maar op de detailspagina is de UI overbodig. */}
 
       {/* Acties */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
