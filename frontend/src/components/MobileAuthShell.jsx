@@ -232,7 +232,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
 // =====================================================================
 const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket'];
 
-export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
+export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan = 'starter' }) {
   const { register } = useAuth();
 
   const [step, setStep] = useState(0);
@@ -244,19 +244,31 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [country, setCountry] = useState('SR');
-  const [plan, setPlan] = useState('starter');
+  const [plan, setPlan] = useState(initialPlan || 'starter');
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [registeredSlug, setRegisteredSlug] = useState('');
 
-  // Plans laden zodra we naar stap 4 gaan (of bij country change)
+  // Plans laden zodra we naar stap 4 gaan (of bij country change).
+  // Óók eagerly laden wanneer bezoeker met initialPlan is gekomen, zodat de
+  // "U koos: <naam>" badge direct de leesbare naam kan tonen ipv de plan-id.
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 3 && !initialPlan) return;
     const q = country === 'NL' ? '?currency=EUR' : '?currency=SRD';
     api.get(`/billing/plans${q}`).then((r) => setPlans(r.data)).catch(() => setPlans([]));
-  }, [step, country]);
+  }, [step, country, initialPlan]);
+
+  // Naam van het gekozen plan voor de sticky "U koos"-badge.
+  // Val terug op capitalized plan-id als de catalog nog niet geladen is
+  // zodat er nooit een lege badge staat.
+  const chosenPlanName = useMemo(() => {
+    if (!initialPlan) return '';
+    const doc = plans.find((p) => p.id === plan);
+    if (doc?.name) return doc.name;
+    return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : '';
+  }, [plans, plan, initialPlan]);
 
   // Live slug preview met beschikbaarheidscheck (alleen op stap 0)
   const portalPreview = useMemo(() => {
@@ -396,6 +408,22 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00' }) {
           </div>
         ))}
       </div>
+
+      {/* "U koos"-badge — verschijnt op elke stap zolang de bezoeker via een
+          plan-CTA op de landing binnenkwam (initialPlan). Bevestigt de keuze
+          zodat de wizard niet aanvoelt als "wat kies ik eigenlijk?". Op stap 3
+          zelf verbergen we hem — daar staan de plan-kaarten zichtbaar. */}
+      {chosenPlanName && step !== 3 && (
+        <div className="relative z-10 flex items-center justify-center mb-3 px-5"
+          data-testid="chosen-plan-badge">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#FF5C00] shadow-[0_6px_16px_-6px_rgba(0,0,0,0.35)]">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-black tracking-[0.18em] uppercase">
+              U koos: {chosenPlanName}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Eyebrow + titel per stap */}
       <div className="relative z-10 px-6 mb-4">

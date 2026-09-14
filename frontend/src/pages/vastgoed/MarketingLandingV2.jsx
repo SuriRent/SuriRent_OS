@@ -552,9 +552,9 @@ function KioskSection() {
 // Statische config voor enterprise (niet in PLAN_PRICES, blijft "Custom") + UI metadata
 // die niet vanuit backend komt (highlight, cta, descriptions als backend ze niet geeft).
 const PLAN_UI_META = {
-  starter:      { highlight: false, cta: 'Start trial' },
-  professional: { highlight: true,  cta: 'Demo aanvragen' },
-  lifetime:     { highlight: false, cta: 'Contact' },
+  starter:      { highlight: false, cta: 'Kies Starter' },
+  professional: { highlight: true,  cta: 'Kies Professional' },
+  lifetime:     { highlight: false, cta: 'Kies Lifetime' },
   enterprise:   { highlight: false, cta: 'Contact',
     name: 'Enterprise', price: 'Custom', sub: 'op aanvraag',
     desc: 'Voor grote portfolios met aangepaste integraties.',
@@ -588,7 +588,7 @@ function formatAmount(n) {
   }
 }
 
-function PricingSection({ onDemo, onWhatsApp }) {
+function PricingSection({ onDemo, onWhatsApp, onRegister }) {
   const [plans, setPlans] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [showEnterprise, setShowEnterprise] = useState(false);
@@ -704,8 +704,15 @@ function PricingSection({ onDemo, onWhatsApp }) {
               <p className={`mt-3 text-sm leading-relaxed ${p.highlight ? 'text-white/70' : 'text-slate-600'}`}>
                 {p.desc}
               </p>
-              <button onClick={p.name === 'Enterprise' ? () => setShowEnterprise(true) : onDemo}
-                data-testid={`plan-cta-${p.name.toLowerCase()}`}
+              <button onClick={() => {
+                  if (p.name === 'Enterprise') { setShowEnterprise(true); return; }
+                  // Bezoeker koos een concreet plan → open register-wizard
+                  // met dat plan voorgeselecteerd. Fallback op name als id
+                  // ontbreekt (hardcoded fallback-plans zonder id).
+                  const planId = (p.id || p.name || '').toString().toLowerCase();
+                  if (onRegister) onRegister(planId); else onDemo();
+                }}
+                data-testid={`plan-cta-${(p.id || p.name).toString().toLowerCase()}`}
                 className={`mt-6 w-full h-12 rounded-md text-sm font-black transition-colors flex items-center justify-center gap-2 ${
                   p.highlight
                     ? 'bg-[#FF5C00] hover:bg-[#FF8A3D] text-white'
@@ -1394,12 +1401,17 @@ export default function MarketingLandingV2() {
     else navigate(t);
   };
 
-  const onRegister = () => {
+  const onRegister = (planId) => {
     if (editMode) return;
+    setRegisterPlan(planId || null);
     setRegisterOpen(true);
   };
 
   const [registerOpen, setRegisterOpen] = useState(false);
+  // Wanneer bezoeker op een plan-CTA klikt (Start trial / Demo aanvragen)
+  // dragen we de plan-id door naar de register-wizard zodat het pakket
+  // meteen voorgeselecteerd staat op stap 4.
+  const [registerPlan, setRegisterPlan] = useState(null);
 
   // Auto-open de register popup wanneer iemand binnenkomt via een link
   // met ?register=1 (bijvoorbeeld via een oude bookmark naar /login?register=1
@@ -1533,7 +1545,7 @@ export default function MarketingLandingV2() {
         <ProductGrid onDemo={onDemo} onLogin={onLogin} />
         <FeatureRows />
         <KioskSection />
-        <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} />
+        <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} onRegister={onRegister} />
         <FAQSection />
         <InstallPwaSection
           install={pwaInstall.install}
@@ -1543,7 +1555,7 @@ export default function MarketingLandingV2() {
           setShowIosModal={pwaInstall.setShowIosModal} />
         <Footer onLogin={onLogin} />
       </div>
-      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
+      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={registerPlan} />
     </EditableProvider>
   );
 }

@@ -10,7 +10,7 @@
 // =====================================================================
 import { MobileRegisterWizard } from './MobileAuthShell';
 
-export default function RegisterModal({ open, onClose }) {
+export default function RegisterModal({ open, onClose, initialPlan }) {
   if (!open) return null;
-  return <MobileRegisterWizard onClose={onClose} />;
+  return <MobileRegisterWizard onClose={onClose} initialPlan={initialPlan} />;
 }
