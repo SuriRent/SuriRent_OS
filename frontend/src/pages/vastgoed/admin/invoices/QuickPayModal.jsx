@@ -16,7 +16,7 @@ import NumPad from '../../../../components/NumPad';
 // deeplink als het apparaat file-share niet ondersteunt.
 // =====================================================================
 
-export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', otherOpenInvoices = [], onClose, onSuccess }) {
+export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', otherOpenInvoices = [], showAllOpen = false, onClose, onSuccess }) {
   const remaining = useMemo(() => {
     const paid = Number(invoice.paid_amount || 0);
     const total = Number(invoice.amount || 0);
@@ -33,11 +33,13 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
     [otherOpenInvoices],
   );
 
-  // Bedrag start bij 0 — user moet zelf toetsen (verzoek gebruiker 2026-02).
-  // Voorheen werd `remaining` van deze specifieke factuur voorgeschreven,
-  // wat verwarring gaf omdat je vaak méér wil betalen (huurder brengt bijv.
-  // achterstand van meerdere maanden ineen).
-  const [amount, setAmount] = useState('0');
+  // Bedrag: bij "Nieuwe" (snelle betaling vanaf hoofdknop) start op 0 zodat
+  // admin zelf het totale ontvangen bedrag intikt. Bij directe klik op een
+  // specifieke factuur-rij prefill met remaining van díe factuur zodat de
+  // "1-klik betaal maand af" flow snel blijft.
+  const [amount, setAmount] = useState(
+    showAllOpen ? '0' : (remaining > 0 ? String(remaining) : String(invoice.amount || 0))
+  );
   const method = 'contant';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -236,15 +238,15 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
       </KeyboardSafeModal.Header>
 
       <KeyboardSafeModal.Body>
-          {/* Openstaand overzicht — "Totaal factuur" toont het bedrag van
-              álle openstaande maanden bij elkaar (deze factuur + andere
-              openstaande maanden van deze huurder) zodat de admin in één
-              oogopslag ziet hoeveel er in totaal nog binnen moet komen. */}
+          {/* Openstaand overzicht. In "Alle openstaande" modus (via Nieuwe-
+              knop bovenaan) toont "Totaal factuur" de som van álle openstaande
+              maanden van deze huurder. In enkel-factuur modus (klik op rij)
+              tonen we netjes alleen de bedragen van deze specifieke factuur. */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
             <div className="flex justify-between mb-1">
               <span className="text-slate-500">Totaal factuur</span>
               <span className="font-bold text-slate-700" data-testid="quickpay-total-all">
-                {fmtMoney(remaining + otherOpenTotal, invoice.currency)}
+                {fmtMoney(showAllOpen ? (remaining + otherOpenTotal) : (invoice.amount || 0), invoice.currency)}
               </span>
             </div>
             <div className="flex justify-between mb-1">
@@ -252,7 +254,9 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
               <span className="font-bold text-slate-700">{fmtMoney(invoice.paid_amount || 0, invoice.currency)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-200">
-              <span className="text-slate-900 font-bold">Nog te betalen ({MONTHS_NL[invoice.period_month - 1]})</span>
+              <span className="text-slate-900 font-bold">
+                Nog te betalen{showAllOpen ? ` (${MONTHS_NL[invoice.period_month - 1]})` : ''}
+              </span>
               <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">{fmtMoney(remaining, invoice.currency)}</span>
             </div>
           </div>

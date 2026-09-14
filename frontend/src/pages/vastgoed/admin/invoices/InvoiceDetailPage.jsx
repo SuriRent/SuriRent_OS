@@ -26,6 +26,11 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
   const paid = (g.all || []).filter((i) => (i.status || '') === 'paid');
   const sev = g.severity;
   const [quickPayInv, setQuickPayInv] = useState(null);
+  // Onderscheid maken: klik op rij ("factuur X betalen") vs klik op de
+  // "Nieuwe" knop bovenaan ("snelle betaling voor deze huurder"). De modal
+  // toont in het laatste geval het totaal van álle openstaande maanden en
+  // laat bedrag beginnen bij 0 zodat admin zelf toetst.
+  const [quickPayAll, setQuickPayAll] = useState(false);
   const [sendInv, setSendInv] = useState(null);
   const tenant = tenants.find((t) => t.id === g.tenant_id) || {};
   const [applyingCredit, setApplyingCredit] = useState(false);
@@ -170,7 +175,7 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
           <ChevronRight className="w-4 h-4 rotate-180" /> Terug
         </button>
         {primaryOpen && (
-          <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
+          <button type="button" onClick={() => { setQuickPayAll(true); setQuickPayInv(primaryOpen); }}
             data-testid="quickpay-top-btn"
             className="px-3 py-2 rounded-xl text-white font-black inline-flex items-center gap-1.5 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
             style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
@@ -269,7 +274,7 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
                   data-testid={`inv-row-${inv.id}`}>
                   {/* Regel 1: klikbare kern (icoon + maand + bedrag rechts) */}
                   <button type="button"
-                    onClick={() => canPay && setQuickPayInv(inv)}
+                    onClick={() => canPay && (setQuickPayAll(false), setQuickPayInv(inv))}
                     disabled={!canPay}
                     data-testid={`inv-card-${inv.id}`}
                     className={`w-full text-left flex items-center gap-3 ${canPay ? '' : 'opacity-70 cursor-default'}`}>
@@ -422,9 +427,11 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
           tenantName={g.tenant_name}
           tenantPhone={tenant.phone || ''}
           otherOpenInvoices={[...overdue, ...current].filter((i) => i.id !== quickPayInv.id)}
-          onClose={() => setQuickPayInv(null)}
+          showAllOpen={quickPayAll}
+          onClose={() => { setQuickPayInv(null); setQuickPayAll(false); }}
           onSuccess={(payment) => {
             setQuickPayInv(null);
+            setQuickPayAll(false);
             if (onPaid) onPaid(payment);
           }}
         />
