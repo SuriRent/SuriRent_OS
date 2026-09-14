@@ -2031,6 +2031,24 @@ async def _seed_plan_catalog():
                         "updated_at": now_utc_iso(),
                     }},
                 )
+        # Extra seed: "Lifetime" — permanent gratis pakket voor speciale klanten
+        # (partner-deals, demo-bedrijven, life-time toegang). Superadmin kan dit
+        # via SaaS Pakketten bewerken of deactiveren. Idempotent seeded.
+        if not await db.plan_catalog.find_one({"id": "lifetime"}):
+            await db.plan_catalog.insert_one({
+                "id": "lifetime",
+                "name": "Lifetime",
+                "amount": 0.0,
+                "currency": "SRD",
+                "interval": "lifetime",
+                "description": "Permanent gratis toegang — voor speciale partners of demo-bedrijven.",
+                "features": ["Alle Professional features", "Geen einddatum", "Geen maandelijkse kosten"],
+                "limits": dict(PLAN_PRICES["professional"].get("limits", DEFAULT_PLAN_LIMITS)),
+                "active": True,
+                "sort_order": 5,  # bovenaan
+                "created_at": now_utc_iso(),
+                "updated_at": now_utc_iso(),
+            })
     except Exception as e:
         import logging as _logging
         _logging.getLogger("uvicorn.error").warning(f"Plan catalog seed failed: {e}")
@@ -2318,18 +2336,28 @@ async def billing_me(user=Depends(get_current_user)):
 
 @api.get("/billing/me/plans")
 async def billing_me_plans(user=Depends(get_current_user)):
-    """Plans in the current company's display currency (SRD for SR, EUR for NL)."""
+    """Plans in the current company's display currency (SRD for SR, EUR for NL).
+    Leest uit `plan_catalog` (DB) zodat door superadmin toegevoegde pakketten
+    zoals 'Lifetime' hier ook verschijnen — voorheen alleen `PLAN_PRICES.keys()`
+    waardoor nieuwe DB-plans onzichtbaar bleven voor bedrijven."""
     cid = company_id_of(user)
     c = await db.companies.find_one({"id": cid}, {"_id": 0}) if cid else {}
+    catalog = await _fetch_plans_from_db()
     out = []
-    for pid in PLAN_PRICES.keys():
+    for entry in catalog:
+        pid = entry.get("id")
+        if not pid:
+            continue
         p = await _plan_for_company(pid, c or {})
-        out.append({"id": pid, **p})
+        out.append({"id": pid, **p, "active": entry.get("active", True), "sort_order": entry.get("sort_order", 100)})
     return out
 
 
 class ChangePlanIn(BaseModel):
-    plan: Literal["starter", "professional"]
+    # Voorheen: Literal["starter","professional"] — brak nieuwe DB-plans zoals
+    # 'lifetime' met 422. Accepteert nu elke string; validatie tegen de catalog
+    # gebeurt in de handler zelf zodat superadmin nieuwe plans mag introduceren.
+    plan: str
 
 
 @api.put("/billing/me/plan")
@@ -2338,7 +2366,8 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
 
     Creates an invoice for the new plan and sets pending_plan on the company.
     The actual plan switch happens only after a superadmin registers payment
-    for that invoice. During trial the new plan becomes the trial-pricing plan."""
+    for that invoice. Uitzondering: als het nieuwe plan gratis is (bedrag = 0)
+    wordt de switch DIRECT effectief — geen factuur nodig."""
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
@@ -2347,11 +2376,32 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     old = c.get("plan", "starter")
     new_plan = body.plan
+    # Valideer dat het gekozen plan bestaat en actief is in de catalog.
+    target_doc = await _fetch_plan_by_id(new_plan)
+    if not target_doc:
+        raise HTTPException(status_code=400, detail=f"Onbekend pakket '{new_plan}'")
+    if target_doc.get("active") is False:
+        raise HTTPException(status_code=400, detail="Dit pakket is niet meer beschikbaar")
     if new_plan == old and not c.get("pending_plan"):
         return {"ok": True, "plan": new_plan, "effective": "already_active"}
 
     new_price = await _plan_for_company(new_plan, c)
     now = now_utc()
+
+    # Gratis plan → direct activeren zonder factuur.
+    if float(new_price.get("amount") or 0) <= 0:
+        await db.companies.update_one({"id": cid}, {
+            "$set": {"plan": new_plan, "billing_status": "active",
+                     "plan_change_requested_at": iso(now)},
+            "$unset": {"pending_plan": "", "pending_invoice_id": ""},
+        })
+        await db.audit_log.insert_one({
+            "id": new_id(), "type": "plan_change_free_immediate",
+            "actor": user.get("email"), "company_id": cid,
+            "from_plan": old, "to_plan": new_plan, "at": iso(now),
+        })
+        return {"ok": True, "plan": new_plan, "effective": "immediate",
+                "message": f"Uw abonnement is omgezet naar {new_price.get('name') or new_plan}."}
 
     # Create an open invoice for the new plan (customer must pay this to activate)
     inv = {
@@ -2513,8 +2563,25 @@ def _company_display_currency(c: dict) -> str:
 
 
 async def _plan_for_company(plan_id: str, c: dict) -> dict:
-    """Return plan dict with amount converted to company's display currency."""
-    base = PLAN_PRICES.get(plan_id, PLAN_PRICES["starter"])
+    """Return plan dict with amount converted to company's display currency.
+    Eerst wordt de dynamische catalog (`plan_catalog` in DB) geraadpleegd zodat
+    door superadmin toegevoegde pakketten (bv. 'Lifetime — Gratis') ook worden
+    ondersteund. Valt bij onbekende id terug op de statische PLAN_PRICES map,
+    zodat legacy 'pro' etc. niet stuk gaan.
+    """
+    doc = await _fetch_plan_by_id(plan_id) if plan_id else None
+    if doc:
+        base = {
+            "name": doc.get("name") or plan_id,
+            "amount": float(doc.get("amount") or 0),
+            "currency": (doc.get("currency") or "SRD").upper(),
+            "interval": doc.get("interval") or "month",
+            "description": doc.get("description") or "",
+            "features": list(doc.get("features") or []),
+            "limits": dict(doc.get("limits") or {}),
+        }
+    else:
+        base = PLAN_PRICES.get(plan_id, PLAN_PRICES["starter"])
     target = _company_display_currency(c)
     if target == base["currency"]:
         return {**base}
@@ -4477,9 +4544,16 @@ class CompanyOut(CompanyIn):
     stats: Optional[dict] = None
 
 
-def _billing_summary(c: dict) -> dict:
+async def _billing_summary(c: dict) -> dict:
     plan_id = c.get("plan", "starter")
-    plan = PLAN_PRICES.get(plan_id, PLAN_PRICES.get("starter", {"amount": 0, "currency": "SRD"}))
+    # DB catalog first zodat door superadmin toegevoegde pakketten (bv.
+    # 'lifetime') een correcte amount/currency krijgen ipv terug te vallen
+    # op starter en verwarrende SRD 3000 te tonen.
+    doc = await _fetch_plan_by_id(plan_id)
+    if doc:
+        plan = {"amount": float(doc.get("amount") or 0), "currency": (doc.get("currency") or "SRD").upper()}
+    else:
+        plan = PLAN_PRICES.get(plan_id, PLAN_PRICES.get("starter", {"amount": 0, "currency": "SRD"}))
     status = c.get("billing_status") or ("trial" if c.get("trial_ends_at") else "active")
     days_left = None
     trial_ends = c.get("trial_ends_at")
@@ -4492,6 +4566,11 @@ def _billing_summary(c: dict) -> dict:
             days_left = None
     if status == "trial" and days_left is not None and days_left <= 0:
         status = "expired"
+    # Gratis pakketten (bv. Lifetime, SRD 0) → altijd "active" ongeacht of de
+    # trial-datum verlopen is. Anders zou de admin foutieve "verlopen" banner
+    # zien terwijl er niets te betalen is.
+    if float(plan.get("amount") or 0) <= 0:
+        status = "active"
     return {
         "billing_status": status,
         "days_left": days_left,
@@ -4529,7 +4608,7 @@ async def list_companies(user=Depends(require_role("superadmin"))):
         cid = c["id"]
         out.append({
             **c,
-            **_billing_summary(c),
+            **(await _billing_summary(c)),
             "stats": {
                 "apartments": apt_counts.get(cid, 0),
                 "tenants": ten_counts.get(cid, 0),
@@ -5316,13 +5395,26 @@ async def update_company(cid: str, body: CompanyIn, user=Depends(require_role("s
     if clash:
         raise HTTPException(status_code=400, detail="Slug is al in gebruik")
     payload["slug"] = new_slug
+    # Valideer dat het gekozen plan bestaat in de catalog. Zonder deze check
+    # kon superadmin per ongeluk een typo opslaan waardoor _plan_for_company
+    # bij elke aanroep zou terugvallen op 'starter' — en gebruikers dus op
+    # starter bleven ondanks dat de dropdown een ander plan toonde.
+    if payload.get("plan"):
+        target = await _fetch_plan_by_id(payload["plan"])
+        if not target:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Onbekend pakket '{payload['plan']}' — beschikbaar in SaaS Pakketten catalog?",
+            )
     res = await db.companies.find_one_and_update(
         {"id": cid}, {"$set": payload},
         projection={"_id": 0}, return_document=ReturnDocument.AFTER,
     )
     if not res:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    return {**res, "stats": None}
+    # Neem billing_summary mee zodat de UI direct het nieuwe monthly_amount /
+    # currency ziet zonder de lijst opnieuw te fetchen.
+    return {**res, **(await _billing_summary(res)), "stats": None}
 
 
 @api.delete("/companies/{cid}")

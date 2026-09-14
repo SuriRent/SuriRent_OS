@@ -1,6 +1,18 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-13) — Plan-catalog synchronisatie
+Diverse bugs opgelost rond SaaS Pakketten ↔ Bedrijf-plan integratie:
+- **Companies-form Plan dropdown** haalt nu dynamisch uit `/superadmin/plans` catalog (voorheen hardcoded `free/starter/pro`).
+- **`_plan_for_company`** kijkt nu eerst in DB-catalog (`plan_catalog`) i.p.v. alleen `PLAN_PRICES` — nieuwe plans zoals **Lifetime (SRD 0)** krijgen nu correcte amount/currency ipv terug te vallen op starter.
+- **`_billing_summary`** is async en gebruikt DB-catalog + forceert `status=active` voor gratis plans.
+- **`PUT /companies/{cid}`** valideert plan-id tegen catalog (400 bij typo i.p.v. stille terugval op starter).
+- **`/billing/me/plans`** leest uit DB-catalog zodat door superadmin toegevoegde plans zichtbaar zijn in "Mijn Abonnement".
+- **`ChangePlanIn.plan`** accepteert nu elke string (was `Literal["starter","professional"]`) — nieuwe DB-plans mogen worden gekozen door admin.
+- **Gratis plan flow**: `change_plan` activeert SRD 0 pakket **direct** zonder factuur (voorheen bleef pending_invoice hangen).
+- **Seed**: nieuwe `Lifetime` (SRD 0, alle Professional features, geen einddatum) automatisch toegevoegd aan plan_catalog met `sort_order=5` zodat hij bovenaan verschijnt.
+
+
 ## Latest UX Fixes (2026-02-13) — InvoiceDetailPage Leesbaarheid
 Op basis van gebruikersfeedback (Gopi Appartements, iPhone smalle viewport):
 1. **Openstaande facturen rij is nu 2-regelig**: bedrag + factuurnr op regel 1, badges (Te laat/Deze maand/Partieel) + acties (Share, Delete) op regel 2. Voorheen werden badges + bedrag afgekapt door de 3 knoppen op één regel. Op iPhone-viewport blijft niks meer verborgen achter een ellipsis.
