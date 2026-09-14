@@ -3974,6 +3974,8 @@ async def put_my_branding(body: BrandingIn, user=Depends(require_role("admin")))
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    # Pakket-gate: White-label branding zit alleen in Professional+.
+    await _require_plan_feature(cid, "allow_branding", "White-label branding")
     update = {
         "branding.app_name": (body.app_name or "").strip()[:80],
         "branding.primary_color": _hex_color(body.primary_color),
@@ -5556,6 +5558,12 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             status_code=400,
             detail="PIN-login werkt alleen op uw bedrijfs-portaal. Open de link uw bedrijf u stuurde, of gebruik e-mail + wachtwoord.",
         )
+
+    # Pakket-gate: Kiosk terminal moet in het abonnement zitten. Zonder deze
+    # check kon een Starter-bedrijf gewoon PIN-inloggen ook al staat
+    # `allow_kiosk: false` in de plan_catalog. Blokkeert nu vroeg zodat er
+    # ook geen medewerker-tokens worden uitgegeven.
+    await _require_plan_feature(target_cid, "allow_kiosk", "Kiosk terminal")
 
     # ---- Probeer eerst de gedeelde bedrijfs-PIN ----
     pin_doc = await db.kiosk_pins.find_one({"company_id": target_cid}, {"_id": 0})
@@ -13967,6 +13975,8 @@ async def _shelly_or_400(user) -> dict:
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    # Pakket-gate: Shelly stroombeheer moet in het abonnement zitten.
+    await _require_plan_feature(cid, "allow_shelly", "Shelly stroombeheer")
     cfg = await get_company_section(cid, "shelly")
     if not cfg.get("enabled"):
         raise HTTPException(status_code=400, detail="Shelly is niet ingeschakeld — configureer eerst onder Instellingen → Shelly.")

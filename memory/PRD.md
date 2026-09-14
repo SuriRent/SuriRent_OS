@@ -1,6 +1,22 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-13) — Plan-limieten daadwerkelijk afdwingen
+De limieten & functies in SaaS Pakketten (Kiosk/OCR/Shelly/Branding/Backup) werden opgeslagen in DB maar niet gehandhaafd op de endpoints — Starter-bedrijven konden bijvoorbeeld nog steeds via Kiosk-PIN inloggen ook al stond `allow_kiosk=false`.
+
+**Gates toegevoegd** via `_require_plan_feature` (raises HTTP 403 `plan_feature_locked`):
+- **Kiosk terminal**: `POST /auth/kiosk-pin` — blokkeert PIN-login vroeg zodat geen tokens worden uitgegeven
+- **Shelly stroombeheer**: helper `_shelly_or_400` (dekt `/shelly/devices`, `/apartments/{id}/shelly`, status, control)
+- **White-label branding**: `PUT /companies/me/branding`
+- Backup was al gegated
+
+**Verificatie (curl)**:
+- `allow_kiosk=false` → HTTP 403 met NL bericht "Kiosk terminal is niet beschikbaar op uw huidige abonnement"
+- `allow_kiosk=true` → HTTP 401 (alleen PIN-verificatie faalt, plan-gate voorbij)
+
+Wijzigingen in SaaS Pakketten hebben nu direct effect — geen restart, geen re-login nodig. De volgende feature-request (kiosk gebruiken) checkt live in `plan_catalog` via `_resolve_company_limits`.
+
+
 ## Latest Fix (2026-02-13) — Plan-catalog synchronisatie
 Diverse bugs opgelost rond SaaS Pakketten ↔ Bedrijf-plan integratie:
 - **Companies-form Plan dropdown** haalt nu dynamisch uit `/superadmin/plans` catalog (voorheen hardcoded `free/starter/pro`).
