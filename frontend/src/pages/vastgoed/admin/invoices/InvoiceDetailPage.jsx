@@ -111,14 +111,72 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
     }
   };
 
+  // ==============================================================
+  // Reminder helpers — gedeeld tussen alle openstaande factuur-rijen.
+  // E-mail knop triggert een bulk-reminder (alle openstaande maanden
+  // in één e-mail). WhatsApp gebruikt Web Share met een gegenereerde
+  // JPG-bijlage en valt terug op wa.me deeplink met tekst.
+  // Elke knop per rij roept dezelfde helper aan zodat de admin overal
+  // dezelfde acties heeft naast Deel/Verwijder.
+  // ==============================================================
+  const phoneDigits = String(tenant.phone || '').replace(/\D/g, '');
+  const hasPhone = phoneDigits.length >= 7;
+  const buildReminderText = () => {
+    const openInvs = [...overdue, ...current];
+    const lines = [
+      `Hallo ${tenant.name || ''},`, '',
+      'Vriendelijke herinnering — de volgende huurbetalingen staan nog open:', '',
+    ];
+    openInvs.forEach((inv) => {
+      const period = `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}`;
+      const rem = Number(inv.remaining_amount != null ? inv.remaining_amount : Math.max(0, (inv.amount || 0) - (inv.paid_amount || 0)));
+      lines.push(`• ${period}: ${inv.currency} ${rem.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
+    });
+    lines.push('', `Totaal openstaand: ${currency} ${totalOpen.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
+    lines.push('', 'Wij verzoeken u vriendelijk het openstaande saldo z.s.m. te voldoen.');
+    return lines.join('\n');
+  };
+  const openWa = async () => {
+    if (!hasPhone) return;
+    const text = buildReminderText();
+    try {
+      const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tenants/${g.tenant_id}/reminder-image`);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const file = new File([blob], `herinnering-${(tenant.name || 'huurder').replace(/\s+/g, '-').toLowerCase()}.jpg`, { type: 'image/jpeg' });
+        if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text, title: 'Betalingsherinnering' });
+          return;
+        }
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      // eslint-disable-next-line no-console
+      console.warn('[reminder] share fout, fallback wa.me', err);
+    }
+    openWhatsApp(phoneDigits, text);
+  };
+
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid={`invoice-detail-page-${g.tenant_id}`}>
-      {/* ================= TERUG-PIL ================= */}
-      <div className="flex items-center gap-2">
+      {/* ================= TERUG + REGISTREER (SNEL) ================= */}
+      {/* Terug-knop links, "Registreer betaling" rechts — direct beschikbaar
+          bovenaan zoals gevraagd (2026-02). De grote knop bovenaan de
+          Openstaande-Facturen-kaart is daarmee overbodig geworden en verwijderd
+          om verticale ruimte te sparen. */}
+      <div className="flex items-center justify-between gap-2">
         <button onClick={onBack} data-testid="invoice-detail-back"
           className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
           <ChevronRight className="w-4 h-4 rotate-180" /> Terug
         </button>
+        {primaryOpen && (
+          <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
+            data-testid="quickpay-top-btn"
+            className="px-3 py-2 rounded-xl text-white font-black inline-flex items-center gap-1.5 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
+            style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
+            <Banknote className="w-4 h-4" /> Registreer betaling
+          </button>
+        )}
       </div>
 
       {/* ================= HOOFDCARD ================= */}
@@ -190,78 +248,6 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Openstaande facturen</h2>
             <span className="text-[10px] font-bold text-slate-400">{overdue.length + current.length + future.length} factu{(overdue.length + current.length + future.length) === 1 ? 'ur' : 'ren'}</span>
           </div>
-          {/* Actie-blok bovenaan: Registreer betaling (primair) + E-mail
-              herinnering + WhatsApp huurder. Op verzoek gebruiker samengebracht
-              met de openstaande facturen zodat je niet meer helemaal naar
-              beneden hoeft te scrollen voor de meest gebruikte acties. */}
-          {(primaryOpen || openCount > 0) && (() => {
-            const phoneDigits = String(tenant.phone || '').replace(/\D/g, '');
-            const hasPhone = phoneDigits.length >= 7;
-            const openInvs = [...overdue, ...current];
-            const buildText = () => {
-              const lines = [
-                `Hallo ${tenant.name || ''},`, '',
-                'Vriendelijke herinnering — de volgende huurbetalingen staan nog open:', '',
-              ];
-              openInvs.forEach((inv) => {
-                const period = `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}`;
-                const rem = Number(inv.remaining_amount != null ? inv.remaining_amount : Math.max(0, (inv.amount || 0) - (inv.paid_amount || 0)));
-                lines.push(`• ${period}: ${inv.currency} ${rem.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
-              });
-              lines.push('', `Totaal openstaand: ${currency} ${totalOpen.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`);
-              lines.push('', 'Wij verzoeken u vriendelijk het openstaande saldo z.s.m. te voldoen.');
-              return lines.join('\n');
-            };
-            const openWa = async () => {
-              if (!hasPhone) return;
-              const text = buildText();
-              try {
-                const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tenants/${g.tenant_id}/reminder-image`);
-                if (resp.ok) {
-                  const blob = await resp.blob();
-                  const file = new File([blob], `herinnering-${(tenant.name || 'huurder').replace(/\s+/g, '-').toLowerCase()}.jpg`, { type: 'image/jpeg' });
-                  if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ files: [file], text, title: 'Betalingsherinnering' });
-                    return;
-                  }
-                }
-              } catch (err) {
-                if (err && err.name === 'AbortError') return;
-                // eslint-disable-next-line no-console
-                console.warn('[reminder] share fout, fallback wa.me', err);
-              }
-              openWhatsApp(phoneDigits, text);
-            };
-            return (
-              <div className="px-4 py-3 border-b border-slate-100 bg-orange-50/40 space-y-2">
-                {primaryOpen && (
-                  <button type="button" onClick={() => setQuickPayInv(primaryOpen)}
-                    data-testid="quickpay-top-btn"
-                    className="w-full py-2.5 rounded-xl text-white font-black inline-flex items-center justify-center gap-2 shadow-[0_8px_16px_-8px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
-                    style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
-                    <Banknote className="w-4 h-4" /> Registreer betaling
-                  </button>
-                )}
-                {openCount > 0 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => onReminder(g, 'email')}
-                      data-testid={`reminder-btn-email-${g.tenant_id}`}
-                      className="inline-flex items-center justify-center gap-1.5 px-2 py-2 bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-[11px] sm:text-xs transition">
-                      <Mail className="w-3.5 h-3.5" /> E-mail
-                    </button>
-                    <button type="button"
-                      disabled={!hasPhone}
-                      onClick={openWa}
-                      data-testid={`open-whatsapp-${g.tenant_id}`}
-                      title={hasPhone ? `Deel herinnering-foto via WhatsApp met ${tenant.name}` : 'Huurder heeft geen telefoonnummer'}
-                      className="inline-flex items-center justify-center gap-1.5 px-2 py-2 bg-white border-2 border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl text-[11px] sm:text-xs transition disabled:opacity-40 disabled:cursor-not-allowed">
-                      <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
           <div className="divide-y divide-slate-100">
             {[...overdue, ...current, ...future].map((inv) => {
               const bucket = overdue.includes(inv) ? 'overdue' : current.includes(inv) ? 'current' : 'future';
@@ -322,6 +308,27 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
                         title="Deel deze factuur via WhatsApp of E-mail"
                         className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95">
                         <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                      {/* E-mail herinnering — stuurt bulk-reminder met ALLE
+                          openstaande maanden naar huurder via backend. Toont
+                          bij elke openstaande rij zodat admin niet naar een
+                          apart actie-blok hoeft te scrollen. */}
+                      <button type="button"
+                        onClick={(e) => { e.stopPropagation(); onReminder && onReminder(g, 'email'); }}
+                        data-testid={`inv-email-${inv.id}`}
+                        title="Stuur e-mail herinnering met alle openstaande maanden"
+                        className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 inline-flex items-center justify-center transition active:scale-95">
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
+                      {/* WhatsApp — Web Share met JPG-bijlage, fallback wa.me
+                          deeplink. Disabled wanneer huurder geen telefoon heeft. */}
+                      <button type="button"
+                        disabled={!hasPhone}
+                        onClick={(e) => { e.stopPropagation(); openWa(); }}
+                        data-testid={`inv-wa-${inv.id}`}
+                        title={hasPhone ? `Deel herinnering-foto via WhatsApp met ${tenant.name}` : 'Huurder heeft geen telefoonnummer'}
+                        className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <MessageCircle className="w-3.5 h-3.5" />
                       </button>
                       {/* Verwijder-knop: alleen onbetaalde facturen zonder plan */}
                       {!partial && !(inv.plans && inv.plans.length > 0) && (
