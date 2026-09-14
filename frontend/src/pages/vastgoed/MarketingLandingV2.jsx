@@ -10,7 +10,7 @@ import {
   LayoutDashboard, MapPin, Home as HomeIcon, Receipt, FileText, Users,
   Wallet, ScanLine, Building2, MessageCircle, Mail, Phone,
   Star, ArrowRight, Landmark, Download, Smartphone, Apple, Monitor,
-  Share2, Plus,
+  Share2, Plus, Check,
 } from 'lucide-react';
 import { EditableProvider, EditableText, EditableImage, useLandingContent } from '../../lib/landing-editable';
 import StatusPill from '../../components/StatusPill';
@@ -554,12 +554,31 @@ function KioskSection() {
 const PLAN_UI_META = {
   starter:      { highlight: false, cta: 'Start trial' },
   professional: { highlight: true,  cta: 'Demo aanvragen' },
+  lifetime:     { highlight: false, cta: 'Contact' },
   enterprise:   { highlight: false, cta: 'Contact',
     name: 'Enterprise', price: 'Custom', sub: 'op aanvraag',
     desc: 'Voor grote portfolios met aangepaste integraties.',
     features: ['Onbeperkt huurders', 'Custom integraties', 'Shelly smart breakers', 'Dedicated server', 'SLA + 24/7 support'],
+    limits: null,
   },
 };
+
+// Human-readable labels + volgorde voor de limieten & features op de pricing-kaart.
+// Hidden voor Enterprise (limits: null).
+const LIMIT_LABELS = [
+  { key: 'max_apartments', label: 'appartementen' },
+  { key: 'max_tenants',    label: 'huurders' },
+  { key: 'max_locations',  label: 'locaties' },
+  { key: 'max_employees',  label: 'medewerkers' },
+];
+const FEATURE_LABELS = [
+  { key: 'allow_kiosk',    label: 'Kiosk terminal' },
+  { key: 'allow_ocr',      label: 'AI-OCR (Gemini)' },
+  { key: 'allow_shelly',   label: 'Shelly stroombeheer' },
+  { key: 'allow_branding', label: 'White-label branding' },
+  { key: 'allow_backup',   label: 'Backup & Herstel' },
+];
+const fmtLimit = (v) => (v === -1 || v == null ? '∞' : new Intl.NumberFormat('nl-NL').format(v));
 
 function formatAmount(n) {
   try {
@@ -592,6 +611,7 @@ function PricingSection({ onDemo, onWhatsApp }) {
             sub: `${p.currency} / maand`,
             desc: p.description || '',
             features: p.features || [],
+            limits: p.limits || {},
             cta: ui.cta || 'Demo aanvragen',
             highlight: !!ui.highlight,
           };
@@ -700,6 +720,53 @@ function PricingSection({ onDemo, onWhatsApp }) {
                   </li>
                 ))}
               </ul>
+              {/* Limieten & Functies — direct zichtbaar op elke plan-kaart zodat
+                  bezoekers per pakket zien hoeveel appartementen/huurders/etc.
+                  ze mogen aanmaken en welke premium-modules erbij zitten. */}
+              {p.limits && Object.keys(p.limits).length > 0 && (
+                <div className={`mt-5 pt-4 border-t ${p.highlight ? 'border-white/10' : 'border-slate-100'}`}
+                  data-testid={`plan-limits-${p.id}`}>
+                  <p className={`text-[10px] font-black tracking-widest uppercase mb-2 ${p.highlight ? 'text-white/50' : 'text-slate-400'}`}>
+                    Limieten
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {LIMIT_LABELS.map((f) => (
+                      <div key={f.key} className={`flex items-baseline justify-between gap-2 rounded px-2 py-1 ${p.highlight ? 'bg-white/5' : 'bg-slate-50'}`}>
+                        <span className={`text-[11px] ${p.highlight ? 'text-white/60' : 'text-slate-500'}`}>
+                          {f.label}
+                        </span>
+                        <span className={`text-sm font-black font-mono tabular-nums ${p.highlight ? 'text-white' : 'text-slate-900'}`}>
+                          {fmtLimit(p.limits[f.key])}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className={`text-[10px] font-black tracking-widest uppercase mt-4 mb-2 ${p.highlight ? 'text-white/50' : 'text-slate-400'}`}>
+                    Modules
+                  </p>
+                  <div className="grid grid-cols-1 gap-1">
+                    {FEATURE_LABELS.map((f) => {
+                      const on = !!p.limits[f.key];
+                      return (
+                        <div key={f.key} className={`flex items-center gap-2 text-[12px] ${on
+                          ? (p.highlight ? 'text-white/90' : 'text-slate-800')
+                          : (p.highlight ? 'text-white/30 line-through' : 'text-slate-300 line-through')}`}>
+                          {on ? (
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${p.highlight ? 'bg-emerald-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                              <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                            </span>
+                          ) : (
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${p.highlight ? 'bg-white/10 text-white/30' : 'bg-slate-200 text-slate-400'}`}>
+                              <X className="w-2.5 h-2.5" strokeWidth={4} />
+                            </span>
+                          )}
+                          <span>{f.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
