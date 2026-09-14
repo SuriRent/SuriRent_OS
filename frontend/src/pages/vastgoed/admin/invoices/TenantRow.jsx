@@ -186,16 +186,14 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
           <div className="text-right shrink-0 whitespace-nowrap">
             <p className={`text-base sm:text-lg font-black tracking-tight ${amtCls}`}
               data-testid={`tenant-total-${group.tenant_id}`}>
-              {group.openCount === 0 && paidInvoices.length > 0
-                ? `${group.currency} ${fmtAmount(paidInvoices.reduce((s, i) => s + Number(i.amount || 0), 0), group.currency)}`
-                : `${group.currency} ${fmtAmount(displayTotal, group.currency)}`}
+              {group.currency} {fmtAmount(displayTotal || 0, group.currency)}
             </p>
             {group.openCount === 0 && paidInvoices.length > 0 && (
               <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                {paidInvoices.length} {paidInvoices.length === 1 ? 'maand' : 'maanden'} betaald
+                Alles betaald
               </p>
             )}
-            {displayCount > 1 && (
+            {group.openCount > 0 && displayCount > 1 && (
               <p className="text-[10px] text-slate-400 mt-0.5">
                 {displayCount} × {fmtAmount(displayTotal / displayCount, group.currency)}
               </p>
