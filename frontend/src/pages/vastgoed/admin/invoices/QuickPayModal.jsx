@@ -33,7 +33,11 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
     [otherOpenInvoices],
   );
 
-  const [amount, setAmount] = useState(remaining > 0 ? String(remaining) : String(invoice.amount || 0));
+  // Bedrag start bij 0 — user moet zelf toetsen (verzoek gebruiker 2026-02).
+  // Voorheen werd `remaining` van deze specifieke factuur voorgeschreven,
+  // wat verwarring gaf omdat je vaak méér wil betalen (huurder brengt bijv.
+  // achterstand van meerdere maanden ineen).
+  const [amount, setAmount] = useState('0');
   const method = 'contant';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -232,18 +236,23 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
       </KeyboardSafeModal.Header>
 
       <KeyboardSafeModal.Body>
-          {/* Openstaand overzicht */}
+          {/* Openstaand overzicht — "Totaal factuur" toont het bedrag van
+              álle openstaande maanden bij elkaar (deze factuur + andere
+              openstaande maanden van deze huurder) zodat de admin in één
+              oogopslag ziet hoeveel er in totaal nog binnen moet komen. */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
             <div className="flex justify-between mb-1">
               <span className="text-slate-500">Totaal factuur</span>
-              <span className="font-bold text-slate-700">{fmtMoney(invoice.amount, invoice.currency)}</span>
+              <span className="font-bold text-slate-700" data-testid="quickpay-total-all">
+                {fmtMoney(remaining + otherOpenTotal, invoice.currency)}
+              </span>
             </div>
             <div className="flex justify-between mb-1">
               <span className="text-slate-500">Reeds betaald</span>
               <span className="font-bold text-slate-700">{fmtMoney(invoice.paid_amount || 0, invoice.currency)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-200">
-              <span className="text-slate-900 font-bold">Nog te betalen</span>
+              <span className="text-slate-900 font-bold">Nog te betalen ({MONTHS_NL[invoice.period_month - 1]})</span>
               <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">{fmtMoney(remaining, invoice.currency)}</span>
             </div>
           </div>

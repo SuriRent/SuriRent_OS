@@ -174,7 +174,7 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
             data-testid="quickpay-top-btn"
             className="px-3 py-2 rounded-xl text-white font-black inline-flex items-center gap-1.5 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
             style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
-            <Banknote className="w-4 h-4" /> Registreer betaling
+            <Banknote className="w-4 h-4" /> Nieuwe
           </button>
         )}
       </div>
