@@ -94,7 +94,7 @@ export default function ApartmentsBell() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-testid="apartments-bell-btn"
-        aria-label={`${occupiedCount} bezet, ${vacantCount} vacant`}
+        aria-label={`${occupiedCount} bezet, ${vacantCount} beschikbaar`}
         className="relative w-11 h-11 landscape:w-9 landscape:h-9 rounded-2xl landscape:rounded-xl flex items-center justify-center bg-white text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] border border-slate-200/70 transition active:scale-95"
       >
         <Building2 className="w-5 h-5 landscape:w-4 landscape:h-4" strokeWidth={2.2} />
@@ -131,7 +131,7 @@ export default function ApartmentsBell() {
                   <p className="text-base font-black text-emerald-600 leading-none mt-0.5">{occupiedCount}</p>
                 </div>
                 <div className="bg-white/70 rounded-lg px-2 py-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#FF5C00]">Vacant</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#FF5C00]">Beschikbaar</p>
                   <p className="text-base font-black text-[#FF5C00] leading-none mt-0.5">{vacantCount}</p>
                 </div>
               </div>
@@ -146,7 +146,7 @@ export default function ApartmentsBell() {
                   tab === 'vacant' ? 'text-[#FF5C00]' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                Vacant ({vacantCount})
+                Beschikbaar ({vacantCount})
                 {tab === 'vacant' && <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[#FF5C00] rounded-full" />}
               </button>
               <button
@@ -176,7 +176,7 @@ export default function ApartmentsBell() {
                     {tab === 'vacant' ? 'Alles is verhuurd!' : 'Nog niets verhuurd.'}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {tab === 'vacant' ? 'Geen vacante appartementen.' : 'Geen bezette appartementen.'}
+                    {tab === 'vacant' ? 'Geen beschikbare appartementen.' : 'Geen bezette appartementen.'}
                   </p>
                 </div>
               ) : (

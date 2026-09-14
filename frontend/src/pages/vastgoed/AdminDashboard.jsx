@@ -1363,7 +1363,7 @@ function Overview() {
   const cards = [
     { label: 'Appartementen', value: stats.apartments_total, icon: Building2, accent: 'bg-orange-50 text-[#FF5C00]' },
     { label: 'Bezet', value: stats.apartments_occupied, icon: Home, accent: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Vacant', value: stats.apartments_vacant, icon: KeySquare, accent: 'bg-slate-100 text-slate-600' },
+    { label: 'Beschikbaar', value: stats.apartments_vacant, icon: KeySquare, accent: 'bg-slate-100 text-slate-600' },
     { label: 'Huurders', value: stats.tenants_total, icon: Users, accent: 'bg-amber-50 text-amber-600' },
   ];
 
@@ -1558,7 +1558,7 @@ function Overview() {
                 </p>
                 <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
                   <span className="text-emerald-600">{stats.apartments_occupied} bezet</span>
-                  {vacantCount > 0 && <span className="text-slate-400"> · {vacantCount} vacant</span>}
+                  {vacantCount > 0 && <span className="text-slate-400"> · {vacantCount} beschikbaar</span>}
                 </p>
               </div>
             </div>
@@ -2195,7 +2195,7 @@ function Apartments() {
         {[
           { v: 'all', l: 'Alles', c: counts.all },
           { v: 'occupied', l: 'Bezet', c: counts.occupied },
-          { v: 'vacant', l: 'Vacant', c: counts.vacant },
+          { v: 'vacant', l: 'Beschikbaar', c: counts.vacant },
         ].map((f) => (
           <button key={f.v} onClick={() => setFilter(f.v)} data-testid={`apt-filter-${f.v}`}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
@@ -2262,7 +2262,7 @@ function ApartmentRow({ a, onOpen }) {
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
             occupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
           }`}>
-            {occupied ? 'Bezet' : 'Vacant'}
+            {occupied ? 'Bezet' : 'Beschikbaar'}
           </span>
         </div>
         <p className="text-xs text-slate-500 mt-0.5 truncate">
@@ -2305,7 +2305,7 @@ function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShel
             <span className={`absolute top-3 right-3 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ring-2 ring-white ${
               occupied ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-white'
             }`}>
-              {occupied ? 'Bezet' : 'Vacant'}
+              {occupied ? 'Bezet' : 'Beschikbaar'}
             </span>
           </div>
         )}
@@ -2319,7 +2319,7 @@ function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShel
                 <span className={`inline-block mt-2 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
                   occupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {occupied ? 'Bezet' : 'Vacant'}
+                  {occupied ? 'Bezet' : 'Beschikbaar'}
                 </span>
               )}
             </div>
