@@ -3876,48 +3876,14 @@ export default function AdminDashboard() {
     if (isAdmin) prefetchAdminChunks();
   }, [isAdmin]);
 
-  // Live-sync SSE — één GEDEELDE EventSource (singleton in admin-events.js).
-  // Voorheen opende deze effect zijn EIGEN EventSource; samen met de 4 hooks
-  // in Bells/Payments werden er 5 parallelle SSE-connecties opgezet per tab.
-  // Browsers/proxies limiten dat aantal (max 6 per domein incl. overige HTTP),
-  // waardoor sommige connecties bytes niet doorkregen en events uitbleven.
-  // Nu abonneren we ons op dezelfde singleton — 1 connectie voor de hele UI.
+  // Live-sync SSE — de globale singleton in `admin-events.js` verzorgt nu
+  // ZELF de SWR-invalidatie voor alle pagina's (dus ook Facturen-lijst,
+  // Bedrijven, …). Deze hook is puur nog voor eventuele dashboard-specifieke
+  // side effects (custom event dispatchen behouden we voor legacy listeners).
   useAdminEvents((data) => {
     if (data?.type !== 'change' && data?.type !== 'notification') return;
-    window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data }));
-    // Invalideer alle SWR-caches waarvan de key onder het gemuteerde
-    // API-pad valt. Voorbeeld: mutation op `/api/tenants/abc` triggert
-    // revalidate van SWR-key `/tenants`, `/tenants/abc`, etc.
-    try {
-      const rawPath = String(data?.path || '');
-      if (!rawPath.startsWith('/api/')) return;
-      const swrKey = rawPath.slice(4);
-      // 1) exacte key + eventuele detail-endpoints eronder
-      swrGlobalMutate(
-        (k) => typeof k === 'string' && (k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?')),
-        undefined,
-        { revalidate: true },
-      );
-      // 2) cross-collectie invalidatie voor typische afhankelijkheden
-      const crossInvalidate = ['/admin/stats'];
-      if (swrKey.startsWith('/payments')) {
-        crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active', '/tenants');
-      }
-      if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
-        crossInvalidate.push('/tenants', '/apartments');
-      }
-      if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
-      if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
-        crossInvalidate.push('/payment-plans?status=active', '/payment-plans');
-      }
-      crossInvalidate.forEach((base) => {
-        swrGlobalMutate(
-          (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
-          undefined,
-          { revalidate: true },
-        );
-      });
-    } catch { /* noop */ }
+    // NB: SWR-invalidatie + `surirent:live-change` custom event worden nu
+    // automatisch door de singleton gedaan — hier hoeven we niets meer.
   }, { enabled: !!user && (user.role === 'admin' || user.role === 'employee') });
   const location = useLocation();
   const { count: badgeCount } = useBadge();

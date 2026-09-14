@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api';
+import { bootstrapAdminEvents, closeAdminEvents } from './admin-events';
 
 const AuthContext = createContext(null);
 
@@ -44,6 +45,11 @@ export function AuthProvider({ children }) {
       } else {
         setActiveCompanyMeta(null);
       }
+      // Start / behoud de globale SSE-connectie zodat live-sync tussen
+      // apparaten werkt op ELKE pagina — óók pagina's die zelf geen
+      // useAdminEvents-hook gebruiken (Facturen-lijst, Bedrijven, …).
+      // De singleton in admin-events.js voorkomt dubbele connecties.
+      if (data?.id) bootstrapAdminEvents();
       // Backfill device_qr_token voor gebruikers die al ingelogd waren VOOR
       // we deze feature toevoegden. Eenmalig: als er geen token in
       // localStorage staat én we hebben een geldige sessie → uitgeven.
@@ -151,6 +157,10 @@ export function AuthProvider({ children }) {
     setActiveCompanyIdState(null);
     setActiveCompanyMeta(null);
     setUser(null);
+    // Sluit de SSE-connectie zodat volgende login met verse token/scope
+    // opnieuw connect (voorkomt dat oude admin's events lekken naar
+    // nieuwe sessie op hetzelfde device).
+    try { closeAdminEvents(); } catch { /* noop */ }
   };
 
   return (
