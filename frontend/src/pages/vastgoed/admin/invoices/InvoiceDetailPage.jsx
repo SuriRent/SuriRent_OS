@@ -164,21 +164,20 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
 
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid={`invoice-detail-page-${g.tenant_id}`}>
-      {/* ================= TERUG + REGISTREER (SNEL) ================= */}
-      {/* Terug-knop links, "Registreer betaling" rechts — direct beschikbaar
-          bovenaan zoals gevraagd (2026-02). De grote knop bovenaan de
-          Openstaande-Facturen-kaart is daarmee overbodig geworden en verwijderd
-          om verticale ruimte te sparen. */}
+      {/* ================= TERUG + NIEUWE (SNEL) ================= */}
+      {/* Terug-knop links, "Nieuwe" (snelle betaling) rechts — beide op
+          dezelfde hoogte als de "Nieuwe factuur" knop op de facturen-lijst
+          (px-4 py-3, rounded-2xl) zodat ze visueel gelijk aanvoelen tussen
+          lijst-pagina en detail-pagina. */}
       <div className="flex items-center justify-between gap-2">
         <button onClick={onBack} data-testid="invoice-detail-back"
-          className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+          className="inline-flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border-2 border-slate-200 rounded-2xl px-4 py-3 text-sm">
           <ChevronRight className="w-4 h-4 rotate-180" /> Terug
         </button>
         {primaryOpen && (
           <button type="button" onClick={() => { setQuickPayAll(true); setQuickPayInv(primaryOpen); }}
             data-testid="quickpay-top-btn"
-            className="px-3 py-2 rounded-xl text-white font-black inline-flex items-center gap-1.5 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform text-sm"
-            style={{ background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 100%)' }}>
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform">
             <Banknote className="w-4 h-4" /> Nieuwe
           </button>
         )}
