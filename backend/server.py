@@ -810,8 +810,10 @@ async def _live_sync_broadcast(request: Request, call_next):
             return response
         # Kort event — client vraagt zelf zijn data opnieuw op. Bevat pad
         # zodat je in de toekomst granulair kunt filteren op collectie.
+        # `create_task` zodat broadcast NIET wacht op response-return —
+        # queue.put_nowait is snel maar we willen 0ms overhead.
         try:
-            await _sse_broadcast(cid, {"type": "change", "path": path, "method": method})
+            asyncio.create_task(_sse_broadcast(cid, {"type": "change", "path": path, "method": method}))
         except Exception:
             pass
     except Exception:

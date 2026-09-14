@@ -28,17 +28,19 @@ const jsonCompare = (a, b) => {
   catch { return false; }
 };
 
-// Gedeelde default config — houd cache voor 60s (dedupingInterval), skip
-// mount-revalidate wanneer data uit cache komt zodat er GEEN extra render
-// gebeurt bij tabwissel. `compare` voorkomt re-render als revalidate
-// dezelfde data teruggeeft.
+// Gedeelde default config — dedupingInterval BEWUST kort (500ms) zodat
+// SSE-triggered mutates altijd een verse fetch triggeren. Voorheen 60s wat
+// ervoor zorgde dat een `mutate(key, undefined, {revalidate:true})` na een
+// live-sync event soms werd gededupliceerd → traag aanvoelende UI updates
+// op device B wanneer device A iets wijzigde. 500ms dedupe't nog steeds
+// gelijktijdige mounts binnen dezelfde render-batch.
 const defaultConfig = {
   fetcher,
   revalidateOnFocus: false,      // was: true — te agressief, veroorzaakte flikker
   revalidateOnReconnect: true,
   revalidateIfStale: false,      // cache is goed genoeg tot expliciete mutate()
   revalidateOnMount: undefined,  // laat SWR zelf beslissen (skip als cache present)
-  dedupingInterval: 60000,       // 60s (was 30s)
+  dedupingInterval: 500,         // 500ms — laat SSE-driven refetches instant door
   focusThrottleInterval: 60000,
   keepPreviousData: true,        // vorige data blijft zichtbaar tijdens fetch
   errorRetryCount: 2,
