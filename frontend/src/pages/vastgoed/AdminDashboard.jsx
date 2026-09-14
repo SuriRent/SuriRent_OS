@@ -2041,7 +2041,6 @@ function Apartments() {
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [assignFor, setAssignFor] = useState(null);
-  const [shellyFor, setShellyFor] = useState(null);
   const [plateFor, setPlateFor] = useState(null);
   const [detailId, setDetailId] = useState(null);  // welk appartement is in detail-view
   const [q, setQ] = useState('');
@@ -2113,10 +2112,6 @@ function Apartments() {
           </div>
         </div>
       )}
-      {shellyFor && (
-        <ShellyControlModal apt={shellyFor} onClose={() => setShellyFor(null)}
-          onChanged={() => { setShellyFor(null); load(); }} />
-      )}
       {plateFor && (
         <PlateSizeModal apt={plateFor} onClose={() => setPlateFor(null)} />
       )}
@@ -2140,7 +2135,6 @@ function Apartments() {
           onEdit={() => setEditing(a)}
           onAssign={() => setAssignFor(a)}
           onRemoveTenant={() => removeT(a.id)}
-          onShelly={() => setShellyFor(a)}
           onPlate={() => setPlateFor(a)}
           onDelete={() => del(a.id)} />
         {sharedModals}
@@ -2281,7 +2275,7 @@ function ApartmentRow({ a, onOpen }) {
 // =====================================================================
 // ApartmentDetail — volledige info + acties. Terug-knop zoals PlanDetail.
 // =====================================================================
-function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onShelly, onPlate, onDelete }) {
+function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onPlate, onDelete }) {
   const a = apt;
   const occupied = a.status === 'occupied';
   const base = process.env.REACT_APP_BACKEND_URL;
@@ -2458,215 +2452,6 @@ function PlateSizeModal({ apt, onClose }) {
   );
 }
 
-function ShellyControlModal({ apt, onClose, onChanged }) {
-  const [binding, setBinding] = useState(apt.shelly || { device_id: '', channel: 0, label: '' });
-  const [devices, setDevices] = useState(null);  // null = not loaded yet
-  const [devicesError, setDevicesError] = useState('');
-  const [status, setStatus] = useState(null);
-  const [statusError, setStatusError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const isBound = !!(apt.shelly?.device_id);
-
-  const loadStatus = useCallback(async () => {
-    if (!isBound) return;
-    setStatusError('');
-    try {
-      const { data } = await api.get(`/shelly/apartment/${apt.id}/status`);
-      setStatus(data);
-    } catch (e) {
-      setStatusError(formatError(e));
-    }
-  }, [apt.id, isBound]);
-
-  useEffect(() => { loadStatus(); }, [loadStatus]);
-
-  const loadDevices = async () => {
-    setDevicesError(''); setDevices([]);
-    try {
-      const { data } = await api.get('/shelly/devices');
-      setDevices(data);
-    } catch (e) {
-      setDevicesError(formatError(e));
-      setDevices([]);
-    }
-  };
-
-  const save = async () => {
-    setBusy(true); setError('');
-    try {
-      await api.put(`/apartments/${apt.id}/shelly`, {
-        device_id: binding.device_id || '',
-        channel: Number(binding.channel) || 0,
-        label: binding.label || '',
-      });
-      onChanged();
-    } catch (e) {
-      setError(formatError(e));
-    } finally { setBusy(false); }
-  };
-
-  const unbind = async () => {
-    if (!window.confirm('Shelly apparaat ontkoppelen van dit appartement?')) return;
-    setBusy(true); setError('');
-    try {
-      await api.put(`/apartments/${apt.id}/shelly`, { device_id: '' });
-      onChanged();
-    } catch (e) {
-      setError(formatError(e));
-    } finally { setBusy(false); }
-  };
-
-  const control = async (turn) => {
-    setBusy(true); setError('');
-    try {
-      await api.post(`/shelly/apartment/${apt.id}/control`, { turn });
-      await loadStatus();
-    } catch (e) {
-      setError(formatError(e));
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 animate-slide-up" data-testid="shelly-modal">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Stroom · Appt. {apt.number}</p>
-            <h3 className="text-xl font-black text-slate-900 mt-0.5">Shelly apparaat</h3>
-          </div>
-          <button onClick={onClose} data-testid="shelly-close"
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
-        </div>
-
-        {isBound && (
-          <div className="mb-5 rounded-2xl border-2 border-[#FFE6D3] bg-gradient-to-br from-[#FFF4EC] to-[#FFE6D3]/40 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#C74600]">Apparaat</p>
-                <p className="font-bold text-slate-900 truncate">{apt.shelly.label || apt.shelly.device_id}</p>
-                <p className="text-xs text-slate-500">ID: {apt.shelly.device_id} · kanaal {apt.shelly.channel ?? 0}</p>
-              </div>
-              {status?.online != null && (
-                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${
-                  status.online ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'
-                }`}>{status.online ? 'Online' : 'Offline'}</span>
-              )}
-            </div>
-            {statusError && <p className="text-xs text-red-500 mb-2" data-testid="shelly-status-error">{statusError}</p>}
-            {status && (
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="rounded-xl bg-white/80 p-2 text-center">
-                  <p className="text-[10px] font-bold uppercase text-slate-500">Status</p>
-                  <p className={`text-sm font-black ${status.ison ? 'text-emerald-600' : 'text-slate-500'}`}>{status.ison ? 'AAN' : 'UIT'}</p>
-                </div>
-                <div className="rounded-xl bg-white/80 p-2 text-center">
-                  <p className="text-[10px] font-bold uppercase text-slate-500">Vermogen</p>
-                  <p className="text-sm font-black text-slate-900">{Math.round(status.power_w || 0)} W</p>
-                </div>
-                <div className="rounded-xl bg-white/80 p-2 text-center">
-                  <p className="text-[10px] font-bold uppercase text-slate-500">Verbruik</p>
-                  <p className="text-sm font-black text-slate-900">{((status.energy_wh || 0) / 1000).toFixed(1)} kWh</p>
-                </div>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => control('on')} disabled={busy} data-testid="shelly-on"
-                className="flex-1 h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-                <Power className="w-4 h-4" /> AAN
-              </button>
-              <button onClick={() => control('off')} disabled={busy} data-testid="shelly-off"
-                className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-                <Power className="w-4 h-4" /> UIT
-              </button>
-              <button onClick={loadStatus} disabled={busy} data-testid="shelly-refresh"
-                className="px-3 h-11 rounded-xl bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 font-bold text-xs">
-                ↻
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3 mb-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Device ID</label>
-            <div className="flex gap-2">
-              <input value={binding.device_id || ''} onChange={(e) => setBinding({ ...binding, device_id: e.target.value })}
-                placeholder="bv. 8caab50a1234"
-                data-testid="shelly-device-id"
-                className="flex-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none font-mono text-sm" />
-              <button type="button" onClick={loadDevices} data-testid="shelly-load-devices"
-                className="px-3 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs whitespace-nowrap">
-                Cloud lijst
-              </button>
-            </div>
-            {devicesError && <p className="text-xs text-red-500 mt-1" data-testid="shelly-devices-error">{devicesError}</p>}
-            {devices && devices.length > 0 && (
-              <div className="mt-2 max-h-32 overflow-auto rounded-xl border-2 border-slate-100">
-                {devices.map((d) => (
-                  <button key={d.device_id} type="button"
-                    onClick={() => setBinding({ ...binding, device_id: d.device_id, label: d.name || binding.label })}
-                    data-testid={`shelly-pick-${d.device_id}`}
-                    className="w-full flex items-center justify-between p-2.5 hover:bg-orange-50 border-b border-slate-100 last:border-0">
-                    <div className="text-left min-w-0">
-                      <p className="font-bold text-slate-900 text-sm truncate">{d.name || d.device_id}</p>
-                      <p className="text-[10px] text-slate-500 font-mono truncate">{d.device_id}</p>
-                    </div>
-                    {d.online != null && (
-                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${d.online ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {d.online ? 'on' : 'off'}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-            {devices && devices.length === 0 && !devicesError && (
-              <p className="text-xs text-slate-500 mt-1">Geen apparaten gevonden of nog niet geladen.</p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Kanaal</label>
-              <input type="number" min={0} max={3} value={binding.channel ?? 0}
-                onChange={(e) => setBinding({ ...binding, channel: e.target.value })}
-                data-testid="shelly-channel"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Label</label>
-              <input value={binding.label || ''} onChange={(e) => setBinding({ ...binding, label: e.target.value })}
-                placeholder="bv. Hoofdmeter"
-                data-testid="shelly-label"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
-            </div>
-          </div>
-        </div>
-
-        {error && <p className="text-sm text-red-600 mb-3" data-testid="shelly-error">{error}</p>}
-
-        <div className="flex gap-2">
-          {isBound && (
-            <button onClick={unbind} disabled={busy} data-testid="shelly-unbind"
-              className="px-4 h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm disabled:opacity-50">
-              Ontkoppelen
-            </button>
-          )}
-          <button onClick={onClose} disabled={busy}
-            className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
-            Annuleer
-          </button>
-          <button onClick={save} disabled={busy || !(binding.device_id || '').trim()} data-testid="shelly-save"
-            className="flex-1 h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Opslaan
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 function TenantNfcField({ tenantId, value, onChange }) {
   // Controlled input — parent bezit state, wij tonen alleen input +
   // pending-scan overname + preview van de NFC-tag URL. Opslaan gebeurt
