@@ -2297,33 +2297,33 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // iOS/Android: pas de OUTER overlay aan aan de zichtbare ruimte zodat er
-  // geen "oranje gap" onderaan is en het scherm nooit onder de statusbar
-  // schuift. Aanpak:
-  //   • RUST (geen keyboard) → gebruik window.innerHeight (dekt safe-area
-  //     ook op iPhones met home-indicator; vv.height rapporteert daar iets
-  //     te weinig waardoor er onder de modal Kiosk-oranje doorschemert).
-  //   • KEYBOARD OPEN → vv.height (excl. keyboard) + vv.offsetTop zodat
-  //     de modal netjes boven het keyboard eindigt.
+  // iOS/Android: overlay dekt bij RUST altijd het hele scherm (top:0+bottom:0
+  // + 100dvh) — geen oranje strip meer onderaan door safe-area verschillen.
+  // Bij KEYBOARD OPEN switchen we naar visualViewport metrieken zodat de
+  // modal netjes boven het keyboard eindigt.
   useEffect(() => {
     const vv = window.visualViewport;
     const el = overlayRef.current;
     if (!el) return undefined;
     const update = () => {
+      if (!vv) return;
       const winH = window.innerHeight;
-      if (vv) {
-        // Als de vv aanzienlijk kleiner is dan window → keyboard/systeem-UI
-        // open. Gebruik dan vv-metrieken; anders vol venster gebruiken.
-        const kbdOpen = vv.height + 40 < winH;
-        el.style.height = `${kbdOpen ? vv.height : winH}px`;
+      const kbdOpen = vv.height + 40 < winH;
+      if (kbdOpen) {
+        // Keyboard actief → gebruik visualViewport metrieken.
         el.style.top = `${vv.offsetTop}px`;
+        el.style.bottom = 'auto';
+        el.style.height = `${vv.height}px`;
         el.style.left = `${vv.offsetLeft}px`;
         el.style.width = `${vv.width}px`;
       } else {
-        el.style.height = `${winH}px`;
-        el.style.top = '0px';
-        el.style.left = '0px';
-        el.style.width = `${window.innerWidth}px`;
+        // Rust → laat CSS het overnemen (inset:0 + 100dvh). Clear alle
+        // inline styles zodat de default-styles weer werken.
+        el.style.top = '';
+        el.style.bottom = '';
+        el.style.height = '';
+        el.style.left = '';
+        el.style.width = '';
       }
     };
     update();
@@ -2365,10 +2365,8 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   return (
     <div ref={overlayRef}
       onClick={onClose}
-      className="fixed z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
-      style={{
-        top: 0, left: 0, width: '100vw', height: '100dvh',  // fallback voor pre-init
-      }}>
+      className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
+      data-testid="kasgeld-overlay">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
         data-testid="kasgeld-form">
