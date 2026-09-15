@@ -2297,26 +2297,49 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // iOS/Android: pas de OUTER overlay aan aan de visualViewport zodat er
+  // iOS/Android: pas de OUTER overlay aan aan de zichtbare ruimte zodat er
   // geen "oranje gap" onderaan is en het scherm nooit onder de statusbar
-  // schuift. Daarvoor tracken we `height` + `top` (offsetTop volgt iOS'
-  // "URL-bar collapse" scroll gedrag) en `left` (voor eventueel pinch-zoom).
+  // schuift. Aanpak:
+  //   • RUST (geen keyboard) → gebruik window.innerHeight (dekt safe-area
+  //     ook op iPhones met home-indicator; vv.height rapporteert daar iets
+  //     te weinig waardoor er onder de modal Kiosk-oranje doorschemert).
+  //   • KEYBOARD OPEN → vv.height (excl. keyboard) + vv.offsetTop zodat
+  //     de modal netjes boven het keyboard eindigt.
   useEffect(() => {
     const vv = window.visualViewport;
     const el = overlayRef.current;
-    if (!vv || !el) return undefined;
+    if (!el) return undefined;
     const update = () => {
-      el.style.height = `${vv.height}px`;
-      el.style.top = `${vv.offsetTop}px`;
-      el.style.left = `${vv.offsetLeft}px`;
-      el.style.width = `${vv.width}px`;
+      const winH = window.innerHeight;
+      if (vv) {
+        // Als de vv aanzienlijk kleiner is dan window → keyboard/systeem-UI
+        // open. Gebruik dan vv-metrieken; anders vol venster gebruiken.
+        const kbdOpen = vv.height + 40 < winH;
+        el.style.height = `${kbdOpen ? vv.height : winH}px`;
+        el.style.top = `${vv.offsetTop}px`;
+        el.style.left = `${vv.offsetLeft}px`;
+        el.style.width = `${vv.width}px`;
+      } else {
+        el.style.height = `${winH}px`;
+        el.style.top = '0px';
+        el.style.left = '0px';
+        el.style.width = `${window.innerWidth}px`;
+      }
     };
     update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+    if (vv) {
+      vv.addEventListener('resize', update);
+      vv.addEventListener('scroll', update);
+    }
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
+      if (vv) {
+        vv.removeEventListener('resize', update);
+        vv.removeEventListener('scroll', update);
+      }
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
     };
   }, []);
 
