@@ -2318,11 +2318,12 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+        className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90vh]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         data-testid="kasgeld-form">
         {/* Sticky header */}
-        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
+        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
           <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
           <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
@@ -2364,6 +2365,10 @@ function KasgeldMutationModal({ onClose, onSaved }) {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
             <input value={description} onChange={(e) => setDescription(e.target.value)}
+              onFocus={(e) => {
+                // Zorg dat het input-veld in beeld komt boven het keyboard
+                setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+              }}
               data-testid="kasgeld-input-desc"
               placeholder="Bijv. schoonmaakspullen"
               className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
@@ -2387,7 +2392,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         </div>
 
         {/* Sticky footer met Opslaan */}
-        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white rounded-b-3xl sm:rounded-b-2xl">
+        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white sm:rounded-b-2xl">
           <button onClick={save} disabled={saving} data-testid="kasgeld-save"
             className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
