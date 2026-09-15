@@ -74,12 +74,21 @@ def empty_section(section: str) -> dict:
             # Modus voor het bepalen van de factuur-datum:
             #  - "grace_workdays" (default): einde vorige maand + N werkdagen
             #  - "fixed_day"                : vaste dag van de HUIDIGE maand (bv. 5)
+            #  - "due_next_month"           : vaste factuurdag + vervaldag in
+            #                                 de VOLGENDE maand (bv. 1 juli
+            #                                 factureren, vervalt 10 augustus)
             "mode": "grace_workdays",
             "grace_workdays": 10,
             "billing_day": 1,
+            # Alleen relevant voor mode=due_next_month: op deze dag van de
+            # VOLGENDE maand vervalt de factuur (bv. 10 → 10 augustus voor
+            # de juli-factuur). Wordt geclamped naar de laatste dag als
+            # 29/30/31 niet in de doelmaand valt.
+            "due_day": 10,
             # Betaaltermijn in KALENDERdagen: aantal dagen tussen factuurdatum
             # en vervaldatum. Bepaalt zowel de "Vervaldatum" op de PDF als
             # wanneer een factuur naar "achterstand" (overdue) verhuist.
+            # Alleen gebruikt voor fixed_day en grace_workdays modi.
             "payment_term_days": 14,
             # Aantal dagen VÓÓR de vervaldatum waarop een huurder een
             # herinnering ontvangt (WhatsApp/SMS via Twilio + Email via SMTP,

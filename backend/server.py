@@ -11327,9 +11327,13 @@ def _compute_invoice_dates(period_month: int, period_year: int, cfg: dict) -> tu
 
     - invoice_date: de datum die "factuurdatum" heet op de PDF. Komt overeen
       met de dag waarop het systeem de factuur AUTOMATISCH zou genereren:
-        · mode=grace_workdays → einde vorige maand + grace_workdays (werkdagen)
+        · mode=grace_workdays  → einde vorige maand + grace_workdays (werkdagen)
         · mode=fixed_day       → vaste dag in de periode-maand (clamped)
-    - due_date: invoice_date + `payment_term_days` KALENDERdagen (default 14).
+        · mode=due_next_month  → vaste dag in de periode-maand (clamped)
+    - due_date: hangt van modus af:
+        · fixed_day / grace_workdays → invoice_date + `payment_term_days` KALENDERdagen (default 14).
+        · due_next_month             → `due_day` van de VOLGENDE maand na de factuurperiode
+                                         (bv. periode juli + due_day=10 → 10 augustus).
 
     Zo blijft de factuurdatum consistent voor zowel handmatig als automatisch
     aangemaakte facturen — en de vervaldatum matcht 1-op-1 het moment waarop
@@ -11337,7 +11341,7 @@ def _compute_invoice_dates(period_month: int, period_year: int, cfg: dict) -> tu
     """
     from datetime import date as _date, timedelta
     mode = (cfg.get("mode") or "grace_workdays").strip()
-    if mode == "fixed_day":
+    if mode in ("fixed_day", "due_next_month"):
         try:
             day = int(cfg.get("billing_day") or 1)
         except (TypeError, ValueError):
@@ -11355,12 +11359,23 @@ def _compute_invoice_dates(period_month: int, period_year: int, cfg: dict) -> tu
         prev_m = period_month - 1 if period_month > 1 else 12
         prev_last = _last_day_of_month(prev_y, prev_m)
         invoice_date = _add_workdays(prev_last, grace)
-    try:
-        term = int(cfg.get("payment_term_days") or 14)
-    except (TypeError, ValueError):
-        term = 14
-    term = max(0, min(180, term))
-    due_date = invoice_date + timedelta(days=term)
+    # Due date
+    if mode == "due_next_month":
+        try:
+            due_day = int(cfg.get("due_day") or 10)
+        except (TypeError, ValueError):
+            due_day = 10
+        due_day = max(1, min(31, due_day))
+        next_y, next_m = _next_month(period_year, period_month)
+        next_last = _last_day_of_month(next_y, next_m)
+        due_date = _date(next_y, next_m, min(due_day, next_last.day))
+    else:
+        try:
+            term = int(cfg.get("payment_term_days") or 14)
+        except (TypeError, ValueError):
+            term = 14
+        term = max(0, min(180, term))
+        due_date = invoice_date + timedelta(days=term)
     return (invoice_date.isoformat(), due_date.isoformat())
 
 
@@ -11585,7 +11600,7 @@ async def _auto_invoice_tick():
         company_id = cs["company_id"]
         mode = (cfg.get("mode") or "grace_workdays").strip()
         try:
-            if mode == "fixed_day":
+            if mode in ("fixed_day", "due_next_month"):
                 try:
                     fixed_day = int(cfg.get("billing_day") or 1)
                 except (TypeError, ValueError):
@@ -13135,7 +13150,7 @@ async def get_settings(user=Depends(get_current_user)):
             return t.replace(day=min(fixed_day, last_of_m.day))
 
         def _deadline_for(t):
-            return _deadline_fixed(t) if mode == "fixed_day" else _deadline_grace(t)
+            return _deadline_fixed(t) if mode in ("fixed_day", "due_next_month") else _deadline_grace(t)
 
         deadline_this = _deadline_for(today)
         already_ran_this_cycle = (

@@ -372,7 +372,7 @@ export function InvoicingForm({ initial }) {
       {/* Modus-keuze */}
       <div>
         <FieldLabel>Factuur-datum bepalen op basis van</FieldLabel>
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
           {[
             {
               id: 'grace_workdays',
@@ -383,6 +383,11 @@ export function InvoicingForm({ initial }) {
               id: 'fixed_day',
               title: 'Vaste dag van de maand',
               desc: 'Altijd op een specifieke dag (bv. de 5e). 31 wordt indien nodig teruggezet naar de laatste van de maand.',
+            },
+            {
+              id: 'due_next_month',
+              title: 'Vervalt in volgende maand',
+              desc: 'Factuur op vaste dag van huidige maand, vervalt op vaste dag van de volgende maand (bv. 1 juli → vervalt 10 augustus).',
             },
           ].map((opt) => (
             <button type="button" key={opt.id}
@@ -404,12 +409,12 @@ export function InvoicingForm({ initial }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {mode === 'fixed_day' ? (
+        {mode === 'fixed_day' || mode === 'due_next_month' ? (
           <TextField label="Vaste factuurdag (1–31)" testid="invoicing-billing-day"
             type="number"
             value={d.billing_day} onChange={(v) => s.onField('billing_day', Math.max(1, Math.min(31, parseInt(v, 10) || 1)))}
-            placeholder="5"
-            helper="De dag van elke maand waarop de facturen worden aangemaakt. 30/31 wordt indien nodig naar de laatste dag verplaatst." />
+            placeholder="1"
+            helper="Dag van elke maand waarop de facturen worden aangemaakt. 30/31 wordt naar laatste dag verplaatst indien nodig." />
         ) : (
           <TextField label="Grace periode (werkdagen)" testid="invoicing-grace"
             type="number"
@@ -417,11 +422,19 @@ export function InvoicingForm({ initial }) {
             placeholder="10"
             helper="Aantal werkdagen na einde van de maand voordat de volgende factuur automatisch wordt aangemaakt." />
         )}
-        <TextField label="Betaaltermijn (dagen)" testid="invoicing-payment-term"
-          type="number"
-          value={d.payment_term_days} onChange={(v) => s.onField('payment_term_days', Math.max(0, Math.min(180, parseInt(v, 10) || 0)))}
-          placeholder="14"
-          helper="Aantal KALENDERdagen tussen factuurdatum en vervaldatum. De factuur wordt overdue zodra deze datum is verstreken." />
+        {mode === 'due_next_month' ? (
+          <TextField label="Vervaldag (in volgende maand)" testid="invoicing-due-day"
+            type="number"
+            value={d.due_day} onChange={(v) => s.onField('due_day', Math.max(1, Math.min(31, parseInt(v, 10) || 1)))}
+            placeholder="10"
+            helper="Dag van de VOLGENDE maand waarop de factuur vervalt. Bv. juli-factuur + 10 → vervalt 10 augustus." />
+        ) : (
+          <TextField label="Betaaltermijn (dagen)" testid="invoicing-payment-term"
+            type="number"
+            value={d.payment_term_days} onChange={(v) => s.onField('payment_term_days', Math.max(0, Math.min(180, parseInt(v, 10) || 0)))}
+            placeholder="14"
+            helper="Aantal KALENDERdagen tussen factuurdatum en vervaldatum. De factuur wordt overdue zodra deze datum is verstreken." />
+        )}
         <TextField label="Herinnering (dagen vóór vervaldatum)" testid="invoicing-reminder-days"
           type="number"
           value={d.reminder_days_before} onChange={(v) => s.onField('reminder_days_before', Math.max(0, Math.min(14, parseInt(v, 10) || 0)))}
@@ -477,6 +490,8 @@ export function InvoicingForm({ initial }) {
           <p className="text-[11px] text-slate-500 mt-1">
             {mode === 'fixed_day'
               ? <>Vaste factuurdag: <b>dag {d.billing_day || 1}</b> van elke maand. Wijzig hierboven om eerder of later te factureren.</>
+              : mode === 'due_next_month'
+              ? <>Factuur op <b>dag {d.billing_day || 1}</b> van de maand, vervalt op <b>dag {d.due_day || 10}</b> van de volgende maand.</>
               : <>Berekend uit: einde vorige maand + {d.grace_workdays || 10} werkdagen (weekenden overslaan). Verlaag om eerder in de maand te factureren.</>}
           </p>
         </div>
@@ -488,6 +503,15 @@ export function InvoicingForm({ initial }) {
             <>
               <li>Op dag <b>{d.billing_day || 1}</b> van elke maand genereert het systeem de facturen voor alle bewoonde woningen.</li>
               <li>Valt de dag niet in de maand (bv. 31 februari) → laatste dag van die maand.</li>
+              <li>Vervaldatum = factuurdatum + <b>{d.payment_term_days || 14}</b> kalenderdagen.</li>
+              <li>Eventueel vooruitbetaald saldo wordt automatisch verrekend.</li>
+            </>
+          ) : mode === 'due_next_month' ? (
+            <>
+              <li>Op dag <b>{d.billing_day || 1}</b> van elke maand genereert het systeem de facturen voor alle bewoonde woningen.</li>
+              <li>De vervaldatum wordt gezet op dag <b>{d.due_day || 10}</b> van de <b>volgende</b> maand.</li>
+              <li>Voorbeeld: Huur-factuur aangemaakt op {d.billing_day || 1} juli → vervalt op {d.due_day || 10} augustus.</li>
+              <li>Handig als je huurders altijd tot een vaste dag in de volgende maand tijd wil geven om te betalen.</li>
               <li>Eventueel vooruitbetaald saldo wordt automatisch verrekend.</li>
             </>
           ) : (
@@ -495,6 +519,7 @@ export function InvoicingForm({ initial }) {
               <li>Aan het einde van elke maand wordt de huidige huur als verlopen beschouwd.</li>
               <li>De huurder krijgt <b>{d.grace_workdays || 10}</b> werkdagen om alsnog te betalen.</li>
               <li>Daarna genereert het systeem automatisch de volgende factuur voor elke bewoonde woning.</li>
+              <li>Vervaldatum = factuurdatum + <b>{d.payment_term_days || 14}</b> kalenderdagen.</li>
               <li>Eventueel vooruitbetaald saldo wordt automatisch verrekend.</li>
             </>
           )}
