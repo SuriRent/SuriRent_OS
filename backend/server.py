@@ -12828,8 +12828,11 @@ async def admin_events_sse(request: Request, user=Depends(get_current_user)):
 
     async def event_stream():
         try:
-            # Initial handshake zodat de client direct weet dat hij verbonden is
-            yield f"event: ready\ndata: {{\"ts\":\"{iso(now_utc())}\"}}\n\n"
+            # Initial handshake als ECHT data-event (client ontvangt via
+            # onmessage en reset zijn watchdog-timer). `event: ready` fired
+            # géén onmessage → toen kon client een silent-dead connection
+            # niet detecteren.
+            yield f"data: {json.dumps({'type':'ready','ts':iso(now_utc())})}\n\n"
             while True:
                 if await request.is_disconnected():
                     break
@@ -12840,8 +12843,11 @@ async def admin_events_sse(request: Request, user=Depends(get_current_user)):
                     payload = await asyncio.wait_for(queue.get(), timeout=25.0)
                     yield f"data: {json.dumps(payload)}\n\n"
                 except asyncio.TimeoutError:
-                    # Heartbeat — houdt connectie levend door proxies/load balancers
-                    yield ": heartbeat\n\n"
+                    # Heartbeat als ECHT event (i.p.v. SSE-comment) zodat de
+                    # client via `onmessage` weet dat de connectie leeft.
+                    # Comments ("`: ...`") firen géén onmessage → client kan
+                    # dan een silent-dead connection niet detecteren.
+                    yield f"data: {json.dumps({'type':'heartbeat','ts':iso(now_utc())})}\n\n"
         finally:
             _bus_unsubscribe(channel, queue)
 

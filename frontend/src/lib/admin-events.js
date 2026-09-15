@@ -29,7 +29,63 @@ let _retryTimer = null;
 let _retryDelay = 1000;
 let _hadFirstConnect = false;
 let _visibilityBound = false;
+let _lastMessageAt = 0;   // performance.now() van laatste event/heartbeat
+let _watchdogTimer = null;
 const _listeners = new Set();
+
+// Watchdog: als er >40s geen event/heartbeat binnenkwam terwijl de tab
+// zichtbaar is, forceer een reconnect. iOS Safari kan een EventSource
+// silent doden zonder onerror te firen — dan blijft `readyState=1` maar
+// komen er nooit meer bytes door. Backend stuurt elke 25s heartbeat, dus
+// 40s zonder message = betrouwbaar signaal dat de connectie dood is.
+const _WATCHDOG_TIMEOUT_MS = 40_000;
+const _WATCHDOG_TICK_MS = 10_000;
+function _startWatchdog() {
+  if (_watchdogTimer) return;
+  _watchdogTimer = setInterval(() => {
+    if (_closed || !_es) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const idle = performance.now() - _lastMessageAt;
+    if (idle > _WATCHDOG_TIMEOUT_MS) {
+      _log('watchdog: stale connection detected (idle', Math.round(idle), 'ms) → force reconnect');
+      try { _es.close(); } catch { /* noop */ }
+      _es = null;
+      _retryDelay = 500;
+      _connect();
+      _forceFullRevalidate();
+    }
+  }, _WATCHDOG_TICK_MS);
+}
+
+// =====================================================================
+// Debug logging — schakel in met localStorage.setItem('sse_debug','1')
+// zodat je in productie kan diagnosticeren zonder de console te
+// spammen voor iedereen. Alle logs zijn timestamped in ms sinds boot.
+// =====================================================================
+const _DEBUG = (() => {
+  try { return localStorage.getItem('sse_debug') === '1'; } catch { return false; }
+})();
+const _t0 = performance.now();
+function _log(...args) {
+  if (!_DEBUG) return;
+  const t = (performance.now() - _t0).toFixed(0);
+  // eslint-disable-next-line no-console
+  console.log(`[SSE +${t}ms]`, ...args);
+}
+
+// Expose helper voor makkelijk aanzetten vanuit devtools:
+//   window.__sseDebug(true)  → aan
+//   window.__sseDebug(false) → uit + refresh
+if (typeof window !== 'undefined' && !window.__sseDebug) {
+  window.__sseDebug = (on) => {
+    try {
+      if (on) localStorage.setItem('sse_debug', '1');
+      else localStorage.removeItem('sse_debug');
+    } catch { /* noop */ }
+    // eslint-disable-next-line no-console
+    console.log('[SSE] debug =', on, '— refresh om effectief te maken');
+  };
+}
 
 function _dispatch(data) {
   // Kopieer eerst — een listener mag zichzelf uit-registreren tijdens
@@ -46,43 +102,65 @@ function _dispatch(data) {
 // eigen useAdminEvents hook heeft.
 // =====================================================================
 function _globalInvalidate(data) {
-  if (data?.type !== 'change' && data?.type !== 'notification') return;
+  if (data?.type !== 'change' && data?.type !== 'notification') {
+    _log('skip (type niet change/notification):', data?.type);
+    return;
+  }
   try { window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data })); } catch { /* noop */ }
+
+  const rawPath = String(data?.path || '');
+  if (!rawPath.startsWith('/api/')) {
+    _log('skip (path niet /api/):', rawPath);
+    return;
+  }
+  const swrKey = rawPath.slice(4); // '/api/tenants' → '/tenants'
+  _log('invalidate', { path: rawPath, key: swrKey, method: data?.method });
+
+  // 1) Alle keys die onder het gemuteerde API-pad vallen
+  let mutatedCount = 0;
   try {
-    const rawPath = String(data?.path || '');
-    if (!rawPath.startsWith('/api/')) return;
-    const swrKey = rawPath.slice(4);
-    // 1) Alle keys die onder het gemuteerde API-pad vallen
-    swrGlobalMutate(
-      (k) => typeof k === 'string' && (
-        k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?')
-      ),
+    const p = swrGlobalMutate(
+      (k) => {
+        if (typeof k !== 'string') return false;
+        const match = k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?');
+        if (match) mutatedCount += 1;
+        return match;
+      },
       undefined,
       { revalidate: true },
     );
-    // 2) Cross-collectie afhankelijkheden — bijv. betaling raakt facturen én plans
-    const crossInvalidate = ['/admin/stats'];
-    if (swrKey.startsWith('/payments')) {
-      crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active', '/tenants');
+    // swrGlobalMutate met filter → geeft Promise[] terug, log wanneer klaar
+    if (p && typeof p.then === 'function') {
+      p.then(() => _log('primary refetch klaar', { key: swrKey, matched: mutatedCount }))
+       .catch((e) => _log('primary refetch fout', e));
     }
-    if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
-      crossInvalidate.push('/tenants', '/apartments');
-    }
-    if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
-    if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
-      crossInvalidate.push('/payment-plans?status=active', '/payment-plans');
-    }
-    if (swrKey.startsWith('/tenants') || swrKey.startsWith('/apartments')) {
-      crossInvalidate.push('/tenants', '/apartments');
-    }
-    crossInvalidate.forEach((base) => {
+  } catch (e) { _log('primary mutate throw', e); }
+
+  // 2) Cross-collectie afhankelijkheden — bijv. betaling raakt facturen én plans
+  const crossInvalidate = ['/admin/stats'];
+  if (swrKey.startsWith('/payments')) {
+    crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active', '/tenants');
+  }
+  if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
+    crossInvalidate.push('/tenants', '/apartments');
+  }
+  if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
+  if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
+    crossInvalidate.push('/payment-plans?status=active', '/payment-plans');
+  }
+  if (swrKey.startsWith('/tenants') || swrKey.startsWith('/apartments')) {
+    crossInvalidate.push('/tenants', '/apartments');
+  }
+  crossInvalidate.forEach((base) => {
+    try {
       swrGlobalMutate(
         (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
         undefined,
         { revalidate: true },
       );
-    });
-  } catch { /* noop */ }
+    } catch (e) { _log('cross mutate throw', base, e); }
+  });
+  if (crossInvalidate.length > 0) _log('cross-invalidate', crossInvalidate);
 }
 
 // =====================================================================
@@ -140,31 +218,47 @@ function _connect() {
   const url = token
     ? `${apiBase}/admin/events?token=${encodeURIComponent(token)}`
     : `${apiBase}/admin/events`;
+  _log('connect →', apiBase + '/admin/events');
   try {
     _es = new EventSource(url, { withCredentials: true });
-  } catch {
+  } catch (e) {
+    _log('EventSource ctor fout', e);
     _scheduleRetry();
     return;
   }
   _es.onopen = () => {
+    _log('open, retry-delay reset');
     _retryDelay = 1000;
+    _lastMessageAt = performance.now();
+    _startWatchdog();
     // Na een RE-connect (niet de eerste): revalidate alles zodat we niks
     // missen dat tijdens de disconnect gebeurde. Bij eerste connect is
     // dat overbodig — pagina laadt sowieso via initial SWR fetch.
-    if (_hadFirstConnect) _forceFullRevalidate();
+    if (_hadFirstConnect) {
+      _log('reconnect → force full revalidate');
+      _forceFullRevalidate();
+    }
     _hadFirstConnect = true;
   };
   _es.onmessage = (e) => {
+    _lastMessageAt = performance.now();
     try {
       const data = JSON.parse(e.data);
+      // Heartbeats: alleen bijhouden dat de connectie leeft, geen SWR-refresh.
+      if (data?.type === 'heartbeat' || data?.type === 'ready') {
+        _log('heartbeat/ready', data?.type);
+        return;
+      }
+      _log('message', data);
       // Eerst globale invalidator, daarna hook-specifieke listeners.
       // Zo krijgen alle pagina's automatisch SWR-refresh — hooks blijven
       // vrij voor pagina-specifieke effects (toast, teller, animatie).
       _globalInvalidate(data);
       _dispatch(data);
-    } catch { /* ignore parse errors */ }
+    } catch (e) { _log('parse fout', e); }
   };
-  _es.onerror = () => {
+  _es.onerror = (e) => {
+    _log('error, readyState=', _es?.readyState, e);
     if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
     _scheduleRetry();
   };

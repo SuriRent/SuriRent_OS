@@ -130,11 +130,12 @@ def local_subscriber_count(channel: str) -> int:
 # =====================================================================
 # Interne tail loop — polling-based i.p.v. tailable cursor.
 # Motor's tailable_await werkte niet betrouwbaar in onze deployment
-# (mogelijk mongo-mode/versie). Polling met 200ms sleep geeft ~100ms
+# (mogelijk mongo-mode/versie). Polling met 50ms sleep geeft ~25ms
 # gemiddelde latency — ruim binnen SSE-perceptibele grenzen — en is
 # 100% robuust ongeacht mongo-configuratie (standalone / replica-set).
 # =====================================================================
-_POLL_INTERVAL = 0.2  # seconde tussen polls; 0.2 = ~100ms gemiddelde latency
+_POLL_INTERVAL = 0.05  # 50ms tussen polls (~25ms gemiddelde latency)
+_BURST_INTERVAL = 0.005  # 5ms tijdens een burst zodat opeenvolgende events instant doorstromen
 
 
 async def _tail_loop() -> None:
@@ -171,7 +172,7 @@ async def _tail_loop() -> None:
             # Backoff reset na succesvolle poll
             delay = 0.5
             # Als batch leeg was → wacht kort. Bij bursts blijf snel pollen.
-            await asyncio.sleep(_POLL_INTERVAL if batch_count == 0 else 0.02)
+            await asyncio.sleep(_POLL_INTERVAL if batch_count == 0 else _BURST_INTERVAL)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
