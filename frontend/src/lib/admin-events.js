@@ -33,13 +33,13 @@ let _lastMessageAt = 0;   // performance.now() van laatste event/heartbeat
 let _watchdogTimer = null;
 const _listeners = new Set();
 
-// Watchdog: als er >40s geen event/heartbeat binnenkwam terwijl de tab
+// Watchdog: als er >25s geen event/heartbeat binnenkwam terwijl de tab
 // zichtbaar is, forceer een reconnect. iOS Safari kan een EventSource
 // silent doden zonder onerror te firen — dan blijft `readyState=1` maar
-// komen er nooit meer bytes door. Backend stuurt elke 25s heartbeat, dus
-// 40s zonder message = betrouwbaar signaal dat de connectie dood is.
-const _WATCHDOG_TIMEOUT_MS = 40_000;
-const _WATCHDOG_TICK_MS = 10_000;
+// komen er nooit meer bytes door. Backend stuurt elke 15s heartbeat,
+// dus 25s zonder message = betrouwbaar signaal dat de connectie dood is.
+const _WATCHDOG_TIMEOUT_MS = 25_000;
+const _WATCHDOG_TICK_MS = 3_000;  // check elke 3s voor snellere detectie
 function _startWatchdog() {
   if (_watchdogTimer) return;
   _watchdogTimer = setInterval(() => {
@@ -184,34 +184,46 @@ function _forceFullRevalidate() {
 }
 
 // visibilitychange handler — één keer registreren, ongeacht hoeveel
-// hook-instances er zijn. Bij `visible` na sleep: sluit stale connection
-// en force reconnect + revalidate.
+// hook-instances er zijn. Bij `visible` na sleep/background:
+//   1. Direct HTTP re-fetch alle SWR-keys (kunnen we niet wachten op SSE
+//      reconnect want iOS Safari houdt EventSource soms in stalled state).
+//   2. Force disconnect + reconnect van EventSource, ongeacht readyState
+//      (iOS zet 'em vaak op readyState=1 (OPEN) terwijl geen data flows).
 function _bindVisibility() {
   if (_visibilityBound || typeof document === 'undefined') return;
   _visibilityBound = true;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || _closed) return;
-    // Bij visible: check of ES nog leeft. EventSource.readyState 2 = CLOSED.
-    const stale = !_es || _es.readyState === 2;
-    if (stale) {
-      if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
-      _retryDelay = 500;  // snelle reconnect na wake
-      _connect();
-    }
-    // In beide gevallen: force full revalidate om gemiste events te
-    // repareren. Zonder deze stap zou mobiel na screen-lock stale data
-    // tonen tot de eerste nieuwe change binnenkomt.
+    _log('visibility → visible: force revalidate + reconnect');
+    // 1) Direct HTTP-refetch — dan is UI in-sync ongeacht SSE-state.
     _forceFullRevalidate();
+    // 2) Force reconnect ALTIJD (iOS: readyState=1 kan misleidend zijn).
+    if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
+    if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+    _retryDelay = 500;
+    _connect();
   });
-  // Ook `online` event (na netwerkverlies) triggert dezelfde flow
+  // pageshow met persisted=true → iOS bfcache restore → altijd re-sync
+  window.addEventListener('pageshow', (e) => {
+    if (_closed || !e.persisted) return;
+    _log('pageshow (bfcache) → force revalidate + reconnect');
+    _forceFullRevalidate();
+    if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
+    if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+    _retryDelay = 500;
+    _connect();
+  });
+  // Ook `online` event (na netwerkverlies) triggert dezelfde flow —
+  // altijd reconnecten (iOS EventSource kan readyState=1 zijn maar
+  // niks meer doorgeven na een netwerk-transitie).
   window.addEventListener('online', () => {
     if (_closed) return;
-    if (!_es || _es.readyState === 2) {
-      if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
-      _retryDelay = 500;
-      _connect();
-    }
+    _log('online → force revalidate + reconnect');
     _forceFullRevalidate();
+    if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
+    if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+    _retryDelay = 500;
+    _connect();
   });
 }
 

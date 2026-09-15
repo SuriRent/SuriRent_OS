@@ -12852,7 +12852,7 @@ async def admin_events_sse(request: Request, user=Depends(get_current_user)):
                     # Bus dispatched dict → dumps hier. Voorheen JSON al
                     # gemaakt in _sse_broadcast; nu doet elke stream zijn
                     # eigen serialisatie voor iets betere fault-isolation.
-                    payload = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield f"data: {json.dumps(payload)}\n\n"
                 except asyncio.TimeoutError:
                     # Heartbeat als ECHT event (i.p.v. SSE-comment) zodat de
