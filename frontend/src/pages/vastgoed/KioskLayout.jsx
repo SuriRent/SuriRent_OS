@@ -2298,39 +2298,12 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // Nu de modal via een portal buiten motion.div gerenderd wordt, werkt
-  // `position: fixed` weer relatief tot de viewport (motion.div gebruikt
-  // transform, wat fixed-descendants normaal aan de parent bindt). We
-  // hoeven alleen nog visualViewport te tracken voor het keyboard-scenario
-  // op iOS zodat de modal boven het keyboard eindigt.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    const el = overlayRef.current;
-    if (!el || !vv) return undefined;
-    const update = () => {
-      const kbdOpen = vv.height + 40 < window.innerHeight;
-      if (kbdOpen) {
-        el.style.top = `${vv.offsetTop}px`;
-        el.style.bottom = 'auto';
-        el.style.height = `${vv.height}px`;
-        el.style.left = `${vv.offsetLeft}px`;
-        el.style.width = `${vv.width}px`;
-      } else {
-        el.style.top = '';
-        el.style.bottom = '';
-        el.style.height = '';
-        el.style.left = '';
-        el.style.width = '';
-      }
-    };
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-    };
-  }, []);
+  // De modal wordt via portal buiten motion.div gerenderd, dus `fixed
+  // inset-0` bindt weer aan de viewport. Combined met de viewport-meta
+  // `interactive-widget=resizes-content` (in index.html) krimpt `100dvh`
+  // automatisch mee met het iOS-keyboard — dus geen visualViewport-hack
+  // meer nodig en geen body-lock die de pagina laat springen.
+  useEffect(() => { /* placeholder — bewust leeg gelaten, zie comment */ }, []);
 
   const save = async () => {
     const n = parseFloat(String(amount).replace(',', '.'));
@@ -2355,6 +2328,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     <div ref={overlayRef}
       onClick={onClose}
       className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
+      style={{ height: '100dvh' }}
       data-testid="kasgeld-overlay">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
@@ -2404,13 +2378,6 @@ function KasgeldMutationModal({ onClose, onSaved }) {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
             <input value={description} onChange={(e) => setDescription(e.target.value)}
-              onFocus={(e) => {
-                // Scroll het input-veld naar bovenkant van scroll-container
-                // zodat 't zichtbaar blijft nadat iOS het keyboard opent.
-                setTimeout(() => {
-                  try { e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
-                }, 320);
-              }}
               data-testid="kasgeld-input-desc"
               placeholder="Bijv. schoonmaakspullen"
               className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
