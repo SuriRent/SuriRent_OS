@@ -2913,6 +2913,12 @@ export default function KioskLayout() {
               )}
               <button onClick={adminMode} data-testid="kiosk-admin-btn-desktop"
                 className={`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm ${hasAdminAccess ? '' : 'hidden'}`}>Beheerder</button>
+              {step === 'select' && (
+                <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
+                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
+                  <Wallet className="w-4 h-4" /> Kasgeld
+                </button>
+              )}
               <button onClick={exit} data-testid="kiosk-lock-btn-desktop"
                 className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-5 py-2 text-sm">Uit</button>
             </div>
