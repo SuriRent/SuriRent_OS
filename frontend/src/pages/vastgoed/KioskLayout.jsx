@@ -2295,6 +2295,30 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [category, setCategory] = useState('overig');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const modalRef = useRef(null);
+  const bodyRef = useRef(null);
+
+  // iOS/Android: gebruik visualViewport zodat de modal exact tot boven het
+  // keyboard reikt (dvh is niet betrouwbaar op iOS Safari — de fixed layer
+  // schuift dan alsnog omhoog en er ontstaat oranje ruimte onderaan).
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const update = () => {
+      if (modalRef.current) {
+        modalRef.current.style.height = `${vv.height}px`;
+        // Volg de viewport-offset zodat het scherm nooit "verschuift".
+        modalRef.current.style.transform = `translateY(${vv.offsetTop}px)`;
+      }
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
 
   const save = async () => {
     const n = parseFloat(String(amount).replace(',', '.'));
@@ -2316,14 +2340,12 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     : 'border-slate-200 text-slate-300 bg-slate-50';
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90vh]"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    <div className="fixed inset-0 z-[100] bg-black/60 flex items-start sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div ref={modalRef} onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-screen sm:h-auto sm:max-h-[90vh]"
         data-testid="kasgeld-form">
         {/* Sticky header */}
-        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
           <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
           <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
@@ -2331,7 +2353,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
               className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
@@ -2365,10 +2387,6 @@ function KasgeldMutationModal({ onClose, onSaved }) {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
             <input value={description} onChange={(e) => setDescription(e.target.value)}
-              onFocus={(e) => {
-                // Zorg dat het input-veld in beeld komt boven het keyboard
-                setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-              }}
               data-testid="kasgeld-input-desc"
               placeholder="Bijv. schoonmaakspullen"
               className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
@@ -2392,7 +2410,8 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         </div>
 
         {/* Sticky footer met Opslaan */}
-        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white sm:rounded-b-2xl">
+        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white sm:rounded-b-2xl"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
           <button onClick={save} disabled={saving} data-testid="kasgeld-save"
             className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
