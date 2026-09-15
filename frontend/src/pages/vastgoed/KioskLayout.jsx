@@ -14,6 +14,7 @@ import {
   KioskEmployeeBar, KioskEmployeeLoginSheet,
   getKioskEmployee, withKioskEmployee,
 } from '../../components/KioskEmployee';
+import NumPad from '../../components/NumPad';
 
 const variants = {
   enter: { opacity: 0, x: 60 },
@@ -2310,64 +2311,88 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     finally { setSaving(false); }
   };
 
+  const amountBorder = amount
+    ? (type === 'in' ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : 'border-red-400 text-red-700 bg-red-50')
+    : 'border-slate-200 text-slate-300 bg-slate-50';
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" data-testid="kasgeld-form">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        data-testid="kasgeld-form">
+        {/* Sticky header */}
+        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
           <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
           <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
-            className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-            Inkomend
-          </button>
-          <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
-            className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-            Uitgaand
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {['SRD', 'USD', 'EUR'].map((c) => (
-            <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-              className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              {c}
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
+              className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              Inkomend
             </button>
-          ))}
+            <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
+              className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              Uitgaand
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {['SRD', 'USD', 'EUR'].map((c) => (
+              <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
+                className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {c}
+              </button>
+            ))}
+          </div>
+
+          {/* Amount display + NumPad (voorkomt iOS keyboard-shift) */}
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
+            <div data-testid="kasgeld-amount-display"
+              className={`w-full h-14 px-4 rounded-xl border-2 flex items-center justify-end text-2xl font-black tabular-nums ${amountBorder}`}>
+              {currency} {amount || '0'}
+            </div>
+          </div>
+          <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad" />
+
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
+            <input value={description} onChange={(e) => setDescription(e.target.value)}
+              data-testid="kasgeld-input-desc"
+              placeholder="Bijv. schoonmaakspullen"
+              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
+          </label>
+
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}
+              data-testid="kasgeld-input-cat"
+              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm bg-white">
+              <option value="overig">Overig</option>
+              <option value="onderhoud">Onderhoud</option>
+              <option value="schoonmaak">Schoonmaak</option>
+              <option value="salaris">Salaris</option>
+              <option value="kantoor">Kantoor</option>
+              <option value="brandstof">Brandstof</option>
+            </select>
+          </label>
+
+          {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
         </div>
-        <label className="block">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
-          <input type="number" inputMode="decimal" min="0" step="0.01"
-            value={amount} onChange={(e) => setAmount(e.target.value)}
-            data-testid="kasgeld-input-amount"
-            className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-lg font-bold tabular-nums" />
-        </label>
-        <label className="block">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
-          <input value={description} onChange={(e) => setDescription(e.target.value)}
-            data-testid="kasgeld-input-desc"
-            className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
-        </label>
-        <label className="block">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}
-            data-testid="kasgeld-input-cat"
-            className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm bg-white">
-            <option value="overig">Overig</option>
-            <option value="onderhoud">Onderhoud</option>
-            <option value="schoonmaak">Schoonmaak</option>
-            <option value="salaris">Salaris</option>
-            <option value="kantoor">Kantoor</option>
-            <option value="brandstof">Brandstof</option>
-          </select>
-        </label>
-        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
-        <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-          {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
-        </button>
+
+        {/* Sticky footer met Opslaan */}
+        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white rounded-b-3xl sm:rounded-b-2xl">
+          <button onClick={save} disabled={saving} data-testid="kasgeld-save"
+            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
+          </button>
+        </div>
       </div>
     </div>
   );
