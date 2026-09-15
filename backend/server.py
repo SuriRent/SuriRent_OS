@@ -483,6 +483,23 @@ async def lifespan(app: FastAPI):
         import asyncio as _aio3
         _billing_cron_handle = _aio3.create_task(_daily_billing_checks_loop())
 
+    # Cross-replica event bus (SSE broadcasts via MongoDB capped tail).
+    # Vervangt in-memory `_sse_queues`/`_cd_subscribers` waardoor events
+    # in een multi-pod deployment ALLE replica's bereiken.
+    try:
+        from event_bus import ensure_started as _bus_start
+        await _bus_start(db)
+    except Exception as _exc:  # noqa: BLE001
+        import logging as _l
+        _l.getLogger("uvicorn.error").warning(f"event_bus startup: {_exc}")
+
+    # Achtergrondtaken die eerder via @app.on_event("startup") liepen —
+    # `lifespan` verdringt die decorator, dus hier expliciet opstarten.
+    if os.environ.get("DISABLE_INSTALLMENT_REMINDERS") != "1":
+        import asyncio as _aio4
+        _aio4.create_task(_installment_reminder_loop())
+        _aio4.create_task(_upcoming_invoice_reminder_loop())
+
     yield
     if _reminder_task_handle:
         _reminder_task_handle.cancel()
@@ -9352,25 +9369,29 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
 #
 # REALTIME PUSH — Server-Sent Events
 # ----------------------------------
-# Naast de polling-fallback houden we per company-slug een verzameling
-# asyncio.Queue's bij. Bij elke succesvolle PUT signaleren we ALLE
-# verbonden klantenschermen direct via deze queues. Cross-device latency
-# zakt zo van ~250ms (poll) naar <50ms (instant push).
+# Naast de polling-fallback publiceren we per company-slug op de cross-
+# replica event bus. Bij elke succesvolle PUT signaleren we ALLE ver-
+# bonden klantenschermen direct — óók als de operator's PUT en het
+# klantenscherm op verschillende backend-replica's zitten (was voorheen
+# stuk want in-memory queues zijn per-pod).
 import asyncio as _asyncio
-_cd_subscribers: dict = {}  # slug → set[asyncio.Queue]
-_cd_lock = _asyncio.Lock()
+from event_bus import (
+    publish as _cd_bus_publish,
+    subscribe as _cd_bus_subscribe,
+    unsubscribe as _cd_bus_unsubscribe,
+)
+
+
+def _cd_channel(slug: str) -> str:
+    return f"cd:{(slug or '').lower()}"
+
 
 async def _cd_publish(slug: str, payload: dict) -> None:
-    """Stuur een nieuwe state naar alle verbonden klantenschermen voor deze
-    company-slug. Stille foutafhandeling — als een client weg is, kan de
-    queue overlopen maar dat blokkeert de PUT niet."""
-    async with _cd_lock:
-        queues = list(_cd_subscribers.get(slug.lower(), ()))
-    for q in queues:
-        try:
-            q.put_nowait(payload)
-        except Exception:
-            pass  # queue vol of gesloten — client opruimen gebeurt in de stream-loop
+    """Publiceert klantenscherm-state naar alle verbonden schermen voor
+    deze company-slug (cross-replica via MongoDB event bus)."""
+    if not slug:
+        return
+    await _cd_bus_publish(_cd_channel(slug), payload)
 
 class CustomerDisplayIn(BaseModel):
     step: str  # 'idle'|'select'|'overview'|'pay'|'method'|'confirm'|'receipt'
@@ -9732,10 +9753,8 @@ async def customer_display_stream(slug: str, request: Request):
     c = await db.companies.find_one({"slug": slug.lower()}, {"_id": 0, "id": 1})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    key = slug.lower()
-    queue: _asyncio.Queue = _asyncio.Queue(maxsize=32)
-    async with _cd_lock:
-        _cd_subscribers.setdefault(key, set()).add(queue)
+    channel = _cd_channel(slug)
+    queue: _asyncio.Queue = _cd_bus_subscribe(channel, maxsize=32)
 
     async def event_gen():
         try:
@@ -9756,12 +9775,7 @@ async def customer_display_stream(slug: str, request: Request):
                 except _asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         finally:
-            async with _cd_lock:
-                subs = _cd_subscribers.get(key)
-                if subs is not None:
-                    subs.discard(queue)
-                    if not subs:
-                        _cd_subscribers.pop(key, None)
+            _cd_bus_unsubscribe(channel, queue)
 
     return StreamingResponse(
         event_gen(),
@@ -12675,35 +12689,38 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
 # Veel sneller dan WebPush voor open tabs (geen FCM/APNS roundtrip).
 # Verwacht: <100ms latency van event tot UI render.
 # =====================================================================
-_sse_queues: dict[str, list] = {}  # company_id -> list[asyncio.Queue]
+# =====================================================================
+# Admin SSE stream — cross-replica via `event_bus` (MongoDB capped tail).
+# Voorheen in-memory `_sse_queues`: events bereikten alleen de replica
+# die de mutation-request afhandelde. Nu wordt elke publish naar Mongo
+# gepushed en pikt elke replica hem op via een tailable cursor.
+# =====================================================================
+from event_bus import publish as _bus_publish, subscribe as _bus_subscribe, unsubscribe as _bus_unsubscribe
+
+
+def _sse_channel(company_id: str) -> str:
+    return f"admin:{company_id}"
 
 
 async def _sse_broadcast(company_id: str, event: dict):
-    """Push een event naar alle open SSE connecties van een company."""
+    """Publish naar de cross-replica bus. Alle SSE-loops (op elke pod)
+    ontvangen het en dispatchen naar hun lokale subscribers."""
     if not company_id:
         return
-    queues = _sse_queues.get(company_id, [])
-    if not queues:
-        return
-    msg = json.dumps(event)
-    # Snapshot om mid-iteration mutatie veilig te houden
-    for q in list(queues):
-        try:
-            q.put_nowait(msg)
-        except Exception:  # noqa: BLE001
-            pass
+    await _bus_publish(_sse_channel(company_id), event)
 
 
 @api.get("/admin/events")
 async def admin_events_sse(request: Request, user=Depends(get_current_user)):
     """Server-Sent Events stream voor real-time admin notificaties.
     Gebruikt door /admin/payments e.a. om instant UI updates te krijgen
-    zonder polling. Hartslag elke 25s om proxies door te laten."""
+    zonder polling. Hartslag elke 25s om proxies door te laten.
+    Cross-replica: subscribed via `event_bus` op kanaal admin:{cid}."""
     cid = user.get("company_id")
     if not cid:
         raise HTTPException(status_code=400, detail="Geen bedrijf")
-    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-    _sse_queues.setdefault(cid, []).append(queue)
+    channel = _sse_channel(cid)
+    queue = _bus_subscribe(channel, maxsize=100)
 
     async def event_stream():
         try:
@@ -12713,16 +12730,16 @@ async def admin_events_sse(request: Request, user=Depends(get_current_user)):
                 if await request.is_disconnected():
                     break
                 try:
-                    msg = await asyncio.wait_for(queue.get(), timeout=25.0)
-                    yield f"data: {msg}\n\n"
+                    # Bus dispatched dict → dumps hier. Voorheen JSON al
+                    # gemaakt in _sse_broadcast; nu doet elke stream zijn
+                    # eigen serialisatie voor iets betere fault-isolation.
+                    payload = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    yield f"data: {json.dumps(payload)}\n\n"
                 except asyncio.TimeoutError:
                     # Heartbeat — houdt connectie levend door proxies/load balancers
                     yield ": heartbeat\n\n"
         finally:
-            try:
-                _sse_queues.get(cid, []).remove(queue)
-            except ValueError:
-                pass
+            _bus_unsubscribe(channel, queue)
 
     return StreamingResponse(
         event_stream(),
@@ -15193,9 +15210,16 @@ import asyncio as _aio_outer  # noqa: E402
 
 @app.on_event("startup")
 async def _start_installment_reminder_loop():
+    # NB: lifespan handelt dit al af. Blijft staan voor backwards-compat
+    # met andere deployments (indien lifespan uitstaat).
     if os.environ.get("DISABLE_INSTALLMENT_REMINDERS") == "1":
         return
-    _aio_outer.create_task(_installment_reminder_loop())
-    # Ook de upcoming-invoice reminder loop opstarten. Delen dezelfde
-    # env-toggle zodat één schakelaar volstaat.
-    _aio_outer.create_task(_upcoming_invoice_reminder_loop())
+    # No-op als lifespan al draait — dubbele task creëren is niet erg
+    # want beide loops zijn idempotent, maar we vermijden 't:
+    return
+
+
+@app.on_event("startup")
+async def _start_event_bus():
+    # NB: lifespan handelt dit al af. Blijft staan als vangnet.
+    return
