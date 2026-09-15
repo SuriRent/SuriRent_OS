@@ -11522,6 +11522,59 @@ async def generate_month_invoices(body: dict, user=Depends(get_current_user)):
     return res
 
 
+@api.post("/invoices/recompute-due-dates")
+async def recompute_invoice_due_dates(user=Depends(get_current_user)):
+    """Herbereken invoice_date + due_date van álle open/partial facturen op
+    basis van de HUIDIGE invoicing-instellingen. Handig nadat een admin de
+    factureringsmodus wijzigt en de bestaande openstaande facturen mee wil
+    laten gaan met de nieuwe vervaldatum-logica.
+
+    Alleen open + partial facturen worden geraakt. Volledig betaalde,
+    verwijderde en 'draft' facturen blijven ongewijzigd zodat historie/
+    boekhouding niet met terugwerkende kracht wordt aangepast.
+
+    Retourneert `{updated: N, skipped: M, mode: <str>}`.
+    """
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
+    cs_doc = await db.company_settings.find_one({"company_id": cid}, {"_id": 0}) or {}
+    inv_cfg = (cs_doc.get("invoicing") or {})
+    cur = db.invoices.find(
+        {"company_id": cid, "status": {"$in": ["open", "partial"]}},
+        {"_id": 0, "id": 1, "period_month": 1, "period_year": 1},
+    )
+    updated = 0
+    skipped = 0
+    async for inv in cur:
+        pm, py = inv.get("period_month"), inv.get("period_year")
+        if not (isinstance(pm, int) and isinstance(py, int) and 1 <= pm <= 12):
+            skipped += 1
+            continue
+        try:
+            new_invoice_date, new_due_date = _compute_invoice_dates(pm, py, inv_cfg)
+        except Exception:
+            skipped += 1
+            continue
+        await db.invoices.update_one(
+            {"id": inv["id"], "company_id": cid},
+            {"$set": {
+                "invoice_date": new_invoice_date,
+                "due_date": new_due_date,
+                "updated_at": iso(now_utc()),
+            }},
+        )
+        updated += 1
+    asyncio.create_task(_sse_broadcast(cid, {
+        "type": "change", "path": "/api/invoices", "method": "POST",
+    }))
+    return {
+        "updated": updated,
+        "skipped": skipped,
+        "mode": inv_cfg.get("mode") or "grace_workdays",
+    }
+
+
 @api.post("/invoices/{invoice_id}/apply-credit")
 async def apply_credit_to_invoice(invoice_id: str, user=Depends(get_current_user)):
     """Verrekent beschikbaar krediet (vooruitbetalingen + overflow-krediet) van

@@ -526,8 +526,70 @@ export function InvoicingForm({ initial }) {
         </ol>
         <p className="mt-2 text-slate-500">De achtergrond-taak loopt elk uur — meestal binnen 1 uur na de deadline staat alles klaar.</p>
       </div>
+
+      <RecomputeDueDatesButton />
+
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
+  );
+}
+
+// Knop om de vervaldata van alle open+partial facturen bij te werken naar
+// de HUIDIGE instellingen. Handig na een wijziging in de factureringsmodus.
+function RecomputeDueDatesButton() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const run = async () => {
+    setBusy(true); setErr(''); setResult(null);
+    try {
+      const { data } = await api.post('/invoices/recompute-due-dates');
+      setResult(data);
+    } catch (e) {
+      setErr(e?.response?.data?.detail || 'Herberekenen is mislukt.');
+    } finally {
+      setBusy(false);
+      setConfirmOpen(false);
+    }
+  };
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+      <p className="font-bold text-amber-800">Bestaande openstaande facturen bijwerken</p>
+      <p className="text-slate-600">
+        Bestaande facturen behouden de vervaldatum waarmee ze zijn aangemaakt.
+        Klik hieronder om de vervaldatum van alle <b>open</b> en <b>gedeeltelijk betaalde</b>
+        facturen te herberekenen volgens de instellingen hierboven. Betaalde en
+        verwijderde facturen worden overgeslagen.
+      </p>
+      {result && (
+        <p className="text-emerald-700 font-semibold" data-testid="recompute-result">
+          ✓ {result.updated} facturen bijgewerkt{result.skipped ? ` — ${result.skipped} overgeslagen` : ''}.
+        </p>
+      )}
+      {err && <p className="text-red-600 font-semibold" data-testid="recompute-err">{err}</p>}
+      {!confirmOpen ? (
+        <button type="button" onClick={() => setConfirmOpen(true)}
+          data-testid="recompute-btn"
+          className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg px-4 py-2 text-xs">
+          Vervaldata herberekenen
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-amber-800 font-semibold">Weet je het zeker?</span>
+          <button type="button" onClick={run} disabled={busy}
+            data-testid="recompute-confirm"
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg px-4 py-2 text-xs disabled:opacity-50">
+            {busy ? 'Bezig…' : 'Ja, bijwerken'}
+          </button>
+          <button type="button" onClick={() => setConfirmOpen(false)} disabled={busy}
+            data-testid="recompute-cancel"
+            className="inline-flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-4 py-2 text-xs">
+            Annuleren
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
