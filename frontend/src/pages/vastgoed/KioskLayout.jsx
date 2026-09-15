@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -2297,28 +2298,24 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // iOS/Android: overlay dekt bij RUST altijd het hele scherm (top:0+bottom:0
-  // + 100dvh) — geen oranje strip meer onderaan door safe-area verschillen.
-  // Bij KEYBOARD OPEN switchen we naar visualViewport metrieken zodat de
-  // modal netjes boven het keyboard eindigt.
+  // Nu de modal via een portal buiten motion.div gerenderd wordt, werkt
+  // `position: fixed` weer relatief tot de viewport (motion.div gebruikt
+  // transform, wat fixed-descendants normaal aan de parent bindt). We
+  // hoeven alleen nog visualViewport te tracken voor het keyboard-scenario
+  // op iOS zodat de modal boven het keyboard eindigt.
   useEffect(() => {
     const vv = window.visualViewport;
     const el = overlayRef.current;
-    if (!el) return undefined;
+    if (!el || !vv) return undefined;
     const update = () => {
-      if (!vv) return;
-      const winH = window.innerHeight;
-      const kbdOpen = vv.height + 40 < winH;
+      const kbdOpen = vv.height + 40 < window.innerHeight;
       if (kbdOpen) {
-        // Keyboard actief → gebruik visualViewport metrieken.
         el.style.top = `${vv.offsetTop}px`;
         el.style.bottom = 'auto';
         el.style.height = `${vv.height}px`;
         el.style.left = `${vv.offsetLeft}px`;
         el.style.width = `${vv.width}px`;
       } else {
-        // Rust → laat CSS het overnemen (inset:0 + 100dvh). Clear alle
-        // inline styles zodat de default-styles weer werken.
         el.style.top = '';
         el.style.bottom = '';
         el.style.height = '';
@@ -2327,19 +2324,11 @@ function KasgeldMutationModal({ onClose, onSaved }) {
       }
     };
     update();
-    if (vv) {
-      vv.addEventListener('resize', update);
-      vv.addEventListener('scroll', update);
-    }
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
     return () => {
-      if (vv) {
-        vv.removeEventListener('resize', update);
-        vv.removeEventListener('scroll', update);
-      }
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
     };
   }, []);
 
@@ -2362,7 +2351,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     ? (type === 'in' ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : 'border-red-400 text-red-700 bg-red-50')
     : 'border-slate-200 text-slate-300 bg-slate-50';
 
-  return (
+  return createPortal((
     <div ref={overlayRef}
       onClick={onClose}
       className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
@@ -2454,7 +2443,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 // =====================================================================
