@@ -12568,6 +12568,110 @@ async def cash_balance(user=Depends(get_current_user)):
 
 
 # =====================================================================
+# Kiosk-scoped kasgeld — voor Kiosk medewerkers die vanuit de kiosk-app
+# saldo kunnen bekijken en handmatige mutaties (bv. contante uitgave voor
+# schoonmaakspullen) kunnen registreren zonder naar de beheerder-app.
+# Auth: kiosk_token (geen access_token) — company scope komt uit sessie,
+# NIET uit de query-string, zodat medewerkers geen data van andere
+# bedrijven kunnen zien.
+# =====================================================================
+@api.get("/kiosk/kasgeld/balance")
+async def kiosk_cash_balance(_session=Depends(get_kiosk_session)):
+    sc = kiosk_scope(_session)
+    balances: dict[str, float] = {"SRD": 0.0, "USD": 0.0, "EUR": 0.0}
+    if not sc:
+        return balances
+    async for r in db.kasgeld.aggregate([
+        {"$match": sc},
+        {"$group": {"_id": {"currency": "$currency", "type": "$type"}, "total": {"$sum": "$amount"}}},
+    ]):
+        cur = r["_id"]["currency"]
+        sign = 1 if r["_id"]["type"] == "in" else -1
+        balances[cur] = balances.get(cur, 0) + sign * r["total"]
+    async for r in db.payments.aggregate([
+        {"$match": {**sc, "status": "approved"}},
+        {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}}},
+    ]):
+        cur = r["_id"] or "SRD"
+        balances[cur] = balances.get(cur, 0) + float(r.get("total") or 0)
+    return balances
+
+
+@api.get("/kiosk/kasgeld", response_model=List[CashEntryOut])
+async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
+    """Recente kasmutaties (handmatig + betalingen als unified feed).
+    Zelfde vorm als admin `/kasgeld` maar geautoriseerd via kiosk_token.
+    Beperkt tot laatste 200 items om kiosk-devices niet te overbelasten."""
+    sc = kiosk_scope(_session)
+    manual = await db.kasgeld.find(sc, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for m in manual:
+        m.setdefault("source", "kasgeld")
+        m.setdefault("entry_date", m.get("created_at"))
+    payments: list[dict] = []
+    async for p in db.payments.find(
+        {**sc, "status": "approved"},
+        {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
+         "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
+         "tenant_id": 1},
+    ).sort("paid_at", -1).limit(100):
+        tenant_name = ""
+        if p.get("tenant_id"):
+            t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
+            tenant_name = (t or {}).get("name") or ""
+        paid_iso = p.get("paid_at") or iso(now_utc())
+        payments.append({
+            "id": f"pay-{p['id']}",
+            "type": "in",
+            "amount": float(p.get("amount") or 0),
+            "currency": p.get("currency") or "SRD",
+            "description": f"{p.get('receipt_number') or ''} {('— ' + tenant_name) if tenant_name else ''}".strip(),
+            "category": p.get("category") or "huur",
+            "method": p.get("method") or "",
+            "created_at": paid_iso,
+            "entry_date": paid_iso,
+            "source": "payment",
+            "payment_id": p["id"],
+            "payment_ref": p.get("receipt_number"),
+        })
+    combined = manual + payments
+    combined.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return combined[:200]
+
+
+@api.post("/kiosk/kasgeld", response_model=CashEntryOut)
+async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_session)):
+    """Nieuwe kasgeld-mutatie geregistreerd vanuit de Kiosk (medewerker).
+    Vereist een geldig kiosk_token. Company_id komt uit de sessie zodat
+    kruis-bedrijf schrijven onmogelijk is."""
+    cid = _session.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    payload = body.model_dump()
+    raw = (payload.pop("entry_date", None) or "").strip()
+    now_iso = iso(now_utc())
+    entry_iso = now_iso
+    if raw:
+        try:
+            if "T" in raw:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            else:
+                dt = datetime.fromisoformat(f"{raw}T12:00:00+00:00")
+            entry_iso = iso(dt)
+        except Exception:
+            entry_iso = now_iso
+    doc = {
+        "id": new_id(), "company_id": cid, **payload,
+        "created_at": now_iso,
+        "entry_date": entry_iso,
+        # Audit: wie heeft dit vanuit de Kiosk ingebracht?
+        "created_via": "kiosk",
+    }
+    await db.kasgeld.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+# =====================================================================
 # AES-256 secure receipt + QR verification
 # =====================================================================
 from pdf_security import secure_pdf, make_verify_token, verify_token  # noqa: E402

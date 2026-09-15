@@ -41,13 +41,19 @@ function sortApartments(a, b) {
 // =====================================================================
 // Mobile header buttons (Beheerder + Uit) — shown inline on mobile only
 // =====================================================================
-function MobileHeaderButtons({ onAdmin, onExit }) {
+function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
   return (
     <div className="flex items-center gap-2 md:hidden">
       {onExit && (
         <button onClick={onExit} data-testid="kiosk-lock-btn"
           className="flex items-center gap-2 text-white font-bold bg-white/20 active:bg-white/30 backdrop-blur-sm rounded-xl px-4 py-2.5 min-h-[44px]">
           <LogOut className="w-4 h-4" /> <span className="text-sm">Uit</span>
+        </button>
+      )}
+      {onKasgeld && (
+        <button onClick={onKasgeld} data-testid="kiosk-kasgeld-btn"
+          className="flex items-center gap-2 text-emerald-700 font-bold bg-white active:bg-emerald-50 rounded-xl px-4 py-2.5 min-h-[44px] shadow-sm">
+          <Wallet className="w-4 h-4" /> <span className="text-sm">Kasgeld</span>
         </button>
       )}
       {onAdmin && (
@@ -63,7 +69,7 @@ function MobileHeaderButtons({ onAdmin, onExit }) {
 // =====================================================================
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
-function ApartmentSelect({ onSelect, onAdmin, onExit }) {
+function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
   const navigate = useBrandedNavigate();
   const [apartments, setApartments] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -135,7 +141,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit }) {
     return (
       <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
         <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
-          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} />
+          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
           <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
           <div className="w-16" />
         </div>
@@ -196,7 +202,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit }) {
               <ArrowLeft className="w-3.5 h-3.5" /> <span className="text-xs">Locaties</span>
             </button>
           )}
-          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} />
+          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         </div>
         <span className="text-sm sm:text-base font-semibold text-white">
           {currentLocation ? `${currentLocation.name} · Kies uw appartement` : 'Kies uw appartement'}
@@ -2178,6 +2184,196 @@ function RowSlim({ label, value }) {
 }
 
 // =====================================================================
+// KasgeldPanel — kiosk-medewerker kan saldo bekijken + nieuwe mutatie
+// registreren zonder naar de beheerder. Read-only feed van laatste 200
+// mutaties (handmatig + betalingen). Nieuwe mutatie POST'ed naar het
+// kiosk-scoped endpoint /api/kiosk/kasgeld dat het kiosk_token accepteert.
+// =====================================================================
+function KasgeldPanel({ onBack }) {
+  const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [showForm, setShowForm] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr('');
+    try {
+      const [b, l] = await Promise.all([
+        api.get('/kiosk/kasgeld/balance'),
+        api.get('/kiosk/kasgeld'),
+      ]);
+      setBalances(b.data || { SRD: 0, USD: 0, EUR: 0 });
+      setItems(Array.isArray(l.data) ? l.data : []);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
+      <div className="flex items-center justify-between gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
+        <button onClick={onBack} data-testid="kasgeld-back"
+          className="flex items-center gap-2 text-white font-bold bg-white/20 rounded-xl px-4 py-2.5 min-h-[44px]">
+          <ArrowLeft className="w-4 h-4" /> <span className="text-sm">Terug</span>
+        </button>
+        <span className="text-sm sm:text-base font-black text-white uppercase tracking-widest">Kasgeld</span>
+        <button onClick={load} data-testid="kasgeld-refresh"
+          className="text-white bg-white/20 rounded-xl px-3 py-2.5 min-h-[44px]" title="Vernieuwen">
+          <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto pb-4 max-w-3xl w-full mx-auto space-y-4">
+        {/* Saldo per valuta */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {['SRD', 'USD', 'EUR'].map((cur) => (
+            <div key={cur} className="bg-white rounded-2xl p-4 text-center shadow-lg" data-testid={`kasgeld-bal-${cur}`}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{cur}</p>
+              <p className="text-lg sm:text-xl font-black text-slate-900 mt-1 font-mono tabular-nums">
+                {(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          ))}
+        </div>
+        {/* Nieuwe mutatie */}
+        <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
+          className="w-full h-14 rounded-2xl bg-white text-orange-600 font-black text-base inline-flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition">
+          <Wallet className="w-5 h-5" /> Nieuwe mutatie
+        </button>
+        {/* Recente mutaties */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Recente mutaties</h3>
+            <span className="text-[10px] font-bold text-slate-400">{items.length}</span>
+          </div>
+          {err && <p className="p-4 text-xs text-red-600">{err}</p>}
+          {!err && loading && <p className="p-4 text-center text-slate-500 text-sm">Laden…</p>}
+          {!err && !loading && items.length === 0 && (
+            <p className="p-4 text-center text-slate-400 text-sm">Nog geen mutaties.</p>
+          )}
+          <div className="divide-y divide-slate-100 max-h-[50vh] overflow-auto">
+            {items.slice(0, 50).map((it) => {
+              const isIn = it.type === 'in';
+              const d = it.entry_date || it.created_at;
+              return (
+                <div key={it.id} className="flex items-center gap-3 px-4 py-3" data-testid={`kasgeld-row-${it.id}`}>
+                  <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {isIn ? <ArrowRight className="w-4 h-4 rotate-[-45deg]" /> : <ArrowRight className="w-4 h-4 rotate-[135deg]" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{it.description || it.category || '—'}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : ''}
+                      {it.source === 'payment' && ' · Betaling'}
+                      {it.method ? ` · ${it.method}` : ''}
+                    </p>
+                  </div>
+                  <p className={`text-sm font-black whitespace-nowrap tabular-nums ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {isIn ? '+' : '-'}{it.currency} {Number(it.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {showForm && (
+        <KasgeldMutationModal onClose={() => setShowForm(false)}
+          onSaved={() => { setShowForm(false); load(); }} />
+      )}
+    </div>
+  );
+}
+
+function KasgeldMutationModal({ onClose, onSaved }) {
+  const [type, setType] = useState('in');
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('SRD');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('overig');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const save = async () => {
+    const n = parseFloat(String(amount).replace(',', '.'));
+    if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
+    if (!description.trim()) { setErr('Omschrijving is verplicht'); return; }
+    setSaving(true); setErr('');
+    try {
+      await api.post('/kiosk/kasgeld', {
+        type, amount: n, currency,
+        description: description.trim(), category,
+      });
+      onSaved && onSaved();
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" data-testid="kasgeld-form">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
+          <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
+            className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            Inkomend
+          </button>
+          <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
+            className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            Uitgaand
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {['SRD', 'USD', 'EUR'].map((c) => (
+            <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
+              className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              {c}
+            </button>
+          ))}
+        </div>
+        <label className="block">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
+          <input type="number" inputMode="decimal" min="0" step="0.01"
+            value={amount} onChange={(e) => setAmount(e.target.value)}
+            data-testid="kasgeld-input-amount"
+            className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-lg font-bold tabular-nums" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
+          <input value={description} onChange={(e) => setDescription(e.target.value)}
+            data-testid="kasgeld-input-desc"
+            className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+            data-testid="kasgeld-input-cat"
+            className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm bg-white">
+            <option value="overig">Overig</option>
+            <option value="onderhoud">Onderhoud</option>
+            <option value="schoonmaak">Schoonmaak</option>
+            <option value="salaris">Salaris</option>
+            <option value="kantoor">Kantoor</option>
+            <option value="brandstof">Brandstof</option>
+          </select>
+        </label>
+        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
+        <button onClick={save} disabled={saving} data-testid="kasgeld-save"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
 // Main
 // =====================================================================
 export default function KioskLayout() {
@@ -2634,7 +2830,12 @@ export default function KioskLayout() {
           )}
           {step === 'select' && (
             <ApartmentSelect onSelect={(a) => { setApartment(a); setStep('overview'); }}
-              onAdmin={hasAdminAccess ? adminMode : null} onExit={exit} />
+              onAdmin={hasAdminAccess ? adminMode : null}
+              onKasgeld={() => setStep('kasgeld')}
+              onExit={exit} />
+          )}
+          {step === 'kasgeld' && (
+            <KasgeldPanel onBack={() => setStep('select')} />
           )}
           {step === 'overview' && apartment && (
             <TenantOverview apartment={apartment} onBack={reset}
