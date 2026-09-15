@@ -2298,12 +2298,46 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // De modal wordt via portal buiten motion.div gerenderd, dus `fixed
-  // inset-0` bindt weer aan de viewport. Combined met de viewport-meta
-  // `interactive-widget=resizes-content` (in index.html) krimpt `100dvh`
-  // automatisch mee met het iOS-keyboard — dus geen visualViewport-hack
-  // meer nodig en geen body-lock die de pagina laat springen.
-  useEffect(() => { /* placeholder — bewust leeg gelaten, zie comment */ }, []);
+  // iOS Safari bug: `100dvh` blijft soms "hangen" op de kleinere keyboard-
+  // waarde NADAT het keyboard sluit → daarna zichtbare orange strook onder
+  // de modal. Fix: manage de hoogte in JS via window.innerHeight (die
+  // correct terug-groeit) + luister naar visualViewport.resize + focusout
+  // + window.resize zodat we bij ELK relevant event de hoogte hersynchen.
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return undefined;
+    const vv = window.visualViewport;
+    const apply = () => {
+      // Neem de grootste van window.innerHeight en visualViewport.height
+      // zodat we bij keyboard-open (window blijft groot, vv krimpt) alleen
+      // schrimpen als beide krimpen. Bij interactive-widget=resizes-content
+      // krimpt window.innerHeight WEL mee → dan is die de bron van waarheid.
+      const h = window.innerHeight;
+      el.style.height = `${h}px`;
+    };
+    apply();
+    // requestAnimationFrame zodat we op de volgende paint synchen (nadat
+    // iOS de viewport heeft aangepast na keyboard-transitie).
+    const applyRAF = () => requestAnimationFrame(apply);
+    window.addEventListener('resize', applyRAF);
+    window.addEventListener('orientationchange', applyRAF);
+    if (vv) {
+      vv.addEventListener('resize', applyRAF);
+    }
+    // focusout = input loses focus → keyboard start met sluiten. Sync na
+    // een korte delay zodat iOS klaar is met de resize.
+    const onFocusOut = () => {
+      setTimeout(apply, 50);
+      setTimeout(apply, 300);
+    };
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      window.removeEventListener('resize', applyRAF);
+      window.removeEventListener('orientationchange', applyRAF);
+      if (vv) vv.removeEventListener('resize', applyRAF);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
 
   const save = async () => {
     const n = parseFloat(String(amount).replace(',', '.'));
@@ -2329,6 +2363,8 @@ function KasgeldMutationModal({ onClose, onSaved }) {
       onClick={onClose}
       className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
       style={{ height: '100dvh' }}
+      /* fallback voor als de useEffect nog niet gedraaid heeft;
+         daarna neemt inline `style.height = window.innerHeight` het over */
       data-testid="kasgeld-overlay">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
