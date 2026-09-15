@@ -764,11 +764,23 @@ async def _live_sync_broadcast(request: Request, call_next):
         if response.status_code >= 400:
             return response
         path = request.url.path or ""
-        # Alleen mutaties op admin/company data — sluit auth/kiosk/public/events uit.
+        # Alleen mutaties op admin/company data — sluit auth/public/events uit.
+        # Kiosk-endpoints doen we WEL broadcasten (kasgeld/payment door
+        # medewerker moet live bij admin verschijnen), behalve de high-
+        # frequency polling-endpoints die anders de bus zouden vervuilen.
         if not path.startswith("/api/"):
             return response
-        skip = ("/api/auth/", "/api/kiosk/", "/api/public/", "/api/admin/events",
-                "/api/push/", "/api/landing/asset/", "/api/tenants/ocr-id-card")
+        skip = (
+            "/api/auth/",
+            "/api/public/",
+            "/api/admin/events",
+            "/api/push/",
+            "/api/landing/asset/",
+            "/api/tenants/ocr-id-card",
+            # Kiosk high-frequency / auth endpoints — GEEN broadcast:
+            "/api/kiosk/customer-display",        # heartbeat elke 1.5s
+            "/api/kiosk/employee-verify",         # PIN check, geen data-mutatie
+        )
         if any(path.startswith(s) for s in skip):
             return response
 

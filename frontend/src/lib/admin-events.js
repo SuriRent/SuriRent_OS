@@ -151,6 +151,14 @@ function _globalInvalidate(data) {
   if (swrKey.startsWith('/tenants') || swrKey.startsWith('/apartments')) {
     crossInvalidate.push('/tenants', '/apartments');
   }
+  // Kiosk-endpoints → mappen naar hun admin-equivalenten zodat een
+  // kiosk-medewerker actie de admin-schermen live update.
+  if (swrKey.startsWith('/kiosk/kasgeld')) {
+    crossInvalidate.push('/kasgeld', '/kasgeld/balance');
+  }
+  if (swrKey.startsWith('/kiosk/payments')) {
+    crossInvalidate.push('/payments', '/payments?status=pending_approval', '/invoices', '/tenants', '/payment-plans?status=active');
+  }
   crossInvalidate.forEach((base) => {
     try {
       swrGlobalMutate(

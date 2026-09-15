@@ -1,6 +1,34 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-14) — SSE latency + Kiosk broadcast + Kasgeld modal UX
+Cross-replica SSE was traag (soms minuten voordat device B updates zag) door meerdere factoren die nu opgelost zijn:
+
+**Backend (`event_bus.py` + `server.py`)**
+- Tail-loop polling: **200ms → 50ms** (empty batch), burst-interval **20ms → 5ms**
+- SSE handshake `event: ready` → `data: {"type":"ready"}` — client krijgt 'em via `onmessage`
+- SSE heartbeat `: heartbeat` (comment, silent) → `data: {"type":"heartbeat"}` — client kan silent-dead connectie detecteren
+- Middleware `/api/kiosk/` skip **opgeheven** → kiosk-medewerker mutaties (kasgeld, payments) triggeren nu ook admin SSE live-update. Alleen `customer-display` (heartbeat 1.5s) en `employee-verify` blijven uitgesloten
+
+**Client (`admin-events.js`)**
+- Debug logging via `window.__sseDebug(true)` — toont `[SSE +Xms]` met event/invalidate/refetch flow in console
+- **Watchdog** — elke 10s check: >40s geen event/heartbeat + tab visible → force reconnect + `_forceFullRevalidate()` (fix voor iOS Safari silent-dead EventSource)
+- `_lastMessageAt` tracking per bericht
+- Skip SWR-refresh voor `type: heartbeat`/`ready`
+- Cross-invalidatie voor kiosk-endpoints → admin-equivalenten: `/kiosk/kasgeld` → `/kasgeld`+`/kasgeld/balance`, `/kiosk/payments` → `/payments`+etc
+
+**Kiosk Kasgeld Modal (`KioskLayout.jsx`)**
+- **NumPad** geïntegreerd voor Bedrag → geen OS-toetsenbord meer bij bedrag invoer op iOS
+- **`visualViewport` API** — modal-hoogte tracked exact aan zichtbaar viewport zodat sticky header + Opslaan-knop altijd zichtbaar blijven met keyboard open
+- Full-screen bottom-sheet layout met scrollable body
+- **Desktop Kasgeld-knop** toegevoegd aan onderbalk (naast Beheerder/Uit) bij `step==='select'` → medewerker op tablet/desktop kan Kasgeld ook bereiken
+
+**Gemeten latency** (curl end-to-end op preview URL):
+- POST /api/kasgeld → 200 in ~140ms
+- SSE change event ontvangen: **+15-50ms** na POST-response
+
+
+
 ## Latest Fix (2026-02-13) — Plan-limieten daadwerkelijk afdwingen
 De limieten & functies in SaaS Pakketten (Kiosk/OCR/Shelly/Branding/Backup) werden opgeslagen in DB maar niet gehandhaafd op de endpoints — Starter-bedrijven konden bijvoorbeeld nog steeds via Kiosk-PIN inloggen ook al stond `allow_kiosk=false`.
 
