@@ -58,6 +58,21 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
   const goesToCredit = Math.max(0, surplus - otherOpenTotal);
   const hasSurplus = surplus > 0.001;
 
+  // Totalen die getoond worden in "Nieuwe" (showAllOpen) modus: som over
+  // álle openstaande maanden van deze huurder, inclusief deze factuur.
+  // In enkel-factuur modus (klik op één rij) blijven we bij deze factuur.
+  const allTotal = useMemo(
+    () => Number(invoice.amount || 0)
+      + otherOpenInvoices.reduce((s, i) => s + Number(i.amount || 0), 0),
+    [invoice, otherOpenInvoices],
+  );
+  const allPaid = useMemo(
+    () => Number(invoice.paid_amount || 0)
+      + otherOpenInvoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0),
+    [invoice, otherOpenInvoices],
+  );
+  const allRemaining = remaining + otherOpenTotal;
+
   const buildWaMessage = (r) => {
     const period = (r?.period_month && r?.period_year)
       ? `${MONTHS_NL[r.period_month - 1]} ${r.period_year}` : '';
@@ -230,34 +245,42 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
         </div>
         <p className="text-sm text-slate-500">
           <b className="text-slate-900">{tenantName || invoice.tenant_name}</b>
-          {' · '}
-          {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
-          {' · '}
-          <span className="text-slate-400">{invoice.invoice_number}</span>
+          {showAllOpen ? (
+            <>{' · '}<span className="text-slate-400">Alle openstaande</span></>
+          ) : (
+            <>
+              {' · '}
+              {MONTHS_NL[invoice.period_month - 1]} {invoice.period_year}
+              {' · '}
+              <span className="text-slate-400">{invoice.invoice_number}</span>
+            </>
+          )}
         </p>
       </KeyboardSafeModal.Header>
 
       <KeyboardSafeModal.Body>
           {/* Openstaand overzicht. In "Alle openstaande" modus (via Nieuwe-
-              knop bovenaan) toont "Totaal factuur" de som van álle openstaande
-              maanden van deze huurder. In enkel-factuur modus (klik op rij)
-              tonen we netjes alleen de bedragen van deze specifieke factuur. */}
+              knop bovenaan) tonen we de som van álle openstaande maanden;
+              in enkel-factuur modus (klik op rij) tonen we alleen deze
+              specifieke factuur. */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
             <div className="flex justify-between mb-1">
-              <span className="text-slate-500">Totaal factuur</span>
+              <span className="text-slate-500">Totaal factuur{showAllOpen ? ' (alle open)' : ''}</span>
               <span className="font-bold text-slate-700" data-testid="quickpay-total-all">
-                {fmtMoney(showAllOpen ? (remaining + otherOpenTotal) : (invoice.amount || 0), invoice.currency)}
+                {fmtMoney(showAllOpen ? allTotal : (invoice.amount || 0), invoice.currency)}
               </span>
             </div>
             <div className="flex justify-between mb-1">
               <span className="text-slate-500">Reeds betaald</span>
-              <span className="font-bold text-slate-700">{fmtMoney(invoice.paid_amount || 0, invoice.currency)}</span>
+              <span className="font-bold text-slate-700">
+                {fmtMoney(showAllOpen ? allPaid : (invoice.paid_amount || 0), invoice.currency)}
+              </span>
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-200">
-              <span className="text-slate-900 font-bold">
-                Nog te betalen{showAllOpen ? ` (${MONTHS_NL[invoice.period_month - 1]})` : ''}
+              <span className="text-slate-900 font-bold">Nog te betalen</span>
+              <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">
+                {fmtMoney(showAllOpen ? allRemaining : remaining, invoice.currency)}
               </span>
-              <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">{fmtMoney(remaining, invoice.currency)}</span>
             </div>
           </div>
 
