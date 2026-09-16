@@ -10125,18 +10125,23 @@ async def kiosk_tenant_reminder_voice_mp3(
 
     # Bedrag uitspreken: "duizend" is duidelijker dan "1.000,00" voor TTS.
     def amount_words(v: float) -> str:
-        # TTS leest "18200,00" goed uit als "achttienduizend tweehonderd komma
-        # nul nul". We laten het decimaal-gedeelte weg als het .00 is.
+        # TTS leest cijfers vaak los uit ("acht vier drie twee"). num2words
+        # zet het bedrag om naar een Nederlands woord ("achtduizendvijf­
+        # honderd") zodat de stem het bedrag correct uitspreekt.
+        from num2words import num2words
         v = round(v, 2)
-        if abs(v - round(v)) < 0.01:
-            return f"{int(round(v))}"
-        return f"{v:.2f}".replace(".", ",")
+        euros = int(v)
+        cents = int(round((v - euros) * 100))
+        words = num2words(euros, lang="nl")
+        if cents:
+            words += f" komma {num2words(cents, lang='nl')}"
+        return words
 
     plural = "factuur" if n_open == 1 else "facturen"
     text = (
         f"Geachte {t.get('name') or 'huurder'}, "
         f"u heeft {n_open} openstaande {plural} "
-        f"met een totaalbedrag van {cur} {amount_words(total_due)}. "
+        f"met een totaalbedrag van {amount_words(total_due)} {cur}. "
         f"Wij verzoeken u vriendelijk dit voor {due_txt} te voldoen. "
         f"Met vriendelijke groet, {company_name}."
     )
