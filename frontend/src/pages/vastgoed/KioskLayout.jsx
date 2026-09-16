@@ -8,6 +8,7 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
+  MessageCircle, StickyNote, Trash2, Plus,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -246,6 +247,197 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
 }
 
 // =====================================================================
+// ShareOverviewButton — genereert JPG van financieel overzicht en deelt
+// via Web Share API (WhatsApp verschijnt als target). Op desktop /
+// browsers zonder file-share support: fallback naar wa.me deeplink.
+// =====================================================================
+function ShareOverviewButton({ tenantId, tenantName, tenantPhone }) {
+  const [busy, setBusy] = useState(false);
+  const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
+  const share = async () => {
+    setBusy(true);
+    try {
+      const resp = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/tenants/${tenantId}/financial-overview.jpg`,
+        { credentials: 'include' },
+      );
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const file = new File([blob], `overzicht-${tenantName || 'huurder'}.jpg`,
+        { type: 'image/jpeg' });
+      const shareText = `Hallo ${tenantName || ''}, hierbij uw actuele financieel overzicht.`;
+      if (typeof navigator.canShare === 'function' &&
+          navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file], text: shareText,
+          title: 'Financieel overzicht',
+        });
+      } else if (phoneDigits.length >= 7) {
+        // Fallback: WhatsApp openen met tekst; medewerker moet foto handmatig
+        // toevoegen (browser support nog niet universeel voor file-share).
+        const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
+        window.open(url, '_blank', 'noopener');
+        // Ook JPG in nieuw tabblad zodat medewerker 'em kan opslaan/kopiëren.
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank', 'noopener');
+      } else {
+        // Geen WhatsApp-nummer, geen file-share → download.
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank', 'noopener');
+      }
+    } catch (e) {
+      if (e && e.name !== 'AbortError') {
+        // eslint-disable-next-line no-console
+        console.error('[share overview] failed:', e);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button onClick={share} disabled={busy} data-testid="overview-share-btn"
+      className="px-3 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-60">
+      {busy
+        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Delen…</>
+        : <><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</>}
+    </button>
+  );
+}
+
+// =====================================================================
+// NotesButton — toont badge met aantal notities, opent NotesModal.
+// =====================================================================
+function NotesButton({ tenantId, tenantName }) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    api.get(`/kiosk/tenants/${tenantId}/notes`)
+      .then((r) => { if (mounted) setCount((r.data || []).length); })
+      .catch(() => { if (mounted) setCount(0); });
+    return () => { mounted = false; };
+  }, [tenantId]);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} data-testid="overview-notes-btn"
+        className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5">
+        <StickyNote className="w-3.5 h-3.5" />
+        Notitie
+        {count !== null && count > 0 && (
+          <span className="bg-orange-500 text-white rounded-full min-w-[18px] h-[18px] px-1 text-[10px] font-black flex items-center justify-center">{count}</span>
+        )}
+      </button>
+      {open && (
+        <NotesModal
+          tenantId={tenantId} tenantName={tenantName}
+          onClose={() => setOpen(false)}
+          onCountChange={setCount} />
+      )}
+    </>
+  );
+}
+
+function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
+  const [notes, setNotes] = useState([]);
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/kiosk/tenants/${tenantId}/notes`);
+      setNotes(r.data || []);
+      onCountChange && onCountChange((r.data || []).length);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setLoading(false); }
+  }, [tenantId, onCountChange]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    const t = text.trim();
+    if (!t) return;
+    setSaving(true); setErr('');
+    try {
+      await api.post(`/kiosk/tenants/${tenantId}/notes`, { text: t });
+      setText('');
+      await load();
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Deze notitie verwijderen?')) return;
+    try {
+      await api.delete(`/kiosk/tenants/${tenantId}/notes/${id}`);
+      await load();
+    } catch (e) { setErr(formatError(e)); }
+  };
+
+  return createPortal((
+    <div onClick={onClose} className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4">
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-lg sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[85vh] overflow-hidden"
+        data-testid="notes-modal">
+        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          <div>
+            <h3 className="text-lg font-black text-slate-900">Notities</h3>
+            <p className="text-xs text-slate-500">{tenantName}</p>
+          </div>
+          <button onClick={onClose} data-testid="notes-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-2">
+          <div className="bg-slate-50 rounded-xl p-3">
+            <textarea value={text} onChange={(e) => setText(e.target.value)}
+              data-testid="notes-input"
+              rows={3}
+              placeholder="Bijv. Gebeld met huurder op 15 aug — belooft rest juli-huur af te maken vóór 20 aug."
+              className="w-full text-sm border-2 border-slate-200 rounded-lg p-2 outline-none focus:border-orange-500 resize-none" />
+            <button onClick={add} disabled={saving || !text.trim()}
+              data-testid="notes-add"
+              className="mt-2 w-full h-11 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</>
+                : <><Plus className="w-4 h-4" /> Notitie toevoegen</>}
+            </button>
+          </div>
+
+          {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+          ) : notes.length === 0 ? (
+            <p className="text-center text-xs text-slate-400 py-6">Nog geen notities voor deze huurder.</p>
+          ) : notes.map((n) => (
+            <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-3 group" data-testid={`note-${n.id}`}>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="text-[10px] font-bold text-slate-400">
+                  {new Date(n.created_at).toLocaleString('nl-NL', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                  {n.created_by && <span className="ml-1.5 text-slate-500">· {n.created_by}</span>}
+                </div>
+                <button onClick={() => remove(n.id)} data-testid={`note-delete-${n.id}`}
+                  className="opacity-60 hover:opacity-100 text-red-500">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ), document.body);
+}
+
+// =====================================================================
 // Tenant overview — split-screen
 // =====================================================================
 function TenantOverview({ apartment, onBack, onPay }) {
@@ -380,12 +572,12 @@ function TenantOverview({ apartment, onBack, onPay }) {
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3">
         <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col p-4 sm:p-5 min-w-0">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-2">
             <h3 className="text-base sm:text-lg font-bold text-slate-900">Financieel overzicht</h3>
-            <button data-testid="overview-pdf" disabled
-              className="px-3 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold text-xs flex items-center gap-1.5 disabled:opacity-60 cursor-not-allowed">
-              <Download className="w-3.5 h-3.5" /> PDF
-            </button>
+            <div className="flex items-center gap-1.5">
+              <ShareOverviewButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} />
+              <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
+            </div>
           </div>
           <div className="flex-1 divide-y divide-slate-100">
             {items.map((it) => {

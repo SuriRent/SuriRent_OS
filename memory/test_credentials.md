@@ -18,8 +18,11 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - **Company**: Demo Vastgoed N.V.
 
 ## Kiosk PIN
-- **Default PIN**: `1234`
+- **Default PIN (my-awesome-rentals-bv)**: `4321`
+- **Company slug voor kiosk login**: `my-awesome-rentals-bv` (demo Rentals company)
 - **Login flow**: `/login?target=kiosk` → PIN-pad
+- **API**: `POST /api/auth/kiosk-pin` body `{"pin":"4321","company_slug":"my-awesome-rentals-bv"}`
+- Reset PIN als 'Ongeldige PIN' error verschijnt via: `db.kiosk_pins.update_one({"company_id":<cid>}, {"$set":{"pin_hash":hash_password("4321")}}, upsert=True)` en `db.pin_throttle.delete_many({})`
 
 ## Tenant Portal
 - **URL**: `/huurder` of `/tenant-portal`

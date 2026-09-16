@@ -9876,6 +9876,216 @@ async def kiosk_create_payment(
     return enriched
 
 
+@api.get("/kiosk/tenants/{tenant_id}/financial-overview.jpg")
+async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(get_kiosk_session)):
+    """Rendert het financieel overzicht van de huurder als 1080-brede JPG
+    die de kiosk-medewerker via WhatsApp/Web Share met de huurder kan delen.
+
+    Bewust JPG i.p.v. PDF: op WhatsApp verschijnt een JPG als foto (met
+    preview) terwijl een PDF een klik-om-te-openen bijlage is — voor huurders
+    is de foto veel toegankelijker.
+    """
+    t = await db.tenants.find_one(
+        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+
+    # Data ophalen — hergebruik de kiosk overview logica zoveel mogelijk.
+    apt = None
+    if t.get("apartment_id"):
+        apt = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0})
+    balance = await _calc_balance(t)
+    credit = 0.0
+    async for p in db.payments.find(
+        {"tenant_id": tenant_id, "credit_remaining": {"$gt": 0}, "status": "approved"},
+        {"_id": 0, "credit_remaining": 1},
+    ):
+        credit += float(p.get("credit_remaining") or 0)
+
+    # Open facturen (achterstand + huidig, geen future).
+    invoices: list[dict] = []
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, "status": {"$in": ["open", "partial"]}},
+        {"_id": 0, "period_month": 1, "period_year": 1, "amount": 1,
+         "paid_amount": 1, "due_date": 1, "invoice_number": 1},
+    ).sort([("period_year", 1), ("period_month", 1)]):
+        invoices.append(inv)
+
+    cur = (balance or {}).get("currency") or "SRD"
+    total_due = float((balance or {}).get("total_due") or 0)
+
+    company = await db.companies.find_one(
+        {"id": _session.get("company_id")},
+        {"_id": 0, "name": 1, "branding": 1, "logo_url": 1},
+    ) or {}
+
+    # Bouw de afbeelding met PIL — geen tussenstap via PDF (sneller, geen
+    # externe dependencies zoals poppler nodig). 1080px breed, hoogte auto.
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+    from datetime import datetime
+
+    W = 1080
+    PAD = 60
+    accent = (255, 92, 0)  # #FF5C00
+    try:
+        f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 44)
+        f_h1 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
+        f_body = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
+        f_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+        f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+    except Exception:
+        f_title = f_h1 = f_body = f_bold = f_small = ImageFont.load_default()
+
+    # Bereken hoogte: header 220 + tenant-blok 140 + per invoice 70 +
+    # summary 200 + footer 80 → dynamisch.
+    row_h = 70
+    inv_block_h = 90 + max(1, len(invoices)) * row_h + 40
+    if not invoices:
+        inv_block_h = 140
+    H = 220 + 160 + inv_block_h + 260 + 80
+    img = Image.new("RGB", (W, H), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+
+    # Header — accent band
+    d.rectangle([0, 0, W, 200], fill=accent)
+    d.text((PAD, 55), company.get("name") or "SuriRent", fill="white", font=f_title)
+    d.text((PAD, 120), "Financieel overzicht", fill="white", font=f_h1)
+    stamp = datetime.now().strftime("%d-%m-%Y %H:%M")
+    d.text((W - PAD - 260, 155), f"{stamp}", fill=(255, 255, 255, 220), font=f_small)
+
+    y = 240
+    d.text((PAD, y), (t.get("name") or "—").upper(), fill=(15, 23, 42), font=f_h1)
+    y += 46
+    apt_num = (apt or {}).get("number") or "—"
+    apt_addr = (apt or {}).get("address") or ""
+    d.text((PAD, y), f"HUIS {apt_num}" + (f" · {apt_addr}" if apt_addr else ""),
+           fill=(100, 116, 139), font=f_body)
+    y += 70
+
+    # Openstaande facturen
+    d.text((PAD, y), "Openstaande facturen", fill=(15, 23, 42), font=f_h1)
+    y += 50
+    if not invoices:
+        d.rectangle([PAD, y, W - PAD, y + 60], outline=(200, 220, 200), width=2)
+        d.text((PAD + 20, y + 15), "Geen openstaande facturen — alles voldaan",
+               fill=(16, 122, 90), font=f_body)
+        y += 90
+    else:
+        for inv in invoices:
+            pm, py = inv.get("period_month"), inv.get("period_year")
+            month_nl = _DUTCH_MONTH_ABBR[pm] if isinstance(pm, int) and 1 <= pm <= 12 else "?"
+            label = f"Huur {month_nl} {py}"
+            amt = float(inv.get("amount") or 0)
+            paid = float(inv.get("paid_amount") or 0)
+            rem = max(0.0, amt - paid)
+            due = inv.get("due_date") or ""
+            d.text((PAD, y + 12), label, fill=(15, 23, 42), font=f_bold)
+            if due:
+                d.text((PAD, y + 42), f"Vervalt {due}", fill=(100, 116, 139), font=f_small)
+            amount_txt = f"{cur} {rem:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            # Right-align amount
+            w = d.textlength(amount_txt, font=f_bold)
+            d.text((W - PAD - w, y + 22), amount_txt, fill=accent, font=f_bold)
+            y += row_h
+            d.line([PAD, y - 8, W - PAD, y - 8], fill=(226, 232, 240), width=1)
+        y += 20
+
+    # Totaal
+    d.rectangle([PAD, y, W - PAD, y + 90], fill=(255, 247, 237), outline=accent, width=3)
+    d.text((PAD + 20, y + 24), "Totaal openstaand", fill=(15, 23, 42), font=f_h1)
+    tot_txt = f"{cur} {total_due:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    w = d.textlength(tot_txt, font=f_title)
+    d.text((W - PAD - 20 - w, y + 20), tot_txt, fill=accent, font=f_title)
+    y += 120
+
+    if credit > 0:
+        d.rectangle([PAD, y, W - PAD, y + 70], fill=(236, 253, 245), outline=(16, 185, 129), width=2)
+        cr_txt = f"Positief saldo (vooruitbetaald): {cur} {credit:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        d.text((PAD + 20, y + 20), cr_txt, fill=(6, 95, 70), font=f_body)
+        y += 90
+
+    d.text((PAD, H - 60), "Vragen? Neem contact op met de beheerder.",
+           fill=(148, 163, 184), font=f_small)
+
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=88, optimize=True)
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="image/jpeg",
+        headers={"Content-Disposition": f'inline; filename="overzicht-{tenant_id[:8]}.jpg"'},
+    )
+
+
+# ---------------------------------------------------------------------
+# Tenant notes — kiosk-medewerker kan afspraken/telefoongesprekken loggen
+# ---------------------------------------------------------------------
+class TenantNoteIn(BaseModel):
+    text: str
+
+
+@api.get("/kiosk/tenants/{tenant_id}/notes")
+async def kiosk_tenant_notes_list(tenant_id: str, _session=Depends(get_kiosk_session)):
+    t = await db.tenants.find_one(
+        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    docs = await db.tenant_notes.find(
+        {"tenant_id": tenant_id, "company_id": _session.get("company_id")},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(50).to_list(50)
+    return docs
+
+
+@api.post("/kiosk/tenants/{tenant_id}/notes")
+async def kiosk_tenant_notes_add(tenant_id: str, body: TenantNoteIn,
+                                 _session=Depends(get_kiosk_session)):
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Notitie mag niet leeg zijn")
+    if len(text) > 2000:
+        raise HTTPException(status_code=400, detail="Notitie is te lang (max 2000 tekens)")
+    t = await db.tenants.find_one(
+        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "company_id": _session.get("company_id"),
+        "tenant_id": tenant_id,
+        "text": text,
+        "created_at": iso(now_utc()),
+        "created_by": _session.get("employee_name") or "kiosk",
+    }
+    await db.tenant_notes.insert_one(doc)
+    doc.pop("_id", None)
+    asyncio.create_task(_sse_broadcast(
+        _session.get("company_id"),
+        {"type": "change", "path": "/api/tenants/notes", "method": "POST"},
+    ))
+    return doc
+
+
+@api.delete("/kiosk/tenants/{tenant_id}/notes/{note_id}")
+async def kiosk_tenant_notes_delete(tenant_id: str, note_id: str,
+                                    _session=Depends(get_kiosk_session)):
+    res = await db.tenant_notes.delete_one({
+        "id": note_id,
+        "tenant_id": tenant_id,
+        "company_id": _session.get("company_id"),
+    })
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Notitie niet gevonden")
+    asyncio.create_task(_sse_broadcast(
+        _session.get("company_id"),
+        {"type": "change", "path": "/api/tenants/notes", "method": "DELETE"},
+    ))
+    return {"ok": True}
+
+
 @api.get("/kiosk/tenants/{tenant_id}/payments")
 async def kiosk_tenant_payments(tenant_id: str, _session=Depends(get_kiosk_session)):
     """List recent payments for a tenant (used in kiosk 'Betalingsgeschiedenis' modal)."""
