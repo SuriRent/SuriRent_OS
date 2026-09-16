@@ -1918,7 +1918,7 @@ function NfcCardField({ apartmentId, currentValue }) {
 
 // ============== Apartments ==============
 function ApartmentForm({ initial, onCancel, onSaved }) {
-  const [data, setData] = useState(initial || { number: '', address: '', rent_amount: 0, currency: 'SRD', location_id: '', photo_url: '' });
+  const [data, setData] = useState(initial || { number: '', address: '', rent_amount: 0, currency: 'SRD', location_id: '', photo_url: '', show_tenant_photo: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [locations, setLocations] = useState([]);
@@ -2010,6 +2010,28 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
             label="Foto van het appartement"
             testId="apt-photo"
           />
+
+          {/* Kiosk-weergave toggle: als aan, verschijnt de pasfoto van de
+              huurder op de appartement-picker i.p.v. het standaard-icoon.
+              Alleen zinvol als het appartement bewoond is én de huurder
+              een pasfoto/ID-foto heeft. */}
+          <label className="flex items-start gap-3 p-3 rounded-xl border-2 border-slate-200 hover:border-slate-300 cursor-pointer transition"
+            data-testid="apt-show-tenant-photo-row">
+            <input type="checkbox"
+              checked={!!data.show_tenant_photo}
+              onChange={(e) => setData({ ...data, show_tenant_photo: e.target.checked })}
+              data-testid="apt-show-tenant-photo"
+              className="mt-1 w-5 h-5 accent-orange-500 cursor-pointer" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-900">
+                Toon huurder-pasfoto op Kiosk
+              </div>
+              <div className="text-xs text-slate-500 leading-snug">
+                Vervangt het standaard icoon op de "Kies appartement" pagina
+                door de pasfoto (of ID-kaart foto) van de huidige huurder.
+              </div>
+            </div>
+          </label>
         </div>
       </KeyboardSafeModal.Body>
       <KeyboardSafeModal.Footer className="flex gap-3">

@@ -60,6 +60,10 @@ class ApartmentIn(BaseModel):
     description: Optional[str] = ""
     location_id: Optional[str] = None
     photo_url: Optional[str] = ""
+    # Wanneer True, toont de Kiosk appartement-picker de pasfoto/avatar
+    # van de huidige huurder i.p.v. het standaard icoon. Beheerder zet
+    # dit per appartement aan. Default False — opt-in per appartement.
+    show_tenant_photo: Optional[bool] = False
 
 
 class ApartmentOut(ApartmentIn):

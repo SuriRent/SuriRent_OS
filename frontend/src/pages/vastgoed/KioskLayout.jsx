@@ -219,13 +219,32 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
 
       <div className="flex-1 min-h-0 overflow-auto pb-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 px-1 sm:px-2">
-          {visible.map((a) => (
+          {visible.map((a) => {
+            // Conditioneel: als beheerder `show_tenant_photo` heeft
+            // aangezet EN er is een pasfoto (avatar of ID-kaart) EN het
+            // appartement is bewoond, tonen we die i.p.v. het icoon.
+            const photo = a.show_tenant_photo && a.tenant_id
+              ? (a.tenant_avatar_url || a.tenant_id_photo_url)
+              : null;
+            const photoSrc = photo && !/^https?:/.test(photo)
+              ? `${process.env.REACT_APP_BACKEND_URL}${photo}`
+              : photo;
+            return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
               className="group bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-4 hover:-translate-y-1 hover:bg-white/95 transition border-2 border-transparent hover:border-orange-500 shadow"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <div className="rounded-full flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mb-2 bg-orange-50 group-hover:bg-orange-100">
-                <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
-              </div>
+              {photoSrc ? (
+                <div className="rounded-full overflow-hidden w-10 h-10 sm:w-12 sm:h-12 mb-2 bg-orange-50 ring-2 ring-orange-100 group-hover:ring-orange-300">
+                  <img src={photoSrc} alt={a.tenant_name || ''}
+                    data-testid={`apt-${a.number}-photo`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                </div>
+              ) : (
+                <div className="rounded-full flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mb-2 bg-orange-50 group-hover:bg-orange-100">
+                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+                </div>
+              )}
               <span className="text-base sm:text-lg font-extrabold text-slate-900 mb-0.5">{a.number}</span>
               <div className="flex items-center gap-1 text-slate-400 mb-1">
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -233,7 +252,8 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
               </div>
               <span className="text-xs font-bold text-green-600 bg-green-50 rounded-full px-2.5 py-0.5">Bezet</span>
             </button>
-          ))}
+            );
+          })}
           {visible.length === 0 && (
             <div className="col-span-full bg-white/90 rounded-2xl p-10 text-center">
               <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />

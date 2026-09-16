@@ -9235,9 +9235,17 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
     out = []
     for a in docs:
         tenant_name = None
+        tenant_avatar_url = None
+        tenant_id_photo_url = None
         if a.get("tenant_id"):
-            t = await db.tenants.find_one({"id": a["tenant_id"]}, {"_id": 0, "name": 1})
-            tenant_name = t["name"] if t else None
+            t = await db.tenants.find_one(
+                {"id": a["tenant_id"]},
+                {"_id": 0, "name": 1, "avatar_url": 1, "id_photo_url": 1},
+            )
+            if t:
+                tenant_name = t.get("name")
+                tenant_avatar_url = t.get("avatar_url") or None
+                tenant_id_photo_url = t.get("id_photo_url") or None
         out.append({
             "id": a["id"],
             "number": a["number"],
@@ -9247,6 +9255,9 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
             "status": a["status"],
             "tenant_id": a.get("tenant_id"),
             "tenant_name": tenant_name,
+            "tenant_avatar_url": tenant_avatar_url,
+            "tenant_id_photo_url": tenant_id_photo_url,
+            "show_tenant_photo": bool(a.get("show_tenant_photo") or False),
             "location_id": a.get("location_id"),
         })
     return out
