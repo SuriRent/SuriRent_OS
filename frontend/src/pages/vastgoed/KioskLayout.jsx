@@ -296,7 +296,7 @@ function ShareOverviewButton({ tenantId, tenantName, tenantPhone }) {
   };
   return (
     <button onClick={share} disabled={busy} data-testid="overview-share-btn"
-      className="px-3 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-60">
+      className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-60">
       {busy
         ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Delen…</>
         : <><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</>}
@@ -880,10 +880,48 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     }
   };
 
-  // WhatsApp/SMS versturen — endpoint hergebruikt (was toegevoegd voor UX
-  // ping, maar user vraagt om alleen printen). Behouden voor mogelijk hergebruik
-  // en aangeroepen via `handleWhatsApp`? Nee — verwijderd. Enkel `handlePrint`
-  // is nodig.
+  // WhatsApp: haal kwitantie-JPG op, deel via Web Share API (WhatsApp
+  // verschijnt in de share-sheet). Fallback: wa.me deeplink met tekst +
+  // JPG in nieuw tabblad zodat medewerker 'em handmatig kan bijvoegen.
+  const handleWhatsApp = async (paymentId) => {
+    if (busy[paymentId]) return;
+    setBusy((prev) => ({ ...prev, [paymentId]: 'wa' }));
+    setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig…' } }));
+    try {
+      const resp = await api.get(`/payments/${paymentId}/image`, { responseType: 'blob' });
+      const blob = resp.data;
+      const receipt = (items || []).find((x) => x.id === paymentId);
+      const file = new File([blob], `kwitantie-${receipt?.receipt_number || paymentId}.jpg`,
+        { type: 'image/jpeg' });
+      const shareText = `Hallo ${tenant.name || ''}, hierbij uw kwitantie ${receipt?.receipt_number || ''}` +
+        (receipt?.amount ? ` · ${fmtMoney(receipt.amount, receipt.currency)}` : '') +
+        (receipt?.period_month ? ` · Periode ${MONTHS_NL[receipt.period_month - 1]} ${receipt.period_year}` : '') +
+        '.';
+      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: shareText, title: 'Kwitantie' });
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Gedeeld' } }));
+      } else {
+        const phone = String(tenant.phone || '').replace(/\D/g, '');
+        if (phone.length >= 7) {
+          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`,
+            '_blank', 'noopener');
+        }
+        // Ook JPG in nieuw tabblad zodat medewerker 'em kan opslaan/kopiëren.
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'WhatsApp geopend' } }));
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        setWaState((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
+      } else {
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Delen mislukt' } }));
+      }
+    } finally {
+      setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
@@ -945,15 +983,26 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
-                <button data-testid={`history-print-${p.id}`}
-                  onClick={() => handlePrint(p.id)}
-                  disabled={!!busy[p.id]}
-                  className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
-                  {busy[p.id] === 'print'
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <Printer className="w-3 h-3" />}
-                  Afdruk
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button data-testid={`history-whatsapp-${p.id}`}
+                    onClick={() => handleWhatsApp(p.id)}
+                    disabled={!!busy[p.id]}
+                    className="px-2.5 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-xs flex items-center gap-1">
+                    {busy[p.id] === 'wa'
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <MessageCircle className="w-3 h-3" />}
+                    WhatsApp
+                  </button>
+                  <button data-testid={`history-print-${p.id}`}
+                    onClick={() => handlePrint(p.id)}
+                    disabled={!!busy[p.id]}
+                    className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
+                    {busy[p.id] === 'print'
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Printer className="w-3 h-3" />}
+                    Afdruk
+                  </button>
+                </div>
                 {waState[p.id] && (
                   <p data-testid={`history-print-status-${p.id}`}
                     className={`text-[10px] font-semibold px-1 ${
