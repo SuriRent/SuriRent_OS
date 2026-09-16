@@ -8,7 +8,7 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
-  MessageCircle, StickyNote, Trash2, Plus, Mic,
+  MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -2837,6 +2837,7 @@ function KasgeldPanel({ onBack }) {
 }
 
 function KasgeldMutationModal({ onClose, onSaved }) {
+  const [step, setStep] = useState('amount');  // 'amount' | 'details'
   const [type, setType] = useState('in');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('SRD');
@@ -2845,6 +2846,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
+  const descInputRef = useRef(null);
 
   // ===== iOS-safe modal positioning =====
   // Probleem: op iPhone Safari schuift bij openen van het toetsenbord de
@@ -2965,9 +2967,20 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     };
   }, []);
 
-  const save = async () => {
+  const goNext = () => {
     const n = parseFloat(String(amount).replace(',', '.'));
     if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
+    setErr('');
+    setStep('details');
+    // Focus description field zodra step 2 gerenderd is. Autofocus met
+    // 200ms delay omdat iOS de focus soms negeert als hij tijdens de
+    // transition wordt gezet.
+    setTimeout(() => descInputRef.current?.focus(), 220);
+  };
+
+  const save = async () => {
+    const n = parseFloat(String(amount).replace(',', '.'));
+    if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); setStep('amount'); return; }
     if (!description.trim()) { setErr('Omschrijving is verplicht'); return; }
     setSaving(true); setErr('');
     try {
@@ -3001,78 +3014,127 @@ function KasgeldMutationModal({ onClose, onSaved }) {
             titel toch onder de notch/statusbalk zit. */}
         <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
           style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
-          <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
+          <div className="flex items-center gap-2">
+            {step === 'details' && (
+              <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
+                className="w-9 h-9 -ml-2 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+                <ChevronLeft className="w-5 h-5 text-slate-500" />
+              </button>
+            )}
+            <h3 className="text-lg font-black text-slate-900">
+              {step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
+            </h3>
+          </div>
           <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
-              className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              Inkomend
-            </button>
-            <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
-              className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              Uitgaand
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {['SRD', 'USD', 'EUR'].map((c) => (
-              <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-                className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                {c}
+        {step === 'amount' ? (
+          /* ============ STEP 1: Type + Currency + Bedrag (NumPad) ============ */
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
+                className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                Inkomend
               </button>
-            ))}
-          </div>
-
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
-            <div data-testid="kasgeld-amount-display"
-              className={`w-full h-14 px-4 rounded-xl border-2 flex items-center justify-end text-2xl font-black tabular-nums ${amountBorder}`}>
-              {currency} {amount || '0'}
+              <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
+                className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                Uitgaand
+              </button>
             </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {['SRD', 'USD', 'EUR'].map((c) => (
+                <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
+                  className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
+              <div data-testid="kasgeld-amount-display"
+                className={`w-full h-14 px-4 rounded-xl border-2 flex items-center justify-end text-2xl font-black tabular-nums ${amountBorder}`}>
+                {currency} {amount || '0'}
+              </div>
+            </div>
+            <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad" />
+
+            {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
           </div>
-          <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad" />
+        ) : (
+          /* ============ STEP 2: Omschrijving + Categorie ============
+              Layout: inputs bovenaan (direct onder header), Opslaan direct
+              onder de velden. Zo blijven ALLE bedienelementen zichtbaar
+              zodra het iOS-toetsenbord opent — geen re-positioning nodig,
+              geen flicker. De onderste ruimte (leeg) wordt weggeschoven
+              door het toetsenbord.
+          */
+          <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3">
+            {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
+                voor welke transactie hij de omschrijving invult. */}
+            <div className={`w-full rounded-xl px-4 py-2.5 flex items-center justify-between ${type === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {type === 'in' ? 'Inkomend' : 'Uitgaand'} · {currency}
+              </span>
+              <span className="text-xl font-black tabular-nums">{amount || '0'}</span>
+            </div>
 
-          <label className="block">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)}
-              data-testid="kasgeld-input-desc"
-              placeholder="Bijv. schoonmaakspullen"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
-          </label>
+            <label className="block">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
+              <input ref={descInputRef}
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                data-testid="kasgeld-input-desc"
+                placeholder="Bijv. schoonmaakspullen"
+                autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+                enterKeyHint="next"
+                className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base" />
+            </label>
 
-          <label className="block">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
-              data-testid="kasgeld-input-cat"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm bg-white">
-              <option value="overig">Overig</option>
-              <option value="onderhoud">Onderhoud</option>
-              <option value="schoonmaak">Schoonmaak</option>
-              <option value="salaris">Salaris</option>
-              <option value="kantoor">Kantoor</option>
-              <option value="brandstof">Brandstof</option>
-            </select>
-          </label>
+            <label className="block">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}
+                data-testid="kasgeld-input-cat"
+                className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
+                <option value="overig">Overig</option>
+                <option value="onderhoud">Onderhoud</option>
+                <option value="schoonmaak">Schoonmaak</option>
+                <option value="salaris">Salaris</option>
+                <option value="kantoor">Kantoor</option>
+                <option value="brandstof">Brandstof</option>
+              </select>
+            </label>
 
-          {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
-        </div>
+            {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
 
-        {/* Sticky footer — safe-area-bottom padding INSIDE de witte modal
-            zodat de Opslaan-knop boven de home-indicator eindigt maar het
-            witte oppervlak wél doorloopt tot de schermbodem. */}
-        <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-          <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
-          </button>
-        </div>
+            {/* Opslaan-knop DIRECT onder de velden i.p.v. footer, zodat hij
+                zichtbaar blijft als het iOS-toetsenbord opent. */}
+            <button onClick={save} disabled={saving} data-testid="kasgeld-save"
+              className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
+            </button>
+
+            {/* Flex-grow spacer die inklapt onder de keyboard. Geen visible
+                content zodat de layout niet flikkert bij open/close. */}
+            <div className="flex-1" aria-hidden="true" />
+          </div>
+        )}
+
+        {/* Sticky footer — alleen zichtbaar in step 1. In step 2 zit de
+            Opslaan-knop tussen de velden zelf (zie hierboven) zodat hij
+            boven het toetsenbord blijft. */}
+        {step === 'amount' && (
+          <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+            <button onClick={goNext} data-testid="kasgeld-next-btn"
+              disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
+              className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              Volgende <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   ), document.body);
