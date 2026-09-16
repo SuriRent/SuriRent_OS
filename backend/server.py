@@ -12503,6 +12503,76 @@ class CashEntryOut(CashEntryIn):
     payment_ref: Optional[str] = None
 
 
+# =====================================================================
+# Kasgeld helper — bouwt een leesbare description voor een payment-rij
+# in de unified kasgeld-feed. Toont apartement + maand ipv huurdersnaam
+# + periode-cijfers zodat de kiosk-medewerker snel ziet waar het bij
+# hoort. Wordt door zowel admin (/kasgeld) als kiosk (/kiosk/kasgeld)
+# gedeeld — zo blijft het format overal identiek.
+# =====================================================================
+_DUTCH_MONTH_ABBR = [
+    "", "jan", "feb", "mrt", "apr", "mei", "jun",
+    "jul", "aug", "sep", "okt", "nov", "dec",
+]
+
+
+async def _kasgeld_payment_description(p: dict) -> str:
+    """`{receipt_number} — HUIS {apt} · Maand {maand-nl}`. Fallback naar
+    huurdersnaam wanneer het appartement onbekend is en naar `MM/YYYY`
+    wanneer de maand niet vertaalbaar is."""
+    apt_label = ""
+    apt_id = p.get("apartment_id")
+    # Als geen apartment_id op de payment: haal via tenant.
+    if not apt_id and p.get("tenant_id"):
+        t = await db.tenants.find_one(
+            {"id": p["tenant_id"]},
+            {"_id": 0, "apartment_id": 1, "name": 1},
+        )
+        apt_id = (t or {}).get("apartment_id")
+        tenant_name = (t or {}).get("name") or ""
+    else:
+        tenant_name = ""
+    if apt_id:
+        apt = await db.apartments.find_one(
+            {"id": apt_id}, {"_id": 0, "number": 1},
+        )
+        num = ((apt or {}).get("number") or "").strip()
+        if num:
+            # Als het nummer al "huis"/"kamer"/"unit" begint → niet dubbelen.
+            lower = num.lower()
+            if lower.startswith(("huis", "kamer", "kmr", "unit", "appartement", "apt", "app.")):
+                apt_label = num.upper() if lower.startswith("huis") else num
+            else:
+                apt_label = f"HUIS {num}"
+    # Fallback: huurdersnaam als apartement niet gevonden
+    if not apt_label and not tenant_name and p.get("tenant_id"):
+        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
+        tenant_name = (t or {}).get("name") or ""
+    who = apt_label or tenant_name
+
+    period = ""
+    pm, py = p.get("period_month"), p.get("period_year")
+    if isinstance(pm, int) and 1 <= pm <= 12:
+        month_nl = _DUTCH_MONTH_ABBR[pm]
+        period = f" · Maand {month_nl}"
+        # Voeg het jaar toe als het niet-huidige jaar betreft — zo blijven
+        # historische rijen ondubbelzinnig zonder de rij onnodig te vullen
+        # voor de meest recente betalingen.
+        try:
+            from datetime import datetime as _dt
+            if isinstance(py, int) and py != _dt.utcnow().year:
+                period += f" {py}"
+        except Exception:
+            pass
+    elif pm and py:
+        period = f" · {pm:02d}/{py}"
+
+    parts = [p.get("receipt_number") or ""]
+    if who:
+        parts.append(f"— {who}")
+    return f"{' '.join(parts)}{period}".strip()
+
+
 @api.get("/kasgeld", response_model=List[CashEntryOut])
 async def list_cash(user=Depends(get_current_user)):
     """Retourneert alle kasmutaties + alle goedgekeurde binnenkomende
@@ -12527,18 +12597,10 @@ async def list_cash(user=Depends(get_current_user)):
         {**scope(user), "status": "approved"},
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
-         "tenant_id": 1, "period_month": 1, "period_year": 1, "note": 1},
+         "tenant_id": 1, "apartment_id": 1, "period_month": 1,
+         "period_year": 1, "note": 1},
     ):
-        tenant_name = ""
-        if p.get("tenant_id"):
-            t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
-            tenant_name = (t or {}).get("name") or ""
-        period = ""
-        if p.get("period_month") and p.get("period_year"):
-            period = f" · {p['period_month']:02d}/{p['period_year']}"
-        desc_parts = [p.get("receipt_number") or ""]
-        if tenant_name:
-            desc_parts.append(f"— {tenant_name}")
+        desc = await _kasgeld_payment_description(p)
         paid_iso = p.get("paid_at") or iso(now_utc())
         # Sort-key = echte insert-tijd van de payment (kan verschillen van
         # paid_at wanneer een payment historisch is gedateerd, bijv. seed).
@@ -12548,7 +12610,7 @@ async def list_cash(user=Depends(get_current_user)):
             "type": "in",
             "amount": float(p.get("amount") or 0),
             "currency": p.get("currency") or "SRD",
-            "description": f"{' '.join(desc_parts)}{period}".strip(),
+            "description": desc,
             "category": p.get("category") or "huur",
             "method": p.get("method") or "",
             "created_at": paid_iso,   # zichtbare betaaldatum (blijft paid_at)
@@ -12692,19 +12754,17 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
         {**sc, "status": "approved"},
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
-         "tenant_id": 1},
+         "tenant_id": 1, "apartment_id": 1, "period_month": 1,
+         "period_year": 1},
     ).sort("paid_at", -1).limit(100):
-        tenant_name = ""
-        if p.get("tenant_id"):
-            t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
-            tenant_name = (t or {}).get("name") or ""
+        desc = await _kasgeld_payment_description(p)
         paid_iso = p.get("paid_at") or iso(now_utc())
         payments.append({
             "id": f"pay-{p['id']}",
             "type": "in",
             "amount": float(p.get("amount") or 0),
             "currency": p.get("currency") or "SRD",
-            "description": f"{p.get('receipt_number') or ''} {('— ' + tenant_name) if tenant_name else ''}".strip(),
+            "description": desc,
             "category": p.get("category") or "huur",
             "method": p.get("method") or "",
             "created_at": paid_iso,

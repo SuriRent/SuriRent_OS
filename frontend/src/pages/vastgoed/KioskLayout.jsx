@@ -2298,43 +2298,90 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
 
-  // iOS Safari bug: `100dvh` blijft soms "hangen" op de kleinere keyboard-
-  // waarde NADAT het keyboard sluit → daarna zichtbare orange strook onder
-  // de modal. Fix: manage de hoogte in JS via window.innerHeight (die
-  // correct terug-groeit) + luister naar visualViewport.resize + focusout
-  // + window.resize zodat we bij ELK relevant event de hoogte hersynchen.
+  // ===== iOS-safe modal positioning =====
+  // Probleem: op iPhone Safari schuift bij openen van het toetsenbord de
+  // hele pagina omhoog (iOS' "scroll input into view" gedrag). Bij een
+  // `position:fixed inset-0` modal betekent dit dat de top van de modal
+  // BOVEN de statusbalk uit-schuift → content overlapt met de tijd/notch.
+  //
+  // Oplossing = 2 dingen combineren:
+  //   1. Body scroll lock met scroll-restore → iOS heeft niks meer om
+  //      omhoog te scrollen dus de fixed modal blijft op zijn plek.
+  //   2. visualViewport tracking → als iOS toch alsnog de layout aanpast
+  //      (bv. na een oriëntatie-wissel met keyboard open), volgen we mee.
+  //
+  // Android heeft dit probleem niet omdat Chrome's `interactive-widget=
+  // resizes-content` gewoon de layout viewport schrimpt zonder scroll.
   useEffect(() => {
     const el = overlayRef.current;
     if (!el) return undefined;
     const vv = window.visualViewport;
+
+    // ---- Stap 1: body scroll lock met exacte scroll-restore ----
+    // iOS-truc: `body {position:fixed; top:-Y}` waarbij Y de huidige
+    // scroll-positie is. Dat vriest de pagina in zonder een spring.
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const body = document.body;
+    const html = document.documentElement;
+    const saved = {
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+      htmlOverflow: html.style.overflow,
+    };
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    html.style.overflow = 'hidden';
+
+    // ---- Stap 2: modal hoogte + positie op visualViewport ----
     const apply = () => {
-      // Neem de grootste van window.innerHeight en visualViewport.height
-      // zodat we bij keyboard-open (window blijft groot, vv krimpt) alleen
-      // schrimpen als beide krimpen. Bij interactive-widget=resizes-content
-      // krimpt window.innerHeight WEL mee → dan is die de bron van waarheid.
-      const h = window.innerHeight;
-      el.style.height = `${h}px`;
+      if (vv) {
+        // Modal-hoogte = zichtbare viewport (excl. keyboard) zodat
+        // Opslaan-knop altijd boven het keyboard uitkomt.
+        el.style.height = `${vv.height}px`;
+        // Als iOS de layout omhoog schuift (offsetTop > 0), verplaatsen
+        // we de modal mee zodat de top nooit onder de statusbalk komt.
+        el.style.top = `${vv.offsetTop}px`;
+        el.style.left = `${vv.offsetLeft}px`;
+        el.style.width = `${vv.width}px`;
+      } else {
+        el.style.height = `${window.innerHeight}px`;
+      }
     };
     apply();
-    // requestAnimationFrame zodat we op de volgende paint synchen (nadat
-    // iOS de viewport heeft aangepast na keyboard-transitie).
     const applyRAF = () => requestAnimationFrame(apply);
-    window.addEventListener('resize', applyRAF);
-    window.addEventListener('orientationchange', applyRAF);
     if (vv) {
       vv.addEventListener('resize', applyRAF);
+      vv.addEventListener('scroll', applyRAF);
     }
-    // focusout = input loses focus → keyboard start met sluiten. Sync na
-    // een korte delay zodat iOS klaar is met de resize.
-    const onFocusOut = () => {
-      setTimeout(apply, 50);
-      setTimeout(apply, 300);
-    };
+    window.addEventListener('resize', applyRAF);
+    window.addEventListener('orientationchange', applyRAF);
+    // Focus/blur events triggeren opnieuw omdat iOS het keyboard-effect
+    // niet direct via `resize` doorgeeft.
+    const onFocusIn = () => { setTimeout(apply, 50); setTimeout(apply, 300); };
+    const onFocusOut = () => { setTimeout(apply, 50); setTimeout(apply, 300); };
+    document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
+
     return () => {
+      // ---- Restore body ----
+      body.style.overflow = saved.bodyOverflow;
+      body.style.position = saved.bodyPosition;
+      body.style.top = saved.bodyTop;
+      body.style.width = saved.bodyWidth;
+      html.style.overflow = saved.htmlOverflow;
+      // Restore scroll-positie zodat de gebruiker niet naar boven springt.
+      window.scrollTo(0, scrollY);
+      if (vv) {
+        vv.removeEventListener('resize', applyRAF);
+        vv.removeEventListener('scroll', applyRAF);
+      }
       window.removeEventListener('resize', applyRAF);
       window.removeEventListener('orientationchange', applyRAF);
-      if (vv) vv.removeEventListener('resize', applyRAF);
+      document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
     };
   }, []);
@@ -2361,10 +2408,11 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   return createPortal((
     <div ref={overlayRef}
       onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
-      style={{ height: '100dvh' }}
-      /* fallback voor als de useEffect nog niet gedraaid heeft;
-         daarna neemt inline `style.height = window.innerHeight` het over */
+      className="fixed z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
+      style={{
+        // Fallback vóór useEffect draait — daarna neemt JS het over
+        top: 0, left: 0, width: '100vw', height: '100dvh',
+      }}
       data-testid="kasgeld-overlay">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
