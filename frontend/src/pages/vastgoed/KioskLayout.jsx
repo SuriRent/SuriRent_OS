@@ -838,17 +838,24 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       .then((r) => setItems(r.data)).catch((e) => setErr(formatError(e)));
   }, [tenant.id]);
 
-  // Direct-afdrukken: haal de PDF als blob op via de authenticated axios
+  // Stille afdruk: haal de PDF als blob op via de authenticated axios
   // client (window.open naar /api/... werkt niet altijd in de kiosk-PWA
   // want de child-tab krijgt niet automatisch de httpOnly cookies mee).
-  // Blob → verborgen iframe → contentWindow.print() opent de OS/browser
-  // printdialoog direct, met de kiosk-printer als default.
+  // Blob → verborgen iframe → contentWindow.print().
+  //
+  // In Chrome/Edge gestart met de `--kiosk-printing` vlag wordt het
+  // printdialoog automatisch overgeslagen en gaat de bon direct naar de
+  // OS-standaardprinter. In een normale browser verschijnt wél nog een
+  // dialoog (browser-beveiliging staat 100% stille print niet toe zonder
+  // die vlag). Zie /app/memory/kiosk-printing-setup.md voor setup.
   const handlePrint = async (paymentId) => {
     if (busy[paymentId]) return;
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
+    setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
+    let blobUrl = null;
     try {
       const resp = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      const blobUrl = URL.createObjectURL(resp.data);
+      blobUrl = URL.createObjectURL(resp.data);
       const existing = document.getElementById('kiosk-print-iframe');
       if (existing) existing.remove();
       const iframe = document.createElement('iframe');
@@ -860,21 +867,52 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       iframe.style.height = '0';
       iframe.style.border = '0';
       iframe.src = blobUrl;
-      iframe.onload = () => {
-        setTimeout(() => {
-          try {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
-          } catch {
-            // Cross-origin/PDF-viewer beperking → fallback naar tab openen.
-            window.open(blobUrl, '_blank');
-          }
-        }, 250);
-      };
+
+      // We wachten max 5s op iframe onload. Als het faalt (bv. PDF-viewer
+      // niet beschikbaar), tonen we een korte melding.
+      const printPromise = new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
+        iframe.onload = () => {
+          clearTimeout(timeoutId);
+          setTimeout(() => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
+          }, 200);
+        };
+        iframe.onerror = () => {
+          clearTimeout(timeoutId);
+          reject(new Error('iframe-error'));
+        };
+      });
+
       document.body.appendChild(iframe);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    } catch {
-      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Afdruk mislukt' } }));
+      await printPromise;
+      // Success feedback (kiosk-printing verbergt het OS-dialoog, dus
+      // de operator heeft visuele bevestiging nodig dat er iets gebeurd is).
+      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Afgedrukt' } }));
+      setTimeout(() => {
+        setWaState((prev) => {
+          const c = { ...prev };
+          if (c[paymentId]?.kind === 'ok') delete c[paymentId];
+          return c;
+        });
+      }, 2500);
+      // Ruim blob op na 60s (genoeg tijd voor de printer om te renderen).
+      setTimeout(() => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, 60000);
+    } catch (e) {
+      // Onmogelijk om vanuit de browser 100% zeker te weten of er geen
+      // printer is; deze catch dekt: netwerk-fout op PDF-endpoint,
+      // iframe-load-fout, of contentWindow.print() gooit synchroon.
+      const msg = e?.message === 'timeout'
+        ? 'Geen printer beschikbaar'
+        : 'Afdruk mislukt — printer niet gevonden?';
+      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg } }));
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
     } finally {
       setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
     }
