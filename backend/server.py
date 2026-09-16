@@ -10065,6 +10065,115 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
 
 
 # ---------------------------------------------------------------------
+# Financieel overzicht — TTS audiobericht (WhatsApp voice-share)
+# ---------------------------------------------------------------------
+# Genereert een gesproken bericht in het Nederlands via OpenAI TTS (Nova
+# voice) met de openstaande facturen van de huurder. De medewerker kan
+# de MP3 direct via WhatsApp delen — dit werkt vaak beter dan een lange
+# tekst omdat de huurder de boodschap letterlijk hoort ("persoonlijker").
+#
+# BELANGRIJK: OpenAI TTS-stemmen zijn geoptimaliseerd voor Engels. Nederlands
+# klinkt begrijpelijk maar met een lichte Engelse tongval. Dit is een
+# provider-limiet, geen bug in onze code.
+_TTS_CACHE: dict[str, bytes] = {}   # key = hash(text|voice) → mp3 bytes
+
+
+@api.get("/kiosk/tenants/{tenant_id}/reminder-voice.mp3")
+async def kiosk_tenant_reminder_voice_mp3(
+    tenant_id: str, _session=Depends(get_kiosk_session)
+):
+    """MP3 met beleefd Nederlands herinnerings-audiobericht (Nova voice).
+    Bericht sjabloon: 'Geachte [naam], u heeft [n] openstaande facturen
+    met een totaalbedrag van SRD [bedrag]. Wij verzoeken u vriendelijk
+    dit voor [vervaldatum] te voldoen. Met vriendelijke groet, [bedrijf].'
+    """
+    overview = await kiosk_tenant_overview(tenant_id, _session)
+    t = overview["tenant"]
+    open_invoices = overview.get("open_invoices") or []
+    current_invoices = overview.get("current_invoices") or []
+    open_total = float(overview.get("open_invoices_total") or 0)
+    current_total = float(overview.get("current_invoices_total") or 0)
+    internet = float(t.get("internet_amount") or 0)
+    total_due = round(open_total + current_total + internet, 2)
+    cur = (overview.get("balance") or {}).get("currency") or "SRD"
+    if total_due <= 0.01:
+        raise HTTPException(status_code=400, detail="Geen openstaande facturen — spraakbericht niet nodig")
+
+    # Aantal openstaande maanden (achterstand + huidige) — internet niet
+    # als aparte "factuur" tellen om verwarring bij huurder te vermijden.
+    n_open = len(open_invoices) + len(current_invoices)
+
+    # Vroegste vervaldatum uit alle open+current facturen; anders vandaag+7.
+    from datetime import date, timedelta
+    due_dates = []
+    for inv in list(open_invoices) + list(current_invoices):
+        dd = inv.get("due_date")
+        if dd:
+            try:
+                due_dates.append(date.fromisoformat(str(dd)[:10]))
+            except Exception:  # noqa: BLE001
+                pass
+    earliest_due = min(due_dates) if due_dates else (now_utc().date() + timedelta(days=7))
+    _NL_MONTHS = ["januari", "februari", "maart", "april", "mei", "juni",
+                  "juli", "augustus", "september", "oktober", "november", "december"]
+    due_txt = f"{earliest_due.day} {_NL_MONTHS[earliest_due.month - 1]} {earliest_due.year}"
+
+    company = await db.companies.find_one(
+        {"id": _session.get("company_id")}, {"_id": 0, "name": 1},
+    ) or {}
+    company_name = company.get("name") or "de beheerder"
+
+    # Bedrag uitspreken: "duizend" is duidelijker dan "1.000,00" voor TTS.
+    def amount_words(v: float) -> str:
+        # TTS leest "18200,00" goed uit als "achttienduizend tweehonderd komma
+        # nul nul". We laten het decimaal-gedeelte weg als het .00 is.
+        v = round(v, 2)
+        if abs(v - round(v)) < 0.01:
+            return f"{int(round(v))}"
+        return f"{v:.2f}".replace(".", ",")
+
+    plural = "factuur" if n_open == 1 else "facturen"
+    text = (
+        f"Geachte {t.get('name') or 'huurder'}, "
+        f"u heeft {n_open} openstaande {plural} "
+        f"met een totaalbedrag van {cur} {amount_words(total_due)}. "
+        f"Wij verzoeken u vriendelijk dit voor {due_txt} te voldoen. "
+        f"Met vriendelijke groet, {company_name}."
+    )
+
+    # Cache op tekst+voice (dezelfde tekst → dezelfde audio, bespaart TTS-calls).
+    import hashlib
+    ckey = hashlib.sha256(f"{text}|nova|tts-1|mp3".encode()).hexdigest()
+    audio_bytes = _TTS_CACHE.get(ckey)
+    if audio_bytes is None:
+        from emergentintegrations.llm.openai import OpenAITextToSpeech
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="TTS niet geconfigureerd")
+        tts = OpenAITextToSpeech(api_key=api_key)
+        try:
+            audio_bytes = await tts.generate_speech(
+                text=text, model="tts-1", voice="nova", response_format="mp3",
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"Spraakbericht mislukt: {e}")
+        # Beperk cache tot 128 entries (LRU-lite).
+        if len(_TTS_CACHE) >= 128:
+            _TTS_CACHE.pop(next(iter(_TTS_CACHE)))
+        _TTS_CACHE[ckey] = audio_bytes
+
+    from fastapi.responses import Response as _Resp
+    return _Resp(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": f'inline; filename="herinnering-{tenant_id[:8]}.mp3"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+# ---------------------------------------------------------------------
 # Tenant notes — kiosk-medewerker kan afspraken/telefoongesprekken loggen
 # ---------------------------------------------------------------------
 class TenantNoteIn(BaseModel):

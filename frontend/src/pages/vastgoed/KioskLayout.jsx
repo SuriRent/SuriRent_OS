@@ -8,7 +8,7 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
-  MessageCircle, StickyNote, Trash2, Plus,
+  MessageCircle, StickyNote, Trash2, Plus, Mic,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -306,6 +306,77 @@ function ShareOverviewButton({ tenantId, tenantName, tenantPhone, totalDue, curr
       {busy
         ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Delen…</>
         : <><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</>}
+    </button>
+  );
+}
+
+// =====================================================================
+// ShareVoiceButton — TTS herinnering als MP3 delen via WhatsApp
+// =====================================================================
+// Genereert via OpenAI TTS (Nova-stem) een gesproken NL-bericht met de
+// openstaande facturen en deelt dit direct via de Web Share API. Als de
+// huurder geen open bedrag heeft is de knop uitgegrijsd — geen zin om
+// spraakmail te maken zonder actie.
+function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currency }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
+  const disabled = !(Number(totalDue) > 0);
+  const share = async () => {
+    if (disabled) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const resp = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/tenants/${tenantId}/reminder-voice.mp3`,
+        { credentials: 'include' },
+      );
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const file = new File(
+        [blob],
+        `herinnering-${(tenantName || 'huurder').replace(/\s+/g, '-')}.mp3`,
+        { type: 'audio/mpeg' },
+      );
+      const totalTxt = Number.isFinite(Number(totalDue))
+        ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
+        : '';
+      const shareText = `Hallo ${tenantName || ''}, hierbij een gesproken herinnering.${totalTxt}`;
+      if (typeof navigator.canShare === 'function' &&
+          navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file], text: shareText,
+          title: 'Betalingsherinnering',
+        });
+      } else if (phoneDigits.length >= 7) {
+        // Fallback: WhatsApp Web deeplink met tekst, MP3 in nieuw tabblad.
+        const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
+        window.open(url, '_blank', 'noopener');
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank', 'noopener');
+      } else {
+        const objUrl = URL.createObjectURL(blob);
+        window.open(objUrl, '_blank', 'noopener');
+      }
+    } catch (e) {
+      if (e && e.name !== 'AbortError') {
+        setErr('Spraakbericht mislukt');
+        // eslint-disable-next-line no-console
+        console.error('[share voice] failed:', e);
+      }
+    } finally {
+      setBusy(false);
+      if (err) setTimeout(() => setErr(''), 3000);
+    }
+  };
+  return (
+    <button onClick={share} disabled={busy || disabled}
+      data-testid="overview-voice-btn"
+      title={disabled ? 'Geen openstaand bedrag' : 'Spraakbericht versturen'}
+      className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+      {busy
+        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Bezig…</>
+        : <><Mic className="w-3.5 h-3.5" /> Spraak</>}
     </button>
   );
 }
@@ -635,6 +706,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
             <h3 className="text-base sm:text-lg font-bold text-slate-900">Financieel overzicht</h3>
             <div className="flex items-center gap-1.5">
               <ShareOverviewButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
+              <ShareVoiceButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
             </div>
           </div>
