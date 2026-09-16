@@ -2337,18 +2337,30 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     html.style.overflow = 'hidden';
 
     // ---- Stap 2: modal hoogte + positie op visualViewport ----
+    // Zonder keyboard: `top:0 + bottom:0` → element strekt zich uit tussen
+    // beide safe-area randen (statusbalk boven + home-indicator onder).
+    // Met keyboard: expliciete height = zichtbare viewport (excl. keyboard)
+    // zodat de Opslaan-knop boven het keyboard eindigt.
+    const KBD_THRESHOLD_PX = 100;  // meer dan 100px verschil = keyboard open
     const apply = () => {
-      if (vv) {
-        // Modal-hoogte = zichtbare viewport (excl. keyboard) zodat
-        // Opslaan-knop altijd boven het keyboard uitkomt.
-        el.style.height = `${vv.height}px`;
-        // Als iOS de layout omhoog schuift (offsetTop > 0), verplaatsen
-        // we de modal mee zodat de top nooit onder de statusbalk komt.
+      const winH = window.innerHeight;
+      const vvH = vv ? vv.height : winH;
+      const kbdOpen = vv ? (winH - vvH > KBD_THRESHOLD_PX) : false;
+      if (kbdOpen) {
+        el.style.bottom = 'auto';
+        el.style.height = `${vvH}px`;
         el.style.top = `${vv.offsetTop}px`;
         el.style.left = `${vv.offsetLeft}px`;
         el.style.width = `${vv.width}px`;
       } else {
-        el.style.height = `${window.innerHeight}px`;
+        // Zonder keyboard: stretch modal tussen top:0 en bottom:0. Zo
+        // eindigt de Opslaan-knop (met safe-area padding op de footer)
+        // netjes boven de home-indicator zonder oranje ruimte.
+        el.style.top = '0px';
+        el.style.bottom = '0px';
+        el.style.height = 'auto';
+        el.style.left = '0px';
+        el.style.width = '100%';
       }
     };
     apply();
