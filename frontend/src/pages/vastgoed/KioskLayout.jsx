@@ -251,7 +251,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
 // via Web Share API (WhatsApp verschijnt als target). Op desktop /
 // browsers zonder file-share support: fallback naar wa.me deeplink.
 // =====================================================================
-function ShareOverviewButton({ tenantId, tenantName, tenantPhone }) {
+function ShareOverviewButton({ tenantId, tenantName, tenantPhone, totalDue, currency }) {
   const [busy, setBusy] = useState(false);
   const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
   const share = async () => {
@@ -265,7 +265,13 @@ function ShareOverviewButton({ tenantId, tenantName, tenantPhone }) {
       const blob = await resp.blob();
       const file = new File([blob], `overzicht-${tenantName || 'huurder'}.jpg`,
         { type: 'image/jpeg' });
-      const shareText = `Hallo ${tenantName || ''}, hierbij uw actuele financieel overzicht.`;
+      // Tekst matcht wat op de JPG staat (totaal openstaand) zodat de
+      // huurder direct het bedrag in het WhatsApp bericht ziet, ook als
+      // ze de foto (nog) niet openen.
+      const totalTxt = Number.isFinite(Number(totalDue))
+        ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
+        : '';
+      const shareText = `Hallo ${tenantName || ''}, hierbij uw actuele financieel overzicht.${totalTxt}`;
       if (typeof navigator.canShare === 'function' &&
           navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -628,7 +634,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
           <div className="flex items-center justify-between mb-3 gap-2">
             <h3 className="text-base sm:text-lg font-bold text-slate-900">Financieel overzicht</h3>
             <div className="flex items-center gap-1.5">
-              <ShareOverviewButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} />
+              <ShareOverviewButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
             </div>
           </div>

@@ -9893,47 +9893,35 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
     """Rendert het financieel overzicht van de huurder als 1080-brede JPG
     die de kiosk-medewerker via WhatsApp/Web Share met de huurder kan delen.
 
-    Bewust JPG i.p.v. PDF: op WhatsApp verschijnt een JPG als foto (met
-    preview) terwijl een PDF een klik-om-te-openen bijlage is — voor huurders
-    is de foto veel toegankelijker.
+    BELANGRIJK: gebruikt EXACT dezelfde data (via `kiosk_tenant_overview`)
+    en formule als het scherm — dus wat de operator ziet == wat de huurder
+    op WhatsApp krijgt. Formule:
+        Totaal = Achterstand + Huidige maand + Internet
+    (Vooruit gefactureerd is informatief, telt NIET in het totaal, precies
+    zoals de Kiosk-overview logica in KioskLayout.jsx.)
     """
-    t = await db.tenants.find_one(
-        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0},
-    )
-    if not t:
-        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-
-    # Data ophalen — hergebruik de kiosk overview logica zoveel mogelijk.
-    apt = None
-    if t.get("apartment_id"):
-        apt = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0})
-    balance = await _calc_balance(t)
-    credit = 0.0
-    async for p in db.payments.find(
-        {"tenant_id": tenant_id, "credit_remaining": {"$gt": 0}, "status": "approved"},
-        {"_id": 0, "credit_remaining": 1},
-    ):
-        credit += float(p.get("credit_remaining") or 0)
-
-    # Open facturen (achterstand + huidig, geen future).
-    invoices: list[dict] = []
-    async for inv in db.invoices.find(
-        {"tenant_id": tenant_id, "status": {"$in": ["open", "partial"]}},
-        {"_id": 0, "period_month": 1, "period_year": 1, "amount": 1,
-         "paid_amount": 1, "due_date": 1, "invoice_number": 1},
-    ).sort([("period_year", 1), ("period_month", 1)]):
-        invoices.append(inv)
-
-    cur = (balance or {}).get("currency") or "SRD"
-    total_due = float((balance or {}).get("total_due") or 0)
+    # Hergebruik de scherm-endpoint zodat er één bron van waarheid is.
+    overview = await kiosk_tenant_overview(tenant_id, _session)
+    t = overview["tenant"]
+    apt = overview.get("apartment") or {}
+    open_invoices = overview.get("open_invoices") or []          # achterstand
+    open_total = float(overview.get("open_invoices_total") or 0)
+    current_invoices = overview.get("current_invoices") or []
+    current_total = float(overview.get("current_invoices_total") or 0)
+    future_invoices = overview.get("future_invoices") or []
+    future_total = float(overview.get("future_invoices_total") or 0)
+    current_invoice = overview.get("current_month_invoice") or (current_invoices[0] if current_invoices else None)
+    internet = float(t.get("internet_amount") or 0)
+    credit = float(overview.get("credit_balance") or 0)
+    cur = (overview.get("balance") or {}).get("currency") or apt.get("currency") or "SRD"
+    # Zelfde formule als KioskLayout.jsx:553
+    total_due = round(open_total + current_total + internet, 2)
 
     company = await db.companies.find_one(
         {"id": _session.get("company_id")},
-        {"_id": 0, "name": 1, "branding": 1, "logo_url": 1},
+        {"_id": 0, "name": 1},
     ) or {}
 
-    # Bouw de afbeelding met PIL — geen tussenstap via PDF (sneller, geen
-    # externe dependencies zoals poppler nodig). 1080px breed, hoogte auto.
     from PIL import Image, ImageDraw, ImageFont
     from io import BytesIO
     from datetime import datetime
@@ -9947,75 +9935,121 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
         f_body = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
         f_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
         f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+        f_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
     except Exception:
-        f_title = f_h1 = f_body = f_bold = f_small = ImageFont.load_default()
+        f_title = f_h1 = f_body = f_bold = f_small = f_sub = ImageFont.load_default()
 
-    # Bereken hoogte: header 220 + tenant-blok 140 + per invoice 70 +
-    # summary 200 + footer 80 → dynamisch.
-    row_h = 70
-    inv_block_h = 90 + max(1, len(invoices)) * row_h + 40
-    if not invoices:
-        inv_block_h = 140
-    H = 220 + 160 + inv_block_h + 260 + 80
+    def fmt(v: float) -> str:
+        return f"{cur} {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def month_label(pm, py):
+        if isinstance(pm, int) and 1 <= pm <= 12:
+            return f"{_DUTCH_MONTH_ABBR[pm]} {py}"
+        return ""
+
+    # Bouw de regel-items (zelfde volgorde als op scherm)
+    row_h = 78
+    rows: list[dict] = []
+    if open_total > 0:
+        n = len(open_invoices)
+        months_text = ", ".join(
+            filter(None, [month_label(i.get("period_month"), i.get("period_year")).split(" ")[0]
+                          for i in open_invoices])
+        )
+        years = sorted({i.get("period_year") for i in open_invoices if i.get("period_year")})
+        sub = months_text + (f" {years[0]}" if len(years) == 1 and months_text else "")
+        rows.append({
+            "label": f"Achterstallige huur ({n} maand{'' if n == 1 else 'en'})",
+            "sub": sub,
+            "value": fmt(open_total),
+            "highlight": True,
+        })
+    # Huidige maandhuur
+    if current_invoice and current_invoice.get("period_month"):
+        cur_label = f"Huidige maandhuur · {month_label(current_invoice['period_month'], current_invoice['period_year'])}"
+    else:
+        cur_label = "Maandhuur"
+    cur_sub = ""
+    if current_invoice and current_invoice.get("due_date"):
+        try:
+            dd = datetime.fromisoformat(str(current_invoice["due_date"])[:10])
+            cur_sub = f"Vervalt {dd.strftime('%-d %b')}"
+        except Exception:
+            cur_sub = f"Vervalt {current_invoice['due_date']}"
+    rows.append({
+        "label": cur_label, "sub": cur_sub,
+        "value": fmt(current_total),
+        "muted": current_total <= 0,
+    })
+    # Boetes — altijd 0 tonen zoals op scherm
+    rows.append({"label": "Boetes", "sub": "", "value": fmt(0), "muted": True})
+    # Internet
+    rows.append({"label": "Internet", "sub": "", "value": fmt(internet), "muted": internet <= 0})
+    # Vooruit gefactureerd (informatief)
+    if future_total > 0:
+        n = len(future_invoices)
+        sub = ", ".join(
+            filter(None, [month_label(i.get("period_month"), i.get("period_year"))
+                          for i in future_invoices])
+        )
+        rows.append({
+            "label": f"Vooruit gefactureerd ({n} maand{'' if n == 1 else 'en'})",
+            "sub": (sub + " · informatief — telt niet mee") if sub else "informatief — telt niet mee",
+            "value": fmt(future_total),
+            "info": True,
+        })
+
+    # Dynamische hoogte
+    n_rows = len(rows)
+    H = 220 + 160 + 30 + n_rows * row_h + 30 + 140 + (100 if credit > 0 else 0) + 80
     img = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(img)
 
-    # Header — accent band
+    # Header
     d.rectangle([0, 0, W, 200], fill=accent)
     d.text((PAD, 55), company.get("name") or "SuriRent", fill="white", font=f_title)
     d.text((PAD, 120), "Financieel overzicht", fill="white", font=f_h1)
     stamp = datetime.now().strftime("%d-%m-%Y %H:%M")
-    d.text((W - PAD - 260, 155), f"{stamp}", fill=(255, 255, 255, 220), font=f_small)
+    d.text((W - PAD - 260, 155), f"{stamp}", fill=(255, 255, 255), font=f_small)
 
     y = 240
     d.text((PAD, y), (t.get("name") or "—").upper(), fill=(15, 23, 42), font=f_h1)
     y += 46
-    apt_num = (apt or {}).get("number") or "—"
-    apt_addr = (apt or {}).get("address") or ""
-    d.text((PAD, y), f"HUIS {apt_num}" + (f" · {apt_addr}" if apt_addr else ""),
+    apt_num = apt.get("number") or "—"
+    apt_addr = apt.get("address") or ""
+    # Voorkomt "HUIS HUIS 1A" wanneer nummer al "HUIS ..." begint.
+    apt_label = str(apt_num) if str(apt_num).upper().startswith("HUIS") else f"HUIS {apt_num}"
+    d.text((PAD, y), apt_label + (f" · {apt_addr}" if apt_addr else ""),
            fill=(100, 116, 139), font=f_body)
     y += 70
 
-    # Openstaande facturen
-    d.text((PAD, y), "Openstaande facturen", fill=(15, 23, 42), font=f_h1)
-    y += 50
-    if not invoices:
-        d.rectangle([PAD, y, W - PAD, y + 60], outline=(200, 220, 200), width=2)
-        d.text((PAD + 20, y + 15), "Geen openstaande facturen — alles voldaan",
-               fill=(16, 122, 90), font=f_body)
-        y += 90
-    else:
-        for inv in invoices:
-            pm, py = inv.get("period_month"), inv.get("period_year")
-            month_nl = _DUTCH_MONTH_ABBR[pm] if isinstance(pm, int) and 1 <= pm <= 12 else "?"
-            label = f"Huur {month_nl} {py}"
-            amt = float(inv.get("amount") or 0)
-            paid = float(inv.get("paid_amount") or 0)
-            rem = max(0.0, amt - paid)
-            due = inv.get("due_date") or ""
-            d.text((PAD, y + 12), label, fill=(15, 23, 42), font=f_bold)
-            if due:
-                d.text((PAD, y + 42), f"Vervalt {due}", fill=(100, 116, 139), font=f_small)
-            amount_txt = f"{cur} {rem:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            # Right-align amount
-            w = d.textlength(amount_txt, font=f_bold)
-            d.text((W - PAD - w, y + 22), amount_txt, fill=accent, font=f_bold)
-            y += row_h
-            d.line([PAD, y - 8, W - PAD, y - 8], fill=(226, 232, 240), width=1)
-        y += 20
+    # Rijen
+    for r in rows:
+        color = (255, 92, 0) if r.get("highlight") else \
+                (59, 130, 246) if r.get("info") else \
+                (148, 163, 184) if r.get("muted") else (15, 23, 42)
+        d.text((PAD, y + 10), r["label"], fill=color, font=f_bold)
+        if r.get("sub"):
+            d.text((PAD, y + 42), r["sub"], fill=(100, 116, 139), font=f_sub)
+        w = d.textlength(r["value"], font=f_bold)
+        d.text((W - PAD - w, y + 20), r["value"], fill=color, font=f_bold)
+        y += row_h
+        d.line([PAD, y - 6, W - PAD, y - 6], fill=(226, 232, 240), width=1)
 
+    y += 20
     # Totaal
-    d.rectangle([PAD, y, W - PAD, y + 90], fill=(255, 247, 237), outline=accent, width=3)
-    d.text((PAD + 20, y + 24), "Totaal openstaand", fill=(15, 23, 42), font=f_h1)
-    tot_txt = f"{cur} {total_due:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    d.rectangle([PAD, y, W - PAD, y + 100], fill=(255, 247, 237), outline=accent, width=3)
+    d.text((PAD + 20, y + 30), "Totaal openstaand", fill=(15, 23, 42), font=f_h1)
+    tot_txt = fmt(total_due)
     w = d.textlength(tot_txt, font=f_title)
-    d.text((W - PAD - 20 - w, y + 20), tot_txt, fill=accent, font=f_title)
-    y += 120
+    d.text((W - PAD - 20 - w, y + 26), tot_txt, fill=accent, font=f_title)
+    y += 130
 
     if credit > 0:
         d.rectangle([PAD, y, W - PAD, y + 70], fill=(236, 253, 245), outline=(16, 185, 129), width=2)
-        cr_txt = f"Positief saldo (vooruitbetaald): {cur} {credit:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        d.text((PAD + 20, y + 20), cr_txt, fill=(6, 95, 70), font=f_body)
+        d.text((PAD + 20, y + 20),
+               f"Positief saldo (vooruitbetaald): {fmt(credit)}",
+               fill=(6, 95, 70), font=f_body)
         y += 90
 
     d.text((PAD, H - 60), "Vragen? Neem contact op met de beheerder.",
