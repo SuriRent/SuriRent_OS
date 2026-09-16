@@ -2337,30 +2337,40 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     html.style.overflow = 'hidden';
 
     // ---- Stap 2: modal hoogte + positie op visualViewport ----
-    // Zonder keyboard: `top:0 + bottom:0` → element strekt zich uit tussen
-    // beide safe-area randen (statusbalk boven + home-indicator onder).
+    // Zonder keyboard: pin modal binnen safe-area randen zodat iOS 'em
+    // fysiek niet boven de statusbalk of onder de home-indicator kan
+    // schuiven. Dat is de robuustste oplossing tegen iOS' "scroll input
+    // into view" gedrag — de modal heeft simpelweg geen ruimte om te
+    // schuiven omdat CSS-safe-area het gebied afbakent.
     // Met keyboard: expliciete height = zichtbare viewport (excl. keyboard)
     // zodat de Opslaan-knop boven het keyboard eindigt.
-    const KBD_THRESHOLD_PX = 100;  // meer dan 100px verschil = keyboard open
+    const KBD_THRESHOLD_PX = 100;
     const apply = () => {
       const winH = window.innerHeight;
       const vvH = vv ? vv.height : winH;
       const kbdOpen = vv ? (winH - vvH > KBD_THRESHOLD_PX) : false;
       if (kbdOpen) {
+        // Keyboard actief → volg visualViewport exact.
         el.style.bottom = 'auto';
         el.style.height = `${vvH}px`;
         el.style.top = `${vv.offsetTop}px`;
         el.style.left = `${vv.offsetLeft}px`;
         el.style.width = `${vv.width}px`;
+        el.style.paddingTop = '';
+        el.style.paddingBottom = '';
       } else {
-        // Zonder keyboard: stretch modal tussen top:0 en bottom:0. Zo
-        // eindigt de Opslaan-knop (met safe-area padding op de footer)
-        // netjes boven de home-indicator zonder oranje ruimte.
+        // Zonder keyboard: stretch tussen top:0 en bottom:0 MAAR met
+        // safe-area padding zodat de inner modal niet in de statusbalk
+        // of home-indicator zone kan komen. iOS' scroll-into-view kan
+        // hier geen kwaad meer doen omdat de modal-content al binnen de
+        // safe zone gepind is.
         el.style.top = '0px';
         el.style.bottom = '0px';
         el.style.height = 'auto';
         el.style.left = '0px';
         el.style.width = '100%';
+        el.style.paddingTop = 'env(safe-area-inset-top, 0px)';
+        el.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
       }
     };
     apply();
@@ -2377,6 +2387,17 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     const onFocusOut = () => { setTimeout(apply, 50); setTimeout(apply, 300); };
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
+
+    // Extra vangnet: als iOS ondanks body-lock TOCH nog de window probeert
+    // te scrollen (soms bij snelle input-focus events), duwen we 'em direct
+    // terug naar 0. Zonder deze safety-net kan de modal na een halve
+    // seconde alsnog over de statusbalk uitschuiven.
+    const onWindowScroll = () => {
+      if (window.scrollY !== 0 || window.pageYOffset !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
 
     return () => {
       // ---- Restore body ----
@@ -2395,6 +2416,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
       window.removeEventListener('orientationchange', applyRAF);
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
+      window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
 
@@ -2429,11 +2451,10 @@ function KasgeldMutationModal({ onClose, onSaved }) {
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
         data-testid="kasgeld-form">
-        {/* Sticky header — met safe-area-top zodat notch/statusbar niet
-            over de titel schuift op iPhone (voorheen zag je "16:56" over
-            "Nieuwe kasmutatie" heen). */}
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}>
+        {/* Sticky header — safe-area-top wordt al door de outer overlay
+            geregeld (padding-top:env(safe-area-inset-top)); hier alleen
+            interne padding voor de titel/kruis. */}
+        <div className="flex-none flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
           <h3 className="text-lg font-black text-slate-900">Nieuwe kasmutatie</h3>
           <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
@@ -2496,9 +2517,9 @@ function KasgeldMutationModal({ onClose, onSaved }) {
           {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
         </div>
 
-        {/* Sticky footer */}
-        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+        {/* Sticky footer — safe-area-bottom wordt al door de outer overlay
+            geregeld; hier alleen interne padding voor de Opslaan-knop. */}
+        <div className="flex-none px-5 py-3 border-t border-slate-100 bg-white">
           <button onClick={save} disabled={saving} data-testid="kasgeld-save"
             className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
