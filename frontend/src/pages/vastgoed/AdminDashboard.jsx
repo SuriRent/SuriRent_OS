@@ -12,7 +12,7 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
-  UserCircle, Sparkles,
+  UserCircle, Sparkles, StickyNote,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -3510,6 +3510,10 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
         </div>
       </div>
 
+      {/* Notities-sectie — synchroniseert met kiosk notities zodat admin
+          en kiosk-medewerker beide zicht hebben op afspraken. */}
+      <AdminNotesCard tenantId={t.id} tenantName={t.name} />
+
       {/* Full-screen preview van ID-kaart */}
       {preview && idPhotoSrc && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
@@ -3561,6 +3565,154 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
     </div>
   );
 }
+
+// =====================================================================
+// AdminNotesCard — admin-side view voor tenant notities. Deelt data met
+// de kiosk NotesModal (zelfde tenant_notes collectie via admin-scoped
+// endpoints). Ondersteunt herinner-datum voor kiosk popup.
+// =====================================================================
+function AdminNotesCard({ tenantId, tenantName }) {
+  const [notes, setNotes] = useState([]);
+  const [text, setText] = useState('');
+  const [remindAt, setRemindAt] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/tenants/${tenantId}/notes`);
+      setNotes(r.data || []);
+    } catch (e) { setErr(e?.response?.data?.detail || 'Kon notities niet laden'); }
+    finally { setLoading(false); }
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    const t = text.trim();
+    if (!t) return;
+    setSaving(true); setErr('');
+    try {
+      await api.post(`/tenants/${tenantId}/notes`, {
+        text: t, remind_at: remindAt || null,
+      });
+      setText(''); setRemindAt('');
+      await load();
+      setExpanded(true);
+    } catch (e) { setErr(e?.response?.data?.detail || 'Opslaan mislukt'); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Deze notitie verwijderen?')) return;
+    try {
+      await api.delete(`/tenants/${tenantId}/notes/${id}`);
+      await load();
+    } catch (e) { setErr(e?.response?.data?.detail || 'Verwijderen mislukt'); }
+  };
+
+  const visible = expanded ? notes : notes.slice(0, 3);
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="rounded-2xl bg-white border border-slate-200 p-4 sm:p-5 shadow-sm" data-testid="tenant-notes-card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <StickyNote className="w-4 h-4 text-amber-700" />
+          </div>
+          <div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900">Notities & afspraken</h3>
+            <p className="text-[11px] text-slate-500">{tenantName} · zichtbaar in kiosk voor medewerkers</p>
+          </div>
+        </div>
+        {notes.length > 0 && (
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+            {notes.length}
+          </span>
+        )}
+      </div>
+
+      <div className="bg-slate-50 rounded-xl p-3 mb-3">
+        <textarea value={text} onChange={(e) => setText(e.target.value)}
+          data-testid="admin-notes-input"
+          rows={2}
+          placeholder="Bijv. Gebeld op 16 sep — huurder belooft rest juli-huur af te maken vóór 20 sep."
+          className="w-full text-sm border-2 border-slate-200 rounded-lg p-2 outline-none focus:border-orange-500 resize-none" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+          <label>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
+              Herinner mij op (optioneel)
+            </span>
+            <input type="date" value={remindAt}
+              onChange={(e) => setRemindAt(e.target.value)}
+              data-testid="admin-notes-remind-at"
+              min={today}
+              className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
+          </label>
+          <button onClick={add} disabled={saving || !text.trim()}
+            data-testid="admin-notes-add"
+            className="h-10 sm:mt-6 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : <><Plus className="w-4 h-4" /> Notitie toevoegen</>}
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-1">
+          Met herinner-datum krijgt de kiosk-medewerker een popup wanneer de huurder op of na die dag binnenkomt.
+        </p>
+      </div>
+
+      {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">{err}</p>}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+      ) : notes.length === 0 ? (
+        <p className="text-center text-xs text-slate-400 py-4">Nog geen notities voor deze huurder.</p>
+      ) : (
+        <div className="space-y-2">
+          {visible.map((n) => {
+            const isDue = n.remind_at && !n.dismissed_at && n.remind_at <= today;
+            return (
+              <div key={n.id}
+                className={`border rounded-xl p-3 ${isDue ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}
+                data-testid={`admin-note-${n.id}`}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1 flex-wrap">
+                    {new Date(n.created_at).toLocaleString('nl-NL', {
+                      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                    })}
+                    {n.created_by && <span className="text-slate-500">· {n.created_by}</span>}
+                    {n.remind_at && (
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold ${n.dismissed_at ? 'bg-slate-100 text-slate-500' : (isDue ? 'bg-amber-500 text-white' : 'bg-blue-100 text-blue-700')}`}>
+                        <Calendar className="w-3 h-3" />
+                        {n.dismissed_at ? 'Afgesloten' : `Herinner ${n.remind_at}`}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => remove(n.id)} data-testid={`admin-note-delete-${n.id}`}
+                    className="opacity-60 hover:opacity-100 text-red-500">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.text}</p>
+              </div>
+            );
+          })}
+          {notes.length > 3 && (
+            <button onClick={() => setExpanded(!expanded)}
+              data-testid="admin-notes-toggle"
+              className="w-full h-9 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100">
+              {expanded ? 'Toon minder' : `Toon alle ${notes.length} notities`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function InfoRow({ label, value, mono }) {
   return (

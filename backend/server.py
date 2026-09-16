@@ -9346,6 +9346,17 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
                                               {"_id": 1}) is not None
     has_invoice = await db.invoices.find_one({"tenant_id": tenant_id},
                                               {"_id": 1}) is not None
+
+    # Reminder-notities die vandaag (of eerder) hun herinner-datum bereiken
+    # en die nog niet zijn afgesloten. Deze tonen we als popup bij binnenkomst
+    # in de Kiosk zodat de medewerker meteen ziet wat er is afgesproken.
+    today_iso = now_utc().date().isoformat()
+    due_notes = await db.tenant_notes.find({
+        "tenant_id": tenant_id,
+        "company_id": _session.get("company_id"),
+        "remind_at": {"$ne": None, "$lte": today_iso},
+        "dismissed_at": None,
+    }, {"_id": 0}).sort("remind_at", 1).to_list(20)
     return {
         "tenant": {
             "id": t["id"],
@@ -9372,6 +9383,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "current_month_invoice": current_month_invoice,
         "grace_workdays": grace_wd,
         "has_history": bool(has_payment or has_invoice),
+        "due_reminders": due_notes,
     }
 
 
@@ -10023,6 +10035,73 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
 # ---------------------------------------------------------------------
 class TenantNoteIn(BaseModel):
     text: str
+    remind_at: Optional[str] = None   # ISO date "YYYY-MM-DD" — popup datum
+
+
+async def _tenant_notes_list(company_id: str, tenant_id: str) -> list[dict]:
+    return await db.tenant_notes.find(
+        {"tenant_id": tenant_id, "company_id": company_id},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(50).to_list(50)
+
+
+async def _tenant_note_add(company_id: str, tenant_id: str, body: TenantNoteIn,
+                           created_by: str) -> dict:
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Notitie mag niet leeg zijn")
+    if len(text) > 2000:
+        raise HTTPException(status_code=400, detail="Notitie is te lang (max 2000 tekens)")
+    remind_at = (body.remind_at or "").strip() or None
+    if remind_at:
+        # Simpele validatie: verwacht "YYYY-MM-DD" formaat
+        try:
+            from datetime import date as _date
+            _date.fromisoformat(remind_at)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Ongeldige herinner-datum (verwacht YYYY-MM-DD)")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "company_id": company_id,
+        "tenant_id": tenant_id,
+        "text": text,
+        "remind_at": remind_at,
+        "dismissed_at": None,
+        "created_at": iso(now_utc()),
+        "created_by": created_by or "admin",
+    }
+    await db.tenant_notes.insert_one(doc)
+    doc.pop("_id", None)
+    asyncio.create_task(_sse_broadcast(
+        company_id, {"type": "change", "path": "/api/tenants/notes", "method": "POST"},
+    ))
+    return doc
+
+
+async def _tenant_note_delete(company_id: str, tenant_id: str, note_id: str) -> None:
+    res = await db.tenant_notes.delete_one({
+        "id": note_id, "tenant_id": tenant_id, "company_id": company_id,
+    })
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Notitie niet gevonden")
+    asyncio.create_task(_sse_broadcast(
+        company_id, {"type": "change", "path": "/api/tenants/notes", "method": "DELETE"},
+    ))
+
+
+async def _tenant_note_dismiss(company_id: str, tenant_id: str, note_id: str) -> None:
+    """Markeer een reminder als 'behandeld' zodat 'ie niet meer popup't bij de
+    volgende kiosk-sessie. Verwijdert de notitie NIET — je kan 'em later nog
+    inzien in de admin/kiosk notities-lijst."""
+    res = await db.tenant_notes.update_one(
+        {"id": note_id, "tenant_id": tenant_id, "company_id": company_id},
+        {"$set": {"dismissed_at": iso(now_utc())}},
+    )
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Notitie niet gevonden")
+    asyncio.create_task(_sse_broadcast(
+        company_id, {"type": "change", "path": "/api/tenants/notes", "method": "DISMISS"},
+    ))
 
 
 @api.get("/kiosk/tenants/{tenant_id}/notes")
@@ -10032,57 +10111,75 @@ async def kiosk_tenant_notes_list(tenant_id: str, _session=Depends(get_kiosk_ses
     )
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    docs = await db.tenant_notes.find(
-        {"tenant_id": tenant_id, "company_id": _session.get("company_id")},
-        {"_id": 0},
-    ).sort("created_at", -1).limit(50).to_list(50)
-    return docs
+    return await _tenant_notes_list(_session.get("company_id"), tenant_id)
 
 
 @api.post("/kiosk/tenants/{tenant_id}/notes")
 async def kiosk_tenant_notes_add(tenant_id: str, body: TenantNoteIn,
                                  _session=Depends(get_kiosk_session)):
-    text = (body.text or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Notitie mag niet leeg zijn")
-    if len(text) > 2000:
-        raise HTTPException(status_code=400, detail="Notitie is te lang (max 2000 tekens)")
     t = await db.tenants.find_one(
         {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1},
     )
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    doc = {
-        "id": str(uuid.uuid4()),
-        "company_id": _session.get("company_id"),
-        "tenant_id": tenant_id,
-        "text": text,
-        "created_at": iso(now_utc()),
-        "created_by": _session.get("employee_name") or "kiosk",
-    }
-    await db.tenant_notes.insert_one(doc)
-    doc.pop("_id", None)
-    asyncio.create_task(_sse_broadcast(
-        _session.get("company_id"),
-        {"type": "change", "path": "/api/tenants/notes", "method": "POST"},
-    ))
-    return doc
+    return await _tenant_note_add(
+        _session.get("company_id"), tenant_id, body,
+        _session.get("employee_name") or "kiosk",
+    )
 
 
 @api.delete("/kiosk/tenants/{tenant_id}/notes/{note_id}")
 async def kiosk_tenant_notes_delete(tenant_id: str, note_id: str,
                                     _session=Depends(get_kiosk_session)):
-    res = await db.tenant_notes.delete_one({
-        "id": note_id,
-        "tenant_id": tenant_id,
-        "company_id": _session.get("company_id"),
-    })
-    if not res.deleted_count:
-        raise HTTPException(status_code=404, detail="Notitie niet gevonden")
-    asyncio.create_task(_sse_broadcast(
-        _session.get("company_id"),
-        {"type": "change", "path": "/api/tenants/notes", "method": "DELETE"},
-    ))
+    await _tenant_note_delete(_session.get("company_id"), tenant_id, note_id)
+    return {"ok": True}
+
+
+@api.post("/kiosk/tenants/{tenant_id}/notes/{note_id}/dismiss")
+async def kiosk_tenant_notes_dismiss(tenant_id: str, note_id: str,
+                                     _session=Depends(get_kiosk_session)):
+    await _tenant_note_dismiss(_session.get("company_id"), tenant_id, note_id)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------
+# Admin-scoped tenant notes — spiegel van de kiosk endpoints hierboven
+# ---------------------------------------------------------------------
+@api.get("/tenants/{tenant_id}/notes")
+async def admin_tenant_notes_list(tenant_id: str, user=Depends(get_current_user)):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
+    t = await db.tenants.find_one(
+        {"id": tenant_id, "company_id": cid}, {"_id": 0, "id": 1},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    return await _tenant_notes_list(cid, tenant_id)
+
+
+@api.post("/tenants/{tenant_id}/notes")
+async def admin_tenant_notes_add(tenant_id: str, body: TenantNoteIn,
+                                 user=Depends(get_current_user)):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
+    t = await db.tenants.find_one(
+        {"id": tenant_id, "company_id": cid}, {"_id": 0, "id": 1},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    return await _tenant_note_add(cid, tenant_id, body,
+                                  user.get("email") or user.get("name") or "admin")
+
+
+@api.delete("/tenants/{tenant_id}/notes/{note_id}")
+async def admin_tenant_notes_delete(tenant_id: str, note_id: str,
+                                    user=Depends(get_current_user)):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen bedrijfscontext")
+    await _tenant_note_delete(cid, tenant_id, note_id)
     return {"ok": True}
 
 

@@ -340,6 +340,7 @@ function NotesButton({ tenantId, tenantName }) {
 function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
   const [notes, setNotes] = useState([]);
   const [text, setText] = useState('');
+  const [remindAt, setRemindAt] = useState('');   // YYYY-MM-DD, optioneel
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -361,8 +362,11 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
     if (!t) return;
     setSaving(true); setErr('');
     try {
-      await api.post(`/kiosk/tenants/${tenantId}/notes`, { text: t });
-      setText('');
+      await api.post(`/kiosk/tenants/${tenantId}/notes`, {
+        text: t,
+        remind_at: remindAt || null,
+      });
+      setText(''); setRemindAt('');
       await load();
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
@@ -372,6 +376,13 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
     if (!window.confirm('Deze notitie verwijderen?')) return;
     try {
       await api.delete(`/kiosk/tenants/${tenantId}/notes/${id}`);
+      await load();
+    } catch (e) { setErr(formatError(e)); }
+  };
+
+  const dismiss = async (id) => {
+    try {
+      await api.post(`/kiosk/tenants/${tenantId}/notes/${id}/dismiss`);
       await load();
     } catch (e) { setErr(formatError(e)); }
   };
@@ -399,6 +410,19 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
               rows={3}
               placeholder="Bijv. Gebeld met huurder op 15 aug — belooft rest juli-huur af te maken vóór 20 aug."
               className="w-full text-sm border-2 border-slate-200 rounded-lg p-2 outline-none focus:border-orange-500 resize-none" />
+            <label className="block mt-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
+                Herinner mij op (optioneel)
+              </span>
+              <input type="date" value={remindAt}
+                onChange={(e) => setRemindAt(e.target.value)}
+                data-testid="notes-remind-at"
+                min={new Date().toISOString().slice(0, 10)}
+                className="w-full h-10 px-2 rounded-lg border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
+              <span className="text-[10px] text-slate-500 block mt-1">
+                Zet een datum om popup te tonen wanneer huurder binnenkomt in kiosk.
+              </span>
+            </label>
             <button onClick={add} disabled={saving || !text.trim()}
               data-testid="notes-add"
               className="mt-2 w-full h-11 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
@@ -413,24 +437,44 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
             <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
           ) : notes.length === 0 ? (
             <p className="text-center text-xs text-slate-400 py-6">Nog geen notities voor deze huurder.</p>
-          ) : notes.map((n) => (
-            <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-3 group" data-testid={`note-${n.id}`}>
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="text-[10px] font-bold text-slate-400">
-                  {new Date(n.created_at).toLocaleString('nl-NL', {
-                    day: '2-digit', month: 'short', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit',
-                  })}
-                  {n.created_by && <span className="ml-1.5 text-slate-500">· {n.created_by}</span>}
+          ) : notes.map((n) => {
+            const isDue = n.remind_at && !n.dismissed_at && n.remind_at <= new Date().toISOString().slice(0, 10);
+            return (
+              <div key={n.id}
+                className={`border rounded-xl p-3 group ${isDue ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}
+                data-testid={`note-${n.id}`}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1 flex-wrap">
+                    {new Date(n.created_at).toLocaleString('nl-NL', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                    {n.created_by && <span className="text-slate-500">· {n.created_by}</span>}
+                    {n.remind_at && (
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold ${n.dismissed_at ? 'bg-slate-100 text-slate-500' : (isDue ? 'bg-amber-500 text-white' : 'bg-blue-100 text-blue-700')}`}>
+                        <Calendar className="w-3 h-3" />
+                        {n.dismissed_at ? 'Afgesloten' : `Herinner ${n.remind_at}`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isDue && (
+                      <button onClick={() => dismiss(n.id)}
+                        data-testid={`note-dismiss-${n.id}`}
+                        className="text-emerald-600 hover:bg-emerald-100 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                        Behandeld
+                      </button>
+                    )}
+                    <button onClick={() => remove(n.id)} data-testid={`note-delete-${n.id}`}
+                      className="opacity-60 hover:opacity-100 text-red-500">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => remove(n.id)} data-testid={`note-delete-${n.id}`}
-                  className="opacity-60 hover:opacity-100 text-red-500">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.text}</p>
               </div>
-              <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.text}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -445,14 +489,23 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [dueReminder, setDueReminder] = useState(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!apartment?.tenant_id) return;
     api.get(`/kiosk/tenants/${apartment.tenant_id}/overview`)
-      .then((r) => setData(r.data))
+      .then((r) => {
+        setData(r.data);
+        // Toon de eerste due reminder als popup — zodra de medewerker deze
+        // afhandelt (Behandeld/Later), pakken we de volgende.
+        const rems = Array.isArray(r.data?.due_reminders) ? r.data.due_reminders : [];
+        setDueReminder(rems[0] || null);
+      })
       .catch((e) => setErr(formatError(e)))
       .finally(() => setLoading(false));
   }, [apartment]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   if (loading) return <div className="h-full bg-orange-500 flex items-center justify-center"><Loader2 className="w-10 h-10 text-white animate-spin" /></div>;
   if (err || !data) return <div className="h-full bg-orange-500 flex items-center justify-center text-white p-8">{err || 'Geen data'}</div>;
@@ -707,8 +760,64 @@ function TenantOverview({ apartment, onBack, onPay }) {
       </div>
 
       {showHistory && <PaymentHistoryModal tenant={tenant} apartment={apt} onClose={() => setShowHistory(false)} />}
+      {dueReminder && (
+        <ReminderPopup
+          tenantId={tenant.id}
+          note={dueReminder}
+          onDismiss={async (dismiss) => {
+            if (dismiss) {
+              try { await api.post(`/kiosk/tenants/${tenant.id}/notes/${dueReminder.id}/dismiss`); } catch { /* noop */ }
+            }
+            reload();  // haalt volgende reminder op, of null als er geen meer is
+          }} />
+      )}
     </div>
   );
+}
+
+// =====================================================================
+// ReminderPopup — toont een enkele due-notitie als modal bij binnenkomst
+// van de huurder in de Kiosk. Twee knoppen: "Later" (opent notitie later
+// weer) en "Behandeld" (markeert dismissed_at).
+// =====================================================================
+function ReminderPopup({ note, onDismiss }) {
+  return createPortal((
+    <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-4"
+      data-testid="reminder-popup">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-4 border-amber-400">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+            <StickyNote className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-black text-slate-900">Herinnering</h3>
+            <p className="text-xs text-slate-500">
+              Aangemaakt {new Date(note.created_at).toLocaleDateString('nl-NL', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              })}
+              {note.created_by && <span> door {note.created_by}</span>}
+              {note.remind_at && <span> · gepland voor {note.remind_at}</span>}
+            </p>
+          </div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.text}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => onDismiss(false)}
+            data-testid="reminder-later"
+            className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
+            Later
+          </button>
+          <button onClick={() => onDismiss(true)}
+            data-testid="reminder-done"
+            className="flex-1 h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm inline-flex items-center justify-center gap-2">
+            <CheckCircle className="w-4 h-4" /> Behandeld
+          </button>
+        </div>
+      </div>
+    </div>
+  ), document.body);
 }
 
 // =====================================================================
