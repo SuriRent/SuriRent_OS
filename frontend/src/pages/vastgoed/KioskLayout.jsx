@@ -311,33 +311,53 @@ function ShareOverviewButton({ tenantId, tenantName, tenantPhone, totalDue, curr
 }
 
 // =====================================================================
-// ShareVoiceButton — TTS herinnering als MP3 delen via WhatsApp
+// ShareVoiceButton + Modal — TTS herinnering met bewerkbare tekst
 // =====================================================================
-// Genereert via OpenAI TTS (Nova-stem) een gesproken NL-bericht met de
-// openstaande facturen en deelt dit direct via de Web Share API. Als de
-// huurder geen open bedrag heeft is de knop uitgegrijsd — geen zin om
-// spraakmail te maken zonder actie.
+// Klik → laadt de default tekst via GET /reminder-voice-text, opent
+// een modal met textarea zodat de beheerder de tekst kan aanpassen.
+// Bevestigen → POST /reminder-voice.mp3 met {text}, deelt MP3 via
+// Web Share API of wa.me fallback.
 function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currency }) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loadingText, setLoadingText] = useState(false);
+  const [text, setText] = useState('');
   const [err, setErr] = useState('');
-  const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
   const disabled = !(Number(totalDue) > 0);
-  const share = async () => {
+
+  const openModal = async () => {
     if (disabled) return;
+    setErr('');
+    setOpen(true);
+    setLoadingText(true);
+    try {
+      const r = await api.get(`/kiosk/tenants/${tenantId}/reminder-voice-text`);
+      setText(r.data?.text || '');
+    } catch (e) {
+      setErr(formatError(e));
+    } finally {
+      setLoadingText(false);
+    }
+  };
+
+  const confirm = async () => {
+    const clean = (text || '').trim();
+    if (!clean) { setErr('Tekst mag niet leeg zijn'); return; }
+    if (clean.length > 2000) { setErr('Tekst is te lang (max 2000 tekens)'); return; }
     setBusy(true);
     setErr('');
     try {
-      const resp = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/tenants/${tenantId}/reminder-voice.mp3`,
-        { credentials: 'include' },
+      const resp = await api.post(
+        `/kiosk/tenants/${tenantId}/reminder-voice.mp3`,
+        { text: clean }, { responseType: 'blob' },
       );
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const blob = await resp.blob();
+      const blob = resp.data;
       const file = new File(
         [blob],
         `herinnering-${(tenantName || 'huurder').replace(/\s+/g, '-')}.mp3`,
         { type: 'audio/mpeg' },
       );
+      const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
       const totalTxt = Number.isFinite(Number(totalDue))
         ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
         : '';
@@ -349,7 +369,6 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
           title: 'Betalingsherinnering',
         });
       } else if (phoneDigits.length >= 7) {
-        // Fallback: WhatsApp Web deeplink met tekst, MP3 in nieuw tabblad.
         const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
         window.open(url, '_blank', 'noopener');
         const objUrl = URL.createObjectURL(blob);
@@ -358,26 +377,89 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
         const objUrl = URL.createObjectURL(blob);
         window.open(objUrl, '_blank', 'noopener');
       }
+      setOpen(false);
     } catch (e) {
       if (e && e.name !== 'AbortError') {
-        setErr('Spraakbericht mislukt');
+        setErr(formatError(e) || 'Spraakbericht mislukt');
         // eslint-disable-next-line no-console
         console.error('[share voice] failed:', e);
       }
     } finally {
       setBusy(false);
-      if (err) setTimeout(() => setErr(''), 3000);
     }
   };
+
   return (
-    <button onClick={share} disabled={busy || disabled}
-      data-testid="overview-voice-btn"
-      title={disabled ? 'Geen openstaand bedrag' : 'Spraakbericht versturen'}
-      className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
-      {busy
-        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Bezig…</>
-        : <><Mic className="w-3.5 h-3.5" /> Spraak</>}
-    </button>
+    <>
+      <button onClick={openModal} disabled={disabled}
+        data-testid="overview-voice-btn"
+        title={disabled ? 'Geen openstaand bedrag' : 'Spraakbericht versturen'}
+        className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+        <Mic className="w-3.5 h-3.5" /> Spraak
+      </button>
+      {open && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !busy && setOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="voice-modal">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mic className="w-5 h-5 text-orange-500" />
+                <h3 className="font-bold text-slate-900">Spraakbericht</h3>
+              </div>
+              <button onClick={() => !busy && setOpen(false)}
+                data-testid="voice-modal-close"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex-1 overflow-auto">
+              <p className="text-xs text-slate-500 mb-2">
+                Bewerk de tekst hieronder. Deze wordt omgezet naar spraak
+                (Nova stem, Nederlands) en gedeeld via WhatsApp.
+              </p>
+              {loadingText ? (
+                <div className="h-40 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+                </div>
+              ) : (
+                <textarea
+                  data-testid="voice-modal-textarea"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  disabled={busy}
+                  rows={7}
+                  maxLength={2000}
+                  className="w-full text-sm rounded-xl border border-slate-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none p-3 resize-none disabled:opacity-60"
+                />
+              )}
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[10px] text-slate-400">{(text || '').length} / 2000</p>
+                {err && <p data-testid="voice-modal-error" className="text-[10px] text-red-500 font-semibold">{err}</p>}
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">
+              <button onClick={() => !busy && setOpen(false)}
+                data-testid="voice-modal-cancel"
+                disabled={busy}
+                className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-60">
+                Annuleren
+              </button>
+              <button onClick={confirm}
+                data-testid="voice-modal-confirm"
+                disabled={busy || loadingText || !text.trim()}
+                className="flex-[2] h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2">
+                {busy
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Bezig…</>
+                  : <><MessageCircle className="w-4 h-4" /> Genereer & Deel</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

@@ -10078,16 +10078,11 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
 _TTS_CACHE: dict[str, bytes] = {}   # key = hash(text|voice) → mp3 bytes
 
 
-@api.get("/kiosk/tenants/{tenant_id}/reminder-voice.mp3")
-async def kiosk_tenant_reminder_voice_mp3(
-    tenant_id: str, _session=Depends(get_kiosk_session)
-):
-    """MP3 met beleefd Nederlands herinnerings-audiobericht (Nova voice).
-    Bericht sjabloon: 'Geachte [naam], u heeft [n] openstaande facturen
-    met een totaalbedrag van SRD [bedrag]. Wij verzoeken u vriendelijk
-    dit voor [vervaldatum] te voldoen. Met vriendelijke groet, [bedrijf].'
+async def _default_reminder_text(overview: dict, company_id: str) -> tuple[str, dict]:
+    """Bouwt de standaard Nederlandse herinnerings-zin op basis van
+    het financieel overzicht. Retourneert (text, meta_dict) waarbij
+    meta gebruikt wordt door de UI om extra info te tonen.
     """
-    overview = await kiosk_tenant_overview(tenant_id, _session)
     t = overview["tenant"]
     open_invoices = overview.get("open_invoices") or []
     current_invoices = overview.get("current_invoices") or []
@@ -10096,14 +10091,8 @@ async def kiosk_tenant_reminder_voice_mp3(
     internet = float(t.get("internet_amount") or 0)
     total_due = round(open_total + current_total + internet, 2)
     cur = (overview.get("balance") or {}).get("currency") or "SRD"
-    if total_due <= 0.01:
-        raise HTTPException(status_code=400, detail="Geen openstaande facturen — spraakbericht niet nodig")
-
-    # Aantal openstaande maanden (achterstand + huidige) — internet niet
-    # als aparte "factuur" tellen om verwarring bij huurder te vermijden.
     n_open = len(open_invoices) + len(current_invoices)
 
-    # Vroegste vervaldatum uit alle open+current facturen; anders vandaag+7.
     from datetime import date, timedelta
     due_dates = []
     for inv in list(open_invoices) + list(current_invoices):
@@ -10119,15 +10108,11 @@ async def kiosk_tenant_reminder_voice_mp3(
     due_txt = f"{earliest_due.day} {_NL_MONTHS[earliest_due.month - 1]} {earliest_due.year}"
 
     company = await db.companies.find_one(
-        {"id": _session.get("company_id")}, {"_id": 0, "name": 1},
+        {"id": company_id}, {"_id": 0, "name": 1},
     ) or {}
     company_name = company.get("name") or "de beheerder"
 
-    # Bedrag uitspreken: "duizend" is duidelijker dan "1.000,00" voor TTS.
     def amount_words(v: float) -> str:
-        # TTS leest cijfers vaak los uit ("acht vier drie twee"). num2words
-        # zet het bedrag om naar een Nederlands woord ("achtduizendvijf­
-        # honderd") zodat de stem het bedrag correct uitspreekt.
         from num2words import num2words
         v = round(v, 2)
         euros = int(v)
@@ -10145,8 +10130,61 @@ async def kiosk_tenant_reminder_voice_mp3(
         f"Wij verzoeken u vriendelijk dit voor {due_txt} te voldoen. "
         f"Met vriendelijke groet, {company_name}."
     )
+    meta = {
+        "text": text,
+        "total_due": total_due,
+        "currency": cur,
+        "n_open": n_open,
+        "due_date": earliest_due.isoformat(),
+        "tenant_name": t.get("name") or "",
+        "company_name": company_name,
+    }
+    return text, meta
 
-    # Cache op tekst+voice (dezelfde tekst → dezelfde audio, bespaart TTS-calls).
+
+@api.get("/kiosk/tenants/{tenant_id}/reminder-voice-text")
+async def kiosk_tenant_reminder_voice_text(
+    tenant_id: str, _session=Depends(get_kiosk_session)
+):
+    """Retourneert de default Nederlandse herinneringstekst voor de UI
+    zodat de beheerder deze kan zien/aanpassen vóór TTS-generatie."""
+    overview = await kiosk_tenant_overview(tenant_id, _session)
+    total_check = (
+        float(overview.get("open_invoices_total") or 0)
+        + float(overview.get("current_invoices_total") or 0)
+        + float((overview.get("tenant") or {}).get("internet_amount") or 0)
+    )
+    if total_check <= 0.01:
+        raise HTTPException(status_code=400, detail="Geen openstaande facturen — spraakbericht niet nodig")
+    _text, meta = await _default_reminder_text(overview, _session.get("company_id"))
+    return meta
+
+
+class ReminderVoiceIn(BaseModel):
+    text: str
+
+
+@api.post("/kiosk/tenants/{tenant_id}/reminder-voice.mp3")
+async def kiosk_tenant_reminder_voice_mp3_post(
+    tenant_id: str,
+    body: ReminderVoiceIn,
+    _session=Depends(get_kiosk_session),
+):
+    """Genereert TTS-MP3 (OpenAI Nova, tts-1) van door beheerder aangepaste
+    tekst. Body: {"text": "..."} — max 2000 tekens."""
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Tekst mag niet leeg zijn")
+    if len(text) > 2000:
+        raise HTTPException(status_code=400, detail="Tekst is te lang (max 2000 tekens)")
+
+    # Verifieer tenant bestaat in scope (voorkomt misbruik van open endpoint).
+    t = await db.tenants.find_one(
+        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1},
+    )
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+
     import hashlib
     ckey = hashlib.sha256(f"{text}|nova|tts-1|mp3".encode()).hexdigest()
     audio_bytes = _TTS_CACHE.get(ckey)
@@ -10162,7 +10200,6 @@ async def kiosk_tenant_reminder_voice_mp3(
             )
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"Spraakbericht mislukt: {e}")
-        # Beperk cache tot 128 entries (LRU-lite).
         if len(_TTS_CACHE) >= 128:
             _TTS_CACHE.pop(next(iter(_TTS_CACHE)))
         _TTS_CACHE[ckey] = audio_bytes
