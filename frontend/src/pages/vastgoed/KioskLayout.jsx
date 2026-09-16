@@ -835,6 +835,17 @@ function TenantOverview({ apartment, onBack, onPay }) {
               {isNewTenant ? (
                 // Nieuwe huurder — nog geen factuur. Toon prominente knop
                 // om vooruit te betalen voor de eerste maand.
+                (() => {
+                  // Bepaal welke maand vooruit betaald wordt: gebruik het
+                  // door backend berekende `balance.next_period` (dat is
+                  // gebaseerd op tenant.created_at + eerste onbetaalde
+                  // periode). Fallback op de huidige kalendermaand.
+                  const np = (data.balance && data.balance.next_period) || null;
+                  const now = new Date();
+                  const nextM = (np && Number(np.month)) || (now.getMonth() + 1);
+                  const nextY = (np && Number(np.year)) || now.getFullYear();
+                  const nextLabel = `${MONTHS_NL[nextM - 1]} ${nextY}`;
+                  return (
                 <>
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-3">
                     <Home className="w-8 h-8 sm:w-9 sm:h-9 text-orange-500" />
@@ -844,23 +855,26 @@ function TenantOverview({ apartment, onBack, onPay }) {
                     Nog geen factuur
                   </p>
                   <p className="text-xs text-slate-500 mb-3 max-w-xs">
-                    Betaal je eerste maand alvast vooruit — {fmtMoney(firstMonthRent, cur)} voor huisnummer {apt.number}
+                    Betaal je eerste maand ({nextLabel}) alvast vooruit — {fmtMoney(firstMonthRent, cur)} voor huisnummer {apt.number}
                   </p>
                   <button onClick={() => onPay({ ...data, internet, total_due: firstMonthRent, isAdvance: true,
                     prefill_advance_amount: firstMonthRent,
+                    advance_period_month: nextM, advance_period_year: nextY,
                     open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
                     current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
                     future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
                     current_month_invoice: currentInvoice })}
                     data-testid="overview-first-month-btn"
                     className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-base font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 active:scale-[0.98]">
-                    Vooruit betalen voor eerste maand <ArrowRight className="w-5 h-5" />
+                    Vooruit betalen voor {nextLabel} <ArrowRight className="w-5 h-5" />
                   </button>
                   <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
                     className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
                     <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
                   </button>
                 </>
+                  );
+                })()
               ) : (
                 <>
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
