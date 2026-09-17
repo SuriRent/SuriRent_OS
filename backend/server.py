@@ -8085,11 +8085,11 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
                 if loc:
                     location_name = loc.get("name")
     # Bedrijfsinfo voor de PDF-header (branding-look uit voorbeeld).
-    # BELANGRIJK: `company_logo_bytes` is een raw PNG-blob (start met
-    # 0x89 magic byte). Strip die vóór het samenvoegen met de payment
-    # dict als deze call bedoeld is voor JSON-response (default), anders
-    # zal FastAPI's jsonable_encoder proberen die bytes als UTF-8 te
-    # decoderen → UnicodeDecodeError → 500.
+    # BELANGRIJK: brand info bevat MEERDERE raw bytes velden
+    # (`company_logo_bytes`, `landlord_signature_bytes`) die FastAPI's
+    # jsonable_encoder crashen (UnicodeDecodeError → 500). Voor JSON-
+    # responses strippen we ELK bytes-veld universeel. PDF-generatie
+    # roept met `include_logo=True` aan om de raw blobs te behouden.
     company_info = {}
     if p.get("company_id"):
         brand = await _company_brand_info(p["company_id"])
@@ -8097,7 +8097,10 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
             if include_logo:
                 company_info = brand
             else:
-                company_info = {k: v for k, v in brand.items() if k != "company_logo_bytes"}
+                company_info = {
+                    k: v for k, v in brand.items()
+                    if not isinstance(v, (bytes, bytearray))
+                }
     # Openstaand na deze betaling — som van remaining_amount over alle
     # niet-betaalde facturen van deze huurder, in dezelfde currency.
     outstanding_after = 0.0
@@ -8122,6 +8125,11 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
         p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
     if not p.get("paid_at"):
         p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
+    # Strip alle bytes-velden uit de raw payment doc zelf (defensief:
+    # legacy docs kunnen embedded binary attachments bevatten die
+    # FastAPI's jsonable_encoder laten crashen).
+    if not include_logo:
+        p = {k: v for k, v in p.items() if not isinstance(v, (bytes, bytearray))}
     return {**p, "tenant_name": tenant_name, "tenant_phone": tenant_phone,
             "apartment_number": apt_number,
             "location_name": location_name,
@@ -8171,14 +8179,15 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
         traceback.print_exc()
 
     # Brand info per company — éénmaal per unieke company gecached.
-    # We strippen `company_logo_bytes` (binary PNG) zodat FastAPI's JSON
-    # encoder niet faalt op de bytes; logo wordt enkel gebruikt in PDF
-    # generatie, niet in lijst-endpoints.
+    # We strippen ELK bytes-veld (bv. `company_logo_bytes`,
+    # `landlord_signature_bytes`) zodat FastAPI's JSON encoder niet
+    # faalt op raw PNG-blobs (UnicodeDecodeError → 500). Deze blobs
+    # worden enkel gebruikt in PDF-generatie, niet in lijst-endpoints.
     for cid in company_ids:
         try:
             b = await _company_brand_info(cid)
             if b:
-                b = {k: v for k, v in b.items() if k != "company_logo_bytes"}
+                b = {k: v for k, v in b.items() if not isinstance(v, (bytes, bytearray))}
             brand_cache[cid] = b
         except Exception as _e:  # noqa: BLE001
             print(f"[payments] brand info fetch FAILED for {cid}: {_e}")
@@ -8222,6 +8231,10 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
     out = []
     for p in payments:
         try:
+            # Strip alle bytes-velden uit de raw payment doc zelf zodat
+            # legacy docs met binary blobs (bv. embedded signature/receipt
+            # attachments) FastAPI JSON encoder niet doen crashen.
+            p = {k: v for k, v in p.items() if not isinstance(v, (bytes, bytearray))}
             tid = p.get("tenant_id")
             aid = p.get("apartment_id")
             cid = p.get("company_id")
