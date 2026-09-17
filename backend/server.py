@@ -8179,37 +8179,64 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
             )
 
     # Bouw de output. Defensive: één corrupt doc (bv. legacy AI-insert zonder
-    # `receipt_number` of `paid_at`) mag NOOIT meer de hele /api/payments
-    # response laten crashen met een ResponseValidationError. Vul missende
-    # verplichte PaymentOut-velden aan met veilige defaults en log een
-    # waarschuwing zodat admins/monitoring het kunnen zien en repareren.
+    # `receipt_number` of `paid_at`, of een null-veld waar Pydantic hikt) mag
+    # NOOIT meer de hele /api/payments response laten crashen. Vul missende
+    # verplichte PaymentOut-velden aan met veilige defaults, wrap de hele
+    # enrichment per payment in een try/except zodat één slechte doc de rest
+    # niet meesleept, en log elk incident zodat admins/monitoring het kunnen
+    # zien en repareren.
     out = []
     for p in payments:
-        tid = p.get("tenant_id")
-        aid = p.get("apartment_id")
-        cid = p.get("company_id")
-        t = tenant_by_id.get(tid) if tid else None
-        a = apt_by_id.get(aid) if aid else None
-        loc = loc_by_id.get(a.get("location_id")) if a and a.get("location_id") else None
-        cur = p.get("currency") or "SRD"
-        # --- Defensive backfill voor verplichte PaymentOut-velden ---
-        _fixed = []
-        if not p.get("receipt_number"):
-            p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
-            _fixed.append("receipt_number")
-        if not p.get("paid_at"):
-            p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
-            _fixed.append("paid_at")
-        if _fixed:
-            print(f"[payments] backfilled missing fields {_fixed} for payment id={p.get('id')} company={cid}")
-        out.append({
-            **p,
-            "tenant_name": t.get("name") if t else None,
-            "apartment_number": a.get("number") if a else None,
-            "location_name": loc.get("name") if loc else None,
-            "outstanding_after": round(outstanding_by_tenant_cur.get((tid, cur), 0.0), 2),
-            **(brand_cache.get(cid) or {}),
-        })
+        try:
+            tid = p.get("tenant_id")
+            aid = p.get("apartment_id")
+            cid = p.get("company_id")
+            t = tenant_by_id.get(tid) if tid else None
+            a = apt_by_id.get(aid) if aid else None
+            loc = loc_by_id.get(a.get("location_id")) if a and a.get("location_id") else None
+            cur = p.get("currency") or "SRD"
+            # --- Defensive backfill voor verplichte PaymentOut-velden ---
+            _fixed = []
+            if not p.get("receipt_number"):
+                p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
+                _fixed.append("receipt_number")
+            if not p.get("paid_at"):
+                p["paid_at"] = p.get("created_at") or p.get("approved_at") or iso(now_utc())
+                _fixed.append("paid_at")
+            if p.get("amount") is None:
+                p["amount"] = 0.0
+                _fixed.append("amount")
+            if not p.get("currency"):
+                p["currency"] = "SRD"
+                _fixed.append("currency")
+            if not p.get("method"):
+                p["method"] = "cash"
+                _fixed.append("method")
+            if not p.get("category"):
+                p["category"] = "rent"
+                _fixed.append("category")
+            if not tid:
+                # Geen tenant_id → skippen. Deze legacy-doc kan niet
+                # meaningful weergegeven worden aan een huurder.
+                print(f"[payments] SKIPPED corrupt doc (no tenant_id) id={p.get('id')}")
+                continue
+            if _fixed:
+                print(f"[payments] backfilled missing fields {_fixed} for payment id={p.get('id')} company={cid}")
+            out.append({
+                **p,
+                "tenant_name": t.get("name") if t else None,
+                "apartment_number": a.get("number") if a else None,
+                "location_name": loc.get("name") if loc else None,
+                "outstanding_after": round(outstanding_by_tenant_cur.get((tid, cur), 0.0), 2),
+                **(brand_cache.get(cid) or {}),
+            })
+        except Exception as _e:  # noqa: BLE001
+            # Fail-safe: log en skip. Betere UX dan de hele lijst laten
+            # crashen omdat één document raar is.
+            import traceback
+            print(f"[payments] SKIPPED payment enrichment failure id={p.get('id')} err={_e}")
+            traceback.print_exc()
+            continue
     return out
 
 
