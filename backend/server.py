@@ -10442,41 +10442,60 @@ async def admin_tenant_notes_delete(tenant_id: str, note_id: str,
 
 @api.get("/kiosk/tenants/{tenant_id}/payments")
 async def kiosk_tenant_payments(tenant_id: str, _session=Depends(get_kiosk_session)):
-    """List recent payments for a tenant (used in kiosk 'Betalingsgeschiedenis' modal)."""
-    t = await db.tenants.find_one({"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1})
-    if not t:
-        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    docs = await db.payments.find(
-        {"tenant_id": tenant_id, **kiosk_scope(_session)}, {"_id": 0}
-    ).sort("paid_at", -1).to_list(50)
+    """List recent payments for a tenant (used in kiosk 'Betalingsgeschiedenis' modal).
+
+    ULTIMATE fail-safe: mag onder GEEN enkele omstandigheid een 500 teruggeven.
+    Elke onverwachte fout wordt gelogd en resulteert in een lege lijst zodat
+    de UI tenminste laadt en de gebruiker niet in een foutmelding vastzit.
+    """
     try:
-        return await _enrich_payments_bulk(docs)
+        t = await db.tenants.find_one({"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1})
+        if not t:
+            raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+        docs = await db.payments.find(
+            {"tenant_id": tenant_id, **kiosk_scope(_session)}, {"_id": 0}
+        ).sort("paid_at", -1).to_list(50)
+        try:
+            return await _enrich_payments_bulk(docs)
+        except Exception as _e:  # noqa: BLE001
+            # Ultimate fail-safe: als de enrichment op enige manier crasht,
+            # retourneer de raw payments met minimale fields zodat de UI
+            # tenminste iets kan tonen i.p.v. 500. Strip alle bytes-velden
+            # om FastAPI JSON-encoder crashes op binary blobs te voorkomen.
+            import traceback
+            print(f"[kiosk_tenant_payments] enrichment crashed, returning raw: {_e}")
+            traceback.print_exc()
+            out = []
+            for p in docs:
+                try:
+                    # Strip elk bytes-veld (bv. legacy company_logo_bytes) —
+                    # FastAPI jsonable_encoder faalt hard op raw PNG blobs.
+                    p = {k: v for k, v in p.items() if not isinstance(v, (bytes, bytearray))}
+                    if not p.get("receipt_number"):
+                        p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
+                    if not p.get("paid_at"):
+                        p["paid_at"] = p.get("created_at") or iso(now_utc())
+                    if p.get("amount") is None:
+                        p["amount"] = 0.0
+                    if not p.get("currency"):
+                        p["currency"] = "SRD"
+                    if not p.get("method"):
+                        p["method"] = "cash"
+                    if not p.get("category"):
+                        p["category"] = "rent"
+                    out.append(p)
+                except Exception:  # noqa: BLE001
+                    continue
+            return out
+    except HTTPException:
+        raise
     except Exception as _e:  # noqa: BLE001
-        # Ultimate fail-safe: als de enrichment op enige manier crasht,
-        # retourneer de raw payments met minimale fields zodat de UI
-        # tenminste iets kan tonen i.p.v. 500.
+        # Alles wat nog steeds crashed (bv. DB timeout, session decode error)
+        # → return lege lijst zodat de kiosk-UI niet stuk gaat.
         import traceback
-        print(f"[kiosk_tenant_payments] enrichment crashed, returning raw: {_e}")
+        print(f"[kiosk_tenant_payments] TOP-LEVEL crash tenant={tenant_id}: {_e}")
         traceback.print_exc()
-        out = []
-        for p in docs:
-            try:
-                if not p.get("receipt_number"):
-                    p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
-                if not p.get("paid_at"):
-                    p["paid_at"] = p.get("created_at") or iso(now_utc())
-                if p.get("amount") is None:
-                    p["amount"] = 0.0
-                if not p.get("currency"):
-                    p["currency"] = "SRD"
-                if not p.get("method"):
-                    p["method"] = "cash"
-                if not p.get("category"):
-                    p["category"] = "rent"
-                out.append(p)
-            except Exception:  # noqa: BLE001
-                continue
-        return out
+        return []
 
 
 @api.get("/kiosk/receipts/{payment_id}")
