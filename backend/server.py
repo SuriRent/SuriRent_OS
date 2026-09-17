@@ -10844,7 +10844,11 @@ async def payment_pdf(payment_id: str):
 
 
 @api.get("/payments/{payment_id}/print.html", response_class=HTMLResponse)
-async def payment_print_html(payment_id: str, format: Optional[str] = None):
+async def payment_print_html(
+    payment_id: str,
+    format: Optional[str] = None,
+    preview: Optional[int] = 0,
+):
     """HTML-versie van de kwitantie speciaal voor Chrome's --kiosk-printing
     flag. Die flag onderdrukt alleen het printdialoog voor **HTML** documenten
     — niet voor PDF's (die worden door Chrome's PDF-viewer weergegeven, en
@@ -10852,18 +10856,18 @@ async def payment_print_html(payment_id: str, format: Optional[str] = None):
     kwitantie-data met @page/@media print CSS zodat window.print() direct
     naar de OS-standaardprinter gaat.
 
-    Query param `format`:
-      - "a4" (default)   → A4 staand, klassieke layout met blauw kader
-      - "thermal"        → 80mm smalle 1-kolom layout voor bonprinter
-    Bij ontbrekende query wordt de company-instelling `receipts.print_format`
-    uit `db.company_settings` gebruikt.
+    Query params:
+      - `format`  → "a4" (default) of "thermal" (80mm bonprinter)
+      - `preview` → 1 = skip het inline `window.print()` <script> (voor
+                    UI-embeds/iframes waar je alleen wil tonen, niet printen)
+    Bij ontbrekende `format` wordt de company-instelling
+    `receipts.print_format` uit `db.company_settings` gebruikt.
     """
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
 
-    # Als er geen ?format= is meegegeven, kijk naar de company-instelling.
     fmt = (format or "").strip().lower()
     if fmt not in ("a4", "thermal"):
         try:
@@ -10877,7 +10881,7 @@ async def payment_print_html(payment_id: str, format: Optional[str] = None):
         if fmt not in ("a4", "thermal"):
             fmt = "a4"
 
-    html = _render_receipt_html(p, fmt=fmt)
+    html = _render_receipt_html(p, fmt=fmt, preview=bool(preview))
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
@@ -10885,7 +10889,7 @@ _NL_MONTHS_FULL = ["januari", "februari", "maart", "april", "mei", "juni",
                    "juli", "augustus", "september", "oktober", "november", "december"]
 
 
-def _render_receipt_html(p: dict, fmt: str = "a4") -> str:
+def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str:
     """Bouwt een compact, print-ready HTML-document voor een betaling.
 
     fmt="a4"      → A4 staand, klassieke 'blue house' layout (2 kolommen partijen)
@@ -10945,6 +10949,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4") -> str:
             apartment_number=apartment_number, location_name=location_name,
             amount=amount, currency=currency, outstanding_after=outstanding_after,
             method=method, note=note, desc=desc, fmt_money=fmt_money,
+            preview=preview,
         )
 
     # ------ A4 layout (default) ------
@@ -10956,6 +10961,20 @@ def _render_receipt_html(p: dict, fmt: str = "a4") -> str:
 
     def cb(m):
         return "☑" if method == m else "☐"
+
+    autoprint_script = "" if preview else """
+  <script>
+    (function() {
+      var didPrint = false;
+      function go() {
+        if (didPrint) return;
+        didPrint = true;
+        setTimeout(function() { try { window.focus(); window.print(); } catch(e) {} }, 80);
+      }
+      if (document.readyState === 'complete') go();
+      else window.addEventListener('load', go);
+    })();
+  </script>"""
 
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
@@ -11058,18 +11077,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4") -> str:
       <div class="line">Handtekening verhuurder</div>
     </div>
   </div></div>
-  <script>
-    (function() {{
-      var didPrint = false;
-      function go() {{
-        if (didPrint) return;
-        didPrint = true;
-        setTimeout(function() {{ try {{ window.focus(); window.print(); }} catch(e) {{}} }}, 80);
-      }}
-      if (document.readyState === 'complete') go();
-      else window.addEventListener('load', go);
-    }})();
-  </script>
+  {autoprint_script}
 </body></html>"""
 
 
@@ -11077,7 +11085,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_name, company_address, company_phone,
                                  tenant_name, apartment_number, location_name,
                                  amount, currency, outstanding_after, method,
-                                 note, desc, fmt_money) -> str:
+                                 note, desc, fmt_money, preview: bool = False) -> str:
     """80mm bonprinter layout — POS-stijl, monospaced, 1 kolom.
     @page size 80mm auto laat de printer zelf de lengte bepalen (bon-rol).
     """
@@ -11091,6 +11099,19 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
         else f'<span class="due">Nog openstaand: {h(fmt_money(outstanding_after, currency))}</span>'
     )
     apt_line = f"{h(apartment_number)}" + (f" · {h(location_name)}" if location_name else "")
+    autoprint_script = "" if preview else """
+  <script>
+    (function() {
+      var didPrint = false;
+      function go() {
+        if (didPrint) return;
+        didPrint = true;
+        setTimeout(function() { try { window.focus(); window.print(); } catch(e) {} }, 80);
+      }
+      if (document.readyState === 'complete') go();
+      else window.addEventListener('load', go);
+    })();
+  </script>"""
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
@@ -11151,18 +11172,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div class="footer">Bedankt voor uw betaling</div>
     <div class="footer">— {h(receipt_number)} —</div>
   </div>
-  <script>
-    (function() {{
-      var didPrint = false;
-      function go() {{
-        if (didPrint) return;
-        didPrint = true;
-        setTimeout(function() {{ try {{ window.focus(); window.print(); }} catch(e) {{}} }}, 80);
-      }}
-      if (document.readyState === 'complete') go();
-      else window.addEventListener('load', go);
-    }})();
-  </script>
+  {autoprint_script}
 </body></html>"""
 
 

@@ -2647,20 +2647,11 @@ function ReceiptScreen({ payment, overview, onDone }) {
             }}
             style={{ transformOrigin: 'top center' }}
             data-testid="receipt-paper">
-            <div className="bg-slate-50 rounded-b-2xl rounded-t-md p-5 text-left border-2 border-dashed border-slate-200 border-t-0">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kwitantie</p>
-                  <p className="font-mono text-base font-extrabold text-slate-900" data-testid="receipt-number">{payment.receipt_number}</p>
-                </div>
-                <div className="w-9 h-9 rounded-lg bg-orange-500 flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-white" />
-                </div>
-              </div>
+            <div className="bg-white rounded-b-2xl rounded-t-md text-left border-2 border-dashed border-slate-200 border-t-0 overflow-hidden">
               {/* Prominente medewerker-banner — direct boven het bedrag.
                   Geeft de huurder vertrouwen + helpt bij klachten. */}
               {payment.received_by && (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mb-3 flex items-center gap-2.5"
+                <div className="bg-orange-50 border-b border-orange-200 px-4 py-2 flex items-center gap-2.5"
                   data-testid="receipt-received-by-banner">
                   <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-black shrink-0">
                     {(payment.received_by || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
@@ -2671,30 +2662,28 @@ function ReceiptScreen({ payment, overview, onDone }) {
                   </div>
                 </div>
               )}
-              <div className="space-y-1.5 text-sm">
-                <RowSlim label="Huurder" value={payment.tenant_name} />
-                <RowSlim label="Appartement" value={payment.apartment_number || '—'} />
-                <RowSlim label="Categorie" value={payment.category} />
-                {payment.period_month && <RowSlim label="Periode" value={`${MONTHS_NL[payment.period_month - 1]} ${payment.period_year}`} />}
-                <RowSlim label="Methode" value={payment.method} />
-                <RowSlim label="Datum" value={new Date(payment.paid_at).toLocaleString('nl-NL')} />
-                {payment.approved_by && payment.approved_by !== payment.received_by && (
-                  <RowSlim label="Goedgekeurd door" value={payment.approved_by} />
-                )}
-                <div className="flex justify-between pt-2 border-t border-dashed border-slate-200 mt-2">
-                  <span className="text-slate-500 font-bold">Betaald</span>
-                  <span className="font-extrabold text-slate-900 text-lg" data-testid="receipt-paid">{fmtMoney(payment.amount, payment.currency)}</span>
-                </div>
-                <div className={`flex justify-between items-center pt-2 mt-1 rounded-lg px-2 py-1.5 ${
-                  remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
-                }`} data-testid="receipt-remaining-row">
-                  <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
-                    Openstaand saldo
-                  </span>
-                  <span className={`font-extrabold text-base ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
-                    {remainingLoading ? '…' : fmtMoney(remaining, cur)}
-                  </span>
-                </div>
+              {/* Exact dezelfde bon als wat er geprint wordt — geladen
+                  via de print.html endpoint in preview-modus (geen
+                  auto-print van dít iframe, alleen visueel). */}
+              <iframe
+                title="Kwitantie preview"
+                data-testid="receipt-preview-iframe"
+                src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${payment.id}/print.html?preview=1`}
+                className="w-full block bg-white"
+                style={{ height: '440px', border: 'none' }}
+                sandbox="allow-same-origin"
+              />
+              {/* Openstaand-saldo balk BLIJFT los onder de iframe zodat
+                  huurder zwart-op-kleur ziet wat er nog open staat. */}
+              <div className={`flex justify-between items-center px-4 py-2.5 border-t border-slate-200 ${
+                remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
+              }`} data-testid="receipt-remaining-row">
+                <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                  Openstaand saldo
+                </span>
+                <span className={`font-extrabold text-base ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
+                  {remainingLoading ? '…' : fmtMoney(remaining, cur)}
+                </span>
               </div>
             </div>
           </motion.div>
