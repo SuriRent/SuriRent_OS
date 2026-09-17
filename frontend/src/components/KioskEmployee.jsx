@@ -48,22 +48,17 @@ export function withKioskEmployee(url) {
 }
 
 // Banner die rechts in de kiosk-header staat. Toont "Medewerker: X" met
-// uitlog-knop, of een grote "Inloggen" knop als er geen sessie is.
-export function KioskEmployeeBar({ onLoginClick }) {
+// uitlog-knop wanneer er een PIN-sessie is. Zonder sessie: onzichtbaar —
+// gebruiker heeft de kiosk al betreden dus een aparte "Medewerker login"
+// CTA is redundant en verwarrend voor beheerders/boekhouders.
+export function KioskEmployeeBar({ onLoginClick: _onLoginClick }) {
   const [emp, setEmp] = useState(getKioskEmployee());
   useEffect(() => {
     const refresh = () => setEmp(getKioskEmployee());
     window.addEventListener('kiosk-employee-changed', refresh);
     return () => window.removeEventListener('kiosk-employee-changed', refresh);
   }, []);
-  if (!emp) {
-    return (
-      <button onClick={onLoginClick} data-testid="kiosk-emp-login-cta"
-        className="inline-flex items-center gap-2 h-10 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-xs sm:text-sm transition active:scale-95">
-        <KeyRound className="w-4 h-4" /> Medewerker login
-      </button>
-    );
-  }
+  if (!emp) return null;
   return (
     <div className="inline-flex items-center gap-2 h-10 px-3 rounded-xl bg-white border border-slate-200" data-testid="kiosk-emp-banner">
       <UserCircle2 className="w-4 h-4 text-emerald-600" />
