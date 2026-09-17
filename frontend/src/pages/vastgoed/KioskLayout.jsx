@@ -13,7 +13,6 @@ import {
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
 import {
-  KioskEmployeeBar, KioskEmployeeLoginSheet,
   getKioskEmployee, withKioskEmployee,
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
@@ -3512,34 +3511,10 @@ export default function KioskLayout() {
   }, [step, overview]);
 
   const showDesktopBar = step !== 'check';
-  const [showEmpLogin, setShowEmpLogin] = useState(false);
-  // Bij stap 'pay' (eerste interactie waar een betaling wordt opgezet)
-  // zorg dat een kiosk-medewerker is ingelogd. Zo nee → toon login sheet.
-  // UITZONDERING: als de gebruiker een admin_token heeft (beheerder of
-  // boekhouder werkt vanaf de Kiosk), GEEN sheet tonen — zijn betalingen
-  // gaan via de legacy directe-goedkeuring flow (status=approved).
-  // Bij stap 'pay' (eerste interactie waar een betaling wordt opgezet)
-  // en wanneer de emp-sessie op enige manier verandert, herevalueren of
-  // we de PIN-popup moeten tonen. Voorkomt "spookpopup" wanneer een
-  // andere tab de emp inlogt of wanneer localStorage net gerepopuleerd
-  // is (bv. tijdens PWA-wake).
-  useEffect(() => {
-    if (step !== 'pay') { setShowEmpLogin(false); return; }
-    let hasAdmin = false;
-    try { hasAdmin = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
-    if (hasAdmin) return;
-    const check = () => {
-      const emp = getKioskEmployee();
-      setShowEmpLogin(!emp);
-    };
-    check();
-    window.addEventListener('kiosk-employee-changed', check);
-    window.addEventListener('storage', check);
-    return () => {
-      window.removeEventListener('kiosk-employee-changed', check);
-      window.removeEventListener('storage', check);
-    };
-  }, [step]);
+  // Medewerker-PIN systeem is compleet uitgeschakeld: de kiosk-PIN (of
+  // admin_token) is de enige authenticatie. Geen aparte emp-login sheet,
+  // geen banner. Payments gaan direct als "approved" (backend accepteert
+  // ontbrekende employee_id/employee_pin en houdt status=approved).
 
   return (
     <div className="kiosk-fullscreen bg-orange-500" data-testid="kiosk-root">
@@ -3622,9 +3597,6 @@ export default function KioskLayout() {
               </span>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
-              {/* Medewerker-bar alleen voor niet-admin gebruikers; admin/boekhouder
-                  tikt direct via legacy flow zonder PIN-sessie. */}
-              {!hasAdminAccess && <KioskEmployeeBar onLoginClick={() => setShowEmpLogin(true)} />}
               {apartment && step !== 'select' && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-400 font-medium hidden sm:inline">{apartment.tenant_name}</span>
@@ -3644,23 +3616,6 @@ export default function KioskLayout() {
             </div>
           </div>
         </div>
-      )}
-      {/* Mobile floating Medewerker-badge — bottom-left, niet in flow.
-          Alleen tonen voor niet-admin gebruikers (admin tikt zonder PIN). */}
-      {showDesktopBar && !hasAdminAccess && (
-        <div className="md:hidden fixed left-3 z-40"
-          style={{ bottom: 'max(env(safe-area-inset-bottom, 12px), 12px)' }}
-          data-testid="kiosk-emp-bar-mobile">
-          <KioskEmployeeBar onLoginClick={() => setShowEmpLogin(true)} />
-        </div>
-      )}
-      {/* Kiosk-medewerker login sheet — verschijnt automatisch bij eerste
-          betaling als er nog geen sessie is, of handmatig via banner. */}
-      {showEmpLogin && (
-        <KioskEmployeeLoginSheet
-          onCancel={() => setShowEmpLogin(false)}
-          onSuccess={() => setShowEmpLogin(false)}
-        />
       )}
     </div>
   );
