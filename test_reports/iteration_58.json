@@ -1,0 +1,23 @@
+{
+  "summary": "Backend-only verification of hardened /api/kiosk/tenants/{id}/payments endpoint. Executed 13 pytest tests covering kiosk-pin login, valid tenants (200 + no company_logo_bytes leakage), unknown tenant (404 not 500), unauthenticated (401), regression on overview/notes/receipts. All 13/13 passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_kiosk_payments_hardening.py",
+    "/app/test_reports/pytest/kiosk_hardening.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py exceeds 10000 lines - strongly recommend splitting into modules (kiosk, admin, payments, tenants). Line 10443 endpoint should live in a dedicated kiosk router file.",
+    "Top-level try/except returning [] on any crash masks real errors; ensure structured logging captures the exception with tenant_id so silent failures can be traced.",
+    "Stripping bytes fields ad-hoc in _enrich_payments_bulk is a symptom; consider excluding company_logo_bytes at the projection level in the Mongo query to avoid ever loading binaries into memory."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_payments_hardening.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Kiosk PIN 4321, company_slug my-awesome-rentals-bv",
+  "seed_data_creation": "None - used existing demo tenants",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_kiosk_payments_hardening.py covers the full contract for /api/kiosk/tenants/{id}/payments: 200/404/401 paths and no bytes leakage. Reuse as regression when touching kiosk endpoints.",
+  "rca of the issue": "Original 500 was reported for tenant 2d286e69-... which no longer exists after DB wipe on 2026-02-08. Fixes verified: (a) unknown tenant now returns 404 (not 500), (b) valid tenants return 200 with clean JSON, (c) company_logo_bytes never appears in payment payloads, (d) unauth requests return 401. No 500s observed in any tested path."
+}

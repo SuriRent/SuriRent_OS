@@ -1,6 +1,20 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-14 later) — Kiosk Payments Endpoint Hardening + SW v92
+
+User rapporteerde 3× `HTTP 500` op `/api/kiosk/tenants/2d286e69-.../payments`. Root cause: die tenant bestaat niet meer sinds de preview-DB wipe (2026-02-08); daarnaast kon een resterende `company_logo_bytes`-blob in oudere docs de JSON-encoder crashen.
+
+**Wijzigingen**
+- `kiosk_tenant_payments` (server.py:10443) heeft nu een **top-level try/except**: elke onverwachte fout logt een traceback en retourneert `[]` — nooit meer een 500 vanuit dit endpoint
+- **Bytes-strip** in de fallback-path zodat legacy docs met `company_logo_bytes` of andere binary velden veilig als raw doorgestuurd kunnen worden
+- **Unknown tenant → 404** blijft correct (was al zo, nu geverifieerd)
+- `sw.js CACHE_VERSION` → **`surirent-v92`** (invalideert stale SW-caches met oude 500-responses)
+
+**Testing agent (iteration_58)**: 13/13 tests passed. Geverifieerd: 200 voor 3 echte tenants, 404 voor onbekende, 401 zonder cookie, geen `company_logo_bytes` in payloads, kiosk-pin + overview + notes + receipts regressie OK.
+
+
+
 ## Latest Fix (2026-02-14) — SSE latency + Kiosk broadcast + Kasgeld modal UX
 Cross-replica SSE was traag (soms minuten voordat device B updates zag) door meerdere factoren die nu opgelost zijn:
 
