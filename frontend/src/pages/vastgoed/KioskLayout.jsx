@@ -2663,14 +2663,28 @@ function ReceiptScreen({ payment, overview, onDone }) {
                 </div>
               )}
               {/* Exact dezelfde bon als wat er geprint wordt — geladen
-                  via de print.html endpoint in preview-modus (geen
-                  auto-print van dít iframe, alleen visueel). */}
+                  via de print.html endpoint in preview-modus. Forceren
+                  thermal (compact, monochrome/zwart-wit) zodat de bon
+                  volledig past zonder scrollen. `preview=1` schakelt
+                  auto-print + de zichtbare printknop uit. */}
               <iframe
                 title="Kwitantie preview"
                 data-testid="receipt-preview-iframe"
-                src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${payment.id}/print.html?preview=1`}
+                src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${payment.id}/print.html?preview=1&format=thermal`}
                 className="w-full block bg-white"
-                style={{ height: '440px', border: 'none' }}
+                style={{ height: '540px', border: 'none' }}
+                onLoad={(e) => {
+                  // Auto-fit iframe hoogte op basis van content — zo
+                  // vermijden we scrollbalken bij zowel korte als lange
+                  // bonnen (bv. met opmerking of zonder).
+                  try {
+                    const doc = e.currentTarget.contentDocument;
+                    if (doc && doc.body) {
+                      const h = Math.min(720, Math.max(360, doc.body.scrollHeight + 8));
+                      e.currentTarget.style.height = `${h}px`;
+                    }
+                  } catch { /* cross-origin — ignoreer, fallback = fixed height */ }
+                }}
                 sandbox="allow-same-origin"
               />
               {/* Openstaand-saldo balk BLIJFT los onder de iframe zodat

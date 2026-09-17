@@ -10975,6 +10975,10 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str
       else window.addEventListener('load', go);
     })();
   </script>"""
+    # In preview-mode (iframe-embed) verbergen we OOK de zichtbare printknop
+    # zodat de bon 100% als "netjes document" ogenblik toont — de outer
+    # app heeft eigen printflows.
+    print_button = '' if preview else '<div class="no-print"><button onclick="window.print()">🖨 Afdrukken</button></div>'
 
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
@@ -11028,7 +11032,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str
     padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; }}
 </style></head>
 <body>
-  <div class="no-print"><button onclick="window.print()">🖨 Afdrukken</button></div>
+  {print_button}
   <div class="sheet"><div class="inner">
     <div class="header">
       <div>
@@ -11112,6 +11116,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
       else window.addEventListener('load', go);
     })();
   </script>"""
+    print_button = '' if preview else '<div class="no-print"><button onclick="window.print()">🖨</button></div>'
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
@@ -11123,8 +11128,12 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     .no-print {{ display: none !important; }}
   }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: 10pt; color: #000; margin: 0; padding: 0; background: #fff;
-    width: 76mm; }}
+    font-size: 11pt; color: #000; margin: 0; padding: 0; background: #fff; }}
+  /* Scherm-preview: gebruik volledige iframe breedte i.p.v. vaste 76mm.
+     Bij daadwerkelijk printen valt het @media print terug op 76mm. */
+  @media screen {{
+    body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
+  }}
   .sheet {{ padding: 2mm 3mm; }}
   .center {{ text-align: center; }}
   .row {{ display: flex; justify-content: space-between; }}
@@ -11143,7 +11152,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     border-radius: 4px; font-size: 10pt; cursor: pointer; }}
 </style></head>
 <body>
-  <div class="no-print"><button onclick="window.print()">🖨</button></div>
+  {print_button}
   <div class="sheet">
     <div class="center h1">{h(company_name)}</div>
     {f'<div class="center lbl">{h(company_address)}</div>' if company_address else ''}
