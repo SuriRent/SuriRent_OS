@@ -1067,22 +1067,17 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       // en het is een echt HTML-document (geen PDF-viewer wrapper).
       iframe.srcdoc = html;
 
-      // Max 5s wachten op iframe load. De HTML zelf roept al automatisch
-      // window.print() aan via inline <script>; deze fallback dekt het
-      // geval waarin dat om welke reden dan ook niet lukt.
+      // De HTML zelf roept al automatisch window.print() aan via een
+      // inline <script>. We wachten alleen op de iframe-load om te weten
+      // dat het gelukt is — GEEN tweede print-call van buitenaf, want
+      // dat veroorzaakt een tweede printdialoog.
       const printPromise = new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
         iframe.onload = () => {
           clearTimeout(timeoutId);
-          setTimeout(() => {
-            try {
-              iframe.contentWindow?.focus();
-              iframe.contentWindow?.print();
-              resolve();
-            } catch (e) {
-              reject(e);
-            }
-          }, 200);
+          // 300ms buffer zodat het inline script tijd heeft om window.print
+          // aan te roepen voordat we "afgedrukt" tonen.
+          setTimeout(resolve, 300);
         };
         iframe.onerror = () => {
           clearTimeout(timeoutId);
@@ -2499,18 +2494,9 @@ function ReceiptScreen({ payment, overview, onDone }) {
         iframe.style.height = '0';
         iframe.style.border = '0';
         iframe.srcdoc = html;
-        // HTML zelf roept al window.print() aan via inline <script>,
-        // deze onload-handler is een extra safety net.
-        iframe.onload = () => {
-          setTimeout(() => {
-            try {
-              iframe.contentWindow?.focus();
-              iframe.contentWindow?.print();
-            } catch {
-              /* stille fallback — HTML script had al geprobeerd */
-            }
-          }, 300);
-        };
+        // HTML zelf roept window.print() aan via inline <script> —
+        // GEEN dubbele print-call van buitenaf om dubbele dialogen
+        // te voorkomen.
         document.body.appendChild(iframe);
       } catch {
         // Geen printer of HTML-fetch mislukt → stille fallback.
