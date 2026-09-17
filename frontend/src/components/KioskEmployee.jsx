@@ -1,20 +1,44 @@
-// Kiosk-medewerker sessie helpers — gebruikt sessionStorage zodat
-// een receptie-medewerker één keer z'n PIN intikt bij start van de
-// dienst en daarna alle betalingen automatisch worden gemarkeerd met
-// `kiosk_employee_id` + `employee_pin` zodat ze in pending_approval gaan.
+// Kiosk-medewerker sessie helpers — gebruikt localStorage zodat een
+// receptie-medewerker één keer z'n PIN intikt bij start van de dienst
+// en dat vervolgens PERSIST over page reloads, nieuwe tabs én PWA
+// wake-ups vanuit de background (iOS sluit sessionStorage soms af als
+// een PWA lang niet actief is geweest). Alle betalingen worden daarna
+// automatisch gemarkeerd met `kiosk_employee_id` + `employee_pin` zodat
+// ze in pending_approval gaan.
+//
+// Terugwaartse compatibiliteit: als er nog een oude sessionStorage-key
+// bestaat (van een vorige installatie), migreren we die naar localStorage
+// bij eerste lezing zodat huidige gebruikers niet opnieuw hoeven in te
+// tikken.
 import { useEffect, useState } from 'react';
 import { X, KeyRound, Loader2, UserCircle2, LogOut } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 
-const SS_ID = 'kiosk_emp_id';
-const SS_NAME = 'kiosk_emp_name';
-const SS_PIN = 'kiosk_emp_pin';
+const LS_ID = 'kiosk_emp_id';
+const LS_NAME = 'kiosk_emp_name';
+const LS_PIN = 'kiosk_emp_pin';
 
 export function getKioskEmployee() {
   try {
-    const id = sessionStorage.getItem(SS_ID);
-    const name = sessionStorage.getItem(SS_NAME);
-    const pin = sessionStorage.getItem(SS_PIN);
+    // Migratie: lees eerst uit localStorage, val terug op sessionStorage
+    // en verhuis dan direct de waardes over.
+    let id = localStorage.getItem(LS_ID);
+    let name = localStorage.getItem(LS_NAME);
+    let pin = localStorage.getItem(LS_PIN);
+    if (!id || !pin) {
+      const sId = sessionStorage.getItem(LS_ID);
+      const sPin = sessionStorage.getItem(LS_PIN);
+      const sName = sessionStorage.getItem(LS_NAME);
+      if (sId && sPin) {
+        localStorage.setItem(LS_ID, sId);
+        localStorage.setItem(LS_NAME, sName || '');
+        localStorage.setItem(LS_PIN, sPin);
+        sessionStorage.removeItem(LS_ID);
+        sessionStorage.removeItem(LS_NAME);
+        sessionStorage.removeItem(LS_PIN);
+        id = sId; name = sName; pin = sPin;
+      }
+    }
     if (id && pin) return { id, name, pin };
   } catch { /* ignore */ }
   return null;
@@ -22,18 +46,22 @@ export function getKioskEmployee() {
 
 export function clearKioskEmployee() {
   try {
-    sessionStorage.removeItem(SS_ID);
-    sessionStorage.removeItem(SS_NAME);
-    sessionStorage.removeItem(SS_PIN);
+    localStorage.removeItem(LS_ID);
+    localStorage.removeItem(LS_NAME);
+    localStorage.removeItem(LS_PIN);
+    // Belt & suspenders: ruim ook eventuele stale sessionStorage waardes op.
+    sessionStorage.removeItem(LS_ID);
+    sessionStorage.removeItem(LS_NAME);
+    sessionStorage.removeItem(LS_PIN);
   } catch { /* ignore */ }
   window.dispatchEvent(new CustomEvent('kiosk-employee-changed'));
 }
 
 export function setKioskEmployee({ id, name, pin }) {
   try {
-    sessionStorage.setItem(SS_ID, id);
-    sessionStorage.setItem(SS_NAME, name || '');
-    sessionStorage.setItem(SS_PIN, pin);
+    localStorage.setItem(LS_ID, id);
+    localStorage.setItem(LS_NAME, name || '');
+    localStorage.setItem(LS_PIN, pin);
   } catch { /* ignore */ }
   window.dispatchEvent(new CustomEvent('kiosk-employee-changed'));
 }

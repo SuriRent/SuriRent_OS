@@ -3408,6 +3408,10 @@ export default function KioskLayout() {
       localStorage.removeItem('active_company_id');
     } catch { /* ignore */ }
     try {
+      // Ook oude sessionStorage keys opruimen (backwards-compat).
+      localStorage.removeItem('kiosk_emp_id');
+      localStorage.removeItem('kiosk_emp_name');
+      localStorage.removeItem('kiosk_emp_pin');
       sessionStorage.removeItem('kiosk_emp_id');
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
@@ -3579,12 +3583,27 @@ export default function KioskLayout() {
   // UITZONDERING: als de gebruiker een admin_token heeft (beheerder of
   // boekhouder werkt vanaf de Kiosk), GEEN sheet tonen — zijn betalingen
   // gaan via de legacy directe-goedkeuring flow (status=approved).
+  // Bij stap 'pay' (eerste interactie waar een betaling wordt opgezet)
+  // en wanneer de emp-sessie op enige manier verandert, herevalueren of
+  // we de PIN-popup moeten tonen. Voorkomt "spookpopup" wanneer een
+  // andere tab de emp inlogt of wanneer localStorage net gerepopuleerd
+  // is (bv. tijdens PWA-wake).
   useEffect(() => {
-    if (step !== 'pay') return;
+    if (step !== 'pay') { setShowEmpLogin(false); return; }
     let hasAdmin = false;
     try { hasAdmin = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
     if (hasAdmin) return;
-    if (!getKioskEmployee()) setShowEmpLogin(true);
+    const check = () => {
+      const emp = getKioskEmployee();
+      setShowEmpLogin(!emp);
+    };
+    check();
+    window.addEventListener('kiosk-employee-changed', check);
+    window.addEventListener('storage', check);
+    return () => {
+      window.removeEventListener('kiosk-employee-changed', check);
+      window.removeEventListener('storage', check);
+    };
   }, [step]);
 
   return (

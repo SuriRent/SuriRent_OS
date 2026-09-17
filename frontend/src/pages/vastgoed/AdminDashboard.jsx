@@ -4219,6 +4219,9 @@ export default function AdminDashboard() {
       if (wasDemo) localStorage.removeItem('pwa_company_slug');
     } catch { /* noop */ }
     try {
+      localStorage.removeItem('kiosk_emp_id');
+      localStorage.removeItem('kiosk_emp_name');
+      localStorage.removeItem('kiosk_emp_pin');
       sessionStorage.removeItem('kiosk_emp_id');
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
