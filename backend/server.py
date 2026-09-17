@@ -8119,6 +8119,10 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
     Voorheen: 200 payments × 4-6 queries = 800-1200 DB calls.
     Nu: 4 batch-queries + 1 brand-lookup per unieke company. Voor één
     bedrijf met 200 betalingen: ~5 queries totaal.
+
+    Fault-tolerant: als een batch-query faalt, fallback naar lege lookup
+    tables zodat de betalings-lijst ALTIJD terugkomt (evt. zonder tenant-
+    naam/appt-nummer). Betere UX dan 500-crash.
     """
     if not payments:
         return []
@@ -8126,57 +8130,70 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
     apt_ids = {p["apartment_id"] for p in payments if p.get("apartment_id")}
     company_ids = {p["company_id"] for p in payments if p.get("company_id")}
 
-    # Parallel: tenants + apartments + companies
-    tenants_task = db.tenants.find(
-        {"id": {"$in": list(tenant_ids)}}, {"_id": 0, "id": 1, "name": 1}
-    ).to_list(None) if tenant_ids else asyncio.sleep(0, result=[])
-    apartments_task = db.apartments.find(
-        {"id": {"$in": list(apt_ids)}}, {"_id": 0, "id": 1, "number": 1, "location_id": 1}
-    ).to_list(None) if apt_ids else asyncio.sleep(0, result=[])
-    tenants, apartments = await asyncio.gather(tenants_task, apartments_task)
-    tenant_by_id = {t["id"]: t for t in tenants}
-    apt_by_id = {a["id"]: a for a in apartments}
-
-    # Locations — alleen voor de apartments die er een hebben
-    loc_ids = {a.get("location_id") for a in apartments if a.get("location_id")}
-    locs = await db.locations.find(
-        {"id": {"$in": list(loc_ids)}}, {"_id": 0, "id": 1, "name": 1}
-    ).to_list(None) if loc_ids else []
-    loc_by_id = {loc["id"]: loc for loc in locs}
+    tenant_by_id, apt_by_id, loc_by_id, brand_cache = {}, {}, {}, {}
+    outstanding_by_tenant_cur: dict[tuple[str, str], float] = {}
+    try:
+        tenants_task = db.tenants.find(
+            {"id": {"$in": list(tenant_ids)}}, {"_id": 0, "id": 1, "name": 1}
+        ).to_list(None) if tenant_ids else asyncio.sleep(0, result=[])
+        apartments_task = db.apartments.find(
+            {"id": {"$in": list(apt_ids)}}, {"_id": 0, "id": 1, "number": 1, "location_id": 1}
+        ).to_list(None) if apt_ids else asyncio.sleep(0, result=[])
+        tenants, apartments = await asyncio.gather(tenants_task, apartments_task)
+        tenant_by_id = {t["id"]: t for t in tenants}
+        apt_by_id = {a["id"]: a for a in apartments}
+        loc_ids = {a.get("location_id") for a in apartments if a.get("location_id")}
+        if loc_ids:
+            locs = await db.locations.find(
+                {"id": {"$in": list(loc_ids)}}, {"_id": 0, "id": 1, "name": 1}
+            ).to_list(None)
+            loc_by_id = {loc["id"]: loc for loc in locs}
+    except Exception as _e:  # noqa: BLE001
+        import traceback
+        print(f"[payments] enrichment batch lookup FAILED, degrading: {_e}")
+        traceback.print_exc()
 
     # Brand info per company — éénmaal per unieke company gecached.
     # We strippen `company_logo_bytes` (binary PNG) zodat FastAPI's JSON
     # encoder niet faalt op de bytes; logo wordt enkel gebruikt in PDF
     # generatie, niet in lijst-endpoints.
-    brand_cache = {}
     for cid in company_ids:
-        b = await _company_brand_info(cid)
-        if b:
-            b = {k: v for k, v in b.items() if k != "company_logo_bytes"}
-        brand_cache[cid] = b
+        try:
+            b = await _company_brand_info(cid)
+            if b:
+                b = {k: v for k, v in b.items() if k != "company_logo_bytes"}
+            brand_cache[cid] = b
+        except Exception as _e:  # noqa: BLE001
+            print(f"[payments] brand info fetch FAILED for {cid}: {_e}")
+            brand_cache[cid] = {}
 
-    # Outstanding-per-tenant: groepeer alle openstaande facturen per
-    # (tenant_id, currency) zodat we sommen kunnen pre-rekenen.
-    outstanding_by_tenant_cur: dict[tuple[str, str], float] = {}
-    if tenant_ids:
-        async for inv in db.invoices.find(
-            {"tenant_id": {"$in": list(tenant_ids)},
-             "status": {"$nin": ["paid", "cancelled"]}},
-            {"_id": 0, "id": 1, "tenant_id": 1, "currency": 1,
-             "amount": 1, "paid_amount": 1},
-        ):
-            tid = inv.get("tenant_id")
-            cur = inv.get("currency") or "SRD"
-            inv_amt = float(inv.get("amount") or 0)
-            paid = inv.get("paid_amount")
-            if paid is None:
-                # Fallback wanneer paid_amount niet gemigreerd is — alleen
-                # voor deze ene factuur, niet voor alle.
-                paid = await _invoice_currently_paid(inv["id"])
-            outstanding_by_tenant_cur[(tid, cur)] = (
-                outstanding_by_tenant_cur.get((tid, cur), 0.0)
-                + max(0.0, inv_amt - float(paid or 0))
-            )
+    # Outstanding-per-tenant — als deze query crasht is het niet erg,
+    # de lijst laadt zonder outstanding_after (default 0).
+    try:
+        if tenant_ids:
+            async for inv in db.invoices.find(
+                {"tenant_id": {"$in": list(tenant_ids)},
+                 "status": {"$nin": ["paid", "cancelled"]}},
+                {"_id": 0, "id": 1, "tenant_id": 1, "currency": 1,
+                 "amount": 1, "paid_amount": 1},
+            ):
+                tid = inv.get("tenant_id")
+                cur = inv.get("currency") or "SRD"
+                inv_amt = float(inv.get("amount") or 0)
+                paid = inv.get("paid_amount")
+                if paid is None:
+                    try:
+                        paid = await _invoice_currently_paid(inv["id"])
+                    except Exception:  # noqa: BLE001
+                        paid = 0
+                outstanding_by_tenant_cur[(tid, cur)] = (
+                    outstanding_by_tenant_cur.get((tid, cur), 0.0)
+                    + max(0.0, inv_amt - float(paid or 0))
+                )
+    except Exception as _e:  # noqa: BLE001
+        import traceback
+        print(f"[payments] outstanding batch calc FAILED, using zeros: {_e}")
+        traceback.print_exc()
 
     # Bouw de output. Defensive: één corrupt doc (bv. legacy AI-insert zonder
     # `receipt_number` of `paid_at`, of een null-veld waar Pydantic hikt) mag
@@ -10415,7 +10432,34 @@ async def kiosk_tenant_payments(tenant_id: str, _session=Depends(get_kiosk_sessi
     docs = await db.payments.find(
         {"tenant_id": tenant_id, **kiosk_scope(_session)}, {"_id": 0}
     ).sort("paid_at", -1).to_list(50)
-    return await _enrich_payments_bulk(docs)
+    try:
+        return await _enrich_payments_bulk(docs)
+    except Exception as _e:  # noqa: BLE001
+        # Ultimate fail-safe: als de enrichment op enige manier crasht,
+        # retourneer de raw payments met minimale fields zodat de UI
+        # tenminste iets kan tonen i.p.v. 500.
+        import traceback
+        print(f"[kiosk_tenant_payments] enrichment crashed, returning raw: {_e}")
+        traceback.print_exc()
+        out = []
+        for p in docs:
+            try:
+                if not p.get("receipt_number"):
+                    p["receipt_number"] = f"KW-LEGACY-{str(p.get('id') or '')[:8].upper()}"
+                if not p.get("paid_at"):
+                    p["paid_at"] = p.get("created_at") or iso(now_utc())
+                if p.get("amount") is None:
+                    p["amount"] = 0.0
+                if not p.get("currency"):
+                    p["currency"] = "SRD"
+                if not p.get("method"):
+                    p["method"] = "cash"
+                if not p.get("category"):
+                    p["category"] = "rent"
+                out.append(p)
+            except Exception:  # noqa: BLE001
+                continue
+        return out
 
 
 @api.get("/kiosk/receipts/{payment_id}")
