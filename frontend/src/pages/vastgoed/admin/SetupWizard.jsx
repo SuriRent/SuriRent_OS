@@ -381,7 +381,7 @@ function StepApartment({ apartment, setApartment, apts }) {
         </select>
       </label>
       <FormField label="Adres (optioneel)" value={apartment.address} onChange={(e) => upd('address', e.target.value)}
-        placeholder="Kewalbansingweg 7B, Paramaribo" data-testid="wizard-apt-address" />
+        placeholder="Hoofdstraat 12B, Paramaribo" data-testid="wizard-apt-address" />
     </div>
   );
 }

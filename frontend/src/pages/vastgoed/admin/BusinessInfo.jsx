@@ -159,7 +159,7 @@ export default function BusinessInfo() {
             <label className="block">
               <span className="block text-xs font-bold text-slate-700 mb-1">Volledige naam</span>
               <input type="text" value={b.landlord_name || ''} onChange={(e) => upd('landlord_name', e.target.value)}
-                placeholder="bv. Bharat Kewalbansing" data-testid="bi-landlord-name"
+                placeholder="bv. J. de Vries" data-testid="bi-landlord-name"
                 className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none" />
               <p className="text-[10px] text-slate-400 mt-0.5">Standaard = bedrijfsnaam wanneer leeg</p>
             </label>
@@ -172,7 +172,7 @@ export default function BusinessInfo() {
             <label className="block">
               <span className="block text-xs font-bold text-slate-700 mb-1">ID-nummer</span>
               <input type="text" value={b.landlord_id_number || ''} onChange={(e) => upd('landlord_id_number', e.target.value.toUpperCase())}
-                placeholder="bv. FM008370" data-testid="bi-landlord-id"
+                placeholder="bv. AB123456" data-testid="bi-landlord-id"
                 className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none uppercase" />
             </label>
           </div>

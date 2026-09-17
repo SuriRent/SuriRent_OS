@@ -1297,7 +1297,7 @@ function Footer({ onLogin }) {
               </li>
               <li className="flex items-start gap-2"><Users className="w-4 h-4 text-[#FF8A3D] mt-0.5 shrink-0" />
                 <EditableText path="v2.footer.address"
-                  fallback="Kewalbansingweg 7, Paramaribo Suriname — South America"
+                  fallback="Paramaribo, Suriname — South America"
                   as="span" multiline />
               </li>
               <li className="flex items-center gap-2"><Landmark className="w-4 h-4 text-[#FF8A3D]" />

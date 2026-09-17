@@ -2925,7 +2925,7 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
                 value={data.id_number || ''}
                 onChange={(e) => setData({ ...data, id_number: e.target.value.toUpperCase() })}
                 data-testid="tenant-id-number"
-                placeholder="bv. FM008370"
+                placeholder="bv. AB123456"
                 className="w-full min-w-0 mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none uppercase" />
             </div>
           </div>

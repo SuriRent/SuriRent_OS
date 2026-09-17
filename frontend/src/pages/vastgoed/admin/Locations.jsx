@@ -46,7 +46,7 @@ function LocationForm({ initial, onCancel, onSaved }) {
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Naam *</label>
             <input value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })}
-              placeholder="bv. Kewalbansingweg 7"
+              placeholder="bv. Hoofdlocatie"
               data-testid="loc-name"
               className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
           </div>
