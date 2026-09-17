@@ -10844,20 +10844,40 @@ async def payment_pdf(payment_id: str):
 
 
 @api.get("/payments/{payment_id}/print.html", response_class=HTMLResponse)
-async def payment_print_html(payment_id: str):
+async def payment_print_html(payment_id: str, format: Optional[str] = None):
     """HTML-versie van de kwitantie speciaal voor Chrome's --kiosk-printing
     flag. Die flag onderdrukt alleen het printdialoog voor **HTML** documenten
     — niet voor PDF's (die worden door Chrome's PDF-viewer weergegeven, en
     die viewer laat de dialoog wél zien). Deze route rendert dezelfde
     kwitantie-data met @page/@media print CSS zodat window.print() direct
     naar de OS-standaardprinter gaat.
+
+    Query param `format`:
+      - "a4" (default)   → A4 staand, klassieke layout met blauw kader
+      - "thermal"        → 80mm smalle 1-kolom layout voor bonprinter
+    Bij ontbrekende query wordt de company-instelling `receipts.print_format`
+    uit `db.company_settings` gebruikt.
     """
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
-    html = _render_receipt_html(p)
-    # Cache-headers uit: elke print moet actuele data ophalen.
+
+    # Als er geen ?format= is meegegeven, kijk naar de company-instelling.
+    fmt = (format or "").strip().lower()
+    if fmt not in ("a4", "thermal"):
+        try:
+            cs = await db.company_settings.find_one(
+                {"company_id": p.get("company_id")},
+                {"_id": 0, "receipts": 1},
+            )
+            fmt = ((cs or {}).get("receipts") or {}).get("print_format") or "a4"
+        except Exception:  # noqa: BLE001
+            fmt = "a4"
+        if fmt not in ("a4", "thermal"):
+            fmt = "a4"
+
+    html = _render_receipt_html(p, fmt=fmt)
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
@@ -10865,12 +10885,14 @@ _NL_MONTHS_FULL = ["januari", "februari", "maart", "april", "mei", "juni",
                    "juli", "augustus", "september", "oktober", "november", "december"]
 
 
-def _render_receipt_html(p: dict) -> str:
+def _render_receipt_html(p: dict, fmt: str = "a4") -> str:
     """Bouwt een compact, print-ready HTML-document voor een betaling.
-    A4 staand, één pagina, minimalistische huurbon layout die matcht met
-    het 'blue house' PDF ontwerp. Bevat een inline <script> die na load
-    `window.print()` aanroept zodat de bon direct print zodra hij in de
-    iframe geladen is.
+
+    fmt="a4"      → A4 staand, klassieke 'blue house' layout (2 kolommen partijen)
+    fmt="thermal" → 80mm brede 1-kolom bonprinter layout (POS-stijl)
+    Beide varianten bevatten een inline <script> die na load
+    `window.print()` aanroept — met de Chrome-vlag `--kiosk-printing`
+    slaat de browser het dialoog dan over.
     """
     from html import escape as h
     from datetime import datetime
@@ -10913,6 +10935,19 @@ def _render_receipt_html(p: dict) -> str:
     if isinstance(pm, int) and 1 <= pm <= 12 and py:
         period_txt = f" — {_NL_MONTHS_FULL[pm - 1].capitalize()} {py}"
     desc = f"{category}{period_txt}"
+
+    if fmt == "thermal":
+        return _render_receipt_html_thermal(
+            h=h, cb_paid=outstanding_after <= 0.001,
+            receipt_number=receipt_number, paid_at=paid_at,
+            company_name=company_name, company_address=company_address,
+            company_phone=company_phone, tenant_name=tenant_name,
+            apartment_number=apartment_number, location_name=location_name,
+            amount=amount, currency=currency, outstanding_after=outstanding_after,
+            method=method, note=note, desc=desc, fmt_money=fmt_money,
+        )
+
+    # ------ A4 layout (default) ------
     outstanding_line = (
         '<span class="paid">✓ Volledig voldaan</span>'
         if outstanding_after <= 0.001
@@ -11024,9 +11059,99 @@ def _render_receipt_html(p: dict) -> str:
     </div>
   </div></div>
   <script>
-    // Auto-print zodra het document en de fonts geladen zijn. Met de
-    // Chrome-vlag --kiosk-printing wordt het printdialoog overgeslagen
-    // en gaat de bon direct naar de OS-standaardprinter.
+    (function() {{
+      var didPrint = false;
+      function go() {{
+        if (didPrint) return;
+        didPrint = true;
+        setTimeout(function() {{ try {{ window.focus(); window.print(); }} catch(e) {{}} }}, 80);
+      }}
+      if (document.readyState === 'complete') go();
+      else window.addEventListener('load', go);
+    }})();
+  </script>
+</body></html>"""
+
+
+def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
+                                 company_name, company_address, company_phone,
+                                 tenant_name, apartment_number, location_name,
+                                 amount, currency, outstanding_after, method,
+                                 note, desc, fmt_money) -> str:
+    """80mm bonprinter layout — POS-stijl, monospaced, 1 kolom.
+    @page size 80mm auto laat de printer zelf de lengte bepalen (bon-rol).
+    """
+    method_label = {
+        "cash": "CONTANT", "bank": "BANKOVERSCHRIJVING",
+        "card": "PIN", "other": "ANDERS",
+    }.get(method, (method or "").upper() or "—")
+    outstanding_txt = (
+        '<span class="paid">** VOLLEDIG VOLDAAN **</span>'
+        if cb_paid
+        else f'<span class="due">Nog openstaand: {h(fmt_money(outstanding_after, currency))}</span>'
+    )
+    apt_line = f"{h(apartment_number)}" + (f" · {h(location_name)}" if location_name else "")
+    return f"""<!doctype html>
+<html lang="nl"><head><meta charset="utf-8">
+<title>Kwitantie {h(receipt_number)}</title>
+<style>
+  /* 80mm bonrol — auto hoogte zodat printer zelf snijdt. */
+  @page {{ size: 80mm auto; margin: 2mm; }}
+  @media print {{
+    body {{ margin: 0; width: 76mm; }}
+    .no-print {{ display: none !important; }}
+  }}
+  html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
+    font-size: 10pt; color: #000; margin: 0; padding: 0; background: #fff;
+    width: 76mm; }}
+  .sheet {{ padding: 2mm 3mm; }}
+  .center {{ text-align: center; }}
+  .row {{ display: flex; justify-content: space-between; }}
+  .h1 {{ font-size: 13pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 1mm; }}
+  .h2 {{ font-size: 10pt; letter-spacing: 3px; margin: 0 0 2mm; }}
+  .sep {{ border-top: 1px dashed #000; margin: 2mm 0; }}
+  .lbl {{ font-size: 8.5pt; color: #333; text-transform: uppercase;
+    letter-spacing: 1px; }}
+  .val {{ font-size: 10pt; font-weight: 700; word-break: break-word; }}
+  .big {{ font-size: 14pt; font-weight: 900; }}
+  .paid {{ font-weight: 900; }}
+  .due {{ font-weight: 700; }}
+  .footer {{ font-size: 8pt; text-align: center; margin-top: 3mm; }}
+  .no-print {{ position: fixed; top: 4px; right: 4px; }}
+  .no-print button {{ background: #000; color: #fff; border: 0; padding: 4px 8px;
+    border-radius: 4px; font-size: 10pt; cursor: pointer; }}
+</style></head>
+<body>
+  <div class="no-print"><button onclick="window.print()">🖨</button></div>
+  <div class="sheet">
+    <div class="center h1">{h(company_name)}</div>
+    {f'<div class="center lbl">{h(company_address)}</div>' if company_address else ''}
+    {f'<div class="center lbl">Tel: {h(company_phone)}</div>' if company_phone else ''}
+    <div class="sep"></div>
+    <div class="center h2">KWITANTIE</div>
+    <div class="row"><span class="lbl">Nr.</span><span class="val">{h(receipt_number)}</span></div>
+    <div class="row"><span class="lbl">Datum</span><span class="val">{h(paid_at)}</span></div>
+    <div class="sep"></div>
+    <div class="lbl">Huurder</div>
+    <div class="val">{h(tenant_name)}</div>
+    {f'<div class="lbl">{apt_line}</div>' if apt_line.strip() else ''}
+    <div class="sep"></div>
+    <div class="lbl">Omschrijving</div>
+    <div class="val">{h(desc)}</div>
+    <div class="sep"></div>
+    <div class="row"><span class="lbl">Betaald</span>
+      <span class="big">{h(fmt_money(amount, currency))}</span></div>
+    <div class="row" style="margin-top:1mm">
+      <span class="lbl">Betaalwijze</span>
+      <span class="val">{h(method_label)}</span></div>
+    <div class="sep"></div>
+    <div class="center val">{outstanding_txt}</div>
+    {f'<div class="sep"></div><div class="lbl">Opmerking:</div><div class="val">{h(note)}</div>' if note else ''}
+    <div class="sep"></div>
+    <div class="footer">Bedankt voor uw betaling</div>
+    <div class="footer">— {h(receipt_number)} —</div>
+  </div>
+  <script>
     (function() {{
       var didPrint = false;
       function go() {{
@@ -13899,7 +14024,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:

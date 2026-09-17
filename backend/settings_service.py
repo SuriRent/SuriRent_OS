@@ -98,6 +98,12 @@ def empty_section(section: str) -> dict:
             "last_auto_run": None,
             "enabled": False,
         },
+        # Kwitantie-afdruk: welk paginaformaat gebruikt de Kiosk voor het
+        # renderen van betalingsbonnen. 'a4' = normale A4 kantoorprinter,
+        # 'thermal' = 80mm-brede bonprinter (compacte 1-kolom layout).
+        "receipts": {
+            "print_format": "a4",
+        },
     }.get(section, {})
 
 

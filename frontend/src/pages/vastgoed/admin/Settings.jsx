@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2, Check, KeySquare, Mail,
-  AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText,
+  AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
@@ -9,6 +9,7 @@ import { useAutoRefresh } from '../../../lib/auto-refresh';
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, desc: 'Automatische maand-facturen na grace periode.' },
+  { id: 'receipts', label: 'Kwitantie afdrukformaat', icon: Printer, desc: 'A4 kantoorprinter of 80mm thermische bonprinter.' },
   { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.' },
 ];
 
@@ -534,6 +535,60 @@ export function InvoicingForm({ initial }) {
   );
 }
 
+// =====================================================================
+// ReceiptsForm — welk formaat gebruikt de Kiosk voor kwitantie-afdruk
+// =====================================================================
+function ReceiptsForm({ initial }) {
+  const s = useSection('receipts', initial);
+  const d = s.data;
+  const options = [
+    {
+      id: 'a4',
+      title: 'A4 kantoorprinter',
+      desc: 'Volledige A4 pagina met blauwe kader en gedetailleerde layout. Ideaal voor kantoorprinters (laser/inkjet) op de PC.',
+    },
+    {
+      id: 'thermal',
+      title: '80mm bonprinter (thermisch)',
+      desc: 'Compacte 1-kolom POS-stijl bon voor 80mm bonrol. Ideaal voor kassa-achtige setups met een thermische bonprinter.',
+    },
+  ];
+  const current = d.print_format || 'a4';
+  return (
+    <SectionShell msg={s.msg} err={s.err}>
+      <p className="text-sm text-slate-600">
+        Bepaalt hoe de kwitantie wordt gerenderd wanneer de Kiosk-medewerker
+        op <b>Afdruk</b> drukt. Verander dit alleen als je printer-hardware
+        wijzigt.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {options.map((opt) => (
+          <button key={opt.id}
+            onClick={() => s.onField('print_format', opt.id)}
+            data-testid={`receipts-fmt-${opt.id}`}
+            className={`text-left p-4 rounded-2xl border-2 transition ${current === opt.id
+              ? 'border-[#FF5C00] bg-orange-50'
+              : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <Printer className={`w-4 h-4 ${current === opt.id ? 'text-[#FF5C00]' : 'text-slate-400'}`} />
+              <span className="text-sm font-black text-slate-900">{opt.title}</span>
+              {current === opt.id && <Check className="w-4 h-4 text-[#FF5C00] ml-auto" />}
+            </div>
+            <p className="text-xs text-slate-500 leading-snug">{opt.desc}</p>
+          </button>
+        ))}
+      </div>
+      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
+        <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
+        worden met de vlag <code className="bg-white px-1 rounded">--kiosk-printing</code>.
+        Zie <code>/app/memory/kiosk-printing-setup.md</code> voor exacte
+        commando's per platform.
+      </div>
+      <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
+    </SectionShell>
+  );
+}
+
 // Knop om de vervaldata van alle open+partial facturen bij te werken naar
 // de HUIDIGE instellingen. Handig na een wijziging in de factureringsmodus.
 function RecomputeDueDatesButton() {
@@ -677,6 +732,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
       {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
+      {section === 'receipts' && <ReceiptsForm initial={settings.receipts} />}
       {section === 'domain' && <DomainForm initial={settings.domain} />}
       {section === 'kiosk' && <KioskPinForm />}
     </>
