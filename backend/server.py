@@ -10843,6 +10843,204 @@ async def payment_pdf(payment_id: str):
     return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
 
 
+@api.get("/payments/{payment_id}/print.html", response_class=HTMLResponse)
+async def payment_print_html(payment_id: str):
+    """HTML-versie van de kwitantie speciaal voor Chrome's --kiosk-printing
+    flag. Die flag onderdrukt alleen het printdialoog voor **HTML** documenten
+    — niet voor PDF's (die worden door Chrome's PDF-viewer weergegeven, en
+    die viewer laat de dialoog wél zien). Deze route rendert dezelfde
+    kwitantie-data met @page/@media print CSS zodat window.print() direct
+    naar de OS-standaardprinter gaat.
+    """
+    p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
+    p = await _enrich_payment(p)
+    html = _render_receipt_html(p)
+    # Cache-headers uit: elke print moet actuele data ophalen.
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
+_NL_MONTHS_FULL = ["januari", "februari", "maart", "april", "mei", "juni",
+                   "juli", "augustus", "september", "oktober", "november", "december"]
+
+
+def _render_receipt_html(p: dict) -> str:
+    """Bouwt een compact, print-ready HTML-document voor een betaling.
+    A4 staand, één pagina, minimalistische huurbon layout die matcht met
+    het 'blue house' PDF ontwerp. Bevat een inline <script> die na load
+    `window.print()` aanroept zodat de bon direct print zodra hij in de
+    iframe geladen is.
+    """
+    from html import escape as h
+    from datetime import datetime
+
+    def fmt_money(v, cur):
+        try:
+            v = float(v or 0)
+        except Exception:
+            v = 0.0
+        s = f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{h(cur or 'SRD')} {s}"
+
+    def fmt_date(s):
+        if not s:
+            return ""
+        try:
+            d = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+            return f"{d.day} {_NL_MONTHS_FULL[d.month - 1]} {d.year}"
+        except Exception:
+            return str(s)[:10]
+
+    receipt_number = p.get("receipt_number") or ""
+    paid_at = fmt_date(p.get("paid_at"))
+    company_name = p.get("company_name") or "Verhuurder"
+    company_address = p.get("company_address") or ""
+    company_phone = p.get("company_whatsapp") or p.get("company_phone") or ""
+    landlord = p.get("landlord") or company_name
+    tenant_name = p.get("tenant_name") or "—"
+    apartment_number = p.get("apartment_number") or ""
+    location_name = p.get("location_name") or ""
+    tenant_phone = p.get("tenant_phone") or ""
+    amount = p.get("amount") or 0
+    currency = p.get("currency") or "SRD"
+    outstanding_after = float(p.get("outstanding_after") or 0)
+    method = (p.get("method") or "").lower()
+    note = p.get("note") or ""
+    category = (p.get("category") or "Huurbetaling").capitalize()
+    pm, py = p.get("period_month"), p.get("period_year")
+    period_txt = ""
+    if isinstance(pm, int) and 1 <= pm <= 12 and py:
+        period_txt = f" — {_NL_MONTHS_FULL[pm - 1].capitalize()} {py}"
+    desc = f"{category}{period_txt}"
+    outstanding_line = (
+        '<span class="paid">✓ Volledig voldaan</span>'
+        if outstanding_after <= 0.001
+        else f'<span class="due">{h(fmt_money(outstanding_after, currency))}</span>'
+    )
+
+    def cb(m):
+        return "☑" if method == m else "☐"
+
+    return f"""<!doctype html>
+<html lang="nl"><head><meta charset="utf-8">
+<title>Kwitantie {h(receipt_number)}</title>
+<style>
+  @page {{ size: A4; margin: 12mm; }}
+  @media print {{
+    body {{ margin: 0; }}
+    .no-print {{ display: none !important; }}
+  }}
+  html, body {{ font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #0f172a; font-size: 12pt; margin: 0; padding: 0; background: #fff; }}
+  .sheet {{ padding: 8mm 6mm; max-width: 190mm; margin: 0 auto;
+    border: 3px solid #1e40af; }}
+  .inner {{ border: 1px solid #93c5fd; padding: 6mm; }}
+  .header {{ display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 2px solid #1e40af; padding-bottom: 4mm; margin-bottom: 4mm; }}
+  .header .title {{ font-size: 22pt; font-weight: 900; color: #1e40af; letter-spacing: 1px; }}
+  .header .sub {{ font-size: 10pt; color: #64748b; letter-spacing: 2px; margin-top: 1mm; }}
+  .header .info {{ text-align: right; font-size: 10pt; line-height: 1.5; }}
+  .header .info .num {{ font-weight: 900; font-size: 12pt; color: #1e40af; }}
+  .parties {{ display: flex; gap: 6mm; border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 4mm; margin-bottom: 4mm; }}
+  .party {{ flex: 1; }}
+  .party .lbl {{ font-size: 8pt; font-weight: 900; color: #64748b;
+    text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1mm; }}
+  .party .name {{ font-weight: 700; font-size: 11pt; }}
+  .party .meta {{ font-size: 9.5pt; color: #475569; line-height: 1.4; }}
+  table {{ width: 100%; border-collapse: collapse; margin-bottom: 4mm; }}
+  th, td {{ padding: 2mm 3mm; text-align: left; }}
+  thead th {{ background: #eff6ff; color: #1e40af; font-size: 9pt;
+    text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #1e40af; }}
+  td.amt {{ text-align: right; font-family: -apple-system, ui-monospace, Menlo, monospace;
+    font-weight: 700; }}
+  tbody tr {{ border-bottom: 1px solid #e2e8f0; }}
+  tr.total td {{ font-weight: 900; background: #f8fafc; }}
+  .paid {{ color: #16a34a; font-weight: 800; }}
+  .due {{ color: #dc2626; font-weight: 800; }}
+  .method {{ display: flex; gap: 8mm; padding: 3mm 0; border-top: 1px dashed #cbd5e1;
+    border-bottom: 1px dashed #cbd5e1; margin-bottom: 4mm; font-size: 10.5pt; }}
+  .method .box {{ display: inline-block; font-family: monospace; font-size: 13pt;
+    margin-right: 1mm; }}
+  .verklaring {{ font-size: 10pt; line-height: 1.5; margin-bottom: 3mm; }}
+  .note {{ font-size: 9.5pt; color: #475569; padding: 2mm 3mm;
+    background: #f8fafc; border-left: 3px solid #1e40af; margin-bottom: 5mm; }}
+  .signature {{ margin-top: 8mm; }}
+  .signature .line {{ border-top: 1px solid #0f172a; margin-top: 12mm;
+    width: 60mm; padding-top: 1mm; font-size: 9pt; }}
+  .no-print {{ position: fixed; top: 8px; right: 8px; }}
+  .no-print button {{ background: #1e40af; color: white; border: 0;
+    padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; }}
+</style></head>
+<body>
+  <div class="no-print"><button onclick="window.print()">🖨 Afdrukken</button></div>
+  <div class="sheet"><div class="inner">
+    <div class="header">
+      <div>
+        <div class="title">KWITANTIE</div>
+        <div class="sub">HUURBETALING</div>
+      </div>
+      <div class="info">
+        <div class="num">Nr. {h(receipt_number)}</div>
+        <div>{h(paid_at)}</div>
+      </div>
+    </div>
+    <div class="parties">
+      <div class="party">
+        <div class="lbl">Verhuurder</div>
+        <div class="name">{h(landlord)}</div>
+        <div class="meta">{h(company_address)}</div>
+        <div class="meta">{h(company_phone)}</div>
+      </div>
+      <div class="party">
+        <div class="lbl">Huurder</div>
+        <div class="name">{h(tenant_name)}</div>
+        <div class="meta">{h(apartment_number)}{(' · ' + h(location_name)) if location_name else ''}</div>
+        <div class="meta">{h(tenant_phone)}</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Omschrijving</th><th style="text-align:right">Bedrag</th></tr></thead>
+      <tbody>
+        <tr><td>{h(desc)}</td><td class="amt">{h(fmt_money(amount, currency))}</td></tr>
+        <tr class="total"><td>Totaal ontvangen</td><td class="amt">{h(fmt_money(amount, currency))}</td></tr>
+        <tr><td>Nog openstaand na deze betaling</td><td class="amt">{outstanding_line}</td></tr>
+      </tbody>
+    </table>
+    <div class="method">
+      <div><span class="box">{cb('cash')}</span> Contant</div>
+      <div><span class="box">{cb('bank')}</span> Bankoverschrijving</div>
+      <div><span class="box">{cb('other')}</span> Anders</div>
+    </div>
+    <div class="verklaring">
+      Ondergetekende verklaart hierbij het bedrag van
+      <b>{h(fmt_money(amount, currency))}</b> te hebben ontvangen van
+      <b>{h(tenant_name)}</b> als betaling voor {h(desc.lower())}.
+    </div>
+    {f'<div class="note"><b>Opmerking:</b> {h(note)}</div>' if note else ''}
+    <div class="signature">
+      <div class="line">Handtekening verhuurder</div>
+    </div>
+  </div></div>
+  <script>
+    // Auto-print zodra het document en de fonts geladen zijn. Met de
+    // Chrome-vlag --kiosk-printing wordt het printdialoog overgeslagen
+    // en gaat de bon direct naar de OS-standaardprinter.
+    (function() {{
+      var didPrint = false;
+      function go() {{
+        if (didPrint) return;
+        didPrint = true;
+        setTimeout(function() {{ try {{ window.focus(); window.print(); }} catch(e) {{}} }}, 80);
+      }}
+      if (document.readyState === 'complete') go();
+      else window.addEventListener('load', go);
+    }})();
+  </script>
+</body></html>"""
+
+
 @api.get("/payments/{payment_id}/image")
 async def payment_image(payment_id: str):
     """Render kwitantie als JPG foto — bedoeld om eenvoudig via WhatsApp

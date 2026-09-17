@@ -1046,10 +1046,13 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     if (busy[paymentId]) return;
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
-    let blobUrl = null;
     try {
-      const resp = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      blobUrl = URL.createObjectURL(resp.data);
+      // Haal HTML-versie op (i.p.v. PDF-blob). Chrome's --kiosk-printing
+      // vlag onderdrukt het printdialoog alleen bij HTML-documenten, niet
+      // bij PDF's (die worden door de PDF-viewer geopend en die viewer
+      // toont het dialoog altijd).
+      const resp = await api.get(`/payments/${paymentId}/print.html`, { responseType: 'text' });
+      const html = resp.data;
       const existing = document.getElementById('kiosk-print-iframe');
       if (existing) existing.remove();
       const iframe = document.createElement('iframe');
@@ -1060,10 +1063,13 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       iframe.style.width = '0';
       iframe.style.height = '0';
       iframe.style.border = '0';
-      iframe.src = blobUrl;
+      // srcdoc render inline HTML in de iframe — geen blob-URL nodig,
+      // en het is een echt HTML-document (geen PDF-viewer wrapper).
+      iframe.srcdoc = html;
 
-      // We wachten max 5s op iframe onload. Als het faalt (bv. PDF-viewer
-      // niet beschikbaar), tonen we een korte melding.
+      // Max 5s wachten op iframe load. De HTML zelf roept al automatisch
+      // window.print() aan via inline <script>; deze fallback dekt het
+      // geval waarin dat om welke reden dan ook niet lukt.
       const printPromise = new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
         iframe.onload = () => {
@@ -1086,8 +1092,6 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
 
       document.body.appendChild(iframe);
       await printPromise;
-      // Success feedback (kiosk-printing verbergt het OS-dialoog, dus
-      // de operator heeft visuele bevestiging nodig dat er iets gebeurd is).
       setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Afgedrukt' } }));
       setTimeout(() => {
         setWaState((prev) => {
@@ -1096,17 +1100,11 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
           return c;
         });
       }, 2500);
-      // Ruim blob op na 60s (genoeg tijd voor de printer om te renderen).
-      setTimeout(() => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, 60000);
     } catch (e) {
-      // Onmogelijk om vanuit de browser 100% zeker te weten of er geen
-      // printer is; deze catch dekt: netwerk-fout op PDF-endpoint,
-      // iframe-load-fout, of contentWindow.print() gooit synchroon.
       const msg = e?.message === 'timeout'
         ? 'Geen printer beschikbaar'
         : 'Afdruk mislukt — printer niet gevonden?';
       setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg } }));
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
     } finally {
       setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
     }
@@ -2482,11 +2480,14 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // verborgen iframe met de PDF-blob → contentWindow.print(). Faalt stil
   // wanneer er geen printer geconfigureerd is (browser toont dan de
   // print-dialoog die de operator gewoon kan annuleren).
+  // Auto-print zodra de bon op het scherm verschijnt (~2.95s na tear).
+  // Gebruikt HTML-versie i.p.v. PDF-blob zodat Chrome's --kiosk-printing
+  // vlag het dialoog kan overslaan (PDF-viewer negeert die vlag).
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const resp = await api.get(`/payments/${payment.id}/pdf`, { responseType: 'blob' });
-        const blobUrl = URL.createObjectURL(resp.data);
+        const resp = await api.get(`/payments/${payment.id}/print.html`, { responseType: 'text' });
+        const html = resp.data;
         const existing = document.getElementById('kiosk-autoprint-iframe');
         if (existing) existing.remove();
         const iframe = document.createElement('iframe');
@@ -2497,22 +2498,22 @@ function ReceiptScreen({ payment, overview, onDone }) {
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = '0';
-        iframe.src = blobUrl;
+        iframe.srcdoc = html;
+        // HTML zelf roept al window.print() aan via inline <script>,
+        // deze onload-handler is een extra safety net.
         iframe.onload = () => {
           setTimeout(() => {
             try {
               iframe.contentWindow?.focus();
               iframe.contentWindow?.print();
             } catch {
-              // Cross-origin/PDF-viewer fallback — stille no-op, operator
-              // kan handmatig via Betalingsgeschiedenis printen.
+              /* stille fallback — HTML script had al geprobeerd */
             }
           }, 300);
         };
         document.body.appendChild(iframe);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
       } catch {
-        // Geen printer of PDF-fetch mislukt → stille fallback.
+        // Geen printer of HTML-fetch mislukt → stille fallback.
       }
     }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
     return () => clearTimeout(t);
