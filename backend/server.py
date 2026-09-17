@@ -8056,7 +8056,15 @@ async def _company_brand_info(company_id: Optional[str]) -> dict:
 
 
 
-async def _enrich_payment(p: dict) -> dict:
+async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
+    """Verrijk een payment doc met tenant/apt/location namen en brand-info.
+
+    `include_logo=False` (default): strippt `company_logo_bytes` uit de
+    output zodat FastAPI's JSON encoder niet crasht op raw PNG-bytes
+    (0x89 magic → UnicodeDecodeError → 500). JSON-endpoints roepen
+    daarom zonder argument aan; PDF-generatie endpoints passen expliciet
+    `include_logo=True` mee zodat het logo in de PDF gerenderd wordt.
+    """
     tenant_name = None
     tenant_phone = None
     apt_number = None
@@ -8077,10 +8085,19 @@ async def _enrich_payment(p: dict) -> dict:
                 if loc:
                     location_name = loc.get("name")
     # Bedrijfsinfo voor de PDF-header (branding-look uit voorbeeld).
+    # BELANGRIJK: `company_logo_bytes` is een raw PNG-blob (start met
+    # 0x89 magic byte). Strip die vóór het samenvoegen met de payment
+    # dict als deze call bedoeld is voor JSON-response (default), anders
+    # zal FastAPI's jsonable_encoder proberen die bytes als UTF-8 te
+    # decoderen → UnicodeDecodeError → 500.
     company_info = {}
     if p.get("company_id"):
         brand = await _company_brand_info(p["company_id"])
-        company_info = brand
+        if brand:
+            if include_logo:
+                company_info = brand
+            else:
+                company_info = {k: v for k, v in brand.items() if k != "company_logo_bytes"}
     # Openstaand na deze betaling — som van remaining_amount over alle
     # niet-betaalde facturen van deze huurder, in dezelfde currency.
     outstanding_after = 0.0
@@ -10491,7 +10508,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
     if not cfg.get("enabled"):
         return {"sent": False, "reason": "smtp_disabled"}
 
-    p_enriched = await _enrich_payment(p)
+    p_enriched = await _enrich_payment(p, include_logo=True)
     tenant = await db.tenants.find_one({"id": p_enriched.get("tenant_id"), **sc}, {"_id": 0}) or {}
     to = (tenant.get("email") or "").strip()
     if not to:
@@ -10565,7 +10582,7 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
     if not cfg.get("enabled"):
         return {"sent": False, "reason": "twilio_disabled"}
 
-    p_enriched = await _enrich_payment(p)
+    p_enriched = await _enrich_payment(p, include_logo=True)
     tenant = await db.tenants.find_one({"id": p_enriched.get("tenant_id"), **sc}, {"_id": 0}) or {}
     to = (tenant.get("phone") or "").strip()
     if not to:
@@ -10909,7 +10926,7 @@ async def payment_pdf(payment_id: str):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p)
+    p = await _enrich_payment(p, include_logo=True)
     pdf = await asyncio.to_thread(receipt_pdf, p)
     return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
 
@@ -11265,7 +11282,7 @@ async def payment_image(payment_id: str):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p)
+    p = await _enrich_payment(p, include_logo=True)
     pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
     # PDF eerste pagina → JPG via pymupdf (zoom 2.5× voor scherpe weergave
     # op iPhone retina-schermen)
@@ -13738,7 +13755,7 @@ async def payment_secure_pdf(payment_id: str, encrypted: bool = False):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p)
+    p = await _enrich_payment(p, include_logo=True)
     base = await asyncio.to_thread(receipt_pdf, p)
     token = make_verify_token({
         "kind": "payment", "id": payment_id, "rn": p["receipt_number"],
@@ -14848,7 +14865,7 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     p = await db.payments.find_one({"id": payment_id, **scope(user)}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p)
+    p = await _enrich_payment(p, include_logo=True)
     tenant = await db.tenants.find_one({"id": p.get("tenant_id"), **scope(user)}, {"_id": 0}) or {}
     to = (body.to or tenant.get("email") or "").strip()
     if not to:
@@ -15028,7 +15045,7 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
     p = await db.payments.find_one({"id": payment_id, **scope(user)}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p)
+    p = await _enrich_payment(p, include_logo=True)
     tenant = await db.tenants.find_one({"id": p.get("tenant_id"), **scope(user)}, {"_id": 0}) or {}
     to = (body.to or tenant.get("phone") or "").strip()
     if not to:

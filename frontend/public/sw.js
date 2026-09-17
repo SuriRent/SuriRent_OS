@@ -6,7 +6,7 @@
  * - Bypass /api/* (always go to network)
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v90';
+const CACHE_VERSION = 'surirent-v91';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target
@@ -126,6 +126,9 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) return;
 
   // Cross-origin (e.g. fonts.googleapis.com): cache-first opportunistic.
+  // Extra .catch() fallback zorgt dat we NOOIT een unhandled promise
+  // rejection krijgen (die door Chrome als "failed to load resource"
+  // wordt gelogd en de PWA onbetrouwbaar maakt bij netwerk-uitval).
   if (url.origin !== self.location.origin) {
     event.respondWith(
       caches.match(req).then((cached) =>
@@ -134,8 +137,8 @@ self.addEventListener('fetch', (event) => {
           const copy = res.clone();
           caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy)).catch(() => {});
           return res;
-        }).catch(() => cached)
-      )
+        }).catch(() => cached || caches.match('/') || new Response('', { status: 504, statusText: 'Offline' }))
+      ).catch(() => caches.match('/').then((r) => r || new Response('', { status: 504, statusText: 'Offline' })))
     );
     return;
   }
@@ -210,6 +213,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Other static assets (images, fonts): cache-first then network.
+  // Beide takken (cache-hit én netwerk-fetch) hebben een .catch() zodat
+  // een offline of gefaalde asset niet leidt tot een unhandled rejection.
+  // Bij mislukking retourneren we de app-shell ('/') of een lege 504
+  // Response, wat een grijs plaatje/font laat zien i.p.v. een crash.
   event.respondWith(
     caches.match(req).then((cached) =>
       cached ||
@@ -219,8 +226,8 @@ self.addEventListener('fetch', (event) => {
           caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy)).catch(() => {});
         }
         return res;
-      })
-    )
+      }).catch(() => cached || caches.match('/').then((r) => r || new Response('', { status: 504, statusText: 'Offline' })))
+    ).catch(() => caches.match('/').then((r) => r || new Response('', { status: 504, statusText: 'Offline' })))
   );
 });
 
