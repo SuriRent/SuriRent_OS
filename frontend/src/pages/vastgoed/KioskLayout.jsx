@@ -267,70 +267,6 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
 }
 
 // =====================================================================
-// ShareOverviewButton — genereert JPG van financieel overzicht en deelt
-// via Web Share API (WhatsApp verschijnt als target). Op desktop /
-// browsers zonder file-share support: fallback naar wa.me deeplink.
-// =====================================================================
-function ShareOverviewButton({ tenantId, tenantName, tenantPhone, totalDue, currency }) {
-  const [busy, setBusy] = useState(false);
-  const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
-  const share = async () => {
-    setBusy(true);
-    try {
-      const resp = await fetch(
-        `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/tenants/${tenantId}/financial-overview.jpg`,
-        { credentials: 'include' },
-      );
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const blob = await resp.blob();
-      const file = new File([blob], `overzicht-${tenantName || 'huurder'}.jpg`,
-        { type: 'image/jpeg' });
-      // Tekst matcht wat op de JPG staat (totaal openstaand) zodat de
-      // huurder direct het bedrag in het WhatsApp bericht ziet, ook als
-      // ze de foto (nog) niet openen.
-      const totalTxt = Number.isFinite(Number(totalDue))
-        ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
-        : '';
-      const shareText = `Hallo ${tenantName || ''}, hierbij uw actuele financieel overzicht.${totalTxt}`;
-      if (typeof navigator.canShare === 'function' &&
-          navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file], text: shareText,
-          title: 'Financieel overzicht',
-        });
-      } else if (phoneDigits.length >= 7) {
-        // Fallback: WhatsApp openen met tekst; medewerker moet foto handmatig
-        // toevoegen (browser support nog niet universeel voor file-share).
-        const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
-        window.open(url, '_blank', 'noopener');
-        // Ook JPG in nieuw tabblad zodat medewerker 'em kan opslaan/kopiëren.
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, '_blank', 'noopener');
-      } else {
-        // Geen WhatsApp-nummer, geen file-share → download.
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, '_blank', 'noopener');
-      }
-    } catch (e) {
-      if (e && e.name !== 'AbortError') {
-        // eslint-disable-next-line no-console
-        console.error('[share overview] failed:', e);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <button onClick={share} disabled={busy} data-testid="overview-share-btn"
-      className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-60">
-      {busy
-        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Delen…</>
-        : <><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</>}
-    </button>
-  );
-}
-
-// =====================================================================
 // ShareVoiceButton + Modal — TTS herinnering met bewerkbare tekst
 // =====================================================================
 // Klik → laadt de default tekst via GET /reminder-voice-text, opent
@@ -807,7 +743,6 @@ function TenantOverview({ apartment, onBack, onPay }) {
           <div className="flex items-center justify-between mb-3 gap-2">
             <h3 className="text-base sm:text-lg font-bold text-slate-900">Financieel overzicht</h3>
             <div className="flex items-center gap-1.5">
-              <ShareOverviewButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
               <ShareVoiceButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
             </div>
