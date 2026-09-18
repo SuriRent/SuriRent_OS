@@ -8310,10 +8310,38 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
        • paid_amount += amount (cumulatief — meerdere partial-payments mogelijk)
        • status → 'paid' wanneer paid_amount >= 95% van het factuurbedrag
        Retourneert de bijgewerkte factuur (of {} bij ontbreken).
+
+    IDEMPOTENCY GUARD (2026-02-14): elke succesvolle allocatie wordt
+    geregistreerd in `payment.allocations = [{invoice_id, amount,
+    applied_at}]`. Wanneer dezelfde `payment_id` een tweede keer op
+    dezelfde `invoice_id` binnenkomt (bv. door een dubbele approve-call,
+    OCR + manual approve race, of een re-allocation bug), skippen we
+    het en loggen een waarschuwing i.p.v. dubbel te tellen. Voorheen
+    kon een 7750 payment op 2 verschillende facturen elk 7750 optellen
+    → totaal 15500 gecrediteerd — nu onmogelijk.
     """
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         return {}
+    # Idempotency guard: is deze payment_id + invoice_id combinatie al toegepast?
+    if payment_id:
+        existing_pay = await db.payments.find_one(
+            {"id": payment_id, "allocations.invoice_id": invoice_id},
+            {"_id": 0, "id": 1, "allocations": 1},
+        )
+        if existing_pay:
+            already = next(
+                (a for a in (existing_pay.get("allocations") or [])
+                 if a.get("invoice_id") == invoice_id),
+                None,
+            )
+            if already:
+                print(
+                    f"[apply] SKIP dubbele allocatie payment={payment_id[:8]} "
+                    f"→ invoice={invoice_id[:8]} (al toegepast met "
+                    f"{already.get('amount')} op {already.get('applied_at')})"
+                )
+                return inv
     inv_amt = float(inv.get("amount") or 0)
     # Migratie-fallback: als paid_amount nog niet bestaat, bereken uit payments.
     if inv.get("paid_amount") is None:
@@ -8344,6 +8372,23 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
         update["status"] = "partial"
     await db.invoices.update_one({"id": invoice_id}, {"$set": update})
     inv.update(update)
+    # Registreer de allocatie op de payment doc zodat toekomstige aanroepen
+    # de idempotency-guard hierboven kunnen raadplegen. Push naar de
+    # `allocations` array (idempotent — pas alleen als de combinatie nog
+    # niet bestaat, wat we al hebben gecontroleerd).
+    if payment_id:
+        try:
+            await db.payments.update_one(
+                {"id": payment_id},
+                {"$push": {"allocations": {
+                    "invoice_id": invoice_id,
+                    "amount": round(float(amount or 0), 2),
+                    "applied_at": iso(now_utc()),
+                }}},
+            )
+        except Exception as _e:  # noqa: BLE001
+            # Best-effort — betaling zelf al toegepast, alleen tracking mist.
+            print(f"[apply] allocation tracking failed: {_e}")
     # Sync eventueel gekoppelde betalingsregelingen (FIFO installments) met
     # de nieuwe paid_amount. Idempotent — kan meerdere keren aangeroepen worden
     # zonder installments dubbel te markeren.
@@ -9110,6 +9155,73 @@ async def tenant_balance(tenant_id: str, user=Depends(get_current_user)):
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
     return await _calc_balance(t)
+
+
+@api.post("/tenants/{tenant_id}/recompute-invoices")
+async def recompute_tenant_invoices(tenant_id: str, user=Depends(require_role("admin", "superadmin"))):
+    """Herbereken `paid_amount` op ALLE facturen van deze huurder vanaf
+    de werkelijke approved payments. Fixt legacy dubbel-allocatie bugs
+    waar één payment per ongeluk op meerdere facturen werd geboekt.
+
+    Voor elke factuur:
+      • paid_amount = sum(payments.amount where invoice_id=inv.id AND status=approved)
+      • Status → paid als paid_amount ≥ 95% van amount, anders partial/open
+
+    Retourneert een report per factuur zodat admin ziet wat er is veranderd.
+    """
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0, "id": 1, "company_id": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    report = []
+    async for inv in db.invoices.find(
+        {"tenant_id": tenant_id, **scope(user)},
+        {"_id": 0, "id": 1, "invoice_number": 1, "amount": 1, "paid_amount": 1,
+         "period_month": 1, "period_year": 1, "status": 1},
+    ).sort([("period_year", 1), ("period_month", 1)]):
+        inv_id = inv["id"]
+        inv_amt = float(inv.get("amount") or 0)
+        old_paid = float(inv.get("paid_amount") or 0)
+        old_status = inv.get("status") or "open"
+        # Herbereken paid_amount vanuit approved payments met deze invoice_id
+        real_paid = 0.0
+        async for p in db.payments.find(
+            {"invoice_id": inv_id, "status": "approved", "tenant_id": tenant_id},
+            {"_id": 0, "amount": 1},
+        ):
+            real_paid += float(p.get("amount") or 0)
+        real_paid = round(real_paid, 2)
+        # Bepaal nieuwe status
+        if inv_amt <= 0 or real_paid >= inv_amt * 0.95:
+            new_status = "paid"
+        elif real_paid > 0:
+            new_status = "partial"
+        else:
+            new_status = "open"
+        # Update alleen als iets veranderd is
+        if abs(real_paid - old_paid) > 0.01 or new_status != old_status:
+            update_doc = {"paid_amount": real_paid, "status": new_status}
+            # Voor status open resetten we `paid_at`
+            if new_status == "open":
+                update_doc["paid_at"] = None
+            await db.invoices.update_one({"id": inv_id}, {"$set": update_doc})
+        report.append({
+            "invoice_id": inv_id,
+            "invoice_number": inv.get("invoice_number") or "",
+            "period": f"{inv.get('period_year')}-{(inv.get('period_month') or 0):02d}",
+            "amount": inv_amt,
+            "old_paid": old_paid,
+            "new_paid": real_paid,
+            "old_status": old_status,
+            "new_status": new_status,
+            "changed": abs(real_paid - old_paid) > 0.01 or new_status != old_status,
+        })
+    return {
+        "tenant_id": tenant_id,
+        "tenant_name": t.get("name"),
+        "invoices_processed": len(report),
+        "invoices_changed": sum(1 for r in report if r["changed"]),
+        "report": report,
+    }
 
 
 # =====================================================================
