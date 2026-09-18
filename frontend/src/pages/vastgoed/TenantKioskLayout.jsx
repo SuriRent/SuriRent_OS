@@ -411,7 +411,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
         )}
         {!busy && !error && (
           <p className="text-sm font-bold text-white/90 mt-1" data-testid="tk-nfc-idle">
-            &nbsp;
+            Houd uw kaart of telefoon tegen de scanner
           </p>
         )}
 
