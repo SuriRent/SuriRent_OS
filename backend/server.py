@@ -9149,6 +9149,121 @@ async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
     return enriched
 
 
+@api.post("/payments/{pid}/reassign-invoice")
+async def reassign_payment_invoice(
+    pid: str,
+    body: dict,
+    user=Depends(require_role("admin", "superadmin")),
+):
+    """Verplaatst een betaling naar een andere factuur — trekt het bedrag
+    af van de OUDE factuur (paid_amount) en past het toe op de NIEUWE.
+    Herberekent status van beide facturen op basis van hun paid_amount.
+
+    Body: {"invoice_id": "<new_invoice_id>"}
+
+    Gebruikt om verkeerd auto-gekoppelde betalingen te herstellen (bv.
+    payment.period=juli maar auto-koppeling ging naar augustus omdat
+    juli's status al 'paid' stond uit een eerder verwijderde betaling).
+
+    Retourneert het bijgewerkte payment doc + report per factuur.
+    """
+    new_inv_id = (body or {}).get("invoice_id") or ""
+    if not new_inv_id:
+        raise HTTPException(status_code=400, detail="invoice_id ontbreekt")
+    q = {"id": pid, **scope(user)}
+    p = await db.payments.find_one(q, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+    if p.get("status") != "approved":
+        raise HTTPException(status_code=400, detail="Alleen approved betalingen kunnen verplaatst worden")
+    new_inv = await db.invoices.find_one(
+        {"id": new_inv_id, "tenant_id": p.get("tenant_id"), **scope(user)}, {"_id": 0},
+    )
+    if not new_inv:
+        raise HTTPException(status_code=404, detail="Nieuwe factuur niet gevonden of niet van deze huurder")
+    old_inv_id = p.get("invoice_id")
+    pay_amt = float(p.get("amount") or 0)
+    report = {"old_invoice": None, "new_invoice": None}
+
+    # 1) Trek van OUDE factuur af
+    if old_inv_id and old_inv_id != new_inv_id:
+        old_inv = await db.invoices.find_one({"id": old_inv_id}, {"_id": 0})
+        if old_inv:
+            old_amt = float(old_inv.get("amount") or 0)
+            old_paid = float(old_inv.get("paid_amount") or 0)
+            new_old_paid = max(0.0, round(old_paid - pay_amt, 2))
+            if old_amt <= 0 or new_old_paid >= old_amt * 0.95:
+                new_old_status = "paid"
+            elif new_old_paid > 0:
+                new_old_status = "partial"
+            else:
+                new_old_status = "open"
+            await db.invoices.update_one(
+                {"id": old_inv_id},
+                {"$set": {"paid_amount": new_old_paid, "status": new_old_status,
+                          "paid_at": None if new_old_status != "paid" else old_inv.get("paid_at")}},
+            )
+            report["old_invoice"] = {
+                "id": old_inv_id,
+                "invoice_number": old_inv.get("invoice_number"),
+                "old_paid": old_paid, "new_paid": new_old_paid,
+                "old_status": old_inv.get("status"), "new_status": new_old_status,
+            }
+
+    # 2) Update payment.invoice_id + invoice_number + period_month/year
+    #    Ook: strip allocations die naar OUDE invoice_id verwijzen zodat
+    #    de idempotency-guard bij de nieuwe apply niet blokkeert.
+    new_allocations = [a for a in (p.get("allocations") or [])
+                       if a.get("invoice_id") != new_inv_id and a.get("invoice_id") != old_inv_id]
+    await db.payments.update_one(
+        {"id": pid},
+        {"$set": {
+            "invoice_id": new_inv_id,
+            "invoice_number": new_inv.get("invoice_number"),
+            "period_month": new_inv.get("period_month"),
+            "period_year": new_inv.get("period_year"),
+            "allocations": new_allocations,
+        }},
+    )
+
+    # 3) Pas toe op NIEUWE factuur — herbereken paid_amount + status.
+    #    We doen dit direct via update i.p.v. _apply_payment_to_invoice
+    #    zodat we het EXACTE bedrag ophogen dat bij deze payment hoort.
+    new_amt = float(new_inv.get("amount") or 0)
+    prev_new_paid = float(new_inv.get("paid_amount") or 0)
+    new_new_paid = round(prev_new_paid + pay_amt, 2)
+    if new_amt <= 0 or new_new_paid >= new_amt * 0.95:
+        new_new_status = "paid"
+        new_paid_at = p.get("paid_at") or iso(now_utc())
+    elif new_new_paid > 0:
+        new_new_status = "partial"
+        new_paid_at = None
+    else:
+        new_new_status = "open"
+        new_paid_at = None
+    upd = {"paid_amount": new_new_paid, "status": new_new_status}
+    if new_paid_at:
+        upd["paid_at"] = new_paid_at
+    await db.invoices.update_one({"id": new_inv_id}, {"$set": upd})
+    # Log allocatie op payment.allocations
+    await db.payments.update_one(
+        {"id": pid},
+        {"$push": {"allocations": {
+            "invoice_id": new_inv_id, "amount": pay_amt,
+            "applied_at": iso(now_utc()),
+        }}},
+    )
+    report["new_invoice"] = {
+        "id": new_inv_id,
+        "invoice_number": new_inv.get("invoice_number"),
+        "old_paid": prev_new_paid, "new_paid": new_new_paid,
+        "old_status": new_inv.get("status"), "new_status": new_new_status,
+    }
+    # Return updated payment
+    updated = await db.payments.find_one({"id": pid}, {"_id": 0})
+    return {"payment": await _enrich_payment(updated), "report": report}
+
+
 @api.get("/tenants/{tenant_id}/balance")
 async def tenant_balance(tenant_id: str, user=Depends(get_current_user)):
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})

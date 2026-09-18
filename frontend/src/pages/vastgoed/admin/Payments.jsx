@@ -445,6 +445,10 @@ function PaymentRow({ p, onOpen }) {
 function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
   const p = payment;
   const [linkedInvoice, setLinkedInvoice] = useState(null);
+  // Openstaande facturen van deze huurder — voor "Wijzig gekoppelde factuur"
+  const [tenantInvoices, setTenantInvoices] = useState([]);
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   useEffect(() => {
     if (!p?.invoice_id) return;
@@ -454,10 +458,34 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
         const { data: allInvs } = await api.get('/invoices');
         if (!alive) return;
         setLinkedInvoice(allInvs.find((i) => i.id === p.invoice_id) || null);
+        // Toon huidige + open/partial van dezelfde huurder als opties
+        setTenantInvoices(
+          allInvs.filter((i) => i.tenant_id === p.tenant_id)
+        );
       } catch (e) { console.warn('[Payments] linked invoice fetch:', e); }
     })();
     return () => { alive = false; };
-  }, [p?.invoice_id]);
+  }, [p?.invoice_id, p?.tenant_id]);
+
+  const handleReassign = async (newInvoiceId) => {
+    if (!newInvoiceId || newInvoiceId === p.invoice_id) {
+      setReassignOpen(false);
+      return;
+    }
+    if (!window.confirm('Wijzig de gekoppelde factuur van deze betaling? Beide facturen worden automatisch herberekend.')) {
+      return;
+    }
+    setReassigning(true);
+    try {
+      await api.post(`/payments/${p.id}/reassign-invoice`, { invoice_id: newInvoiceId });
+      window.location.reload();
+    } catch (e) {
+      alert('Wijzigen mislukt: ' + (e?.response?.data?.detail || e.message));
+    } finally {
+      setReassigning(false);
+      setReassignOpen(false);
+    }
+  };
 
   const date = new Date(p.paid_at);
   const statusBadge = (() => {
@@ -523,8 +551,64 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="payment-linked-invoice">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Gekoppelde factuur</h2>
-            <span className="text-[10px] font-bold text-slate-400">1 factuur</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setReassignOpen((v) => !v)}
+                disabled={reassigning}
+                data-testid="payment-reassign-invoice-btn"
+                className="text-[10px] font-bold text-[#FF5C00] hover:text-orange-700 uppercase tracking-wider px-2 py-1 rounded hover:bg-orange-50 disabled:opacity-40"
+              >
+                Wijzig
+              </button>
+              <span className="text-[10px] font-bold text-slate-400">1 factuur</span>
+            </div>
           </div>
+          {reassignOpen && (
+            <div className="px-4 py-3 border-b border-slate-100 bg-orange-50/50" data-testid="payment-reassign-panel">
+              <p className="text-xs font-bold text-slate-700 mb-2">Kies andere factuur:</p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {tenantInvoices.length === 0 && (
+                  <p className="text-xs text-slate-500">Geen andere facturen gevonden.</p>
+                )}
+                {tenantInvoices.map((inv) => {
+                  const isCurrent = inv.id === p.invoice_id;
+                  const amtNum = Number(inv.amount || 0);
+                  const paidNum = Number(inv.paid_amount || 0);
+                  const remNum = Math.max(0, amtNum - paidNum);
+                  return (
+                    <button
+                      key={inv.id}
+                      onClick={() => handleReassign(inv.id)}
+                      disabled={reassigning || isCurrent}
+                      data-testid={`payment-reassign-option-${inv.id}`}
+                      className={`w-full text-left px-3 py-2 rounded-lg border-2 text-xs transition ${
+                        isCurrent
+                          ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-white border-slate-200 hover:border-[#FF5C00] hover:bg-orange-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">
+                          {inv.invoice_number}
+                          <span className="ml-2 font-normal text-slate-500 capitalize">
+                            {MONTHS_NL[(inv.period_month || 1) - 1]} {inv.period_year}
+                          </span>
+                          {isCurrent && (
+                            <span className="ml-2 text-[9px] font-bold uppercase text-[#FF5C00]">Huidige</span>
+                          )}
+                        </span>
+                        <span className="text-right shrink-0">
+                          <span className="block font-bold text-slate-900">{fmtMoney(remNum, inv.currency)}</span>
+                          <span className="block text-[9px] text-slate-500">open</span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="px-4 py-3">
             {linkedInvoice ? (() => {
               const paid = Number(linkedInvoice.paid_amount || 0);
