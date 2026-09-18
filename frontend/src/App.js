@@ -301,20 +301,13 @@ export default function App() {
   // custom_domain is van een bedrijf, renderen we DIRECT TenantPublicLanding
   // ipv de standaard routes. Skipt zichzelf op system hosts.
   const tenant = useTenantLandingResolver();
-  // Dismiss de HTML PWA splash zodra tenant-resolve klaar is en React
-  // écht content gaat renderen. Voorkomt cream+ring-spinner flikker
-  // tussen de PWA splash en de eerste app-render. requestAnimationFrame
-  // wacht 1 frame zodat de eerste paint van de app al is voltooid vóór
-  // de fade-out begint — zo geen wit-flash meer tussen splash en app.
-  useEffect(() => {
-    if (tenant.status === 'checking') return;
-    if (typeof window === 'undefined' || typeof window.__hidePwaSplash !== 'function') return;
-    const raf = window.requestAnimationFrame(() => {
-      // Nog 1 extra frame delay zodat React zeker klaar is met committen.
-      window.requestAnimationFrame(() => window.__hidePwaSplash());
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [tenant.status]);
+  // NB: we hiden de PWA HTML splash NIET meer op tenant.status change,
+  // want daarna kan BrandedShell nog even bezig zijn met de company-
+  // lookup wat een tweede spinner zou tonen. In plaats daarvan roept
+  // elke top-level page-component (LoginPage, KioskLayout, Admin,
+  // TenantKiosk) `window.__hidePwaSplash()` in zijn eigen mount-
+  // useEffect. Zo blijft de splash zichtbaar tot er écht content
+  // getoond wordt.
   if (tenant.status === 'checking') {
     return <RouteFallback />;
   }

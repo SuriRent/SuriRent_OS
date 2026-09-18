@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
 import { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { EmailDialog, SendDialog } from '../../components/EmailDialog';
@@ -4010,6 +4011,7 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
 }
 
 export default function AdminDashboard() {
+  useHidePwaSplash();
   const { user, logout, activeCompany, refresh: refreshAuth } = useAuth();
   const tabs = getTabsFor(user);
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop

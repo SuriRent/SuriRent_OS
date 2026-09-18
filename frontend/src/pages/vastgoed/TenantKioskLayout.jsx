@@ -17,6 +17,7 @@ import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost,
   readCachedBranding, applyBranding, resolveLogoUrl,
 } from '../../lib/branding';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
 const TENANT_TOKEN_KEY = 'tenant_token';
 const PIN_LENGTH = 4;
@@ -1747,6 +1748,7 @@ function CompanyPicker({ onPicked }) {
 // CONTAINER
 // =====================================================================
 export default function TenantKioskLayout() {
+  useHidePwaSplash();
   const navigate = useBrandedNavigate();
   const [searchParams] = useSearchParams();
   const aptId = searchParams.get('apt');

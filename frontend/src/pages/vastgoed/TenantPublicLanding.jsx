@@ -22,6 +22,7 @@ import {
 import {
   EditableProvider, EditableText, EditableImage,
 } from '../../lib/landing-editable';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
 const fmtMoney = (n, c = 'SRD') => {
   try {
@@ -476,6 +477,7 @@ export default function TenantPublicLanding({
   content: contentProp = null,
   editMode: editModeProp = null,
 } = {}) {
+  useHidePwaSplash();
   const [company, setCompany] = useState(companyProp);
   const [apartments, setApartments] = useState(apartmentsProp || []);
   const [content, setContent] = useState(contentProp || {});

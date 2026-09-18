@@ -13,6 +13,7 @@ import PinLanding from './auth/PinLogin';
 import PasswordView from './auth/EmailLogin';
 import RegisterModal from '../../components/RegisterModal';
 import PwaOnboarding, { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
 
 // =============================================================================
@@ -21,6 +22,7 @@ import PwaOnboarding, { PWA_ONBOARDING_KEY } from '../../components/PwaOnboardin
 // /app/frontend/src/pages/vastgoed/auth/ voor onderhoudbaarheid.
 // =============================================================================
 export default function LoginPage() {
+  useHidePwaSplash();
   const navigate = useBrandedNavigate();
   const [searchParams] = useSearchParams();
   const { user, loading, refresh } = useAuth();

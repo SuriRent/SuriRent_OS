@@ -6,7 +6,7 @@
  * - Bypass /api/* (always go to network)
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v94';
+const CACHE_VERSION = 'surirent-v95';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target

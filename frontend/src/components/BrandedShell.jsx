@@ -55,11 +55,11 @@ export default function BrandedShell({ children, requireKnownSlug = true }) {
     return <Navigate to={`/${slug}`} replace />;
   }
   if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-kiosk-cream">
-        <div className="w-12 h-12 border-4 border-orange-200 border-t-kiosk-orange rounded-full animate-spin" />
-      </div>
-    );
+    // Transparant zodat de PWA HTML splash eronder zichtbaar blijft
+    // (geen "eerste cream+ring-spinner" flikker). Splash wordt pas
+    // dismissed als de branded child echt kan renderen (LoginPage /
+    // Protected → AdminDashboard, etc.).
+    return <div className="min-h-screen" style={{ background: 'transparent' }} />;
   }
   if (!valid) {
     return (

@@ -16,6 +16,7 @@ import {
   getKioskEmployee, withKioskEmployee,
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
 const variants = {
   enter: { opacity: 0, x: 60 },
@@ -3102,6 +3103,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
 // Main
 // =====================================================================
 export default function KioskLayout() {
+  useHidePwaSplash();
   const navigate = useBrandedNavigate();
   const [step, setStep] = useState('check');
   const [apartment, setApartment] = useState(null);

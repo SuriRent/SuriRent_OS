@@ -15,6 +15,7 @@ import {
 import { EditableProvider, EditableText, EditableImage, useLandingContent } from '../../lib/landing-editable';
 import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
+import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
 const SHOTS = {
   overzicht:     'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png',
@@ -1352,6 +1353,7 @@ function Footer({ onLogin }) {
 // Main export
 // =============================================================================
 export default function MarketingLandingV2() {
+  useHidePwaSplash();
   const navigate = useNavigate();
   const { refresh: refreshAuth } = useAuth();
   const pwaInstall = usePwaInstall();
