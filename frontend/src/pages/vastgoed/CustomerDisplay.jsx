@@ -106,10 +106,37 @@ function OverviewScreen({ state, slug }) {
   const apt = overview.apartment || state.apartment || {};
   const tenant = state.tenant || {};
   const internet = Number(tenant.internet_amount || overview.internet || 0);
-  const openRent = (balance.balance || 0) > 0 ? balance.balance : 0;
-  const totalDue = Number(overview.total_due || (openRent + internet) || 0);
+  // BUCKET-based bedragen — IDENTIEK aan de beheerder-kiosk in KioskLayout
+  // (regels 634-668) zodat "Maandhuur" en "Achterstallige huur" hier hetzelfde
+  // getoond worden als op de operator-kant. Voorheen viel dit terug op
+  // `balance.balance` wat een legacy veld is dat vaak 0 stond zelfs bij
+  // achterstand → klant zag ten onrechte "Volledig bij".
+  const openInvoices = Array.isArray(overview.open_invoices) ? overview.open_invoices : [];
+  const openInvoicesTotal = Number(overview.open_invoices_total || 0);
+  const currentInvoices = Array.isArray(overview.current_invoices) ? overview.current_invoices : [];
+  const currentInvoicesTotal = Number(overview.current_invoices_total || 0);
+  const currentInvoice = overview.current_month_invoice || currentInvoices[0] || null;
+  const openRent = openInvoicesTotal;
+  const currentMonthAmount = currentInvoices.length > 0
+    ? currentInvoicesTotal
+    : (currentInvoice ? Number(currentInvoice.outstanding || 0) : 0);
+  const totalDue = currentMonthAmount + openRent + internet;
   const cur = balance.currency || apt.currency || 'SRD';
   const hasBalance = totalDue > 0;
+
+  const monthsCovered = openInvoices.length;
+  const openLabel = monthsCovered > 0
+    ? `Achterstallige huur (${monthsCovered} maand${monthsCovered === 1 ? '' : 'en'})`
+    : 'Achterstallige huur';
+  const openSub = openInvoices.length > 0
+    ? openInvoices
+        .map((inv) => inv.period_month ? MONTHS_NL[inv.period_month - 1].slice(0, 3) : null)
+        .filter(Boolean).join(', ')
+    : '';
+  const currentMonthLabel = currentInvoice && currentInvoice.period_month
+    ? `Huidige maandhuur · ${MONTHS_NL[currentInvoice.period_month - 1]} ${currentInvoice.period_year}`
+    : 'Maandhuur';
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -126,12 +153,11 @@ function OverviewScreen({ state, slug }) {
   };
 
   const items = [
-    { key: 'rent', label: 'Maandhuur', value: apt.rent_amount || 0, icon: HomeIcon },
     ...(openRent > 0 ? [{
-      key: 'open', label: 'Openstaande huur', value: openRent, icon: Wallet, highlight: true,
-      sub: balance.next_period ? `${MONTHS_NL[balance.next_period.month - 1]} ${balance.next_period.year}` : '',
+      key: 'open', label: openLabel, value: openRent, icon: Wallet,
+      highlight: true, sub: openSub,
     }] : []),
-    { key: 'svc', label: 'Servicekosten', value: 0, icon: FileText, muted: true },
+    { key: 'rent', label: currentMonthLabel, value: currentMonthAmount, icon: HomeIcon },
     { key: 'fines', label: 'Boetes', value: 0, icon: FileText, muted: true },
     { key: 'internet', label: 'Internet', value: internet, icon: Wifi, muted: internet === 0 },
   ];

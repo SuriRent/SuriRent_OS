@@ -986,7 +986,10 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       // vlag onderdrukt het printdialoog alleen bij HTML-documenten, niet
       // bij PDF's (die worden door de PDF-viewer geopend en die viewer
       // toont het dialoog altijd).
-      const resp = await api.get(`/payments/${paymentId}/print.html`, { responseType: 'text' });
+      // `format=thermal` → 80mm bon-printer layout (default voor de kiosk).
+      // Voorheen ontbrak deze parameter → viel terug op A4 → bon-printer
+      // printte een halve pagina i.p.v. een compacte 80mm bon.
+      const resp = await api.get(`/payments/${paymentId}/print.html?format=thermal`, { responseType: 'text' });
       const html = resp.data;
       const existing = document.getElementById('kiosk-print-iframe');
       if (existing) existing.remove();
@@ -2416,7 +2419,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const resp = await api.get(`/payments/${payment.id}/print.html`, { responseType: 'text' });
+        // `format=thermal` → 80mm bon-printer layout (kiosk-default).
+        const resp = await api.get(`/payments/${payment.id}/print.html?format=thermal`, { responseType: 'text' });
         const html = resp.data;
         const existing = document.getElementById('kiosk-autoprint-iframe');
         if (existing) existing.remove();
@@ -3378,6 +3382,19 @@ export default function KioskLayout() {
       const ovw = overview ? {
         balance: overview.balance, apartment: overview.apartment,
         internet: overview.internet || 0, total_due: overview.total_due || 0,
+        // Bucket-info toevoegen zodat het klantenscherm EXACT dezelfde
+        // "Achterstallige huur" / "Maandhuur" splitsing kan tonen als de
+        // beheerder-kiosk. Voorheen kreeg het klantenscherm alleen
+        // `balance.balance` (legacy) waardoor Financieel overzicht altijd
+        // op "Volledig bij / SRD 0,00" bleef staan zelfs bij achterstand.
+        open_invoices: Array.isArray(overview.open_invoices) ? overview.open_invoices : [],
+        open_invoices_total: Number(overview.open_invoices_total || 0),
+        current_invoices: Array.isArray(overview.current_invoices) ? overview.current_invoices : [],
+        current_invoices_total: Number(overview.current_invoices_total || 0),
+        future_invoices: Array.isArray(overview.future_invoices) ? overview.future_invoices : [],
+        future_invoices_total: Number(overview.future_invoices_total || 0),
+        current_month_invoice: overview.current_month_invoice || null,
+        credit_balance: Number(overview.credit_balance || 0),
       } : null;
       // Tijdens 'pay' tonen we de live preview van de operator-selectie
       // (categorieën + lopend totaal) zodat het klantenscherm meteen
