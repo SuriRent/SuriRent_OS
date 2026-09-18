@@ -332,38 +332,34 @@
     </script>
     <script>
       // First-paint background: voorkomt witte flits + witte strook onderaan
-      // op iOS PWA standalone. Voor /login en /kiosk → oranje (brand). Voor
-      // alle andere routes (admin, huurder) → cream zodat Safari's URL-bar
-      // de cream kleur erft i.p.v. oranje.
+      // op iOS PWA standalone. De PWA HTML-splash is ALTIJD SuriRent-oranje
+      // met wit logo + 3 pulserende dots — geen route-afhankelijke kleur
+      // meer zodat de opstart-ervaring consistent SuriRent-merk voelt.
       //
-      // We zetten window.__PWA_BG zodat de splash-div hieronder EXACT
-      // dezelfde kleur pakt en er geen oranje→cream flikker meer ontstaat
-      // tijdens PWA-opstart.
+      // Ná splash-out neemt de body zijn eigen route-BG over via CSS
+      // (kiosk-mode / login-mode / cream default), maar dat gebeurt pas
+      // NADAT de app is gerenderd — geen flikker meer.
       (function () {
         try {
-          var p = (window.location.pathname || '').toLowerCase();
-          var isKiosk = p === '/kiosk' || p.indexOf('/kiosk') === 0;
-          var isLogin = p === '/login' || p.indexOf('/login') === 0
-            || /^\/[a-z0-9][a-z0-9-]{0,62}\/login/.test(p);
-          var BG = (isKiosk || isLogin) ? '#FF5C00' : '#FFF7F0';
-          var FG = (isKiosk || isLogin) ? '#FFFFFF' : '#FF5C00';
-          window.__PWA_BG = BG;
-          window.__PWA_FG = FG;
-          document.documentElement.style.backgroundColor = BG;
+          var BRAND = '#FF5C00';
+          var CONTRAST = '#FFFFFF';
+          window.__PWA_BG = BRAND;
+          window.__PWA_FG = CONTRAST;
+          // Body/HTML BG matcht ALLEEN tijdens splash. Zodra splash weg is
+          // (App.js → useHidePwaSplash) valt de CSS terug op de route-BG.
+          document.documentElement.style.backgroundColor = BRAND;
           var applyBody = function () {
-            if (document.body) document.body.style.backgroundColor = BG;
+            if (document.body) document.body.style.backgroundColor = BRAND;
             var splash = document.getElementById('__pwa_splash');
-            if (splash) splash.style.background = BG;
-            // Update SVG stroke + dots + label naar de contrast-kleur zodat
-            // ze zichtbaar blijven wanneer de achtergrond oranje is.
+            if (splash) splash.style.background = BRAND;
             var svg = splash && splash.querySelector('svg');
-            if (svg) { svg.setAttribute('stroke', FG); }
+            if (svg) { svg.setAttribute('stroke', CONTRAST); }
             var path = splash && splash.querySelector('svg path');
-            if (path) { path.setAttribute('fill', FG); path.setAttribute('fill-opacity', '0.12'); }
+            if (path) { path.setAttribute('fill', CONTRAST); path.setAttribute('fill-opacity', '0.18'); }
             var dots = splash ? splash.querySelectorAll('span') : [];
-            for (var i = 0; i < dots.length; i++) dots[i].style.background = FG;
+            for (var i = 0; i < dots.length; i++) dots[i].style.background = CONTRAST;
             var label = splash && splash.querySelector('p');
-            if (label) label.style.color = FG;
+            if (label) { label.style.color = CONTRAST; label.style.opacity = '0.9'; }
           };
           if (document.body) applyBody();
           else document.addEventListener('DOMContentLoaded', applyBody);
@@ -419,25 +415,25 @@
          runtime fetch. -->
     <!--__LANDING_CONTENT__-->
   </head>
-  <body style="background-color: #FFF7F0;">
+  <body style="background-color: #FF5C00;">
     <noscript>JavaScript is vereist om deze app te gebruiken.</noscript>
     <!-- Splash screen — LEEFT BUITEN #root zodat React deze niet unmount
          zodra createRoot() aanroept. Blijft zichtbaar tot App.js het via
          window.__hidePwaSplash() dismisst nadat auth + tenant-resolve
          zijn afgerond. Zo geen tussentijdse "cream + ring spinner" flikker
          meer tijdens PWA-opstart. -->
-    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FFF7F0;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity 0.3s ease-out;pointer-events:none;">
+    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FF5C00;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity 0.3s ease-out;pointer-events:none;">
       <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;animation:__pwaSplashPulse 1.4s ease-in-out infinite;">
-        <svg width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="#FF5C00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
-          <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FF5C00" fill-opacity="0.08"/>
+        <svg width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
+          <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FFFFFF" fill-opacity="0.18"/>
         </svg>
       </div>
       <div style="margin-top:24px;display:flex;gap:6px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0s;"></span>
-        <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.2s;"></span>
-        <span style="width:8px;height:8px;border-radius:50%;background:#FF5C00;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.4s;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#FFFFFF;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0s;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#FFFFFF;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.2s;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#FFFFFF;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.4s;"></span>
       </div>
-      <p style="margin-top:20px;font-size:13px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:#FF5C00;opacity:0.75;">SuriRent</p>
+      <p style="margin-top:20px;font-size:13px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:#FFFFFF;opacity:0.9;">SuriRent</p>
       <style>
         @keyframes __pwaSplashPulse {
           0%,100% { transform: scale(1); opacity: 1; }
