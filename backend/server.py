@@ -6524,14 +6524,21 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
 
     matched_invoice = None
     if p.get("category") == "huur":
-        inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
-        if company_id:
-            inv_q["company_id"] = company_id
+        # PERIOD-STRICT: match ALLEEN de aangewezen periode's factuur
+        # ongeacht status. Voorkomt dat een OCR-goedgekeurde payment voor
+        # juli per ongeluk wordt gekoppeld aan augustus (Jacyntha-bug).
         if p.get("period_month") and p.get("period_year"):
-            scoped_q = {**inv_q, "period_month": p["period_month"],
+            period_q = {"tenant_id": p["tenant_id"],
+                        "period_month": p["period_month"],
                         "period_year": p["period_year"]}
-            matched_invoice = await db.invoices.find_one(scoped_q, {"_id": 0})
-        if not matched_invoice:
+            if company_id:
+                period_q["company_id"] = company_id
+            matched_invoice = await db.invoices.find_one(period_q, {"_id": 0})
+        # Fallback ALLEEN wanneer geen periode is opgegeven.
+        if not matched_invoice and not (p.get("period_month") and p.get("period_year")):
+            inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
+            if company_id:
+                inv_q["company_id"] = company_id
             matched_invoice = await db.invoices.find_one(
                 inv_q, {"_id": 0},
                 sort=[("period_year", 1), ("period_month", 1)],
@@ -8636,9 +8643,24 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                 {"_id": 0}, sort=[("period_year", 1), ("period_month", 1)],
             )
         elif body.period_month and body.period_year:
-            scoped = {**inv_q, "period_month": body.period_month, "period_year": body.period_year}
-            matched_invoice = await db.invoices.find_one(scoped, {"_id": 0})
-        if not matched_invoice and not explicit_invoice_ids:
+            # PERIOD-STRICT MATCH — negeer status filter zodat we óók een
+            # factuur vinden waarvan `status=paid` ten onrechte staat (uit
+            # een eerder verwijderde/foutieve betaling). De huurder heeft
+            # deze periode expliciet aangewezen, dus voor die maand is deze
+            # factuur de enige juiste doelfactuur — NOOIT overslaan om naar
+            # een andere maand terug te vallen.
+            period_q = {"tenant_id": body.tenant_id,
+                        "period_month": body.period_month,
+                        "period_year": body.period_year}
+            if company_id:
+                period_q["company_id"] = company_id
+            matched_invoice = await db.invoices.find_one(period_q, {"_id": 0})
+        # FALLBACK naar oudst-open ALLEEN wanneer noch expliciete invoice_ids,
+        # noch een periode zijn opgegeven. Dit voorkomt de Jacyntha-bug waar
+        # een payment voor juli per ongeluk aan augustus werd gekoppeld omdat
+        # juli's status stale op "paid" stond.
+        if (not matched_invoice and not explicit_invoice_ids
+                and not (body.period_month and body.period_year)):
             matched_invoice = await db.invoices.find_one(
                 inv_q, {"_id": 0}, sort=[("period_year", 1), ("period_month", 1)]
             )
@@ -8992,14 +9014,24 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
     # Probeer alsnog een openstaande factuur te matchen bij approval.
     matched_invoice = None
     if p.get("category") == "huur":
-        inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
         cid = p.get("company_id")
-        if cid:
-            inv_q["company_id"] = cid
+        # PERIOD-STRICT: wanneer de payment een periode heeft → match ALLEEN
+        # die periode's factuur, ongeacht status. Voorkomt dat een payment
+        # voor juli per ongeluk wordt gekoppeld aan augustus omdat juli's
+        # status stale op 'paid' staat (Jacyntha-bug).
         if p.get("period_month") and p.get("period_year"):
-            scoped_q = {**inv_q, "period_month": p["period_month"], "period_year": p["period_year"]}
-            matched_invoice = await db.invoices.find_one(scoped_q, {"_id": 0})
-        if not matched_invoice:
+            period_q = {"tenant_id": p["tenant_id"],
+                        "period_month": p["period_month"],
+                        "period_year": p["period_year"]}
+            if cid:
+                period_q["company_id"] = cid
+            matched_invoice = await db.invoices.find_one(period_q, {"_id": 0})
+        # Fallback ALLEEN wanneer géén periode is opgegeven — dan pak
+        # de oudste openstaande.
+        if not matched_invoice and not (p.get("period_month") and p.get("period_year")):
+            inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
+            if cid:
+                inv_q["company_id"] = cid
             matched_invoice = await db.invoices.find_one(
                 inv_q, {"_id": 0}, sort=[("period_year", 1), ("period_month", 1)]
             )
