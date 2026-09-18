@@ -61,11 +61,11 @@ const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPag
 const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
 
 function RouteFallback() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-kiosk-cream">
-      <div className="w-10 h-10 border-4 border-orange-200 border-t-kiosk-orange rounded-full animate-spin" />
-    </div>
-  );
+  // Transparante fallback: we hebben al een HTML __pwa_splash die tot
+  // ná auth blijft. Een tweede cream + ring spinner geeft alleen een
+  // flikker. Dus tijdens deze korte suspense-window renderen we NIETS
+  // (de PWA splash blijft eronder zichtbaar).
+  return <div className="min-h-screen" style={{ background: 'transparent' }} />;
 }
 
 /* Per-company branded routes (path-based). Mounted under both AppRoutes and
@@ -95,12 +95,17 @@ function BrandedRouteTree() {
 function Protected({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
+  // Hide de HTML PWA splash zodra auth klaar is (user of niet — we
+  // gaan hoe dan ook renderen: content OF redirect naar /login).
+  useEffect(() => {
+    if (!loading && typeof window !== 'undefined' && typeof window.__hidePwaSplash === 'function') {
+      window.__hidePwaSplash();
+    }
+  }, [loading]);
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-kiosk-cream">
-        <div className="w-12 h-12 border-4 border-orange-200 border-t-kiosk-orange rounded-full animate-spin" />
-      </div>
-    );
+    // Transparant tijdens auth-check → de PWA HTML splash blijft
+    // zichtbaar zodat er geen visuele "flip" is tussen splash en app.
+    return <div className="min-h-screen" style={{ background: 'transparent' }} />;
   }
   if (!user) {
     // Preserve branded slug context. Wanneer de admin afmeldt vanaf
@@ -296,6 +301,20 @@ export default function App() {
   // custom_domain is van een bedrijf, renderen we DIRECT TenantPublicLanding
   // ipv de standaard routes. Skipt zichzelf op system hosts.
   const tenant = useTenantLandingResolver();
+  // Dismiss de HTML PWA splash zodra tenant-resolve klaar is en React
+  // écht content gaat renderen. Voorkomt cream+ring-spinner flikker
+  // tussen de PWA splash en de eerste app-render. requestAnimationFrame
+  // wacht 1 frame zodat de eerste paint van de app al is voltooid vóór
+  // de fade-out begint — zo geen wit-flash meer tussen splash en app.
+  useEffect(() => {
+    if (tenant.status === 'checking') return;
+    if (typeof window === 'undefined' || typeof window.__hidePwaSplash !== 'function') return;
+    const raf = window.requestAnimationFrame(() => {
+      // Nog 1 extra frame delay zodat React zeker klaar is met committen.
+      window.requestAnimationFrame(() => window.__hidePwaSplash());
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [tenant.status]);
   if (tenant.status === 'checking') {
     return <RouteFallback />;
   }
