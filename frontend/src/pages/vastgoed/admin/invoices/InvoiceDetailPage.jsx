@@ -36,6 +36,10 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
   const [applyingCredit, setApplyingCredit] = useState(false);
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState('');
+  // Sub-page toggle voor "Betalingsgeschiedenis" — vervangt de inline
+  // sub-card door een volledige details view die de admin via de Acties
+  // knop opent. Terug-knop reset dit naar false.
+  const [showHistoryPage, setShowHistoryPage] = useState(false);
 
   const primaryOpen = overdue[0] || current[0] || future[0] || null;
   const currency = g.currency || primaryOpen?.currency || 'SRD';
@@ -164,6 +168,54 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
 
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid={`invoice-detail-page-${g.tenant_id}`}>
+      {/* ================= SUB-PAGE: BETALINGSGESCHIEDENIS =================
+          Wanneer de admin op "Betalingsgeschiedenis" klikt in de Acties-
+          kaart, tonen we een volledige details-view i.p.v. de facturen-
+          lijst. Terug-knop reset naar de hoofdview. */}
+      {showHistoryPage ? (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <button onClick={() => setShowHistoryPage(false)}
+              data-testid="history-back-btn"
+              className="inline-flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border-2 border-slate-200 rounded-2xl px-4 py-3 text-sm">
+              <ChevronRight className="w-4 h-4 rotate-180" /> Terug
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">{g.tenant_name || 'Onbekende huurder'}</h1>
+                {g.apartment_number && (
+                  <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                    {g.location_name ? `${g.location_name} · ` : ''}Appt. {g.apartment_number}
+                  </p>
+                )}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">
+                Historie
+              </span>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Betalingsgeschiedenis</h2>
+              <span className="text-[10px] font-bold text-slate-400">
+                {paid.length} {paid.length === 1 ? 'betaling' : 'betalingen'}
+              </span>
+            </div>
+            <div className="p-4">
+              {paid.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-6">
+                  Nog geen betalingen voor deze huurder.
+                </p>
+              ) : (
+                <PaidHistorySection paidInvoices={paid} currency={currency} testidPrefix={`history-paid-${g.tenant_id}`} />
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+      <>
       {/* ================= TERUG + NIEUWE (SNEL) ================= */}
       {/* Terug-knop links, "Nieuwe" (snelle betaling) rechts — beide op
           dezelfde hoogte als de "Nieuwe factuur" knop op de facturen-lijst
@@ -194,12 +246,37 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
               </p>
             )}
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>
-            <p className="text-base sm:text-2xl font-black text-slate-900 whitespace-nowrap">{fmtMoney(totalOpen, currency)}</p>
-            <p className="text-[10px] sm:text-[11px] text-slate-500">totaal saldo</p>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {/* Compact "Herverdeel" knop — verplaatst uit de Acties-kaart
+                naar hier rechts naast de huurder-naam. Klein & discreet, met
+                loader tijdens de actie. Description onder de knop is
+                verwijderd — bewust minimaal om de header niet vol te
+                zetten. Titel-tooltip legt uit wat de actie doet. */}
+            <button
+              type="button"
+              onClick={rebalanceCredits}
+              disabled={rebalancing}
+              data-testid="rebalance-credits-btn"
+              title="Herverdeel alle openstaande tegoeden FIFO over de openstaande facturen."
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5C00] hover:bg-orange-600 text-white text-[11px] font-black uppercase tracking-wider transition disabled:opacity-60 shadow-sm"
+            >
+              {rebalancing
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Herverdelen…</>
+                : <><RefreshCw className="w-3 h-3" /> Herverdeel</>}
+              <ChevronRight className="w-3 h-3" />
+            </button>
+            <div className="text-right">
+              <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>
+              <p className="text-base sm:text-2xl font-black text-slate-900 whitespace-nowrap">{fmtMoney(totalOpen, currency)}</p>
+              <p className="text-[10px] sm:text-[11px] text-slate-500">totaal saldo</p>
+            </div>
           </div>
         </div>
+        {rebalanceMsg && (
+          <p className="text-[11px] font-bold text-slate-700 text-center mt-2" data-testid="rebalance-msg">
+            {rebalanceMsg}
+          </p>
+        )}
         {/* Badges op eigen regel = volledige kaartbreedte. Ultracompact
             (`text-[9px]`, `px-1.5`, `gap-1`) + verkorte labels zodat alle 3
             ook op een smalle Android-viewport (~320px) op één regel passen. */}
@@ -372,46 +449,35 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
       )}
 
       {/* ================= SUB-CARD: ACTIES ================= */}
-      {/* Registreer + E-mail + WhatsApp staan nu bovenaan Openstaande facturen.
-          Deze kaart bevat nog uitsluitend "Herverdeel tegoeden" (technische
-          reparatie-actie), zodat de primaire acties dicht bij de facturen-lijst
-          blijven en deze kaart niet meer visueel domineert. */}
-      {openCount > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
-          </div>
-          <div className="p-4 space-y-2">
-            <button type="button" onClick={rebalanceCredits} disabled={rebalancing}
-              data-testid="rebalance-credits-btn"
-              className="w-full h-11 rounded-xl bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 font-bold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60 transition">
-              {rebalancing
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Herverdelen…</>
-                : <><RefreshCw className="w-4 h-4" /> Herverdeel alle tegoeden</>}
-            </button>
-            <p className="text-[10px] text-slate-500 text-center leading-tight">
-              Overloop van eerdere grote betalingen doorschuiven naar openstaande maanden (FIFO).
-            </p>
-            {rebalanceMsg && (
-              <p className="text-[11px] font-bold text-slate-700 text-center" data-testid="rebalance-msg">
-                {rebalanceMsg}
-              </p>
-            )}
-          </div>
+      {/* Bevat nu 1 primaire actie: navigeren naar "Betalingsgeschiedenis"
+          detail-view. De Herverdeel-actie is verhuisd naar de hoofdcard
+          (compacte knop rechts naast de huurder-naam). */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100">
+          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
         </div>
-      )}
+        <div className="p-4">
+          <button
+            type="button"
+            onClick={() => setShowHistoryPage(true)}
+            data-testid="open-payment-history-btn"
+            className="w-full h-12 rounded-xl bg-[#FF5C00] hover:bg-orange-600 text-white font-bold text-sm inline-flex items-center justify-center gap-2 transition shadow-sm"
+          >
+            <Clock className="w-4 h-4" />
+            Betalingsgeschiedenis
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <p className="text-[10px] text-slate-500 text-center leading-tight mt-2">
+            Bekijk alle betaalde facturen van deze huurder in detail.
+          </p>
+        </div>
+      </div>
 
-      {/* ================= SUB-CARD: BETALINGSGESCHIEDENIS ================= */}
-      {paid.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Betalingsgeschiedenis</h2>
-            <span className="text-[10px] font-bold text-slate-400">{paid.length} betaald</span>
-          </div>
-          <div className="p-4">
-            <PaidHistorySection paidInvoices={paid} currency={currency} testidPrefix={`detail-paid-${g.tenant_id}`} />
-          </div>
-        </div>
+      {/* De "Betalingsgeschiedenis" sub-card (inline lijst) is verwijderd
+          op verzoek van de gebruiker — de admin opent nu de aparte
+          detail-view via de Acties-knop hierboven. */}
+
+      </>
       )}
 
       {/* ================= SUB-CARD: ACTIES (onderaan) VERWIJDERD =================
