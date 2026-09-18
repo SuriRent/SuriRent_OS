@@ -982,14 +982,16 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
     try {
-      // Haal HTML-versie op (i.p.v. PDF-blob). Chrome's --kiosk-printing
-      // vlag onderdrukt het printdialoog alleen bij HTML-documenten, niet
-      // bij PDF's (die worden door de PDF-viewer geopend en die viewer
-      // toont het dialoog altijd).
-      // `format=thermal` → 80mm bon-printer layout (default voor de kiosk).
-      // Voorheen ontbrak deze parameter → viel terug op A4 → bon-printer
-      // printte een halve pagina i.p.v. een compacte 80mm bon.
-      const resp = await api.get(`/payments/${paymentId}/print.html?format=thermal`, { responseType: 'text' });
+      // Haal HTML-versie op — GEEN PDF-blob (Chrome's --kiosk-printing
+      // vlag onderdrukt de dialoog alléén voor HTML-documenten, niet
+      // voor PDF's die door de PDF-viewer worden geopend).
+      // `format=thermal` → 80mm bon-printer layout (default kiosk).
+      // `preview=1` → skip de inline window.print() in de HTML zodat
+      // we vanuit de user-click gesture zelf `iframe.contentWindow.print()`
+      // kunnen aanroepen — dat is het patroon waarmee --kiosk-printing
+      // betrouwbaar de dialoog overslaat (i.p.v. te racen met een inline
+      // <script> auto-print).
+      const resp = await api.get(`/payments/${paymentId}/print.html?format=thermal&preview=1`, { responseType: 'text' });
       const html = resp.data;
       const existing = document.getElementById('kiosk-print-iframe');
       if (existing) existing.remove();
@@ -1001,20 +1003,27 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       iframe.style.width = '0';
       iframe.style.height = '0';
       iframe.style.border = '0';
-      // srcdoc render inline HTML in de iframe — geen blob-URL nodig,
-      // en het is een echt HTML-document (geen PDF-viewer wrapper).
+      // srcdoc → echt HTML-document (geen PDF-viewer wrapper). Native
+      // window.print() op de HTML-flow → --kiosk-printing werkt.
       iframe.srcdoc = html;
 
-      // De HTML zelf roept al automatisch window.print() aan via een
-      // inline <script>. We wachten alleen op de iframe-load om te weten
-      // dat het gelukt is — GEEN tweede print-call van buitenaf, want
-      // dat veroorzaakt een tweede printdialoog.
       const printPromise = new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
         iframe.onload = () => {
           clearTimeout(timeoutId);
-          // 300ms buffer zodat het inline script tijd heeft om window.print
-          // aan te roepen voordat we "afgedrukt" tonen.
+          // Vanuit PARENT (in de user-click callstack) de iframe-window
+          // focus + print aanroepen. Dat is het aanbevolen patroon voor
+          // Chrome --kiosk-printing: dialoog wordt overgeslagen omdat de
+          // print-call binnen het HTML-document scope zit en niet in een
+          // aparte PDF-viewer.
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (err) {
+            reject(err);
+            return;
+          }
+          // 300ms buffer voordat we "afgedrukt" tonen (print-job async).
           setTimeout(resolve, 300);
         };
         iframe.onerror = () => {
@@ -2420,7 +2429,10 @@ function ReceiptScreen({ payment, overview, onDone }) {
     const t = setTimeout(async () => {
       try {
         // `format=thermal` → 80mm bon-printer layout (kiosk-default).
-        const resp = await api.get(`/payments/${payment.id}/print.html?format=thermal`, { responseType: 'text' });
+        // `preview=1` → geen inline auto-print in de HTML; parent triggert
+        // `iframe.contentWindow.print()` zodat --kiosk-printing de dialoog
+        // betrouwbaar overslaat i.p.v. te racen met een inline <script>.
+        const resp = await api.get(`/payments/${payment.id}/print.html?format=thermal&preview=1`, { responseType: 'text' });
         const html = resp.data;
         const existing = document.getElementById('kiosk-autoprint-iframe');
         if (existing) existing.remove();
@@ -2433,9 +2445,12 @@ function ReceiptScreen({ payment, overview, onDone }) {
         iframe.style.height = '0';
         iframe.style.border = '0';
         iframe.srcdoc = html;
-        // HTML zelf roept window.print() aan via inline <script> —
-        // GEEN dubbele print-call van buitenaf om dubbele dialogen
-        // te voorkomen.
+        iframe.onload = () => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch { /* geen printer of print-service niet beschikbaar */ }
+        };
         document.body.appendChild(iframe);
       } catch {
         // Geen printer of HTML-fetch mislukt → stille fallback.
