@@ -411,14 +411,9 @@ function LoginView({ branding, onLoggedIn, prefill }) {
         )}
         {!busy && !error && (
           <p className="text-sm font-bold text-white/90 mt-1" data-testid="tk-nfc-idle">
-            Houd uw kaart of telefoon tegen de scanner
+            &nbsp;
           </p>
         )}
-
-        {/* Subtiele info-pill onderaan over de input-bronnen */}
-        <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.22em] text-white/55">
-          {hasWebNfc ? 'Web NFC actief' : 'NFC-lezer & URL-tag'} · {branding?.name || ''}
-        </p>
 
         {/* Logout/back voor het geval iemand per ongeluk hier komt */}
         <button onClick={() => navigate('/')}
@@ -1951,7 +1946,7 @@ export default function TenantKioskLayout() {
   if (!authed) {
     return (
       <div style={wrapper} className="flex flex-col">
-        <div className="flex-1" style={{ paddingBottom: FOOTER_H + 16 }}>
+        <div className="flex-1">
           <AnimatePresence mode="wait">
             <motion.div key={needsCompanyPick ? 'picker' : 'login'} variants={slideVariants}
               initial="enter" animate="center" exit="exit"
@@ -1967,7 +1962,9 @@ export default function TenantKioskLayout() {
             </motion.div>
           </AnimatePresence>
         </div>
-        <Footer />
+        {/* Footer verwijderd op de NFC-login pagina — geen "Gopi Appartements
+            + Uit" balk meer. Op ingelogde pagina's blijft er een compacte
+            Uit-knop rechtsboven staan (zie hoofd-return). */}
       </div>
     );
   }
@@ -1983,8 +1980,19 @@ export default function TenantKioskLayout() {
 
   // --- Authed views ---
   return (
-    <div style={wrapperLocked} className="flex flex-col">
-      <div className="flex-1 min-h-0 flex flex-col" style={{ paddingBottom: FOOTER_H + 24 }}>
+    <div style={wrapperLocked} className="flex flex-col relative">
+      {/* Compacte Uit-knop rechtsboven — vervangt de brede footer met
+          bedrijfsnaam + Uit die de gebruiker uit de layout wilde. Alleen
+          zichtbaar op ingelogde screens. Blijft binnen de safe-area zodat
+          het niet achter de iPhone notch verdwijnt. */}
+      <button onClick={logout}
+        data-testid="tk-logout"
+        title="Uitloggen"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+        className="fixed right-4 z-50 bg-white/95 hover:bg-white text-slate-700 font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow-lg">
+        <LogOut className="w-3.5 h-3.5" /> Uit
+      </button>
+      <div className="flex-1 min-h-0 flex flex-col">
         <AnimatePresence mode="wait">
           <motion.div key={view} variants={slideVariants}
             initial="enter" animate="center" exit="exit"
@@ -2038,7 +2046,8 @@ export default function TenantKioskLayout() {
           </motion.div>
         </AnimatePresence>
       </div>
-      <Footer />
+      {/* Grote onder-footer verwijderd — alleen de kleine Uit-knop
+          rechtsboven blijft (zie hierboven). */}
     </div>
   );
 }
