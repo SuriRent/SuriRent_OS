@@ -7017,11 +7017,38 @@ async def apartment_kiosk_sticker(apt_id: str, request: Request):
             slug = c.get("slug") or ""
     # Bouw een absolute URL met scheme + host. Als we de bedrijfsslug kennen
     # gebruiken we het branded pad zodat de juiste kleuren laden bij scan.
-    # Per-tenant: gebruik `?t=<tenant_id>` zodat de huurder bij eerste scan
-    # direct een PIN kan kiezen (welkom-flow) en daarna altijd herkend wordt.
-    # Fallback `?apt=` blijft werken voor stickers van vóór deze feature.
+    # Per-tenant: gebruik `?nfc=<card_id>` zodat de tenant-portal auto-login
+    # flow direct triggert — IDENTIEK aan een fysieke NFC-tag. Als er geen
+    # tenant/card_id is (leeg appartement) valt de link terug op `?apt=<id>`
+    # voor de klassieke apt-based flow.
     base = _company_base_url(request) or _public_url("")
-    tenant_param = f"?t={apt['tenant_id']}" if apt.get("tenant_id") else f"?apt={apt_id}"
+    tenant_param = f"?apt={apt_id}"
+    if apt.get("tenant_id"):
+        t = await db.tenants.find_one(
+            {"id": apt["tenant_id"]},
+            {"_id": 0, "id": 1, "nfc_card_id": 1, "company_id": 1},
+        )
+        if t:
+            nfc_card_id = _normalize_nfc_uid(t.get("nfc_card_id") or "")
+            if not nfc_card_id:
+                # Auto-genereer NFC card_id zodat QR + toekomstige NFC-tap
+                # dezelfde login-URL delen.
+                import secrets
+                for _ in range(5):
+                    candidate = secrets.token_hex(6).upper()
+                    exists = await db.tenants.find_one(
+                        {"company_id": t.get("company_id"), "nfc_card_id": candidate},
+                        {"_id": 0, "id": 1},
+                    )
+                    if not exists:
+                        nfc_card_id = candidate
+                        break
+                if nfc_card_id:
+                    await db.tenants.update_one(
+                        {"id": t["id"]}, {"$set": {"nfc_card_id": nfc_card_id}}
+                    )
+            if nfc_card_id:
+                tenant_param = f"?nfc={nfc_card_id}"
     if slug:
         kiosk_url = f"{base}/{slug}/kiosk/huurder{tenant_param}"
     else:
@@ -7058,10 +7085,32 @@ async def tenant_qr_plate(tenant_id: str, request: Request, refresh: int = 0,
         size = "medium"
     t = await db.tenants.find_one(
         {"id": tenant_id},
-        {"_id": 0, "id": 1, "name": 1, "company_id": 1, "apartment_id": 1},
+        {"_id": 0, "id": 1, "name": 1, "company_id": 1, "apartment_id": 1, "nfc_card_id": 1},
     )
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    # Zorg dat de huurder een NFC-card_id heeft. Als er nog geen is, genereren
+    # we er automatisch één zodat de QR-code EXACT dezelfde URL heeft als een
+    # (toekomstige) fysieke NFC-tag. Zo geeft QR-scannen direct portaal-toegang
+    # via dezelfde `/tenant-portal/nfc-login` flow als NFC-tap.
+    nfc_card_id = _normalize_nfc_uid(t.get("nfc_card_id") or "")
+    if not nfc_card_id:
+        # Genereer een unieke 12-char UID (hex uit tenant_id + timestamp) en
+        # sla op — zo blijft de QR-plate ook na een refresh dezelfde URL.
+        import secrets
+        for _ in range(5):
+            candidate = secrets.token_hex(6).upper()  # 12 hex chars
+            exists = await db.tenants.find_one(
+                {"company_id": t.get("company_id"), "nfc_card_id": candidate},
+                {"_id": 0, "id": 1},
+            )
+            if not exists:
+                nfc_card_id = candidate
+                break
+        if nfc_card_id:
+            await db.tenants.update_one(
+                {"id": tenant_id}, {"$set": {"nfc_card_id": nfc_card_id}}
+            )
     # Appartement info ophalen
     apt_number = "—"
     address = ""
@@ -7090,17 +7139,21 @@ async def tenant_qr_plate(tenant_id: str, request: Request, refresh: int = 0,
             if logo_url:
                 brand = await _company_brand_info(cid)
                 company_logo_bytes = (brand or {}).get("company_logo_bytes")
-    # URL bouwen — persoonlijke huurder-QR
+    # URL bouwen — persoonlijke huurder-QR. Gebruikt `?nfc=<card_id>` zodat
+    # de tenant-portal auto-login flow (`/tenant-portal/nfc-login`) direct
+    # triggert bij QR-scan. IDENTIEK aan een fysieke NFC-tag URL — één en
+    # dezelfde login-flow voor scannen én tikken.
     base = _company_base_url(request) or _public_url("")
+    nfc_param = f"?nfc={nfc_card_id}" if nfc_card_id else f"?t={tenant_id}"
     if slug:
-        kiosk_url = f"{base}/{slug}/kiosk/huurder?t={tenant_id}"
+        kiosk_url = f"{base}/{slug}/kiosk/huurder{nfc_param}"
     else:
-        kiosk_url = f"{base}/kiosk/huurder?t={tenant_id}"
+        kiosk_url = f"{base}/kiosk/huurder{nfc_param}"
     from pdf_gen import luxury_plate_pdf, luxury_plate_pdf_ai
     import hashlib as _hashlib
     # Cache key: tenant + alle dynamische inputs. Voorkomt herhaald LLM-budget
     # verbruik bij elke download.
-    cache_inputs = f"{tenant_id}|{company_name}|{apt_number}|{address}|{kiosk_url}|{size}|v10"
+    cache_inputs = f"{tenant_id}|{company_name}|{apt_number}|{address}|{kiosk_url}|{size}|nfc={nfc_card_id}|v11"
     cache_hash = _hashlib.sha256(cache_inputs.encode("utf-8")).hexdigest()
     cached = await db.qr_plate_cache.find_one(
         {"hash": cache_hash}, {"_id": 0, "pdf_b64": 1}
