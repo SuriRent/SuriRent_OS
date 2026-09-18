@@ -12730,7 +12730,9 @@ async def _seed_demo_data(cid: str):
         {"id": loc_b_id, "company_id": cid, "name": "Filiaal — Nieuw Nickerie",
          "address": "Frederikstraat 5, Nieuw Nickerie", "is_demo": True, "created_at": iso_now},
     ])
-    # 5 appartementen
+    # 5 appartementen — ALLE zijn bezet (Studio 1 + Penthouse zijn later
+    # in deze seed gekoppeld aan Kevin resp. Anisha; hun `tenant_id`
+    # wordt hieronder bijgewerkt na huurders-insert).
     apts = []
     for i, (nr, rent, loc) in enumerate([
         ("HUIS 1A", 6000, loc_a_id), ("HUIS 1B", 5500, loc_a_id),
@@ -12741,26 +12743,37 @@ async def _seed_demo_data(cid: str):
             "id": str(uuid.uuid4()), "company_id": cid, "location_id": loc,
             "number": nr, "address": f"Demo straat {i + 1}",
             "rent_amount": rent, "currency": "SRD",
-            "status": "occupied" if i < 3 else "vacant",
+            "status": "occupied",
             "is_demo": True, "created_at": iso(now_utc()),
         })
     await db.apartments.insert_many(apts)
-    # 3 huurders met contract
+    # 5 huurders met contract — één per appartement zodat er geen
+    # "beschikbaar" appartement meer zichtbaar is in de demo.
     tenants_data = [
-        ("Jan Pieterse", "+597 8801001", "jan@demo.sr", apts[0], 1234),
-        ("Marlies Sewdien", "+597 8801002", "marlies@demo.sr", apts[1], 5678),
-        ("Roy van der Berg", "+597 8801003", "roy@demo.sr", apts[2], 9012),
+        ("Jan Pieterse", "+597 8801001", "jan@demo.sr", apts[0], 1234, "male"),
+        ("Marlies Sewdien", "+597 8801002", "marlies@demo.sr", apts[1], 5678, "female"),
+        ("Roy van der Berg", "+597 8801003", "roy@demo.sr", apts[2], 9012, "male"),
+        ("Kevin Doelahasori", "+597 8801004", "kevin@demo.sr", apts[3], 3344, "male"),
+        ("Anisha Ramdhan", "+597 8801005", "anisha@demo.sr", apts[4], 5566, "female"),
     ]
     tenants = []
-    for name, phone, email, apt, pin in tenants_data:
+    for name, phone, email, apt, pin, gender in tenants_data:
         tid = str(uuid.uuid4())
         tenants.append({
             "id": tid, "company_id": cid, "apartment_id": apt["id"],
-            "name": name, "phone": phone, "email": email,
+            "name": name, "phone": phone, "email": email, "gender": gender,
             "pin_hash": hash_password(str(pin)),
             "internet_amount": 200, "is_demo": True, "created_at": iso_now,
         })
     await db.tenants.insert_many(tenants)
+    # Bidirectionele link: elk appartement krijgt `tenant_id` van zijn
+    # gekoppelde huurder. Zonder deze update toont het admin dashboard
+    # "beschikbaar" ondanks dat de status 'occupied' is.
+    for t in tenants:
+        await db.apartments.update_one(
+            {"id": t["apartment_id"], "company_id": cid},
+            {"$set": {"tenant_id": t["id"]}},
+        )
     # Contracten per huurder
     contracts = [{
         "id": str(uuid.uuid4()), "company_id": cid,
@@ -12863,6 +12876,64 @@ async def _seed_demo_data(cid: str):
         "paid_at": iso(now_utc()),
         "created_at": iso(now_utc()), "is_demo": True,
     })
+    # Kevin (Studio 1) — nieuwe huurder, huidige maand volledig betaald
+    kevin = tenants[3]
+    kev_inv_id = str(uuid.uuid4())
+    invoices_to_insert.append({
+        "id": kev_inv_id, "company_id": cid,
+        "tenant_id": kevin["id"], "apartment_id": kevin["apartment_id"],
+        "invoice_number": inv_number(),
+        "period_month": cur_m, "period_year": cur_y,
+        "amount": 4500, "amount_due": 4500, "paid_amount": 4500,
+        "currency": "SRD", "status": "paid", "kind": "huur",
+        "due_date": now.date().isoformat(),
+        "paid_at": (now - timedelta(days=3)).isoformat(),
+        "is_demo": True, "created_at": iso_now,
+    })
+    payments_to_insert.append({
+        "id": str(uuid.uuid4()), "company_id": cid,
+        "tenant_id": kevin["id"], "tenant_name": kevin["name"],
+        "apartment_id": kevin["apartment_id"],
+        "amount": 4500, "currency": "SRD",
+        "category": "huur", "method": "bank",
+        "period_month": cur_m, "period_year": cur_y,
+        "invoice_id": kev_inv_id, "receipt_number": f"D-KW-{inv_counter:05d}",
+        "status": "approved",
+        "paid_at": (now - timedelta(days=3)).isoformat(),
+        "created_at": (now - timedelta(days=3)).isoformat(),
+        "is_demo": True,
+    })
+    # Anisha (Penthouse) — vorige + huidige maand betaald (premium huurder)
+    anisha = tenants[4]
+    for offset in [1, 0]:
+        m = cur_m - offset if cur_m - offset > 0 else cur_m - offset + 12
+        y = cur_y if cur_m - offset > 0 else cur_y - 1
+        inv_id = str(uuid.uuid4())
+        days_back = max(1, offset * 30 - 2)
+        invoices_to_insert.append({
+            "id": inv_id, "company_id": cid,
+            "tenant_id": anisha["id"], "apartment_id": anisha["apartment_id"],
+            "invoice_number": inv_number(),
+            "period_month": m, "period_year": y,
+            "amount": 12000, "amount_due": 12000, "paid_amount": 12000,
+            "currency": "SRD", "status": "paid", "kind": "huur",
+            "due_date": (now - timedelta(days=offset * 30)).date().isoformat(),
+            "paid_at": (now - timedelta(days=days_back)).isoformat(),
+            "is_demo": True, "created_at": iso_now,
+        })
+        payments_to_insert.append({
+            "id": str(uuid.uuid4()), "company_id": cid,
+            "tenant_id": anisha["id"], "tenant_name": anisha["name"],
+            "apartment_id": anisha["apartment_id"],
+            "amount": 12000, "currency": "SRD",
+            "category": "huur", "method": "bank",
+            "period_month": m, "period_year": y,
+            "invoice_id": inv_id, "receipt_number": f"D-KW-{inv_counter:05d}",
+            "status": "approved",
+            "paid_at": (now - timedelta(days=days_back)).isoformat(),
+            "created_at": (now - timedelta(days=days_back)).isoformat(),
+            "is_demo": True,
+        })
     await db.invoices.insert_many(invoices_to_insert)
     await db.payments.insert_many(payments_to_insert)
     # Betalingsregeling voor Roy's restbedrag
@@ -12891,24 +12962,63 @@ async def _seed_demo_data(cid: str):
          "role": "Onderhoud", "phone": "+597 8801011", "pin_hash": hash_password("2222"),
          "is_demo": True, "created_at": iso_now},
     ])
-    # Kasgeld — recente kasstroom
-    await db.cash_book.insert_many([
-        {"id": str(uuid.uuid4()), "company_id": cid, "kind": "in",
-         "amount": 5500, "currency": "SRD", "description": "Huur Marlies",
-         "date": iso_now, "is_demo": True, "created_at": iso_now},
-        {"id": str(uuid.uuid4()), "company_id": cid, "kind": "out",
-         "amount": 250, "currency": "SRD", "description": "Onderhoudsmateriaal",
-         "date": iso_now, "is_demo": True, "created_at": iso_now},
+    # Kasgeld — 2 handmatige boekingen (uitgaven). Payments (huur) worden
+    # automatisch als kasgeld getoond via de unified feed in GET /kasgeld,
+    # dus die hoeven we hier niet dubbel in te voegen.
+    await db.kasgeld.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 250, "currency": "SRD", "category": "onderhoud",
+         "description": "Onderhoudsmateriaal — kraan reparatie",
+         "entry_date": iso_now, "created_at": iso_now, "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 850, "currency": "SRD", "category": "salaris",
+         "description": "Salaris Anita (deelbetaling)",
+         "entry_date": (now - timedelta(days=1)).isoformat(),
+         "created_at": (now - timedelta(days=1)).isoformat(), "is_demo": True},
     ])
-    # Onderhoudsorder
-    await db.maintenance.insert_one({
+    # Boete op Jan's achterstallige huur — automatische late-fee die admin
+    # nog kan kwijtschelden of innen. Toont dashboard "Openstaande boete".
+    jan_first_open_invoice_id = next(
+        (inv["id"] for inv in invoices_to_insert
+         if inv.get("tenant_id") == jan["id"] and inv.get("status") == "open"),
+        None,
+    )
+    await db.fines.insert_one({
         "id": str(uuid.uuid4()), "company_id": cid,
         "tenant_id": jan["id"], "apartment_id": jan["apartment_id"],
-        "title": "Lekkende kraan keuken",
-        "description": "Kraan in de keuken lekt sinds vorige week.",
-        "status": "open", "priority": "medium",
-        "created_at": iso_now, "is_demo": True,
+        "invoice_id": jan_first_open_invoice_id,
+        "amount": 300, "currency": "SRD",
+        "reason": "Late-fee: huur 2 maanden achterstand",
+        "status": "open",
+        "issued_at": iso_now, "is_demo": True, "created_at": iso_now,
     })
+    # 1 onderhoudsorder per appartement — realistische mix van statussen
+    # zodat de admin ziet hoe onderhoud er in productie uitziet.
+    maintenance_seeds = [
+        (jan, apts[0], "Lekkende kraan keuken",
+         "Kraan in de keuken lekt sinds vorige week.",
+         "open", "medium"),
+        (marlies, apts[1], "AC koelt niet meer",
+         "Woonkamer airco geeft geen koude lucht — mogelijk gasfilter.",
+         "in_progress", "high"),
+        (roy, apts[2], "Deurbel doet het niet",
+         "Voordeurbel geeft geen geluid; bezoekers moeten bellen op mobiel.",
+         "open", "low"),
+        (kevin, apts[3], "Wifi valt vaak uit",
+         "Wifi router in Studio 1 heeft dagelijkse uitval — router vervangen?",
+         "open", "medium"),
+        (anisha, apts[4], "Jacuzzi water blijft koud",
+         "Penthouse jacuzzi opwarming werkt niet meer — thermostaat controleren.",
+         "in_progress", "high"),
+    ]
+    await db.maintenance.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid,
+         "tenant_id": t["id"], "apartment_id": apt["id"],
+         "title": title, "description": desc,
+         "status": status, "priority": priority,
+         "created_at": iso_now, "is_demo": True}
+        for (t, apt, title, desc, status, priority) in maintenance_seeds
+    ])
 
 
 async def _demo_reset_tick():
@@ -12919,7 +13029,7 @@ async def _demo_reset_tick():
     collections = [
         "tenants", "apartments", "locations", "contracts", "invoices",
         "payments", "payment_plans", "payment_plan_installments", "deposits",
-        "employees", "cash_book", "maintenance", "kasgeld_entries",
+        "employees", "cash_book", "maintenance", "kasgeld", "kasgeld_entries",
         "fines", "notifications", "kiosk_sessions",
     ]
     for coll in collections:
