@@ -17,6 +17,7 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import { isAndroid, printViaRawBT } from '../../lib/kiosk-print';
 
 const variants = {
   enter: { opacity: 0, x: 60 },
@@ -982,15 +983,28 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
     try {
-      // Haal HTML-versie op — GEEN PDF-blob (Chrome's --kiosk-printing
-      // vlag onderdrukt de dialoog alléén voor HTML-documenten, niet
-      // voor PDF's die door de PDF-viewer worden geopend).
+      // === ANDROID PAD → RawBT app ===
+      // Chrome's --kiosk-printing werkt niet op Android (dat is een
+      // desktop-CLI flag). In plaats daarvan gebruiken we RawBT: een
+      // gratis Android-app die de kwitantie-JPG direct naar de
+      // Bluetooth/USB/Wifi thermische printer stuurt zonder dialoog.
+      if (isAndroid()) {
+        printViaRawBT(paymentId);
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Verstuurd naar printer' } }));
+        setTimeout(() => {
+          setWaState((prev) => {
+            const c = { ...prev };
+            if (c[paymentId]?.kind === 'ok') delete c[paymentId];
+            return c;
+          });
+        }, 2500);
+        return;
+      }
+      // === DESKTOP PAD → HTML iframe + window.print() ===
       // `format=thermal` → 80mm bon-printer layout (default kiosk).
-      // `preview=1` → skip de inline window.print() in de HTML zodat
-      // we vanuit de user-click gesture zelf `iframe.contentWindow.print()`
-      // kunnen aanroepen — dat is het patroon waarmee --kiosk-printing
-      // betrouwbaar de dialoog overslaat (i.p.v. te racen met een inline
-      // <script> auto-print).
+      // `preview=1` → skip inline auto-print in HTML; parent triggert
+      // `iframe.contentWindow.print()` zodat --kiosk-printing de dialoog
+      // betrouwbaar overslaat i.p.v. te racen met een inline <script>.
       const resp = await api.get(`/payments/${paymentId}/print.html?format=thermal&preview=1`, { responseType: 'text' });
       const html = resp.data;
       const existing = document.getElementById('kiosk-print-iframe');
@@ -2428,6 +2442,12 @@ function ReceiptScreen({ payment, overview, onDone }) {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
+        // === ANDROID PAD → RawBT app ===
+        if (isAndroid()) {
+          printViaRawBT(payment.id);
+          return;
+        }
+        // === DESKTOP PAD → HTML iframe + window.print() ===
         // `format=thermal` → 80mm bon-printer layout (kiosk-default).
         // `preview=1` → geen inline auto-print in de HTML; parent triggert
         // `iframe.contentWindow.print()` zodat --kiosk-printing de dialoog
