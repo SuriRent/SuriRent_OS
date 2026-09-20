@@ -3234,24 +3234,7 @@ function AddTenantModal({ onClose, onSaved }) {
     return () => { alive = false; };
   }, []);
 
-  // Body scroll-lock (iOS-safe) — voorkomt dat de pagina onder de modal
-  // wegscrollt als het toetsenbord opent.
-  useEffect(() => {
-    const scrollY = window.scrollY || 0;
-    const body = document.body;
-    const saved = { pos: body.style.position, top: body.style.top, w: body.style.width, ov: body.style.overflow };
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-    body.style.overflow = 'hidden';
-    return () => {
-      body.style.position = saved.pos;
-      body.style.top = saved.top;
-      body.style.width = saved.w;
-      body.style.overflow = saved.ov;
-      window.scrollTo(0, scrollY);
-    };
-  }, []);
+  // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
   const save = async () => {
     const trimmed = name.trim();
@@ -3267,50 +3250,40 @@ function AddTenantModal({ onClose, onSaved }) {
     finally { setSaving(false); }
   };
 
-  return createPortal((
-    <div onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
-      data-testid="add-tenant-overlay">
-      <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[92dvh] overflow-hidden"
-        data-testid="add-tenant-form">
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-sky-100 flex items-center justify-center">
-              <UserPlus className="w-5 h-5 text-sky-600" />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">Nieuwe huurder</h3>
-          </div>
-          <button onClick={onClose} data-testid="add-tenant-close"
-            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
-          style={{ WebkitOverflowScrolling: 'touch' }}>
+  return (
+    <KioskModalShell title="Nieuwe huurder" Icon={UserPlus}
+      testId="add-tenant" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !name.trim()}
+          data-testid="add-tenant-save"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Huurder opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
           <label className="block">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Naam *</span>
+            <span className={modalLabelCls}>Naam *</span>
             <input value={name} onChange={(e) => setName(e.target.value)}
               autoFocus autoComplete="name"
               data-testid="add-tenant-name"
               placeholder="Voornaam Achternaam"
-              className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-sky-500 outline-none px-4 text-base font-semibold text-slate-900" />
+              className={modalInputCls(accent)} />
           </label>
           <label className="block">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Telefoon</span>
+            <span className={modalLabelCls}>Telefoon</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)}
               type="tel" inputMode="tel" autoComplete="tel"
               data-testid="add-tenant-phone"
               placeholder="+597 8xx xxxx"
-              className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-sky-500 outline-none px-4 text-base font-semibold text-slate-900" />
+              className={modalInputCls(accent)} />
           </label>
           <label className="block">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Appartement (optioneel)</span>
+            <span className={modalLabelCls}>Appartement (optioneel)</span>
             <select value={aptId} onChange={(e) => setAptId(e.target.value)}
               data-testid="add-tenant-apartment"
-              className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-sky-500 outline-none px-4 text-base font-semibold text-slate-900 bg-white">
+              className={`${modalInputCls(accent)} bg-white`}>
               <option value="">— Nog geen appartement —</option>
               {apartments.sort(sortApartments).map((a) => (
                 <option key={a.id} value={a.id}>Appt. {a.number} · {a.currency} {a.rent_amount}</option>
@@ -3323,20 +3296,10 @@ function AddTenantModal({ onClose, onSaved }) {
               {err}
             </div>
           )}
-        </div>
-
-        <div className="flex-none border-t border-slate-100 px-5 py-3"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-          <button onClick={save} disabled={saving || !name.trim()}
-            data-testid="add-tenant-save"
-            className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Opslaan…' : 'Huurder opslaan'}
-          </button>
-        </div>
-      </div>
-    </div>
-  ), document.body);
+        </>
+      )}
+    </KioskModalShell>
+  );
 }
 
 // =====================================================================
@@ -3351,22 +3314,7 @@ function AddApartmentModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    const scrollY = window.scrollY || 0;
-    const body = document.body;
-    const saved = { pos: body.style.position, top: body.style.top, w: body.style.width, ov: body.style.overflow };
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-    body.style.overflow = 'hidden';
-    return () => {
-      body.style.position = saved.pos;
-      body.style.top = saved.top;
-      body.style.width = saved.w;
-      body.style.overflow = saved.ov;
-      window.scrollTo(0, scrollY);
-    };
-  }, []);
+  // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
   const save = async () => {
     const n = String(number || '').trim();
@@ -3383,50 +3331,40 @@ function AddApartmentModal({ onClose, onSaved }) {
     finally { setSaving(false); }
   };
 
-  return createPortal((
-    <div onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
-      data-testid="add-apartment-overlay">
-      <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[92dvh] overflow-hidden"
-        data-testid="add-apartment-form">
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center">
-              <Home className="w-5 h-5 text-violet-600" />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">Nieuw appartement</h3>
-          </div>
-          <button onClick={onClose} data-testid="add-apartment-close"
-            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
-          style={{ WebkitOverflowScrolling: 'touch' }}>
+  return (
+    <KioskModalShell title="Nieuw appartement" Icon={Home}
+      testId="add-apartment" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !number.trim() || !rent}
+          data-testid="add-apartment-save"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Appartement opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
           <label className="block">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nummer *</span>
+            <span className={modalLabelCls}>Nummer *</span>
             <input value={number} onChange={(e) => setNumber(e.target.value)}
               autoFocus data-testid="add-apartment-number"
               placeholder="A1, HUIS 7A, …"
-              className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-violet-500 outline-none px-4 text-base font-semibold text-slate-900" />
+              className={modalInputCls(accent)} />
           </label>
           <div className="grid grid-cols-3 gap-2">
             <label className="block col-span-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Huur bedrag *</span>
+              <span className={modalLabelCls}>Huur bedrag *</span>
               <input value={rent} onChange={(e) => setRent(e.target.value)}
                 type="number" inputMode="decimal" step="0.01" min="0"
                 data-testid="add-apartment-rent"
                 placeholder="0.00"
-                className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-violet-500 outline-none px-4 text-base font-semibold text-slate-900" />
+                className={modalInputCls(accent)} />
             </label>
             <label className="block">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Valuta</span>
+              <span className={modalLabelCls}>Valuta</span>
               <select value={currency} onChange={(e) => setCurrency(e.target.value)}
                 data-testid="add-apartment-currency"
-                className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-violet-500 outline-none px-3 text-base font-semibold text-slate-900 bg-white">
+                className={`${modalInputCls(accent)} bg-white`}>
                 <option value="SRD">SRD</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -3434,11 +3372,11 @@ function AddApartmentModal({ onClose, onSaved }) {
             </label>
           </div>
           <label className="block">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Omschrijving (optioneel)</span>
+            <span className={modalLabelCls}>Omschrijving (optioneel)</span>
             <input value={description} onChange={(e) => setDescription(e.target.value)}
               data-testid="add-apartment-description"
               placeholder="Type / verdieping / kenmerk"
-              className="mt-1 w-full h-12 rounded-xl border-2 border-slate-200 focus:border-violet-500 outline-none px-4 text-base font-semibold text-slate-900" />
+              className={modalInputCls(accent)} />
           </label>
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
@@ -3446,20 +3384,10 @@ function AddApartmentModal({ onClose, onSaved }) {
               {err}
             </div>
           )}
-        </div>
-
-        <div className="flex-none border-t border-slate-100 px-5 py-3"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-          <button onClick={save} disabled={saving || !number.trim() || !rent}
-            data-testid="add-apartment-save"
-            className="w-full h-12 rounded-xl bg-violet-500 hover:bg-violet-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Opslaan…' : 'Appartement opslaan'}
-          </button>
-        </div>
-      </div>
-    </div>
-  ), document.body);
+        </>
+      )}
+    </KioskModalShell>
+  );
 }
 
 // =====================================================================
@@ -3486,35 +3414,38 @@ function useBodyScrollLock() {
   }, []);
 }
 
-function KioskModalShell({ title, Icon, testId, onClose, children, footer, saveColor = 'orange' }) {
+function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   useBodyScrollLock();
   return createPortal((
-    <div onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
-      data-testid={`${testId}-overlay`}>
+    <div
+      className="fixed inset-0 z-[100] bg-orange-500 sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4"
+      data-testid={`${testId}-overlay`}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+        className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden"
         data-testid={`${testId}-form`}>
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
+        {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
+        <div className="flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
           style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
+              <Icon className="w-5 h-5 text-white sm:text-orange-600" />
             </div>
-            <h3 className="text-lg font-black text-slate-900">{title}</h3>
+            <h3 className="text-lg font-black text-white sm:text-slate-900">{title}</h3>
           </div>
           <button onClick={onClose} data-testid={`${testId}-close`}
-            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-            <X className="w-5 h-5 text-slate-500" />
+            className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-transparent sm:hover:bg-slate-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center active:bg-white/30">
+            <X className="w-6 h-6 sm:w-5 sm:h-5 text-white sm:text-slate-500" strokeWidth={2.5} />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
+        {/* Body — witte scrollbare content */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 bg-white"
           style={{ WebkitOverflowScrolling: 'touch' }}
           data-testid={`${testId}-body`}>
           {typeof children === 'function' ? children({ accent: 'focus:border-orange-500' }) : children}
         </div>
         {footer && (
-          <div className="flex-none border-t border-slate-100 px-5 py-3"
+          <div className="flex-none border-t border-slate-100 px-5 py-3 bg-white"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {footer}
           </div>
@@ -4617,43 +4548,7 @@ export default function KioskLayout() {
       {showDesktopBar && (
         <div className="hidden md:block absolute bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100"
           data-testid="kiosk-bottom-bar">
-          {/* Rij 1 — Admin quick-actions (alleen op select-stap voor ingelogde admin) */}
-          {step === 'select' && hasAdminAccess && (
-            <div className="flex flex-wrap items-center justify-center gap-2 px-4 sm:px-6 py-2 border-b border-slate-100"
-              data-testid="kiosk-admin-quickbar">
-              <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <UserPlus className="w-3.5 h-3.5" /> Nieuwe huurder
-              </button>
-              <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <Home className="w-3.5 h-3.5" /> Nieuw appartement
-              </button>
-              <button onClick={() => setShowAddLocation(true)} data-testid="kiosk-add-location-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <MapPin className="w-3.5 h-3.5" /> Nieuwe locatie
-              </button>
-              <button onClick={() => setShowAddContract(true)} data-testid="kiosk-add-contract-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <FileText className="w-3.5 h-3.5" /> Nieuw contract
-              </button>
-              <button onClick={() => setShowAddInvoice(true)} data-testid="kiosk-add-invoice-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <Receipt className="w-3.5 h-3.5" /> Nieuwe factuur
-              </button>
-              <button onClick={() => setShowPaymentsViewer(true)} data-testid="kiosk-payments-viewer-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <Banknote className="w-3.5 h-3.5" /> Betalingen inzien
-              </button>
-              <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
-                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
-                <Wrench className="w-3.5 h-3.5" /> Onderhoud
-              </button>
-            </div>
-          )}
-          {/* Rij 2 — Branding + systeem-acties */}
-          <div className="flex items-center justify-between px-4 sm:px-6"
-            style={{ height: 'clamp(48px, 7vh, 64px)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="rounded-lg bg-orange-500 flex items-center justify-center w-9 h-9 shrink-0">
                 <Building2 className="w-5 h-5 text-white" />
@@ -4662,23 +4557,59 @@ export default function KioskLayout() {
                 {company?.name || 'Kiosk'}
               </span>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-1.5">
               {apartment && step !== 'select' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-400 font-medium hidden sm:inline">{apartment.tenant_name}</span>
+                <div className="flex items-center gap-2 mr-2">
+                  <span className="text-sm text-slate-400 font-medium hidden lg:inline">{apartment.tenant_name}</span>
                   <span className="text-sm font-bold text-slate-800">Appt. {apartment.number}</span>
                 </div>
               )}
+              {step === 'select' && hasAdminAccess && (
+                <>
+                  <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <UserPlus className="w-3.5 h-3.5" /> Huurder
+                  </button>
+                  <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <Home className="w-3.5 h-3.5" /> Appt.
+                  </button>
+                  <button onClick={() => setShowAddLocation(true)} data-testid="kiosk-add-location-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <MapPin className="w-3.5 h-3.5" /> Locatie
+                  </button>
+                  <button onClick={() => setShowAddContract(true)} data-testid="kiosk-add-contract-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <FileText className="w-3.5 h-3.5" /> Contract
+                  </button>
+                  <button onClick={() => setShowAddInvoice(true)} data-testid="kiosk-add-invoice-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <Receipt className="w-3.5 h-3.5" /> Factuur
+                  </button>
+                  <button onClick={() => setShowPaymentsViewer(true)} data-testid="kiosk-payments-viewer-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <Banknote className="w-3.5 h-3.5" /> Betalingen
+                  </button>
+                  <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
+                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                    <Wrench className="w-3.5 h-3.5" /> Onderhoud
+                  </button>
+                </>
+              )}
               <button onClick={adminMode} data-testid="kiosk-admin-btn-desktop"
-                className={`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm ${hasAdminAccess ? '' : 'hidden'}`}>Beheerder</button>
+                className={`inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs ${hasAdminAccess ? '' : 'hidden'}`}>
+                <SettingsIcon className="w-3.5 h-3.5" /> Beheerder
+              </button>
               {step === 'select' && (
                 <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
-                  className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                  <Wallet className="w-4 h-4" /> Kasgeld
+                  className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                  <Wallet className="w-3.5 h-3.5" /> Kasgeld
                 </button>
               )}
               <button onClick={exit} data-testid="kiosk-lock-btn-desktop"
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-5 py-2 text-sm">Uit</button>
+                className="inline-flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-2.5 py-1.5 text-xs">
+                <LogOut className="w-3.5 h-3.5" /> Uit
+              </button>
             </div>
           </div>
         </div>
