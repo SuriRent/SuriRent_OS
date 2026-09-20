@@ -9618,11 +9618,19 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
         else:
             q["location_id"] = location_id
     docs = await db.apartments.find(q, {"_id": 0}).sort("number", 1).to_list(1000)
+    # Bereken huidige maand voor de "Betaald/Niet betaald" badge op de
+    # kiosk apartment-picker. We kijken naar de factuur van deze maand
+    # per huurder → als paid_amount ≥ 95% van het bedrag → Betaald.
+    from datetime import datetime, timezone
+    now_local = datetime.now(timezone.utc)
+    cur_month = now_local.month
+    cur_year = now_local.year
     out = []
     for a in docs:
         tenant_name = None
         tenant_avatar_url = None
         tenant_id_photo_url = None
+        rent_paid = None  # True/False/None (None = geen huurder of geen factuur)
         if a.get("tenant_id"):
             t = await db.tenants.find_one(
                 {"id": a["tenant_id"]},
@@ -9632,6 +9640,25 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
                 tenant_name = t.get("name")
                 tenant_avatar_url = t.get("avatar_url") or None
                 tenant_id_photo_url = t.get("id_photo_url") or None
+            # Huidige maand factuur ophalen → paid-check
+            cur_inv = await db.invoices.find_one(
+                {"tenant_id": a["tenant_id"],
+                 "period_month": cur_month,
+                 "period_year": cur_year,
+                 "kind": {"$in": [None, "huur"]}},
+                {"_id": 0, "amount": 1, "paid_amount": 1, "status": 1},
+            )
+            if cur_inv:
+                amt = float(cur_inv.get("amount") or 0)
+                paid = float(cur_inv.get("paid_amount") or 0)
+                status = cur_inv.get("status")
+                # "Betaald" wanneer status = paid OF paid ≥ 95% van amount
+                rent_paid = (status == "paid") or (amt > 0 and paid >= amt * 0.95)
+            else:
+                # Geen factuur voor deze maand → nog niets verschuldigd
+                # (bijv. nieuwe huurder) → we tonen "Niet betaald" om de
+                # kiosk-operator te helpen wie nog moet betalen.
+                rent_paid = False
         out.append({
             "id": a["id"],
             "number": a["number"],
@@ -9645,6 +9672,7 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
             "tenant_id_photo_url": tenant_id_photo_url,
             "show_tenant_photo": bool(a.get("show_tenant_photo") or False),
             "location_id": a.get("location_id"),
+            "rent_paid": rent_paid,
         })
     return out
 
