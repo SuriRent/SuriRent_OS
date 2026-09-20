@@ -3486,18 +3486,8 @@ function useBodyScrollLock() {
   }, []);
 }
 
-function KioskModalShell({ title, Icon, iconTint = 'sky', testId, onClose, children, footer }) {
+function KioskModalShell({ title, Icon, testId, onClose, children, footer, saveColor = 'orange' }) {
   useBodyScrollLock();
-  const tints = {
-    sky:     { bg: 'bg-sky-100',     fg: 'text-sky-600',     accent: 'focus:border-sky-500' },
-    violet:  { bg: 'bg-violet-100',  fg: 'text-violet-600',  accent: 'focus:border-violet-500' },
-    emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600', accent: 'focus:border-emerald-500' },
-    indigo:  { bg: 'bg-indigo-100',  fg: 'text-indigo-600',  accent: 'focus:border-indigo-500' },
-    amber:   { bg: 'bg-amber-100',   fg: 'text-amber-600',   accent: 'focus:border-amber-500' },
-    rose:    { bg: 'bg-rose-100',    fg: 'text-rose-600',    accent: 'focus:border-rose-500' },
-    orange:  { bg: 'bg-orange-100',  fg: 'text-orange-600',  accent: 'focus:border-orange-500' },
-  };
-  const t = tints[iconTint] || tints.sky;
   return createPortal((
     <div onClick={onClose}
       className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
@@ -3508,8 +3498,8 @@ function KioskModalShell({ title, Icon, iconTint = 'sky', testId, onClose, child
         <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
           style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
           <div className="flex items-center gap-2">
-            <div className={`w-9 h-9 rounded-lg ${t.bg} flex items-center justify-center`}>
-              <Icon className={`w-5 h-5 ${t.fg}`} />
+            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+              <Icon className="w-5 h-5 text-orange-600" />
             </div>
             <h3 className="text-lg font-black text-slate-900">{title}</h3>
           </div>
@@ -3521,7 +3511,7 @@ function KioskModalShell({ title, Icon, iconTint = 'sky', testId, onClose, child
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
           style={{ WebkitOverflowScrolling: 'touch' }}
           data-testid={`${testId}-body`}>
-          {typeof children === 'function' ? children({ accent: t.accent }) : children}
+          {typeof children === 'function' ? children({ accent: 'focus:border-orange-500' }) : children}
         </div>
         {footer && (
           <div className="flex-none border-t border-slate-100 px-5 py-3"
@@ -3560,12 +3550,12 @@ function AddLocationModal({ onClose, onSaved }) {
   };
 
   return (
-    <KioskModalShell title="Nieuwe locatie" Icon={MapPin} iconTint="emerald"
+    <KioskModalShell title="Nieuwe locatie" Icon={MapPin}
       testId="add-location" onClose={onClose}
       footer={(
         <button onClick={save} disabled={saving || !name.trim()}
           data-testid="add-location-save"
-          className="w-full h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           {saving ? 'Opslaan…' : 'Locatie opslaan'}
         </button>
@@ -3642,12 +3632,12 @@ function AddContractModal({ onClose, onSaved }) {
   };
 
   return (
-    <KioskModalShell title="Nieuw contract" Icon={FileText} iconTint="indigo"
+    <KioskModalShell title="Nieuw contract" Icon={FileText}
       testId="add-contract" onClose={onClose}
       footer={(
         <button onClick={save} disabled={saving || !tenantId || !aptId || !startDate}
           data-testid="add-contract-save"
-          className="w-full h-12 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           {saving ? 'Opslaan…' : 'Contract opslaan'}
         </button>
@@ -3749,12 +3739,12 @@ function AddInvoiceModal({ onClose, onSaved }) {
   };
 
   return (
-    <KioskModalShell title="Nieuwe factuur" Icon={Receipt} iconTint="amber"
+    <KioskModalShell title="Nieuwe factuur" Icon={Receipt}
       testId="add-invoice" onClose={onClose}
       footer={(
         <button onClick={save} disabled={saving || !tenantId}
           data-testid="add-invoice-save"
-          className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           {saving ? 'Opslaan…' : 'Factuur opslaan'}
         </button>
@@ -3822,7 +3812,7 @@ function PaymentsViewerModal({ onClose }) {
   }, []);
 
   return (
-    <KioskModalShell title="Betalingen inzien" Icon={Banknote} iconTint="rose"
+    <KioskModalShell title="Betalingen inzien" Icon={Banknote}
       testId="payments-viewer" onClose={onClose}
       footer={(
         <button onClick={onClose}
@@ -3857,8 +3847,7 @@ function PaymentsViewerModal({ onClose }) {
               </div>
               <div className="text-right shrink-0">
                 <div className="text-sm font-black text-slate-900">{fmtMoney(p.amount, p.currency || 'SRD')}</div>
-                <div className="text-[11px] font-bold uppercase tracking-wide"
-                  style={{ color: p.status === 'approved' ? '#059669' : p.status === 'pending_approval' ? '#d97706' : '#dc2626' }}>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-orange-600">
                   {p.status || 'approved'}
                 </div>
               </div>
@@ -3911,7 +3900,7 @@ function AddMaintenanceModal({ onClose, onSaved }) {
   };
 
   return (
-    <KioskModalShell title="Nieuw onderhoud" Icon={Wrench} iconTint="orange"
+    <KioskModalShell title="Nieuw onderhoud" Icon={Wrench}
       testId="add-maintenance" onClose={onClose}
       footer={(
         <button onClick={save} disabled={saving || !aptId || !title.trim()}
@@ -3978,20 +3967,20 @@ function AddMaintenanceModal({ onClose, onSaved }) {
 }
 
 // =====================================================================
-// Beheerder-actie bottom-sheet — 2 kolommen icoon-tegels (mobiel + desktop).
-// Vervangt de speed-dial `MobileAddFab`; opent vanaf de + knop en biedt
-// alle beheerder-shortcuts op de Kiosk.
+// Beheerder-actie sheet — fullscreen op mobiel, gecentreerd op desktop.
+// Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
+// en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
 function KioskAddSheet({ onClose, onPick }) {
   useBodyScrollLock();
   const tiles = [
-    { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus, bg: 'bg-sky-100',     fg: 'text-sky-600' },
-    { key: 'apartment',   label: 'Nieuw appartement', Icon: Home,     bg: 'bg-violet-100',  fg: 'text-violet-600' },
-    { key: 'location',    label: 'Nieuwe locatie',    Icon: MapPin,   bg: 'bg-emerald-100', fg: 'text-emerald-600' },
-    { key: 'contract',    label: 'Nieuw contract',    Icon: FileText, bg: 'bg-indigo-100',  fg: 'text-indigo-600' },
-    { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt,  bg: 'bg-amber-100',   fg: 'text-amber-600' },
-    { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote, bg: 'bg-rose-100',    fg: 'text-rose-600' },
-    { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench,   bg: 'bg-orange-100',  fg: 'text-orange-600' },
+    { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
+    { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
+    { key: 'location',    label: 'Nieuwe locatie',    Icon: MapPin },
+    { key: 'contract',    label: 'Nieuw contract',    Icon: FileText },
+    { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt },
+    { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
+    { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -3999,39 +3988,40 @@ function KioskAddSheet({ onClose, onPick }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return createPortal((
-    <div onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4"
+    <div
+      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150"
       data-testid="kiosk-add-sheet-overlay">
-      <div onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-3xl flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
-        data-testid="kiosk-add-sheet">
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
-              <Plus className="w-5 h-5 text-orange-600" strokeWidth={3} />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">Snel toevoegen</h3>
+      {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
+      <div className="flex-none flex items-center justify-between px-4"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+          paddingBottom: 12,
+        }}>
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <Plus className="w-6 h-6 text-white" strokeWidth={3} />
           </div>
-          <button onClick={onClose} data-testid="kiosk-add-sheet-close"
-            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <h3 className="text-xl font-black text-white">Snel toevoegen</h3>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
-          <div className="grid grid-cols-2 gap-3">
-            {tiles.map((t) => (
-              <button key={t.key} onClick={() => onPick(t.key)}
-                data-testid={`kiosk-tile-${t.key}`}
-                className="flex flex-col items-start gap-3 rounded-2xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-100 p-4 text-left transition active:scale-95">
-                <span className={`w-12 h-12 rounded-xl ${t.bg} flex items-center justify-center`}>
-                  <t.Icon className={`w-6 h-6 ${t.fg}`} />
-                </span>
-                <span className="text-sm font-black text-slate-900 leading-tight">{t.label}</span>
-              </button>
-            ))}
-          </div>
+        <button onClick={onClose} data-testid="kiosk-add-sheet-close"
+          className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition">
+          <X className="w-6 h-6 text-white" strokeWidth={2.5} />
+        </button>
+      </div>
+      {/* Body — 2-koloms grid van witte tegels met oranje icon */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
+        <div className="grid grid-cols-2 gap-3">
+          {tiles.map((t) => (
+            <button key={t.key} onClick={() => onPick(t.key)}
+              data-testid={`kiosk-tile-${t.key}`}
+              className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 active:bg-white shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]">
+              <span className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
+                <t.Icon className="w-7 h-7 text-orange-600" strokeWidth={2} />
+              </span>
+              <span className="text-sm font-black text-slate-900 leading-tight text-center">{t.label}</span>
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -4625,8 +4615,43 @@ export default function KioskLayout() {
           Voorkomt iOS quirk waarbij geneste fixed elementen op iPad ~20px
           boven de fysieke onderrand renderen. */}
       {showDesktopBar && (
-        <div className="hidden md:block absolute bottom-0 left-0 right-0 z-40 bg-white"
+        <div className="hidden md:block absolute bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100"
           data-testid="kiosk-bottom-bar">
+          {/* Rij 1 — Admin quick-actions (alleen op select-stap voor ingelogde admin) */}
+          {step === 'select' && hasAdminAccess && (
+            <div className="flex flex-wrap items-center justify-center gap-2 px-4 sm:px-6 py-2 border-b border-slate-100"
+              data-testid="kiosk-admin-quickbar">
+              <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <UserPlus className="w-3.5 h-3.5" /> Nieuwe huurder
+              </button>
+              <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <Home className="w-3.5 h-3.5" /> Nieuw appartement
+              </button>
+              <button onClick={() => setShowAddLocation(true)} data-testid="kiosk-add-location-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <MapPin className="w-3.5 h-3.5" /> Nieuwe locatie
+              </button>
+              <button onClick={() => setShowAddContract(true)} data-testid="kiosk-add-contract-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <FileText className="w-3.5 h-3.5" /> Nieuw contract
+              </button>
+              <button onClick={() => setShowAddInvoice(true)} data-testid="kiosk-add-invoice-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <Receipt className="w-3.5 h-3.5" /> Nieuwe factuur
+              </button>
+              <button onClick={() => setShowPaymentsViewer(true)} data-testid="kiosk-payments-viewer-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <Banknote className="w-3.5 h-3.5" /> Betalingen inzien
+              </button>
+              <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
+                className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-3 py-1.5 text-xs">
+                <Wrench className="w-3.5 h-3.5" /> Onderhoud
+              </button>
+            </div>
+          )}
+          {/* Rij 2 — Branding + systeem-acties */}
           <div className="flex items-center justify-between px-4 sm:px-6"
             style={{ height: 'clamp(48px, 7vh, 64px)' }}>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -4647,18 +4672,10 @@ export default function KioskLayout() {
               <button onClick={adminMode} data-testid="kiosk-admin-btn-desktop"
                 className={`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm ${hasAdminAccess ? '' : 'hidden'}`}>Beheerder</button>
               {step === 'select' && (
-                <>
-                  {hasAdminAccess && (
-                    <button onClick={() => setShowAddSheet(true)} data-testid="kiosk-add-sheet-btn-desktop"
-                      className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                      <Plus className="w-4 h-4" strokeWidth={3} /> Snel toevoegen
-                    </button>
-                  )}
-                  <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                    <Wallet className="w-4 h-4" /> Kasgeld
-                  </button>
-                </>
+                <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
+                  className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
+                  <Wallet className="w-4 h-4" /> Kasgeld
+                </button>
               )}
               <button onClick={exit} data-testid="kiosk-lock-btn-desktop"
                 className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-5 py-2 text-sm">Uit</button>
