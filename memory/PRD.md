@@ -1,6 +1,24 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-02-15) — Kiosk quick-create: Nieuwe huurder + Nieuw appartement
+
+**Wat**: Twee nieuwe knoppen op de Kiosk-onderrij (Desktop + Mobile) naast Uit/Kasgeld/Beheerder waarmee de operator ter plekke een huurder of appartement kan aanmaken zonder de Kiosk-modus te verlaten.
+
+**Frontend (`KioskLayout.jsx`)**
+- `MobileHeaderButtons` uitgebreid van 3 → 5 knoppen (Uit, Kasgeld, Huurder, Appt., Beheer). Layout: `flex flex-wrap justify-end`, compacte pill-buttons met icoon + kort label. Wrapt vanzelf naar 2 rijen op iPhone-breedtes (< 400px), blijft 1 rij op tablet+
+- Desktop bottom bar (`step === 'select'`): 2 nieuwe gekleurde knoppen (`bg-sky-500` "Nieuwe huurder", `bg-violet-500` "Nieuw appartement") — beide alleen zichtbaar met `hasAdminAccess`
+- Twee nieuwe modal-componenten `AddTenantModal` en `AddApartmentModal` (via `createPortal`, iOS-safe body scroll-lock, `items-end sm:items-center` bottom-sheet op mobiel, gecentreerd op desktop, safe-area padding op header en footer)
+- `AddTenantModal` velden: Naam (required) · Telefoon (tel input) · Appartement dropdown (alleen vacante). Post naar `POST /api/tenants`
+- `AddApartmentModal` velden: Nummer (required) · Huur bedrag (numeric, required) · Valuta (SRD/USD/EUR) · Omschrijving. Post naar `POST /api/apartments`
+- Na succes: modal sluit + `apartmentsReloadKey` bumpt zodat `ApartmentSelect` opnieuw mount en de verse lijst fetcht
+
+**Toegangscontrole**: knoppen zijn hidden zolang er geen `admin_token` in localStorage staat (`hasAdminAccess`). Dit sluit aan bij de bestaande Beheerder-knop en voorkomt 401's op de admin-only backend endpoints.
+
+**Getest (self-test)**: desktop 1440×900 en mobile 390×844 (iPhone 14 Pro) — beide viewports laten alle 5 knoppen zonder overlap zien; modals openen, formulier submit maakt daadwerkelijk tenant/apartment aan en sluit. Compileerde clean.
+
+
+
 ## Latest Fix (2026-02-14 later) — Kiosk Payments Endpoint Hardening + SW v92
 
 User rapporteerde 3× `HTTP 500` op `/api/kiosk/tenants/2d286e69-.../payments`. Root cause: die tenant bestaat niet meer sinds de preview-DB wipe (2026-02-08); daarnaast kon een resterende `company_logo_bytes`-blob in oudere docs de JSON-encoder crashen.
