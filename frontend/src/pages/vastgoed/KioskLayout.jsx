@@ -9,7 +9,7 @@ import {
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus, Wrench,
+  UserPlus, Wrench, Camera,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -3219,9 +3219,15 @@ function AddTenantModal({ onClose, onSaved }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [aptId, setAptId] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [idNumber, setIdNumber] = useState('');
   const [apartments, setApartments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  // ID-scan (Gemini Vision) state
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState('');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -3236,6 +3242,29 @@ function AddTenantModal({ onClose, onSaved }) {
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
+  // ID-scan: verstuurt de foto naar `/api/tenants/ocr-id-card` en vult de
+  // Naam / Geboortedatum / IDnummer velden automatisch met Gemini's output.
+  const onIdFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // reset zodat dezelfde file opnieuw gekozen kan worden
+    if (!file) return;
+    setScanning(true); setErr(''); setScanMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post('/tenants/ocr-id-card', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const d = r?.data || {};
+      if (d.name) setName(d.name);
+      if (d.birth_date) setBirthDate(d.birth_date);
+      if (d.id_number) setIdNumber(d.id_number);
+      const conf = typeof d.confidence === 'number' ? Math.round(d.confidence * 100) : null;
+      setScanMsg(conf != null ? `Gescand · ${conf}% zekerheid` : 'Gescand');
+    } catch (e2) { setErr(formatError(e2)); }
+    finally { setScanning(false); }
+  };
+
   const save = async () => {
     const trimmed = name.trim();
     if (!trimmed) { setErr('Naam is verplicht'); return; }
@@ -3244,6 +3273,8 @@ function AddTenantModal({ onClose, onSaved }) {
       const body = { name: trimmed };
       if (phone.trim()) body.phone = phone.trim();
       if (aptId) body.apartment_id = aptId;
+      if (birthDate) body.birth_date = birthDate;
+      if (idNumber.trim()) body.id_number = idNumber.trim();
       const r = await api.post('/tenants', body);
       onSaved && onSaved(r?.data);
     } catch (e) { setErr(formatError(e)); }
@@ -3263,10 +3294,27 @@ function AddTenantModal({ onClose, onSaved }) {
       )}>
       {({ accent }) => (
         <>
+          {/* ID-scan (Gemini Vision) — auto-invullen NAW velden */}
+          <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+            onChange={onIdFileChange} className="hidden"
+            data-testid="add-tenant-id-file" />
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            disabled={scanning}
+            data-testid="add-tenant-scan-id"
+            className="w-full h-14 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-700 font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+            {scanning ? 'Scannen…' : 'Scan ID-kaart (Gemini AI)'}
+          </button>
+          {scanMsg && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold px-4 py-2 text-center"
+              data-testid="add-tenant-scan-msg">
+              ✓ {scanMsg}
+            </div>
+          )}
           <label className="block">
             <span className={modalLabelCls}>Naam *</span>
             <input value={name} onChange={(e) => setName(e.target.value)}
-              autoFocus autoComplete="name"
+              autoComplete="name"
               data-testid="add-tenant-name"
               placeholder="Voornaam Achternaam"
               className={modalInputCls(accent)} />
@@ -3279,6 +3327,20 @@ function AddTenantModal({ onClose, onSaved }) {
               placeholder="+597 8xx xxxx"
               className={modalInputCls(accent)} />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={modalLabelCls}>Geboortedatum</span>
+              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
+                data-testid="add-tenant-birth" className={modalInputCls(accent)} />
+            </label>
+            <label className="block">
+              <span className={modalLabelCls}>ID-nummer</span>
+              <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)}
+                data-testid="add-tenant-id-number"
+                placeholder="XXXXXXX"
+                className={modalInputCls(accent)} />
+            </label>
+          </div>
           <label className="block">
             <span className={modalLabelCls}>Appartement (optioneel)</span>
             <select value={aptId} onChange={(e) => setAptId(e.target.value)}
@@ -4557,7 +4619,7 @@ export default function KioskLayout() {
                 {company?.name || 'Kiosk'}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               {apartment && step !== 'select' && (
                 <div className="flex items-center gap-2 mr-2">
                   <span className="text-sm text-slate-400 font-medium hidden lg:inline">{apartment.tenant_name}</span>
@@ -4567,49 +4629,45 @@ export default function KioskLayout() {
               {step === 'select' && hasAdminAccess && (
                 <>
                   <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <UserPlus className="w-3.5 h-3.5" /> Huurder
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <UserPlus className="w-4 h-4" /> Huurder
                   </button>
                   <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <Home className="w-3.5 h-3.5" /> Appt.
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <Home className="w-4 h-4" /> Appt.
                   </button>
                   <button onClick={() => setShowAddLocation(true)} data-testid="kiosk-add-location-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <MapPin className="w-3.5 h-3.5" /> Locatie
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <MapPin className="w-4 h-4" /> Locatie
                   </button>
                   <button onClick={() => setShowAddContract(true)} data-testid="kiosk-add-contract-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <FileText className="w-3.5 h-3.5" /> Contract
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <FileText className="w-4 h-4" /> Contract
                   </button>
                   <button onClick={() => setShowAddInvoice(true)} data-testid="kiosk-add-invoice-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <Receipt className="w-3.5 h-3.5" /> Factuur
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <Receipt className="w-4 h-4" /> Factuur
                   </button>
                   <button onClick={() => setShowPaymentsViewer(true)} data-testid="kiosk-payments-viewer-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <Banknote className="w-3.5 h-3.5" /> Betalingen
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <Banknote className="w-4 h-4" /> Betalingen
                   </button>
                   <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
-                    className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                    <Wrench className="w-3.5 h-3.5" /> Onderhoud
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <Wrench className="w-4 h-4" /> Onderhoud
                   </button>
                 </>
               )}
               <button onClick={adminMode} data-testid="kiosk-admin-btn-desktop"
-                className={`inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs ${hasAdminAccess ? '' : 'hidden'}`}>
-                <SettingsIcon className="w-3.5 h-3.5" /> Beheerder
-              </button>
+                className={`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm ${hasAdminAccess ? '' : 'hidden'}`}>Beheerder</button>
               {step === 'select' && (
                 <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
-                  className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                  <Wallet className="w-3.5 h-3.5" /> Kasgeld
+                  className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
+                  <Wallet className="w-4 h-4" /> Kasgeld
                 </button>
               )}
               <button onClick={exit} data-testid="kiosk-lock-btn-desktop"
-                className="inline-flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-2.5 py-1.5 text-xs">
-                <LogOut className="w-3.5 h-3.5" /> Uit
-              </button>
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-5 py-2 text-sm">Uit</button>
             </div>
           </div>
         </div>
