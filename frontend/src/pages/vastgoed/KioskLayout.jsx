@@ -44,67 +44,110 @@ function sortApartments(a, b) {
 }
 
 // =====================================================================
-// Mobiele Kiosk knoppen — 2 rijen bovenaan (zoals in ontwerp).
-//   Rij 1: Uit · Kasgeld · Beheerder (3 gelijke pills, Kasgeld wit accent)
-//   Rij 2: + Nieuw app. · + Nieuwe huurder (2 outlined pills)
-// Alleen zichtbaar op mobiel (`md:hidden`). Desktop gebruikt de bottom
-// bar onderaan.
+// Mobiele Kiosk knoppen — 1 rij bovenaan (zoals in ontwerp).
+//   Uit · Kasgeld · Beheerder (3 gelijke pills, Kasgeld wit accent)
+// De "Nieuwe huurder" en "Nieuw appartement" acties staan op mobiel
+// op een floating + menubalk onderaan (`MobileAddFab`), niet meer hier.
 // =====================================================================
-function MobileHeaderButtons({ onAdmin, onExit, onKasgeld, onAddTenant, onAddApartment }) {
-  const pillRow1 =
+function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
+  const pill =
     'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition shadow-sm';
-  const pillRow2 =
-    'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition bg-white/10 border border-white/25 text-white backdrop-blur-sm';
   return (
-    <div className="md:hidden px-3 pt-3 space-y-2"
+    <div className="md:hidden px-3 pt-3"
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
       data-testid="kiosk-mobile-top-buttons">
-      {/* Rij 1 — Uit / Kasgeld / Beheerder */}
       <div className="grid grid-cols-3 gap-2">
         {onExit ? (
           <button onClick={onExit} data-testid="kiosk-lock-btn"
-            className={`${pillRow1} bg-white/15 text-white backdrop-blur-sm`}>
+            className={`${pill} bg-white/15 text-white backdrop-blur-sm`}>
             <LogOut className="w-4 h-4" /> Uit
           </button>
         ) : <span />}
         {onKasgeld ? (
           <button onClick={onKasgeld} data-testid="kiosk-kasgeld-btn"
-            className={`${pillRow1} bg-white text-orange-600`}>
+            className={`${pill} bg-white text-orange-600`}>
             <Wallet className="w-4 h-4" /> Kasgeld
           </button>
         ) : <span />}
         {onAdmin ? (
           <button onClick={onAdmin} data-testid="kiosk-admin-btn"
-            className={`${pillRow1} bg-white/15 text-white backdrop-blur-sm`}>
+            className={`${pill} bg-white/15 text-white backdrop-blur-sm`}>
             <SettingsIcon className="w-4 h-4" /> Beheerder
           </button>
         ) : <span />}
       </div>
-      {/* Rij 2 — Snelle aanmaak (alleen zichtbaar voor admin) */}
-      {(onAddApartment || onAddTenant) && (
-        <div className="grid grid-cols-2 gap-2">
-          {onAddApartment && (
-            <button onClick={onAddApartment} data-testid="kiosk-add-apartment-btn"
-              className={pillRow2}>
-              <Plus className="w-4 h-4" /> Nieuw app.
-            </button>
-          )}
-          {onAddTenant && (
-            <button onClick={onAddTenant} data-testid="kiosk-add-tenant-btn"
-              className={pillRow2}>
-              <Plus className="w-4 h-4" /> Nieuwe huurder
-            </button>
-          )}
-        </div>
-      )}
     </div>
+  );
+}
+
+// =====================================================================
+// Mobile FAB — floating "+" onderaan met speed-dial.
+// Tap op + → toont pill-knoppen "Nieuwe huurder" en "Nieuw appartement"
+// erboven. Alleen mobiel (`md:hidden`) en alleen voor admins.
+// =====================================================================
+function MobileAddFab({ onAddTenant, onAddApartment }) {
+  const [open, setOpen] = useState(false);
+  // Body-scroll niet locken (menu is klein) maar wel Escape sluiten
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  return (
+    <>
+      {open && (
+        <div onClick={() => setOpen(false)}
+          data-testid="kiosk-fab-backdrop"
+          className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
+      )}
+      <div className="md:hidden fixed left-0 right-0 z-50 pointer-events-none"
+        style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+        <div className="relative flex items-end justify-center">
+          {open && (
+            <div className="absolute bottom-full mb-3 flex flex-col items-center gap-2.5 pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
+              {onAddTenant && (
+                <button onClick={() => { setOpen(false); onAddTenant(); }}
+                  data-testid="kiosk-fab-add-tenant"
+                  className="flex items-center gap-3 bg-white rounded-full pl-4 pr-5 py-3 shadow-2xl active:scale-95 transition">
+                  <span className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center">
+                    <UserPlus className="w-4 h-4 text-sky-600" />
+                  </span>
+                  <span className="font-black text-slate-800 text-sm">Nieuwe huurder</span>
+                </button>
+              )}
+              {onAddApartment && (
+                <button onClick={() => { setOpen(false); onAddApartment(); }}
+                  data-testid="kiosk-fab-add-apartment"
+                  className="flex items-center gap-3 bg-white rounded-full pl-4 pr-5 py-3 shadow-2xl active:scale-95 transition">
+                  <span className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
+                    <Home className="w-4 h-4 text-violet-600" />
+                  </span>
+                  <span className="font-black text-slate-800 text-sm">Nieuw appartement</span>
+                </button>
+              )}
+            </div>
+          )}
+          {/* Menubalk-look — wit vlak met opgetilde oranje + FAB in het midden */}
+          <div className="pointer-events-auto relative w-full flex items-end justify-center">
+            <div className="absolute inset-x-4 bottom-0 h-14 bg-white rounded-full shadow-xl" aria-hidden="true" />
+            <button onClick={() => setOpen(!open)}
+              data-testid="kiosk-fab-plus"
+              aria-label={open ? 'Sluit menu' : 'Nieuw toevoegen'}
+              className={`relative w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center active:scale-95 transition ${open ? 'rotate-45' : ''}`}>
+              <Plus className="w-8 h-8" strokeWidth={3} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
 // =====================================================================
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
-function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, onAddApartment }) {
+function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
   const navigate = useBrandedNavigate();
   const [apartments, setApartments] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -175,9 +218,8 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
   if (showLocationPicker) {
     return (
       <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
-        {/* Mobile: knoppen bovenaan in 2 rijen (matcht ontwerp) */}
-        <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
-          onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
+        {/* Mobile: knoppen bovenaan in 1 rij (matcht ontwerp) */}
+        <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
         <div className="md:hidden px-4 pt-3 pb-1">
           <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
@@ -188,7 +230,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
           <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
           <div className="w-16" />
         </div>
-        <div className="flex-1 min-h-0 overflow-auto pb-3">
+        <div className="flex-1 min-h-0 overflow-auto pb-28 md:pb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
               const count = apartments.filter((a) => a.location_id === loc.id && a.status === 'occupied').length;
@@ -237,9 +279,8 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
   // ----- Apartment grid view -----
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
-      {/* Mobile: knoppen bovenaan in 2 rijen */}
-      <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
-        onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
+      {/* Mobile: knoppen bovenaan in 1 rij */}
+      <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
       {/* Mobile: kleine titel links, onder de knoppen */}
       <div className="md:hidden px-4 pt-3 pb-1 flex items-center gap-2">
         {totalGroups > 1 && (
@@ -272,7 +313,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-3">
+      <div className="flex-1 min-h-0 overflow-auto pb-28 md:pb-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 px-1 sm:px-2">
           {visible.map((a) => {
             // Conditioneel: als beheerder `show_tenant_photo` heeft
@@ -3938,9 +3979,7 @@ export default function KioskLayout() {
               onSelect={(a) => { setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onKasgeld={() => setStep('kasgeld')}
-              onExit={exit}
-              onAddTenant={hasAdminAccess ? () => setShowAddTenant(true) : null}
-              onAddApartment={hasAdminAccess ? () => setShowAddApartment(true) : null} />
+              onExit={exit} />
           )}
           {step === 'kasgeld' && (
             <KasgeldPanel onBack={() => setStep('select')} />
@@ -3984,6 +4023,13 @@ export default function KioskLayout() {
             setShowAddApartment(false);
             setApartmentsReloadKey((k) => k + 1);
           }} />
+      )}
+
+      {/* Mobile-only floating "+" menubalk onderaan (alleen op appartement-select stap + admin) */}
+      {step === 'select' && hasAdminAccess && !showAddTenant && !showAddApartment && (
+        <MobileAddFab
+          onAddTenant={() => setShowAddTenant(true)}
+          onAddApartment={() => setShowAddApartment(true)} />
       )}
 
       {/* Bottom bar — absolute (binnen .kiosk-fullscreen) i.p.v. fixed.
