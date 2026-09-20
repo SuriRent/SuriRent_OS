@@ -3210,6 +3210,161 @@ function KasgeldMutationModal({ onClose, onSaved }) {
 }
 
 // =====================================================================
+// Live ID-scan camera modal (fullscreen, mobile-first).
+// Opent de achterste camera via getUserMedia, toont een oranje kader
+// als viewfinder, en auto-vast legt zodra het beeld ~1.5s stabiel is.
+// Gebruiker kan ook handmatig op "Nu vastleggen" tikken.
+// =====================================================================
+function IdScanCameraModal({ onClose, onCaptured }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Start camera stream on mount, cleanup on unmount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('Camera niet ondersteund op dit apparaat.');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        const v = videoRef.current;
+        if (v) {
+          v.srcObject = stream;
+          v.onloadedmetadata = () => { v.play().catch(() => {}); setReady(true); };
+        }
+      } catch (e) {
+        setError('Kon camera niet openen. Sta camera-toegang toe in browserinstellingen.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const capture = useCallback(() => {
+    if (processing) return;
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    setProcessing(true);
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    c.toBlob((blob) => {
+      if (blob) onCaptured(new File([blob], 'id-scan.jpg', { type: 'image/jpeg' }));
+      else { setProcessing(false); }
+    }, 'image/jpeg', 0.92);
+  }, [processing, onCaptured]);
+
+  // Auto-capture: neem elk 200ms een lo-res sample, bepaal pixeldiff met
+  // vorige frame. Als de diff onder de threshold blijft voor ~1.6s en het
+  // beeld is niet blanco → auto-vast leg. Vermijdt dat een stil camera-
+  // beeld naar een tafel of muur onterecht triggert (min. brightness check).
+  useEffect(() => {
+    if (!ready || processing || error) return undefined;
+    let prev = null;
+    let stable = 0;
+    const iv = setInterval(() => {
+      const v = videoRef.current;
+      const c = canvasRef.current;
+      if (!v || !c || !v.videoWidth) return;
+      const w = 128, h = 80;
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(v, 0, 0, w, h);
+      const cur = ctx.getImageData(0, 0, w, h).data;
+      // Min. helderheid / kleur variatie check zodat we niet triggeren op
+      // een pikzwart of blanko beeld
+      let brightness = 0;
+      for (let i = 0; i < cur.length; i += 32) brightness += cur[i] + cur[i + 1] + cur[i + 2];
+      const avgBright = brightness / (cur.length / 32) / 3;
+      if (avgBright < 30) { prev = cur; stable = 0; return; }
+      if (prev) {
+        let diff = 0;
+        for (let i = 0; i < cur.length; i += 16) diff += Math.abs(cur[i] - prev[i]);
+        const norm = diff / (cur.length / 16);
+        if (norm < 4) stable += 1; else stable = 0;
+        if (stable >= 8) { // ~1.6s
+          clearInterval(iv);
+          capture();
+        }
+      }
+      prev = cur;
+    }, 200);
+    return () => clearInterval(iv);
+  }, [ready, processing, error, capture]);
+
+  return createPortal((
+    <div className="fixed inset-0 z-[110] bg-black flex flex-col"
+      data-testid="id-scan-camera-overlay">
+      {/* Header */}
+      <div className="flex-none flex items-center justify-between px-4 pb-2 text-white"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}>
+        <div className="flex items-center gap-2">
+          <Camera className="w-5 h-5" />
+          <h3 className="text-lg font-black">Scan ID-kaart</h3>
+        </div>
+        <button onClick={onClose} data-testid="id-scan-close"
+          className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center active:bg-white/30">
+          <X className="w-6 h-6" strokeWidth={2.5} />
+        </button>
+      </div>
+      {/* Live view */}
+      <div className="flex-1 relative overflow-hidden">
+        {error ? (
+          <div className="absolute inset-0 flex items-center justify-center text-white text-center px-6 text-sm font-semibold">
+            {error}
+          </div>
+        ) : (
+          <>
+            <video ref={videoRef} playsInline muted autoPlay
+              className="w-full h-full object-cover" />
+            <canvas ref={canvasRef} className="hidden" />
+            {/* Viewfinder — donker masker + oranje kader in ID-kaart verhouding */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="border-4 border-orange-500 rounded-2xl w-[88%] max-w-md aspect-[85/54]"
+                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }} />
+            </div>
+            <div className="absolute bottom-6 left-0 right-0 text-center text-white text-sm font-bold px-6 drop-shadow-lg"
+              data-testid="id-scan-hint">
+              {processing ? (
+                <><Loader2 className="inline w-5 h-5 animate-spin mr-2" />Bezig met scannen…</>
+              ) : ready ? (
+                'Houd ID-kaart in het oranje kader — auto-scan bezig'
+              ) : (
+                <><Loader2 className="inline w-5 h-5 animate-spin mr-2" />Camera wordt gestart…</>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {/* Manueel vastleggen — fallback */}
+      <div className="flex-none px-4 py-3 bg-black"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+        <button onClick={capture} disabled={!ready || processing || !!error}
+          data-testid="id-scan-capture"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          <Camera className="w-4 h-4" /> Nu vastleggen
+        </button>
+      </div>
+    </div>
+  ), document.body);
+}
+
+
+// =====================================================================
 // Snelle "Nieuwe huurder" modal (Kiosk quick-create).
 // Minimale velden: naam + telefoon + optioneel appartement uit dropdown.
 // Body scroll-lock voor iOS zodat de fixed modal niet weg-scrollt tijdens
@@ -3224,10 +3379,10 @@ function AddTenantModal({ onClose, onSaved }) {
   const [apartments, setApartments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
-  // ID-scan (Gemini Vision) state
+  // ID-scan (live camera) state
+  const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState('');
-  const fileInputRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -3242,11 +3397,10 @@ function AddTenantModal({ onClose, onSaved }) {
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
-  // ID-scan: verstuurt de foto naar `/api/tenants/ocr-id-card` en vult de
-  // Naam / Geboortedatum / IDnummer velden automatisch met Gemini's output.
-  const onIdFileChange = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = ''; // reset zodat dezelfde file opnieuw gekozen kan worden
+  // ID-scan callback: krijgt een File van de live camera, stuurt naar
+  // `/api/tenants/ocr-id-card` en vult de velden automatisch in.
+  const onScanCaptured = async (file) => {
+    setShowScanner(false);
     if (!file) return;
     setScanning(true); setErr(''); setScanMsg('');
     try {
@@ -3294,17 +3448,19 @@ function AddTenantModal({ onClose, onSaved }) {
       )}>
       {({ accent }) => (
         <>
-          {/* ID-scan (Gemini Vision) — auto-invullen NAW velden */}
-          <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
-            onChange={onIdFileChange} className="hidden"
-            data-testid="add-tenant-id-file" />
-          <button type="button" onClick={() => fileInputRef.current?.click()}
+          {/* Live ID-scan camera + Gemini Vision — auto-invullen NAW velden */}
+          <button type="button" onClick={() => setShowScanner(true)}
             disabled={scanning}
             data-testid="add-tenant-scan-id"
             className="w-full h-14 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-700 font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
             {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
-            {scanning ? 'Scannen…' : 'Scan ID-kaart (Gemini AI)'}
+            {scanning ? 'Scannen…' : 'Scan ID-kaart'}
           </button>
+          {showScanner && (
+            <IdScanCameraModal
+              onClose={() => setShowScanner(false)}
+              onCaptured={onScanCaptured} />
+          )}
           {scanMsg && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold px-4 py-2 text-center"
               data-testid="add-tenant-scan-msg">

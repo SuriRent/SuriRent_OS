@@ -12,8 +12,9 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
-  UserCircle, Sparkles, StickyNote,
+  UserCircle, Sparkles, StickyNote, Scissors,
 } from 'lucide-react';
+import Cropper from 'react-easy-crop';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
@@ -3328,6 +3329,114 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
 }
 
 // =====================================================================
+// AvatarCropModal — manuele crop van de ID-kaart naar een pasfoto.
+// Beheerder sleept en zoomt een 1:1 crop over de ID-kaart, tapt Opslaan
+// en de bijgesneden bytes worden naar `/api/tenants/{id}/avatar-upload`
+// gestuurd om als tenant.avatar_url te fungeren.
+// =====================================================================
+function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  // Body scroll lock zoals bij de Kiosk modals
+  useEffect(() => {
+    const y = window.scrollY || 0;
+    const b = document.body;
+    const s = { pos: b.style.position, top: b.style.top, w: b.style.width, ov: b.style.overflow };
+    b.style.position = 'fixed'; b.style.top = `-${y}px`; b.style.width = '100%'; b.style.overflow = 'hidden';
+    return () => {
+      b.style.position = s.pos; b.style.top = s.top; b.style.width = s.w; b.style.overflow = s.ov;
+      window.scrollTo(0, y);
+    };
+  }, []);
+  const onCropComplete = useCallback((_area, pixels) => setCroppedAreaPixels(pixels), []);
+
+  // Canvas-crop op basis van react-easy-crop pixel-bounds, upload naar backend.
+  const save = async () => {
+    if (!croppedAreaPixels) { setErr('Selecteer eerst een gebied'); return; }
+    setSaving(true); setErr('');
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise((res, rej) => {
+        img.onload = res; img.onerror = () => rej(new Error('Kan foto niet laden'));
+        img.src = src;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = croppedAreaPixels.width;
+      canvas.height = croppedAreaPixels.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(
+        img,
+        croppedAreaPixels.x, croppedAreaPixels.y,
+        croppedAreaPixels.width, croppedAreaPixels.height,
+        0, 0, croppedAreaPixels.width, croppedAreaPixels.height,
+      );
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
+      if (!blob) throw new Error('Crop mislukt');
+      const fd = new FormData();
+      fd.append('file', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      await api.post(`/tenants/${tenantId}/avatar-upload`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      onSaved && await onSaved();
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-black flex flex-col" data-testid="avatar-crop-overlay">
+      <div className="flex-none flex items-center justify-between px-4 py-3 text-white"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}>
+        <div className="flex items-center gap-2">
+          <Scissors className="w-5 h-5" />
+          <h3 className="text-lg font-black">Kies pasfoto</h3>
+        </div>
+        <button onClick={onClose} data-testid="avatar-crop-close"
+          className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center active:bg-white/30">
+          <X className="w-6 h-6" strokeWidth={2.5} />
+        </button>
+      </div>
+      <div className="flex-1 relative bg-slate-900">
+        <Cropper
+          image={src}
+          crop={crop}
+          zoom={zoom}
+          aspect={1}
+          cropShape="rect"
+          showGrid={true}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={onCropComplete}
+        />
+      </div>
+      <div className="flex-none px-4 py-3 bg-black space-y-3"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-white/70 uppercase tracking-wide w-10">Zoom</span>
+          <input type="range" min="1" max="4" step="0.05" value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            data-testid="avatar-crop-zoom"
+            className="flex-1 accent-orange-500" />
+        </div>
+        {err && (
+          <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-4 py-2 text-center">{err}</div>
+        )}
+        <button onClick={save} disabled={saving || !croppedAreaPixels}
+          data-testid="avatar-crop-save"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Pasfoto opslaan'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// =====================================================================
 // TenantDetail — Full detail page voor een huurder.
 // - Terug-knop bovenaan zoals PlanDetail
 // - Hero card met naam + contact + huur + appartement
@@ -3340,6 +3449,7 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [nfcOpen, setNfcOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
+  const [cropOpen, setCropOpen] = useState(false); // Manuele crop-tool voor pasfoto
   // Scroll altijd naar boven bij openen — anders kan een verborgen file-
   // input (met autofocus/keyboard trigger) de pagina naar beneden scrollen
   // waardoor de gebruiker de naam niet direct ziet.
@@ -3452,10 +3562,16 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
             <p className="text-sm text-slate-500 mt-0.5">Foto van paspoort of identiteitskaart · max 5 MB</p>
           </div>
           {t.id_photo_url && (
-            <button onClick={removePhoto} data-testid="tenant-id-remove"
-              className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Verwijderen
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setCropOpen(true)} data-testid="tenant-crop-avatar-btn"
+                className="h-9 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-xs flex items-center gap-1.5">
+                <Scissors className="w-3.5 h-3.5" /> Kies pasfoto
+              </button>
+              <button onClick={removePhoto} data-testid="tenant-id-remove"
+                className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> Verwijderen
+              </button>
+            </div>
           )}
         </div>
 
@@ -3505,6 +3621,13 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
 
       {/* Digitale handtekening — nu via popup form via de Acties knop */}
       <SignatureModal tenant={t} open={sigOpen} onClose={() => setSigOpen(false)} onReload={onReload} />
+
+      {/* Manuele crop-tool voor de pasfoto uit de ID-kaart */}
+      {cropOpen && (
+        <AvatarCropModal src={idPhotoSrc} tenantId={t.id}
+          onClose={() => setCropOpen(false)}
+          onSaved={async () => { setCropOpen(false); if (onReload) await onReload(); }} />
+      )}
 
       {/* Acties */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">

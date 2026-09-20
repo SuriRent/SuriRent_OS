@@ -7638,6 +7638,46 @@ async def generate_tenant_avatar(tenant_id: str, user=Depends(get_current_user))
     return {"avatar_url": avatar_url}
 
 
+@api.post("/tenants/{tenant_id}/avatar-upload")
+async def upload_tenant_avatar(
+    tenant_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    """Sla een manueel gecropte pasfoto op als tenant.avatar_url.
+    Beheerders gebruiken dit vanaf de admin-UI (react-easy-crop) om zelf
+    de juiste pasfoto uit de ID-kaart te knippen i.p.v. de Gemini-auto-
+    crop te gebruiken. Body = multipart image (image/jpeg of image/webp)."""
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Leeg bestand")
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Bestand te groot (max 8MB)")
+    mime = file.content_type or "image/jpeg"
+    if not mime.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan")
+    # Bewaar als landing_asset zodat het via /api/landing/asset/{id} toonbaar
+    # is — zelfde patroon als _extract_face_avatar_from_bytes.
+    asset_id = str(uuid.uuid4())
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "company_id": company_id_of(user),
+        "kind": "tenant_avatar",
+        "tenant_id": tenant_id,
+        "content_type": mime,
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+        "size": len(raw),
+        "uploaded_by": user.get("email"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    avatar_url = f"/api/landing/asset/{asset_id}"
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"avatar_url": avatar_url}})
+    return {"avatar_url": avatar_url}
+
+
 @api.post("/tenants/backfill-avatars")
 async def backfill_tenant_avatars(force: bool = False, user=Depends(get_current_user)):
     """Genereer avatars voor alle huurders in deze company die wél een
