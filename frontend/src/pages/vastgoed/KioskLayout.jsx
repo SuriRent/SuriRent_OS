@@ -251,12 +251,19 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span className="text-xs sm:text-sm truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px]">{a.tenant_name}</span>
               </div>
-              {/* Betaal-status badge — vervangt de generieke "Bezet" label.
-                  Toont in één oogopslag welke huurders deze maand al hebben
-                  betaald (groen) versus welke nog moeten betalen (rood). */}
-              {a.rent_paid === true ? (
+              {/* Betaal-status badge — dynamisch per huurder-status:
+                   • paid    → Betaald    (groen)
+                   • partial → Deels bet. (geel/oranje)
+                   • unpaid  → Niet bet.  (rood)
+                  Wanneer er geen facturen zijn, valt de backend terug op
+                  "paid" (geen achterstand). */}
+              {a.pay_status === 'paid' ? (
                 <span className="text-xs font-bold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-paid`}>
                   Betaald
+                </span>
+              ) : a.pay_status === 'partial' ? (
+                <span className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-partial`}>
+                  Deels betaald
                 </span>
               ) : (
                 <span className="text-xs font-bold text-red-700 bg-red-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-unpaid`}>
