@@ -9,7 +9,7 @@ import {
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus,
+  UserPlus, Wrench,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -80,66 +80,25 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 }
 
 // =====================================================================
-// Mobile FAB — floating "+" onderaan met speed-dial.
-// Tap op + → toont pill-knoppen "Nieuwe huurder" en "Nieuw appartement"
-// erboven. Alleen mobiel (`md:hidden`) en alleen voor admins.
+// Mobiele "+" FAB — vast in het midden van een witte menubalk onderaan.
+// Tap opent de `KioskAddSheet` bottom-sheet met alle admin-shortcuts.
 // =====================================================================
-function MobileAddFab({ onAddTenant, onAddApartment }) {
-  const [open, setOpen] = useState(false);
-  // Body-scroll niet locken (menu is klein) maar wel Escape sluiten
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+function MobileAddFab({ onOpen }) {
   return (
-    <>
-      {open && (
-        <div onClick={() => setOpen(false)}
-          data-testid="kiosk-fab-backdrop"
-          className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
-      )}
-      <div className="md:hidden fixed left-0 right-0 z-50 pointer-events-none"
-        style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-        <div className="relative flex items-end justify-center">
-          {open && (
-            <div className="absolute bottom-full mb-3 flex flex-col items-center gap-2.5 pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
-              {onAddTenant && (
-                <button onClick={() => { setOpen(false); onAddTenant(); }}
-                  data-testid="kiosk-fab-add-tenant"
-                  className="flex items-center gap-3 bg-white rounded-full pl-4 pr-5 py-3 shadow-2xl active:scale-95 transition">
-                  <span className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center">
-                    <UserPlus className="w-4 h-4 text-sky-600" />
-                  </span>
-                  <span className="font-black text-slate-800 text-sm">Nieuwe huurder</span>
-                </button>
-              )}
-              {onAddApartment && (
-                <button onClick={() => { setOpen(false); onAddApartment(); }}
-                  data-testid="kiosk-fab-add-apartment"
-                  className="flex items-center gap-3 bg-white rounded-full pl-4 pr-5 py-3 shadow-2xl active:scale-95 transition">
-                  <span className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
-                    <Home className="w-4 h-4 text-violet-600" />
-                  </span>
-                  <span className="font-black text-slate-800 text-sm">Nieuw appartement</span>
-                </button>
-              )}
-            </div>
-          )}
-          {/* Menubalk-look — wit vlak met opgetilde oranje + FAB in het midden */}
-          <div className="pointer-events-auto relative w-full flex items-end justify-center">
-            <div className="absolute inset-x-4 bottom-0 h-14 bg-white rounded-full shadow-xl" aria-hidden="true" />
-            <button onClick={() => setOpen(!open)}
-              data-testid="kiosk-fab-plus"
-              aria-label={open ? 'Sluit menu' : 'Nieuw toevoegen'}
-              className={`relative w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center active:scale-95 transition ${open ? 'rotate-45' : ''}`}>
-              <Plus className="w-8 h-8" strokeWidth={3} />
-            </button>
-          </div>
+    <div className="md:hidden fixed left-0 right-0 z-40 pointer-events-none"
+      style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+      <div className="relative flex items-end justify-center">
+        <div className="pointer-events-auto relative w-full flex items-end justify-center">
+          <div className="absolute inset-x-4 bottom-0 h-14 bg-white rounded-full shadow-xl" aria-hidden="true" />
+          <button onClick={onOpen}
+            data-testid="kiosk-fab-plus"
+            aria-label="Menu — Nieuw toevoegen"
+            className="relative w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center active:scale-95 transition">
+            <Plus className="w-8 h-8" strokeWidth={3} />
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -3503,6 +3462,583 @@ function AddApartmentModal({ onClose, onSaved }) {
   ), document.body);
 }
 
+// =====================================================================
+// Gedeelde modal-shell utilities (DRY) — body scroll lock + createPortal.
+// Elk create-formulier binnen de Kiosk gebruikt dezelfde skeleton met
+// een gekleurde header, safe-area padding en een sticky bottom knop.
+// =====================================================================
+function useBodyScrollLock() {
+  useEffect(() => {
+    const scrollY = window.scrollY || 0;
+    const body = document.body;
+    const saved = { pos: body.style.position, top: body.style.top, w: body.style.width, ov: body.style.overflow };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.position = saved.pos;
+      body.style.top = saved.top;
+      body.style.width = saved.w;
+      body.style.overflow = saved.ov;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+}
+
+function KioskModalShell({ title, Icon, iconTint = 'sky', testId, onClose, children, footer }) {
+  useBodyScrollLock();
+  const tints = {
+    sky:     { bg: 'bg-sky-100',     fg: 'text-sky-600',     accent: 'focus:border-sky-500' },
+    violet:  { bg: 'bg-violet-100',  fg: 'text-violet-600',  accent: 'focus:border-violet-500' },
+    emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600', accent: 'focus:border-emerald-500' },
+    indigo:  { bg: 'bg-indigo-100',  fg: 'text-indigo-600',  accent: 'focus:border-indigo-500' },
+    amber:   { bg: 'bg-amber-100',   fg: 'text-amber-600',   accent: 'focus:border-amber-500' },
+    rose:    { bg: 'bg-rose-100',    fg: 'text-rose-600',    accent: 'focus:border-rose-500' },
+    orange:  { bg: 'bg-orange-100',  fg: 'text-orange-600',  accent: 'focus:border-orange-500' },
+  };
+  const t = tints[iconTint] || tints.sky;
+  return createPortal((
+    <div onClick={onClose}
+      className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
+      data-testid={`${testId}-overlay`}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+        data-testid={`${testId}-form`}>
+        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          <div className="flex items-center gap-2">
+            <div className={`w-9 h-9 rounded-lg ${t.bg} flex items-center justify-center`}>
+              <Icon className={`w-5 h-5 ${t.fg}`} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900">{title}</h3>
+          </div>
+          <button onClick={onClose} data-testid={`${testId}-close`}
+            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+          data-testid={`${testId}-body`}>
+          {typeof children === 'function' ? children({ accent: t.accent }) : children}
+        </div>
+        {footer && (
+          <div className="flex-none border-t border-slate-100 px-5 py-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  ), document.body);
+}
+
+const modalInputCls = (accent) =>
+  `mt-1 w-full h-12 rounded-xl border-2 border-slate-200 ${accent} outline-none px-4 text-base font-semibold text-slate-900`;
+const modalLabelCls = 'text-xs font-bold text-slate-500 uppercase tracking-wide';
+
+// =====================================================================
+// Nieuwe locatie modal
+// =====================================================================
+function AddLocationModal({ onClose, onSaved }) {
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const save = async () => {
+    if (!name.trim()) { setErr('Naam is verplicht'); return; }
+    setSaving(true); setErr('');
+    try {
+      const body = { name: name.trim() };
+      if (address.trim()) body.address = address.trim();
+      const r = await api.post('/locations', body);
+      onSaved && onSaved(r?.data);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <KioskModalShell title="Nieuwe locatie" Icon={MapPin} iconTint="emerald"
+      testId="add-location" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !name.trim()}
+          data-testid="add-location-save"
+          className="w-full h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Locatie opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
+          <label className="block">
+            <span className={modalLabelCls}>Naam *</span>
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              autoFocus data-testid="add-location-name"
+              placeholder="Hoofdvestiging, Filiaal…"
+              className={modalInputCls(accent)} />
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Adres</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)}
+              data-testid="add-location-address"
+              placeholder="Straatnaam nr, Stad"
+              className={modalInputCls(accent)} />
+          </label>
+          {err && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
+              data-testid="add-location-error">{err}</div>
+          )}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+// =====================================================================
+// Nieuw contract modal
+// =====================================================================
+function AddContractModal({ onClose, onSaved }) {
+  const [tenants, setTenants] = useState([]);
+  const [apartments, setApartments] = useState([]);
+  const [tenantId, setTenantId] = useState('');
+  const [aptId, setAptId] = useState('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState('');
+  const [payDay, setPayDay] = useState(1);
+  const [deposit, setDeposit] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([api.get('/tenants'), api.get('/apartments')]).then(([tr, ar]) => {
+      if (!alive) return;
+      setTenants(Array.isArray(tr?.data) ? tr.data : []);
+      setApartments(Array.isArray(ar?.data) ? ar.data : []);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async () => {
+    if (!tenantId) { setErr('Kies een huurder'); return; }
+    if (!aptId) { setErr('Kies een appartement'); return; }
+    if (!startDate) { setErr('Startdatum is verplicht'); return; }
+    setSaving(true); setErr('');
+    try {
+      const body = {
+        tenant_id: tenantId,
+        apartment_id: aptId,
+        start_date: startDate,
+        payment_day: Number(payDay) || 1,
+        deposit_amount: parseFloat(String(deposit).replace(',', '.')) || 0,
+      };
+      if (endDate) body.end_date = endDate;
+      const r = await api.post('/contracts', body);
+      onSaved && onSaved(r?.data);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <KioskModalShell title="Nieuw contract" Icon={FileText} iconTint="indigo"
+      testId="add-contract" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !tenantId || !aptId || !startDate}
+          data-testid="add-contract-save"
+          className="w-full h-12 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Contract opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
+          <label className="block">
+            <span className={modalLabelCls}>Huurder *</span>
+            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}
+              data-testid="add-contract-tenant"
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">— Kies huurder —</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}{t.apartment_number ? ` · Appt. ${t.apartment_number}` : ''}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Appartement *</span>
+            <select value={aptId} onChange={(e) => setAptId(e.target.value)}
+              data-testid="add-contract-apartment"
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">— Kies appartement —</option>
+              {apartments.sort(sortApartments).map((a) => (
+                <option key={a.id} value={a.id}>Appt. {a.number} · {a.currency} {a.rent_amount}</option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={modalLabelCls}>Startdatum *</span>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                data-testid="add-contract-start" className={modalInputCls(accent)} />
+            </label>
+            <label className="block">
+              <span className={modalLabelCls}>Einddatum</span>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                data-testid="add-contract-end" className={modalInputCls(accent)} />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={modalLabelCls}>Betaaldag</span>
+              <input type="number" min="1" max="31" value={payDay}
+                onChange={(e) => setPayDay(e.target.value)}
+                data-testid="add-contract-payday" className={modalInputCls(accent)} />
+            </label>
+            <label className="block">
+              <span className={modalLabelCls}>Borg</span>
+              <input type="number" min="0" step="0.01" value={deposit}
+                onChange={(e) => setDeposit(e.target.value)}
+                placeholder="0.00"
+                data-testid="add-contract-deposit" className={modalInputCls(accent)} />
+            </label>
+          </div>
+          {err && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
+              data-testid="add-contract-error">{err}</div>
+          )}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+// =====================================================================
+// Nieuwe factuur modal — kiest tenant + period, backend berekent bedrag.
+// =====================================================================
+function AddInvoiceModal({ onClose, onSaved }) {
+  const [tenants, setTenants] = useState([]);
+  const [tenantId, setTenantId] = useState('');
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/tenants').then((r) => {
+      if (!alive) return;
+      setTenants((Array.isArray(r?.data) ? r.data : []).filter((t) => t.apartment_id));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async () => {
+    if (!tenantId) { setErr('Kies een huurder'); return; }
+    setSaving(true); setErr('');
+    try {
+      const r = await api.post('/invoices', {
+        tenant_id: tenantId,
+        period_month: Number(month),
+        period_year: Number(year),
+      });
+      onSaved && onSaved(r?.data);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <KioskModalShell title="Nieuwe factuur" Icon={Receipt} iconTint="amber"
+      testId="add-invoice" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !tenantId}
+          data-testid="add-invoice-save"
+          className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Factuur opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
+          <label className="block">
+            <span className={modalLabelCls}>Huurder *</span>
+            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}
+              data-testid="add-invoice-tenant"
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">— Kies huurder —</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}{t.apartment_number ? ` · Appt. ${t.apartment_number}` : ''}</option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={modalLabelCls}>Maand *</span>
+              <select value={month} onChange={(e) => setMonth(e.target.value)}
+                data-testid="add-invoice-month"
+                className={`${modalInputCls(accent)} bg-white`}>
+                {MONTHS_NL.map((m, idx) => (
+                  <option key={idx + 1} value={idx + 1}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className={modalLabelCls}>Jaar *</span>
+              <input type="number" min="2020" max="2100" value={year}
+                onChange={(e) => setYear(e.target.value)}
+                data-testid="add-invoice-year" className={modalInputCls(accent)} />
+            </label>
+          </div>
+          <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3">
+            Het bedrag wordt automatisch berekend op basis van de huurprijs van het appartement.
+          </div>
+          {err && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
+              data-testid="add-invoice-error">{err}</div>
+          )}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+// =====================================================================
+// Betalingen inzien — modal met scrollbare lijst van recente betalingen.
+// =====================================================================
+function PaymentsViewerModal({ onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState([]);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/payments', { params: { limit: 50 } }).then((r) => {
+      if (!alive) return;
+      setPayments(Array.isArray(r?.data) ? r.data : []);
+    }).catch((e) => setErr(formatError(e)))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <KioskModalShell title="Betalingen inzien" Icon={Banknote} iconTint="rose"
+      testId="payments-viewer" onClose={onClose}
+      footer={(
+        <button onClick={onClose}
+          data-testid="payments-viewer-close-btn"
+          className="w-full h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">
+          Sluiten
+        </button>
+      )}>
+      {() => (
+        <>
+          {loading && (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-rose-500 animate-spin" /></div>
+          )}
+          {!loading && err && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3">{err}</div>
+          )}
+          {!loading && !err && payments.length === 0 && (
+            <div className="text-center text-slate-500 py-10 text-sm">Nog geen betalingen.</div>
+          )}
+          {!loading && payments.map((p) => (
+            <div key={p.id} data-testid={`payment-row-${p.id}`}
+              className="rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-black text-slate-900 truncate">{p.tenant_name || '—'}</div>
+                <div className="text-xs text-slate-500 truncate">
+                  {p.receipt_number || p.id?.slice(0, 8)} · {p.category || 'huur'}
+                  {p.apartment_number ? ` · Appt. ${p.apartment_number}` : ''}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : '—'}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-sm font-black text-slate-900">{fmtMoney(p.amount, p.currency || 'SRD')}</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide"
+                  style={{ color: p.status === 'approved' ? '#059669' : p.status === 'pending_approval' ? '#d97706' : '#dc2626' }}>
+                  {p.status || 'approved'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+// =====================================================================
+// Nieuw onderhoud modal
+// =====================================================================
+function AddMaintenanceModal({ onClose, onSaved }) {
+  const [apartments, setApartments] = useState([]);
+  const [aptId, setAptId] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [cost, setCost] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/apartments').then((r) => {
+      if (!alive) return;
+      setApartments(Array.isArray(r?.data) ? r.data : []);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async () => {
+    if (!aptId) { setErr('Kies een appartement'); return; }
+    if (!title.trim()) { setErr('Titel is verplicht'); return; }
+    setSaving(true); setErr('');
+    try {
+      const body = {
+        apartment_id: aptId,
+        title: title.trim(),
+        priority,
+        cost: parseFloat(String(cost).replace(',', '.')) || 0,
+      };
+      if (description.trim()) body.description = description.trim();
+      const r = await api.post('/maintenance', body);
+      onSaved && onSaved(r?.data);
+    } catch (e) { setErr(formatError(e)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <KioskModalShell title="Nieuw onderhoud" Icon={Wrench} iconTint="orange"
+      testId="add-maintenance" onClose={onClose}
+      footer={(
+        <button onClick={save} disabled={saving || !aptId || !title.trim()}
+          data-testid="add-maintenance-save"
+          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Opslaan…' : 'Onderhoud opslaan'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
+          <label className="block">
+            <span className={modalLabelCls}>Appartement *</span>
+            <select value={aptId} onChange={(e) => setAptId(e.target.value)}
+              data-testid="add-maintenance-apartment"
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">— Kies appartement —</option>
+              {apartments.sort(sortApartments).map((a) => (
+                <option key={a.id} value={a.id}>Appt. {a.number}{a.tenant_name ? ` · ${a.tenant_name}` : ''}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Titel *</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)}
+              data-testid="add-maintenance-title"
+              placeholder="Lekkage keukenkraan"
+              className={modalInputCls(accent)} />
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Omschrijving</span>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              rows={3} data-testid="add-maintenance-description"
+              placeholder="Extra details voor de monteur"
+              className={`mt-1 w-full rounded-xl border-2 border-slate-200 ${accent} outline-none px-4 py-3 text-base font-semibold text-slate-900`} />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={modalLabelCls}>Prioriteit</span>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}
+                data-testid="add-maintenance-priority"
+                className={`${modalInputCls(accent)} bg-white`}>
+                <option value="low">Laag</option>
+                <option value="medium">Middel</option>
+                <option value="high">Hoog</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={modalLabelCls}>Kosten (SRD)</span>
+              <input type="number" min="0" step="0.01" value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="0.00"
+                data-testid="add-maintenance-cost" className={modalInputCls(accent)} />
+            </label>
+          </div>
+          {err && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
+              data-testid="add-maintenance-error">{err}</div>
+          )}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+// =====================================================================
+// Beheerder-actie bottom-sheet — 2 kolommen icoon-tegels (mobiel + desktop).
+// Vervangt de speed-dial `MobileAddFab`; opent vanaf de + knop en biedt
+// alle beheerder-shortcuts op de Kiosk.
+// =====================================================================
+function KioskAddSheet({ onClose, onPick }) {
+  useBodyScrollLock();
+  const tiles = [
+    { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus, bg: 'bg-sky-100',     fg: 'text-sky-600' },
+    { key: 'apartment',   label: 'Nieuw appartement', Icon: Home,     bg: 'bg-violet-100',  fg: 'text-violet-600' },
+    { key: 'location',    label: 'Nieuwe locatie',    Icon: MapPin,   bg: 'bg-emerald-100', fg: 'text-emerald-600' },
+    { key: 'contract',    label: 'Nieuw contract',    Icon: FileText, bg: 'bg-indigo-100',  fg: 'text-indigo-600' },
+    { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt,  bg: 'bg-amber-100',   fg: 'text-amber-600' },
+    { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote, bg: 'bg-rose-100',    fg: 'text-rose-600' },
+    { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench,   bg: 'bg-orange-100',  fg: 'text-orange-600' },
+  ];
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return createPortal((
+    <div onClick={onClose}
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4"
+      data-testid="kiosk-add-sheet-overlay">
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-3xl flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
+        data-testid="kiosk-add-sheet">
+        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+              <Plus className="w-5 h-5 text-orange-600" strokeWidth={3} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900">Snel toevoegen</h3>
+          </div>
+          <button onClick={onClose} data-testid="kiosk-add-sheet-close"
+            className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
+          <div className="grid grid-cols-2 gap-3">
+            {tiles.map((t) => (
+              <button key={t.key} onClick={() => onPick(t.key)}
+                data-testid={`kiosk-tile-${t.key}`}
+                className="flex flex-col items-start gap-3 rounded-2xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-100 p-4 text-left transition active:scale-95">
+                <span className={`w-12 h-12 rounded-xl ${t.bg} flex items-center justify-center`}>
+                  <t.Icon className={`w-6 h-6 ${t.fg}`} />
+                </span>
+                <span className="text-sm font-black text-slate-900 leading-tight">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  ), document.body);
+}
+
+
 
 // =====================================================================
 // Main
@@ -3523,11 +4059,32 @@ export default function KioskLayout() {
   const [paymentResult, setPaymentResult] = useState(null);
   const [company, setCompany] = useState(getKioskCompany());
   const [nfcToast, setNfcToast] = useState(null); // {kind:'ok'|'err', msg}
-  // Modals voor snel aanmaken vanuit de Kiosk (nieuwe huurder / appartement)
+  // Modals voor snel aanmaken vanuit de Kiosk (alle beheerder-shortcuts)
+  const [showAddSheet, setShowAddSheet] = useState(false);
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [showAddApartment, setShowAddApartment] = useState(false);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showAddContract, setShowAddContract] = useState(false);
+  const [showAddInvoice, setShowAddInvoice] = useState(false);
+  const [showPaymentsViewer, setShowPaymentsViewer] = useState(false);
+  const [showAddMaintenance, setShowAddMaintenance] = useState(false);
   // Bump om ApartmentSelect te forceren opnieuw te fetchen na een aanmaak
   const [apartmentsReloadKey, setApartmentsReloadKey] = useState(0);
+
+  // Bottom-sheet tegel selectie → open de bijbehorende modal
+  const handleSheetPick = useCallback((key) => {
+    setShowAddSheet(false);
+    // Kleine delay zodat de sheet-close animatie niet clashet met modal-open
+    setTimeout(() => {
+      if (key === 'tenant') setShowAddTenant(true);
+      else if (key === 'apartment') setShowAddApartment(true);
+      else if (key === 'location') setShowAddLocation(true);
+      else if (key === 'contract') setShowAddContract(true);
+      else if (key === 'invoice') setShowAddInvoice(true);
+      else if (key === 'payments') setShowPaymentsViewer(true);
+      else if (key === 'maintenance') setShowAddMaintenance(true);
+    }, 100);
+  }, []);
 
   useEffect(() => {
     // document.title wordt centraal beheerd door usePwaManifest() in App.js
@@ -4007,6 +4564,11 @@ export default function KioskLayout() {
       </AnimatePresence>
 
       {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk */}
+      {showAddSheet && (
+        <KioskAddSheet
+          onClose={() => setShowAddSheet(false)}
+          onPick={handleSheetPick} />
+      )}
       {showAddTenant && (
         <AddTenantModal
           onClose={() => setShowAddTenant(false)}
@@ -4023,12 +4585,40 @@ export default function KioskLayout() {
             setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
+      {showAddLocation && (
+        <AddLocationModal
+          onClose={() => setShowAddLocation(false)}
+          onSaved={() => {
+            setShowAddLocation(false);
+            setApartmentsReloadKey((k) => k + 1);
+          }} />
+      )}
+      {showAddContract && (
+        <AddContractModal
+          onClose={() => setShowAddContract(false)}
+          onSaved={() => setShowAddContract(false)} />
+      )}
+      {showAddInvoice && (
+        <AddInvoiceModal
+          onClose={() => setShowAddInvoice(false)}
+          onSaved={() => setShowAddInvoice(false)} />
+      )}
+      {showPaymentsViewer && (
+        <PaymentsViewerModal
+          onClose={() => setShowPaymentsViewer(false)} />
+      )}
+      {showAddMaintenance && (
+        <AddMaintenanceModal
+          onClose={() => setShowAddMaintenance(false)}
+          onSaved={() => setShowAddMaintenance(false)} />
+      )}
 
       {/* Mobile-only floating "+" menubalk onderaan (alleen op appartement-select stap + admin) */}
-      {step === 'select' && hasAdminAccess && !showAddTenant && !showAddApartment && (
-        <MobileAddFab
-          onAddTenant={() => setShowAddTenant(true)}
-          onAddApartment={() => setShowAddApartment(true)} />
+      {step === 'select' && hasAdminAccess && !showAddSheet
+        && !showAddTenant && !showAddApartment && !showAddLocation
+        && !showAddContract && !showAddInvoice && !showPaymentsViewer
+        && !showAddMaintenance && (
+        <MobileAddFab onOpen={() => setShowAddSheet(true)} />
       )}
 
       {/* Bottom bar — absolute (binnen .kiosk-fullscreen) i.p.v. fixed.
@@ -4059,16 +4649,10 @@ export default function KioskLayout() {
               {step === 'select' && (
                 <>
                   {hasAdminAccess && (
-                    <>
-                      <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
-                        className="inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                        <UserPlus className="w-4 h-4" /> Nieuwe huurder
-                      </button>
-                      <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
-                        className="inline-flex items-center gap-2 bg-violet-500 hover:bg-violet-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                        <Home className="w-4 h-4" /> Nieuw appartement
-                      </button>
-                    </>
+                    <button onClick={() => setShowAddSheet(true)} data-testid="kiosk-add-sheet-btn-desktop"
+                      className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
+                      <Plus className="w-4 h-4" strokeWidth={3} /> Snel toevoegen
+                    </button>
                   )}
                   <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
                     className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
