@@ -53,8 +53,7 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
   const pill =
     'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition shadow-sm';
   return (
-    <div className="md:hidden px-3 pt-3"
-      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
+    <div className="md:hidden px-3 pt-2"
       data-testid="kiosk-mobile-top-buttons">
       <div className="grid grid-cols-3 gap-2">
         {onExit ? (
