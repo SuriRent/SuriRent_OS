@@ -44,46 +44,58 @@ function sortApartments(a, b) {
 }
 
 // =====================================================================
-// Mobile header buttons — icon-first wrappable pill grid.
-// Op iPhone (klein scherm) wrappen 5 knoppen naar 2 rijen zodat ze
-// niet overlappen met de titel. Labels blijven zichtbaar (klein) maar
-// worden verborgen op super-smalle schermen om ruimte te sparen.
+// Mobiele Kiosk knoppen — 2 rijen bovenaan (zoals in ontwerp).
+//   Rij 1: Uit · Kasgeld · Beheerder (3 gelijke pills, Kasgeld wit accent)
+//   Rij 2: + Nieuw app. · + Nieuwe huurder (2 outlined pills)
+// Alleen zichtbaar op mobiel (`md:hidden`). Desktop gebruikt de bottom
+// bar onderaan.
 // =====================================================================
 function MobileHeaderButtons({ onAdmin, onExit, onKasgeld, onAddTenant, onAddApartment }) {
-  const base =
-    'flex items-center gap-1.5 font-bold rounded-xl px-2.5 py-2 min-h-[40px] shadow-sm active:scale-95 transition';
-  const label = 'text-[11px] leading-none hidden [@media(min-width:380px)]:inline';
+  const pillRow1 =
+    'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition shadow-sm';
+  const pillRow2 =
+    'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition bg-white/10 border border-white/25 text-white backdrop-blur-sm';
   return (
-    <div className="flex md:hidden flex-wrap items-center gap-1.5 justify-end max-w-[70%]">
-      {onExit && (
-        <button onClick={onExit} data-testid="kiosk-lock-btn" aria-label="Uit"
-          className={`${base} text-white bg-white/20 active:bg-white/30 backdrop-blur-sm`}>
-          <LogOut className="w-4 h-4" /><span className={label}>Uit</span>
-        </button>
-      )}
-      {onKasgeld && (
-        <button onClick={onKasgeld} data-testid="kiosk-kasgeld-btn" aria-label="Kasgeld"
-          className={`${base} text-emerald-700 bg-white active:bg-emerald-50`}>
-          <Wallet className="w-4 h-4" /><span className={label}>Kasgeld</span>
-        </button>
-      )}
-      {onAddTenant && (
-        <button onClick={onAddTenant} data-testid="kiosk-add-tenant-btn" aria-label="Nieuwe huurder"
-          className={`${base} text-sky-700 bg-white active:bg-sky-50`}>
-          <UserPlus className="w-4 h-4" /><span className={label}>Huurder</span>
-        </button>
-      )}
-      {onAddApartment && (
-        <button onClick={onAddApartment} data-testid="kiosk-add-apartment-btn" aria-label="Nieuw appartement"
-          className={`${base} text-violet-700 bg-white active:bg-violet-50`}>
-          <Home className="w-4 h-4" /><span className={label}>Appt.</span>
-        </button>
-      )}
-      {onAdmin && (
-        <button onClick={onAdmin} data-testid="kiosk-admin-btn" aria-label="Beheerder"
-          className={`${base} text-orange-600 bg-white active:bg-orange-50`}>
-          <SettingsIcon className="w-4 h-4" /><span className={label}>Beheer</span>
-        </button>
+    <div className="md:hidden px-3 pt-3 space-y-2"
+      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
+      data-testid="kiosk-mobile-top-buttons">
+      {/* Rij 1 — Uit / Kasgeld / Beheerder */}
+      <div className="grid grid-cols-3 gap-2">
+        {onExit ? (
+          <button onClick={onExit} data-testid="kiosk-lock-btn"
+            className={`${pillRow1} bg-white/15 text-white backdrop-blur-sm`}>
+            <LogOut className="w-4 h-4" /> Uit
+          </button>
+        ) : <span />}
+        {onKasgeld ? (
+          <button onClick={onKasgeld} data-testid="kiosk-kasgeld-btn"
+            className={`${pillRow1} bg-white text-orange-600`}>
+            <Wallet className="w-4 h-4" /> Kasgeld
+          </button>
+        ) : <span />}
+        {onAdmin ? (
+          <button onClick={onAdmin} data-testid="kiosk-admin-btn"
+            className={`${pillRow1} bg-white/15 text-white backdrop-blur-sm`}>
+            <SettingsIcon className="w-4 h-4" /> Beheerder
+          </button>
+        ) : <span />}
+      </div>
+      {/* Rij 2 — Snelle aanmaak (alleen zichtbaar voor admin) */}
+      {(onAddApartment || onAddTenant) && (
+        <div className="grid grid-cols-2 gap-2">
+          {onAddApartment && (
+            <button onClick={onAddApartment} data-testid="kiosk-add-apartment-btn"
+              className={pillRow2}>
+              <Plus className="w-4 h-4" /> Nieuw app.
+            </button>
+          )}
+          {onAddTenant && (
+            <button onClick={onAddTenant} data-testid="kiosk-add-tenant-btn"
+              className={pillRow2}>
+              <Plus className="w-4 h-4" /> Nieuwe huurder
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -162,10 +174,17 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
   // ----- Location picker view -----
   if (showLocationPicker) {
     return (
-      <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-        <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
-          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
-            onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
+      <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
+        {/* Mobile: knoppen bovenaan in 2 rijen (matcht ontwerp) */}
+        <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
+          onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
+        {/* Mobile: kleine titel links, onder de knoppen */}
+        <div className="md:hidden px-4 pt-3 pb-1">
+          <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
+        </div>
+        {/* Desktop: gecentreerde titel-header */}
+        <div className="hidden md:flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
+          <div />
           <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
           <div className="w-16" />
         </div>
@@ -217,8 +236,24 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
 
   // ----- Apartment grid view -----
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
+    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
+      {/* Mobile: knoppen bovenaan in 2 rijen */}
+      <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
+        onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
+      {/* Mobile: kleine titel links, onder de knoppen */}
+      <div className="md:hidden px-4 pt-3 pb-1 flex items-center gap-2">
+        {totalGroups > 1 && (
+          <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
+            className="flex items-center gap-1 text-white/90 font-bold bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs">
+            <ArrowLeft className="w-3.5 h-3.5" /> Locaties
+          </button>
+        )}
+        <span className="text-2xl font-black text-white tracking-tight">
+          {currentLocation ? currentLocation.name : 'Kies uw appartement'}
+        </span>
+      </div>
+      {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
+      <div className="hidden md:flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
         <div className="flex items-center gap-2">
           {totalGroups > 1 && (
             <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations"
@@ -226,8 +261,6 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld, onAddTenant, on
               <ArrowLeft className="w-3.5 h-3.5" /> <span className="text-xs">Locaties</span>
             </button>
           )}
-          <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld}
-            onAddTenant={onAddTenant} onAddApartment={onAddApartment} />
         </div>
         <span className="text-sm sm:text-base font-semibold text-white">
           {currentLocation ? `${currentLocation.name} · Kies uw appartement` : 'Kies uw appartement'}
