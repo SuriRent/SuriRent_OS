@@ -4756,8 +4756,8 @@ export default function KioskLayout() {
           onSaved={() => setShowAddMaintenance(false)} />
       )}
 
-      {/* Mobile-only floating "+" menubalk onderaan (alleen op appartement-select stap + admin) */}
-      {step === 'select' && hasAdminAccess && !showAddSheet
+      {/* Mobile-only floating "+" menubalk onderaan (alleen op appartement-select stap) */}
+      {step === 'select' && !showAddSheet
         && !showAddTenant && !showAddApartment && !showAddLocation
         && !showAddContract && !showAddInvoice && !showPaymentsViewer
         && !showAddMaintenance && (
@@ -4786,7 +4786,7 @@ export default function KioskLayout() {
                   <span className="text-sm font-bold text-slate-800">Appt. {apartment.number}</span>
                 </div>
               )}
-              {step === 'select' && hasAdminAccess && (
+              {step === 'select' && (
                 <>
                   <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
                     className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
