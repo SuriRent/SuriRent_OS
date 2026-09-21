@@ -4123,7 +4123,9 @@ function AddMaintenanceModal({ onClose, onSaved }) {
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
 function KioskAddSheet({ onClose, onPick }) {
-  useBodyScrollLock();
+  // Geen body-scroll-lock nodig: de sheet dekt de hele viewport af.
+  // Body-position: fixed veroorzaakt een "sprong" op iOS wat lijkt op
+  // een menubalk die omhoog schuift; laten we vermijden.
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
