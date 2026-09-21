@@ -188,7 +188,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
           <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
           <div className="w-16" />
         </div>
-        <div className="flex-1 min-h-0 overflow-auto pb-28 md:pb-3">
+        <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
               const count = apartments.filter((a) => a.location_id === loc.id && a.status === 'occupied').length;
@@ -271,7 +271,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-28 md:pb-3">
+      <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 px-1 sm:px-2">
           {visible.map((a) => {
             // Conditioneel: als beheerder `show_tenant_photo` heeft
