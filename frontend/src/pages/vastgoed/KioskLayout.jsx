@@ -80,23 +80,25 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 }
 
 // =====================================================================
-// Mobiele "+" FAB — vast in het midden van een witte menubalk onderaan.
-// Tap opent de `KioskAddSheet` bottom-sheet met alle admin-shortcuts.
+// Mobiele "+" FAB — vaste witte menubalk aan de onderkant, met oranje
+// + knop centraal (steekt licht uit boven de balk). Balk plakt tegen
+// de onderkant en heeft interne safe-area padding zodat op iPhone de
+// home-indicator ruimte niet als oranje gat zichtbaar is.
 // =====================================================================
 function MobileAddFab({ onOpen }) {
   return (
-    <div className="md:hidden fixed left-0 right-0 z-40 pointer-events-none"
-      style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-      <div className="relative flex items-end justify-center">
-        <div className="pointer-events-auto relative w-full flex items-end justify-center">
-          <div className="absolute inset-x-4 bottom-0 h-14 bg-white rounded-full shadow-xl" aria-hidden="true" />
-          <button onClick={onOpen}
-            data-testid="kiosk-fab-plus"
-            aria-label="Menu — Nieuw toevoegen"
-            className="relative w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center active:scale-95 transition">
-            <Plus className="w-8 h-8" strokeWidth={3} />
-          </button>
-        </div>
+    <div className="md:hidden fixed inset-x-0 bottom-0 z-40"
+      data-testid="kiosk-fab-bar">
+      <div className="relative bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        {/* Oranje + knop — steekt licht uit boven de menubalk */}
+        <button onClick={onOpen}
+          data-testid="kiosk-fab-plus"
+          aria-label="Menu — Nieuw toevoegen"
+          className="absolute left-1/2 -translate-x-1/2 -top-5 w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center active:scale-95 transition z-10">
+          <Plus className="w-8 h-8" strokeWidth={3} />
+        </button>
+        <div className="h-14" />
       </div>
     </div>
   );
@@ -188,7 +190,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
           <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
           <div className="w-16" />
         </div>
-        <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-3">
+        <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
               const count = apartments.filter((a) => a.location_id === loc.id && a.status === 'occupied').length;
@@ -271,7 +273,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-40 md:pb-3">
+      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 px-1 sm:px-2">
           {visible.map((a) => {
             // Conditioneel: als beheerder `show_tenant_photo` heeft
