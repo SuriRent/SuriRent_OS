@@ -3668,7 +3668,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   // openen via de "Snel toevoegen" sheet. Zonder de lock blijft de balk stil.
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-orange-500 sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(40px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
+      className="fixed inset-0 z-[100] bg-white sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(40px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
