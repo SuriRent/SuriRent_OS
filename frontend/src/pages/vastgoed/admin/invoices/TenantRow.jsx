@@ -69,17 +69,17 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
           <p className="font-black text-slate-900 truncate">
             {aptTitle || <span className="text-slate-400 italic">Geen appartement</span>}
           </p>
-          {group.tenant_name && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 truncate max-w-[220px]" data-testid={`mi-tenant-name-${group.tenant_id}`}>
-              {group.tenant_name}
-            </span>
-          )}
           <CreditBadge credits={credits} variant="compact" onClick={onCreditClick} testid={`mi-credit-${group.tenant_id}`} />
           <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
         </div>
         {sub && (
           <p className="text-xs text-slate-500 mt-0.5 truncate">
             {sub}
+          </p>
+        )}
+        {group.tenant_name && (
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-900 mt-0.5 truncate" data-testid={`mi-tenant-name-${group.tenant_id}`}>
+            {group.tenant_name}
           </p>
         )}
       </div>
@@ -135,22 +135,22 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-              {/* Op verzoek gebruiker (2026-02): appartement als hoofd-titel
-                  identiek aan Huurders-tab; huurdernaam nu in zwarte tekst
-                  zonder groene badge (per user 2026-02-22). */}
+              {/* Op verzoek gebruiker (2026-02-22): huurdernaam onder de
+                  locatie i.p.v. naast de appartementstitel — geeft rustiger
+                  uitzicht en betere alignment met de Huurders-tab. */}
               <p className="font-bold text-slate-900 text-sm sm:text-[15px] truncate">
                 {group.apartment_number || <span className="text-slate-400 italic">Geen appartement</span>}
               </p>
-              {group.tenant_name && (
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 truncate max-w-[220px]" data-testid={`tenant-name-${group.tenant_id}`}>
-                  {group.tenant_name}
-                </span>
-              )}
               <CreditBadge credits={credits} onClick={onCreditClick} testid={`tenant-credit-${group.tenant_id}`} />
             </div>
             {group.location_name && (
               <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate" data-testid={`tenant-apt-${group.tenant_id}`}>
                 {group.location_name}
+              </p>
+            )}
+            {group.tenant_name && (
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-900 mt-0.5 truncate" data-testid={`tenant-name-${group.tenant_id}`}>
+                {group.tenant_name}
               </p>
             )}
             <div className="mt-1 md:hidden">
