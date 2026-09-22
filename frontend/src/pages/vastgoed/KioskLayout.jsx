@@ -82,12 +82,13 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // =====================================================================
 // Mobiele "+" FAB — vaste witte menubalk aan de onderkant. De hele balk
 // is één grote button — klikken op de + of ergens op de balk opent het
-// "Snel toevoegen" menu. Op iPhone loopt de balk-kleur door in de home-
-// indicator zone via interne safe-area padding.
+// "Snel toevoegen" menu. Gebruikt `absolute` i.p.v. `fixed` omdat op
+// iOS PWA een `position: fixed` kind van `.kiosk-fullscreen` een paar
+// pixels boven de echte viewport-onderrand terechtkomt.
 // =====================================================================
 function MobileAddFab({ onOpen }) {
   return (
-    <div className="md:hidden fixed inset-x-0 bottom-0 z-40"
+    <div className="md:hidden absolute inset-x-0 bottom-0 z-40"
       data-testid="kiosk-fab-bar">
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
