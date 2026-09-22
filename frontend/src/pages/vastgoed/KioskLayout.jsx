@@ -88,18 +88,17 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // =====================================================================
 function MobileAddFab({ onOpen }) {
   return (
-    <div className="md:hidden absolute inset-x-0 bottom-0 z-40"
+    <div className="md:hidden absolute inset-x-0 bottom-0 z-40 bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       data-testid="kiosk-fab-bar">
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
         aria-label="Menu — Snel toevoegen"
-        className="w-full relative bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)] text-left active:bg-slate-50 transition"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        className="w-full h-14 relative bg-transparent active:bg-slate-50 transition">
         {/* Oranje + knop (visueel, niet klikbaar zelf — hele balk vangt de tap) */}
         <span className="absolute left-1/2 -translate-x-1/2 -top-5 w-16 h-16 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
           <Plus className="w-8 h-8" strokeWidth={3} />
         </span>
-        <span className="block h-14" />
       </button>
     </div>
   );
