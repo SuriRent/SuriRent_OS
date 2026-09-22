@@ -80,42 +80,25 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 }
 
 // =====================================================================
-// Mobiele "+" FAB — vaste witte menubalk aan de onderkant. De hele balk
-// is één grote button — klikken op de + of ergens op de balk opent het
-// "Snel toevoegen" menu. Wordt via createPortal in document.body geplaatst
-// met `position: fixed` + z-[110] zodat de balk ALTIJD zichtbaar en
-// klikbaar blijft — ook boven op een geopende modal (modals gebruiken
-// z-[100]). Modals reserveren onderin ruimte voor deze balk zodat er
-// niets achter verdwijnt.
+// Mobiele "+" FAB — vaste witte menubalk aan de onderkant van het scherm.
+// De hele balk is één grote button — klikken op de + of ergens op de balk
+// opent het "Snel toevoegen" menu.
 //
-// Toetsenbord-detectie: op iOS PWA verandert `visualViewport.height` bij
-// het openen van het software keyboard. In dat geval verbergen we de balk
-// — anders knalt iOS de balk boven op het keyboard of scrollt hij de hele
-// pagina omhoog.
+// Positionering (permanent, per user-spec):
+//   • position: fixed
+//   • bottom: 0            (nooit position: absolute of vh-berekeningen)
+//   • padding-bottom: env(safe-area-inset-bottom)   → iOS home-indicator
+//   • z-[110]              → boven alle modals (die zitten op z-[100])
+//
+// createPortal(document.body) zodat de fixed positioning t.o.v. de layout
+// viewport gebeurt en niet t.o.v. .kiosk-fullscreen (dat op iOS PWA een
+// ander stacking/containing block creëert).
+//
+// Bewust GEEN visualViewport-check meer die de balk verbergt bij open
+// toetsenbord — de balk moet altijd op zijn plek blijven, ook tijdens
+// typen. iOS legt het keyboard er dan over heen, dat is aanvaardbaar.
 // =====================================================================
-function useKeyboardOpen() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return undefined;
-    const check = () => {
-      // iOS keyboard slinkt de visualViewport met > 150px t.o.v. layout viewport
-      setOpen(window.innerHeight - vv.height > 150);
-    };
-    vv.addEventListener('resize', check);
-    vv.addEventListener('scroll', check);
-    check();
-    return () => {
-      vv.removeEventListener('resize', check);
-      vv.removeEventListener('scroll', check);
-    };
-  }, []);
-  return open;
-}
-
 function MobileAddFab({ onOpen }) {
-  const kbOpen = useKeyboardOpen();
-  if (kbOpen) return null;
   return createPortal((
     <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
