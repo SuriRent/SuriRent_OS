@@ -3279,8 +3279,8 @@ function IdScanCameraModal({ onClose, onCaptured }) {
     }, 'image/jpeg', 0.92);
   }, [processing, onCaptured]);
 
-  // Auto-capture: neem elk 200ms een lo-res sample, bepaal pixeldiff met
-  // vorige frame. Als de diff onder de threshold blijft voor ~1.6s en het
+  // Auto-capture: neem elk 120ms een lo-res sample, bepaal pixeldiff met
+  // vorige frame. Als de diff onder de threshold blijft voor ~600ms en het
   // beeld is niet blanco → auto-vast leg. Vermijdt dat een stil camera-
   // beeld naar een tafel of muur onterecht triggert (min. brightness check).
   useEffect(() => {
@@ -3301,19 +3301,19 @@ function IdScanCameraModal({ onClose, onCaptured }) {
       let brightness = 0;
       for (let i = 0; i < cur.length; i += 32) brightness += cur[i] + cur[i + 1] + cur[i + 2];
       const avgBright = brightness / (cur.length / 32) / 3;
-      if (avgBright < 30) { prev = cur; stable = 0; return; }
+      if (avgBright < 25) { prev = cur; stable = 0; return; }
       if (prev) {
         let diff = 0;
         for (let i = 0; i < cur.length; i += 16) diff += Math.abs(cur[i] - prev[i]);
         const norm = diff / (cur.length / 16);
-        if (norm < 4) stable += 1; else stable = 0;
-        if (stable >= 8) { // ~1.6s
+        if (norm < 6) stable += 1; else stable = 0;
+        if (stable >= 5) { // ~600ms — snelle auto-capture
           clearInterval(iv);
           capture();
         }
       }
       prev = cur;
-    }, 200);
+    }, 120);
     return () => clearInterval(iv);
   }, [ready, processing, error, capture]);
 
@@ -3394,6 +3394,10 @@ function AddTenantModal({ onClose, onSaved }) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState('');
+  // Bewaar de gescande ID-kaart foto zodat we deze na het opslaan van de
+  // huurder direct uploaden naar `/tenants/{id}/upload-id-photo`. Anders
+  // ziet de beheerder alleen tekst en niet de originele scan.
+  const [scannedIdFile, setScannedIdFile] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -3409,10 +3413,14 @@ function AddTenantModal({ onClose, onSaved }) {
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
   // ID-scan callback: krijgt een File van de live camera, stuurt naar
-  // `/api/tenants/ocr-id-card` en vult de velden automatisch in.
+  // `/api/tenants/ocr-id-card` en vult de velden automatisch in. Bewaart
+  // óók het File-object in state → na tenant-creatie uploaden we hem naar
+  // `/tenants/{id}/upload-id-photo` zodat de beheerder de originele scan
+  // + auto-gecropte avatar krijgt.
   const onScanCaptured = async (file) => {
     setShowScanner(false);
     if (!file) return;
+    setScannedIdFile(file);
     setScanning(true); setErr(''); setScanMsg('');
     try {
       const fd = new FormData();
@@ -3425,7 +3433,7 @@ function AddTenantModal({ onClose, onSaved }) {
       if (d.birth_date) setBirthDate(d.birth_date);
       if (d.id_number) setIdNumber(d.id_number);
       const conf = typeof d.confidence === 'number' ? Math.round(d.confidence * 100) : null;
-      setScanMsg(conf != null ? `Gescand · ${conf}% zekerheid` : 'Gescand');
+      setScanMsg(conf != null ? `Gescand · ${conf}% zekerheid — foto wordt opgeslagen` : 'Gescand — foto wordt opgeslagen');
     } catch (e2) { setErr(formatError(e2)); }
     finally { setScanning(false); }
   };
@@ -3441,7 +3449,22 @@ function AddTenantModal({ onClose, onSaved }) {
       if (birthDate) body.birth_date = birthDate;
       if (idNumber.trim()) body.id_number = idNumber.trim();
       const r = await api.post('/tenants', body);
-      onSaved && onSaved(r?.data);
+      const created = r?.data;
+      // Upload de ID-kaart foto (indien gescand) direct na aanmaak. Fouten
+      // hier blokkeren niet — huurder is al aangemaakt. `upload-id-photo`
+      // triggert bovendien face-crop → tenant.avatar_url.
+      if (created?.id && scannedIdFile) {
+        try {
+          const fd = new FormData();
+          fd.append('file', scannedIdFile);
+          await api.post(`/tenants/${created.id}/upload-id-photo`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } catch (upErr) {
+          console.warn('ID-foto upload gefaald (huurder wel aangemaakt):', upErr);
+        }
+      }
+      onSaved && onSaved(created);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
