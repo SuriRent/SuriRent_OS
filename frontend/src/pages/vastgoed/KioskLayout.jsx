@@ -3615,21 +3615,26 @@ function AddApartmentModal({ onClose, onSaved }) {
 // Elk create-formulier binnen de Kiosk gebruikt dezelfde skeleton met
 // een gekleurde header, safe-area padding en een sticky bottom knop.
 // =====================================================================
+// Scroll-lock helper — voorkomt scroll-through achter modals zonder de
+// iOS "body position fixed" jitter die op iPhone PWA de layout na sluiten
+// omhoog laat verspringen. We gebruiken alleen `overflow: hidden` op
+// html en body — herstellen exact wat er stond na unmount.
 function useBodyScrollLock() {
   useEffect(() => {
-    const scrollY = window.scrollY || 0;
+    const html = document.documentElement;
     const body = document.body;
-    const saved = { pos: body.style.position, top: body.style.top, w: body.style.width, ov: body.style.overflow };
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
+    const prev = {
+      htmlOv: html.style.overflow,
+      bodyOv: body.style.overflow,
+      bodyOb: body.style.overscrollBehavior,
+    };
+    html.style.overflow = 'hidden';
     body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'contain';
     return () => {
-      body.style.position = saved.pos;
-      body.style.top = saved.top;
-      body.style.width = saved.w;
-      body.style.overflow = saved.ov;
-      window.scrollTo(0, scrollY);
+      html.style.overflow = prev.htmlOv;
+      body.style.overflow = prev.bodyOv;
+      body.style.overscrollBehavior = prev.bodyOb;
     };
   }, []);
 }
