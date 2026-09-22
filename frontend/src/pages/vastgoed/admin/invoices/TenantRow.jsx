@@ -70,7 +70,6 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
             {aptTitle || <span className="text-slate-400 italic">Geen appartement</span>}
           </p>
           <CreditBadge credits={credits} variant="compact" onClick={onCreditClick} testid={`mi-credit-${group.tenant_id}`} />
-          <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
         </div>
         {sub && (
           <p className="text-xs text-slate-500 mt-0.5 truncate">
@@ -82,6 +81,9 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
             {group.tenant_name}
           </p>
         )}
+        <div className="mt-1">
+          <StatusPill severity={sev} overdueCount={group.overdueCount} currentCount={group.currentCount} upcomingCount={group.upcomingCount} />
+        </div>
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
         <p className={`text-base font-black tracking-tight whitespace-nowrap ${amtCls}`}
