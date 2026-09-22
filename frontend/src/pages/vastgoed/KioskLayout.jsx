@@ -85,23 +85,54 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // opent het "Snel toevoegen" menu.
 //
 // Positionering (permanent, per user-spec):
-//   • position: fixed
-//   • bottom: 0            (nooit position: absolute of vh-berekeningen)
+//   • position: fixed        (NOOIT position: absolute)
+//   • bottom: 0              (NOOIT vh-berekeningen)
 //   • padding-bottom: env(safe-area-inset-bottom)   → iOS home-indicator
-//   • z-[110]              → boven alle modals (die zitten op z-[100])
+//   • z-[110]                → boven alle modals (die zitten op z-[100])
 //
-// createPortal(document.body) zodat de fixed positioning t.o.v. de layout
-// viewport gebeurt en niet t.o.v. .kiosk-fullscreen (dat op iOS PWA een
-// ander stacking/containing block creëert).
-//
-// Bewust GEEN visualViewport-check meer die de balk verbergt bij open
-// toetsenbord — de balk moet altijd op zijn plek blijven, ook tijdens
-// typen. iOS legt het keyboard er dan over heen, dat is aanvaardbaar.
+// iOS PWA layout-viewport drift compensatie:
+//   Na keyboard-events komt op iOS PWA de LAYOUT viewport (waarop `fixed`
+//   gepind is) niet altijd overeen met de VISUAL viewport → er ontstaat
+//   een oranje strook onder de balk (de `.kiosk-fullscreen` achtergrond
+//   die door de drift zichtbaar wordt). We compenseren via een CSS
+//   `transform: translateY(-drift)` waarbij drift = layout-bottom minus
+//   visual-bottom. Position blijft dus letterlijk `fixed; bottom: 0`.
 // =====================================================================
+function useVisualBottomDrift() {
+  const [drift, setDrift] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const update = () => {
+      // drift = hoeveel de layout viewport uitsteekt onder de visual viewport
+      const d = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      setDrift(d);
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+  return drift;
+}
+
 function MobileAddFab({ onOpen }) {
+  const drift = useVisualBottomDrift();
   return createPortal((
     <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        transform: drift > 0 ? `translateY(-${drift}px)` : undefined,
+        // willChange voor smooth GPU-transform op iOS
+        willChange: 'transform',
+      }}
       data-testid="kiosk-fab-bar">
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
