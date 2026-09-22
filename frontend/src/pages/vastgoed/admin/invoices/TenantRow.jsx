@@ -70,7 +70,7 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
             {aptTitle || <span className="text-slate-400 italic">Geen appartement</span>}
           </p>
           {group.tenant_name && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 truncate max-w-[220px]" data-testid={`mi-tenant-name-${group.tenant_id}`}>
               {group.tenant_name}
             </span>
           )}
@@ -136,12 +136,13 @@ export function TenantRow({ group, credits, expanded, onToggle, onReminder, onCr
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
               {/* Op verzoek gebruiker (2026-02): appartement als hoofd-titel
-                  identiek aan Huurders-tab; huurdernaam als groene badge. */}
+                  identiek aan Huurders-tab; huurdernaam nu in zwarte tekst
+                  zonder groene badge (per user 2026-02-22). */}
               <p className="font-bold text-slate-900 text-sm sm:text-[15px] truncate">
                 {group.apartment_number || <span className="text-slate-400 italic">Geen appartement</span>}
               </p>
               {group.tenant_name && (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 truncate max-w-[220px]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 truncate max-w-[220px]" data-testid={`tenant-name-${group.tenant_id}`}>
                   {group.tenant_name}
                 </span>
               )}
