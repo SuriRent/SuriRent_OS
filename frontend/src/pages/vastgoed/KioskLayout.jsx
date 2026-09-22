@@ -82,13 +82,15 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // =====================================================================
 // Mobiele "+" FAB — vaste witte menubalk aan de onderkant. De hele balk
 // is één grote button — klikken op de + of ergens op de balk opent het
-// "Snel toevoegen" menu. Gebruikt `absolute` i.p.v. `fixed` omdat op
-// iOS PWA een `position: fixed` kind van `.kiosk-fullscreen` een paar
-// pixels boven de echte viewport-onderrand terechtkomt.
+// "Snel toevoegen" menu. Wordt via createPortal in document.body geplaatst
+// met `position: fixed` + z-[110] zodat de balk ALTIJD zichtbaar en
+// klikbaar blijft — ook boven op een geopende modal (modals gebruiken
+// z-[100]). Modals reserveren onderin ruimte voor deze balk zodat er
+// niets achter verdwijnt.
 // =====================================================================
 function MobileAddFab({ onOpen }) {
-  return (
-    <div className="md:hidden absolute inset-x-0 bottom-0 z-40 bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
+  return createPortal((
+    <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       data-testid="kiosk-fab-bar">
       <button onClick={onOpen} type="button"
@@ -101,7 +103,7 @@ function MobileAddFab({ onOpen }) {
         </span>
       </button>
     </div>
-  );
+  ), document.body);
 }
 
 // =====================================================================
@@ -3635,7 +3637,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   useBodyScrollLock();
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-orange-500 sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[100] bg-orange-500 sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(56px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
@@ -4139,7 +4141,7 @@ function KioskAddSheet({ onClose, onPick }) {
   }, [onClose]);
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150 pb-[calc(56px_+_env(safe-area-inset-bottom,0px))] md:pb-0"
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
@@ -4753,19 +4755,17 @@ export default function KioskLayout() {
           onSaved={() => setShowAddMaintenance(false)} />
       )}
 
-      {/* Mobile-only floating "+" menubalk onderaan (alleen op appartement-select stap) */}
-      {step === 'select' && !showAddSheet
-        && !showAddTenant && !showAddApartment && !showAddLocation
-        && !showAddContract && !showAddInvoice && !showPaymentsViewer
-        && !showAddMaintenance && (
+      {/* Mobile-only vaste "+" menubalk onderaan — ALTIJD zichtbaar buiten
+          het check-scherm, ook bovenop geopende modals (portal + z-[110]). */}
+      {step !== 'check' && (
         <MobileAddFab onOpen={() => setShowAddSheet(true)} />
       )}
 
-      {/* Bottom bar — absolute (binnen .kiosk-fullscreen) i.p.v. fixed.
-          Voorkomt iOS quirk waarbij geneste fixed elementen op iPad ~20px
-          boven de fysieke onderrand renderen. */}
-      {showDesktopBar && (
-        <div className="hidden md:block absolute bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100"
+      {/* Desktop bottom bar — via createPortal in document.body geplaatst met
+          fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
+          ook bovenop een geopende modal (modals gebruiken z-[100]). */}
+      {showDesktopBar && createPortal((
+        <div className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-white border-t border-slate-100"
           data-testid="kiosk-bottom-bar">
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -4828,7 +4828,7 @@ export default function KioskLayout() {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

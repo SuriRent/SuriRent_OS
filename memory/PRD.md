@@ -1,6 +1,26 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-22) — Kiosk onderbalk ALTIJD zichtbaar in de hele Kiosk
+
+**Probleem**: De onderste menubalk (mobile "+" FAB + desktop knoppenbalk) verdween wanneer een modal geopend werd (Kasgeld, Snel toevoegen, Nieuwe huurder, etc.). User wilde de balk overal in de Kiosk zichtbaar + klikbaar houden.
+
+**Root cause**: De balk stond binnen `.kiosk-fullscreen` met `position: absolute` en `z-40`. Modals werden via `createPortal` naar `document.body` gerenderd met `fixed inset-0 z-[100]` → de modal overlay dekte de balk visueel af. Op mobile werd de FAB expliciet verborgen via een lange conditie (`!showAddSheet && !showAddTenant && ...`).
+
+**Wijzigingen**
+- `MobileAddFab` (KioskLayout.jsx:89-113) — gerefactored naar `createPortal(..., document.body)` met `position: fixed inset-x-0 bottom-0 z-[110]`
+- Desktop bottom bar (KioskLayout.jsx:4767-4835) — omhuld in `createPortal(..., document.body)`, positie van `absolute` → `fixed`, z-index `z-40` → `z-[110]` (hoger dan modal-shell z-[100])
+- Conditie op FAB rendering vereenvoudigd van `step === 'select' && !showAddSheet && !showAdd* ...` → `step !== 'check'` (dus ook zichtbaar op Kasgeld en op alle modals)
+- `KioskModalShell` outer div: extra `pb-[calc(56px_+_env(safe-area-inset-bottom,0px))] sm:pb-4` — reserveert onderin ruimte voor de balk zodat modal-content niet onder de balk verdwijnt
+- `KioskAddSheet` outer div: idem `pb-[calc(56px_+_env(safe-area-inset-bottom,0px))] md:pb-0`
+- `.kiosk-content-scroll` in index.css: op mobiel (< 768px) nu `padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px))` zodat ApartmentSelect/KasgeldPanel scroll-content niet onder de FAB doorschuift
+
+**Getest (self-test, screenshot tool)**
+- **Mobile 390×844**: balk zichtbaar op (1) apartment-select, (2) Kasgeld-panel, (3) Snel toevoegen sheet, (4) Nieuwe huurder modal — alle vier bevestigd
+- **Desktop 1280×800**: balk zichtbaar op (1) select, (2) Nieuwe huurder modal (contract-knop `is_visible()=True` → volledig klikbaar boven de modal), (3) Kasgeld — alle drie bevestigd
+
+
+
 ## Latest Feature (2026-02-15) — Kiosk quick-create: Nieuwe huurder + Nieuw appartement
 
 **Wat**: Twee nieuwe knoppen op de Kiosk-onderrij (Desktop + Mobile) naast Uit/Kasgeld/Beheerder waarmee de operator ter plekke een huurder of appartement kan aanmaken zonder de Kiosk-modus te verlaten.
