@@ -3634,7 +3634,11 @@ function useBodyScrollLock() {
 }
 
 function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
-  useBodyScrollLock();
+  // GEEN useBodyScrollLock hier: `.kiosk-fullscreen` heeft al `overflow: hidden`,
+  // en het modal is `fixed inset-0` dus scroll-through is niet mogelijk. Het
+  // togglen van `body`/`html` overflow triggert op iOS PWA een reflow die
+  // de vaste onderbalk (z-[110]) zichtbaar omhoog laat springen bij het
+  // openen via de "Snel toevoegen" sheet. Zonder de lock blijft de balk stil.
   return createPortal((
     <div
       className="fixed inset-0 z-[100] bg-orange-500 sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(56px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
