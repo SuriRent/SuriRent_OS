@@ -18,7 +18,22 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { isAndroid, printViaRawBT } from '../../lib/kiosk-print';
+import { isAndroid, printViaRawBT, openReceiptImage } from '../../lib/kiosk-print';
+
+// Detecteer iOS/iPadOS (incl. iPadOS 13+ die zich als "MacIntel" voordoet
+// maar wél touch heeft). Deze telefoons ondersteunen géén RawBT en de
+// iframe.print()-flow werkt niet betrouwbaar op iOS Safari → we openen de
+// JPG-kwitantie in een nieuw tabblad zodat de gebruiker via Share Sheet
+// kan afdrukken of opslaan.
+function isMobileBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // iPadOS 13+ camoufleert zich als desktop macOS met touch
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  return false;
+}
+
 
 const variants = {
   enter: { opacity: 0, x: 60 },
@@ -2529,12 +2544,23 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // Auto-print zodra de bon op het scherm verschijnt (~2.95s na tear).
   // Gebruikt HTML-versie i.p.v. PDF-blob zodat Chrome's --kiosk-printing
   // vlag het dialoog kan overslaan (PDF-viewer negeert die vlag).
+  //
+  // Flow per platform:
+  //   • Android           → RawBT intent (scheme=rawbt) → thermische printer
+  //   • Desktop Chrome    → iframe.print() → --kiosk-printing slaat dialoog over
+  //   • iOS / iPadOS      → skip auto-print (Safari opent geen printer op de
+  //                          achtergrond zonder user gesture) — gebruiker
+  //                          heeft de "Print bon" knop hieronder voor manueel.
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
         // === ANDROID PAD → RawBT app ===
         if (isAndroid()) {
           printViaRawBT(payment.id);
+          return;
+        }
+        // === iOS / iPadOS → geen auto-print (Safari blokkeert dat)
+        if (isMobileBrowser()) {
           return;
         }
         // === DESKTOP PAD → HTML iframe + window.print() ===
@@ -2568,6 +2594,30 @@ function ReceiptScreen({ payment, overview, onDone }) {
     }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
     return () => clearTimeout(t);
   }, [payment.id]);
+
+  // Manuele print-trigger — wordt gebruikt door de "Print bon" knop op het
+  // ontvangst-scherm. Werkt op elk platform, ook iOS/iPad (via openReceiptImage).
+  const manualPrint = () => {
+    try {
+      if (isAndroid()) {
+        printViaRawBT(payment.id);
+        return;
+      }
+      if (isMobileBrowser()) {
+        // iOS Safari: opent de JPG-kwitantie in nieuw tabblad zodat de
+        // gebruiker via de Share Sheet kan afdrukken of opslaan.
+        openReceiptImage(payment.id);
+        return;
+      }
+      // Desktop → re-trigger de auto-print iframe direct
+      const existing = document.getElementById('kiosk-autoprint-iframe');
+      if (existing) {
+        try { existing.contentWindow.focus(); existing.contentWindow.print(); return; }
+        catch { /* val terug op nieuw tabblad */ }
+      }
+      openReceiptImage(payment.id);
+    } catch { /* stille fallback */ }
+  };
 
 
   // Bon-printer geluid — gesynthetiseerd via Web Audio API.
@@ -2782,6 +2832,17 @@ function ReceiptScreen({ payment, overview, onDone }) {
           <UserRound className="w-5 h-5" strokeWidth={2.6} />
           Volgende huurder
         </motion.button>
+        {/* "Print bon" — manuele herprint knop. Werkt overal:
+              • Android → RawBT thermische printer
+              • iOS/iPad → opent JPG in nieuw tabblad → Share Sheet
+              • Desktop → iframe.print() (of nieuw tabblad als fallback)
+            Alleen gemount als er een payment.id is (voorwaarde). */}
+        <button onClick={manualPrint} type="button"
+          data-testid="receipt-manual-print"
+          className="w-full h-12 mt-2 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-2xl flex items-center justify-center gap-2 border-2 border-slate-200 transition">
+          <Printer className="w-4 h-4" />
+          Print bon opnieuw
+        </button>
         <p className="text-center text-xs text-slate-400 mt-2" data-testid="receipt-autoreturn">
           Automatisch terug naar startscherm in 10 seconden
         </p>
