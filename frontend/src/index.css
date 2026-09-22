@@ -57,8 +57,12 @@ body {
     overscroll-behavior: none;
     background-color: #ffffff;
   }
-  /* Tijdens kiosk-mode -> brand-oranje voor home-indicator gebied. */
-  body.kiosk-mode { background-color: #FF5C00; }
+  /* Tijdens kiosk-mode -> WIT voor home-indicator gebied. De vaste witte
+     FAB-menubalk zit onderaan, dus het home-indicator gebied is óók wit
+     en er kan geen oranje strook onder de balk tevoorschijn komen wanneer
+     iOS PWA een layout-viewport rapporteert die groter is dan de visual
+     viewport (bekende iOS bug na keyboard-events / status-bar-toggles). */
+  body.kiosk-mode { background-color: #ffffff; }
   /* Tijdens login-mode -> brand kleur (var --login-bg, default oranje). */
   body.login-mode { background-color: var(--login-bg, #FF5C00); }
   /* Tijdens huurder-portaal -> brand cream zodat home-indicator
@@ -73,7 +77,7 @@ body {
 html.login-mode-html,
 body.login-mode { background-color: var(--login-bg, #FF5C00); }
 html.kiosk-mode-html,
-body.kiosk-mode { background-color: #FF5C00; }
+body.kiosk-mode { background-color: #ffffff; }
 
 /* Utility for screens that should respect safe area manually. */
 .safe-top { padding-top: env(safe-area-inset-top); }
