@@ -111,10 +111,10 @@ function MobileAddFab({ onOpen }) {
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
         aria-label="Menu — Snel toevoegen"
-        className="w-full h-10 relative bg-transparent active:bg-slate-50 transition">
+        className="w-full h-8 relative bg-transparent active:bg-slate-50 transition">
         {/* Oranje + knop (visueel, niet klikbaar zelf — hele balk vangt de tap) */}
-        <span className="absolute left-1/2 -translate-x-1/2 -top-5 w-14 h-14 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
-          <Plus className="w-7 h-7" strokeWidth={3} />
+        <span className="absolute left-1/2 -translate-x-1/2 -top-4 w-12 h-12 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
+          <Plus className="w-6 h-6" strokeWidth={3} />
         </span>
       </button>
     </div>
@@ -3656,7 +3656,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   // openen via de "Snel toevoegen" sheet. Zonder de lock blijft de balk stil.
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-white sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(40px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
+      className="fixed inset-0 z-[100] bg-white sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(32px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
@@ -4160,7 +4160,7 @@ function KioskAddSheet({ onClose, onPick }) {
   }, [onClose]);
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150 pb-[calc(40px_+_env(safe-area-inset-bottom,0px))] md:pb-0"
+      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150 pb-[calc(32px_+_env(safe-area-inset-bottom,0px))] md:pb-0"
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
