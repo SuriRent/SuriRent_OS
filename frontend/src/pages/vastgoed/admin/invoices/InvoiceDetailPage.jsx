@@ -226,13 +226,32 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
           className="inline-flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border-2 border-slate-200 rounded-2xl px-4 py-3 text-sm">
           <ChevronRight className="w-4 h-4 rotate-180" /> Terug
         </button>
-        {primaryOpen && (
-          <button type="button" onClick={() => { setQuickPayAll(true); setQuickPayInv(primaryOpen); }}
-            data-testid="quickpay-top-btn"
-            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform">
-            <Banknote className="w-4 h-4" /> Nieuwe
+        <div className="flex items-center gap-2">
+          {/* Kleine icon-only "Herverdeel" knop — verplaatst vanuit de
+              HOOFDCARD naar hier, naast de "Nieuwe" betaling. Bewust zonder
+              tekst zodat de header niet vol staat; title-attribuut + aria
+              label geven context voor screen readers en tooltips. */}
+          <button
+            type="button"
+            onClick={rebalanceCredits}
+            disabled={rebalancing}
+            data-testid="rebalance-credits-btn"
+            title="Herverdeel alle openstaande tegoeden FIFO over de openstaande facturen."
+            aria-label="Herverdeel tegoeden"
+            className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 transition disabled:opacity-60"
+          >
+            {rebalancing
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <RefreshCw className="w-4 h-4" />}
           </button>
-        )}
+          {primaryOpen && (
+            <button type="button" onClick={() => { setQuickPayAll(true); setQuickPayInv(primaryOpen); }}
+              data-testid="quickpay-top-btn"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition-transform">
+              <Banknote className="w-4 h-4" /> Nieuwe
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ================= HOOFDCARD ================= */}
@@ -246,30 +265,10 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            {/* Compact "Herverdeel" knop — verplaatst uit de Acties-kaart
-                naar hier rechts naast de huurder-naam. Klein & discreet, met
-                loader tijdens de actie. Description onder de knop is
-                verwijderd — bewust minimaal om de header niet vol te
-                zetten. Titel-tooltip legt uit wat de actie doet. */}
-            <button
-              type="button"
-              onClick={rebalanceCredits}
-              disabled={rebalancing}
-              data-testid="rebalance-credits-btn"
-              title="Herverdeel alle openstaande tegoeden FIFO over de openstaande facturen."
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5C00] hover:bg-orange-600 text-white text-[11px] font-black uppercase tracking-wider transition disabled:opacity-60 shadow-sm"
-            >
-              {rebalancing
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> Herverdelen…</>
-                : <><RefreshCw className="w-3 h-3" /> Herverdeel</>}
-              <ChevronRight className="w-3 h-3" />
-            </button>
-            <div className="text-right">
-              <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>
-              <p className="text-base sm:text-2xl font-black text-slate-900 whitespace-nowrap">{fmtMoney(totalOpen, currency)}</p>
-              <p className="text-[10px] sm:text-[11px] text-slate-500">totaal saldo</p>
-            </div>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>
+            <p className="text-base sm:text-2xl font-black text-slate-900 whitespace-nowrap">{fmtMoney(totalOpen, currency)}</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-500">totaal saldo</p>
           </div>
         </div>
         {rebalanceMsg && (
