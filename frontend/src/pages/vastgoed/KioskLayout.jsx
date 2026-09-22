@@ -2938,23 +2938,19 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     if (!el) return undefined;
     const vv = window.visualViewport;
 
-    // ---- Stap 1: body scroll lock met exacte scroll-restore ----
-    // iOS-truc: `body {position:fixed; top:-Y}` waarbij Y de huidige
-    // scroll-positie is. Dat vriest de pagina in zonder een spring.
-    const scrollY = window.scrollY || window.pageYOffset || 0;
+    // ---- Stap 1: scroll-lock zonder layout-jitter ----
+    // Alleen `overflow: hidden` op html+body — geen body.position=fixed
+    // meer omdat dat op iOS PWA een layout-jump veroorzaakt bij sluiten
+    // (de menubalk verspringt dan naar boven).
     const body = document.body;
     const html = document.documentElement;
     const saved = {
       bodyOverflow: body.style.overflow,
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyWidth: body.style.width,
+      bodyOverscroll: body.style.overscrollBehavior,
       htmlOverflow: html.style.overflow,
     };
     body.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
+    body.style.overscrollBehavior = 'contain';
     html.style.overflow = 'hidden';
 
     // ---- Stap 2: modal hoogte + positie op visualViewport ----
@@ -3020,12 +3016,8 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     return () => {
       // ---- Restore body ----
       body.style.overflow = saved.bodyOverflow;
-      body.style.position = saved.bodyPosition;
-      body.style.top = saved.bodyTop;
-      body.style.width = saved.bodyWidth;
+      body.style.overscrollBehavior = saved.bodyOverscroll;
       html.style.overflow = saved.htmlOverflow;
-      // Restore scroll-positie zodat de gebruiker niet naar boven springt.
-      window.scrollTo(0, scrollY);
       if (vv) {
         vv.removeEventListener('resize', applyRAF);
         vv.removeEventListener('scroll', applyRAF);
