@@ -173,24 +173,16 @@ function useKeyboardOpen() {
 
 function MobileAddFab({ onOpen }) {
   const kbOpen = useKeyboardOpen();
-  const vv = useVisualViewport();
-  // Verberg de balk zodra het keyboard open is (baseline-gebaseerde
-  // detectie hierboven). Zodra keyboard sluit komt de balk terug.
+  // Verberg de balk zodra het keyboard open is — anders schuift hij mee
+  // omhoog met de gekrompen layout-viewport op iOS.
   if (kbOpen) return null;
-  // Bar-hoogte incl. safe-area-padding zodat de balk exact tegen de
-  // onderrand van de visualViewport wordt verankerd. Geen `bottom: 0`
-  // meer — dat gebruikte de layout viewport wat op iOS Safari kan
-  // afwijken van de visualViewport (adresbalk-toggle, keyboard).
-  const BAR_HEIGHT = 28; // content h-7
   return createPortal((
     <div className="md:hidden fixed inset-x-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
       style={{
-        // Verankering aan de onderrand van de visualViewport:
-        //   top = vv.top + vv.height − (bar-hoogte + safe-area-bottom)
-        // Zo staat de balk ALTIJD precies aan de zichtbare onderkant,
-        // ook wanneer iOS Safari's adresbalk verschijnt/verdwijnt.
-        top: `calc(${vv.top + vv.height}px - ${BAR_HEIGHT}px - env(safe-area-inset-bottom, 0px))`,
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        // Balk boven de safe-area (Android nav-balk / iOS home-indicator).
+        // Fallback 16px voor toestellen zonder env-value. + 16px extra
+        // marge voor comfortabele tap-zone en visuele adem.
+        bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)',
         touchAction: 'none',
       }}
       data-testid="kiosk-fab-bar">
@@ -199,7 +191,6 @@ function MobileAddFab({ onOpen }) {
         aria-label="Menu — Snel toevoegen"
         style={{ touchAction: 'manipulation' }}
         className="w-full h-7 relative bg-transparent active:bg-slate-50 transition">
-        {/* Oranje + knop — kleiner, minder prominent uitsteek. */}
         <span className="absolute left-1/2 -translate-x-1/2 -top-3 w-10 h-10 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
           <Plus className="w-5 h-5" strokeWidth={3} />
         </span>
@@ -4349,7 +4340,7 @@ export default function KioskLayout() {
   // een oranje strook onder de FAB bij iOS PWA viewport-drift.
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   useEffect(() => {
-    const BODY_BG = '#ffffff';
+    const BODY_BG = '#FF5C00';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;

@@ -57,12 +57,12 @@ body {
     overscroll-behavior: none;
     background-color: #ffffff;
   }
-  /* Tijdens kiosk-mode -> WIT voor home-indicator gebied. De vaste witte
-     FAB-menubalk zit onderaan, dus het home-indicator gebied is óók wit
-     en er kan geen oranje strook onder de balk tevoorschijn komen wanneer
-     iOS PWA een layout-viewport rapporteert die groter is dan de visual
-     viewport (bekende iOS bug na keyboard-events / status-bar-toggles). */
-  body.kiosk-mode { background-color: #ffffff; }
+  /* Tijdens kiosk-mode -> ORANJE voor safe-area onderaan. De vaste FAB-
+     menubalk zit boven de safe-area via `bottom: calc(env(safe-area-inset-
+     bottom, 16px) + 16px)` — het onderste veilige gebied (Android nav-
+     balk / iOS home-indicator) wordt door de oranje body afgedekt zodat
+     er geen witte strook ontstaat. */
+  body.kiosk-mode { background-color: #FF5C00; }
   /* Tijdens login-mode -> brand kleur (var --login-bg, default oranje). */
   body.login-mode { background-color: var(--login-bg, #FF5C00); }
   /* Tijdens huurder-portaal -> brand cream zodat home-indicator
@@ -77,7 +77,7 @@ body {
 html.login-mode-html,
 body.login-mode { background-color: var(--login-bg, #FF5C00); }
 html.kiosk-mode-html,
-body.kiosk-mode { background-color: #ffffff; }
+body.kiosk-mode { background-color: #FF5C00; }
 
 /* Utility for screens that should respect safe area manually. */
 .safe-top { padding-top: env(safe-area-inset-top); }
@@ -151,9 +151,16 @@ html { scroll-behavior: smooth; }
   width: 100%;
   background: #FF5C00;
   overflow: hidden;
+  box-sizing: border-box;
   padding-top: env(safe-area-inset-top);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  /* Auto-reageert op Android navigatiebalk én iOS home-indicator:
+     - Android met knoppen → env(safe-area-inset-bottom) ~48px
+     - Android met veeggebaren → env(safe-area-inset-bottom) ~16px
+     - iOS met home-indicator → env(safe-area-inset-bottom) ~34px
+     Fallback 16px voor toestellen die het env-value niet leveren. */
+  padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
 /* Subtle grain noise overlay (data URL) */
