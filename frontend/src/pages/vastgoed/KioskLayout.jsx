@@ -149,7 +149,17 @@ function useKeyboardOpen() {
   useEffect(() => {
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (!vv) return undefined;
-    const check = () => setOpen(window.innerHeight - vv.height > 150);
+    // Bewaar de grootst gemeten `visualViewport.height` als baseline
+    // (zonder keyboard). Zodra de huidige height > 150px kleiner is dan
+    // die baseline, beschouwen we het keyboard als geopend. Deze
+    // methode is robuuster dan `window.innerHeight - vv.height` want
+    // `innerHeight` kan op iOS Safari zelf ook variëren (adresbalk
+    // toggle) en zou dan foutieve keyboard-open triggers geven.
+    let baseline = vv.height;
+    const check = () => {
+      if (vv.height > baseline) baseline = vv.height;
+      setOpen(baseline - vv.height > 150);
+    };
     vv.addEventListener('resize', check);
     vv.addEventListener('scroll', check);
     check();
@@ -163,19 +173,23 @@ function useKeyboardOpen() {
 
 function MobileAddFab({ onOpen }) {
   const kbOpen = useKeyboardOpen();
-  // Verberg de balk zodra het keyboard open is — voorkomt dat de FAB
-  // op iOS mee-schuift omhoog met de gekrompen layout-viewport. Zodra
-  // je het keyboard sluit, komt de balk automatisch terug op zijn
-  // vaste plek onderaan.
+  const vv = useVisualViewport();
+  // Verberg de balk zodra het keyboard open is (baseline-gebaseerde
+  // detectie hierboven). Zodra keyboard sluit komt de balk terug.
   if (kbOpen) return null;
+  // Bar-hoogte incl. safe-area-padding zodat de balk exact tegen de
+  // onderrand van de visualViewport wordt verankerd. Geen `bottom: 0`
+  // meer — dat gebruikte de layout viewport wat op iOS Safari kan
+  // afwijken van de visualViewport (adresbalk-toggle, keyboard).
+  const BAR_HEIGHT = 28; // content h-7
   return createPortal((
-    <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
+    <div className="md:hidden fixed inset-x-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
       style={{
-        // KORT: alleen 28px content, wit bg extendt in de home-indicator
-        // zone via padding-bottom → géén losstaande balk boven safe-area.
-        // fixed + bottom:0 = plakt exact aan viewport-onderkant, ook op
-        // iOS Safari (touch-action:none voorkomt mee-schuiven met scroll
-        // en met keyboard-events).
+        // Verankering aan de onderrand van de visualViewport:
+        //   top = vv.top + vv.height − (bar-hoogte + safe-area-bottom)
+        // Zo staat de balk ALTIJD precies aan de zichtbare onderkant,
+        // ook wanneer iOS Safari's adresbalk verschijnt/verdwijnt.
+        top: `calc(${vv.top + vv.height}px - ${BAR_HEIGHT}px - env(safe-area-inset-bottom, 0px))`,
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         touchAction: 'none',
       }}
