@@ -138,17 +138,45 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // viewport werkt en niet t.o.v. .kiosk-fullscreen (dat op iOS PWA een
 // eigen stacking/containing block creëert).
 // =====================================================================
+// Hook: detecteert of het software-keyboard open is via visualViewport.
+// Op iOS PWA verandert `visualViewport.height` met > 150px wanneer het
+// keyboard opent → return true, anders false. Wordt gebruikt om de FAB
+// te verbergen tijdens typen (voorkomt dat hij mee-schuift met de
+// layout-viewport die iOS Safari krimpt bij `interactive-widget=
+// resizes-content`).
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return undefined;
+    const check = () => setOpen(window.innerHeight - vv.height > 150);
+    vv.addEventListener('resize', check);
+    vv.addEventListener('scroll', check);
+    check();
+    return () => {
+      vv.removeEventListener('resize', check);
+      vv.removeEventListener('scroll', check);
+    };
+  }, []);
+  return open;
+}
+
 function MobileAddFab({ onOpen }) {
+  const kbOpen = useKeyboardOpen();
+  // Verberg de balk zodra het keyboard open is — voorkomt dat de FAB
+  // op iOS mee-schuift omhoog met de gekrompen layout-viewport. Zodra
+  // je het keyboard sluit, komt de balk automatisch terug op zijn
+  // vaste plek onderaan.
+  if (kbOpen) return null;
   return createPortal((
-    <div className="md:hidden fixed inset-x-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
+    <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
       style={{
-        // Per user-spec: bottom = env(safe-area-inset-bottom), fixed
-        // height = 60px. Home-indicator zone blijft vrij (body is wit,
-        // dus visueel doorlopend). Vaste hoogte voorkomt drift op iOS.
-        bottom: 'env(safe-area-inset-bottom, 0px)',
-        height: '60px',
-        // Voorkom dat de balk meebeweegt met iOS Safari scroll-events
-        // (adresbalk verbergen/tonen, rubber-band bounce, pinch).
+        // KORT: alleen 28px content, wit bg extendt in de home-indicator
+        // zone via padding-bottom → géén losstaande balk boven safe-area.
+        // fixed + bottom:0 = plakt exact aan viewport-onderkant, ook op
+        // iOS Safari (touch-action:none voorkomt mee-schuiven met scroll
+        // en met keyboard-events).
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         touchAction: 'none',
       }}
       data-testid="kiosk-fab-bar">
@@ -156,10 +184,10 @@ function MobileAddFab({ onOpen }) {
         data-testid="kiosk-fab-plus"
         aria-label="Menu — Snel toevoegen"
         style={{ touchAction: 'manipulation' }}
-        className="w-full h-full relative bg-transparent active:bg-slate-50 transition">
-        {/* Oranje + knop (visueel, niet klikbaar zelf — hele balk vangt de tap) */}
-        <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
-          <Plus className="w-6 h-6" strokeWidth={3} />
+        className="w-full h-7 relative bg-transparent active:bg-slate-50 transition">
+        {/* Oranje + knop — kleiner, minder prominent uitsteek. */}
+        <span className="absolute left-1/2 -translate-x-1/2 -top-3 w-10 h-10 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
+          <Plus className="w-5 h-5" strokeWidth={3} />
         </span>
       </button>
     </div>
@@ -1651,7 +1679,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 pb-[calc(64px_+_env(safe-area-inset-bottom,0px))] md:pb-2">
+    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 pb-[calc(36px_+_env(safe-area-inset-bottom,0px))] md:pb-2">
       <div className="flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
@@ -3150,7 +3178,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
               door het toetsenbord.
           */
           <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3"
-            style={{ paddingBottom: 'calc(64px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
+            style={{ paddingBottom: 'calc(36px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
             <div className={`w-full rounded-xl px-4 py-2.5 flex items-center justify-between ${type === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -3205,7 +3233,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
             boven het toetsenbord blijft. */}
         {step === 'amount' && (
           <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
-            style={{ paddingBottom: 'calc(64px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
+            style={{ paddingBottom: 'calc(36px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
             <button onClick={goNext} data-testid="kasgeld-next-btn"
               disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
               className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
@@ -3687,7 +3715,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   const mobileStyle = isMobile ? {
     top: `${vv.top}px`,
     height: `${vv.height}px`,
-    paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+    paddingBottom: 'calc(36px + env(safe-area-inset-bottom, 0px))',
   } : {};
   return createPortal((
     <div
@@ -4188,7 +4216,7 @@ function KioskAddSheet({ onClose, onPick }) {
   const mobileStyle = isMobile ? {
     top: `${vv.top}px`,
     height: `${vv.height}px`,
-    paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+    paddingBottom: 'calc(36px + env(safe-area-inset-bottom, 0px))',
   } : {};
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
