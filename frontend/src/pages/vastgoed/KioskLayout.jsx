@@ -1339,12 +1339,12 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
 // =====================================================================
 // Pay select — checklist + keypad (old-ERP style)
 // =====================================================================
-// Boete + Internet zijn de enige template-items. Huur wordt per factuur als
+// Boete is het enige template-item. Huur wordt per factuur als
 // individuele rij getoond (achterstand + huidige maand + vooruit), zodat de
 // huurder/medewerker precies kan kiezen wat ze willen voldoen.
+// (Internet-item verwijderd op verzoek — 2026-02-22.)
 const PAY_ITEMS_TEMPLATE = [
   { id: 'boete', label: 'Boetes', icon: AlertCircle, desc: 'Openstaande boetes' },
-  { id: 'internet', label: 'Internet', icon: Wifi, desc: 'Internetaansluiting' },
 ];
 
 function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
@@ -1858,7 +1858,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
               </>
             )}
 
-            {/* Boetes + Internet — reguliere extras */}
+            {/* Boetes — enig regulier extra template-item (Internet verwijderd) */}
             {PAY_ITEMS_TEMPLATE.map((t) => {
               const disabled = isDisabled(t.id);
               const sel = selected.has(t.id);
