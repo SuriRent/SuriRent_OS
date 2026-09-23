@@ -133,17 +133,22 @@ html { scroll-behavior: smooth; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Kiosk fullscreen — gebruikt 100dvh (dynamic viewport height) i.p.v.
-   nested `position: fixed`. Reden: iOS Safari heeft een bekende quirk waarbij
-   `position: fixed; bottom: 0` op een KIND van een ander `position: fixed`
-   element op iPad in PWA-modus ~20px boven de fysieke onderrand wordt
-   gerenderd. Door dit element `position: relative` + `min-height: 100dvh`
-   te maken kunnen children met `position: absolute; bottom: 0` exact aan
-   de onderkant blijven plakken. */
+/* Kiosk fullscreen — gebruikt uitsluitend 100dvh (dynamic viewport height).
+   Per user-spec (iOS Safari fix): GÉÉN 100vh fallback meer — 100vh houdt op
+   iOS Safari geen rekening met de dynamische adresbalk, waardoor bij
+   scrollen (adresbalk verbergt zich) de app-hoogte verandert en de FAB
+   menubalk visueel meebeweegt. 100dvh past zich real-time aan zodat de
+   app altijd exact de zichtbare viewport hoogte heeft.
+   Reden voor position: relative i.p.v. nested fixed: iOS Safari heeft een
+   bekende quirk waarbij `position: fixed; bottom: 0` op een KIND van een
+   ander `position: fixed` element op iPad in PWA-modus ~20px boven de
+   fysieke onderrand wordt gerenderd. Door dit element `position: relative`
+   + `min-height: 100dvh` te maken kunnen children met `position: absolute;
+   bottom: 0` exact aan de onderkant blijven plakken. */
 .kiosk-fullscreen {
   position: relative;
-  min-height: 100vh;
   min-height: 100dvh;
+  height: 100dvh;
   width: 100%;
   background: #FF5C00;
   overflow: hidden;

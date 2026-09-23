@@ -141,11 +141,19 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 function MobileAddFab({ onOpen }) {
   return createPortal((
     <div className="md:hidden fixed inset-x-0 bottom-0 z-[110] bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.12)]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        // Voorkom dat de balk meebeweegt met iOS Safari scroll-events
+        // (adresbalk verbergen/tonen, rubber-band bounce, pinch). De
+        // button hieronder krijgt `touch-action: auto` zodat taps nog
+        // steeds werken.
+        touchAction: 'none',
+      }}
       data-testid="kiosk-fab-bar">
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
         aria-label="Menu — Snel toevoegen"
+        style={{ touchAction: 'manipulation' }}
         className="w-full h-6 relative bg-transparent active:bg-slate-50 transition">
         {/* Oranje + knop (visueel, niet klikbaar zelf — hele balk vangt de tap) */}
         <span className="absolute left-1/2 -translate-x-1/2 -top-4 w-11 h-11 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
