@@ -1641,7 +1641,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2">
+    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 pb-[calc(28px_+_env(safe-area-inset-bottom,0px))] md:pb-2">
       <div className="flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
@@ -3095,8 +3095,11 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         </div>
 
         {step === 'amount' ? (
-          /* ============ STEP 1: Type + Currency + Bedrag (NumPad) ============ */
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+          /* ============ STEP 1: Type + Currency + Bedrag (NumPad) ============
+              De sticky footer hieronder handelt de FAB-clearance af — body
+              zelf hoeft dus geen extra padding-bottom. */
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
                 className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
@@ -3136,7 +3139,8 @@ function KasgeldMutationModal({ onClose, onSaved }) {
               geen flicker. De onderste ruimte (leeg) wordt weggeschoven
               door het toetsenbord.
           */
-          <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3">
+          <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3"
+            style={{ paddingBottom: 'calc(28px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
             <div className={`w-full rounded-xl px-4 py-2.5 flex items-center justify-between ${type === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -3191,7 +3195,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
             boven het toetsenbord blijft. */}
         {step === 'amount' && (
           <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+            style={{ paddingBottom: 'calc(28px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
             <button onClick={goNext} data-testid="kasgeld-next-btn"
               disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
               className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
