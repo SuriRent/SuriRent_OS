@@ -3179,7 +3179,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
               door het toetsenbord.
           */
           <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3"
-            style={{ paddingBottom: 'calc(36px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
             <div className={`w-full rounded-xl px-4 py-2.5 flex items-center justify-between ${type === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -3234,7 +3234,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
             boven het toetsenbord blijft. */}
         {step === 'amount' && (
           <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
-            style={{ paddingBottom: 'calc(36px + max(env(safe-area-inset-bottom, 0px), 12px))' }}>
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             <button onClick={goNext} data-testid="kasgeld-next-btn"
               disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
               className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
@@ -3716,7 +3716,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   const mobileStyle = isMobile ? {
     top: `${vv.top}px`,
     height: `${vv.height}px`,
-    paddingBottom: 'calc(36px + env(safe-area-inset-bottom, 0px))',
+    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   } : {};
   return createPortal((
     <div
@@ -4217,7 +4217,7 @@ function KioskAddSheet({ onClose, onPick }) {
   const mobileStyle = isMobile ? {
     top: `${vv.top}px`,
     height: `${vv.height}px`,
-    paddingBottom: 'calc(36px + env(safe-area-inset-bottom, 0px))',
+    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   } : {};
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
@@ -4800,12 +4800,9 @@ export default function KioskLayout() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk */}
-      {showAddSheet && (
-        <KioskAddSheet
-          onClose={() => setShowAddSheet(false)}
-          onPick={handleSheetPick} />
-      )}
+      {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk desktop-bar.
+          De mobile "+" FAB + Snel Toevoegen sheet zijn verwijderd (user
+          request 2026-02-22 — werkten niet naar behoren op iOS PWA). */}
       {showAddTenant && (
         <AddTenantModal
           onClose={() => setShowAddTenant(false)}
@@ -4850,11 +4847,10 @@ export default function KioskLayout() {
           onSaved={() => setShowAddMaintenance(false)} />
       )}
 
-      {/* Mobile-only vaste "+" menubalk onderaan — ALTIJD zichtbaar buiten
-          het check-scherm, ook bovenop geopende modals (portal + z-[110]). */}
-      {step !== 'check' && (
-        <MobileAddFab onOpen={() => setShowAddSheet(true)} />
-      )}
+      {/* Mobile "+" FAB verwijderd op user-verzoek (2026-02-22) — werkte
+          niet naar behoren op iOS PWA (viewport-drift, keyboard-shift).
+          Snelle aanmaak-modals blijven bereikbaar via de desktop-bar
+          hieronder en via andere Kiosk-navigatie. */}
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst met
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,

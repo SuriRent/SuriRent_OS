@@ -93,13 +93,13 @@ body.kiosk-mode { background-color: #FF5C00; }
   .mobile-safe-top { padding-top: env(safe-area-inset-top, 0px); }
 }
 
-/* Kiosk-content scroll padding: reserveert ruimte voor de witte onderbalk.
-   Op mobiel (< md) reserveren we ~56px (FAB balk) + safe-area zodat scroll
-   content niet onder de vaste "+" balk verdwijnt. Op desktop reserveren we
-   clamp(48-64px) + 16px buffer voor de brede knoppenbalk. */
+/* Kiosk-content scroll padding: op mobiel geen FAB meer (verwijderd 2026-02-22)
+   → alleen safe-area-bottom voor Android nav-balk / iOS home-indicator.
+   Op desktop reserveren we clamp(48-64px) + 16px buffer voor de brede
+   knoppenbalk onderin. */
 @media (max-width: 767px) {
   .kiosk-content-scroll {
-    padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 @media (min-width: 768px) {
