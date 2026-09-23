@@ -126,7 +126,7 @@ function RefundForm({ deposit, onCancel, onSaved }) {
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="refund-note"
               className="w-full mt-1 px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none resize-none" />
           </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value">
             <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terugbetaling</span>
             <span className="text-2xl font-black text-slate-900">{fmtMoney(refund, deposit.currency)}</span>
           </div>
@@ -206,22 +206,22 @@ export default function Deposits() {
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Borggegevens</h2>
           </div>
           <div className="p-4 space-y-1.5 text-sm">
-            <div className="flex justify-between gap-2">
+            <div className="row-label-value">
               <span className="text-slate-500">Huurder</span>
-              <span className="text-slate-900 font-semibold text-right">{detail.tenant_name || '—'}</span>
+              <span className="text-slate-900 font-semibold">{detail.tenant_name || '—'}</span>
             </div>
-            <div className="flex justify-between gap-2">
+            <div className="row-label-value">
               <span className="text-slate-500">Appartement</span>
-              <span className="text-slate-900 font-semibold text-right">{detail.apartment_number || '—'}</span>
+              <span className="text-slate-900 font-semibold">{detail.apartment_number || '—'}</span>
             </div>
-            <div className="flex justify-between gap-2">
+            <div className="row-label-value">
               <span className="text-slate-500">Valuta</span>
-              <span className="text-slate-900 font-semibold text-right">{detail.currency}</span>
+              <span className="text-slate-900 font-semibold">{detail.currency}</span>
             </div>
             {!isHeld && detail.refund_amount !== undefined && detail.refund_amount !== null && (
-              <div className="flex justify-between gap-2">
+              <div className="row-label-value">
                 <span className="text-slate-500">Terugbetaald</span>
-                <span className="text-slate-900 font-semibold text-right">{fmtMoney(detail.refund_amount, detail.currency)}</span>
+                <span className="text-slate-900 font-semibold">{fmtMoney(detail.refund_amount, detail.currency)}</span>
               </div>
             )}
           </div>

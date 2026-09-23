@@ -521,9 +521,9 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
 // DetailRow — identiek aan PaymentDetail voor consistente look & feel.
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between gap-2">
+    <div className="row-label-value">
       <span className="text-slate-500">{label}</span>
-      <span className="text-slate-900 font-semibold text-right">{value}</span>
+      <span className="text-slate-900 font-semibold">{value}</span>
     </div>
   );
 }

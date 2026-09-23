@@ -1,6 +1,38 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-27) — Globale `.row-label-value` utility voor label/waarde-rijen
+
+**Probleem**: Op smalle schermen (< 400px, iOS PWA) sprong het bedrag naast een label soms naar een tweede regel of werd links uitgelijnd door lange dynamische labels. User wilde dat label + bedrag ALTIJD op één horizontale lijn blijven staan.
+
+**Oplossing**: Globale CSS utility class `.row-label-value` toegevoegd aan `/app/frontend/src/index.css`:
+- Container: `flex flex-row justify-between items-start gap-2 w-full min-w-0`
+- Eerste child (label): `flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap`
+- Laatste child (waarde): `flex-shrink: 0; white-space: nowrap; text-align: right`
+- Sub-klassen `.row-label-value__label` en `.row-label-value__value` beschikbaar voor complexere layouts
+
+**Toegepast op** (systematische uitrol via reusable helpers + expliciete rijen):
+- `KioskLayout.jsx`: `Row`, `RowSlim` helpers · Totaal openstaand (financieel overzicht) · Regeling-modal (Per maand / Termijnen / Eerste vervaldatum) · PartialPlanSuggestion
+- `TenantKioskLayout.jsx`: `ConfirmRow` helper · Totaal openstaand (huurder-portaal)
+- `admin/Deposits.jsx`: Refund-modal Terugbetaling · Borggegevens detail-card (Huurder/Appartement/Valuta/Terugbetaald)
+- `admin/invoices/QuickPayModal.jsx`: Totaal factuur / Reeds betaald / Nog te betalen samenvatting
+- `admin/Payments.jsx`: `DetailRow` helper
+- `admin/invoices/InvoiceDetailPage.jsx`: `DetailRow` helper
+- `admin/Subscriptions.jsx`: `Row` helper (billing-detail rijen)
+- `admin/MijnAbonnement.jsx`: `KV` helper (bank/plan info)
+- `admin/Maintenance.jsx`: Ticket-status + kosten rij
+- `admin/Employees.jsx`: Netto uitbetaling in loonstrook-modal
+- `components/TrialBanner.jsx`: `Row` helper (bank-details in trial modal)
+- `auth/RegisterSuccess.jsx`: `Bank` helper
+
+**Bewust NIET aangepast** (bestaande protection of geen label/value pattern):
+- `InvoiceRow.jsx` — heeft al `whitespace-nowrap` + `truncate` + extra delete-button (3-child layout)
+- `PaidHistorySection.jsx` — headers combineren count+total in één `<p>`, geen simpele split
+- `TenantPublicLanding.jsx` — grote price + CTA-button, aesthetische layout
+- `AdminDashboard.jsx` outstanding-card — header/chevron pattern, waarde op tweede regel
+- Nav/header/toggle rijen door de hele app — niet het target-patroon
+
+
 ## Latest Fix (2026-02-22) — Kiosk onderbalk ALTIJD zichtbaar in de hele Kiosk
 
 **Probleem**: De onderste menubalk (mobile "+" FAB + desktop knoppenbalk) verdween wanneer een modal geopend werd (Kasgeld, Snel toevoegen, Nieuwe huurder, etc.). User wilde de balk overal in de Kiosk zichtbaar + klikbaar houden.

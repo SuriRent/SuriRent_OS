@@ -225,4 +225,39 @@ html { scroll-behavior: smooth; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
 .animate-slide-in { animation: slideIn 0.25s ease-out; }
 
+/* ────────────────────────────────────────────────────────────────
+   Globale label/waarde-rij utility.
+   Gebruik: één rij met een tekstlabel links en een bedrag/waarde rechts.
+   Blijft ALTIJD op één horizontale lijn, ook op smalle schermen:
+     - Label krimpt met ellipsis-truncatie
+     - Bedrag/waarde springt nooit naar een nieuwe regel
+   Werkt zowel via één klasse (`.row-label-value` op de container en
+   direct-child <span>/<p>) als via expliciete subklassen
+   (`.row-label-value__label` / `.row-label-value__value`) wanneer
+   er extra elementen tussen zitten.
+   ──────────────────────────────────────────────────────────────── */
+.row-label-value {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+.row-label-value > :first-child,
+.row-label-value .row-label-value__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-label-value > :last-child,
+.row-label-value .row-label-value__value {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+}
+
 

@@ -264,19 +264,19 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
               in enkel-factuur modus (klik op rij) tonen we alleen deze
               specifieke factuur. */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-4 text-sm">
-            <div className="flex justify-between mb-1">
+            <div className="row-label-value mb-1">
               <span className="text-slate-500">Totaal factuur{showAllOpen ? ' (alle open)' : ''}</span>
               <span className="font-bold text-slate-700" data-testid="quickpay-total-all">
                 {fmtMoney(showAllOpen ? allTotal : (invoice.amount || 0), invoice.currency)}
               </span>
             </div>
-            <div className="flex justify-between mb-1">
+            <div className="row-label-value mb-1">
               <span className="text-slate-500">Reeds betaald</span>
               <span className="font-bold text-slate-700">
                 {fmtMoney(showAllOpen ? allPaid : (invoice.paid_amount || 0), invoice.currency)}
               </span>
             </div>
-            <div className="flex justify-between pt-2 border-t border-slate-200">
+            <div className="row-label-value pt-2 border-t border-slate-200">
               <span className="text-slate-900 font-bold">Nog te betalen</span>
               <span className="font-black text-[#FF5C00]" data-testid="quickpay-remaining">
                 {fmtMoney(showAllOpen ? allRemaining : remaining, invoice.currency)}

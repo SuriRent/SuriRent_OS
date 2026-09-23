@@ -622,7 +622,7 @@ function DashboardView({ overview, onAction, onHistory }) {
               );
             })}
           </div>
-          <div className="border-t-2 border-slate-200 mt-2 pt-2 flex items-center justify-between">
+          <div className="border-t-2 border-slate-200 mt-2 pt-2 row-label-value">
             <p className="font-bold text-slate-900 text-sm sm:text-base">Totaal openstaand</p>
             <p className="text-lg sm:text-xl font-extrabold text-slate-900" data-testid="tk-total-due">
               {fmtMoney(totalDue, cur)}
@@ -1391,9 +1391,9 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
 
 function ConfirmRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-100 py-1.5 last:border-0">
+    <div className="row-label-value border-b border-slate-100 py-1.5 last:border-0">
       <span className="text-xs font-black uppercase tracking-widest text-slate-400">{label}</span>
-      <span className="text-sm font-bold text-slate-900 text-right truncate ml-3 capitalize">{value}</span>
+      <span className="text-sm font-bold text-slate-900 capitalize">{value}</span>
     </div>
   );
 }

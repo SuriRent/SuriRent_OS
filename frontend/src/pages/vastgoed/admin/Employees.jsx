@@ -216,7 +216,7 @@ function SalaryForm({ employees, onCancel, onSaved }) {
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
           </div>
-          <div className="bg-gradient-to-r from-[#FFF4EC] to-[#FFE6D3] border border-[#FF5C00]/30 rounded-xl p-3 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-[#FFF4EC] to-[#FFE6D3] border border-[#FF5C00]/30 rounded-xl p-3 row-label-value items-center">
             <span className="text-xs font-bold uppercase tracking-widest text-[#C74600]">Netto uitbetaling</span>
             <span className="text-2xl font-black text-slate-900 tracking-tight">{fmtMoney(net, data.currency)}</span>
           </div>

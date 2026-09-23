@@ -66,9 +66,9 @@ function RegisterSuccess({ plan, company, bankDetails, onContinue }) {
 
 function Bank({ label, value, mono }) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className="row-label-value">
       <span className="text-slate-500">{label}</span>
-      <span className={`font-bold text-slate-900 text-right ${mono ? 'font-mono' : ''}`}>{value}</span>
+      <span className={`font-bold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   );
 }

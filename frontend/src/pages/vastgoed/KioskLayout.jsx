@@ -946,7 +946,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
               );
             })}
           </div>
-          <div className="border-t-2 border-slate-200 mt-2 pt-2 flex items-center justify-between">
+          <div className="border-t-2 border-slate-200 mt-2 pt-2 row-label-value">
             <p className="font-bold text-slate-900 text-sm sm:text-base">Totaal openstaand</p>
             <p className="text-lg sm:text-xl font-extrabold text-slate-900" data-testid="overview-total">{fmtMoney(totalDue, cur)}</p>
           </div>
@@ -2129,11 +2129,11 @@ function ArrangePlanModal({ tenantId, currency, totalAmount, invoiceIds, monthsL
           </div>
 
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center justify-between text-sm">
+            <div className="row-label-value text-sm">
               <span className="text-slate-700 font-semibold">Per maand</span>
               <span className="font-extrabold text-orange-600">{fmt(per)}</span>
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+            <div className="row-label-value text-xs text-slate-500 mt-1">
               <span>{n} termijnen, maandelijks</span>
               <span>Eerste op {startDate}</span>
             </div>
@@ -2187,16 +2187,16 @@ function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
           <p className="text-2xl font-extrabold mt-1">{fmt(plan.total_amount)}</p>
         </div>
         <div className="p-6 space-y-3">
-          <div className="flex justify-between text-sm">
+          <div className="row-label-value text-sm">
             <span className="text-slate-500">Huurder</span>
             <span className="font-bold">{tenant.name}</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="row-label-value text-sm">
             <span className="text-slate-500">Termijnen</span>
             <span className="font-bold">{plan.num_installments}× {fmt(per)}</span>
           </div>
           {plan.first_due_date && (
-            <div className="flex justify-between text-sm">
+            <div className="row-label-value text-sm">
               <span className="text-slate-500">Eerste vervaldatum</span>
               <span className="font-bold">{plan.first_due_date}</span>
             </div>
@@ -2378,7 +2378,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
 }
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between items-center bg-slate-50 rounded-lg p-3">
+    <div className="row-label-value items-center bg-slate-50 rounded-lg p-3">
       <span className="text-sm text-slate-500">{label}</span>
       <span className="text-sm font-bold text-slate-900">{value}</span>
     </div>
@@ -2456,11 +2456,11 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
           </div>
 
           <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
-            <div className="flex items-center justify-between mb-1">
+            <div className="row-label-value mb-1">
               <span className="text-slate-500 font-bold">Per maand</span>
               <span className="font-extrabold text-slate-900 font-mono">{fmt(monthly)}</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="row-label-value">
               <span className="text-slate-500 font-bold">Eerste vervaldatum</span>
               <span className="font-mono text-slate-700 font-semibold">~30 dagen vanaf vandaag</span>
             </div>
@@ -2841,7 +2841,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   );
 }
 function RowSlim({ label, value }) {
-  return <div className="flex justify-between"><span className="text-slate-500">{label}</span><span className="font-bold text-slate-900 capitalize">{value}</span></div>;
+  return <div className="row-label-value"><span className="text-slate-500">{label}</span><span className="font-bold text-slate-900 capitalize">{value}</span></div>;
 }
 
 // =====================================================================

@@ -768,9 +768,9 @@ function CompanyDetailDrawer({ company, onClose, onChanged }) {
 
 function Row({ label, value, mono, bold }) {
   return (
-    <div className="flex justify-between gap-3 py-1.5 text-sm">
+    <div className="row-label-value py-1.5 text-sm">
       <span className="text-slate-500">{label}</span>
-      <span className={`${bold ? 'font-extrabold' : 'font-bold'} text-slate-900 text-right ${mono ? 'font-mono' : ''} capitalize`}>{value}</span>
+      <span className={`${bold ? 'font-extrabold' : 'font-bold'} text-slate-900 ${mono ? 'font-mono' : ''} capitalize`}>{value}</span>
     </div>
   );
 }

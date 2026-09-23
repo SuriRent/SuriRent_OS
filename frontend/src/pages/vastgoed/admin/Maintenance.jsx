@@ -175,7 +175,7 @@ export default function Maintenance() {
             </div>
             <h3 className="font-bold text-slate-900 text-base mb-1">{m.title}</h3>
             <p className="text-sm text-slate-500 mb-3 line-clamp-2">{m.description || '—'}</p>
-            <div className="flex items-center justify-between mb-3">
+            <div className="row-label-value items-center mb-3">
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[m.status]}`}>{STATUS_LABELS[m.status]}</span>
               {m.cost > 0 && <span className="text-sm font-bold text-slate-700">{fmtMoney(m.cost, m.currency)}</span>}
             </div>

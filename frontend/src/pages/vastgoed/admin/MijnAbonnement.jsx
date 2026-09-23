@@ -200,10 +200,10 @@ function BankBox({ details, invoice, company, onSuccess, onErr }) {
 
 function KV({ label, value, mono, onCopy, copied }) {
   return (
-    <div className="flex justify-between gap-3 items-center group">
+    <div className="row-label-value items-center group">
       <span className="text-slate-500">{label}</span>
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`font-bold text-slate-900 text-right truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+        <span className={`font-bold text-slate-900 truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
         {onCopy && (
           <button onClick={onCopy}
             className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-orange-500 shrink-0">
