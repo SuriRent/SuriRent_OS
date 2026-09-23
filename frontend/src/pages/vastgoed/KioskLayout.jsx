@@ -18,20 +18,40 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { isAndroid, printViaRawBT, openReceiptImage } from '../../lib/kiosk-print';
+import { printReceipt, openReceiptImage } from '../../lib/kiosk-print';
 
-// Detecteer iOS/iPadOS (incl. iPadOS 13+ die zich als "MacIntel" voordoet
-// maar wél touch heeft). Deze telefoons ondersteunen géén RawBT en de
-// iframe.print()-flow werkt niet betrouwbaar op iOS Safari → we openen de
-// JPG-kwitantie in een nieuw tabblad zodat de gebruiker via Share Sheet
-// kan afdrukken of opslaan.
-function isMobileBrowser() {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  if (/iPad|iPhone|iPod/.test(ua)) return true;
-  // iPadOS 13+ camoufleert zich als desktop macOS met touch
-  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
-  return false;
+// Hook: tracked `visualViewport` (iOS/Android). Retourneert de huidige
+// hoogte + offsetTop van de VISUELE viewport (het gebied dat niet door
+// het toetsenbord wordt bedekt). Modals die deze waardes als `top` +
+// `height` gebruiken krimpen automatisch mee met een openend keyboard
+// zonder dat iOS de hele pagina omhoog scrollt om de focus-input in
+// zicht te brengen.
+function useVisualViewport() {
+  const [vv, setVV] = useState(() => ({
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    top: 0,
+    layoutH: typeof window !== 'undefined' ? window.innerHeight : 0,
+  }));
+  useEffect(() => {
+    const vp = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vp) return undefined;
+    const update = () => {
+      setVV({ height: vp.height, top: vp.offsetTop || 0, layoutH: window.innerHeight });
+      // Reset window-scroll → voorkomt dat iOS de layout viewport omhoog
+      // scrollt om een focus-input onder het toetsenbord te onthullen.
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    update();
+    vp.addEventListener('resize', update);
+    vp.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      vp.removeEventListener('resize', update);
+      vp.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  return vv;
 }
 
 
@@ -126,10 +146,10 @@ function MobileAddFab({ onOpen }) {
       <button onClick={onOpen} type="button"
         data-testid="kiosk-fab-plus"
         aria-label="Menu — Snel toevoegen"
-        className="w-full h-8 relative bg-transparent active:bg-slate-50 transition">
+        className="w-full h-6 relative bg-transparent active:bg-slate-50 transition">
         {/* Oranje + knop (visueel, niet klikbaar zelf — hele balk vangt de tap) */}
-        <span className="absolute left-1/2 -translate-x-1/2 -top-4 w-12 h-12 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
-          <Plus className="w-6 h-6" strokeWidth={3} />
+        <span className="absolute left-1/2 -translate-x-1/2 -top-4 w-11 h-11 rounded-full bg-orange-500 text-white shadow-2xl flex items-center justify-center pointer-events-none">
+          <Plus className="w-5 h-5" strokeWidth={3} />
         </span>
       </button>
     </div>
@@ -1088,72 +1108,22 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
     try {
-      // === ANDROID PAD → RawBT app ===
-      // Chrome's --kiosk-printing werkt niet op Android (dat is een
-      // desktop-CLI flag). In plaats daarvan gebruiken we RawBT: een
-      // gratis Android-app die de kwitantie-JPG direct naar de
-      // Bluetooth/USB/Wifi thermische printer stuurt zonder dialoog.
-      if (isAndroid()) {
-        printViaRawBT(paymentId);
-        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Verstuurd naar printer' } }));
-        setTimeout(() => {
-          setWaState((prev) => {
-            const c = { ...prev };
-            if (c[paymentId]?.kind === 'ok') delete c[paymentId];
-            return c;
-          });
-        }, 2500);
-        return;
-      }
-      // === DESKTOP PAD → HTML iframe + window.print() ===
-      // `format=thermal` → 80mm bon-printer layout (default kiosk).
-      // `preview=1` → skip inline auto-print in HTML; parent triggert
-      // `iframe.contentWindow.print()` zodat --kiosk-printing de dialoog
-      // betrouwbaar overslaat i.p.v. te racen met een inline <script>.
-      const resp = await api.get(`/payments/${paymentId}/print.html?format=thermal&preview=1`, { responseType: 'text' });
-      const html = resp.data;
-      const existing = document.getElementById('kiosk-print-iframe');
-      if (existing) existing.remove();
-      const iframe = document.createElement('iframe');
-      iframe.id = 'kiosk-print-iframe';
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      // srcdoc → echt HTML-document (geen PDF-viewer wrapper). Native
-      // window.print() op de HTML-flow → --kiosk-printing werkt.
-      iframe.srcdoc = html;
-
-      const printPromise = new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
-        iframe.onload = () => {
-          clearTimeout(timeoutId);
-          // Vanuit PARENT (in de user-click callstack) de iframe-window
-          // focus + print aanroepen. Dat is het aanbevolen patroon voor
-          // Chrome --kiosk-printing: dialoog wordt overgeslagen omdat de
-          // print-call binnen het HTML-document scope zit en niet in een
-          // aparte PDF-viewer.
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-          } catch (err) {
-            reject(err);
-            return;
-          }
-          // 300ms buffer voordat we "afgedrukt" tonen (print-job async).
-          setTimeout(resolve, 300);
-        };
-        iframe.onerror = () => {
-          clearTimeout(timeoutId);
-          reject(new Error('iframe-error'));
-        };
+      // Universeel via `iframe.contentWindow.print()` — werkt op elk
+      // platform (desktop Chrome met --kiosk-printing → geen dialoog;
+      // Android/iOS → native print-dialoog). Bij mislukking valt hij
+      // terug op de JPG-versie in een nieuw tabblad zodat de operator
+      // via Share Sheet kan afdrukken of opslaan.
+      const ok = await printReceipt({
+        paymentId,
+        apiGet: api.get,
+        iframeId: 'kiosk-print-iframe',
       });
-
-      document.body.appendChild(iframe);
-      await printPromise;
-      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Afgedrukt' } }));
+      if (!ok) {
+        openReceiptImage(paymentId);
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Bon geopend in tabblad' } }));
+      } else {
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Afgedrukt' } }));
+      }
       setTimeout(() => {
         setWaState((prev) => {
           const c = { ...prev };
@@ -1162,10 +1132,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
         });
       }, 2500);
     } catch (e) {
-      const msg = e?.message === 'timeout'
-        ? 'Geen printer beschikbaar'
-        : 'Afdruk mislukt — printer niet gevonden?';
-      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg } }));
+      setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Afdruk mislukt' } }));
     } finally {
       setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
     }
@@ -2541,82 +2508,38 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // verborgen iframe met de PDF-blob → contentWindow.print(). Faalt stil
   // wanneer er geen printer geconfigureerd is (browser toont dan de
   // print-dialoog die de operator gewoon kan annuleren).
-  // Auto-print zodra de bon op het scherm verschijnt (~2.95s na tear).
+  // Auto-print via universele `iframe.contentWindow.print()`. Werkt op:
+  //   • Desktop Chrome met --kiosk-printing → geen dialoog, direct printen
+  //   • Desktop / Laptop → OS print-dialoog (kies printer of PDF)
+  //   • Android Chrome → native Android print-dialoog (Cloud Print, PDF,
+  //     of "Delen naar" → Bluetooth thermische printer app)
+  //   • iOS Safari → AirPrint dialoog
+  //
   // Gebruikt HTML-versie i.p.v. PDF-blob zodat Chrome's --kiosk-printing
   // vlag het dialoog kan overslaan (PDF-viewer negeert die vlag).
-  //
-  // Flow per platform:
-  //   • Android           → RawBT intent (scheme=rawbt) → thermische printer
-  //   • Desktop Chrome    → iframe.print() → --kiosk-printing slaat dialoog over
-  //   • iOS / iPadOS      → skip auto-print (Safari opent geen printer op de
-  //                          achtergrond zonder user gesture) — gebruiker
-  //                          heeft de "Print bon" knop hieronder voor manueel.
   useEffect(() => {
-    const t = setTimeout(async () => {
-      try {
-        // === ANDROID PAD → RawBT app ===
-        if (isAndroid()) {
-          printViaRawBT(payment.id);
-          return;
-        }
-        // === iOS / iPadOS → geen auto-print (Safari blokkeert dat)
-        if (isMobileBrowser()) {
-          return;
-        }
-        // === DESKTOP PAD → HTML iframe + window.print() ===
-        // `format=thermal` → 80mm bon-printer layout (kiosk-default).
-        // `preview=1` → geen inline auto-print in de HTML; parent triggert
-        // `iframe.contentWindow.print()` zodat --kiosk-printing de dialoog
-        // betrouwbaar overslaat i.p.v. te racen met een inline <script>.
-        const resp = await api.get(`/payments/${payment.id}/print.html?format=thermal&preview=1`, { responseType: 'text' });
-        const html = resp.data;
-        const existing = document.getElementById('kiosk-autoprint-iframe');
-        if (existing) existing.remove();
-        const iframe = document.createElement('iframe');
-        iframe.id = 'kiosk-autoprint-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        iframe.srcdoc = html;
-        iframe.onload = () => {
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-          } catch { /* geen printer of print-service niet beschikbaar */ }
-        };
-        document.body.appendChild(iframe);
-      } catch {
-        // Geen printer of HTML-fetch mislukt → stille fallback.
-      }
+    const t = setTimeout(() => {
+      printReceipt({
+        paymentId: payment.id,
+        apiGet: api.get,
+        iframeId: 'kiosk-autoprint-iframe',
+      });
     }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
     return () => clearTimeout(t);
   }, [payment.id]);
 
-  // Manuele print-trigger — wordt gebruikt door de "Print bon" knop op het
-  // ontvangst-scherm. Werkt op elk platform, ook iOS/iPad (via openReceiptImage).
-  const manualPrint = () => {
-    try {
-      if (isAndroid()) {
-        printViaRawBT(payment.id);
-        return;
-      }
-      if (isMobileBrowser()) {
-        // iOS Safari: opent de JPG-kwitantie in nieuw tabblad zodat de
-        // gebruiker via de Share Sheet kan afdrukken of opslaan.
-        openReceiptImage(payment.id);
-        return;
-      }
-      // Desktop → re-trigger de auto-print iframe direct
-      const existing = document.getElementById('kiosk-autoprint-iframe');
-      if (existing) {
-        try { existing.contentWindow.focus(); existing.contentWindow.print(); return; }
-        catch { /* val terug op nieuw tabblad */ }
-      }
-      openReceiptImage(payment.id);
-    } catch { /* stille fallback */ }
+  // Manuele "Print bon opnieuw" knop op het ontvangst-scherm. Hergebruikt
+  // dezelfde iframe (via id) of maakt een nieuwe aan. Als de printer-dialoog
+  // om welke reden dan ook geblokkeerd is (bv. iOS popup-blocker), valt
+  // hij terug op de JPG-versie in een nieuw tabblad → gebruiker kan via
+  // de Share Sheet alsnog afdrukken of opslaan in Foto's / WhatsApp.
+  const manualPrint = async () => {
+    const ok = await printReceipt({
+      paymentId: payment.id,
+      apiGet: api.get,
+      iframeId: 'kiosk-manualprint-iframe',
+    });
+    if (!ok) openReceiptImage(payment.id);
   };
 
 
@@ -3733,14 +3656,26 @@ function useBodyScrollLock() {
 }
 
 function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
-  // GEEN useBodyScrollLock hier: `.kiosk-fullscreen` heeft al `overflow: hidden`,
-  // en het modal is `fixed inset-0` dus scroll-through is niet mogelijk. Het
-  // togglen van `body`/`html` overflow triggert op iOS PWA een reflow die
-  // de vaste onderbalk (z-[110]) zichtbaar omhoog laat springen bij het
-  // openen via de "Snel toevoegen" sheet. Zonder de lock blijft de balk stil.
+  // Track visualViewport zodat de modal automatisch mee-krimpt met het
+  // toetsenbord op iOS/Android. Zonder deze tracking scrollt iOS de
+  // hele pagina omhoog om een focus-input onder het keyboard vandaan
+  // te halen → header verdwijnt uit beeld en form voelt onstabiel.
+  // Met visualViewport-sized modal blijft alles op zijn plek — alleen
+  // de scrollbare body verkort, header en footer zichtbaar boven het
+  // keyboard.
+  const vv = useVisualViewport();
+  // Op mobiel: forceer top/height op basis van visualViewport (blijft
+  // altijd binnen zichtbaar gebied). Op desktop (sm+) valt CSS terug op
+  // `inset-0` + centreren via classes.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const mobileStyle = isMobile ? {
+    top: `${vv.top}px`,
+    height: `${vv.height}px`,
+  } : {};
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-white sm:bg-black/60 flex flex-col sm:items-center sm:justify-center sm:p-4 pb-[calc(32px_+_env(safe-area-inset-bottom,0px))] sm:pb-4"
+      className="fixed left-0 right-0 z-[100] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4"
+      style={mobileStyle}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
@@ -3760,8 +3695,9 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
             <X className="w-6 h-6 sm:w-5 sm:h-5 text-white sm:text-slate-500" strokeWidth={2.5} />
           </button>
         </div>
-        {/* Body — witte scrollbare content */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 bg-white"
+        {/* Body — witte scrollbare content. `overscroll-contain` voorkomt
+            dat de scroll doorlekt naar de underlying page op iOS. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4 bg-white"
           style={{ WebkitOverflowScrolling: 'touch' }}
           data-testid={`${testId}-body`}>
           {typeof children === 'function' ? children({ accent: 'focus:border-orange-500' }) : children}
@@ -4225,9 +4161,17 @@ function AddMaintenanceModal({ onClose, onSaved }) {
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
 function KioskAddSheet({ onClose, onPick }) {
-  // Geen body-scroll-lock nodig: de sheet dekt de hele viewport af.
-  // Body-position: fixed veroorzaakt een "sprong" op iOS wat lijkt op
-  // een menubalk die omhoog schuift; laten we vermijden.
+  // visualViewport-tracking → sheet krimpt mee met keyboard (hoewel dit
+  // sheet zelf geen inputs heeft, blijft consistentie belangrijk voor
+  // toekomstige uitbreidingen en zorgt het dat de sheet nooit onder de
+  // FAB doorschuift). Geen body-scroll-lock — die veroorzaakt een
+  // "sprong" op iOS wat lijkt op een menubalk die omhoog schuift.
+  const vv = useVisualViewport();
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const mobileStyle = isMobile ? {
+    top: `${vv.top}px`,
+    height: `${vv.height}px`,
+  } : {};
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
@@ -4244,7 +4188,8 @@ function KioskAddSheet({ onClose, onPick }) {
   }, [onClose]);
   return createPortal((
     <div
-      className="fixed inset-0 z-[100] bg-orange-500 flex flex-col animate-in fade-in duration-150 pb-[calc(32px_+_env(safe-area-inset-bottom,0px))] md:pb-0"
+      className="fixed left-0 right-0 z-[100] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150"
+      style={mobileStyle}
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
