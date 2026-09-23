@@ -1693,7 +1693,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 pb-[calc(36px_+_env(safe-area-inset-bottom,0px))] md:pb-2">
+    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2">
       <div className="flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
