@@ -99,7 +99,7 @@ body.kiosk-mode { background-color: #ffffff; }
    clamp(48-64px) + 16px buffer voor de brede knoppenbalk. */
 @media (max-width: 767px) {
   .kiosk-content-scroll {
-    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 }
 @media (min-width: 768px) {
@@ -133,22 +133,21 @@ html { scroll-behavior: smooth; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Kiosk fullscreen — gebruikt uitsluitend 100dvh (dynamic viewport height).
-   Per user-spec (iOS Safari fix): GÉÉN 100vh fallback meer — 100vh houdt op
-   iOS Safari geen rekening met de dynamische adresbalk, waardoor bij
-   scrollen (adresbalk verbergt zich) de app-hoogte verandert en de FAB
-   menubalk visueel meebeweegt. 100dvh past zich real-time aan zodat de
-   app altijd exact de zichtbare viewport hoogte heeft.
+/* Kiosk fullscreen — gebruikt 100svh (small viewport height) per user-spec.
+   100svh = de KLEINSTE viewport-hoogte inclusief de Safari werkbalk. Deze
+   waarde verandert NOOIT tijdens de sessie, ook niet als de adresbalk
+   verschijnt/verdwijnt of het toetsenbord opent. Resultaat: de layout
+   verschuift niet meer op iOS Safari.
    Reden voor position: relative i.p.v. nested fixed: iOS Safari heeft een
    bekende quirk waarbij `position: fixed; bottom: 0` op een KIND van een
    ander `position: fixed` element op iPad in PWA-modus ~20px boven de
    fysieke onderrand wordt gerenderd. Door dit element `position: relative`
-   + `min-height: 100dvh` te maken kunnen children met `position: absolute;
+   + `min-height: 100svh` te maken kunnen children met `position: absolute;
    bottom: 0` exact aan de onderkant blijven plakken. */
 .kiosk-fullscreen {
   position: relative;
-  min-height: 100dvh;
-  height: 100dvh;
+  min-height: 100svh;
+  height: 100svh;
   width: 100%;
   background: #FF5C00;
   overflow: hidden;
