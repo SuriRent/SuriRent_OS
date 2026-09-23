@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  CheckCircle2, Wallet, Home as HomeIcon, FileText, Wifi,
+  CheckCircle2, Wallet, Home as HomeIcon, FileText,
   CreditCard, Banknote, Smartphone, Loader2, ChevronRight, QrCode, ShieldCheck,
 } from 'lucide-react';
 import { api, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -105,12 +105,12 @@ function OverviewScreen({ state, slug }) {
   const balance = overview.balance || {};
   const apt = overview.apartment || state.apartment || {};
   const tenant = state.tenant || {};
-  const internet = Number(tenant.internet_amount || overview.internet || 0);
   // BUCKET-based bedragen — IDENTIEK aan de beheerder-kiosk in KioskLayout
   // (regels 634-668) zodat "Maandhuur" en "Achterstallige huur" hier hetzelfde
   // getoond worden als op de operator-kant. Voorheen viel dit terug op
   // `balance.balance` wat een legacy veld is dat vaak 0 stond zelfs bij
   // achterstand → klant zag ten onrechte "Volledig bij".
+  // (Internet-item is verwijderd op 2026-02-22.)
   const openInvoices = Array.isArray(overview.open_invoices) ? overview.open_invoices : [];
   const openInvoicesTotal = Number(overview.open_invoices_total || 0);
   const currentInvoices = Array.isArray(overview.current_invoices) ? overview.current_invoices : [];
@@ -120,7 +120,7 @@ function OverviewScreen({ state, slug }) {
   const currentMonthAmount = currentInvoices.length > 0
     ? currentInvoicesTotal
     : (currentInvoice ? Number(currentInvoice.outstanding || 0) : 0);
-  const totalDue = currentMonthAmount + openRent + internet;
+  const totalDue = currentMonthAmount + openRent;
   const cur = balance.currency || apt.currency || 'SRD';
   const hasBalance = totalDue > 0;
 
@@ -159,7 +159,6 @@ function OverviewScreen({ state, slug }) {
     }] : []),
     { key: 'rent', label: currentMonthLabel, value: currentMonthAmount, icon: HomeIcon },
     { key: 'fines', label: 'Boetes', value: 0, icon: FileText, muted: true },
-    { key: 'internet', label: 'Internet', value: internet, icon: Wifi, muted: internet === 0 },
   ];
 
   const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -420,11 +419,11 @@ function PayScreen({ state }) {
   const amt = Number(payload.amount || 0);
   const labels = {
     huur: 'Huur', servicekosten: 'Servicekosten',
-    boete: 'Boetes', internet: 'Internet', overig: 'Overig',
+    boete: 'Boetes', overig: 'Overig',
   };
   const ICONS_BY_KEY = {
     huur: HomeIcon, servicekosten: FileText, boete: FileText,
-    internet: Wifi, overig: Wallet,
+    overig: Wallet,
   };
   const isEmpty = cats.length === 0;
   // Staggered reveal voor het hele scherm

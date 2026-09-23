@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
-  Check, Loader2, Home, X, Wallet, FileText, Wifi, AlertCircle,
+  Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
@@ -804,7 +804,6 @@ function TenantOverview({ apartment, onBack, onPay }) {
   if (err || !data) return <div className="h-full bg-orange-500 flex items-center justify-center text-white p-8">{err || 'Geen data'}</div>;
 
   const { tenant, apartment: apt, balance, credit_balance: credit = 0 } = data;
-  const internet = Number(tenant.internet_amount || 0);
   // Backend levert 3 buckets:
   //   open_invoices      → Achterstallige huur (vervaltermijn + grace verstreken)
   //   current_invoices   → Openstaande huidige maand (lopende periode of nog in grace)
@@ -819,7 +818,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const currentInvoice = data.current_month_invoice || currentInvoices[0] || null;
   // Achterstand — ALTIJD uit het backend bucket (`open_invoices_total`). De
   // oude fallback op `balance.balance` was buggy: `balance.balance` bevat
-  // ook current_invoices + internet, waardoor die bij het openstaand bedrag
+  // ook current_invoices, waardoor die bij het openstaand bedrag
   // werd opgeteld = dubbeltelling (bv. 2× SRD 7.500 = SRD 15.000 bij één
   // openstaande maand). Backend levert altijd expliciet 0.0 als er geen
   // achterstand is, dus vertrouwen we die.
@@ -841,9 +840,10 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const currentMonthLabel = currentInvoice && currentInvoice.period_month
     ? `Huidige maandhuur · ${MONTHS_NL[currentInvoice.period_month - 1]} ${currentInvoice.period_year}`
     : 'Maandhuur';
-  // Totaal openstaand = achterstand + huidige maand + internet
+  // Totaal openstaand = achterstand + huidige maand
   // (vooruit gefactureerd NIET meegerekend — dat is toekomst, geen schuld nu)
-  const totalDue = currentMonthAmount + openRent + internet;
+  // (Internet-item is verwijderd op 2026-02-22)
+  const totalDue = currentMonthAmount + openRent;
   const allPaid = totalDue <= 0;
   const cur = balance.currency || apt.currency || 'SRD';
 
@@ -892,7 +892,6 @@ function TenantOverview({ apartment, onBack, onPay }) {
         ? `Vervalt ${new Date(currentInvoice.due_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}`
         : '' },
     { key: 'fines', label: 'Boetes', value: 0, icon: FileText, muted: true },
-    { key: 'internet', label: 'Internet', value: internet, icon: Wifi, muted: internet === 0 },
     ...(futureInvoicesTotal > 0 ? [{
       key: 'future',
       label: `Vooruit gefactureerd (${futureInvoices.length} maand${futureInvoices.length === 1 ? '' : 'en'})`,
@@ -990,7 +989,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
                   <p className="text-xs text-slate-500 mb-3 max-w-xs">
                     Betaal je eerste maand ({nextLabel}) alvast vooruit — {fmtMoney(firstMonthRent, cur)} voor huisnummer {apt.number}
                   </p>
-                  <button onClick={() => onPay({ ...data, internet, total_due: firstMonthRent, isAdvance: true,
+                  <button onClick={() => onPay({ ...data, total_due: firstMonthRent, isAdvance: true,
                     prefill_advance_amount: firstMonthRent,
                     advance_period_month: nextM, advance_period_year: nextY,
                     open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
@@ -1025,7 +1024,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
                     </div>
                   )}
                   {!credit && <div className="h-3" />}
-                  <button onClick={() => onPay({ ...data, internet, total_due: 0, isAdvance: true,
+                  <button onClick={() => onPay({ ...data, total_due: 0, isAdvance: true,
                     open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
                     current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
                     future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
@@ -1048,7 +1047,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
               </div>
               <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-slate-400">Te betalen</p>
               <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mt-1 mb-6">{fmtMoney(totalDue, cur)}</p>
-              <button onClick={() => onPay({ ...data, internet, total_due: totalDue,
+              <button onClick={() => onPay({ ...data, total_due: totalDue,
                 open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
                 current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
                 future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
@@ -1348,7 +1347,7 @@ const PAY_ITEMS_TEMPLATE = [
 ];
 
 function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
-  const { tenant, apartment: apt, balance, internet, total_due, isAdvance = false,
+  const { tenant, apartment: apt, balance, total_due, isAdvance = false,
     prefill_advance_amount: prefillAdvance = 0,
     open_invoices: openInvoices = [], open_invoices_total: openInvoicesTotal = 0,
     current_invoices: currentInvoicesRaw = [],
@@ -1375,7 +1374,6 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
 
   const amounts = {
     boete: 0,
-    internet: Number(internet || 0),
   };
 
   const [selected, setSelected] = useState(new Set());
@@ -1445,8 +1443,9 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
 
   const isDisabled = (id) => (amounts[id] || 0) <= 0;
   const enabled = PAY_ITEMS_TEMPLATE.filter((t) => !isDisabled(t.id));
-  // "Alles betalen" includeert: achterstand + huidige maand + boete + internet + plan-termijnen.
+  // "Alles betalen" includeert: achterstand + huidige maand + boete + plan-termijnen.
   // Vooruit gefactureerd is OPT-IN (niet standaard mee-geselecteerd, want het is toekomst).
+  // (Internet-item is verwijderd op 2026-02-22.)
   const allSelectableKeys = [
     ...enabled.map((t) => t.id),
     ...(hasOpenInvoices ? openInvoicesFiltered.map(invItemKey) : []),
@@ -1493,7 +1492,6 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
       labels.push('Huur (huidige maand)');
     }
     if (selected.has('boete')) labels.push('Boetes');
-    if (selected.has('internet')) labels.push('Internet');
     if (selectedPlanItems.length > 0) labels.push(`Regeling (${selectedPlanItems.length}× termijn)`);
     return labels.join(' + ');
   };
@@ -1530,7 +1528,6 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
       cats.push({ key: 'huur', label: 'Huur (huidige maand)', value: selectedSynCurrent });
     }
     if (selected.has('boete')) cats.push({ key: 'boete', label: 'Boetes', value: amounts.boete || 0 });
-    if (selected.has('internet')) cats.push({ key: 'internet', label: 'Internet', value: amounts.internet || 0 });
     selectedPlanItems.forEach((it, i) => {
       cats.push({ key: 'overig', label: `Regeling termijn ${i + 1}`, value: it.amount });
     });
@@ -1542,7 +1539,7 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
       lastLivePreviewKeyRef.current = key;
       onLiveChange({ amount: activeAmount, currency: cur, categories: cats });
     }
-  }, [activeAmount, hasCustom, custom, cur, isAdvance, selected, selectedInvItems, selectedPlanItems, selectedSynCurrent, amounts.boete, amounts.internet, onLiveChange]);
+  }, [activeAmount, hasCustom, custom, cur, isAdvance, selected, selectedInvItems, selectedPlanItems, selectedSynCurrent, amounts.boete, onLiveChange]);
 
 
   const press = (k) => {
@@ -2528,8 +2525,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
         const data = r.data || {};
         const bal = Number(data?.balance?.balance || 0);
         const open = bal > 0 ? bal : 0;
-        const internet = Number(data?.tenant?.internet_amount || 0);
-        setRemaining(open + internet);
+        setRemaining(open);
         // Eerste partial-factuur uit de bijgewerkte overview pakken.
         const invs = Array.isArray(data?.open_invoices) ? data.open_invoices : [];
         const partial = invs.find((inv) => inv.is_partial && inv.outstanding > 0);
@@ -4591,11 +4587,10 @@ export default function KioskLayout() {
       } : null;
       const tenant = overview?.tenant ? {
         name: overview.tenant.name,
-        internet_amount: overview.tenant.internet_amount || 0,
       } : (apartment?.tenant_name ? { name: apartment.tenant_name } : null);
       const ovw = overview ? {
         balance: overview.balance, apartment: overview.apartment,
-        internet: overview.internet || 0, total_due: overview.total_due || 0,
+        total_due: overview.total_due || 0,
         // Bucket-info toevoegen zodat het klantenscherm EXACT dezelfde
         // "Achterstallige huur" / "Maandhuur" splitsing kan tonen als de
         // beheerder-kiosk. Voorheen kreeg het klantenscherm alleen
@@ -4643,7 +4638,7 @@ export default function KioskLayout() {
           amt: body.payload?.amount, cur: body.payload?.currency,
           m: body.payload?.method, mc: body.payload?.method_chosen_at,
           // Categorieën in de hash zodat live-preview wijzigingen
-          // (b.v. operator vinkt "Internet" aan met €0) een push triggeren.
+          // (b.v. operator vinkt "Boetes" aan) een push triggeren.
           cats: (body.payload?.categories || []).map((c) => `${c.key || c.label}:${c.value || 0}`).join('|'),
           r: body.payment?.receipt_number, pa: body.payment?.paid_at,
         });

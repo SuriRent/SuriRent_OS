@@ -61,8 +61,7 @@ async def kiosk_nfc_lookup(body: NfcLookupIn, request: Request):
     if apt.get("tenant_id"):
         tenant = await _deps.db.tenants.find_one(
             {"id": apt["tenant_id"]},
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1,
-             "internet_amount": 1, "internet_currency": 1},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1},
         )
     return {"found": True, "card_id": uid, "apartment": apt, "tenant": tenant}
 

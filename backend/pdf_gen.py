@@ -1764,8 +1764,8 @@ def contract_pdf(contract: dict, tenant: dict, apartment: dict,
     ))
     el.append(Paragraph(
         "Deze boete laat de verplichting van de huurder onverlet om eventuele achterstallige "
-        "huur, schade aan het gehuurde, openstaande kosten voor water, elektriciteit, "
-        "internet en overige verschuldigde bedragen volledig te betalen.",
+        "huur, schade aan het gehuurde, openstaande kosten voor water, elektriciteit "
+        "en overige verschuldigde bedragen volledig te betalen.",
         body,
     ))
     el.append(Paragraph(

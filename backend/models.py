@@ -90,7 +90,6 @@ class TenantIn(BaseModel):
     phone: Optional[str] = ""
     email: Optional[str] = ""
     apartment_id: Optional[str] = None
-    internet_amount: float = 0.0  # Vast bedrag per maand voor internet (SRD)
     # Persoonsgegevens — komen automatisch in het huurcontract PDF
     birth_date: Optional[str] = ""   # YYYY-MM-DD
     id_number: Optional[str] = ""    # bv. FM008370

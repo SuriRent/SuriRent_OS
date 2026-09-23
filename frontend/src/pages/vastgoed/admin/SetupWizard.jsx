@@ -39,7 +39,7 @@ export default function SetupWizard() {
 
   const [profile, setProfile] = useState({});
   const [apartment, setApartment] = useState({ number: '', address: '', rent_amount: '', currency: 'SRD' });
-  const [tenant, setTenant] = useState({ name: '', phone: '', email: '', apartment_id: '', internet_amount: 0 });
+  const [tenant, setTenant] = useState({ name: '', phone: '', email: '', apartment_id: '' });
   const [apts, setApts] = useState([]);
 
   const loadStatus = useCallback(async () => {
@@ -137,11 +137,10 @@ export default function SetupWizard() {
         phone: tenant.phone || '',
         email: tenant.email || '',
         apartment_id: tenant.apartment_id || null,
-        internet_amount: Number(tenant.internet_amount) || 0,
       });
       await loadStatus();
       showOk(`Huurder ${tenant.name} aangemaakt`);
-      setTenant({ name: '', phone: '', email: '', apartment_id: '', internet_amount: 0 });
+      setTenant({ name: '', phone: '', email: '', apartment_id: '' });
       return true;
     } catch (e) { setErr(formatError(e)); return false; }
     finally { setSaving(false); }

@@ -9836,7 +9836,6 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             "name": t["name"],
             "phone": t.get("phone", ""),
             "email": t.get("email", ""),
-            "internet_amount": float(t.get("internet_amount") or 0),
         },
         "apartment": apt and {
             "id": apt["id"],
@@ -10149,16 +10148,13 @@ async def customer_start_payment(slug: str):
     apt = overview.get("apartment") or state.get("apartment") or {}
     tenant = state.get("tenant") or {}
     open_rent = max(0.0, float(bal.get("balance") or 0))
-    internet = float(tenant.get("internet_amount") or overview.get("internet") or 0)
-    total_due = float(overview.get("total_due") or (open_rent + internet))
+    total_due = float(overview.get("total_due") or open_rent)
     if total_due <= 0:
         raise HTTPException(status_code=400, detail="Geen openstaand bedrag")
     currency = bal.get("currency") or apt.get("currency") or "SRD"
     categories = []
     if open_rent > 0:
         categories.append({"key": "huur", "value": open_rent})
-    if internet > 0:
-        categories.append({"key": "internet", "value": internet})
     state["step"] = "method"
     state["payload"] = {
         "amount": total_due,
@@ -10369,9 +10365,10 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
     BELANGRIJK: gebruikt EXACT dezelfde data (via `kiosk_tenant_overview`)
     en formule als het scherm — dus wat de operator ziet == wat de huurder
     op WhatsApp krijgt. Formule:
-        Totaal = Achterstand + Huidige maand + Internet
+        Totaal = Achterstand + Huidige maand
     (Vooruit gefactureerd is informatief, telt NIET in het totaal, precies
     zoals de Kiosk-overview logica in KioskLayout.jsx.)
+    (Internet-item is verwijderd op 2026-02-22.)
     """
     # Hergebruik de scherm-endpoint zodat er één bron van waarheid is.
     overview = await kiosk_tenant_overview(tenant_id, _session)
@@ -10384,11 +10381,10 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
     future_invoices = overview.get("future_invoices") or []
     future_total = float(overview.get("future_invoices_total") or 0)
     current_invoice = overview.get("current_month_invoice") or (current_invoices[0] if current_invoices else None)
-    internet = float(t.get("internet_amount") or 0)
     credit = float(overview.get("credit_balance") or 0)
     cur = (overview.get("balance") or {}).get("currency") or apt.get("currency") or "SRD"
-    # Zelfde formule als KioskLayout.jsx:553
-    total_due = round(open_total + current_total + internet, 2)
+    # Zelfde formule als KioskLayout.jsx (Internet-item is verwijderd 2026-02-22).
+    total_due = round(open_total + current_total, 2)
 
     company = await db.companies.find_one(
         {"id": _session.get("company_id")},
@@ -10456,8 +10452,6 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
     })
     # Boetes — altijd 0 tonen zoals op scherm
     rows.append({"label": "Boetes", "sub": "", "value": fmt(0), "muted": True})
-    # Internet
-    rows.append({"label": "Internet", "sub": "", "value": fmt(internet), "muted": internet <= 0})
     # Vooruit gefactureerd (informatief)
     if future_total > 0:
         n = len(future_invoices)
@@ -10561,8 +10555,7 @@ async def _default_reminder_text(overview: dict, company_id: str) -> tuple[str, 
     current_invoices = overview.get("current_invoices") or []
     open_total = float(overview.get("open_invoices_total") or 0)
     current_total = float(overview.get("current_invoices_total") or 0)
-    internet = float(t.get("internet_amount") or 0)
-    total_due = round(open_total + current_total + internet, 2)
+    total_due = round(open_total + current_total, 2)
     cur = (overview.get("balance") or {}).get("currency") or "SRD"
     n_open = len(open_invoices) + len(current_invoices)
 
@@ -10625,7 +10618,6 @@ async def kiosk_tenant_reminder_voice_text(
     total_check = (
         float(overview.get("open_invoices_total") or 0)
         + float(overview.get("current_invoices_total") or 0)
-        + float((overview.get("tenant") or {}).get("internet_amount") or 0)
     )
     if total_check <= 0.01:
         raise HTTPException(status_code=400, detail="Geen openstaande facturen — spraakbericht niet nodig")
@@ -13151,7 +13143,7 @@ async def _seed_demo_data(cid: str):
             "id": tid, "company_id": cid, "apartment_id": apt["id"],
             "name": name, "phone": phone, "email": email, "gender": gender,
             "pin_hash": hash_password(str(pin)),
-            "internet_amount": 200, "is_demo": True, "created_at": iso_now,
+            "is_demo": True, "created_at": iso_now,
         })
     await db.tenants.insert_many(tenants)
     # Bidirectionele link: elk appartement krijgt `tenant_id` van zijn

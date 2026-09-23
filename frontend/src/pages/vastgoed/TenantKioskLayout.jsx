@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Lock, Loader2, LogOut, CreditCard, Wrench, User, Phone,
   CheckCircle2, ChevronRight, Calendar, ArrowLeft, Building2, Delete,
-  Home as HomeIcon, Mail, Wallet, FileText, Wifi,
+  Home as HomeIcon, Mail, Wallet, FileText,
   HelpCircle, Send, Check, ArrowRight, Banknote, Droplets, AlertCircle,
   QrCode, Smartphone, Clock as ClockIcon, Receipt, Hash, X, Printer,
   Landmark, FileUp,
@@ -531,9 +531,8 @@ function DashboardView({ overview, onAction, onHistory }) {
   const tenant = overview?.tenant;
   const apartment = overview?.apartment;
   const balance = overview?.balance || {};
-  const internet = Number(tenant?.internet_amount || 0);
   const openRent = (balance.balance || 0) > 0 ? balance.balance : 0;
-  const totalDue = openRent + internet;
+  const totalDue = openRent;
   const cur = (balance.currency || apartment?.currency || 'SRD').toUpperCase();
   const hasBalance = totalDue > 0;
 
@@ -574,7 +573,6 @@ function DashboardView({ overview, onAction, onHistory }) {
     }] : []),
     { key: 'svc', label: 'Servicekosten', value: 0, icon: Droplets, muted: true },
     { key: 'fines', label: 'Boetes', value: 0, icon: AlertCircle, muted: true },
-    { key: 'internet', label: 'Internet', value: internet, icon: Wifi, muted: internet === 0 },
   ];
 
   return (
@@ -732,22 +730,19 @@ const PAY_ITEMS_TEMPLATE = [
   { id: 'huur', label: 'Huur', icon: Banknote, desc: 'Openstaand huurbedrag' },
   { id: 'servicekosten', label: 'Servicekosten', icon: Droplets, desc: 'Water, stroom en overige' },
   { id: 'boete', label: 'Boetes', icon: AlertCircle, desc: 'Openstaande boetes' },
-  { id: 'internet', label: 'Internet', icon: Wifi, desc: 'Internetaansluiting' },
 ];
 
 function TenantPaySelect({ overview, onBack, onConfirm }) {
   const { tenant, apartment: apt, balance } = overview;
-  const internet = Number(tenant?.internet_amount || 0);
   const cur = (balance.currency || apt?.currency || 'SRD').toUpperCase();
   const fmt = (v) => fmtMoney(v, cur);
   const openRent = balance.balance > 0 ? balance.balance : 0;
-  const totalDue = openRent + internet;
+  const totalDue = openRent;
 
   const amounts = {
     huur: openRent > 0 ? openRent : (apt?.rent_amount || 0),
     servicekosten: 0,
     boete: 0,
-    internet,
   };
 
   const [selected, setSelected] = useState(new Set());
@@ -820,7 +815,6 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
     if (selected.has('huur')) labels.push('Huur');
     if (selected.has('servicekosten')) labels.push('Servicekosten');
     if (selected.has('boete')) labels.push('Boetes');
-    if (selected.has('internet')) labels.push('Internet');
     if (selectedPlanItems.length > 0) {
       labels.push(`Regeling (${selectedPlanItems.length}× termijn)`);
     }

@@ -2802,7 +2802,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
 
 function TenantForm({ initial, apartments, onCancel, onSaved }) {
   const [data, setData] = useState(initial || {
-    name: '', phone: '', email: '', apartment_id: '', internet_amount: 0,
+    name: '', phone: '', email: '', apartment_id: '',
     nfc_card_id: '', birth_date: '', id_number: '',
   });
   const [loading, setLoading] = useState(false);
@@ -2823,7 +2823,6 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
         phone: data.phone || '',
         email: data.email || '',
         apartment_id: data.apartment_id || null,
-        internet_amount: parseFloat(data.internet_amount) || 0,
         birth_date: data.birth_date || '',
         id_number: data.id_number || '',
       };
@@ -3549,7 +3548,6 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
           <InfoRow label="E-mail" value={t.email || '—'} />
           <InfoRow label="Geboortedatum" value={t.birth_date || '—'} />
           <InfoRow label="ID-nummer" value={t.id_number || '—'} mono />
-          <InfoRow label="Internet" value={t.internet_amount ? fmtMoney(t.internet_amount, 'SRD') : '—'} />
           <InfoRow label="Portal PIN" value={t.pin ? '••••' : 'Niet ingesteld'} />
         </div>
       </div>
