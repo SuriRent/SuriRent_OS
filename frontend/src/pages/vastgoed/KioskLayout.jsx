@@ -1988,22 +1988,37 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
             </button>
           )}
 
-          {/* Mobile keypad toggle — extra bottom-padding met safe-area zodat
-              de laatste rij toetsen (7/8/9/0) niet onder de iOS home-
-              indicator of Android navigatiebalk verdwijnt. */}
-          <div className="md:hidden mt-1.5"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-            {!showMobileKeypad ? (
-              <button onClick={() => setShowMobileKeypad(true)} data-testid="mobile-custom-toggle"
-                className="w-full flex items-center justify-center gap-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition">
-                <Hash className="w-4 h-4" /> Ander bedrag invoeren
-              </button>
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-2.5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400 font-medium">Ander bedrag ({cur})</span>
-                  <button onClick={() => { setShowMobileKeypad(false); setCustom(''); }} className="text-xs text-slate-400">Sluiten</button>
-                </div>
+          {/* Mobile keypad — de toggle-bar ("Ander bedrag · Sluiten") blijft
+              ALTIJD zichtbaar; alleen het numpad-grid en het bedragdisplay
+              worden onder de bar in-/uitgevouwen. Extra bottom-padding met
+              safe-area zodat de 7/8/9/0 rij niet onder de iOS home-indicator
+              of Android navigatiebalk verdwijnt. */}
+          <div className="md:hidden mt-1.5 bg-white border border-slate-200 rounded-xl overflow-hidden"
+            style={{ paddingBottom: showMobileKeypad ? 'max(env(safe-area-inset-bottom, 0px), 12px)' : '0px' }}>
+            {/* Toggle-bar — altijd zichtbaar, click schakelt het numpad */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowMobileKeypad((v) => {
+                  const next = !v;
+                  if (!next) setCustom('');
+                  return next;
+                });
+              }}
+              data-testid="mobile-custom-toggle"
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-slate-50 transition">
+              <span className="flex items-center gap-2 text-slate-700 font-medium">
+                <Hash className="w-4 h-4" />
+                Ander bedrag ({cur})
+              </span>
+              <span className="text-xs text-slate-500 font-semibold">
+                {showMobileKeypad ? 'Sluiten' : 'Openen'}
+              </span>
+            </button>
+
+            {/* Numpad-paneel — opent/sluit zonder de toggle-bar te verbergen */}
+            {showMobileKeypad && (
+              <div className="border-t border-slate-100 p-2.5">
                 <div className={`border-2 rounded-lg text-center py-2 mb-2 ${hasCustom ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}`}>
                   <span className={`font-mono font-extrabold text-xl ${hasCustom ? 'text-orange-600' : 'text-slate-300'}`}>{cur} {custom || '0.00'}</span>
                 </div>

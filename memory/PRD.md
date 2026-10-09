@@ -1,6 +1,19 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · v3) — Numpad toggle-bar blijft altijd zichtbaar
+
+**User feedback**: toen de numpad gesloten was, verdween de "Ander bedrag" rij volledig en kwam alleen een vage compacte knop terug. Beter is dat de bar met "Ander bedrag (SRD) · Sluiten/Openen" ALTIJD zichtbaar blijft en alleen het numpad-grid in-/uitklapt.
+
+**Fix** (`PaySelect` in KioskLayout.jsx): mobile keypad container herbouwd als één card met twee lagen:
+1. **Toggle-bar** (altijd zichtbaar) — `# Ander bedrag (SRD)` links + `Sluiten`/`Openen` rechts, hele rij is klikbaar
+2. **Numpad-paneel** (conditioneel) — bedrag-display + 4×3 grid onder de bar met `border-t` scheiding
+
+Safe-area bottom-padding wordt alleen toegepast wanneer het paneel open is (anders overbodige lege ruimte onder de dichte bar).
+
+Visueel getest op 390×844 — toggle-bar blijft zichtbaar in alle 3 states (open → dicht → opnieuw open), numpad verschijnt/verdwijnt eronder.
+
+
 ## Latest Fix (2026-02-28 · update) — Kiosk PaySelect items-list scrollbaar
 
 **Probleem** (vervolg na vorige fix): wanneer álle items (achterstallige huur + vooruit gefactureerd + 4× termijnen) geselecteerd zijn, groeide de items-lijst door en duwde de "Direct betalen" + numpad onder de viewport. Numpad-rij `7/8/9/0` was dan niet zichtbaar.
