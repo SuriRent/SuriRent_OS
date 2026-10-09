@@ -59,6 +59,7 @@ const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback')
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
 const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
+const SaaSStripeCheckout = lazyWithRetry(() => import('./pages/SaaSStripeCheckout'));
 
 function RouteFallback() {
   // Transparante fallback: we hebben al een HTML __pwa_splash die tot
@@ -79,6 +80,7 @@ function BrandedRouteTree() {
         <Route path="" element={<LoginPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="admin/*" element={<Protected><AdminDashboard /></Protected>} />
+        <Route path="saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
         <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
         <Route path="kiosk/huurder" element={<TenantKioskLayout />} />

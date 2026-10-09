@@ -15,9 +15,9 @@ export const RESERVED_TOP_PATHS = new Set([
   'api', 'health', 'static', 'assets', 'public', 'manifest', 'manifest.json',
   'sw', 'sw.js', 'favicon', 'favicon.ico', 'robots.txt', 'sitemap.xml',
   'index.html', 'www', 'app', 'mail', 'ftp', 'blog', 'support', 'docs', 'help',
-  'auth', 'logout', 'register', 'settings', 'billing', 'checkout',
+  'auth', 'logout', 'register', 'settings', 'billing', 'checkout', 'saas',
   'tenant', 'tenants', 'company', 'companies', 'superadmin',
-  'qr-link', 'qr',
+  'qr-link', 'qr', 'deel-ontvangst', 'offline.html',
 ]);
 
 /**

@@ -1272,6 +1272,7 @@ async function emailInvoicePdf(inv) {
 }
 
 function SaasInvoiceList({ invoices, onMarkPaid }) {
+  const navigate = useNavigate();
   if (invoices.length === 0) {
     return (
       <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
@@ -1321,6 +1322,13 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
                   className="text-[10px] font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded inline-flex items-center gap-1">
                   <Mail className="w-3 h-3" /> Mail
                 </button>
+                {!paid && (
+                  <button onClick={() => navigate(`/saas/checkout/${inv.id}`)} data-testid={`inv-card-pay-${inv.id}`}
+                    title="Online betalen met kaart (Stripe)"
+                    className="text-[10px] font-bold text-[#FF5C00] bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                    <CreditCard className="w-3 h-3" /> Kaart
+                  </button>
+                )}
                 {!paid && (
                   <button onClick={() => onMarkPaid(inv)} data-testid={`mark-paid-${inv.id}`}
                     className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded">

@@ -5,7 +5,7 @@ import { useBadge } from '../../lib/pwa';
 import { useAutoRefresh } from '../../lib/auto-refresh';
 import {
   Building2, Users, Receipt, LayoutDashboard, LogOut, Plus, Trash2, Pencil,
-  X, Check, Loader2, Search, Home, Banknote, KeySquare, ChevronRight, Wallet,
+  X, Check, Loader2, Search, Home, Banknote, KeySquare, ChevronRight, Wallet, CreditCard,
   FileText, ShieldCheck, Wrench, FileSignature, Bell, Briefcase, Mail,
   Zap, Power, Menu, MoreHorizontal, MapPin, Paintbrush,
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
@@ -443,6 +443,7 @@ const loadSubscriptions = () => import('./admin/Subscriptions');
 const loadSaasOverview = () => import('./admin/SaasOverview');
 const loadSaasKasregister = () => import('./admin/SaasKasregister');
 const loadSaasSettings = () => import('./admin/SaasSettings');
+const loadSaasClientPayments = () => import('./admin/SaasClientPayments');
 const loadLandingEditor = () => import('./admin/LiveLandingEditor');
 const loadPlansAdmin = () => import('./admin/PlansAdmin');
 const InstellingenHub = lazy(loadInstellingenHub);
@@ -451,11 +452,12 @@ const Subscriptions = lazy(loadSubscriptions);
 const SaasOverview = lazy(loadSaasOverview);
 const SaasKasregister = lazy(loadSaasKasregister);
 const SaasSettings = lazy(loadSaasSettings);
+const SaasClientPayments = lazy(loadSaasClientPayments);
 const LandingEditor = lazy(loadLandingEditor);
 const PlansAdmin = lazy(loadPlansAdmin);
 ADMIN_TAB_LOADERS.push(
   loadInstellingenHub, loadLocations, loadSubscriptions, loadSaasOverview,
-  loadSaasKasregister, loadSaasSettings, loadLandingEditor, loadPlansAdmin,
+  loadSaasKasregister, loadSaasSettings, loadSaasClientPayments, loadLandingEditor, loadPlansAdmin,
 );
 import SetupWizardSheet from './admin/SetupWizardSheet';
 import MyUrlCard from '../../components/MyUrlCard';
@@ -499,6 +501,7 @@ const SUPER_TABS = [
   { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
   { id: 'saas_payment_plans', label: 'Betalingsregelingen', icon: Calendar },
   { id: 'saas_kasgeld', label: 'Kasgeld', icon: Wallet },
+  { id: 'saas_client_payments', label: 'Klant-betaalstatus', icon: CreditCard },
   // Operaties
   { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
   { id: 'saas_employees', label: 'Werknemers', icon: Users },
@@ -523,7 +526,7 @@ const SIDEBAR_GROUPS = {
   // SaaS Superadmin groep — nu ingedeeld in dezelfde categorieën als de
   // Beheerder (Hoofd/Financieel/Operaties/Account) voor consistente UX.
   saas_hoofd: { label: 'Hoofd', ids: ['saas_overview', 'companies', 'saas_clients', 'saas_contracts', 'plans'] },
-  saas_geld: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld'] },
+  saas_geld: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
   saas_ops: { label: 'Operaties', ids: ['saas_kiosk', 'saas_employees', 'saas_notifications', 'landing_editor', 'saas_pending'] },
   saas_account: { label: 'Account', ids: ['saas_settings'] },
 };
@@ -4388,6 +4391,7 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'saas_payments'} tabId="saas_payments" currentTab={tab}><Subscriptions viewMode="payments" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_payment_plans'} tabId="saas_payment_plans" currentTab={tab}><Subscriptions viewMode="payment_plans" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kasgeld'} tabId="saas_kasgeld" currentTab={tab}><Subscriptions viewMode="kasgeld" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_client_payments'} tabId="saas_client_payments" currentTab={tab}><SaasClientPayments /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kiosk'} tabId="saas_kiosk" currentTab={tab}><SaasKasregister /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_clients'} tabId="saas_clients" currentTab={tab}><SaasClients /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts /></KeepAliveTab>

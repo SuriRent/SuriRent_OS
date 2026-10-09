@@ -16147,6 +16147,10 @@ app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
 
+# SaaS Stripe betalingen — custom PaymentIntent flow (geen hosted checkout)
+from routes import saas_stripe as _saas_stripe_routes  # noqa: E402
+app.include_router(_saas_stripe_routes.router, prefix="/api")
+
 # AI-assistent — aparte router met eigen /api/assistant/* endpoints
 from ai_assistant import router as _assistant_router  # noqa: E402
 app.include_router(_assistant_router)
