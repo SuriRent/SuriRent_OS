@@ -1,6 +1,20 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28) — Mobile "+" FAB terug op Kiosk select
+
+**Reden**: Op desktop was er al een bottom-bar met Huurder/Appt./Locatie/Contract/Factuur/Betalingen/Onderhoud, maar op mobiel waren deze shortcuts niet bereikbaar sinds de verwijdering van de oude FAB (iOS-PWA viewport-drift bug uit feb 2026).
+
+**Nieuwe implementatie** (`KioskLayout.jsx`):
+- Mobile FAB (oranje rond `+` icoon, 56×56) via `createPortal` naar `document.body` met safe-area bottom padding, zodat de iOS/Android nav-bar nooit over de knop valt
+- Alleen zichtbaar wanneer `step === 'select'` + `md:hidden` zodat desktop onveranderd blijft
+- Opent de bestaande (al gedefinieerde maar niet-gerenderd) `KioskAddSheet` component die fullscreen uitklapt met 2-koloms grid van 7 tegels. De sheet-component was al bulletproof tegen keyboard-shift via `useVisualViewport`
+- Dispatch via `handleSheetPick` → dezelfde `setShowAdd*`-states die ook de desktop-bar gebruikt (dus elke tegel opent exact dezelfde modal)
+- Mount van `<KioskAddSheet>` toegevoegd in de JSX van `KioskLayout` (ontbrak voorheen)
+
+**Visueel getest** op 390×844: FAB zichtbaar, click opent sheet, 7 tegels + ✕-sluit knop allemaal correct zichtbaar met oranje branding.
+
+
 ## Latest Feature (2026-02-28) — Automatische boetes via Facturen-automatisering
 
 **Doel**: Boetes-rij in Financieel overzicht moet pas verschijnen zodra er echt een boete is. De admin schakelt dit aan in Facturen-automatisering en configureert bedrag + modus.

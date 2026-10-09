@@ -5102,10 +5102,35 @@ export default function KioskLayout() {
           onSaved={() => setShowAddMaintenance(false)} />
       )}
 
-      {/* Mobile "+" FAB verwijderd op user-verzoek (2026-02-22) — werkte
-          niet naar behoren op iOS PWA (viewport-drift, keyboard-shift).
-          Snelle aanmaak-modals blijven bereikbaar via de desktop-bar
-          hieronder en via andere Kiosk-navigatie. */}
+      {/* KioskAddSheet — opent via mobile FAB (hieronder) en dispatcht via
+          handleSheetPick naar dezelfde setShowAdd*-states als de desktop-bar. */}
+      {showAddSheet && (
+        <KioskAddSheet
+          onClose={() => setShowAddSheet(false)}
+          onPick={handleSheetPick}
+        />
+      )}
+
+      {/* Mobile "+" FAB — kiosk-medewerker opent dezelfde quick-add bottom-
+          sheet die normaal via de desktop-balk bereikbaar is (Huurder, Appt.,
+          Locatie, Contract, Factuur, Betalingen, Onderhoud). Alleen zichtbaar
+          op mobiel (`md:hidden`) en op het apartment-select scherm. Vorige
+          iOS-PWA viewport-drift bug is opgelost door de FAB via createPortal
+          direct onder document.body te mounten met safe-area padding; het
+          `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
+          niet meer speelt. */}
+      {step === 'select' && createPortal((
+        <button
+          type="button"
+          onClick={() => setShowAddSheet(true)}
+          data-testid="kiosk-mobile-fab"
+          aria-label="Snelle acties"
+          className="md:hidden fixed right-4 z-[109] w-14 h-14 rounded-full bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)] flex items-center justify-center active:scale-95 transition"
+          style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+        >
+          <Plus className="w-7 h-7" strokeWidth={2.8} />
+        </button>
+      ), document.body)}
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst met
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
