@@ -60,6 +60,7 @@ const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
 const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
 const SaaSStripeCheckout = lazyWithRetry(() => import('./pages/SaaSStripeCheckout'));
+const KioskStripePay = lazyWithRetry(() => import('./pages/KioskStripePay'));
 
 function RouteFallback() {
   // Transparante fallback: we hebben al een HTML __pwa_splash die tot
@@ -211,6 +212,7 @@ function AppRoutes() {
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+      <Route path="/betalen/:token" element={<KioskStripePay />} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />

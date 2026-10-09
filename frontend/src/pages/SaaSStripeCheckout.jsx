@@ -10,6 +10,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { Loader2, CheckCircle, AlertCircle, Lock, ArrowLeft, CreditCard, Landmark } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { CheckoutBrandHeader } from '../components/CheckoutBrandHeader';
 
 const stripeCache = {};
 const getStripe = (pk) => {
@@ -107,7 +108,10 @@ function SaveCardToggle({ intent }) {
 function Shell({ children }) {
   return (
     <div className="min-h-screen bg-[#FF5C00] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">{children}</div>
+      <div className="max-w-md w-full">
+        <CheckoutBrandHeader />
+        <div className="bg-white rounded-3xl p-8 text-center shadow-2xl">{children}</div>
+      </div>
     </div>
   );
 }
@@ -198,10 +202,13 @@ export default function SaaSStripeCheckout() {
   return (
     <div className="min-h-screen bg-[#FF5C00] p-4 sm:p-6" style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}>
       <div className="max-w-xl mx-auto">
-        <button onClick={() => navigate(back)} data-testid="checkout-back"
-          className="inline-flex items-center gap-2 text-white font-bold bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 mb-4 active:scale-95 transition-transform">
-          <ArrowLeft className="w-4 h-4" /> Terug
-        </button>
+        <div className="flex items-start justify-between gap-3">
+          <CheckoutBrandHeader />
+          <button onClick={() => navigate(back)} data-testid="checkout-back"
+            className="inline-flex items-center gap-2 text-white font-bold bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 active:scale-95 transition-transform shrink-0">
+            <ArrowLeft className="w-4 h-4" /> Terug
+          </button>
+        </div>
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div>

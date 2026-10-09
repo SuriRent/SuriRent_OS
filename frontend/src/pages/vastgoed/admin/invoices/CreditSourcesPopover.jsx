@@ -108,7 +108,7 @@ function SourceCard({ src }) {
     ? 'bg-amber-100 text-amber-700'
     : 'bg-emerald-100 text-emerald-700';
   const methodLabel = ({
-    contant: 'Contant', bank: 'Bankoverschrijving',
+    contant: 'Contant', bank: 'Bankoverschrijving', creditcard: 'Creditcard', ideal: 'iDEAL',
   })[src.method] || src.method || '—';
 
   return (

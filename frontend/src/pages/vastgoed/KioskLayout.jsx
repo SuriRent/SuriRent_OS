@@ -10,8 +10,10 @@ import {
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
+  Landmark as LandmarkIcon, MonitorSmartphone,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
 import {
   getKioskEmployee, withKioskEmployee,
@@ -2246,9 +2248,14 @@ function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
 function MethodSelect({ payload, overview, onBack, onConfirm }) {
   const { tenant, apartment: apt } = overview;
   const cur = payload.currency || 'SRD';
+  const [stripeCfg, setStripeCfg] = useState(null);
+  const [stripeMethod, setStripeMethod] = useState(null);
+  useEffect(() => { api.get('/kiosk/stripe/config').then(({ data }) => setStripeCfg(data)).catch(() => {}); }, []);
   const methods = [
     { v: 'contant', l: 'Contant', sub: 'Betaal met contant geld', icon: Banknote, accent: 'emerald' },
     { v: 'bank', l: 'Bankoverschrijving', sub: 'Overboeking naar bankrekening', icon: CreditCard, accent: 'blue' },
+    ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Via QR of op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
+    ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Scan QR met uw telefoon', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
   ];
   // Poll het klantenscherm puur om te VISUALISEREN welke methode de klant
   // heeft aangeraakt — we navigeren GEEN automatisch door. De medewerker
@@ -2291,14 +2298,14 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           omdat deze irrelevant was wanneer er geen customer-display is
           gekoppeld. Methodes blijven direct selecteerbaar. */}
       <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-4xl w-full px-2">
+        <div className={`grid grid-cols-1 gap-3 sm:gap-4 w-full px-2 ${methods.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-4 max-w-6xl' : 'sm:grid-cols-3 max-w-4xl'}`}>
           {methods.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.v} onClick={() => onConfirm({ ...payload, method: m.v })} data-testid={`method-${m.v}`}
+              <button key={m.v} onClick={() => (m.stripe ? setStripeMethod(m.stripe) : onConfirm({ ...payload, method: m.v }))} data-testid={`method-${m.v}`}
                 className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] sm:hover:scale-[1.03] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl">
                 <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shrink-0 sm:mb-4 ${
-                  m.accent === 'red' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'
+                  m.accent === 'red' ? 'bg-red-50 text-red-500' : m.accent === 'orange' ? 'bg-orange-50 text-[#FF5C00]' : m.accent === 'pink' ? 'bg-pink-50 text-[#CC0066]' : 'bg-emerald-50 text-emerald-500'
                 }`}>
                   <Icon className="w-7 h-7 sm:w-10 sm:h-10" />
                 </div>
@@ -2312,7 +2319,77 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           })}
         </div>
       </div>
+      {stripeMethod && (
+        <KioskStripePanel payload={payload} method={stripeMethod} tenantName={tenant.name}
+          onClose={() => setStripeMethod(null)}
+          onPaid={(pi) => onConfirm({ ...payload, method: stripeMethod === 'ideal' ? 'ideal' : 'creditcard', stripe_payment_intent_id: pi, stripe_paid: true })} />
+      )}
     </div>
+  );
+}
+
+// Stripe betalen in de Kiosk: QR-code (eigen telefoon) of direct op het scherm.
+function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
+  const [intent, setIntent] = useState(null);
+  const [err, setErr] = useState('');
+  const [mode, setMode] = useState('qr');
+  const cur = payload.currency || 'SRD';
+  useEffect(() => {
+    api.post('/kiosk/stripe/intent', { tenant_id: payload.tenant_id, amount: payload.amount, currency: cur, method })
+      .then(({ data }) => setIntent(data)).catch((e) => setErr(formatError(e)));
+  }, []);
+  useEffect(() => {
+    if (!intent) return undefined;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const { data } = await api.get(`/kiosk/stripe/status/${intent.payment_intent_id}`);
+        if (data.status === 'paid' && !stop) { stop = true; playSuccessPing(); onPaid(intent.payment_intent_id); return; }
+      } catch { /* opnieuw */ }
+      if (!stop) setTimeout(tick, 2000);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [intent]);
+  const url = intent ? `${window.location.origin}/betalen/${intent.token}` : '';
+  const eur = intent ? `€${(intent.amount_eur_cents / 100).toFixed(2)}` : '';
+  return createPortal(
+    <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" data-testid="kiosk-stripe-panel">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[92vh] overflow-auto shadow-2xl p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{method === 'ideal' ? 'iDEAL' : 'Creditcard'} · {tenantName}</p>
+            <p className="text-2xl font-black text-slate-900">{fmtMoney(payload.amount, cur)} {eur && <span className="text-base font-bold text-[#FF5C00]">({eur})</span>}</p>
+          </div>
+          <button onClick={onClose} data-testid="kiosk-stripe-close" className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-5 h-5 text-slate-600" /></button>
+        </div>
+        {method === 'card' && (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {[{ v: 'qr', l: 'QR op telefoon', I: QrCode }, { v: 'screen', l: 'Op dit scherm', I: MonitorSmartphone }].map(({ v, l, I }) => (
+              <button key={v} onClick={() => setMode(v)} data-testid={`kiosk-stripe-mode-${v}`}
+                className={`h-11 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 transition-colors ${mode === v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                <I className="w-4 h-4" /> {l}
+              </button>
+            ))}
+          </div>
+        )}
+        {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3" data-testid="kiosk-stripe-error">{err}</p>}
+        {!err && !intent && <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}
+        {intent && (mode === 'qr' || method === 'ideal') && (
+          <div className="text-center" data-testid="kiosk-stripe-qr">
+            <div className="inline-block bg-white p-4 rounded-2xl border-2 border-orange-100"><QRCodeSVG value={url} size={220} /></div>
+            <p className="text-sm font-bold text-slate-900 mt-3">Scan met uw telefoon om te betalen</p>
+            <p className="text-xs text-slate-500 mt-1 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Wacht op betaling…</p>
+          </div>
+        )}
+        {intent && mode === 'screen' && method === 'card' && (
+          <StripePayElements publishableKey={intent.publishable_key} clientSecret={intent.client_secret} amountLabel={eur}
+            returnUrl={window.location.href} onPaid={() => {}} />
+        )}
+        {intent?.mode === 'test' && <p className="text-[10px] text-center font-bold uppercase tracking-widest text-amber-600 mt-4">Testmodus</p>}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2324,6 +2401,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
+  useEffect(() => { if (payload.stripe_paid) submit(); }, []);
   const submit = async () => {
     setLoading(true); setErr('');
     try {
@@ -2339,7 +2417,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
       const plainAmount = payload.plain_amount != null ? payload.plain_amount : payload.amount;
       if (plainAmount && plainAmount > 0) {
         const plainPayload = { ...payload, amount: plainAmount };
-        delete plainPayload.plan_items; delete plainPayload.plain_amount;
+        delete plainPayload.plan_items; delete plainPayload.plain_amount; delete plainPayload.stripe_paid;
         const res = await api.post(withKioskEmployee('/kiosk/payments'), plainPayload);
         data = res.data;
       } else {

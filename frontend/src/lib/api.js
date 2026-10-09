@@ -102,7 +102,7 @@ api.interceptors.response.use(
           const segs = path.split('/').filter(Boolean);
           // Detecteer branded slug + admin route binnen die slug.
           // Sync met RESERVED_SLUGS in lib/branded-nav.js.
-          const RESERVED = new Set(['login','admin','kiosk','huurder','onderteken','c','vastgoed','api','health','static','manifest','sw','favicon','assets','qr-link','qr','tenant','tenants','company','companies','superadmin']);
+          const RESERVED = new Set(['login','betalen','admin','kiosk','huurder','onderteken','c','vastgoed','api','health','static','manifest','sw','favicon','assets','qr-link','qr','tenant','tenants','company','companies','superadmin']);
           let isAdminRoute = false;
           let brandedSlug = '';
           if (segs[0] === 'admin') {

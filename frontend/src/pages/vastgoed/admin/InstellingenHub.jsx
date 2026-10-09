@@ -6,7 +6,7 @@ import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
 import BackupRestore from './BackupRestore';
 import SettingsPage from './Settings';
-import ApiIntegration from './ApiIntegration';
+import StripeCompanySettings from './StripeCompanySettings';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
 
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
@@ -18,7 +18,7 @@ const RENDER = {
   smtp: () => <SettingsPage initialSection="smtp" hideSubNav />,
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   kiosk: () => <SettingsPage initialSection="kiosk" hideSubNav />,
-  api: () => <ApiIntegration />,
+  stripe: () => <StripeCompanySettings />,
   backup: () => <BackupRestore />,
 };
 

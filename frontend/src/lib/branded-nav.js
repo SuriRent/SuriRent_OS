@@ -10,7 +10,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 // Synced with backend RESERVED_SLUGS — paden die NIET een bedrijfs-slug kunnen zijn.
 export const RESERVED_SLUGS = new Set([
   'login', 'admin', 'kiosk', 'huurder', 'onderteken', 'c', 'vastgoed',
-  'api', 'health', 'static', 'manifest', 'sw', 'favicon', 'assets',
+  'api', 'betalen', 'health', 'static', 'manifest', 'sw', 'favicon', 'assets',
   'www', 'app', 'mail', 'ftp', 'blog', 'support', 'docs', 'help',
   'register', 'settings', 'billing', 'checkout', 'auth', 'logout',
   'tenant', 'tenants', 'company', 'companies', 'superadmin',

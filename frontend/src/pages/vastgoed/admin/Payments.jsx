@@ -42,6 +42,8 @@ function startOfDayUTC(d) {
 const METHOD_LABELS = {
   contant: 'Contant',
   bank: 'Bankoverschrijving',
+  creditcard: 'Creditcard',
+  ideal: 'iDEAL',
 };
 
 const CATEGORY_LABELS = {
