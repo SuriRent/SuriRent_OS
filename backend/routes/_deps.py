@@ -36,4 +36,5 @@ is_online = None           # (last_seen_iso, threshold_seconds=300) -> bool
 activate_company_after_payment = None  # async (company_id, plan_in_payment=None)
 send_saas_payment_email = None         # async (company, amount, currency, method, invoice_id)
 get_eur_per_srd = None                 # async () -> {rate, source, fetched_at}
-ensure_open_invoice = None             # async (company_doc, user_email) -> invoice
+ensure_open_invoice = None
+notify_company_admins = None           # async (company_id, title, body, data) -> int             # async (company_doc, user_email) -> invoice

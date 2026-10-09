@@ -64,6 +64,7 @@ function CheckoutForm({ intent, onDone }) {
   return (
     <form onSubmit={submit} className="space-y-5" data-testid="checkout-form">
       <PaymentElement options={{ layout: 'tabs', defaultValues: { billingDetails: { address: { country: 'NL' } } } }} />
+      {intent.can_save_card && <SaveCardToggle intent={intent} />}
       {err && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700" data-testid="checkout-err">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {err}
@@ -77,6 +78,29 @@ function CheckoutForm({ intent, onDone }) {
       </button>
       <p className="text-xs text-slate-400 text-center">Veilige betaling via Stripe · Uw betaalgegevens worden nooit op onze servers opgeslagen.</p>
     </form>
+  );
+}
+
+function SaveCardToggle({ intent }) {
+  const [params] = useSearchParams();
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toggle = async (v) => {
+    setBusy(true);
+    try { await api.post('/saas-stripe/intent-save-card', { payment_intent_id: intent.payment_intent_id, save: v }); setOn(v); }
+    catch { /* laat ongewijzigd */ } finally { setBusy(false); }
+  };
+  useEffect(() => { if (params.get('save') === '1') toggle(true); }, []);
+  return (
+    <label className={`flex items-start gap-3 rounded-2xl border-2 p-3.5 cursor-pointer transition-colors ${on ? 'border-[#FF5C00] bg-orange-50/60' : 'border-slate-200 hover:border-orange-200'}`}
+      data-testid="checkout-save-card">
+      <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)}
+        className="mt-0.5 w-5 h-5 accent-[#FF5C00]" data-testid="checkout-save-card-input" />
+      <span>
+        <span className="block text-sm font-bold text-slate-900">Kaart bewaren voor automatisch betalen</span>
+        <span className="block text-xs text-slate-500 mt-0.5">Nieuwe abonnementsfacturen worden dan direct van deze kaart afgeschreven. U kunt dit altijd uitzetten.</span>
+      </span>
+    </label>
   );
 }
 
@@ -116,7 +140,11 @@ export default function SaaSStripeCheckout() {
     }
     (async () => {
       try {
-        const body = { method, ...(invoiceId && invoiceId !== 'open' ? { invoice_id: invoiceId } : {}) };
+        const ids = (params.get('ids') || '').split(',').filter(Boolean);
+        const body = { method };
+        if (invoiceId === 'alle') body.all_open = true;
+        else if (invoiceId === 'selectie' && ids.length) body.invoice_ids = ids;
+        else if (invoiceId && invoiceId !== 'open') body.invoice_id = invoiceId;
         const { data } = await api.post('/saas-stripe/create-intent', body);
         setIntent(data);
       } catch (e) {
@@ -188,11 +216,19 @@ export default function SaaSStripeCheckout() {
           </div>
 
           <div className="bg-slate-50 rounded-2xl p-4 mb-6" data-testid="checkout-summary">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Factuur</p>
-            <div className="row-label-value">
-              <span className="font-bold text-slate-700">#{intent.invoice.invoice_number || intent.invoice.id.slice(0, 8).toUpperCase()}{intent.invoice.plan ? ` · ${intent.invoice.plan}` : ''}</span>
-              <span className="font-bold text-slate-900">{intent.invoice.currency} {Number(intent.invoice.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</span>
-            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">{(intent.invoices || []).length > 1 ? 'Facturen' : 'Factuur'}</p>
+            {(intent.invoices || [intent.invoice]).map((iv) => (
+              <div key={iv.id} className="row-label-value py-1" data-testid={`checkout-inv-${iv.id}`}>
+                <span className="font-bold text-slate-700">#{iv.invoice_number || iv.id.slice(0, 8).toUpperCase()}{iv.plan ? ` · ${iv.plan}` : ''}</span>
+                <span className="font-bold text-slate-900">{iv.currency} {Number(iv.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+            {(intent.invoices || []).length > 1 && (
+              <div className="row-label-value pt-1 mt-1 border-t border-slate-200" data-testid="checkout-total">
+                <span className="text-sm font-bold text-slate-700">Totaal ({intent.invoices.length} facturen)</span>
+                <span className="font-black text-slate-900">{intent.currency} {Number(intent.total_amount).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
             <div className="row-label-value mt-2 pt-2 border-t border-slate-200">
               <span className="text-sm text-slate-500">Afrekening in EUR</span>
               <span className="text-xl font-black text-[#FF5C00]" data-testid="checkout-eur-amount">€{(intent.amount_eur_cents / 100).toFixed(2)}</span>

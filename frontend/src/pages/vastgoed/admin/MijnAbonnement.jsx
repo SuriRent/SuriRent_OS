@@ -97,8 +97,11 @@ function PayButtons({ invoiceId, onPay, size = 'lg' }) {
   );
 }
 
-function PayBanner({ me, invoice, openCount, stripeOn, onPay }) {
-  if (!invoice) {
+function PayBanner({ me, openInvoices, stripeOn, onPayMany }) {
+  const [sel, setSel] = useState(() => new Set(openInvoices.map((i) => i.id)));
+  const key = openInvoices.map((i) => i.id).join(',');
+  useEffect(() => { setSel(new Set(openInvoices.map((i) => i.id))); }, [key]);
+  if (openInvoices.length === 0) {
     return (
       <div className={`${CARD} px-5 py-4 flex items-center gap-3`} data-testid="saas-all-paid">
         <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center shrink-0"><CheckCircle2 className="w-5 h-5" /></span>
@@ -109,26 +112,91 @@ function PayBanner({ me, invoice, openCount, stripeOn, onPay }) {
       </div>
     );
   }
-  const urgent = me.status === 'expired' || openCount > 1;
+  const chosen = openInvoices.filter((i) => sel.has(i.id));
+  const total = chosen.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const cur = openInvoices[0].currency;
+  const urgent = me.status === 'expired' || openInvoices.length > 1;
+  const toggle = (id) => setSel((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allOn = chosen.length === openInvoices.length;
   return (
-    <div className={`${CARD} relative overflow-hidden px-5 py-4 flex flex-col md:flex-row md:items-center gap-4`} data-testid="saas-online-pay-box">
+    <div className={`${CARD} relative overflow-hidden`} data-testid="saas-online-pay-box">
       <span aria-hidden className={`absolute left-0 inset-y-0 w-1 ${urgent ? 'bg-red-500' : 'bg-[#FF5C00]'}`} />
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="px-5 pt-4 pb-3 flex items-center gap-3">
         <span className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${urgent ? 'bg-red-100 text-red-500' : 'bg-orange-100 text-orange-500'}`}>
           <Receipt className="w-5 h-5" />
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-black text-slate-900">
-            {me.status === 'expired' ? 'Uw abonnement is verlopen' : openCount > 1 ? `${openCount} facturen staan open` : 'Openstaande factuur'}
+            {me.status === 'expired' ? 'Uw abonnement is verlopen' : openInvoices.length > 1 ? `${openInvoices.length} facturen staan open` : 'Openstaande factuur'}
           </p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Oudste: <span className="font-bold text-slate-800" data-testid="saas-pay-amount">{fmt(invoice.amount, invoice.currency)}</span>
-            {' '}· <span className="capitalize">{invoice.plan}</span> · {fmtDate(invoice.period_start)} → {fmtDate(invoice.period_end)}
+          <p className="text-xs text-slate-500 mt-0.5">Kies welke facturen u nu wilt betalen.</p>
+        </div>
+        {openInvoices.length > 1 && (
+          <button onClick={() => setSel(allOn ? new Set() : new Set(openInvoices.map((i) => i.id)))} data-testid="saas-pay-select-all"
+            className="text-xs font-bold text-[#FF5C00] hover:underline shrink-0">{allOn ? 'Niets selecteren' : 'Alles selecteren'}</button>
+        )}
+      </div>
+      <div className="mx-5 rounded-xl border border-orange-100 divide-y divide-orange-50">
+        {openInvoices.map((i) => (
+          <label key={i.id} className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-orange-50/40 transition-colors" data-testid={`saas-pay-row-${i.id}`}>
+            <input type="checkbox" checked={sel.has(i.id)} onChange={() => toggle(i.id)} className="w-4 h-4 accent-[#FF5C00]"
+              data-testid={`saas-pay-check-${i.id}`} />
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13px] font-bold text-slate-900 truncate">{fmtDate(i.period_start)} → {fmtDate(i.period_end)}</span>
+              <span className="block text-[11px] text-slate-400"><span className="capitalize">{i.plan}</span>{i.autopay_failed && <span className="text-red-500 font-semibold"> · automatische betaling mislukt</span>}</span>
+            </span>
+            <span className="text-sm font-black text-slate-900 tabular-nums">{fmt(i.amount, i.currency)}</span>
+          </label>
+        ))}
+      </div>
+      <div className="px-5 py-4 flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex-1">
+          <p className="text-[11px] font-semibold text-slate-500">Totaal te betalen ({chosen.length})</p>
+          <p className="text-xl font-black text-slate-900 tracking-tight tabular-nums" data-testid="saas-pay-amount">{fmt(total, cur)}</p>
+        </div>
+        {stripeOn ? (
+          <div className={chosen.length ? '' : 'opacity-40 pointer-events-none'}>
+            <PayButtons onPay={(_, m) => onPayMany(chosen.map((i) => i.id), m)} />
+          </div>
+        ) : <p className="text-xs text-slate-500">Betaal via het tabblad Bankoverschrijving.</p>}
+      </div>
+    </div>
+  );
+}
+
+function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, busy }) {
+  if (!stripeOn) return null;
+  const card = autopay?.card;
+  return (
+    <div className={`${CARD} px-5 py-4 flex flex-col md:flex-row md:items-center gap-4`} data-testid="autopay-card">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <span className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${autopay?.enabled ? 'bg-emerald-100 text-emerald-500' : 'bg-slate-100 text-slate-400'}`}>
+          <CreditCard className="w-5 h-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-black text-slate-900">Automatisch betalen</p>
+          <p className="text-xs text-slate-500 mt-0.5" data-testid="autopay-status">
+            {card
+              ? <>{autopay.enabled ? 'Aan' : 'Uit'} · <span className="capitalize">{card.brand}</span> •••• {card.last4} · verloopt {String(card.exp_month).padStart(2, '0')}/{String(card.exp_year).slice(-2)}</>
+              : 'Bewaar uw creditcard bij een betaling — nieuwe facturen worden dan direct afgeschreven.'}
           </p>
         </div>
       </div>
-      {stripeOn ? <PayButtons invoiceId={invoice.id} onPay={onPay} />
-        : <p className="text-xs text-slate-500">Betaal via het tabblad Bankoverschrijving.</p>}
+      {card ? (
+        <div className="flex items-center gap-3">
+          <button onClick={() => onToggle(!autopay.enabled)} disabled={busy} data-testid="autopay-toggle" aria-pressed={autopay.enabled}
+            className={`relative w-12 h-7 rounded-full transition-colors ${autopay.enabled ? 'bg-[#FF5C00]' : 'bg-slate-300'} disabled:opacity-50`}>
+            <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-[left] ${autopay.enabled ? 'left-6' : 'left-1'}`} />
+          </button>
+          <button onClick={onRemove} disabled={busy} data-testid="autopay-remove"
+            className="text-xs font-bold text-slate-500 hover:text-red-600 transition-colors">Kaart verwijderen</button>
+        </div>
+      ) : hasOpen ? (
+        <button onClick={onSetup} data-testid="autopay-setup"
+          className="h-10 px-4 rounded-xl bg-white border-2 border-orange-200 hover:bg-orange-50 text-[#FF6A1A] font-bold text-sm transition-colors shrink-0">
+          Betalen & kaart bewaren
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -331,6 +399,8 @@ export default function MijnAbonnement() {
   const [err, setErr] = useState('');
   const [stripeOn, setStripeOn] = useState(false);
   const [tab, setTab] = useState('invoices');
+  const [autopay, setAutopay] = useState(null);
+  const [apBusy, setApBusy] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -343,7 +413,18 @@ export default function MijnAbonnement() {
     navigate(`/saas/checkout/${invoiceId || 'open'}?method=${method}&back=${back}`);
   };
 
+  const payMany = (ids, method, save) => {
+    const back = encodeURIComponent(location.pathname + location.hash);
+    navigate(`/saas/checkout/selectie?ids=${ids.join(',')}&method=${method}${save ? '&save=1' : ''}&back=${back}`);
+  };
+
+  const apCall = async (fn) => {
+    setApBusy(true); setErr('');
+    try { const { data } = await fn(); setAutopay(data); } catch (e) { setErr(formatError(e)); } finally { setApBusy(false); }
+  };
+
   const load = useCallback(async () => {
+    api.get('/billing/me/autopay').then(({ data }) => setAutopay(data)).catch(() => {});
     try {
       const [m, p, b, inv, pay] = await Promise.all([
         api.get('/billing/me'), api.get('/billing/me/plans'), api.get('/billing/bank-details'),
@@ -376,7 +457,8 @@ export default function MijnAbonnement() {
   if (loading || !me) return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
 
   const openInvoices = invoices.filter(isOpen);
-  const oldestOpen = [...openInvoices].sort((a, b) => String(a.period_start || a.created_at).localeCompare(String(b.period_start || b.created_at)))[0];
+  const sortedOpen = [...openInvoices].sort((a, b) => String(a.period_start || a.created_at).localeCompare(String(b.period_start || b.created_at)));
+  const oldestOpen = sortedOpen[0];
   const openTotal = openInvoices.reduce((s, i) => s + Number(i.amount || 0), 0);
   const showBank = !!bank && (me.currency || 'SRD') === 'SRD';
 
@@ -386,7 +468,11 @@ export default function MijnAbonnement() {
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
       <KpiStrip me={me} openInvoices={openInvoices} openTotal={openTotal} lastPayment={payments[0]} />
-      <PayBanner me={me} invoice={oldestOpen} openCount={openInvoices.length} stripeOn={stripeOn} onPay={goPay} />
+      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} onPayMany={payMany} />
+      <AutopayCard autopay={autopay} stripeOn={stripeOn} hasOpen={sortedOpen.length > 0} busy={apBusy}
+        onToggle={(v) => apCall(() => api.put('/billing/me/autopay', { enabled: v }))}
+        onRemove={() => { if (window.confirm('Opgeslagen kaart verwijderen en automatisch betalen uitzetten?')) apCall(() => api.delete('/billing/me/autopay')); }}
+        onSetup={() => payMany(sortedOpen.map((i) => i.id), 'card', true)} />
 
       <div className={`${CARD} px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0`} data-testid="my-sub-tabs">
         <Tab v="invoices" tab={tab} setTab={setTab} label={`Facturen (${invoices.length})`} dot={openInvoices.length ? 'red' : undefined} testid="my-sub-tab-invoices" />

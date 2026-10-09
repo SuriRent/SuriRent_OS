@@ -250,6 +250,8 @@ async def create_subscription_invoice(body: NewInvoiceIn,
     }
     await db.subscription_invoices.insert_one(inv)
     inv.pop("_id", None)
+    from .saas_stripe import on_new_saas_invoice
+    inv["autopay_result"] = await on_new_saas_invoice(inv)
     return inv
 
 
@@ -317,6 +319,11 @@ async def saas_auto_invoice_tick() -> list[dict]:
             {"$set": {"subscription_renews_at": _deps.iso(period_end)}},
         )
         inv.pop("_id", None)
+        try:
+            from .saas_stripe import on_new_saas_invoice
+            await on_new_saas_invoice(inv)
+        except Exception as e:  # noqa: BLE001
+            print(f"[saas-invoice] autopay/push hook faalde: {e}")
         created.append({
             "invoice_id": inv["id"],
             "company_id": c["id"],

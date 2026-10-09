@@ -556,6 +556,11 @@ async def _daily_billing_checks_loop():
                     _log.info(f"[saas-invoice] created {len(new_invoices)} monthly invoices @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[saas-invoice] cycle failed: {e}")
+            try:
+                from routes.saas_stripe import expiry_push_tick as _ept
+                await _ept()
+            except Exception as e:
+                _log.warning(f"[saas-expiry-push] cycle failed: {e}")
             # Factuur-herinneringen: 3 dagen na vervaldatum een reminder
             # (met PDF-bijlage) sturen. Idempotent via `sent_invoice_reminders`.
             try:
@@ -16148,6 +16153,7 @@ _route_deps.activate_company_after_payment = _activate_company_after_saas_paymen
 _route_deps.send_saas_payment_email = _send_saas_payment_email
 _route_deps.get_eur_per_srd = _get_eur_per_srd
 _route_deps.ensure_open_invoice = _ensure_open_invoice_for_company
+_route_deps.notify_company_admins = _notify_company_admins
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
