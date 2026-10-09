@@ -660,3 +660,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Manual trigger: `POST /api/admin/run-upcoming-invoice-reminders` — geregistreerd via `@app.post` (bypass omdat `app.include_router(api)` al gebeurd is).
 - Frontend Settings: nieuw veld "Herinnering (dagen vóór vervaldatum)" (default 3, 0 = uit) + paars info-paneel met **"Test nu"**-knop voor handmatige trigger.
 - End-to-end verifieerd via curl (4 reminders aangemaakt in de demo, 2e trigger idempotent).
+
+## 2026-06 — Kiosk Stripe zonder QR
+- Creditcard en iDEAL op de kiosk openen nu direct de betaalpagina; de QR-flow is verwijderd.
+- Creditcard: het Stripe-formulier staat direct op het kioskscherm. iDEAL: de PaymentIntent wordt op de server bevestigd en de bankpagina opent automatisch (return_url /betalen/{token}); de kiosk pollt de status.
+- Getest: iteration_65 (backend 16/16, frontend E2E op desktop en mobiel)

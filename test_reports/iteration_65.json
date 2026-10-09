@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 65 — Kiosk payment: QR code flow REMOVED; Creditcard/iDEAL go directly to payment page. Backend 3/3 new tests + 13/13 iter64 regression = 16/16 pass. Frontend E2E via Playwright on both desktop (1920x1080) and mobile (430x900): kiosk PIN 4321 login on branded /my-awesome-rentals-bv/login?target=kiosk → location → apartment (HUIS 1A) → amount 50 SRD → method screen 'Hoe wilt u betalen?' shows 4 cards: Contant, Bankoverschrijving, Creditcard ('Direct betalen op dit scherm'), iDEAL ('Direct naar uw bank'). Clicking method-creditcard opens kiosk-stripe-panel rendering stripe-pay-form + stripe-pay-btn immediately with real Stripe iframes (12 Stripe frames detected). NO 'kiosk-stripe-ideal' panel, NO 'QR' text, NO 'telefoon' text, NO toggle. Clicking method-ideal: backend returns non-null redirect_url (https://payments.stripe.com/payment_methods/test_payment?...); frontend auto-opens new tab AND renders kiosk-stripe-ideal panel with kiosk-stripe-ideal-open button + 'Rond de betaling af op de iDEAL-pagina / Wacht op betaling…' — again NO QR. Backend contract verified: POST /api/kiosk/stripe/intent {method:'card'} returns redirect_url=null + client_secret for PaymentElement; {method:'ideal', origin:...} returns non-null stripe.com redirect_url. The sole remaining 'QR' word in codebase is a stale comment on line 8 of /app/frontend/src/pages/KioskStripePay.jsx — cosmetic only, not shown to users.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter65_kiosk_no_qr.py",
+    "/app/backend/tests/test_iter64_company_stripe_kiosk.py",
+    "/app/test_reports/pytest/iter65.xml",
+    "/app/test_reports/pytest/iter65_regression.xml"
+  ],
+  "action_items": [
+    "(Nit, non-blocking) Update stale comment on line 8 of /app/frontend/src/pages/KioskStripePay.jsx: 'Publieke betaalpagina die de huurder opent via de QR-code op de Kiosk.' — QR flow is removed; this page is now only used as iDEAL return_url. Rephrase to 'Publieke iDEAL-returnpagina' or similar."
+  ],
+  "critical_code_review_comments": [
+    "KioskLayout.jsx MethodSelect (~line 2256-2258): clean implementation — stripe methods conditionally appended only when enabled; onClick sets stripeMethod (opens KioskStripePanel) rather than confirming → nice separation.",
+    "KioskStripePanel useEffect (~line 2336-2340): intent fetched with origin=window.location.origin; auto-opens bank tab when redirect_url present via window.open then falls back to location.assign if popup blocked — good UX.",
+    "Panel branching (line 2368 / 2376): purely redirect_url-driven. No QR code / toggle code paths remain. 'Op dit scherm / QR op telefoon' UX is fully gone.",
+    "company_stripe.py kiosk_stripe_intent correctly guards: iDEAL confirm only when origin provided; return_url derived from provided origin — safe against spoofing in combination with company-scoped kiosk auth. redirect_url is None for card as expected.",
+    "KioskLayout.jsx is 5294 lines — exceeds 700-line guideline. Consider splitting MethodSelect / KioskStripePanel into their own files for maintainability.",
+    "Stale comment in KioskStripePay.jsx line 8 references QR — see action_items."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter65_kiosk_no_qr.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16: 3 new + 13 regression)", "frontend": "100% (desktop + mobile E2E through PIN login → location → apartment → amount → method → card panel / iDEAL panel verified; no QR UI anywhere)"},
+  "test_credentials": "kiosk PIN 4321 slug my-awesome-rentals-bv; demo@surirent.sr/demo1234",
+  "seed_data_creation": "Created several TEST kiosk_stripe_payments intents on company test-mode Stripe keys (50 SRD each). test_iter64 also books 1 real paid intent per run via pm_card_visa. No live money.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "QR flow is fully removed from KioskStripePanel. Card = PaymentElement form in-panel; iDEAL = backend auto-confirms + returns redirect_url to Stripe bank page which kiosk opens in new tab. Backend tests in /app/backend/tests/test_iter65_kiosk_no_qr.py are idempotent. PIN pad keys use data-testid='keypad-{d}' (confirmed working). To reach method screen in Playwright: /my-awesome-rentals-bv/login?target=kiosk → click 'Terug naar PIN' link if email form shown → enter 4321 → location-{id} → apt-{HUIS...} → overview-pay-btn → keypad-X on desktop OR mobile-key-X on <768px → payment-next-btn → method-{v}.",
+  "rca of the issue": "N/A — feature already correctly implemented. Verified removal of QR flow at both API (redirect_url semantics) and UI (no QR toggle / no QR text in panel) levels."
+}
