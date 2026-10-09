@@ -1,0 +1,25 @@
+{
+  "summary": "Full-stack test of SaaS Stripe custom-checkout (Creditcard/iDEAL). 19/19 pytest backend tests pass against live Stripe test account. UI verified end-to-end: superadmin Stripe section (test/live toggle, test-connection, prefix guards, live-without-keys guard), company-admin Mijn Abonnement direct-pay box + per-invoice Kaart/iDEAL buttons, full card payment via Stripe PaymentElement with 4242… → success screen 'Betaling gelukt!' and invoice marked paid. Superadmin SaaS Facturen 'Kaart' button opens checkout.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter60_saas_stripe_v2.py",
+    "/app/test_reports/pytest/iter60.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "saas_stripe.py cleanly keeps secret_key out of GET /superadmin/stripe-config (only masked + bool). Prefix + per-mode guards work. _mark_paid is idempotent (status $ne paid guard).",
+    "Previous iter59 test file (test_iter59_saas_stripe.py) now has 3 failing tests due to stale hardcoded invoice IDs that were paid in prior runs - not real bugs. Recommend deleting/replacing with iter60 file which fetches invoices dynamically.",
+    "Front-end console shows repeated 400 errors on an unrelated endpoint on superadmin pages (not stripe); worth investigating in a follow-up but outside this scope."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter60_saas_stripe_v2.py (new, 19 tests)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% of in-scope flows"},
+  "test_credentials": "super@surirent.sr/super1234, demo@surirent.sr/demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No seed. Test consumed one demo-company open subscription invoice (paid via Stripe pm_card_visa in both backend TestEndToEndCard and UI card-payment flow). Demo still has further open invoices for retest.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Stripe left in TEST mode as required. Prior test_iter59_saas_stripe.py has 3 stale failures (hardcoded invoice ids now paid) - safe to remove in favor of test_iter60_saas_stripe_v2.py which dynamically fetches invoices. iDEAL top-level + per-invoice buttons render; iDEAL end-to-end not completed in UI (requires Stripe-hosted authorize redirect) but create-intent for method=ideal returns 200 OK with ideal payment method types. Full card flow (create-intent → confirm pm_card_visa → intent-status poll → paid) verified via backend tests and via UI (clicked saas-pay-card-btn then filled 4242… inside Stripe iframe → 'Betaling gelukt!' banner).",
+  "rca of the issue": "N/A — no bugs found."
+}

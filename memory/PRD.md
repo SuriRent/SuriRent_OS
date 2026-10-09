@@ -1,6 +1,23 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-06 · Stripe Creditcard & iDEAL voor SaaS-abonnement)
+- **SaaS Instellingen → "Stripe betalingen"**: Test/Live schakelaar, Publishable key, Secret key (gemaskeerd), Webhook secret per modus; opgeslagen in `saas_settings.stripe`. Testmodus valt terug op env-keys. Prefix-validatie (pk_/sk_/whsec_, _test_/_live_), live kan pas na invullen live keys. Knop "Test verbinding" (`POST /api/superadmin/stripe-config/test`).
+- **Mijn Abonnement (klant)**: box "Direct online betalen" met knoppen Creditcard + iDEAL (oudste open factuur) + per open factuur Creditcard/iDEAL knoppen. Navigeert naar `/saas/checkout/<id|open>?method=card|ideal&back=...`.
+- **Checkout**: eigen pagina (Stripe PaymentElement), iDEAL-redirect terugkeer via `?pi=` / `payment_intent` → status polling. SRD→EUR met live FX (`_get_eur_per_srd`).
+- **Na betaling**: factuur paid, `subscription_payments` (method creditcard/ideal), bedrijf geactiveerd (`_activate_company_after_saas_payment`) + bevestigingsmail.
+- **Webhook**: verifieert met live én test whsec; bugfix StripeObject `.get()` crash.
+- **Superadmin SaaS Facturen**: knop "Kaart" per open factuur.
+- Endpoints: `GET/PUT /api/superadmin/stripe-config`, `GET /api/saas-stripe/public-config`, `POST /api/saas-stripe/create-intent` (superadmin of eigen bedrijf), `GET /api/saas-stripe/intent-status/{pi}`, `POST /api/saas-stripe/webhook`.
+- Getest: iteration_60 (19/19 backend, frontend kaartflow E2E). iDEAL end-to-end redirect niet volledig in UI getest.
+
+## Backlog
+- P0: server.py opsplitsen (17k regels)
+- P1: OCR automatische betalingsverwerking
+- P2: NumPad overal, reserved slugs single source, public API rate limiting
+- Onderzoek: herhaalde 400-fout op een (niet-Stripe) endpoint op superadmin pagina's
+
+
 ## Latest Fix (2026-02-28 · superadmin) — Missing `await` in `routes/superadmin.py`
 
 **Bug**: Alle superadmin schermen (Overzicht, Betalingen, Facturen, Betalingsregelingen, Kasgeld, Kasregister) bleven oneindig laden. Backend returned HTTP 500 met `TypeError: 'coroutine' object is not subscriptable`.
