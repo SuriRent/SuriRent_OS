@@ -2415,6 +2415,18 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         data = { kind: 'plan_only', plan_items: planItems };
       }
       playSuccessPing();
+      if (window.ReactNativeWebView?.postMessage) {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PRINT_RECEIPT', data: {
+            naam: tenant.name,
+            appartement: apt.number,
+            bedrag: data.amount ?? payload.amount,
+            methode: data.method || payload.method,
+            datum: data.paid_at || data.created_at || new Date().toISOString(),
+            kwitantie: data.receipt_number || '',
+          } }));
+        } catch { /* APK-bridge niet beschikbaar */ }
+      }
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
