@@ -2,15 +2,14 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
-  Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
+  Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
-  Landmark as LandmarkIcon, MonitorSmartphone,
+  Landmark as LandmarkIcon,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
@@ -2254,8 +2253,8 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
   const methods = [
     { v: 'contant', l: 'Contant', sub: 'Betaal met contant geld', icon: Banknote, accent: 'emerald' },
     { v: 'bank', l: 'Bankoverschrijving', sub: 'Overboeking naar bankrekening', icon: CreditCard, accent: 'blue' },
-    ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Via QR of op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
-    ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Scan QR met uw telefoon', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
+    ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Direct betalen op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
+    ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Direct naar uw bank', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
   ];
   // Poll het klantenscherm puur om te VISUALISEREN welke methode de klant
   // heeft aangeraakt — we navigeren GEEN automatisch door. De medewerker
@@ -2328,15 +2327,16 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
   );
 }
 
-// Stripe betalen in de Kiosk: QR-code (eigen telefoon) of direct op het scherm.
+// Stripe betalen in de Kiosk: direct de betaalpagina (kaart op scherm, iDEAL via bankpagina).
 function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
   const [intent, setIntent] = useState(null);
   const [err, setErr] = useState('');
-  const [mode, setMode] = useState('qr');
   const cur = payload.currency || 'SRD';
+  const openBank = (u) => { const w = window.open(u, '_blank'); if (!w) window.location.assign(u); };
   useEffect(() => {
-    api.post('/kiosk/stripe/intent', { tenant_id: payload.tenant_id, amount: payload.amount, currency: cur, method })
-      .then(({ data }) => setIntent(data)).catch((e) => setErr(formatError(e)));
+    api.post('/kiosk/stripe/intent', { tenant_id: payload.tenant_id, amount: payload.amount, currency: cur, method, origin: window.location.origin })
+      .then(({ data }) => { setIntent(data); if (data.redirect_url) openBank(data.redirect_url); })
+      .catch((e) => setErr(formatError(e)));
   }, []);
   useEffect(() => {
     if (!intent) return undefined;
@@ -2345,13 +2345,13 @@ function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
       try {
         const { data } = await api.get(`/kiosk/stripe/status/${intent.payment_intent_id}`);
         if (data.status === 'paid' && !stop) { stop = true; playSuccessPing(); onPaid(intent.payment_intent_id); return; }
+        if (data.status === 'failed' && !stop) setErr('Betaling mislukt of geannuleerd — probeer opnieuw.');
       } catch { /* opnieuw */ }
       if (!stop) setTimeout(tick, 2000);
     };
     tick();
     return () => { stop = true; };
   }, [intent]);
-  const url = intent ? `${window.location.origin}/betalen/${intent.token}` : '';
   const eur = intent ? `€${(intent.amount_eur_cents / 100).toFixed(2)}` : '';
   return createPortal(
     <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" data-testid="kiosk-stripe-panel">
@@ -2363,28 +2363,19 @@ function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
           </div>
           <button onClick={onClose} data-testid="kiosk-stripe-close" className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-5 h-5 text-slate-600" /></button>
         </div>
-        {method === 'card' && (
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {[{ v: 'qr', l: 'QR op telefoon', I: QrCode }, { v: 'screen', l: 'Op dit scherm', I: MonitorSmartphone }].map(({ v, l, I }) => (
-              <button key={v} onClick={() => setMode(v)} data-testid={`kiosk-stripe-mode-${v}`}
-                className={`h-11 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 transition-colors ${mode === v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700'}`}>
-                <I className="w-4 h-4" /> {l}
-              </button>
-            ))}
-          </div>
-        )}
-        {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3" data-testid="kiosk-stripe-error">{err}</p>}
+        {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-3" data-testid="kiosk-stripe-error">{err}</p>}
         {!err && !intent && <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}
-        {intent && (mode === 'qr' || method === 'ideal') && (
-          <div className="text-center" data-testid="kiosk-stripe-qr">
-            <div className="inline-block bg-white p-4 rounded-2xl border-2 border-orange-100"><QRCodeSVG value={url} size={220} /></div>
-            <p className="text-sm font-bold text-slate-900 mt-3">Scan met uw telefoon om te betalen</p>
+        {intent && intent.redirect_url && (
+          <div className="text-center py-4" data-testid="kiosk-stripe-ideal">
+            <p className="text-sm font-bold text-slate-900">Rond de betaling af op de iDEAL-pagina</p>
             <p className="text-xs text-slate-500 mt-1 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Wacht op betaling…</p>
+            <button onClick={() => openBank(intent.redirect_url)} data-testid="kiosk-stripe-ideal-open"
+              className="mt-4 w-full h-14 rounded-2xl bg-[#CC0066] hover:bg-[#B3005A] text-white font-black">Open iDEAL-betaalpagina</button>
           </div>
         )}
-        {intent && mode === 'screen' && method === 'card' && (
+        {intent && !intent.redirect_url && (
           <StripePayElements publishableKey={intent.publishable_key} clientSecret={intent.client_secret} amountLabel={eur}
-            returnUrl={window.location.href} onPaid={() => {}} />
+            returnUrl={`${window.location.origin}/betalen/${intent.token}`} onPaid={() => {}} />
         )}
         {intent?.mode === 'test' && <p className="text-[10px] text-center font-bold uppercase tracking-widest text-amber-600 mt-4">Testmodus</p>}
       </div>

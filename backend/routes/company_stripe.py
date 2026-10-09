@@ -114,6 +114,7 @@ class KioskIntentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
     method: Literal["card", "ideal"]
+    origin: Optional[str] = None
 
 
 @router.post("/kiosk/stripe/intent")
@@ -126,19 +127,26 @@ async def kiosk_stripe_intent(body: KioskIntentIn, session: dict = Depends(_deps
         raise HTTPException(400, "Ongeldig bedrag")
     tenant = await _deps.db.tenants.find_one({"id": body.tenant_id, "company_id": cid}, {"_id": 0, "name": 1}) or {}
     cents, rate = await _to_eur_cents(body.amount, body.currency)
+    token = secrets.token_urlsafe(16)
+    extra = {}
+    if body.method == "ideal" and body.origin:
+        extra = {"confirm": True, "payment_method_data": {"type": "ideal"},
+                 "return_url": f"{body.origin.rstrip('/')}/betalen/{token}"}
     try:
         pi = stripe.PaymentIntent.create(
             api_key=a["secret_key"], amount=cents, currency="eur", payment_method_types=[body.method],
             metadata={"company_id": cid, "tenant_id": body.tenant_id, "source": "surirent_kiosk",
                       "original": f"{body.currency} {body.amount}"},
-            description=f"Huur {tenant.get('name') or ''}".strip(),
+            description=f"Huur {tenant.get('name') or ''}".strip(), **extra,
         )
     except stripe.error.StripeError as e:
         msg = e.user_message or str(e)
         if body.method == "ideal" and "ideal" in msg.lower():
             msg = "iDEAL is niet geactiveerd in uw Stripe-account."
         raise HTTPException(400, f"Stripe: {msg[:200]}")
-    token = secrets.token_urlsafe(16)
+    na = getattr(pi, "next_action", None)
+    rtu = getattr(na, "redirect_to_url", None) if na else None
+    redirect_url = getattr(rtu, "url", None) if rtu else None
     now = _deps.iso(_deps.now_utc())
     await _deps.db.kiosk_stripe_payments.insert_one({
         "id": _deps.new_id(), "token": token, "company_id": cid, "tenant_id": body.tenant_id,
@@ -148,7 +156,7 @@ async def kiosk_stripe_intent(body: KioskIntentIn, session: dict = Depends(_deps
         "created_at": now, "updated_at": now,
     })
     return {"token": token, "payment_intent_id": pi.id, "client_secret": pi.client_secret,
-            "publishable_key": a["publishable_key"], "amount_eur_cents": cents, "method": body.method, "mode": a["mode"]}
+            "publishable_key": a["publishable_key"], "amount_eur_cents": cents, "method": body.method, "mode": a["mode"], "redirect_url": redirect_url}
 
 
 async def _refresh(tx: dict) -> dict:
