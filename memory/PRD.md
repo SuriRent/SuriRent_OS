@@ -665,3 +665,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Creditcard en iDEAL op de kiosk openen nu direct de betaalpagina; de QR-flow is verwijderd.
 - Creditcard: het Stripe-formulier staat direct op het kioskscherm. iDEAL: de PaymentIntent wordt op de server bevestigd en de bankpagina opent automatisch (return_url /betalen/{token}); de kiosk pollt de status.
 - Getest: iteration_65 (backend 16/16, frontend E2E op desktop en mobiel)
+
+## 2026-06 — APK print-bridge
+- Na een geslaagde kioskbetaling (PaymentConfirm.submit) wordt alleen binnen de APK (als window.ReactNativeWebView bestaat) PRINT_RECEIPT {naam, appartement, bedrag, methode, datum, kwitantie} verstuurd. Getest: iteration_66.

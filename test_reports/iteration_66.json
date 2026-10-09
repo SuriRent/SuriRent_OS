@@ -1,0 +1,25 @@
+{
+  "summary": "Iter 66 — Verified new ReactNativeWebView PRINT_RECEIPT bridge in KioskLayout.jsx PaymentConfirm.submit (lines 2418-2429). Playwright E2E on branded /my-awesome-rentals-bv/login?target=kiosk flow: PIN 4321 → location (first) → apartment Studio 1 → overview-advance-pay-btn → keypad-1 (1 SRD) → payment-next-btn → method-contant → confirm-submit. CASE A (APK-mock): page.add_init_script installs window.ReactNativeWebView={postMessage:m=>window.__rnMsgs.push(m)} before navigation. After confirm, window.__rnMsgs contains EXACTLY 1 JSON string. Parsed payload fully conforms: type='PRINT_RECEIPT', data.naam='Kevin Doelahasori' (string), data.appartement='Studio 1' (string), data.bedrag=1 (number), data.methode='contant' (lowercase string match), data.datum='2026-10-09T21:37:21.086429+00:00' (ISO 8601 w/ tz), data.kwitantie='KW2026-00528' (non-empty receipt number, matches server-generated receipt_number shown on the Bedankt! screen). CASE B (plain browser, no mock): typeof window.ReactNativeWebView==='undefined'. Same flow completes, 'Bedankt!' + full KWITANTIE receipt (KW2026-00529) render on screen, 0 pageerrors captured. Only console noise is a benign sandboxed iframe for /api/payments/.../print.html preview (unrelated to the RN bridge). The try/catch wrapper around postMessage protects correctly: no throws observed, flow continues to onSuccess regardless of bridge presence.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PaymentConfirm.submit (KioskLayout.jsx ~2418-2429): guard `window.ReactNativeWebView?.postMessage` + try/catch is correct — never breaks browser flow. Payload shape matches spec exactly (naam, appartement, bedrag, methode, datum, kwitantie).",
+    "bedrag field uses `data.amount ?? payload.amount` — survives case where backend omits amount (plan-only path). methode uses `data.method || payload.method` — correct fallback. datum falls back from paid_at → created_at → new Date().toISOString() — always ISO.",
+    "Nit: when planItems-only path triggers (plainAmount===0), kwitantie will be '' (no receipt_number). Not reached in tested flows but worth noting — APK printer may want to skip empty-kwitantie receipts or print a plan summary instead.",
+    "KioskLayout.jsx still 5300+ lines (unchanged from iter65 note) — maintainability concern, not blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100% (both APK-mock and plain-browser scenarios pass end-to-end)"},
+  "test_credentials": "kiosk PIN 4321 slug my-awesome-rentals-bv (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "2 real cash kiosk payments of SRD 1 against tenant 'Kevin Doelahasori' / apartment 'Studio 1' (receipts KW2026-00528 + KW2026-00529). Harmless test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Flow confirmed via advance-pay (no outstanding invoices on Studio 1 → use overview-advance-pay-btn not overview-pay-btn). Confirm button is data-testid='confirm-submit'. page.add_init_script must be called BEFORE page.goto to inject window.ReactNativeWebView early enough; verified has_mock=True pre-navigation and single message captured post-confirm.",
+  "rca of the issue": "N/A — feature correctly implemented and verified."
+}
