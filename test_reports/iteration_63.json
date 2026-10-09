@@ -1,0 +1,29 @@
+{
+  "summary": "Iter 63 — Multi-invoice pay-select + save-card autopay. Backend: 7/7 pytest pass. GET /api/billing/me/autopay returns {enabled,has_card,card{brand,last4,exp_month,exp_year}}. POST /api/saas-stripe/create-intent supports {all_open:true} and {invoice_ids:[...]}; cross-company invoice_ids → 404. PUT /api/billing/me/autopay enable without card → 400 Dutch 'Betaal eerst één keer met creditcard en vink Kaart bewaren aan'. End-to-end: create-intent card → intent-save-card save=true → stripe confirm(pm_card_visa) → poll paid → autopay.has_card=true (visa 4242 10/27) → superadmin creates new invoice → autopay_result='paid', invoice persisted paid, subscription_payment note 'Automatisch afgeschreven (creditcard)'. With autopay disabled, autopay_result='skipped' and invoice stays open (no error from push). Frontend (demo@surirent.sr, 3 open invoices seeded): /c/my-awesome-rentals-bv/admin/instellingen#abonnement shows saas-online-pay-box with 3 saas-pay-row-<id> + checkboxes (default all checked), saas-pay-amount='SRD 5.534', saas-pay-select-all toggles between 'Niets selecteren' and 'Alles selecteren', amount updates live (0 → 5534 → 4300). With 0 selected the saas-pay-card-btn / saas-pay-ideal-btn parent gets opacity-40 pointer-events-none (disabled). Card button navigates to /saas/checkout/selectie?ids=<id1,id2,id3>&method=card&back=... Checkout page lists 3 checkout-inv-<id> rows, checkout-total='Totaal (3 facturen) SRD 5.534,00', checkout-eur-amount='€131.09', checkout-save-card-input visible. autopay-card shows 'Aan · visa •••• 4242 · verloopt 10/27' with autopay-toggle + autopay-remove. subscription-bell-btn (count 3) opens panel with 3 subscription-alert rows each having subscription-pay-card-<id>/subscription-pay-ideal-<id>; card click navigates to /saas/checkout/<id>?method=card&back=.... Mobile 390: scrollWidth==clientWidth==390 (no horizontal overflow), both pay-box with checkbox rows and autopay-card fit.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter63_multi_select_autopay.py",
+    "/app/test_reports/pytest/iter63.xml"
+  ],
+  "action_items": [
+    "Housekeeping: iter63 left behind 2 TEST_multiselect open invoices (SRD 2.500 d3ca8c06 + SRD 1.800 20afc11c) plus the original SRD 1.234 f2fd49eb. Since autopay was re-enabled at the end these invoices did NOT get auto-charged (they were created with autopay disabled). Main agent may wish to delete/void these before switching Stripe back to LIVE, otherwise they will remain open to the real end-user.",
+    "No code changes needed — all tested surfaces work as specified."
+  ],
+  "critical_code_review_comments": [
+    "saas_stripe._resolve_invoices correctly scopes invoice_ids by company_id for non-super callers → cross-company 404 verified.",
+    "put_autopay returns 400 only when enabling without a saved payment_method_id; disabling is always allowed. Clean idempotent behavior.",
+    "autopay_charge_invoice guards on mode-match (autopay.mode == active cfg.mode) to avoid mixing test-saved cards with live-mode intents — correct.",
+    "_mark_paid is idempotent (status $ne paid guard) and both invoice-level + payments-level writes are also idempotent-safe. ✅",
+    "PayBanner uses state.Set keyed on invoice ids and resets correctly when the list changes (useEffect [key]). Totaal label and (chosen.length) counter stay in sync.",
+    "SaveCardToggle auto-triggers on ?save=1 which lets AutopayCard.onSetup pre-check the box — flow verified in task description and tested via the setup click."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter63_multi_select_autopay.py (new)"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all testids and flows verified)"},
+  "test_credentials": "demo@surirent.sr/demo1234, super@surirent.sr/super1234",
+  "seed_data_creation": "Via test E2E: saved Visa 4242 (10/27) as demo autopay card. Via curl between browser runs: created 2 extra open invoices (SRD 2.500, SRD 1.800) with autopay temporarily disabled, then re-enabled autopay. Also 1 invoice SRD 1.234 was left open by test_autopay_skipped_when_disabled.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo autopay now has saved Visa 4242 (test-mode) and is enabled. Open invoices at end of run: f2fd49eb SRD 1.234, d3ca8c06 SRD 2.500, 20afc11c SRD 1.800 (sum 5.534 ≈ €131.09). To re-test paid-path again, just POST /superadmin/subscription-invoices (autopay will charge immediately). To re-test skipped-path, PUT /billing/me/autopay {enabled:false} first. Multi-select UI uses saas-pay-row-<id>/saas-pay-check-<id>; select-all button only renders when openInvoices.length>1. Subscription-bell renders 2x in DOM (desktop+mobile) — use :visible selector. Checkout URL for multi-select is /saas/checkout/selectie?ids=<csv>&method=<card|ideal>&back=..., for autopay setup appends &save=1 which pre-checks checkout-save-card-input.",
+  "rca_of_the_issue": "N/A — feature works end-to-end."
+}

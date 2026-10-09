@@ -1,6 +1,14 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Change (2026-06 · Alles-in-één betalen + Automatisch betalen + Pushmeldingen)
+- Betaalbox Mijn Abonnement toont ALLE open facturen met checkboxes (standaard alles), totaal live; betaalt selectie in één Stripe PaymentIntent (`create-intent` met `invoice_ids` / `all_open`). Checkout toont factuurlijst + totaal.
+- Automatisch betalen (alleen creditcard): checkbox "Kaart bewaren" in checkout (`POST /saas-stripe/intent-save-card` → setup_future_usage off_session, Stripe Customer per bedrijf per modus `companies.stripe_customers`). Kaart opgeslagen in `companies.autopay`. Kaart `AutopayCard`: aan/uit, verwijderen. Endpoints `GET/PUT/DELETE /api/billing/me/autopay`.
+- Nieuwe factuur (maandelijkse tick + handmatig superadmin) → `on_new_saas_invoice`: direct off-session afschrijven; mislukt → `autopay_failed` op factuur + push. Geen autopay → push "Nieuwe abonnementsfactuur".
+- Push ook bij geslaagde autopay en dagelijks bij verlopen abonnement (`expiry_push_tick`, idempotent via `sent_expiry_push`).
+- Getest: iteration_63 (backend 7/7, frontend 100%) in TEST-modus; Stripe daarna teruggezet naar LIVE, testfacturen opgeruimd.
+
+
 ## Latest Change (2026-06 · Abonnementsbel + Mijn Abonnement licht design)
 - ApartmentsBell (gebouw-icoon) en OverdueBell (huur-achterstanden) verwijderd uit de beheerder-topbar (desktop + mobiel). Nieuwe `components/SubscriptionBell.jsx`: toont alleen abonnementsmeldingen (verlopen, proef/vernieuwing binnen 7 dagen, nieuwe/achterstallige factuur) met directe Creditcard/iDEAL knoppen + link naar Mijn abonnement.
 - Huur-achterstanden alleen nog op Facturen-pagina.
