@@ -9,7 +9,7 @@ import {
   Smartphone, QrCode, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus, Wrench, Camera,
+  UserPlus, Wrench, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -2845,10 +2845,16 @@ function RowSlim({ label, value }) {
 }
 
 // =====================================================================
-// KasgeldPanel — kiosk-medewerker kan saldo bekijken + nieuwe mutatie
-// registreren zonder naar de beheerder. Read-only feed van laatste 200
-// mutaties (handmatig + betalingen). Nieuwe mutatie POST'ed naar het
-// kiosk-scoped endpoint /api/kiosk/kasgeld dat het kiosk_token accepteert.
+// =====================================================================
+// KasgeldPanel — nieuw design (2026-02-28), inspired door user mock-up.
+// Oranje achtergrond, twee witte "card" secties: Overzicht + Recente
+// mutaties met per-maand accordion. Werkt zowel op mobiel (compacte
+// stack) als desktop (bredere layout).
+//
+// Data-flow (ongewijzigd):
+//   GET /kiosk/kasgeld/balance → { SRD, USD, EUR } totaal-saldi
+//   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
+//   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
 function KasgeldPanel({ onBack }) {
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
@@ -2856,6 +2862,15 @@ function KasgeldPanel({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const operator = getKioskEmployee();
+
+  // Huidige maand als default-focus voor de accordion én het
+  // "Oktober 2026 ▼" selector-pil in de overzicht-card.
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonth, setSelectedMonth] = useState(currentKey);
+  const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -2872,79 +2887,270 @@ function KasgeldPanel({ onBack }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Groepeer alle mutations per YYYY-MM, nieuwste maand eerst.
+  const monthGroups = useMemo(() => {
+    const map = new Map();
+    for (const it of items) {
+      const d = new Date(it.entry_date || it.created_at);
+      if (isNaN(d)) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: `${MONTHS_NL[d.getMonth()]} ${d.getFullYear()}`,
+          year: d.getFullYear(),
+          month: d.getMonth(),
+          items: [],
+        });
+      }
+      map.get(key).items.push(it);
+    }
+    return Array.from(map.values()).sort((a, b) => b.key.localeCompare(a.key));
+  }, [items]);
+
+  const selectedLabel = (() => {
+    const g = monthGroups.find((x) => x.key === selectedMonth);
+    if (g) return g.label;
+    const [y, m] = selectedMonth.split('-');
+    return `${MONTHS_NL[Number(m) - 1]} ${y}`;
+  })();
+
+  const toggleMonth = (key) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const pickMonth = (key) => {
+    setSelectedMonth(key);
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setShowMonthPicker(false);
+  };
+
+  const totalMutations = items.length;
+  const srdBalance = balances.SRD || 0;
+
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="flex items-center justify-between gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
+    <div className="h-full w-full bg-[#FF5C00] overflow-y-auto"
+      style={{ paddingTop: 'max(env(safe-area-inset-top,0px), 12px)' }}>
+      {/* Oranje header — Terug links, operator-context rechts */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-2 pb-4 flex items-start justify-between gap-3 max-w-5xl mx-auto">
         <button onClick={onBack} data-testid="kasgeld-back"
-          className="flex items-center gap-2 text-white font-bold bg-white/20 rounded-xl px-4 py-2.5 min-h-[44px]">
-          <ArrowLeft className="w-4 h-4" /> <span className="text-sm">Terug</span>
+          className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/20 backdrop-blur-sm text-white font-bold rounded-2xl px-4 py-2.5 min-h-[44px] active:scale-95 transition">
+          <ArrowLeft className="w-5 h-5" strokeWidth={2.5} />
+          <span className="text-sm">Terug</span>
         </button>
-        <span className="text-sm sm:text-base font-black text-white uppercase tracking-widest">Kasgeld</span>
-        <button onClick={load} data-testid="kasgeld-refresh"
-          className="text-white bg-white/20 rounded-xl px-3 py-2.5 min-h-[44px]" title="Vernieuwen">
-          <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="text-right text-white">
+          <p className="text-base sm:text-lg font-black leading-tight" data-testid="kasgeld-operator-name">
+            {operator?.name || 'Kiosk'}
+          </p>
+          <p className="text-xs sm:text-sm opacity-80 font-semibold">Kasgeldbeheer</p>
+        </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto pb-4 max-w-3xl w-full mx-auto space-y-4">
-        {/* Saldo per valuta */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {['SRD', 'USD', 'EUR'].map((cur) => (
-            <div key={cur} className="bg-white rounded-2xl p-4 text-center shadow-lg" data-testid={`kasgeld-bal-${cur}`}>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{cur}</p>
-              <p className="text-lg sm:text-xl font-black text-slate-900 mt-1 font-mono tabular-nums">
-                {(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+      {/* Content stacks: op mobiel verticaal, op desktop in 2 kolommen */}
+      <div className="px-3 sm:px-6 lg:px-8 pb-6 max-w-5xl mx-auto space-y-3 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-5 lg:items-start">
+        {/* ─── CARD 1 — OVERZICHT ─── */}
+        <div className="bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)] p-5 sm:p-6">
+          <div className="row-label-value items-center mb-4 sm:mb-5">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl px-2.5 py-2">
+                <Calendar className="w-3.5 h-3.5" /> Maand
+              </span>
+              <button onClick={() => setShowMonthPicker(true)} data-testid="kasgeld-month-picker"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-2.5 py-2 hover:border-slate-300 active:scale-95 transition">
+                <span className="capitalize">{selectedLabel}</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Totaal saldo — orange tile + big SRD amount */}
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
+              <Wallet className="w-7 h-7" strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-500">Totaal kasgeld</p>
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight tabular-nums leading-tight" data-testid="kasgeld-total-srd">
+                {fmtMoney(srdBalance, 'SRD')}
               </p>
             </div>
-          ))}
-        </div>
-        {/* Nieuwe mutatie */}
-        <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-          className="w-full h-14 rounded-2xl bg-white text-orange-600 font-black text-base inline-flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition">
-          <Wallet className="w-5 h-5" /> Nieuwe mutatie
-        </button>
-        {/* Recente mutaties */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Recente mutaties</h3>
-            <span className="text-[10px] font-bold text-slate-400">{items.length}</span>
           </div>
-          {err && <p className="p-4 text-xs text-red-600">{err}</p>}
-          {!err && loading && <p className="p-4 text-center text-slate-500 text-sm">Laden…</p>}
-          {!err && !loading && items.length === 0 && (
-            <p className="p-4 text-center text-slate-400 text-sm">Nog geen mutaties.</p>
+
+          {/* 3-currency grid */}
+          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-4" data-testid="kasgeld-currency-grid">
+            {['SRD', 'USD', 'EUR'].map((cur) => (
+              <div key={cur} className="px-2 py-3 text-center" data-testid={`kasgeld-bal-${cur}`}>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{cur}</p>
+                <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5 tabular-nums leading-tight">
+                  {Number(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
+            className="w-full h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+            <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
+          </button>
+        </div>
+
+        {/* ─── CARD 2 — RECENTE MUTATIES ─── */}
+        <div className="bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)] p-5 sm:p-6">
+          <div className="row-label-value items-center mb-4">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Recente mutaties</h2>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1.5" data-testid="kasgeld-count-badge">
+              {totalMutations} mutaties
+            </span>
+          </div>
+
+          {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
+
+          {!err && loading && (
+            <div className="py-10 text-center" data-testid="kasgeld-loading">
+              <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin" />
+              <p className="text-sm text-slate-400 font-semibold mt-2">Laden…</p>
+            </div>
           )}
-          <div className="divide-y divide-slate-100 max-h-[50vh] overflow-auto">
-            {items.slice(0, 50).map((it) => {
-              const isIn = it.type === 'in';
-              const d = it.entry_date || it.created_at;
+
+          {!err && !loading && monthGroups.length === 0 && (
+            <div className="py-10 text-center" data-testid="kasgeld-empty">
+              <Wallet className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-400 font-semibold">Nog geen mutaties.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {monthGroups.map((g) => {
+              const isOpen = expandedMonths.has(g.key);
+              const isSelected = g.key === selectedMonth;
               return (
-                <div key={it.id} className="flex items-center gap-3 px-4 py-3" data-testid={`kasgeld-row-${it.id}`}>
-                  <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {isIn ? <ArrowRight className="w-4 h-4 rotate-[-45deg]" /> : <ArrowRight className="w-4 h-4 rotate-[135deg]" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{it.description || it.category || '—'}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      {d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : ''}
-                      {it.source === 'payment' && ' · Betaling'}
-                      {it.method ? ` · ${it.method}` : ''}
-                    </p>
-                  </div>
-                  <p className={`text-sm font-black whitespace-nowrap tabular-nums ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {isIn ? '+' : '-'}{it.currency} {Number(it.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
-                  </p>
+                <div key={g.key} className={`rounded-2xl border transition ${
+                  isSelected ? 'border-orange-200 bg-orange-50/40' : 'border-slate-200 bg-slate-50/40'
+                }`} data-testid={`kasgeld-month-${g.key}`}>
+                  <button type="button" onClick={() => toggleMonth(g.key)}
+                    data-testid={`kasgeld-month-toggle-${g.key}`}
+                    className="w-full flex items-center gap-3 px-3 sm:px-4 py-3 text-left">
+                    <Calendar className="w-5 h-5 text-slate-500 shrink-0" />
+                    <span className="flex-1 min-w-0 font-black text-slate-900 capitalize truncate">{g.label}</span>
+                    <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{g.items.length} mutaties</span>
+                    <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="divide-y divide-slate-100 border-t border-slate-100 bg-white rounded-b-2xl" data-testid={`kasgeld-month-items-${g.key}`}>
+                      {g.items.map((it) => (
+                        <KasgeldMutationRow key={it.id} item={it} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {/* Month picker overlay (bottom-sheet op mobiel, centered op desktop) */}
+      {showMonthPicker && (
+        <KasgeldMonthPicker groups={monthGroups} selected={selectedMonth}
+          onPick={pickMonth} onClose={() => setShowMonthPicker(false)} />
+      )}
+
       {showForm && (
         <KasgeldMutationModal onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); load(); }} />
       )}
     </div>
   );
+}
+
+// Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode) +
+// bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
+function KasgeldMutationRow({ item }) {
+  const isIn = item.type === 'in';
+  const d = item.entry_date || item.created_at;
+  const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
+  return (
+    <div className="flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
+      <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
+        isIn ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'
+      }`}>
+        {isIn ? <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} /> : <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm sm:text-base font-bold text-slate-900 truncate" data-testid={`kasgeld-row-title-${item.id}`}>
+          {item.description || item.category || '—'}
+        </p>
+        <p className="text-xs text-slate-500 mt-0.5 truncate">
+          {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
+        </p>
+      </div>
+      <p className={`text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
+        isIn ? 'text-emerald-600' : 'text-red-500'
+      }`} data-testid={`kasgeld-row-amount-${item.id}`}>
+        {isIn ? '+' : '−'}{item.currency} {Number(item.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </p>
+    </div>
+  );
+}
+
+// Bottom-sheet op mobiel / centered dialog op desktop om een maand te kiezen.
+// Toont alle maanden die daadwerkelijk mutations hebben.
+function KasgeldMonthPicker({ groups, selected, onPick, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+  return createPortal(
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose} data-testid="kasgeld-month-picker-overlay">
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom,16px), 16px)' }}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <h3 className="text-lg font-black text-slate-900">Kies een maand</h3>
+          <button onClick={onClose} data-testid="kasgeld-month-picker-close"
+            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto px-3 pb-4">
+          {groups.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-6">Geen mutaties beschikbaar.</p>
+          )}
+          {groups.map((g) => {
+            const active = g.key === selected;
+            return (
+              <button key={g.key} onClick={() => onPick(g.key)}
+                data-testid={`kasgeld-month-pick-${g.key}`}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition ${
+                  active ? 'bg-orange-50 border border-[#FF5C00]' : 'hover:bg-slate-50 border border-transparent'
+                }`}>
+                <Calendar className={`w-5 h-5 shrink-0 ${active ? 'text-[#FF5C00]' : 'text-slate-400'}`} />
+                <span className="flex-1 min-w-0 font-bold text-slate-900 capitalize truncate">{g.label}</span>
+                <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{g.items.length}</span>
+                {active && <Check className="w-5 h-5 text-[#FF5C00] shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>, document.body);
 }
 
 function KasgeldMutationModal({ onClose, onSaved }) {

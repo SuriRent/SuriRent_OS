@@ -1,6 +1,28 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-02-28) — Kiosk Kasgeld herontwerp (mobile + desktop)
+
+**Wat**: Volledige redesign van het Kasgeld-paneel in de Kiosk, op basis van user mock-up. Twee witte "card"-secties op oranje achtergrond: (1) Overzicht met totaalsaldo + 3-valuta grid + "Nieuwe mutatie" knop, (2) Recente mutaties met per-maand accordion.
+
+**Mobile layout**: Verticaal gestapeld; eerst de overzicht-card met titel/maand-pil, dan het totaal-saldo (wallet-icon + SRD-bedrag groot), dan 3-koloms valuta-grid (SRD/USD/EUR) + oranje `Nieuwe mutatie` CTA; onder de card de recente-mutaties lijst gegroepeerd per maand.
+
+**Desktop layout**: Op `lg+` (≥1024px) wordt het een 2-koloms grid: overzicht-card links (max 420px), mutaties-rechts (flexibel). Dezelfde cards, zelfde logica.
+
+**Functionaliteit**:
+- `KasgeldPanel` fetcht `/kiosk/kasgeld/balance` en `/kiosk/kasgeld` (ongewijzigd backend)
+- Mutations worden client-side gegroepeerd per `YYYY-MM`, nieuwste maand eerst
+- Standaard is de huidige maand uitgevouwen in de accordion, oudere maanden ingeklapt
+- "Oktober 2026 ▼" chip opent `KasgeldMonthPicker` (bottom-sheet mobiel / centered dialog desktop) om snel naar een andere maand te springen
+- Mutatie-rij: gekleurde icoon-tegel (groen ↗ voor inkomsten / rood ↙ voor uitgaven) + titel + "datum · Contant/Betaalmethode" subtekst + gekleurd bedrag (+/−)
+- Operator-naam uit `getKioskEmployee()` toont rechts in de oranje header
+- `Nieuwe mutatie` opent de bestaande `KasgeldMutationModal` (ongewijzigd)
+
+**Nieuwe helpers**: `KasgeldMutationRow` (1 regel per transactie) + `KasgeldMonthPicker` (overlay). Icons `ArrowUpRight`/`ArrowDownLeft`/`ChevronDown` toegevoegd aan lucide-imports.
+
+**Getest** op 390×844 (iPhone 14 Pro) en 1440×900 (desktop) via screenshot tool — beide matchen de user mock-up.
+
+
 ## Latest Fix (2026-02-27 • update) — Android text-size-adjust + robuustere label/value utility
 
 **Correctie**: Vorige fix richtte zich teveel op iOS. User meldde dat op kleinere Android schermen de layout nog steeds brak tenzij gebruikers in Instellingen de systeem-lettergrootte verkleinden.
