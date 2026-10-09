@@ -6301,6 +6301,52 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
     if tenant.get("apartment_id"):
         apt = await db.apartments.find_one({"id": tenant["apartment_id"]}, {"_id": 0})
     bal = await _calc_balance(tenant)
+    # Boetes (automatische) — zelfde logica als kiosk_tenant_overview, maar
+    # vereenvoudigd omdat de tenant-portal geen gedetailleerde buckets kent.
+    # We tellen alle open facturen van deze huurder die >grace dagen te laat
+    # zijn, en passen de admin-ingestelde boete toe.
+    fines_total = 0.0
+    fines_currency = bal.get("currency") or "SRD"
+    try:
+        cs = await db.company_settings.find_one(
+            {"company_id": tenant.get("company_id")},
+            {"_id": 0, "invoicing": 1},
+        )
+        inv_cfg = (cs or {}).get("invoicing") if cs else None
+        if isinstance(inv_cfg, dict) and inv_cfg.get("fines_enabled"):
+            fine_amt = float(inv_cfg.get("fines_amount") or 0)
+            fine_mode = str(inv_cfg.get("fines_mode") or "per_overdue")
+            fine_grace = int(inv_cfg.get("fines_grace_days") or 0)
+            fines_currency = str(inv_cfg.get("fines_currency") or fines_currency)
+            if fine_amt > 0:
+                today_local = now_utc().date()
+                overdue_count = 0
+                total_days = 0
+                async for inv in db.invoices.find(
+                    {"tenant_id": tenant["id"], "status": {"$ne": "paid"}},
+                    {"_id": 0, "due_date": 1, "amount_due": 1, "amount": 1, "paid_amount": 1},
+                ):
+                    total = float(inv.get("amount_due") or inv.get("amount") or 0)
+                    paid = float(inv.get("paid_amount") or 0)
+                    if total - paid <= 0:
+                        continue
+                    dd = inv.get("due_date")
+                    if not dd:
+                        continue
+                    try:
+                        due = datetime.fromisoformat(str(dd)).date()
+                    except Exception:  # noqa: BLE001
+                        continue
+                    days_late = (today_local - due).days - fine_grace
+                    if days_late > 0:
+                        overdue_count += 1
+                        total_days += days_late
+                if fine_mode == "per_day":
+                    fines_total = round(fine_amt * total_days, 2)
+                else:
+                    fines_total = round(fine_amt * overdue_count, 2)
+    except Exception:  # noqa: BLE001
+        pass
     return {
         "tenant": {"id": tenant["id"], "name": tenant["name"], "phone": tenant.get("phone"), "email": tenant.get("email")},
         "apartment": apt and {
@@ -6308,6 +6354,8 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
             "rent_amount": apt["rent_amount"], "currency": apt["currency"],
         },
         "balance": bal,
+        "fines_total": fines_total,
+        "fines_currency": fines_currency,
     }
 
 
@@ -9811,6 +9859,42 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             overdue_invoices.append(item)
             overdue_total += outstanding
     current_month_invoice = current_invoices[0] if current_invoices else None
+    # ----- Boetes (automatische) -----
+    # Alleen berekenen wanneer admin `invoicing.fines_enabled` heeft aangezet.
+    # Modi:
+    #   - "per_overdue": vast bedrag × aantal achterstallige facturen
+    #   - "per_day"    : vast bedrag × totaal dagen te laat (sum per factuur)
+    # Het grace-window (`fines_grace_days`) wordt afgetrokken van de
+    # dagen-te-laat voor "per_day". Resultaat (afgerond op 2 decimalen) wordt
+    # mee-geserveerd als `fines_total`; frontend toont de rij alleen wanneer
+    # > 0.
+    fines_total = 0.0
+    fines_currency = balance.get("currency") or "SRD"
+    try:
+        inv_cfg = (cs or {}).get("invoicing") if cs else None
+        if isinstance(inv_cfg, dict) and inv_cfg.get("fines_enabled"):
+            fine_amt = float(inv_cfg.get("fines_amount") or 0)
+            fine_mode = str(inv_cfg.get("fines_mode") or "per_overdue")
+            fine_grace = int(inv_cfg.get("fines_grace_days") or 0)
+            fines_currency = str(inv_cfg.get("fines_currency") or fines_currency)
+            if fine_amt > 0 and overdue_invoices:
+                if fine_mode == "per_day":
+                    total_days = 0
+                    for inv in overdue_invoices:
+                        dd = inv.get("due_date")
+                        if not dd:
+                            continue
+                        try:
+                            due = datetime.fromisoformat(str(dd)).date()
+                        except Exception:  # noqa: BLE001
+                            continue
+                        days_late = max((today_local - due).days - fine_grace, 0)
+                        total_days += days_late
+                    fines_total = round(fine_amt * total_days, 2)
+                else:  # per_overdue (default)
+                    fines_total = round(fine_amt * len(overdue_invoices), 2)
+    except Exception:  # noqa: BLE001
+        pass
     # `has_history` — bepaalt of frontend "Vooruit betalen voor eerste maand"
     # als prominente knop toont (nieuwe huurder) of gewoon de kleine
     # "Vooruitbetaling registreren" (bestaande huurder, alles voldaan).
@@ -9854,6 +9938,8 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "future_invoices_total": round(future_total, 2),
         "current_month_invoice": current_month_invoice,
         "grace_workdays": grace_wd,
+        "fines_total": fines_total,
+        "fines_currency": fines_currency,
         "has_history": bool(has_payment or has_invoice),
         "due_reminders": due_notes,
     }

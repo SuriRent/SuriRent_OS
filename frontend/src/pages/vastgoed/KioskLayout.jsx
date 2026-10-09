@@ -801,6 +801,11 @@ function TenantOverview({ apartment, onBack, onPay }) {
   //   future_invoices    → Vooruit gefactureerd (toekomst, NIET in totaal)
   const openInvoices = Array.isArray(data.open_invoices) ? data.open_invoices : [];
   const openInvoicesTotal = Number(data.open_invoices_total || 0);
+  // Boetes — alleen berekenen/tonen wanneer admin "Automatische boetes" heeft
+  // ingeschakeld in Facturen-automatisering. Backend levert `fines_total`
+  // als 0 wanneer uitgeschakeld, anders de berekende som.
+  const finesTotal = Number(data.fines_total || 0);
+  const finesCurrency = String(data.fines_currency || data.balance?.currency || 'SRD');
   const currentInvoices = Array.isArray(data.current_invoices) ? data.current_invoices : [];
   const currentInvoicesTotal = Number(data.current_invoices_total || 0);
   const futureInvoices = Array.isArray(data.future_invoices) ? data.future_invoices : [];
@@ -882,7 +887,17 @@ function TenantOverview({ apartment, onBack, onPay }) {
       sub: currentInvoice && currentInvoice.due_date
         ? `Vervalt ${new Date(currentInvoice.due_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}`
         : '' },
-    { key: 'fines', label: 'Boetes', value: 0, icon: FileText, muted: true },
+    // Boetes — alleen tonen wanneer er daadwerkelijk een boetebedrag is
+    // berekend (admin heeft "Automatische boetes" aangezet). Zolang
+    // `finesTotal === 0` blijft de rij volledig verborgen.
+    ...(finesTotal > 0 ? [{
+      key: 'fines',
+      label: 'Boetes',
+      value: finesTotal,
+      currency: finesCurrency,
+      icon: FileText,
+      muted: true,
+    }] : []),
     ...(futureInvoicesTotal > 0 ? [{
       key: 'future',
       label: `Vooruit gefactureerd (${futureInvoices.length} maand${futureInvoices.length === 1 ? '' : 'en'})`,

@@ -1,6 +1,29 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-02-28) — Automatische boetes via Facturen-automatisering
+
+**Doel**: Boetes-rij in Financieel overzicht moet pas verschijnen zodra er echt een boete is. De admin schakelt dit aan in Facturen-automatisering en configureert bedrag + modus.
+
+**Backend** (`settings_service.py` + `server.py`):
+- `empty_section("invoicing")` uitgebreid met 5 velden: `fines_enabled`, `fines_amount`, `fines_currency`, `fines_mode` (`per_overdue` | `per_day`), `fines_grace_days`
+- `GET /kiosk/tenants/{id}/overview` berekent nu `fines_total` + `fines_currency`:
+  - Alleen wanneer `fines_enabled: true` én tenant heeft `overdue_invoices`
+  - `per_overdue`: `fines_amount × count(overdue)`
+  - `per_day`: `fines_amount × sum(max(days_late - grace, 0))` over alle overdue facturen
+- `GET /tenant-portal/overview` idem — eigen berekening uit huurder-scoped invoices
+- Testresultaat: Jan Pieterse met 2 overdue facturen × SRD 50 → `fines_total: 100.0` correct
+
+**Frontend**:
+- `KioskLayout.jsx` `TenantOverview`: items-array leest `data.fines_total` + `data.fines_currency` en toont Boetes-rij alleen wanneer `> 0`
+- `TenantKioskLayout.jsx` `DashboardView`: leest `overview.fines_total` en toont rij conditioneel
+- `admin/Settings.jsx` `InvoicingForm`: nieuwe "Automatische boetes" sectie onderaan met toggle "Ingeschakeld", bedrag/valuta/grace-dagen velden, en modus-selector (Per vervallen factuur / Per dag te laat). Toont uitleg-blok dat niets automatisch wordt geïncasseerd — enkel informatief in Financieel overzicht
+
+**Visueel geverifieerd**:
+- Fines ingeschakeld (SRD 50 per overdue) → Boetes-rij toont `SRD 100,00` bij 2 overdue
+- Fines uitgeschakeld → Boetes-rij volledig verborgen
+
+
 ## Latest Fix (2026-02-28 · v4) — Items in eigen scroll-container + numpad toggle label
 
 **Twee aanpassingen** (`PaySelect` in KioskLayout.jsx):

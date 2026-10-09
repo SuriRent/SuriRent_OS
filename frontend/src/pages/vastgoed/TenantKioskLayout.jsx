@@ -535,6 +535,9 @@ function DashboardView({ overview, onAction, onHistory }) {
   const totalDue = openRent;
   const cur = (balance.currency || apartment?.currency || 'SRD').toUpperCase();
   const hasBalance = totalDue > 0;
+  // Boetes — alleen tonen wanneer backend `fines_total > 0` meegeeft (admin
+  // heeft "Automatische boetes" aangezet). Anders verbergen.
+  const finesTotal = Number(overview?.fines_total || 0);
 
   // Per-factuur breakdown — toont elke openstaande factuur met paid+remaining,
   // én een "Via betalingsregeling"-label als de factuur in een actief plan zit.
@@ -572,7 +575,12 @@ function DashboardView({ overview, onAction, onHistory }) {
       sub: balance.next_period ? `${MONTHS_NL[balance.next_period.month - 1]} ${balance.next_period.year}` : '',
     }] : []),
     { key: 'svc', label: 'Servicekosten', value: 0, icon: Droplets, muted: true },
-    { key: 'fines', label: 'Boetes', value: 0, icon: AlertCircle, muted: true },
+    // Boetes — alleen zichtbaar wanneer admin "Automatische boetes" heeft
+    // ingeschakeld in Facturen-automatisering én de huurder achterstallige
+    // facturen heeft die een boete triggeren.
+    ...(finesTotal > 0 ? [{
+      key: 'fines', label: 'Boetes', value: finesTotal, icon: AlertCircle, muted: true,
+    }] : []),
   ];
 
   return (

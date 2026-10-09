@@ -97,6 +97,25 @@ def empty_section(section: str) -> dict:
             "reminder_days_before": 3,
             "last_auto_run": None,
             "enabled": False,
+            # ── Automatische boetes ──
+            # Wanneer `fines_enabled` aan, berekent de kiosk/tenant-portal
+            # overview-endpoint een boete-bedrag per huurder op basis van
+            # hun achterstallige facturen. Niets wordt automatisch geïn-
+            # casseerd — de boete-rij informeert alleen in het Financieel
+            # overzicht zodat kiosk-medewerker + huurder deze bewust kunnen
+            # meerekenen bij de volgende betaling.
+            #
+            #   fines_mode:
+            #     - "per_overdue" (default): vast bedrag × aantal overdue
+            #     - "per_day"              : vast bedrag × dagen te laat
+            #                                 (sommig over alle overdue)
+            #   fines_grace_days: aantal dagen na vervaldatum voordat
+            #                     de boete start. 0 = direct dag 1.
+            "fines_enabled": False,
+            "fines_amount": 0.0,
+            "fines_currency": "SRD",
+            "fines_mode": "per_overdue",
+            "fines_grace_days": 0,
         },
         # Kwitantie-afdruk: welk paginaformaat gebruikt de Kiosk voor het
         # renderen van betalingsbonnen. 'a4' = normale A4 kantoorprinter,

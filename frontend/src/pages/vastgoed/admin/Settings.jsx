@@ -528,6 +528,85 @@ export function InvoicingForm({ initial }) {
         <p className="mt-2 text-slate-500">De achtergrond-taak loopt elk uur — meestal binnen 1 uur na de deadline staat alles klaar.</p>
       </div>
 
+      {/* ─── BOETES — automatisch berekenen bij overdue facturen ────────── */}
+      <div className="bg-white border-2 border-slate-200 rounded-xl p-4 sm:p-5 space-y-4" data-testid="invoicing-fines-block">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-black text-slate-900">Automatische boetes</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Reken automatisch een boete door wanneer een huurder achter raakt met betalen. De boete verschijnt dan als aparte regel in het Financieel overzicht van de huurder.</p>
+          </div>
+        </div>
+
+        <SwitchField label="Ingeschakeld" testid="invoicing-fines-enabled"
+          value={d.fines_enabled} onChange={(v) => s.onField('fines_enabled', v)}
+          desc="Wanneer aan, berekent het systeem de boete per huurder op basis van hun openstaande achterstallige facturen." />
+
+        {d.fines_enabled && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <TextField label="Boete bedrag" testid="invoicing-fines-amount"
+                type="number"
+                value={d.fines_amount} onChange={(v) => s.onField('fines_amount', Math.max(0, parseFloat(v) || 0))}
+                placeholder="50.00"
+                helper="Bedrag in de gekozen valuta — per overdue factuur of per dag te laat (afhankelijk van modus)." />
+              <div>
+                <FieldLabel>Valuta</FieldLabel>
+                <select value={d.fines_currency || 'SRD'}
+                  onChange={(e) => s.onField('fines_currency', e.target.value)}
+                  data-testid="invoicing-fines-currency"
+                  className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 bg-white font-semibold">
+                  <option value="SRD">SRD</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Valuta waarin de boete wordt gerekend.</p>
+              </div>
+              <TextField label="Grace dagen" testid="invoicing-fines-grace"
+                type="number"
+                value={d.fines_grace_days} onChange={(v) => s.onField('fines_grace_days', Math.max(0, parseInt(v, 10) || 0))}
+                placeholder="0"
+                helper="Aantal dagen na vervaldatum voordat de boete start. 0 = direct vanaf de 1e dag te laat." />
+            </div>
+
+            <div>
+              <FieldLabel>Berekeningsmodus</FieldLabel>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { id: 'per_overdue', title: 'Per vervallen factuur', desc: 'Vast bedrag × aantal achterstallige facturen.' },
+                  { id: 'per_day', title: 'Per dag te laat', desc: 'Vast bedrag × totaal dagen te laat (alle overdue facturen samen).' },
+                ].map((opt) => {
+                  const active = (d.fines_mode || 'per_overdue') === opt.id;
+                  return (
+                    <button type="button" key={opt.id}
+                      onClick={() => s.onField('fines_mode', opt.id)}
+                      data-testid={`invoicing-fines-mode-${opt.id}`}
+                      className={`text-left rounded-xl border-2 p-3 transition ${
+                        active ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-4 h-4 rounded-full border-2 ${active ? 'border-[#FF5C00] bg-[#FF5C00]' : 'border-slate-300'}`} />
+                        <span className="font-bold text-sm text-slate-900">{opt.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-slate-700 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <b className="text-amber-800">Opmerking:</b> De boete wordt alleen zichtbaar in het Financieel overzicht van huurders zodra ze echt een overdue factuur hebben (voorbij grace-dagen). Niets wordt automatisch geïncasseerd — de boete-rij informeert kiosk-medewerker en huurder zodat ze de boete bewust mee kunnen rekenen bij de volgende betaling.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       <RecomputeDueDatesButton />
 
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
