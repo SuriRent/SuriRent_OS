@@ -210,6 +210,7 @@ function AppRoutes() {
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />
@@ -255,6 +256,7 @@ function HybridRoutes() {
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/kiosk/klant" element={<CustomerDisplay />} />

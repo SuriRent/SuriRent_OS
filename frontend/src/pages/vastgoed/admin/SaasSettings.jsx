@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog,
+  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
@@ -42,6 +42,84 @@ function Toggle({ label, value, onChange, hint, testid }) {
         <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
       </div>
     </button>
+  );
+}
+
+function StripeSection() {
+  const [cfg, setCfg] = useState(null);
+  const [mode, setMode] = useState('test');
+  const [keys, setKeys] = useState({ test: {}, live: {} });
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  const webhookUrl = `${process.env.REACT_APP_BACKEND_URL}/api/saas-stripe/webhook`;
+
+  const load = useCallback(async () => {
+    const { data } = await api.get('/superadmin/stripe-config');
+    setCfg(data); setMode(data.mode);
+    setKeys({ test: { publishable_key: data.test.publishable_key }, live: { publishable_key: data.live.publishable_key } });
+  }, []);
+  useEffect(() => { load().catch((e) => setMsg({ type: 'err', text: formatError(e) })); }, [load]);
+
+  const run = async (kind, fn, ok) => {
+    setBusy(kind); setMsg({ type: '', text: '' });
+    try { const r = await fn(); setMsg({ type: 'ok', text: ok(r) }); } catch (e) { setMsg({ type: 'err', text: formatError(e) }); }
+    finally { setBusy(''); }
+  };
+  const save = () => run('save', async () => { await api.put('/superadmin/stripe-config', { mode, ...keys }); await load(); },
+    () => `Stripe-instellingen opgeslagen (${mode === 'live' ? 'LIVE' : 'test'}-modus).`);
+  const test = () => run('test', () => api.post('/superadmin/stripe-config/test'),
+    ({ data }) => `Verbonden met ${data.name} (${data.mode === 'live' ? 'LIVE' : 'test'}).`);
+  const setK = (m, f, v) => setKeys((k) => ({ ...k, [m]: { ...k[m], [f]: v } }));
+
+  if (!cfg) return null;
+  const k = cfg[mode];
+  return (
+    <Section title="Stripe betalingen (Creditcard & iDEAL)" icon={CreditCard} accent="bg-indigo-100 text-indigo-600">
+      <div className="flex gap-2" data-testid="stripe-mode-toggle">
+        {['test', 'live'].map((m) => (
+          <button key={m} type="button" onClick={() => setMode(m)} data-testid={`stripe-mode-${m}`}
+            className={`flex-1 h-11 rounded-xl font-bold text-sm transition-colors ${mode === m
+              ? (m === 'live' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white')
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>
+            {m === 'live' ? 'Live (echte betalingen)' : 'Testmodus'}
+          </button>
+        ))}
+      </div>
+      {mode === 'live' && cfg.mode !== 'live' && (
+        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+          Na opslaan worden alle klantbetalingen echt afgeschreven. Vul eerst uw live sleutels in.
+        </p>
+      )}
+      <Field label={`Publishable key (${mode})`} mono value={keys[mode].publishable_key}
+        placeholder={`pk_${mode}_...`} onChange={(v) => setK(mode, 'publishable_key', v)} testid={`stripe-${mode}-pk`} />
+      <Field label={k.secret_key_set ? `Secret key (${mode}) — ingesteld: ${k.secret_key_masked}` : `Secret key (${mode})`}
+        type="password" mono value={keys[mode].secret_key} placeholder={k.secret_key_set ? 'Laat leeg om te behouden' : `sk_${mode}_...`}
+        onChange={(v) => setK(mode, 'secret_key', v)} testid={`stripe-${mode}-sk`} />
+      <Field label={k.webhook_secret_set ? `Webhook secret (${mode}) — ingesteld` : `Webhook secret (${mode})`}
+        type="password" mono value={keys[mode].webhook_secret} placeholder={k.webhook_secret_set ? 'Laat leeg om te behouden' : 'whsec_...'}
+        onChange={(v) => setK(mode, 'webhook_secret', v)} testid={`stripe-${mode}-whsec`}
+        hint="Stripe Dashboard → Developers → Webhooks → endpoint toevoegen met events payment_intent.succeeded / payment_failed." />
+      <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+        <p className="font-bold text-slate-600 mb-0.5">Webhook URL</p>
+        <p className="font-mono text-slate-800 break-all" data-testid="stripe-webhook-url">{webhookUrl}</p>
+      </div>
+      {msg.text && (
+        <div className={`rounded-xl p-2.5 text-xs flex items-center gap-2 border ${msg.type === 'ok'
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`} data-testid="stripe-msg">
+          {msg.type === 'ok' ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />} {msg.text}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={test} disabled={!!busy} data-testid="stripe-test-btn"
+          className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+          {busy === 'test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />} Test verbinding
+        </button>
+        <button type="button" onClick={save} disabled={!!busy} data-testid="stripe-save-btn"
+          className="h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+          {busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Stripe opslaan
+        </button>
+      </div>
+    </Section>
   );
 }
 
@@ -229,6 +307,8 @@ export default function SaasSettings() {
           <Field label="WhatsApp" value={data.banking?.whatsapp} placeholder="+597 ..."
             onChange={(v) => upd('banking', { whatsapp: v })} testid="bank-whatsapp" />
         </Section>
+
+        <StripeSection />
 
         <Section title="Wisselkoers SRD → EUR" icon={RefreshCw} accent="bg-amber-100 text-amber-600">
           <div className="flex gap-2">

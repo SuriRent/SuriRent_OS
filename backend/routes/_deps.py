@@ -33,3 +33,7 @@ now_utc = None             # aware datetime.now(timezone.utc) helper
 new_id = None              # nieuwe UUID string
 billing_summary = None     # (company_doc) -> {billing_status, monthly_amount, currency, ...}
 is_online = None           # (last_seen_iso, threshold_seconds=300) -> bool
+activate_company_after_payment = None  # async (company_id, plan_in_payment=None)
+send_saas_payment_email = None         # async (company, amount, currency, method, invoice_id)
+get_eur_per_srd = None                 # async () -> {rate, source, fetched_at}
+ensure_open_invoice = None             # async (company_doc, user_email) -> invoice

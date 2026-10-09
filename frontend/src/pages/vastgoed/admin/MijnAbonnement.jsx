@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Crown, Clock, CheckCircle, AlertCircle, ArrowUp, ArrowDown, Loader2,
   Landmark, Banknote, Copy, Check,
-  Upload, FileCheck2, ScanLine,
+  Upload, FileCheck2, ScanLine, CreditCard,
 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 
@@ -198,6 +199,32 @@ function BankBox({ details, invoice, company, onSuccess, onErr }) {
   );
 }
 
+function StripePayBox({ invoice, onPay }) {
+  return (
+    <div className="rounded-2xl bg-white border-2 border-orange-200 p-5" data-testid="saas-online-pay-box">
+      <div className="flex items-center gap-2 mb-1">
+        <CreditCard className="w-5 h-5 text-orange-600" />
+        <h4 className="font-extrabold text-slate-900">Direct online betalen</h4>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        {invoice
+          ? <>Oudste openstaande factuur: <strong className="text-slate-700">{fmt(invoice.amount, invoice.currency)}</strong> · {fmtDate(invoice.period_start)}. Uw abonnement wordt direct na betaling geactiveerd.</>
+          : 'Betaal uw abonnement direct — activatie volgt meteen na betaling.'}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onClick={() => onPay(invoice?.id, 'card')} data-testid="saas-pay-card-btn"
+          className="h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+          <CreditCard className="w-4 h-4" /> Creditcard
+        </button>
+        <button onClick={() => onPay(invoice?.id, 'ideal')} data-testid="saas-pay-ideal-btn"
+          className="h-12 rounded-xl bg-[#CC0066] hover:bg-[#B0005A] text-white font-extrabold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+          <Landmark className="w-4 h-4" /> iDEAL
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function KV({ label, value, mono, onCopy, copied }) {
   return (
     <div className="row-label-value items-center group">
@@ -225,6 +252,18 @@ export default function MijnAbonnement() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [stripeOn, setStripeOn] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    api.get('/saas-stripe/public-config').then(({ data }) => setStripeOn(!!data?.enabled)).catch(() => setStripeOn(false));
+  }, []);
+
+  const goPay = (invoiceId, method) => {
+    const back = encodeURIComponent(location.pathname + location.hash);
+    navigate(`/saas/checkout/${invoiceId || 'open'}?method=${method}&back=${back}`);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -278,7 +317,9 @@ export default function MijnAbonnement() {
   }
 
   const st = STATUS[me.status] || STATUS.active;
-  const openInvoices = invoices.filter((i) => i.status !== 'paid');
+  const isOpen = (i) => !['paid', 'superseded', 'cancelled', 'void'].includes(i.status);
+  const openInvoices = invoices.filter(isOpen);
+  const oldestOpen = [...openInvoices].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0];
 
   return (
     <div className="space-y-5">
@@ -329,6 +370,7 @@ export default function MijnAbonnement() {
 
       {(me.status === 'trial' || me.status === 'expired' || openInvoices.length > 0) && (
         <>
+          {stripeOn && <StripePayBox invoice={oldestOpen} onPay={goPay} />}
           {bank && (me.currency || 'SRD') === 'SRD' && (
             <BankBox details={bank} invoice={openInvoices[0]} company={me.company_name || 'UW BEDRIJF'}
               onSuccess={() => { setMsg('Betaling automatisch goedgekeurd — abonnement is geactiveerd!'); load(); }}
@@ -369,7 +411,21 @@ export default function MijnAbonnement() {
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}</p>
                 </div>
-                <p className="font-extrabold text-slate-900 shrink-0">{fmt(inv.amount, inv.currency)}</p>
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <p className="font-extrabold text-slate-900">{fmt(inv.amount, inv.currency)}</p>
+                  {stripeOn && isOpen(inv) && (
+                    <div className="flex gap-1.5">
+                      <button onClick={() => goPay(inv.id, 'card')} data-testid={`my-invoice-card-${inv.id}`}
+                        className="text-[11px] font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded-lg inline-flex items-center gap-1">
+                        <CreditCard className="w-3 h-3" /> Creditcard
+                      </button>
+                      <button onClick={() => goPay(inv.id, 'ideal')} data-testid={`my-invoice-ideal-${inv.id}`}
+                        className="text-[11px] font-bold text-[#CC0066] bg-pink-50 hover:bg-pink-100 px-2 py-1 rounded-lg inline-flex items-center gap-1">
+                        <Landmark className="w-3 h-3" /> iDEAL
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
