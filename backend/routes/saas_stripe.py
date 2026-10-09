@@ -162,7 +162,7 @@ async def _resolve_invoice(invoice_id: Optional[str], user: dict) -> dict:
     if not cid:
         raise HTTPException(400, "Geen actief bedrijf")
     inv = await _deps.db.subscription_invoices.find_one(
-        {"company_id": cid, "status": {"$nin": CLOSED_STATUSES}}, {"_id": 0}, sort=[("created_at", 1)],
+        {"company_id": cid, "status": {"$nin": CLOSED_STATUSES}}, {"_id": 0}, sort=[("period_start", 1), ("created_at", 1)],
     )
     if inv:
         return inv

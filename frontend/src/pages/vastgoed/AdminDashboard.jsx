@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
+import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './admin/instellingenSections';
 import { useBadge } from '../../lib/pwa';
 import { useAutoRefresh } from '../../lib/auto-refresh';
 import {
   Building2, Users, Receipt, LayoutDashboard, LogOut, Plus, Trash2, Pencil,
-  X, Check, Loader2, Search, Home, Banknote, KeySquare, ChevronRight, Wallet, CreditCard,
+  X, Check, Loader2, Search, Home, Banknote, KeySquare, ChevronRight, ChevronDown, Wallet, CreditCard,
   FileText, ShieldCheck, Wrench, FileSignature, Bell, Briefcase, Mail,
   Zap, Power, Menu, MoreHorizontal, MapPin, Paintbrush,
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
@@ -538,6 +539,46 @@ function groupTabs(tabs) {
   })).filter((g) => g.items.length > 0);
 }
 
+function SidebarSettingsDropdown({ tab, isActive }) {
+  const navigate = useBrandedNavigate();
+  const location = useLocation();
+  const [open, setOpen] = useState(isActive);
+  useEffect(() => { if (isActive) setOpen(true); }, [isActive]);
+  const activeSub = isActive ? activeInstellingenSection(location.hash) : null;
+  const Icon = tab.icon;
+  return (
+    <div data-testid="sidebar-instellingen-dropdown">
+      <button onClick={() => setOpen((o) => !o)} data-testid="tab-instellingen" aria-expanded={open}
+        className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors duration-200 ${
+          isActive ? 'bg-orange-50 text-[#FF5C00]' : 'text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00]'}`}>
+        <Icon className="w-4 h-4 shrink-0" strokeWidth={isActive ? 2.4 : 2} />
+        <span className="truncate flex-1 text-left">{tab.label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="ml-5 mt-1 pl-3 border-l-2 border-orange-100 space-y-0.5 pb-1">
+            {INSTELLINGEN_SECTIONS.map((s) => {
+              const SIcon = s.icon;
+              const on = activeSub === s.id;
+              return (
+                <button key={s.id} onClick={() => navigate(`/admin/instellingen#${s.id}`)}
+                  data-testid={`tab-instellingen-${s.id}`}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
+                    on ? 'bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white shadow-[0_8px_18px_-8px_rgba(255,92,0,0.6)]'
+                      : 'text-slate-500 hover:bg-orange-50 hover:text-[#FF5C00]'}`}>
+                  <SIcon className="w-3.5 h-3.5 shrink-0" strokeWidth={on ? 2.4 : 2} />
+                  <span className="truncate text-left">{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCompany }) {
   const groups = groupTabs(tabs);
   const pulsingTabs = useLivePulse(active);
@@ -614,6 +655,9 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                 const isActive = active === t.id;
                 const showBadge = t.id === 'notifications' && badgeCount > 0;
                 const isPulsing = pulsingTabs.has(t.id);
+                if (t.id === 'instellingen') {
+                  return <SidebarSettingsDropdown key={t.id} tab={t} isActive={isActive} />;
+                }
                 return (
                   <button key={t.id} onClick={() => onChange(t.id)}
                     data-testid={`tab-${t.id}`}
@@ -748,6 +792,8 @@ function MobileTopLogo({ user, activeCompany }) {
 
 function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, activeCompany, badgeCount }) {
   const navigate = useBrandedNavigate();
+  const location = useLocation();
+  const [settingsOpen, setSettingsOpen] = useState(active === 'instellingen');
   if (!open) return null;
   return (
     <div className="md:hidden fixed inset-0 z-50" data-testid="mobile-sheet">
@@ -821,7 +867,10 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
               return (
                 <button
                   key={t.id}
-                  onClick={() => { onChange(t.id); onClose(); }}
+                  onClick={() => {
+                    if (t.id === 'instellingen') { setSettingsOpen((o) => !o); return; }
+                    onChange(t.id); onClose();
+                  }}
                   data-testid={`tab-sheet-${t.id}`}
                   className={`relative flex flex-col items-center justify-center gap-1.5 md:gap-2 py-4 md:py-5 rounded-2xl text-xs md:text-sm font-bold transition-all active:scale-95 ${
                     isActive
@@ -842,6 +891,26 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
               );
             })}
           </div>
+          {settingsOpen && (
+            <div className="mt-3 rounded-2xl bg-orange-50/60 border border-orange-100 p-2 animate-fade-in" data-testid="sheet-instellingen-list">
+              <p className="px-2 pt-1 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">Instellingen</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {INSTELLINGEN_SECTIONS.map((s) => {
+                  const SIcon = s.icon;
+                  const on = active === 'instellingen' && activeInstellingenSection(location.hash) === s.id;
+                  return (
+                    <button key={s.id} data-testid={`tab-sheet-instellingen-${s.id}`}
+                      onClick={() => { navigate(`/admin/instellingen#${s.id}`); onClose(); }}
+                      className={`flex items-center gap-2 px-3 py-3 rounded-xl text-xs font-bold text-left active:scale-95 transition-transform ${
+                        on ? 'bg-[#FF5C00] text-white' : 'bg-white text-slate-700'}`}>
+                      <SIcon className={`w-4 h-4 shrink-0 ${on ? '' : 'text-[#FF5C00]'}`} />
+                      <span className="leading-tight">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* FOOTER — email + logout */}

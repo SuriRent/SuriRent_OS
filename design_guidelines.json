@@ -1,146 +1,116 @@
 {
-  "theme": "LIGHT",
-  "archetype": "4 (Swiss & High-Contrast)",
-  "vibe": "Architectural, Brutalist, Structured, Confident, Professional B2B SaaS",
+  "project_name": "SuriRent - Mijn Abonnement Redesign",
+  "app_type": "saas_app",
+  "theme": "Light mode primary with high-contrast Slate & SuriRent Orange accents",
+  "design_principles": [
+    "Asymmetric High-Density Bento Grid layout with hero status spotlight",
+    "Instant Payment & Bank OCR Action Hub integrated into primary viewport",
+    "Tactile typography hierarchy using Outfit font with tight letter-spacing for headings",
+    "Micro-interactions on interactive cards, buttons, copy triggers, and file dropzone",
+    "Preserve 100% of functional requirements and data-testid attributes for E2E testing"
+  ],
+  "typography": {
+    "font_family": "Outfit, ui-sans-serif, system-ui, sans-serif",
+    "page_title": "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight",
+    "section_title": "text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight",
+    "card_title": "text-base sm:text-lg font-extrabold text-slate-900",
+    "body_text": "text-sm text-slate-600 leading-relaxed",
+    "caption": "text-xs text-slate-500",
+    "micro_label": "text-[10px] font-extrabold uppercase tracking-widest"
+  },
   "colors": {
     "primary": "#FF5C00",
-    "primary_hover": "#FF8A3D",
-    "primary_dark": "#C74600",
-    "accent": "#F8C260",
-    "accent_dark": "#D4A037",
-    "background": "#FFFFFF",
-    "surface": "#F5F5F0",
-    "surface_alt": "#EDEDE8",
-    "text_main": "#0A0A0A",
-    "text_muted": "#52525B",
-    "border": "#E5E5E5",
-    "border_hard": "#0A0A0A"
-  },
-  "typography": {
-    "headings": "Cabinet Grotesk",
-    "body": "IBM Plex Sans",
-    "rules": [
-      "H1 must use tracking-tighter and font-black for maximum structural impact",
-      "Overlines must be tracking-[0.2em] and uppercase",
-      "Use strict left alignment for most text, never center-align everything to avoid 'generic SaaS slop'"
-    ]
-  },
-  "layout_strategy": {
-    "grid": "Strict border-collapse style grids. Elements should have visible hard boundaries (1px solid black or dark gray border-[#0A0A0A] or border-gray-300).",
-    "borders": "Heavy use of border-b, border-r on structural containers to create a 'Blueprint/Matrix' feel. No soft drop shadows, use hard 1px borders instead.",
-    "spacing": "Generous internal padding (p-8 to p-16) inside bordered containers to prevent text collision.",
-    "radius": "rounded-none or max rounded-sm to maintain the brutalist architectural feel."
-  },
-  "sections": [
-    {
-      "name": "Navigation",
-      "layout": "Fixed top. White background, hard 1px border-b border-black. Flex between. Logo on left, links in center, 'Demo aanvragen' solid orange button on right."
-    },
-    {
-      "name": "Hero",
-      "layout": "2-column grid (md:grid-cols-2) with a hard vertical divider (border-r border-black). Left: Massive typography, overline, subtext, primary CTA. Right: The 'Overzicht/KPI dashboard' screenshot cropped aggressively in a structured box. Background uses the abstract_grid_bg.",
-      "media_requirements": ["abstract_grid_bg", "desktop_overzicht_screenshot"]
-    },
-    {
-      "name": "Feature Matrix (Beheer Suite)",
-      "layout": "Sticky Split Layout. Left column (sticky, 35vw) acts as an index/menu with 4 large numbered items. Right column (65vw) contains a vertical stack of the 4 remaining desktop screenshots (Locaties, Appartementen, Betalingen, Facturen) housed in strict bordered boxes with generous padding.",
-      "media_requirements": [
-        "desktop_locaties_screenshot",
-        "desktop_appartementen_screenshot",
-        "desktop_betalingen_screenshot",
-        "desktop_facturen_screenshot"
-      ]
-    },
-    {
-      "name": "Kiosk Flow (Tablet)",
-      "layout": "Horizontal Scrolling 'Filmstrip' or 4-column strict grid. Massive full-width section. Top half has section header. Bottom half is a horizontally scrolling track (or CSS grid if fits) of 4 tablet screenshots, showing the exact step-by-step payment flow. Each has an Orange/Cream theme background.",
-      "media_requirements": [
-        "tablet_kiosk_step1",
-        "tablet_kiosk_step2",
-        "tablet_kiosk_step3",
-        "tablet_kiosk_step4"
-      ]
-    },
-    {
-      "name": "Pricing",
-      "layout": "3-column grid Matrix. No shadows, no floating cards. Just stark cells with border-r and border-b. Pro tier (SRD 950) is highlighted by inverted colors (Black background, white text, orange button).",
-      "media_requirements": []
-    },
-    {
-      "name": "FAQ",
-      "layout": "Minimalist accordion. Each item has a strong 1px border-b. No backgrounds, just pure typography and high contrast.",
-      "media_requirements": []
-    },
-    {
-      "name": "Final CTA",
-      "layout": "Massive solid Orange (#FF5C00) full-width block. Giant black typography. 'Klaar om uw vastgoed te digitaliseren?'. 2 buttons: 'Demo proberen' (Black) and 'WhatsApp ons' (Transparent with black border).",
-      "media_requirements": []
-    },
-    {
-      "name": "Footer",
-      "layout": "Dark architectural footer (Black background, white text). Strict grid columns for links. Massive 'SuriRent' logo/text spanning the bottom.",
-      "media_requirements": []
+    "primary_hover": "#E65300",
+    "primary_light": "#FFF7F0",
+    "primary_border": "#FFD1A8",
+    "slate_dark": "#0F172A",
+    "slate_border": "#E2E8F0",
+    "status": {
+      "trial": {
+        "bg": "bg-amber-500/10 border-amber-500/20",
+        "text": "text-amber-800",
+        "badge": "bg-amber-500 text-white"
+      },
+      "active": {
+        "bg": "bg-emerald-500/10 border-emerald-500/20",
+        "text": "text-emerald-800",
+        "badge": "bg-emerald-500 text-white"
+      },
+      "expired": {
+        "bg": "bg-rose-500/10 border-rose-500/20",
+        "text": "text-rose-800",
+        "badge": "bg-rose-500 text-white"
+      },
+      "cancelled": {
+        "bg": "bg-slate-500/10 border-slate-500/20",
+        "text": "text-slate-700",
+        "badge": "bg-slate-500 text-white"
+      }
     }
+  },
+  "layout_grid_strategy": {
+    "mobile": "Single column vertical stack (gap-5), touch-friendly targets (h-12 buttons), PWA compliant (390px min width)",
+    "desktop": "12-column Bento Grid system with asymmetric sections",
+    "hero_and_actions_row": "Grid of 12 columns: Status Hero (col-span-12 lg:col-span-7) alongside Payment Action & Bank Hub (col-span-12 lg:col-span-5)",
+    "plan_selection_grid": "Grid of 1 to 3 columns: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+    "billing_history_grid": "Grid of 12 columns: Invoices List (col-span-12 lg:col-span-7) alongside Payments History (col-span-12 lg:col-span-5)"
+  },
+  "component_specifications": {
+    "status_hero": {
+      "container": "rounded-3xl p-6 border shadow-sm transition-all duration-300 relative overflow-hidden",
+      "active_theme": "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white border-slate-800 shadow-xl shadow-slate-950/20",
+      "trial_theme": "bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 text-white border-orange-400 shadow-xl shadow-orange-500/20",
+      "features": "Status pill badge, plan title with fluid pricing, trial countdown pill widget with glassmorphism backdrop blur, renewal notice banner."
+    },
+    "direct_payment_box": {
+      "container": "rounded-3xl p-6 bg-white border-2 border-orange-500/30 shadow-lg shadow-orange-500/5 hover:border-orange-500/60 transition-all",
+      "buttons": {
+        "credit_card": "h-12 rounded-2xl bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-extrabold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20",
+        "ideal": "h-12 rounded-2xl bg-[#CC0066] hover:bg-[#B0005A] active:scale-[0.98] text-white font-extrabold flex items-center justify-center gap-2 transition-all shadow-md shadow-pink-600/20"
+      }
+    },
+    "bank_box_and_ocr": {
+      "container": "rounded-3xl p-6 bg-slate-50/80 border border-slate-200/80 space-y-4",
+      "copy_button": "p-1.5 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-white transition-all",
+      "ocr_uploader": "p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-orange-300 transition-all"
+    },
+    "plan_cards": {
+      "current_plan": "rounded-3xl p-6 border-2 border-orange-500 bg-gradient-to-b from-orange-50/80 via-white to-white shadow-xl shadow-orange-500/10 relative flex flex-col justify-between",
+      "available_plan": "rounded-3xl p-6 border border-slate-200 bg-white hover:border-orange-300 hover:shadow-lg transition-all flex flex-col justify-between"
+    },
+    "invoices_table": {
+      "container": "bg-white rounded-3xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm",
+      "row": "p-4 sm:p-5 flex items-center gap-4 hover:bg-slate-50/50 transition-colors"
+    },
+    "danger_zone": {
+      "container": "rounded-3xl p-6 bg-rose-50/40 border border-rose-200/70 space-y-3",
+      "button": "h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-extrabold text-sm transition-all shadow-sm shadow-rose-600/20"
+    }
+  },
+  "required_data_testids": [
+    "my-sub-status",
+    "plan-card-${plan.id}",
+    "plan-select-${plan.id}",
+    "saas-bank-proof-uploader",
+    "saas-bank-proof-input",
+    "saas-bank-proof-upload-btn",
+    "saas-bank-proof-result-paid",
+    "saas-bank-proof-result-pending",
+    "saas-bank-proof-retry",
+    "saas-online-pay-box",
+    "saas-pay-card-btn",
+    "saas-pay-ideal-btn",
+    "my-invoice-${inv.id}",
+    "my-invoice-card-${inv.id}",
+    "my-invoice-ideal-${inv.id}",
+    "my-payment-${p.id}",
+    "cancel-subscription-btn"
   ],
-  "media_urls": {
-    "abstract_grid_bg": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/112f335e-34a5-41f6-964a-ace72b419b81/images/47831d937ec66ad2eac29ee630213ff18ab5537d6e0a0fba674374d50af2c41b.png",
-      "description": "Abstract grid background for hero section",
-      "category": "background"
-    },
-    "desktop_overzicht_screenshot": {
-      "url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Overzicht/KPI dashboard desktop screenshot URL provided in your context",
-      "category": "hero_image"
-    },
-    "desktop_locaties_screenshot": {
-      "url": "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Locaties desktop screenshot URL provided in your context",
-      "category": "feature_image"
-    },
-    "desktop_appartementen_screenshot": {
-      "url": "https://images.unsplash.com/photo-1686061594225-3e92c0cd51b0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwzfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Appartementen desktop screenshot URL provided in your context",
-      "category": "feature_image"
-    },
-    "desktop_betalingen_screenshot": {
-      "url": "https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwyfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Betalingen log desktop screenshot URL provided in your context",
-      "category": "feature_image"
-    },
-    "desktop_facturen_screenshot": {
-      "url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Facturen desktop screenshot URL provided in your context",
-      "category": "feature_image"
-    },
-    "tablet_kiosk_step1": {
-      "url": "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Kiosk tablet screenshot 1 (Locatie kiezen) from your context",
-      "category": "kiosk_image"
-    },
-    "tablet_kiosk_step2": {
-      "url": "https://images.unsplash.com/photo-1686061594225-3e92c0cd51b0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwzfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Kiosk tablet screenshot 2 (Appartement) from your context",
-      "category": "kiosk_image"
-    },
-    "tablet_kiosk_step3": {
-      "url": "https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwyfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Kiosk tablet screenshot 3 (Bedrag bekijken) from your context",
-      "category": "kiosk_image"
-    },
-    "tablet_kiosk_step4": {
-      "url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzgwMjUxOTMxfDA&ixlib=rb-4.1.0&q=85",
-      "description": "CRITICAL: MUST REPLACE THIS WITH THE ACTUAL Kiosk tablet screenshot 4 (Betalen numpad) from your context",
-      "category": "kiosk_image"
-    }
-  },
   "instructions_to_main_agent": [
-    "CRITICAL: Replace all unsplash placeholder URLs in media_urls with the ACTUAL 9 CDN screenshot URLs provided in your system prompt.",
-    "Do NOT use typical SaaS 'bento' or floating center-card templates.",
-    "Rely heavily on 'border-black/10' or 'border-black' on major layout elements to create a strict, architectural, blueprint-like grid.",
-    "Use Cabinet Grotesk for all headings. Ensure leading-tight and tracking-tighter for a modern editorial feel.",
-    "Ensure the screenshots are placed inside containers with padding, rather than stretching edge-to-edge randomly. They represent professional tools.",
-    "Every button and interactive element MUST have a 'data-testid' attribute.",
-    "For the Kiosk section, use an overflow-x-auto or a strict 4-column grid (if they fit) to show the flow chronologically."
+    "Refactor /app/frontend/src/pages/vastgoed/admin/MijnAbonnement.jsx to implement the updated Bento Grid layout.",
+    "Do NOT break any backend API integrations (api.get('/billing/me'), api.get('/billing/me/plans'), api.get('/billing/bank-details'), api.get('/billing/me/invoices'), api.get('/billing/me/payments'), api.post('/billing/me/bank-confirm'), api.put('/billing/me/plan'), api.post('/companies/me/cancel-subscription')).",
+    "Ensure all data-testid attributes are preserved exactly as defined.",
+    "Maintain complete Dutch UI copy and translation consistency.",
+    "Implement smooth micro-interactions on button hover, copy triggers, plan cards selection, and OCR file dropzone."
   ]
 }
