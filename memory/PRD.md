@@ -668,3 +668,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — APK print-bridge
 - Na een geslaagde kioskbetaling (PaymentConfirm.submit) wordt alleen binnen de APK (als window.ReactNativeWebView bestaat) PRINT_RECEIPT {naam, appartement, bedrag, methode, datum, kwitantie} verstuurd. Getest: iteration_66.
+- Update: de bon-data wordt nu opgemaakt voor printen (bedrag 'SRD 25,00', methode 'Contant', datum 'DD-MM-JJJJ UU:MM', kwitantie ook bij betaling van alleen termijnen) en eerst gelogd als console.log('[APK PRINT_RECEIPT]'). Getest: iteration_67.

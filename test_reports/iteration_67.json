@@ -1,0 +1,73 @@
+{
+  "summary": "Frontend-only verification of APK PRINT_RECEIPT bridge in KioskLayout (sendApkPrint + PaymentConfirm). All three scenarios pass: (1) APK-mock + method Contant, (2) APK-mock + method Bankoverschrijving, (3) plain browser (no mock). The console.log('[APK PRINT_RECEIPT]', msg) fires BEFORE window.ReactNativeWebView.postMessage, exactly one message is pushed per payment, and all data fields are correctly formatted.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "scenario_1_mock_contant": {
+      "apk_log_present_before_postmessage": true,
+      "rn_msgs_count": 1,
+      "payload": {
+        "type": "PRINT_RECEIPT",
+        "data": {
+          "naam": "Marlies Sewdien",
+          "appartement": "HUIS 1B",
+          "bedrag": "SRD 25,00",
+          "methode": "Contant",
+          "datum": "09-10-2026 23:32",
+          "kwitantie": "KW2026-00530"
+        }
+      },
+      "matches_on_screen_receipt": true
+    },
+    "scenario_2_mock_bank": {
+      "apk_log_present_before_postmessage": true,
+      "rn_msgs_count": 1,
+      "payload": {
+        "type": "PRINT_RECEIPT",
+        "data": {
+          "naam": "Anisha Ramdhan",
+          "appartement": "Penthouse",
+          "bedrag": "SRD 25,00",
+          "methode": "Bankoverschrijving",
+          "datum": "09-10-2026 23:33",
+          "kwitantie": "KW2026-00531"
+        }
+      },
+      "matches_on_screen_receipt": true
+    },
+    "scenario_3_plain_browser": {
+      "apk_log_present": true,
+      "reactnativewebview_typeof": "undefined",
+      "no_postmessage_called": true,
+      "js_errors": [],
+      "receipt_renders_normally": true,
+      "payload": {
+        "naam": "Marlies Sewdien",
+        "appartement": "HUIS 1B",
+        "bedrag": "SRD 25,00",
+        "methode": "Contant",
+        "datum": "09-10-2026 23:34",
+        "kwitantie": "KW2026-00532"
+      }
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sendApkPrint (KioskLayout.jsx line 2396) is clean and small; console.log fires before the optional postMessage, satisfying the requirement.",
+    "KioskLayout.jsx is 5317 lines — significantly over the 700-line recommended threshold. Consider splitting into submodules (PaymentConfirm, PaymentReceipt, Overview, PinLogin, etc.) for maintainability.",
+    "fmtPrintDate uses local time without timezone info in the string; acceptable for a kiosk printer but note it depends on device clock."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "kiosk PIN 4321, slug my-awesome-rentals-bv (used location Hoofdvestiging ec93f719..., apts HUIS 1B / Penthouse — both 'Betaald' so overview-advance-pay-btn is shown; apts with openstaande huur show overview-pay-btn instead).",
+  "seed_data_creation": "None — used existing seeded tenants (Marlies Sewdien @ HUIS 1B, Anisha Ramdhan @ Penthouse). Created real vooruitbetalingen KW2026-00530, 00531, 00532 (SRD 25 each).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "APK PRINT_RECEIPT fix is fully verified. If you need to re-test the advance-pay flow, use HUIS 1B (Marlies Sewdien) or Penthouse (Anisha Ramdhan) in the Hoofdvestiging location (id ec93f719-21e0-4b1b-8a16-d00ee3d8b4b9); only 'Betaald' apartments expose data-testid='overview-advance-pay-btn'. Apartment card testids follow the pattern 'apt-<number>' (e.g. 'apt-HUIS 1B'). Amount keypad testids are 'keypad-<digit>' or 'mobile-key-<digit>'. Confirm button: 'confirm-submit'. Note the testids include spaces (e.g. 'apt-HUIS 1A') so use attribute-selector form.",
+  "rca of the issue": "Not applicable — this was a verification iteration, not a bug fix. Prior iteration (66) reported raw/ISO values; current implementation now formats bedrag via fmtMoney, methode via METHOD_LABELS lookup, and datum via fmtPrintDate (DD-MM-YYYY HH:MM). All values match the on-screen receipt."
+}
