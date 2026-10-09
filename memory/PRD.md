@@ -1,6 +1,15 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · update) — Kiosk PaySelect items-list scrollbaar
+
+**Probleem** (vervolg na vorige fix): wanneer álle items (achterstallige huur + vooruit gefactureerd + 4× termijnen) geselecteerd zijn, groeide de items-lijst door en duwde de "Direct betalen" + numpad onder de viewport. Numpad-rij `7/8/9/0` was dan niet zichtbaar.
+
+**Fix** (`KioskLayout.jsx` PaySelect LEFT-card): items-container `flex flex-col gap-1 sm:gap-1.5 flex-1` → `flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 overflow-y-auto -mx-0.5 px-0.5`. Nu scrolt de items-lijst binnen de witte card zodat de "Direct betalen"/"Regeling afspreken" knoppen en het "Ander bedrag" numpad altijd zichtbaar blijven onderaan.
+
+Visueel getest op 390×844 met Alles-geselecteerd + geopende numpad — alle 10 toetsen (1-9 + 0 + DEL + .) zichtbaar inclusief veilige safe-area padding onder.
+
+
 ## Latest Fix (2026-02-28) — Kiosk PaySelect UI clean-up (3 items)
 
 1. **Boetes rij conditioneel**: `PAY_ITEMS_TEMPLATE.map` → `PAY_ITEMS_TEMPLATE.filter((t) => (amounts[t.id] || 0) > 0).map` zodat de "Boetes" rij alleen verschijnt zodra de beheerder een boetebedrag heeft ingesteld. Zolang `amounts.boete === 0` blijft deze volledig verborgen in de "Wat wilt u betalen?" lijst.

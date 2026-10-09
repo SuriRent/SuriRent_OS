@@ -1718,7 +1718,11 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
             </button>
           )}
 
-          <div className="flex flex-col gap-1 sm:gap-1.5 flex-1">
+          {/* Items-lijst — scrollbaar binnen de kaart zodat de knoppen
+              ("Direct betalen" / "Regeling afspreken") én het "Ander bedrag"
+              numpad altijd zichtbaar blijven onderaan, ook wanneer alles
+              geselecteerd is en er veel maanden/termijnen staan. */}
+          <div className="flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 overflow-y-auto -mx-0.5 px-0.5">
             {/* Achterstallige huur — één regel per maand */}
             {hasOpenInvoices && (
               <>
