@@ -2355,6 +2355,7 @@ async def billing_me(user=Depends(get_current_user)):
         "monthly_amount": plan["amount"],
         "currency": plan["currency"],
         "country": c.get("country"),
+        "company_name": c.get("name"),
         "pending_plan_id": pending_plan_id,
         "pending_plan": pending_plan,
         "pending_invoice": pending_invoice,

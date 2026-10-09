@@ -465,9 +465,8 @@ import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
 import LiveIndicator from '../../components/LiveIndicator';
-import OverdueBell from '../../components/OverdueBell';
+import SubscriptionBell from '../../components/SubscriptionBell';
 import PendingApprovalBell from '../../components/PendingApprovalBell';
-import ApartmentsBell from '../../components/ApartmentsBell';
 import QuickPayButton from '../../components/QuickPayButton';
 import PhotoUpload from '../../components/PhotoUpload';
 import { installPendingApprovalDingListener } from '../../lib/notify-sound';
@@ -782,7 +781,7 @@ function MobileTopLogo({ user, activeCompany }) {
         {user?.role !== 'superadmin' && (
           <div className="flex items-center gap-2 md:gap-3 landscape:gap-1.5 shrink-0">
             <PendingApprovalBell />
-            <OverdueBell />
+            <SubscriptionBell />
           </div>
         )}
       </div>
@@ -4195,9 +4194,8 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
         <GlobalSearch variant="topbar" />
-        <ApartmentsBell />
         <PendingApprovalBell />
-        <OverdueBell />
+        <SubscriptionBell />
       </div>
     </div>
   );
