@@ -28,7 +28,20 @@ html {
      The app handles its own scrolling inside; the document itself should
      never overscroll. */
   overscroll-behavior: none;
+  /* Belangrijk voor Android: BEIDE varianten zetten op 100% zodat Chrome
+     Android GEEN automatische tekst-vergroting toepast wanneer de user
+     "Lettergrootte" in Instellingen hoger zet. Zonder deze regels wordt
+     de app opgeblazen tot buiten de viewport op kleine Android schermen
+     en moeten gebruikers hun systeem-instelling verkleinen om de app te
+     kunnen gebruiken. `none` is strikter dan `100%` maar wordt niet
+     consistent gerespecteerd, dus 100% is de veilige keuze. */
   -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Vaste base font-size zodat rem-waarden door de hele app voorspelbaar
+     blijven, ongeacht de device-settings. */
+  font-size: 16px;
   /* No native zoom — feels like an app, not a webpage. */
   touch-action: manipulation;
 }
@@ -228,22 +241,32 @@ html { scroll-behavior: smooth; }
 /* ────────────────────────────────────────────────────────────────
    Globale label/waarde-rij utility.
    Gebruik: één rij met een tekstlabel links en een bedrag/waarde rechts.
-   Blijft ALTIJD op één horizontale lijn, ook op smalle schermen:
+   Blijft ALTIJD op één horizontale lijn, ook op smalle schermen (Android
+   320px, iPhone SE 375px) EN wanneer de user z'n Android systeem-font
+   groter heeft gezet (`text-size-adjust: 100%` op html voorkomt bij-
+   schaling, de truncatie-regel hieronder vangt de rest).
      - Label krimpt met ellipsis-truncatie
      - Bedrag/waarde springt nooit naar een nieuwe regel
    Werkt zowel via één klasse (`.row-label-value` op de container en
    direct-child <span>/<p>) als via expliciete subklassen
    (`.row-label-value__label` / `.row-label-value__value`) wanneer
-   er extra elementen tussen zitten.
+   er extra elementen tussen zitten (bv. een copy-knop naast de waarde).
    ──────────────────────────────────────────────────────────────── */
 .row-label-value {
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.5rem;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
+}
+/* Op heel smalle schermen (< 360px — Android compact mode) iets minder
+   gap zodat label-tekst meer ademruimte heeft vóór truncatie. */
+@media (max-width: 359px) {
+  .row-label-value { gap: 0.375rem; }
 }
 .row-label-value > :first-child,
 .row-label-value .row-label-value__label {
@@ -252,12 +275,16 @@ html { scroll-behavior: smooth; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 .row-label-value > :last-child,
 .row-label-value .row-label-value__value {
   flex: 0 0 auto;
   white-space: nowrap;
   text-align: right;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 

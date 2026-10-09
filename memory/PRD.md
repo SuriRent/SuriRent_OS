@@ -1,6 +1,20 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-27 • update) — Android text-size-adjust + robuustere label/value utility
+
+**Correctie**: Vorige fix richtte zich teveel op iOS. User meldde dat op kleinere Android schermen de layout nog steeds brak tenzij gebruikers in Instellingen de systeem-lettergrootte verkleinden.
+
+**Root cause**: Android Chrome schaalt tekst mee met de systeem "Lettergrootte" instelling tenzij `text-size-adjust: 100%` expliciet in álle vendor-varianten op `html` staat. De oude CSS had alleen `-webkit-text-size-adjust`. Daarnaast had `.row-label-value__value` geen fallback-truncatie bij extreem lange bedragen op <320px schermen.
+
+**Wijzigingen (`index.css`)**:
+- `html`: `-webkit-text-size-adjust`, `-moz-text-size-adjust`, `-ms-text-size-adjust` én `text-size-adjust` nu allemaal op `100%` — Android Chrome respecteert nu geen systeem-font-scaling meer. Base `font-size: 16px` toegevoegd zodat rem-waarden overal voorspelbaar blijven
+- `.row-label-value`: `flex-wrap: nowrap` + `max-width: 100%` expliciet; gap-reductie naar `0.375rem` op <360px
+- `.row-label-value > :last-child` (waarde): `max-width: 65%` + `overflow: hidden` + `text-overflow: ellipsis` als vangnet bij extreem lange bedragen, blijft nog altijd `white-space: nowrap`
+
+**Getest** op 288×640, 320×640 Android viewports — alle label/value rijen in Facturen-lijst, Factuur-detail en Betalingen blijven correct op één regel staan zonder dat de gebruiker Android systeem-settings hoeft aan te passen.
+
+
 ## Latest Fix (2026-02-27) — Globale `.row-label-value` utility voor label/waarde-rijen
 
 **Probleem**: Op smalle schermen (< 400px, iOS PWA) sprong het bedrag naast een label soms naar een tweede regel of werd links uitgelijnd door lange dynamische labels. User wilde dat label + bedrag ALTIJD op één horizontale lijn blijven staan.
