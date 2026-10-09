@@ -1,6 +1,15 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Change (2026-06 · Instellingen-dropdown + Mijn Abonnement redesign)
+- Tab-balk bovenaan Instellingen verwijderd. Zijmenu "Instellingen" (klant-admin) is nu een uitklapbare dropdown met 8 onderdelen (Mijn abonnement eerst). Mobiel: in de menu-sheet klapt "Instellingen" een lijst open.
+- Eén bron: `admin/instellingenSections.js`; `InstellingenHub` volgt de URL-hash (`/admin/instellingen#<id>`).
+- Mijn Abonnement: nieuwe bento-layout (donkere status-hero met 3 stats, "Nu betalen" kaart met Creditcard/iDEAL, bankoverschrijving + upload naast elkaar, pakketkaarten, facturen + betalingen-tijdlijn, gevarenzone).
+- "Oudste open factuur" = vroegste `period_start` (frontend + backend).
+- Getest: iteration_61 (backend 8/8, frontend OK; mobiele overflow opgelost en opnieuw gecontroleerd op 390px).
+- LET OP: Stripe staat in LIVE-modus (door superadmin ingesteld op 2026-10-09).
+
+
 ## Latest Feature (2026-06 · Stripe Creditcard & iDEAL voor SaaS-abonnement)
 - **SaaS Instellingen → "Stripe betalingen"**: Test/Live schakelaar, Publishable key, Secret key (gemaskeerd), Webhook secret per modus; opgeslagen in `saas_settings.stripe`. Testmodus valt terug op env-keys. Prefix-validatie (pk_/sk_/whsec_, _test_/_live_), live kan pas na invullen live keys. Knop "Test verbinding" (`POST /api/superadmin/stripe-config/test`).
 - **Mijn Abonnement (klant)**: box "Direct online betalen" met knoppen Creditcard + iDEAL (oudste open factuur) + per open factuur Creditcard/iDEAL knoppen. Navigeert naar `/saas/checkout/<id|open>?method=card|ideal&back=...`.

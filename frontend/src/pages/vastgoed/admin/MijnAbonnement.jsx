@@ -27,9 +27,9 @@ const STATUS = {
 
 function Stat({ label, value, testid }) {
   return (
-    <div className="rounded-2xl bg-white/[0.07] border border-white/10 px-4 py-3 min-w-0" data-testid={testid}>
-      <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/50">{label}</p>
-      <p className="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">{value}</p>
+    <div className="rounded-2xl bg-white/[0.07] border border-white/10 px-2.5 sm:px-4 py-3 min-w-0" data-testid={testid}>
+      <p className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider sm:tracking-widest text-white/50 truncate">{label}</p>
+      <p className="text-xs sm:text-base font-extrabold text-white mt-0.5 truncate">{value}</p>
     </div>
   );
 }
@@ -66,10 +66,10 @@ function StatusHero({ me, openTotal, lastPayment }) {
           {fmt(me.monthly_amount, me.currency)} <span className="text-sm font-medium text-white/50">/ maand</span>
         </p>
         {sub && <p className="mt-3 text-sm text-white/75 max-w-lg leading-relaxed">{sub}</p>}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="mt-6 grid grid-cols-3 gap-2">
           <Stat label={me.status === 'trial' ? 'Proef eindigt' : 'Vernieuwing'} value={fmtDate(me.status === 'trial' ? me.trial_ends_at : me.renews_at)} testid="my-sub-stat-renew" />
           <Stat label="Openstaand" value={openTotal > 0 ? fmt(openTotal, me.currency) : 'Niets'} testid="my-sub-stat-open" />
-          <Stat label="Laatste betaling" value={lastPayment ? fmtDate(lastPayment.paid_at) : 'Nog geen'} testid="my-sub-stat-last" />
+          <Stat label="Betaald op" value={lastPayment ? fmtDate(lastPayment.paid_at) : 'Nog geen'} testid="my-sub-stat-last" />
         </div>
       </div>
     </section>
@@ -196,12 +196,12 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
   );
 }
 
-function KV({ label, value, mono, onCopy, copied }) {
+function KV({ label, value, mono, onCopy, copied, wrap }) {
   return (
     <div className="row-label-value items-center py-2 border-b border-slate-200/70 last:border-0">
       <span className="text-slate-500 text-sm">{label}</span>
       <div className="flex items-center gap-1 min-w-0">
-        <span className={`font-bold text-slate-900 text-sm truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+        <span className={`font-bold text-slate-900 text-sm ${wrap ? 'break-words whitespace-normal text-right' : 'truncate'} ${mono ? 'font-mono' : ''}`}>{value}</span>
         {onCopy && (
           <button onClick={onCopy} title="Kopiëren"
             className="p-1.5 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-white transition-colors shrink-0">
@@ -222,7 +222,7 @@ function BankBox({ details, invoice, company, onSuccess, onErr }) {
     setTimeout(() => setCopied(''), 1500);
   };
   return (
-    <section className="rounded-3xl bg-slate-50/80 border border-slate-200/80 p-5 sm:p-6 sub-rise sub-d2" data-testid="saas-bank-box">
+    <section className="rounded-3xl bg-slate-50/80 border border-slate-200/80 p-4 sm:p-6 sub-rise sub-d2 min-w-0 overflow-hidden" data-testid="saas-bank-box">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center"><Landmark className="w-4 h-4" /></span>
         <div>
@@ -230,14 +230,14 @@ function BankBox({ details, invoice, company, onSuccess, onErr }) {
           <p className="text-[11px] text-slate-500">Liever zelf overmaken? Gebruik onderstaande gegevens.</p>
         </div>
       </div>
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 [&>*]:min-w-0">
         <div className="rounded-2xl bg-white/70 border border-slate-200/70 px-4 py-1">
           <KV label="Bank" value={details.bank_name} />
           <KV label="Tenaamstelling" value={details.account_name} onCopy={() => copy('account_name', details.account_name)} copied={copied === 'account_name'} />
           <KV label="Rekeningnummer" value={details.account_number} mono onCopy={() => copy('account_number', details.account_number)} copied={copied === 'account_number'} />
           {details.swift && <KV label="SWIFT" value={details.swift} mono onCopy={() => copy('swift', details.swift)} copied={copied === 'swift'} />}
           {invoice && <KV label="Bedrag" value={fmt(invoice.amount, invoice.currency)} mono />}
-          <KV label="Omschrijving" value={refText} mono onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
+          <KV label="Omschrijving" value={refText} mono wrap onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
         </div>
         <BankProofUploader invoice={invoice} onSuccess={onSuccess} onErr={onErr} />
       </div>

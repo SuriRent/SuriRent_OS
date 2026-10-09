@@ -1,0 +1,42 @@
+{
+  "summary": "Verified Instellingen sidebar dropdown (desktop + mobile sheet), Mijn Abonnement bento redesign, deep-links, legacy redirect, and backend oldest-open-invoice selection in /api/saas-stripe/create-intent. 8/8 backend tests pass. Desktop UI fully OK. Mobile 390px shows horizontal overflow on BankBox (row-label-value grid cells) — regression against the stated requirement 'no horizontal overflow at 390px'. Superadmin regression OK: tab-saas_settings is a plain link (no dropdown), Stripe section loads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/saas-stripe/create-intent", "issue": "Returns Stripe LIVE publishable key (pk_live_...) and mode='live'. Review request said 'Stripe in TEST mode; keep it so'. Env currently has live Stripe secrets which could lead to real charges. Please verify intent."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MijnAbonnement BankBox / KV", "issue": "Horizontal overflow of ~133px at mobile 390px. Offending element: div.row-label-value with children not shrinking (long 'Omschrijving' value + 448px grid row). The .row-label-value grid lacks min-w-0 on cells or min-content fallback, causing the inner `.rounded-2xl bg-white/70 ... px-4 py-1` div to be 482px wide inside a 390px viewport. Also the status hero decorative blur (`-right-16 w-72 h-72`) extends to right=434 but is pointer-events-none & inside relative; main overflow is from BankBox row.", "selector": "[data-testid=\"saas-bank-box\"] .row-label-value", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mijn abonnement mobile (390px)", "issues": ["BankBox section causes page horizontal scroll; fix by adding min-w-0 to grid cells, truncate on value spans, and/or breaking long omschrijving reference into wrap."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter61_instellingen.py",
+    "/app/test_reports/pytest/iter61.xml"
+  ],
+  "action_items": [
+    "Fix Mijn Abonnement BankBox horizontal overflow at 390px (likely need min-w-0 on grid cells in `.row-label-value` + ensure Omschrijving value can wrap/truncate).",
+    "Confirm whether Stripe should be in TEST or LIVE mode in preview; current pk is pk_live_... (review request said test)."
+  ],
+  "critical_code_review_comments": [
+    "InstellingenHub & INSTELLINGEN_SECTIONS structure is clean and DRY: single source for sidebar, mobile sheet, and hub router.",
+    "SidebarSettingsDropdown auto-opens on isActive — good UX. Chevron rotation + grid-template-rows animation works.",
+    "MijnAbonnement.jsx is ~495 lines, close to the 700-line guideline; still OK but consider extracting PlanCard/BankBox into own files if it grows.",
+    "saas_stripe._resolve_invoice sorts by ('period_start', 1) then ('created_at', 1) — matches UI expectation. Verified end-to-end: oldest open (SRD 2.500, period_start 2026-08-15) is picked over newer SRD 2.000 (2026-10-14)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter61_instellingen.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "90%"},
+  "test_credentials": "demo@surirent.sr/demo1234, super@surirent.sr/super1234",
+  "seed_data_creation": "None (used existing demo data; 2 open invoices preserved).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Desktop Instellingen dropdown + all 8 sub items work. Deep link #branding works. Legacy /admin/mijn_abonnement redirects to #abonnement. Mobile sheet (via data-testid='mobile-fab-menu') -> tab-sheet-instellingen expands sheet-instellingen-list with 8 tab-sheet-instellingen-<id> items; tapping one navigates and closes sheet. Backend create-intent correctly selects oldest open invoice by period_start. Only remaining issue: mobile 390 horizontal overflow (133px) on Mijn abonnement coming from BankBox row-label-value cells.",
+  "rca_of_the_issue": "Overflow at 390px: `.row-label-value` CSS grid produces fixed-width columns; its value cell contains `<span class='font-bold ... truncate'>` + Copy button. The `truncate` requires parent to be `min-w-0`, but the containing `<div class='flex items-center gap-1 min-w-0'>` is inside a grid cell that itself is NOT min-w-0, so the span expands to its natural width (long 'Omschrijving' = ABONNEMENT — UW BEDRIJF — augustus 2026 ~ 347px) and the whole row grows to 448px. Fix: ensure `.row-label-value > *` get `min-w-0` or set `grid-template-columns: auto minmax(0,1fr)` in the CSS util class."
+}
