@@ -1,6 +1,14 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Change (2026-06 · Abonnementsbel + Mijn Abonnement licht design)
+- ApartmentsBell (gebouw-icoon) en OverdueBell (huur-achterstanden) verwijderd uit de beheerder-topbar (desktop + mobiel). Nieuwe `components/SubscriptionBell.jsx`: toont alleen abonnementsmeldingen (verlopen, proef/vernieuwing binnen 7 dagen, nieuwe/achterstallige factuur) met directe Creditcard/iDEAL knoppen + link naar Mijn abonnement.
+- Huur-achterstanden alleen nog op Facturen-pagina.
+- Mijn Abonnement herontworpen in de stijl van Facturen: KPI-strip (Pakket/Status/Openstaand/Laatste betaling), betaalbanner oudste open factuur, tabbalk (Facturen/Betalingen/Pakket wijzigen/Bankoverschrijving), tabel-achtige factuurrijen.
+- `/api/billing/me` geeft nu `company_name` terug (omschrijving bankoverschrijving toont echte naam).
+- Getest: iteration_62 (100% backend + frontend).
+
+
 ## Latest Change (2026-06 · Instellingen-dropdown + Mijn Abonnement redesign)
 - Tab-balk bovenaan Instellingen verwijderd. Zijmenu "Instellingen" (klant-admin) is nu een uitklapbare dropdown met 8 onderdelen (Mijn abonnement eerst). Mobiel: in de menu-sheet klapt "Instellingen" een lijst open.
 - Eén bron: `admin/instellingenSections.js`; `InstellingenHub` volgt de URL-hash (`/admin/instellingen#<id>`).

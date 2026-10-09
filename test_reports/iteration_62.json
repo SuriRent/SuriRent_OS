@@ -1,0 +1,27 @@
+{
+  "summary": "Verified subscription bell replacement (apartments/overdue bells removed; new subscription-bell with alerts panel + pay buttons that navigate to /saas/checkout/<id>?method=card|ideal), Mijn Abonnement light-style redesign with KPI strip, pay banner using oldest open invoice (SRD 2.500), tab bar, invoices/payments/plans/bank panels, bankoverschrijving omschrijving now contains real company name 'SuriRent N.V.' (no 'UW BEDRIJF'), and mobile 390 horizontal overflow regression from iter 61 is now FIXED (scrollWidth==clientWidth==390 on invoices + bank tabs). Backend /api/billing/me returns company_name. Facturen page still shows tenant arrears KPIs. 3/3 backend tests pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter62_subscription_bell.py",
+    "/app/test_reports/pytest/iter62.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SubscriptionBell + MijnAbonnement cleanly separate concerns. 2-DOM render (desktop+mobile) works but means querySelector hits the hidden mobile node first on desktop; tests must use :visible locator (noted for next agent).",
+    "Bank omschrijving correctly resolved via billing/me.company_name server-side; no hardcoded 'UW BEDRIJF' anywhere user-facing.",
+    "Stripe mode is still LIVE (pk_live) per iter 61 note — flagged earlier; not re-tested here per instructions to not complete real payments. Confirm with user if LIVE is intended for preview."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter62_subscription_bell.py (new)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "demo@surirent.sr/demo1234, super@surirent.sr/super1234",
+  "seed_data_creation": "None (used existing demo data; 2 open subscription invoices: SRD 2.500 period_start 15 aug 2026 [achterstallig] + SRD 2.000 period_start 14 okt 2026 [nieuwe]).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Subscription bell renders twice in DOM (desktop + mobile). ALWAYS use `[data-testid=\"subscription-bell-btn\"]:visible` locator. Count badge text=2 corresponding to 2 open invoices. Pay-card button navigates to /saas/checkout/<invoiceId>?method=card&back=... (verified for oldest open invoice 43bece85-...). Mijn Abonnement mobile deep link: /c/<slug>/admin/instellingen#abonnement renders mobile KPI tiles with suffix '-m' (my-sub-kpi-plan-m etc). No horizontal overflow at 390px. Bank box omschrijving = 'ABONNEMENT — SuriRent N.V. — <maand> <jaar>'. Superadmin regression could not be fully re-tested in this run due to carried-over demo session; prior iter 61 confirmed superadmin tab-saas_settings has no dropdown; subscription-bell should not render for superadmin (no company_id).",
+  "rca_of_the_issue": "N/A — iter 61 BankBox overflow is resolved. Verified `document.documentElement.scrollWidth === clientWidth === 390` on both Invoices and Bank tabs at 390x844."
+}
