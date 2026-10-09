@@ -1,6 +1,23 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · v2) — Uit/Kasgeld/Beheerder verhuisd naar `+` sheet
+
+**Reden**: user wou dat de drie knoppen (Uit, Kasgeld, Beheerder) uit de mobile top-balk weg gaan en samen met de quick-add opties in de `+` bottom-sheet komen, zodat de top-balk vrij komt en de locatie-/appartement-lijst hoger op het scherm begint.
+
+**Wijzigingen** (`KioskLayout.jsx`):
+- `MobileHeaderButtons` component retourneert nu `null` (geen DOM op mobile) — call-sites in `ApartmentSelect`/`TenantConfirm` blijven intact
+- `KioskAddSheet.tiles` uitgebreid van 7 naar maximaal 10 tegels:
+  - **Standaard** (7, zelfde als desktop bottom-bar): Nieuwe huurder, Nieuw appartement, Nieuwe locatie, Nieuw contract, Nieuwe factuur, Betalingen inzien, Onderhoud
+  - **Nieuw**: Kasgeld (oranje accent `#FF5C00`), Beheerder (alleen zichtbaar als `hasAdminAccess === true`), Uit/uitloggen (rode danger-styling)
+- `handleSheetPick` uitgebreid met `kasgeld` → `setStep('kasgeld')`, `admin` → `adminRef.current()`, `exit` → `exitRef.current()`. Hoisting-probleem opgelost via `useRef`+`useEffect` zodat `handleSheetPick` bovenaan de component kan blijven staan terwijl `exit`/`adminMode` pas verderop gedefinieerd zijn
+- Sheet-mount krijgt `hasAdminAccess` prop door zodat de Beheerder-tegel conditioneel verschijnt — zelfde logica als de desktop-bar
+
+**Visueel geverifieerd op 390×844**:
+- Top van het scherm: "Kies een locatie" start direct zonder tussen-balk
+- `+` sheet toont nu 10 tegels in 2-koloms grid incluzief kleur-accenten op Kasgeld (oranje) en Uit (rood)
+
+
 ## Latest Fix (2026-02-28) — Mobile "+" FAB terug op Kiosk select
 
 **Reden**: Op desktop was er al een bottom-bar met Huurder/Appt./Locatie/Contract/Factuur/Betalingen/Onderhoud, maar op mobiel waren deze shortcuts niet bereikbaar sinds de verwijdering van de oude FAB (iOS-PWA viewport-drift bug uit feb 2026).

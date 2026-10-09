@@ -85,33 +85,14 @@ function sortApartments(a, b) {
 // op een floating + menubalk onderaan (`MobileAddFab`), niet meer hier.
 // =====================================================================
 function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
-  const pill =
-    'h-12 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition shadow-sm';
-  return (
-    <div className="md:hidden px-3 pt-2"
-      data-testid="kiosk-mobile-top-buttons">
-      <div className="grid grid-cols-3 gap-2">
-        {onExit ? (
-          <button onClick={onExit} data-testid="kiosk-lock-btn"
-            className={`${pill} bg-white/15 text-white backdrop-blur-sm`}>
-            <LogOut className="w-4 h-4" /> Uit
-          </button>
-        ) : <span />}
-        {onKasgeld ? (
-          <button onClick={onKasgeld} data-testid="kiosk-kasgeld-btn"
-            className={`${pill} bg-white text-orange-600`}>
-            <Wallet className="w-4 h-4" /> Kasgeld
-          </button>
-        ) : <span />}
-        {onAdmin ? (
-          <button onClick={onAdmin} data-testid="kiosk-admin-btn"
-            className={`${pill} bg-white/15 text-white backdrop-blur-sm`}>
-            <SettingsIcon className="w-4 h-4" /> Beheerder
-          </button>
-        ) : <span />}
-      </div>
-    </div>
-  );
+  // 2026-02-28 — De drie knoppen "Uit", "Kasgeld" en "Beheerder" zijn
+  // verhuisd naar de mobile `+` bottom-sheet (zie KioskAddSheet). Hierdoor
+  // komt de top-balk op mobiel vrij en kan de inhoud (Kies een locatie
+  // / Appartement) hoger op het scherm beginnen. We retourneren null om
+  // bestaande call-sites (ApartmentSelect / TenantConfirm) niet te hoeven
+  // aanpassen, zodat de knoppen puur via de sheet bereikbaar blijven.
+  void onAdmin; void onExit; void onKasgeld;
+  return null;
 }
 
 // =====================================================================
@@ -4461,7 +4442,7 @@ function AddMaintenanceModal({ onClose, onSaved }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
-function KioskAddSheet({ onClose, onPick }) {
+function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   // visualViewport-tracking → sheet krimpt mee met keyboard (hoewel dit
   // sheet zelf geen inputs heeft, blijft consistentie belangrijk voor
   // toekomstige uitbreidingen en zorgt het dat de sheet nooit onder de
@@ -4474,6 +4455,10 @@ function KioskAddSheet({ onClose, onPick }) {
     height: `${vv.height}px`,
     paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   } : {};
+  // Snel-aanmaak tegels (zelfde set als de desktop-balk) + de drie
+  // kiosk-niveau acties die eerder in de top-balk stonden (Kasgeld,
+  // Beheerder, Uit). Voor Kasgeld geven we een accent-styling zodat die
+  // visueel iets opvalt, net als in de oude top-balk.
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
@@ -4482,6 +4467,9 @@ function KioskAddSheet({ onClose, onPick }) {
     { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt },
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
+    { key: 'kasgeld',     label: 'Kasgeld',           Icon: Wallet,     accent: true },
+    ...(hasAdminAccess ? [{ key: 'admin', label: 'Beheerder', Icon: SettingsIcon }] : []),
+    { key: 'exit',        label: 'Uit (uitloggen)',   Icon: LogOut,     danger: true },
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4514,16 +4502,41 @@ function KioskAddSheet({ onClose, onPick }) {
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
         <div className="grid grid-cols-2 gap-3">
-          {tiles.map((t) => (
-            <button key={t.key} onClick={() => onPick(t.key)}
-              data-testid={`kiosk-tile-${t.key}`}
-              className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 active:bg-white shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]">
-              <span className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
-                <t.Icon className="w-7 h-7 text-orange-600" strokeWidth={2} />
-              </span>
-              <span className="text-sm font-black text-slate-900 leading-tight text-center">{t.label}</span>
-            </button>
-          ))}
+          {tiles.map((t) => {
+            // Accent (Kasgeld) → oranje gevulde tegel; danger (Uit) → rood
+            // accent; default → witte tegel met oranje icoon.
+            const base = 'flex flex-col items-center justify-center gap-3 rounded-2xl shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]';
+            const look = t.accent
+              ? 'bg-[#FF5C00] active:bg-[#E05200]'
+              : t.danger
+                ? 'bg-white/95 active:bg-white border-2 border-red-200'
+                : 'bg-white/95 active:bg-white';
+            const iconWrap = t.accent
+              ? 'w-14 h-14 rounded-2xl bg-white/25 flex items-center justify-center'
+              : t.danger
+                ? 'w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'
+                : 'w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center';
+            const iconColor = t.accent
+              ? 'w-7 h-7 text-white'
+              : t.danger
+                ? 'w-7 h-7 text-red-600'
+                : 'w-7 h-7 text-orange-600';
+            const textColor = t.accent
+              ? 'text-sm font-black text-white leading-tight text-center'
+              : t.danger
+                ? 'text-sm font-black text-red-700 leading-tight text-center'
+                : 'text-sm font-black text-slate-900 leading-tight text-center';
+            return (
+              <button key={t.key} onClick={() => onPick(t.key)}
+                data-testid={`kiosk-tile-${t.key}`}
+                className={`${base} ${look}`}>
+                <span className={iconWrap}>
+                  <t.Icon className={iconColor} strokeWidth={2} />
+                </span>
+                <span className={textColor}>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -4563,7 +4576,15 @@ export default function KioskLayout() {
   // Bump om ApartmentSelect te forceren opnieuw te fetchen na een aanmaak
   const [apartmentsReloadKey, setApartmentsReloadKey] = useState(0);
 
-  // Bottom-sheet tegel selectie → open de bijbehorende modal
+  // Bottom-sheet actie-refs — handleSheetPick wordt vroeg in de component
+  // gedeclareerd, maar `exit` en `adminMode` pas later. We vangen hun
+  // referenties via useRef zodat we geen hoisting-issue krijgen in de
+  // useCallback dependency array.
+  const exitRef = useRef(null);
+  const adminRef = useRef(null);
+
+  // Bottom-sheet tegel selectie → open de bijbehorende modal of
+  // navigeer naar het kiosk-niveau scherm (kasgeld / admin / exit).
   const handleSheetPick = useCallback((key) => {
     setShowAddSheet(false);
     // Kleine delay zodat de sheet-close animatie niet clashet met modal-open
@@ -4575,6 +4596,9 @@ export default function KioskLayout() {
       else if (key === 'invoice') setShowAddInvoice(true);
       else if (key === 'payments') setShowPaymentsViewer(true);
       else if (key === 'maintenance') setShowAddMaintenance(true);
+      else if (key === 'kasgeld') setStep('kasgeld');
+      else if (key === 'admin') adminRef.current?.();
+      else if (key === 'exit') exitRef.current?.();
     }, 100);
   }, []);
 
@@ -4927,6 +4951,12 @@ export default function KioskLayout() {
     }
   }, [navigate]);
 
+  // Koppel de refs die handleSheetPick gebruikt om Exit/Admin te triggeren
+  // zonder in een hoisting-fout te lopen (handleSheetPick is bovenaan de
+  // component, deze callbacks zijn hier verder onder).
+  useEffect(() => { exitRef.current = exit; }, [exit]);
+  useEffect(() => { adminRef.current = adminMode; }, [adminMode]);
+
   // Snapshot van admin_token aanwezigheid — wordt herberekend wanneer er
   // een medewerker (uit)logt zodat de Beheerder-knop direct verschijnt of
   // verdwijnt.
@@ -5108,6 +5138,7 @@ export default function KioskLayout() {
         <KioskAddSheet
           onClose={() => setShowAddSheet(false)}
           onPick={handleSheetPick}
+          hasAdminAccess={hasAdminAccess}
         />
       )}
 
