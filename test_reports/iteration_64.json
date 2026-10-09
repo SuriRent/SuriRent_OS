@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 64 — Company Stripe settings + Kiosk Stripe (card/iDEAL) + SaaS checkout brand header. Backend: 13/13 pytest pass. (1) Public vastgoed-app endpoints /api/public/vastgoed-app/{landing,login,woningen} all return 404 (removed, verified). (2) GET /api/company/stripe-config requires admin — kiosk token rejected (401/403), tenant/no-token rejected. GET returns {mode:'test', card:true, ideal:true, enabled:true, test:{publishable_key:pk_test_…, secret_key_set:true, secret_key_masked:'...EGYK'}, live:{secret_key_set:false}} — full secret never exposed. PUT {mode:'live', card:true, ideal:true} without live keys → 400 Dutch error 'Vul eerst de live Publishable key en Secret key in'. POST /api/company/stripe-config/test → 200 {ok:true, mode:'test', name:'vastgoed-app'}. Final state restored: TEST mode, card+ideal both ON. (3) Kiosk Stripe: GET /api/kiosk/stripe/config returns {enabled:true, methods:['card','ideal'], mode:'test'}. POST /api/kiosk/payments method=creditcard without stripe_payment_intent_id → 400 ('Creditcard/iDEAL vereist een Stripe-betaling'). Create intent then book without paying → 400 'Stripe-betaling is nog niet voltooid'. Real Stripe PI confirmed via SDK with pm_card_visa → status succeeded → POST /api/kiosk/payments books payment (status=approved, method=creditcard); second POST same PI → 409 'Deze Stripe-betaling is al geboekt'. Frontend (demo@surirent.sr): /my-awesome-rentals-bv/admin/instellingen#stripe renders company-stripe-settings with all expected testids (status/card-toggle/ideal-toggle/mode-test/mode-live/test-pk/test-sk/test-btn/save-btn). Status reads 'Actief in de Kiosk (testmodus) · Huurders betalen via een QR-code op hun eigen telefoon of direct op het kiosk-scherm.' Secret-key input is empty with placeholder 'Laat leeg om te behouden' and label 'SECRET KEY (TEST) — INGESTELD: SK_TEST_…EGYK' (masked suffix only). Clicking test-btn renders 'Verbonden met vastgoed-app (test).'. Sidebar NO longer has tab-instellingen-api; has tab-instellingen-stripe (verified via DOM query and sidebar text). SaaS checkout: /saas/checkout/open?method=card renders with checkout-brand header 'SuriRent · VEILIG BETALEN' including the orange house-icon chip (visible in screenshot) above the 'Afrekenen' card.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Kiosk PIN login UI (/<slug>/login PIN-pad)", "issue": "Could not drive kiosk UI from Playwright because: (a) /login?target=kiosk defaults to email/password 'Beheerder Login' (PIN pad only on branded /<slug>/login route), (b) branded route alternates between PIN-pad and Beheerder Login based on previous session (sometimes landed on email form with only a 'Terug naar PIN' link), (c) PIN buttons lack data-testid (first row shows digits '1 ABC', '2 ABC'... which breaks exact-text matchers). Not a bug per se — expected variability — but adding data-testid=kiosk-pin-key-{0..9} would make this flow deterministically testable. Kiosk→payment flow fully validated end-to-end via backend (real Stripe pm_card_visa confirmation + double-book 409); only UI driver was blocked.", "affected_selectors": ["kiosk-pin-key-1..9", "method-creditcard via branded flow"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter64_company_stripe_kiosk.py",
+    "/app/test_reports/pytest/iter64.xml"
+  ],
+  "action_items": [
+    "(Optional) Add data-testid=\"kiosk-pin-key-{d}\" to the branded PIN-pad buttons in LoginPage.jsx so Playwright can deterministically test the Kiosk login + payment UI flow (currently only robust via API). Not blocking.",
+    "No functional bugs found — all task requirements met."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/company_stripe.py:67 put_company_stripe validates prefix for publishable (pk_) and secret (sk_|rk_) keys and enforces per-mode suffix (_test_/_live_) — great. Live-mode without a saved secret correctly 400s with Dutch message.",
+    "GET /api/company/stripe-config never returns a raw secret_key: only secret_key_set + masked. _mask util used — good.",
+    "consume_kiosk_stripe_payment uses find_one_and_update({consumed:False},{$set:{consumed:True}}) → atomic idempotent guard, correctly returns 409 on double-book. _refresh() hits Stripe to update status before consume — safe.",
+    "kiosk_create_payment correctly rejects creditcard/ideal without a stripe_payment_intent_id and verifies amount/method match (±0.01).",
+    "StripeCompanySettings.jsx exposes all required data-testids and places secret input as type=password + placeholder 'Laat leeg om te behouden' — never prefilled with full key.",
+    "CheckoutBrandHeader is reused by SaaSStripeCheckout AND the error screen AND the public kiosk pay page (kiosk-pay-brand) — DRY and consistent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter64_company_stripe_kiosk.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "95% (admin Stripe settings + SaaS checkout brand verified fully in UI; kiosk UI method/panel flow not driven from Playwright due to PIN-pad selector gap but all required testids exist in source and backend path is proven E2E)"},
+  "test_credentials": "demo@surirent.sr / demo1234 ; kiosk PIN 4321 (slug my-awesome-rentals-bv) ; super@surirent.sr / super1234",
+  "seed_data_creation": "Created 2 kiosk Stripe test payments (SRD 50 Creditcard, approved, paid via pm_card_visa) + 1 unpaid intent + 1 extra unpaid intent (SRD 25 for public-QR attempt). All on company test-mode Stripe keys; no live money moved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Company stripe_config is left in TEST mode with both card+ideal ON (as requested). Backend tests in /app/backend/tests/test_iter64_company_stripe_kiosk.py are idempotent and can be re-run (will create 1 more TEST_ kiosk payment per run via pm_card_visa). Kiosk PIN-pad UI needs data-testid=kiosk-pin-key-{d} to make Playwright drive the full tenant→amount→method→Stripe-panel path; today use the API POST /api/auth/kiosk-pin to get a kiosk_token then exercise /api/kiosk/stripe/intent + /api/kiosk/payments.",
+  "rca of the issue": "N/A — feature works end-to-end."
+}
