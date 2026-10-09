@@ -2,11 +2,11 @@
 /**
  * SuriRent PWA service worker.
  * - App shell caching (offline-tolerant)
- * - Network-first for HTML/JSON, cache-first for static assets
- * - Bypass /api/* (always go to network)
+ * - Network-first for HTML/JSON (met /offline.html fallback), cache-first for static assets
+ * - Network-first for API GETs met stale cache-fallback bij offline
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v107';
+const CACHE_VERSION = 'surirent-v108';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target
@@ -17,6 +17,7 @@ const SHARE_CACHE = `${CACHE_VERSION}-share`;
 const PRECACHE = [
   '/',
   '/manifest.json',
+  '/offline.html',
   '/kiosk-icons/kiosk-72.png',
   '/kiosk-icons/kiosk-144.png',
   '/kiosk-icons/kiosk-192.png',
@@ -122,8 +123,44 @@ self.addEventListener('fetch', (event) => {
 
   if (req.method !== 'GET') return;
 
-  // Never intercept API calls — always network, no caching.
-  if (url.pathname.startsWith('/api/')) return;
+  // ===== API calls — NETWORK-FIRST met cache-fallback =====
+  // Vroeger werden alle /api/* calls hard gebypassed (no caching). Dat
+  // werkt prima met goede connectie maar laat de app volledig breken
+  // zodra er even geen internet is. Nu: probeer eerst het netwerk; faalt
+  // dat → serveer de laatste gecachete respons zodat de UI met stale
+  // data verder kan. We cachen alleen idempotente GET's (POST/PUT/DELETE
+  // worden niet geraakt — door de `req.method !== 'GET'` check hierboven).
+  //
+  // Opt-out: endpoints met `?nocache=1` of SSE (`/admin/events`) worden
+  // nooit gecacht om te voorkomen dat we live-stream events uit cache
+  // halen.
+  if (url.pathname.startsWith('/api/')) {
+    const isSSE = url.pathname.includes('/events') || (req.headers.get('accept') || '').includes('event-stream');
+    const noCache = url.searchParams.get('nocache') === '1';
+    if (isSSE || noCache) return;  // bypass → geen interceptie
+    event.respondWith((async () => {
+      const cache = await caches.open(RUNTIME_CACHE);
+      try {
+        const fresh = await fetch(req);
+        // Alleen succesvolle idempotente responses cachen.
+        if (fresh && fresh.status === 200 && fresh.type === 'basic') {
+          cache.put(req, fresh.clone()).catch(() => {});
+        }
+        return fresh;
+      } catch {
+        const cached = await cache.match(req);
+        if (cached) return cached;
+        // Geen netwerk én geen cache → return 503 zodat frontend-code
+        // (axios error handler) netjes een "offline" toast kan tonen.
+        return new Response(JSON.stringify({ detail: 'Offline — geen verbinding en geen cached data' }), {
+          status: 503,
+          statusText: 'Offline',
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    })());
+    return;
+  }
 
   // Cross-origin (e.g. fonts.googleapis.com): cache-first opportunistic.
   // Extra .catch() fallback zorgt dat we NOOIT een unhandled promise
@@ -179,8 +216,19 @@ self.addEventListener('fetch', (event) => {
           // Timeout won maar had geen cache-hit → wacht alsnog op netwerk
           return await networkPromise;
         } catch {
+          // Volledige fallback-ladder:
+          //   1. cache-match van de specifieke URL
+          //   2. cache-match van de app-shell '/'
+          //   3. de dedicated /offline.html pagina (uit PRECACHE)
+          //   4. een minimale inline Response (noodgeval)
           const cached = await cache.match(req) || await cache.match('/');
-          return cached || Response.error();
+          if (cached) return cached;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          return new Response(
+            '<!doctype html><title>Offline</title><h1>Offline</h1><p>Controleer je verbinding.</p>',
+            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          );
         }
       })
     );

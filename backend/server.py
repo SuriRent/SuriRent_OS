@@ -16312,6 +16312,47 @@ _PWA_ROLE_MANIFEST: dict[str, dict] = {
 }
 
 
+# =====================================================================
+# Globaal gedeelde PWA metadata — screenshots voor install-prompt UI,
+# IARC content-rating (volwassen content: nee) en protocol_handlers
+# zodat `web+surirent://` deeplinks de app openen. Voor alle rollen
+# identiek; wordt gemerged in de dynamic manifest response hieronder.
+# =====================================================================
+_PWA_SCREENSHOTS = [
+    {
+        "src": "/kiosk-icons/screenshots/01_landing.jpg",
+        "sizes": "540x960",
+        "type": "image/jpeg",
+        "form_factor": "narrow",
+        "label": "De complete huurbeheer oplossing voor vastgoed",
+    },
+    {
+        "src": "/kiosk-icons/screenshots/02_kiosk_pin.jpg",
+        "sizes": "540x960",
+        "type": "image/jpeg",
+        "form_factor": "narrow",
+        "label": "Kiosk Terminal — snelle PIN-toegang voor huurders",
+    },
+    {
+        "src": "/kiosk-icons/screenshots/03_tenant_login.jpg",
+        "sizes": "540x960",
+        "type": "image/jpeg",
+        "form_factor": "narrow",
+        "label": "Mijn Huurportaal — saldo, betalingen en onderhoud",
+    },
+]
+
+# IARC rating (Everyone, geen volwassen content) — zelfde id in alle manifests.
+_PWA_IARC_RATING_ID = "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7"
+
+# Protocol handlers — Chrome/Edge Android/Desktop openen `web+surirent://`
+# deeplinks direct in de geïnstalleerde PWA. `%s` wordt vervangen door
+# de encoded target-URL door de browser.
+_PWA_PROTOCOL_HANDLERS = [
+    {"protocol": "web+surirent", "url": "/open?target=%s"},
+]
+
+
 def _slug_aware_start_url(role: str, slug: str | None) -> str:
     """Bouw de role-specifieke in-slug start_url."""
     if not slug:
@@ -16343,6 +16384,12 @@ async def pwa_manifest(role: str = "beheer", slug: str | None = None):
     if role not in _PWA_ROLE_MANIFEST:
         role = "beheer"
     base = _json.loads(_json.dumps(_PWA_ROLE_MANIFEST[role]))  # diepe copy
+    # Merge gedeelde PWA metadata: install-screenshots, content rating,
+    # protocol_handlers. Deze blijven identiek per rol zodat alle Apps
+    # dezelfde ratings/handlers krijgen bij install.
+    base["screenshots"] = _PWA_SCREENSHOTS
+    base["iarc_rating_id"] = _PWA_IARC_RATING_ID
+    base["protocol_handlers"] = _PWA_PROTOCOL_HANDLERS
     if slug:
         slug = slug.lower().strip()
         # Strikte sanitatie — alleen [a-z0-9-] toelaten zodat we geen

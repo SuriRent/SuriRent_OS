@@ -11,8 +11,19 @@
   "lang": "nl",
   "dir": "ltr",
   "categories": ["business", "finance", "productivity"],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
   "id": "/?source=pwa",
   "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+surirent",
+      "url": "/open?target=%s"
+    },
+    {
+      "protocol": "mailto",
+      "url": "/admin/berichten/nieuw?to=%s"
+    }
+  ],
   "icons": [
     {
       "src": "/kiosk-icons/kiosk-72.png",

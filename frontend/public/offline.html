@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#FF5C00" />
+<title>Offline — SuriRent</title>
+<link rel="icon" href="/kiosk-icons/kiosk-favicon.ico" />
+<style>
+  :root { --orange: #FF5C00; --cream: #FFF7F0; --slate: #0f172a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--orange);
+    color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: max(env(safe-area-inset-top), 24px) 24px max(env(safe-area-inset-bottom), 24px);
+    text-align: center;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  .card {
+    max-width: 420px; width: 100%;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 28px;
+    padding: 36px 28px;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 20px 50px -15px rgba(0,0,0,0.3);
+  }
+  .icon-wrap {
+    width: 96px; height: 96px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .icon-wrap svg { width: 56px; height: 56px; stroke: #fff; stroke-width: 1.8; fill: none; }
+  h1 {
+    margin: 0 0 10px;
+    font-size: clamp(22px, 6vw, 30px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  p {
+    margin: 0 0 24px;
+    font-size: clamp(14px, 3.6vw, 16px);
+    font-weight: 500;
+    opacity: 0.95;
+    line-height: 1.5;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 52px;
+    background: #fff;
+    color: var(--orange);
+    font-weight: 800;
+    font-size: 15px;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.25);
+  }
+  .btn:active { transform: scale(0.97); }
+  .brand {
+    margin-top: 28px;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    opacity: 0.75;
+    font-weight: 800;
+  }
+  .dots {
+    margin-top: 14px;
+    display: inline-flex; gap: 6px;
+  }
+  .dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.6);
+    animation: pulse 1.4s infinite ease-in-out;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap" aria-hidden="true">
+      <!-- WiFi-off icon (lucide) -->
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h.01"/>
+        <path d="M8.5 16.429a5 5 0 0 1 7 0"/>
+        <path d="M5 12.859a10 10 0 0 1 5.17-2.69"/>
+        <path d="M19 12.859a10 10 0 0 0-2.007-1.523"/>
+        <path d="M2 8.82a15 15 0 0 1 4.177-2.643"/>
+        <path d="M22 8.82a15 15 0 0 0-11.726-3.588"/>
+        <path d="M2 2l20 20"/>
+      </svg>
+    </div>
+    <h1>Je bent offline</h1>
+    <p>SuriRent heeft geen internetverbinding. Controleer je WiFi of mobiel data en probeer het opnieuw.</p>
+    <button class="btn" onclick="window.location.reload()" data-testid="offline-retry-btn">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M16 8h5V3"/>
+        <path d="M3 16v5h5"/>
+      </svg>
+      Probeer opnieuw
+    </button>
+    <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="brand">SuriRent</div>
+  </div>
+  <script>
+    // Zodra het netwerk weer online komt, probeer de app automatisch opnieuw te laden.
+    window.addEventListener('online', function () {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

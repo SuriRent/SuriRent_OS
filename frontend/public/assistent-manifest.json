@@ -10,10 +10,29 @@
   "background_color": "#0F172A",
   "theme_color": "#FF5C00",
   "lang": "nl-NL",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+surirent",
+      "url": "/assistent?prompt=%s"
+    }
+  ],
   "icons": [
     {"src": "/kiosk-icons/assistent-72.png", "sizes": "72x72", "type": "image/png"},
     {"src": "/kiosk-icons/assistent-144.png", "sizes": "144x144", "type": "image/png"},
     {"src": "/kiosk-icons/assistent-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
     {"src": "/kiosk-icons/assistent-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ],
+  "screenshots": [
+    {
+      "src": "/kiosk-icons/screenshots/01_landing.jpg",
+      "sizes": "540x960",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "SuriRent Assistent — stel al je vastgoedvragen in gewone taal"
+    }
   ]
 }

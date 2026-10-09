@@ -1,6 +1,34 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Feature (2026-02-28) — PWA score boost (manifest + SW + offline)
+
+**Manifest** (statisch `/public/manifest.json` + `/public/assistent-manifest.json` + dynamic `/api/pwa/manifest`):
+- `iarc_rating_id: e84b072d-71b3-4d3e-86ae-31a8ce4e53b7` toegevoegd (IARC Everyone, geen volwassen content)
+- `protocol_handlers` toegevoegd: `web+surirent://` → `/open?target=%s` + voor beheer-manifest ook `mailto` → `/admin/berichten/nieuw?to=%s`
+- `screenshots` toegevoegd aan de dynamic endpoint (statisch had al 3 install-screenshots) — in de backend als `_PWA_SCREENSHOTS` constante, geserveerd voor alle 4 rollen (beheer/huurder/kiosk/klant)
+- `categories: ["business", "finance", "productivity"]` + `description` waren al aanwezig; voor `assistent-manifest.json` toegevoegd
+
+**Service Worker** (`/public/sw.js` → v107 → **v108**):
+- Nieuwe `/offline.html` branded fallback-pagina (oranje card, "Je bent offline", retry-knop, auto-reload bij `online` event)
+- `/offline.html` toegevoegd aan `PRECACHE` zodat hij altijd beschikbaar is
+- **API-strategie gewijzigd**: `/api/*` GET-calls waren hard bypassed → nu **network-first met stale cache-fallback**. SSE (`/events`) + `?nocache=1` blijven bypassen. Bij offline + geen cache return 503 JSON zodat frontend toast kan tonen
+- **HTML navigation fallback-ladder**: specifieke URL cache → app-shell `/` cache → `/offline.html` → inline minimal HTML
+- Static assets (JS/CSS/images) blijven cache-first (geen wijziging)
+- Push notifications: ongewijzigd (al volledig geïmplementeerd)
+
+**Installeerbaarheid**:
+- `beforeinstallprompt` handler bestond al in `lib/pwa.jsx:146` + iOS fallback timer; geen wijziging nodig — handler is actief in `<InstallPrompt />` dat in `App.js` is gemount
+
+**Geverifieerd via curl**:
+- `GET /offline.html` → 200
+- `GET /manifest.json` → bevat `iarc_rating_id`, `protocol_handlers`, `screenshots(3)`, `shortcuts(3)`, `categories`
+- `GET /api/pwa/manifest?role=beheer` → bevat `iarc_rating_id`, `protocol_handlers`, `screenshots(3)` + per-role base
+- `GET /sw.js` → v108 live met nieuwe strategie-comment
+
+Visueel getest op 390×844: offline-pagina toont correct SuriRent branding, WiFi-off icoon, "Probeer opnieuw" knop.
+
+
 ## Latest Fix (2026-02-28) — Kasgeld desktop = Financieel overzicht patroon + creator per mutatie
 
 **Wijzigingen**:
