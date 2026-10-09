@@ -1,6 +1,15 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · v4) — Items in eigen scroll-container + numpad toggle label
+
+**Twee aanpassingen** (`PaySelect` in KioskLayout.jsx):
+1. **Items in eigen scroll-container** — de maand/termijn-lijst krijgt een visueel distinct scroll-vak (`bg-slate-50/60 border border-slate-100 rounded-xl p-1.5`) ONDER de altijd-vaste "Alles betalen" knop. Zo scrollen de items binnen hun eigen afgebakende sectie zonder dat "Alles betalen", de "Direct betalen" knop of het "Ander bedrag" numpad meescrollen.
+2. **Toggle label dynamisch**: `showMobileKeypad ? 'Sluiten' : 'Openen'` reeds correct; de SW v108 updates heeft het label nu live in-browser gefixt. Default-state is `useState(true)` zodat huurders direct een bedrag kunnen invoeren bij openen van PaySelect.
+
+Visueel geverifieerd op 390×844 — numpad open ("Sluiten" label + toetsen 1-9+0 zichtbaar) en numpad dicht ("Openen" label + alleen bar) werken beide correct.
+
+
 ## Latest Fix (2026-02-28 · v3) — Numpad toggle-bar blijft altijd zichtbaar
 
 **User feedback**: toen de numpad gesloten was, verdween de "Ander bedrag" rij volledig en kwam alleen een vage compacte knop terug. Beter is dat de bar met "Ander bedrag (SRD) · Sluiten/Openen" ALTIJD zichtbaar blijft en alleen het numpad-grid in-/uitklapt.
