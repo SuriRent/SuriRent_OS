@@ -1,6 +1,15 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28) — Kiosk PaySelect UI clean-up (3 items)
+
+1. **Boetes rij conditioneel**: `PAY_ITEMS_TEMPLATE.map` → `PAY_ITEMS_TEMPLATE.filter((t) => (amounts[t.id] || 0) > 0).map` zodat de "Boetes" rij alleen verschijnt zodra de beheerder een boetebedrag heeft ingesteld. Zolang `amounts.boete === 0` blijft deze volledig verborgen in de "Wat wilt u betalen?" lijst.
+2. **Donkere samenvattingsbalk verwijderd**: De `bg-slate-900` rij met "N items — Huur X, Y, Z — totaal" (lines ~1963-1971) is weg. De totalen zijn al zichtbaar in de "Direct betalen" + "Regeling afspreken" CTA-knoppen eronder, dus de aparte balk was overbodig.
+3. **Mobile keypad safe-area padding**: `md:hidden` keypad container krijgt `paddingBottom: max(env(safe-area-inset-bottom, 0px), 12px)` zodat de laatste rij toetsen (7/8/9/0) niet onder de iOS home-indicator of Android navigatiebalk verdwijnt.
+
+Visueel getest op 390×844: PaySelect toont alleen huur-items (geen Boetes), geen donkere balk, en de numpad `0`-rij zit netjes boven de safe-area.
+
+
 ## Latest Feature (2026-02-28) — PWA score boost (manifest + SW + offline)
 
 **Manifest** (statisch `/public/manifest.json` + `/public/assistent-manifest.json` + dynamic `/api/pwa/manifest`):

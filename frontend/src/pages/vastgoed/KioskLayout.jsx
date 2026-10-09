@@ -1846,8 +1846,11 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
               </>
             )}
 
-            {/* Boetes — enig regulier extra template-item (Internet verwijderd) */}
-            {PAY_ITEMS_TEMPLATE.map((t) => {
+            {/* Boetes — alleen tonen wanneer de beheerder daadwerkelijk een
+                boetebedrag heeft ingesteld (amounts[t.id] > 0). Zolang er
+                geen boete openstaat, verbergen we de rij volledig zodat de
+                huurder niet onnodig verwarring krijgt. */}
+            {PAY_ITEMS_TEMPLATE.filter((t) => (amounts[t.id] || 0) > 0).map((t) => {
               const disabled = isDisabled(t.id);
               const sel = selected.has(t.id);
               const Icon = t.icon;
@@ -1960,15 +1963,10 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
             })}
           </div>
 
-          {selected.size > 0 && (
-            <div className="bg-slate-900 rounded-lg flex items-center justify-between px-3 py-2 sm:py-2.5 mt-1.5">
-              <div className="min-w-0">
-                <p className="text-xs text-slate-400">{selected.size} item{selected.size > 1 ? 's' : ''}</p>
-                <p className="text-xs text-white truncate">{buildDescription()}</p>
-              </div>
-              <p className="text-base sm:text-lg font-bold text-white whitespace-nowrap ml-2">{fmt(selectedTotal)}</p>
-            </div>
-          )}
+          {/* Donkere "N items — Huur X, Y, Z — totaal" samenvatting verwijderd
+              per user-verzoek (2026-02-28). De totalen worden al duidelijk
+              getoond in de "Direct betalen" + "Regeling afspreken" knoppen
+              hieronder, dus een aparte samenvatting is overbodig. */}
 
           <button onClick={handleNext} disabled={!canProceed} data-testid="payment-next-btn"
             className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-3 sm:py-3.5 mt-1.5 text-sm sm:text-base font-bold">
@@ -1986,8 +1984,11 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
             </button>
           )}
 
-          {/* Mobile keypad toggle */}
-          <div className="md:hidden mt-1.5">
+          {/* Mobile keypad toggle — extra bottom-padding met safe-area zodat
+              de laatste rij toetsen (7/8/9/0) niet onder de iOS home-
+              indicator of Android navigatiebalk verdwijnt. */}
+          <div className="md:hidden mt-1.5"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {!showMobileKeypad ? (
               <button onClick={() => setShowMobileKeypad(true)} data-testid="mobile-custom-toggle"
                 className="w-full flex items-center justify-center gap-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition">
