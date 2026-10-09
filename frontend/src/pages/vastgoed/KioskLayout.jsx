@@ -2387,6 +2387,19 @@ function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
 // =====================================================================
 // Confirm + Receipt
 // =====================================================================
+// APK print-bridge: alleen binnen de Android-APK (ReactNativeWebView) actief.
+const METHOD_LABELS = { contant: 'Contant', bank: 'Bankoverschrijving', creditcard: 'Creditcard', ideal: 'iDEAL' };
+const fmtPrintDate = (d) => {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+function sendApkPrint(data) {
+  const msg = { type: 'PRINT_RECEIPT', data };
+  console.log('[APK PRINT_RECEIPT]', msg);
+  if (!window.ReactNativeWebView?.postMessage) return;
+  try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
+}
+
 function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
   const { tenant, apartment: apt } = overview;
   const [loading, setLoading] = useState(false);
@@ -2397,12 +2410,14 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
     setLoading(true); setErr('');
     try {
       const planItems = payload.plan_items || [];
+      let planReceipt = '';
       for (const pi of planItems) {
-        await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
+        const pr = await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
           method: payload.method,
           amount: pi.amount,
           note: `Operator Kiosk — termijn ${pi.seq}`,
         });
+        planReceipt = planReceipt || pr?.data?.receipt_number || pr?.data?.payment?.receipt_number || '';
       }
       let data;
       const plainAmount = payload.plain_amount != null ? payload.plain_amount : payload.amount;
@@ -2415,18 +2430,14 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         data = { kind: 'plan_only', plan_items: planItems };
       }
       playSuccessPing();
-      if (window.ReactNativeWebView?.postMessage) {
-        try {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PRINT_RECEIPT', data: {
-            naam: tenant.name,
-            appartement: apt.number,
-            bedrag: data.amount ?? payload.amount,
-            methode: data.method || payload.method,
-            datum: data.paid_at || data.created_at || new Date().toISOString(),
-            kwitantie: data.receipt_number || '',
-          } }));
-        } catch { /* APK-bridge niet beschikbaar */ }
-      }
+      sendApkPrint({
+        naam: tenant?.name || '',
+        appartement: apt?.number || '',
+        bedrag: fmtMoney(payload.amount, payload.currency || 'SRD'),
+        methode: METHOD_LABELS[payload.method] || payload.method || '',
+        datum: fmtPrintDate(new Date()),
+        kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
+      });
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
