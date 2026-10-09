@@ -51,7 +51,7 @@ async def superadmin_overview(user: dict = Depends(_superadmin)):
     trial = active = expired = cancelled = online_now = 0
     mrr = 0.0
     for c in companies:
-        s = _deps.billing_summary(c)
+        s = await _deps.billing_summary(c)
         st = s["billing_status"]
         if st == "trial":
             trial += 1
@@ -145,7 +145,7 @@ async def superadmin_online_status(user: dict = Depends(_superadmin)):
     rows = []
     for c in companies:
         last_seen = c.get("last_seen_at")
-        s = _deps.billing_summary(c)
+        s = await _deps.billing_summary(c)
         rows.append({
             "id": c.get("id"),
             "name": c.get("name"),
@@ -375,7 +375,7 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
             except Exception:
                 pass
         last_pmt = pmts[0] if pmts else None
-        summary = _deps.billing_summary(c)
+        summary = await _deps.billing_summary(c)
         # Bepaal status voor kasregister
         if overdue > 0:
             status = "overdue"
@@ -541,7 +541,7 @@ async def kasregister_detail(company_id: str, user: dict = Depends(_superadmin))
     plans = await db.saas_payment_plans.find(
         {"company_id": company_id}, {"_id": 0},
     ).sort("created_at", -1).to_list(100)
-    summary = _deps.billing_summary(c)
+    summary = await _deps.billing_summary(c)
 
     outstanding: dict[str, float] = {}
     for iv in invoices:

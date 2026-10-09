@@ -1,6 +1,23 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · superadmin) — Missing `await` in `routes/superadmin.py`
+
+**Bug**: Alle superadmin schermen (Overzicht, Betalingen, Facturen, Betalingsregelingen, Kasgeld, Kasregister) bleven oneindig laden. Backend returned HTTP 500 met `TypeError: 'coroutine' object is not subscriptable`.
+
+**Root cause**: `_billing_summary(c)` is een `async def` in `server.py:4670` maar werd op 4 plaatsen in `routes/superadmin.py` AANGEROEPEN ZONDER `await` tijdens de recente refactor:
+- `superadmin_overview` (line 54)
+- `superadmin_clients` (line 148)
+- `superadmin_kasregister` (line 378)
+- `superadmin_company_detail` (line 544)
+
+**Fix**: `s = _deps.billing_summary(c)` → `s = await _deps.billing_summary(c)` (replace_all + 1 unieke). Alle 4 endpoints returnen nu HTTP 200 in <120ms.
+
+**Visueel getest**: SaaS Overzicht laadt alle KPI tegels + "Totaal ontvangen SRD 6.100" + sidebar menu volledig bereikbaar.
+
+**Credentials opgeslagen**: `super@surirent.sr` / `super1234` toegevoegd aan `test_credentials.md`.
+
+
 ## Latest Fix (2026-02-28 · v3) — Pill-knoppen onderaan `+` sheet + Hoe-wilt-u-betalen opschoning
 
 **Twee wijzigingen** (`KioskLayout.jsx`):

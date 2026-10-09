@@ -17,6 +17,12 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - **Slug**: `demo`
 - **Company**: Demo Vastgoed N.V.
 
+## Superadmin
+- **Role**: superadmin
+- **Email**: `super@surirent.sr`
+- **Password**: `super1234` (reset 2026-02-28)
+- **URL**: na login auto-redirect naar `/saas/overzicht`
+
 ## Kiosk PIN
 - **Default PIN (my-awesome-rentals-bv)**: `4321`
 - **Company slug voor kiosk login**: `my-awesome-rentals-bv` (demo Rentals company)
