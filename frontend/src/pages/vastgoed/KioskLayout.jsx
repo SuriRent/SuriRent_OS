@@ -2937,29 +2937,32 @@ function KasgeldPanel({ onBack }) {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className="h-full w-full bg-[#FF5C00] overflow-y-auto"
-      style={{ paddingTop: 'max(env(safe-area-inset-top,0px), 12px)' }}>
-      {/* Oranje header — Terug links, operator-context rechts */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-2 pb-4 flex items-start justify-between gap-3 max-w-5xl mx-auto">
+    <div className="h-full w-full bg-[#FF5C00] flex flex-col"
+      style={{ padding: '1.5vh 1.5vw 0', paddingTop: 'max(env(safe-area-inset-top,0px), 12px)' }}>
+      {/* Oranje header — Terug links, operator-context rechts (zelfde patroon
+          als TenantOverview "Financieel overzicht") */}
+      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
         <button onClick={onBack} data-testid="kasgeld-back"
-          className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/20 backdrop-blur-sm text-white font-bold rounded-2xl px-4 py-2.5 min-h-[44px] active:scale-95 transition">
-          <ArrowLeft className="w-5 h-5" strokeWidth={2.5} />
-          <span className="text-sm">Terug</span>
+          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 active:scale-95 transition">
+          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
         <div className="text-right text-white">
-          <p className="text-base sm:text-lg font-black leading-tight" data-testid="kasgeld-operator-name">
+          <p className="text-xs sm:text-sm font-semibold" data-testid="kasgeld-operator-name">
             {operator?.name || 'Kiosk'}
           </p>
-          <p className="text-xs sm:text-sm opacity-80 font-semibold">Kasgeldbeheer</p>
+          <p className="text-[10px] sm:text-xs opacity-70">Kasgeldbeheer</p>
         </div>
       </div>
 
-      {/* Content stacks: op mobiel verticaal, op desktop in 2 kolommen */}
-      <div className="px-3 sm:px-6 lg:px-8 pb-6 max-w-5xl mx-auto space-y-3 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-5 lg:items-start">
-        {/* ─── CARD 1 — OVERZICHT ─── */}
-        <div className="bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)] p-5 sm:p-6">
-          <div className="row-label-value items-center mb-4 sm:mb-5">
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
+      {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
+          md+: horizontal 3:2 row match van het Financieel-overzicht patroon
+          (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
+          `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 overflow-hidden">
+        {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
+        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
+          <div className="row-label-value items-center mb-4">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl px-2.5 py-2">
                 <Calendar className="w-3.5 h-3.5" /> Maand
@@ -2979,18 +2982,18 @@ function KasgeldPanel({ onBack }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-slate-500">Totaal kasgeld</p>
-              <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight tabular-nums leading-tight" data-testid="kasgeld-total-srd">
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-tight truncate" data-testid="kasgeld-total-srd">
                 {fmtMoney(srdBalance, 'SRD')}
               </p>
             </div>
           </div>
 
           {/* 3-currency grid */}
-          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-4" data-testid="kasgeld-currency-grid">
+          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-5" data-testid="kasgeld-currency-grid">
             {['SRD', 'USD', 'EUR'].map((cur) => (
-              <div key={cur} className="px-2 py-3 text-center" data-testid={`kasgeld-bal-${cur}`}>
+              <div key={cur} className="px-2 py-3 text-center min-w-0" data-testid={`kasgeld-bal-${cur}`}>
                 <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{cur}</p>
-                <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5 tabular-nums leading-tight">
+                <p className="text-sm sm:text-base font-black text-slate-900 mt-0.5 tabular-nums leading-tight truncate">
                   {Number(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
@@ -3003,11 +3006,11 @@ function KasgeldPanel({ onBack }) {
           </button>
         </div>
 
-        {/* ─── CARD 2 — RECENTE MUTATIES ─── */}
-        <div className="bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)] p-5 sm:p-6">
-          <div className="row-label-value items-center mb-4">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Recente mutaties</h2>
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1.5" data-testid="kasgeld-count-badge">
+        {/* ─── Recente mutaties ─── (mobile: bottom | desktop: left wide) */}
+        <div className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden">
+          <div className="row-label-value items-center mb-3">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Recente mutaties</h3>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1" data-testid="kasgeld-count-badge">
               {totalMutations} mutaties
             </span>
           </div>
@@ -3028,7 +3031,7 @@ function KasgeldPanel({ onBack }) {
             </div>
           )}
 
-          <div className="space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1">
             {monthGroups.map((g) => {
               const isOpen = expandedMonths.has(g.key);
               const isSelected = g.key === selectedMonth;
@@ -3072,13 +3075,14 @@ function KasgeldPanel({ onBack }) {
   );
 }
 
-// Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode) +
+// Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
 function KasgeldMutationRow({ item }) {
   const isIn = item.type === 'in';
   const d = item.entry_date || item.created_at;
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
+  const creator = (item.created_by_name || '').trim();
   return (
     <div className="flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
@@ -3092,6 +3096,14 @@ function KasgeldMutationRow({ item }) {
         </p>
         <p className="text-xs text-slate-500 mt-0.5 truncate">
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
+          {creator && (
+            <>
+              {' · '}
+              <span className="text-slate-600" data-testid={`kasgeld-row-creator-${item.id}`}>
+                Door {creator}
+              </span>
+            </>
+          )}
         </p>
       </div>
       <p className={`text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${

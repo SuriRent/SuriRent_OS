@@ -13956,6 +13956,12 @@ class CashEntryOut(CashEntryIn):
     method: Optional[str] = None
     payment_id: Optional[str] = None
     payment_ref: Optional[str] = None
+    # Audit: wie heeft de mutatie geboekt? Voor handmatige entries is dit
+    # de ingelogde admin of kiosk-medewerker; voor payment-sourced rijen
+    # komt het uit de bijbehorende payment (kiosk_employee_name of
+    # approved_by). Legacy entries zonder deze velden tonen "Onbekend".
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
 
 
 # =====================================================================
@@ -14041,6 +14047,9 @@ async def list_cash(user=Depends(get_current_user)):
         m.setdefault("source", "kasgeld")
         # Backfill: oude rijen hebben geen entry_date → gebruik created_at
         m.setdefault("entry_date", m.get("created_at"))
+        # Audit backfill — legacy entries zonder creator krijgen "Onbekend"
+        m.setdefault("created_by_name", "Onbekend")
+        m.setdefault("created_by", None)
         # Sorteersleutel = insert-tijd (created_at). Voor manual rijen is
         # dit al de echte insert-tijd sinds we entry_date & created_at
         # scheiden. Voor backfill (oude rijen zonder entry_date) is dit
@@ -14053,13 +14062,22 @@ async def list_cash(user=Depends(get_current_user)):
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
          "tenant_id": 1, "apartment_id": 1, "period_month": 1,
-         "period_year": 1, "note": 1},
+         "period_year": 1, "note": 1,
+         "kiosk_employee_id": 1, "kiosk_employee_name": 1, "approved_by": 1},
     ):
         desc = await _kasgeld_payment_description(p)
         paid_iso = p.get("paid_at") or iso(now_utc())
         # Sort-key = echte insert-tijd van de payment (kan verschillen van
         # paid_at wanneer een payment historisch is gedateerd, bijv. seed).
         insert_iso = p.get("created_at") or paid_iso
+        # Creator — kiosk-medewerker als die geregistreerd is, anders de
+        # admin die het goedkeurde, anders "Onbekend".
+        creator_name = (
+            p.get("kiosk_employee_name")
+            or p.get("approved_by")
+            or "Onbekend"
+        )
+        creator_id = p.get("kiosk_employee_id")
         payments.append({
             "id": f"pay-{p['id']}",   # namespace zodat we conflicts vermijden
             "type": "in",
@@ -14073,6 +14091,8 @@ async def list_cash(user=Depends(get_current_user)):
             "source": "payment",
             "payment_id": p["id"],
             "payment_ref": p.get("receipt_number"),
+            "created_by": creator_id,
+            "created_by_name": creator_name,
             "_sort_at": insert_iso,   # interne sortering
         })
 
@@ -14115,6 +14135,10 @@ async def create_cash(body: CashEntryIn, user=Depends(get_current_user)):
         "id": new_id(), "company_id": cid, **payload,
         "created_at": now_iso,   # insert-tijd — voor sortering (nieuwste boven)
         "entry_date": entry_iso, # zichtbare boekdatum
+        # Audit: wie heeft deze handmatige mutatie geboekt?
+        "created_by": user.get("id"),
+        "created_by_name": user.get("name") or user.get("email") or "Beheerder",
+        "created_via": "admin",
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)
@@ -14204,16 +14228,24 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
     for m in manual:
         m.setdefault("source", "kasgeld")
         m.setdefault("entry_date", m.get("created_at"))
+        m.setdefault("created_by_name", "Onbekend")
+        m.setdefault("created_by", None)
     payments: list[dict] = []
     async for p in db.payments.find(
         {**sc, "status": "approved"},
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
          "tenant_id": 1, "apartment_id": 1, "period_month": 1,
-         "period_year": 1},
+         "period_year": 1,
+         "kiosk_employee_id": 1, "kiosk_employee_name": 1, "approved_by": 1},
     ).sort("paid_at", -1).limit(100):
         desc = await _kasgeld_payment_description(p)
         paid_iso = p.get("paid_at") or iso(now_utc())
+        creator_name = (
+            p.get("kiosk_employee_name")
+            or p.get("approved_by")
+            or "Onbekend"
+        )
         payments.append({
             "id": f"pay-{p['id']}",
             "type": "in",
@@ -14227,6 +14259,8 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
             "source": "payment",
             "payment_id": p["id"],
             "payment_ref": p.get("receipt_number"),
+            "created_by": p.get("kiosk_employee_id"),
+            "created_by_name": creator_name,
         })
     combined = manual + payments
     combined.sort(key=lambda x: x.get("created_at") or "", reverse=True)
@@ -14260,6 +14294,8 @@ async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_sessio
         "entry_date": entry_iso,
         # Audit: wie heeft dit vanuit de Kiosk ingebracht?
         "created_via": "kiosk",
+        "created_by": _session.get("employee_id"),
+        "created_by_name": _session.get("employee_name") or "Kiosk medewerker",
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)

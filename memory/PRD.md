@@ -1,6 +1,28 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28) — Kasgeld desktop = Financieel overzicht patroon + creator per mutatie
+
+**Wijzigingen**:
+
+1. **Desktop layout aligned met Financieel-overzicht patroon** (`KioskLayout.jsx` KasgeldPanel):
+   - `md:flex-row` 3:2 split zoals TenantOverview "Financieel overzicht"
+   - LINKS (`md:flex-[3]`, `md:order-1`): Recente mutaties - brede card met per-maand accordion
+   - RECHTS (`md:flex-[2]`, `md:order-2`): Kasgeld-overzicht met titel, maand-pil, totaal-saldo, 3-valuta grid, "Nieuwe mutatie" CTA
+   - Mobile orde intact (Kasgeld-overview boven, Recente onder) via `md:order-*` swap
+   - Oranje header (Terug + operator-naam rechts) identiek aan Financieel-overzicht
+
+2. **Creator-naam zichtbaar per mutatie** (`backend/server.py` + `KioskLayout.jsx`):
+   - `CashEntryOut` model uitgebreid met `created_by` + `created_by_name`
+   - `POST /api/kasgeld` (admin) → slaat `created_by = user.id`, `created_by_name = user.name or user.email or "Beheerder"` + `created_via: "admin"`
+   - `POST /api/kiosk/kasgeld` (kiosk) → slaat `created_by = session.employee_id`, `created_by_name = session.employee_name or "Kiosk medewerker"`
+   - GET endpoints: projectie uit `payments.kiosk_employee_name` of `payments.approved_by` voor payment-sourced items; `"Onbekend"` fallback voor legacy kasgeld-docs
+   - UI toont `{datum} · {Contant/method} · Door {creator_name}` in de subregel van elke `KasgeldMutationRow`
+   - Nieuwe testid: `kasgeld-row-creator-{id}`
+
+**Getest** op 390×844 (mobile) en 1440×900 (desktop) — mobile matcht de user-mock, desktop matcht het Financieel-overzicht patroon. Legacy payment-items tonen "Door Onbekend"; nieuwe mutaties zullen de operator-naam tonen.
+
+
 ## Latest Feature (2026-02-28) — Kiosk Kasgeld herontwerp (mobile + desktop)
 
 **Wat**: Volledige redesign van het Kasgeld-paneel in de Kiosk, op basis van user mock-up. Twee witte "card"-secties op oranje achtergrond: (1) Overzicht met totaalsaldo + 3-valuta grid + "Nieuwe mutatie" knop, (2) Recente mutaties met per-maand accordion.
