@@ -2287,13 +2287,9 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
         </div>
       </div>
-      <div className="px-2 sm:px-4 mb-1">
-        <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center text-sm font-bold"
-          data-testid="method-waiting-customer">
-          <Loader2 className="inline-block w-4 h-4 mr-2 animate-spin" />
-          Wacht op klant: laat hen op het klantenscherm de betaalmethode kiezen — of tik hieronder voor handmatige invoer.
-        </div>
-      </div>
+      {/* 2026-02-28 — "Wacht op klant"-info verwijderd op user-verzoek
+          omdat deze irrelevant was wanneer er geen customer-display is
+          gekoppeld. Methodes blijven direct selecteerbaar. */}
       <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-4xl w-full px-2">
           {methods.map((m) => {
@@ -4455,10 +4451,9 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     height: `${vv.height}px`,
     paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   } : {};
-  // Snel-aanmaak tegels (zelfde set als de desktop-balk) + de drie
-  // kiosk-niveau acties die eerder in de top-balk stonden (Kasgeld,
-  // Beheerder, Uit). Voor Kasgeld geven we een accent-styling zodat die
-  // visueel iets opvalt, net als in de oude top-balk.
+  // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
+  // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
+  // knopbalk gerenderd, NIET als cards.
   const tiles = [
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
@@ -4467,9 +4462,6 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt },
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
-    { key: 'kasgeld',     label: 'Kasgeld',           Icon: Wallet,     accent: true },
-    ...(hasAdminAccess ? [{ key: 'admin', label: 'Beheerder', Icon: SettingsIcon }] : []),
-    { key: 'exit',        label: 'Uit (uitloggen)',   Icon: LogOut,     danger: true },
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4502,41 +4494,37 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
         <div className="grid grid-cols-2 gap-3">
-          {tiles.map((t) => {
-            // Accent (Kasgeld) → oranje gevulde tegel; danger (Uit) → rood
-            // accent; default → witte tegel met oranje icoon.
-            const base = 'flex flex-col items-center justify-center gap-3 rounded-2xl shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]';
-            const look = t.accent
-              ? 'bg-[#FF5C00] active:bg-[#E05200]'
-              : t.danger
-                ? 'bg-white/95 active:bg-white border-2 border-red-200'
-                : 'bg-white/95 active:bg-white';
-            const iconWrap = t.accent
-              ? 'w-14 h-14 rounded-2xl bg-white/25 flex items-center justify-center'
-              : t.danger
-                ? 'w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center'
-                : 'w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center';
-            const iconColor = t.accent
-              ? 'w-7 h-7 text-white'
-              : t.danger
-                ? 'w-7 h-7 text-red-600'
-                : 'w-7 h-7 text-orange-600';
-            const textColor = t.accent
-              ? 'text-sm font-black text-white leading-tight text-center'
-              : t.danger
-                ? 'text-sm font-black text-red-700 leading-tight text-center'
-                : 'text-sm font-black text-slate-900 leading-tight text-center';
-            return (
-              <button key={t.key} onClick={() => onPick(t.key)}
-                data-testid={`kiosk-tile-${t.key}`}
-                className={`${base} ${look}`}>
-                <span className={iconWrap}>
-                  <t.Icon className={iconColor} strokeWidth={2} />
-                </span>
-                <span className={textColor}>{t.label}</span>
-              </button>
-            );
-          })}
+          {tiles.map((t) => (
+            <button key={t.key} onClick={() => onPick(t.key)}
+              data-testid={`kiosk-tile-${t.key}`}
+              className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 active:bg-white shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]">
+              <span className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
+                <t.Icon className="w-7 h-7 text-orange-600" strokeWidth={2} />
+              </span>
+              <span className="text-sm font-black text-slate-900 leading-tight text-center">{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Kiosk-niveau actieknoppen — compacte pill-knoppen onderaan de
+            sheet, NIET als kaarten zoals de aanmaak-tegels hierboven. Dit
+            matcht de visuele hiërarchie van de oude top-balk waar deze
+            drie items al compact weergegeven stonden. */}
+        <div className="mt-4 grid grid-cols-3 gap-2" data-testid="kiosk-sheet-actions">
+          <button onClick={() => onPick('kasgeld')} data-testid="kiosk-tile-kasgeld"
+            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
+            <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
+          </button>
+          {hasAdminAccess ? (
+            <button onClick={() => onPick('admin')} data-testid="kiosk-tile-admin"
+              className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
+              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Beheerder
+            </button>
+          ) : <span />}
+          <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
+            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
+            <LogOut className="w-4 h-4" strokeWidth={2.5} /> Uit
+          </button>
         </div>
       </div>
     </div>

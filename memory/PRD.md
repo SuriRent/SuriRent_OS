@@ -1,6 +1,20 @@
 # SuriRent — Multi-Company Vastgoed SaaS
 
 
+## Latest Fix (2026-02-28 · v3) — Pill-knoppen onderaan `+` sheet + Hoe-wilt-u-betalen opschoning
+
+**Twee wijzigingen** (`KioskLayout.jsx`):
+
+1. **Kasgeld / Beheerder / Uit nu als pill-knoppen** onder de 7 aanmaak-tegels in `KioskAddSheet`:
+   - 7 witte card-tegels (unchanged): Nieuwe huurder, appartement, locatie, contract, factuur, Betalingen inzien, Onderhoud
+   - 3 compacte pill-buttons in `grid-cols-3 gap-2` eronder: **Kasgeld** (witte achtergrond, oranje tekst), **Beheerder** (semi-transparant wit, alleen bij admin-access), **Uit** (semi-transparant wit)
+   - Pill-styling matcht de oude top-balk visuele hiërarchie — zijn echt knoppen, geen kaarten
+
+2. **"Hoe wilt u betalen?" opschoning**: tekst "Wacht op klant: laat hen op het klantenscherm de betaalmethode kiezen — of tik hieronder voor handmatige invoer." verwijderd (lines ~2290-2296). De betaalmethodes (SRD/USD/EUR cash/bank/online) blijven direct selecteerbaar — simpeler scherm.
+
+Visueel geverifieerd op 390×844.
+
+
 ## Latest Fix (2026-02-28 · v2) — Uit/Kasgeld/Beheerder verhuisd naar `+` sheet
 
 **Reden**: user wou dat de drie knoppen (Uit, Kasgeld, Beheerder) uit de mobile top-balk weg gaan en samen met de quick-add opties in de `+` bottom-sheet komen, zodat de top-balk vrij komt en de locatie-/appartement-lijst hoger op het scherm begint.
