@@ -11399,9 +11399,9 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str
 
     receipt_number = p.get("receipt_number") or ""
     paid_at = fmt_date(p.get("paid_at"))
-    company_name = p.get("company_name") or "Verhuurder"
+    company_name = (p.get("company_name") or "").strip() or "SuriRent"
     company_address = p.get("company_address") or ""
-    company_phone = p.get("company_whatsapp") or p.get("company_phone") or ""
+    company_phone = p.get("company_phone") or p.get("company_whatsapp") or ""
     landlord = p.get("landlord") or company_name
     tenant_name = p.get("tenant_name") or "—"
     apartment_number = p.get("apartment_number") or ""
@@ -11428,7 +11428,9 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str
             apartment_number=apartment_number, location_name=location_name,
             amount=amount, currency=currency, outstanding_after=outstanding_after,
             method=method, note=note, desc=desc, fmt_money=fmt_money,
-            preview=preview,
+            preview=preview, company_email=p.get("company_email") or "",
+            company_tagline=p.get("company_tagline") or "",
+            company_kkf=p.get("kkf_number") or "",
         )
 
     # ------ A4 layout (default) ------
@@ -11568,13 +11570,15 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_name, company_address, company_phone,
                                  tenant_name, apartment_number, location_name,
                                  amount, currency, outstanding_after, method,
-                                 note, desc, fmt_money, preview: bool = False) -> str:
+                                 note, desc, fmt_money, preview: bool = False,
+                                 company_email: str = "", company_tagline: str = "",
+                                 company_kkf: str = "") -> str:
     """80mm bonprinter layout — POS-stijl, monospaced, 1 kolom.
     @page size 80mm auto laat de printer zelf de lengte bepalen (bon-rol).
     """
     method_label = {
-        "cash": "CONTANT", "bank": "BANKOVERSCHRIJVING",
-        "card": "PIN", "other": "ANDERS",
+        "cash": "CONTANT", "contant": "CONTANT", "bank": "BANKOVERSCHRIJVING",
+        "card": "PIN", "creditcard": "CREDITCARD", "ideal": "IDEAL", "other": "ANDERS",
     }.get(method, (method or "").upper() or "—")
     outstanding_txt = (
         '<span class="paid">** VOLLEDIG VOLDAAN **</span>'
@@ -11634,8 +11638,11 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {print_button}
   <div class="sheet">
     <div class="center h1">{h(company_name)}</div>
+    {f'<div class="center lbl">{h(company_tagline)}</div>' if company_tagline else ''}
     {f'<div class="center lbl">{h(company_address)}</div>' if company_address else ''}
     {f'<div class="center lbl">Tel: {h(company_phone)}</div>' if company_phone else ''}
+    {f'<div class="center lbl" style="text-transform:none">{h(company_email)}</div>' if company_email else ''}
+    {f'<div class="center lbl">KKF: {h(company_kkf)}</div>' if company_kkf else ''}
     <div class="sep"></div>
     <div class="center h2">KWITANTIE</div>
     <div class="row"><span class="lbl">Nr.</span><span class="val">{h(receipt_number)}</span></div>

@@ -672,3 +672,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Registratie-fix
 - De knop Registreren op de landingspagina gaf het klik-event door als pakket-id; dat is opgelost. De registratiewizard en EmailLogin sturen nu de slug (portalPreview.slug) mee naar /auth/register. Getest: iteration_68.
+
+## 2026-06 — Thermische bon met dynamische bedrijfsgegevens
+- /api/payments/{id}/print.html?format=thermal haalt naam, slogan, adres, telefoon, e-mail en KKF op uit het bedrijfsprofiel van de betaling; zonder bedrijfsnaam wordt 'SuriRent' gebruikt. Labels toegevoegd voor CREDITCARD/IDEAL/CONTANT.
