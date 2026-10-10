@@ -1,0 +1,40 @@
+{
+  "summary": "Verified fix for registration bugs: (1) landing-page 'Registreren' button in top header now opens the orange 4-step MobileRegisterWizard, (2) the wizard sends `slug` to POST /api/auth/register so the Dutch error 'Slug (portal-URL) is verplicht' no longer fires. All 4 requested scenarios pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification_details": {
+    "scenario_1_landing_topheader_register": {
+      "status": "PASS",
+      "evidence": "Click [data-testid=topheader-register] opens MobileRegisterWizard. Filled 4 steps (company='Regtest <ts>', unique email, country NL, plan starter) → register-success-continue appeared → clicking continue navigated to /<slug>/admin (Setup Wizard rendered, confirming authenticated admin portal load). Slug matched slugified company name (regtest-<ts>)."
+    },
+    "scenario_2_pricing_cta_preselected_plan": {
+      "status": "PASS",
+      "evidence": "Click [data-testid=plan-cta-professional] opened MobileRegisterWizard with header badge 'U KOOS: PROFESSIONAL' preselected. Full wizard submit succeeded with no slug error."
+    },
+    "scenario_3_login_switch_mode_register": {
+      "status": "PASS",
+      "evidence": "On /login, clicking [data-testid=auth-switch-mode] opened the same MobileRegisterWizard (header shows 'U KOOS: STARTER'). Completed 4 steps, submission succeeded and user was redirected to /<slug>/admin (Setup Wizard rendered for new company LoginReg <ts>). No 'Slug verplicht' error."
+    },
+    "scenario_4_backend_slug_validation": {
+      "status": "PASS",
+      "evidence": "POST /api/auth/register without `slug` + with company_name returns 400 with Dutch detail 'Slug (portal-URL) is verplicht — kies een unieke naam voor uw portal.' POST with valid slug returns 200 and company.slug matches submitted slug. Public /api/public/companies/<slug>/available correctly reports available=false afterwards. See pytest results: 2/2 passed."
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_register_slug.py",
+    "/app/test_reports/pytest/register_slug.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MobileAuthShell.jsx MobileRegisterWizard duplicates slugify + availability-check logic that already lives in EmailLogin.jsx — consider extracting a usePortalSlug(companyName) hook to keep both forms in sync and avoid future drift.",
+    "MarketingLandingV2.jsx TopHeader onRegister handler was previously vulnerable to accidental event-arg leakage; wrapping with `() => onRegister()` is correct — same defensive wrapping could be applied to all other handler callsites that forward optional args (planId) to prevent regression."
+  ],
+  "updated_files": ["/app/backend/tests/test_register_slug.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "N/A — created unique accounts: regtest+<ts>@example.com / secret123 across runs",
+  "seed_data_creation": "Created 3 trial companies via self-service register during testing (slugs: regtest-<ts>, pricingreg-<ts>, loginreg-<ts>). Harmless trial tenants; can be deleted if needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Register wizard testids: register-company, register-name, register-email, register-password, register-country-nl, register-country-sr, register-plan-<id>, register-next, register-back, register-close, register-success-continue, register-error. Pricing plan CTAs: plan-cta-starter/professional/enterprise/lifetime (click opens wizard with that plan preselected, shown in header badge 'U KOOS: <PLAN>'). /login register entry: [data-testid=auth-switch-mode] opens same wizard. Backend /api/auth/register requires slug when company_name is provided (returns 400 Dutch error) — frontend now always sends portalPreview.slug. After success, user is auto-logged-in and routed to /<slug>/admin where Setup Wizard appears for first-time setup.",
+  "rca of the issue": "Two independent bugs: (1) <TopHeader> onClick was previously passing the React synthetic event as planId to onRegister, which breaks the handler. Now wrapped as `() => onRegister()`. (2) Both MobileRegisterWizard.submit() and EmailLogin register-mode submit were not forwarding `slug` to POST /api/auth/register; backend validation (which requires explicit slug when company_name is set) therefore returned 400 'Slug (portal-URL) is verplicht'. Fix: both callsites now pass `slug: portalPreview.slug` in the register payload. Verified via UI (3 flows) and direct API (2 pytest cases)."
+}
