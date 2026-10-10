@@ -99,7 +99,7 @@ function TopHeader({ onLogin, onRegister }) {
             <StatusPill />
           </div>
 
-          <button onClick={onRegister} data-testid="topheader-register"
+          <button onClick={() => onRegister()} data-testid="topheader-register"
             className="hidden sm:inline-flex h-11 px-4 md:px-5 rounded-md bg-white hover:bg-orange-50 border-2 border-[#FF5C00] text-[#FF5C00] text-sm font-bold items-center gap-2 transition-colors">
             <EditableText path="v2.brand.cta_register" fallback="Registreren" as="span" />
           </button>

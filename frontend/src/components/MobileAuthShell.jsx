@@ -244,7 +244,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [country, setCountry] = useState('SR');
-  const [plan, setPlan] = useState(initialPlan || 'starter');
+  const [plan, setPlan] = useState(typeof initialPlan === 'string' && initialPlan ? initialPlan : 'starter');
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -316,6 +316,7 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan
         address: address.trim(),
         plan,
         country,
+        slug: portalPreview.slug,
       });
       const newSlug = result?.company?.slug || '';
       if (newSlug) setRegisteredSlug(newSlug);

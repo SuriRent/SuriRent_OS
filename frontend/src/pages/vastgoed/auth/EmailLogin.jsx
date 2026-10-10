@@ -174,6 +174,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
           email: email.trim(),
           password,
           company_name: companyName.trim(),
+          slug: portalPreview.slug,
           telefoon: telefoon.trim(),
           address: address.trim(),
           plan,
