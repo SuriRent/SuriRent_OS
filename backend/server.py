@@ -11712,14 +11712,36 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     })();
   </script>"""
     print_button = '' if preview else '<div class="no-print"><button onclick="window.print()">🖨</button></div>'
+    # "size: Wmm auto" is ongeldige CSS (Chrome valt dan terug op A4/Letter).
+    # Daarom meten we de bonlengte en zetten we een exacte @page-hoogte.
+    page_fit_script = """
+  <script>
+    (function() {
+      var W = %d;
+      function fit() {
+        try {
+          var b = document.body, prev = b.style.width;
+          b.style.width = (W - 4) + 'mm';
+          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 8;
+          b.style.width = prev;
+          var el = document.getElementById('page-fit');
+          if (!el) { el = document.createElement('style'); el.id = 'page-fit'; document.head.appendChild(el); }
+          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 2mm; } }';
+        } catch (e) {}
+      }
+      document.addEventListener('DOMContentLoaded', fit);
+      window.addEventListener('load', fit);
+      window.addEventListener('beforeprint', fit);
+    })();
+  </script>""" % W
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
 <style>
   /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
   @media print {{
-    @page {{ size: {W}mm auto; margin: 2mm; }}
-    body {{ margin: 0; width: {W}mm; max-width: {W}mm; }}
+    @page {{ size: {W}mm 297mm; margin: 2mm; }}
+    body {{ margin: 0; width: {W - 4}mm; max-width: {W - 4}mm; }}
     .no-print {{ display: none !important; }}
   }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
@@ -11746,7 +11768,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   .no-print {{ position: fixed; top: 4px; right: 4px; }}
   .no-print button {{ background: #000; color: #fff; border: 0; padding: 4px 8px;
     border-radius: 4px; font-size: 10pt; cursor: pointer; }}
-</style></head>
+</style>{page_fit_script}</head>
 <body>
   {print_button}
   <div class="sheet">
