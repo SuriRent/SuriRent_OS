@@ -680,3 +680,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Elke rol (Beheerder, Boekhouder, Kiosk) kan een PIN krijgen en de PIN is verplicht (4 cijfers, uniek binnen het bedrijf). De beheerder stelt in het werknemerformulier het wachtwoord en de PIN in, en daarmee wordt een account in db.users aangemaakt (employee_id, rol = app_role).
 - Login: één keer met e-mail + wachtwoord, daarna op hetzelfde apparaat alleen de PIN (personal-pin/login). Kiosk-medewerkers krijgen na het wachtwoord de PIN-stap en daarna een kiosk-sessie, zonder toegang tot beheer. Boekhouders zien in het beheer alleen de financiële tabbladen en mogen betalingen goedkeuren of afwijzen. Inactief of verwijderd → geen login meer.
 - De Werknemers-pagina is responsive gemaakt (kaarten op mobiel). Getest: iteration_69 (backend 15/15, frontend OK).
+
+## 2026-06 — Printerinstellingen per locatie
+- Instellingen → Printers (#printers): per locatie printertype (ktp/sunmi/bluetooth) en papier (58mm/80mm/aangepast 30-120mm), opgeslagen in locations.printer. API: GET /api/locations/printer-settings, PUT /api/locations/{id}/printer (alleen admin), GET /api/kiosk/printer-settings?location_id= (standaard sunmi/80mm).
+- De kiosk haalt vóór het printen de instellingen van de locatie van het appartement op. PRINT_RECEIPT = {type, command: PRINT_KTP|PRINT_SUNMI|PRINT_BLUETOOTH, printer:{type,command,paper,width_mm,chars_per_line,configured}, data:{...}}. Getest: iteration_70 (backend 11/11) + handmatige controle.

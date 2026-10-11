@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Printer, Check, Loader2, MapPin, Bluetooth, Smartphone, Cpu } from 'lucide-react';
-import { toast } from 'sonner';
 import { api, formatError } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 
@@ -25,16 +24,17 @@ function LocationPrinterCard({ loc, onSaved }) {
   const [paper, setPaper] = useState(loc.printer.paper);
   const [width, setWidth] = useState(loc.printer.paper === 'custom' ? String(loc.printer.width_mm) : '');
   const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
   const save = async () => {
     if (paper === 'custom' && !(Number(width) >= 30 && Number(width) <= 120)) {
-      toast.error('Vul een papierbreedte tussen 30 en 120 mm in'); return;
+      setMsg({ ok: false, t: 'Vul een papierbreedte tussen 30 en 120 mm in' }); return;
     }
-    setSaving(true);
+    setSaving(true); setMsg(null);
     try {
       await api.put(`/locations/${loc.id}/printer`, { type, paper, width_mm: paper === 'custom' ? Number(width) : null });
-      toast.success(`Printerinstellingen opgeslagen voor ${loc.name}`);
+      setMsg({ ok: true, t: 'Printerinstellingen opgeslagen' });
       onSaved();
-    } catch (e) { toast.error(formatError(e)); }
+    } catch (e) { setMsg({ ok: false, t: formatError(e) }); }
     finally { setSaving(false); }
   };
   return (
@@ -78,6 +78,10 @@ function LocationPrinterCard({ loc, onSaved }) {
         className="mt-5 w-full sm:w-auto h-11 px-6 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Opslaan
       </button>
+      {msg && (
+        <p data-testid={`printer-msg-${loc.id}`}
+          className={`mt-3 text-sm font-semibold rounded-xl px-3 py-2 ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{msg.t}</p>
+      )}
     </div>
   );
 }
