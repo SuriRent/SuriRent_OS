@@ -79,7 +79,10 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
   });
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(() => {
-    try { return localStorage.getItem('saved_login_email') !== null; } catch { return false; }
+    try {
+      const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      return standalone || localStorage.getItem('saved_login_email') !== null;
+    } catch { return false; }
   });
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
