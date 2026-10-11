@@ -9578,6 +9578,53 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 
 
 # =====================================================================
+# Printerinstellingen per locatie (APK bonprinter)
+# =====================================================================
+PRINTER_COMMANDS = {"ktp": "PRINT_KTP", "sunmi": "PRINT_SUNMI", "bluetooth": "PRINT_BLUETOOTH"}
+DEFAULT_PRINTER = {"type": "sunmi", "paper": "80mm", "width_mm": 80}
+
+
+class PrinterSettingsIn(BaseModel):
+    type: Literal["ktp", "sunmi", "bluetooth"]
+    paper: Literal["58mm", "80mm", "custom"]
+    width_mm: Optional[int] = Field(default=None, ge=30, le=120)
+
+
+def _printer_out(cfg: Optional[dict]) -> dict:
+    c = {**DEFAULT_PRINTER, **(cfg or {})}
+    width = {"58mm": 58, "80mm": 80}.get(c["paper"]) or int(c.get("width_mm") or 80)
+    return {"type": c["type"], "command": PRINTER_COMMANDS[c["type"]], "paper": c["paper"],
+            "width_mm": width, "chars_per_line": {58: 32, 80: 48}.get(width, max(16, round(width * 0.6))),
+            "configured": bool(cfg)}
+
+
+@api.get("/locations/printer-settings")
+async def list_printer_settings(user=Depends(get_current_user)):
+    docs = await db.locations.find(scope(user), {"_id": 0, "id": 1, "name": 1, "address": 1, "printer": 1}).sort("name", 1).to_list(1000)
+    return [{"id": d["id"], "name": d.get("name", ""), "address": d.get("address", ""), "printer": _printer_out(d.get("printer"))} for d in docs]
+
+
+@api.put("/locations/{loc_id}/printer")
+async def put_printer_settings(loc_id: str, body: PrinterSettingsIn, user=Depends(require_role("admin"))):
+    if body.paper == "custom" and not body.width_mm:
+        raise HTTPException(status_code=400, detail="Vul de papierbreedte in mm in (30-120)")
+    cfg = {"type": body.type, "paper": body.paper, "width_mm": body.width_mm if body.paper == "custom" else int(body.paper[:2]),
+           "updated_at": iso(now_utc())}
+    res = await db.locations.update_one({"id": loc_id, **scope(user)}, {"$set": {"printer": cfg}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Locatie niet gevonden")
+    return {"id": loc_id, "printer": _printer_out(cfg)}
+
+
+@api.get("/kiosk/printer-settings")
+async def kiosk_printer_settings(location_id: Optional[str] = None, _session=Depends(get_kiosk_session)):
+    loc = None
+    if location_id and location_id not in ("_none", "__none__", "__any__"):
+        loc = await db.locations.find_one({"id": location_id, **kiosk_scope(_session)}, {"_id": 0, "printer": 1})
+    return {"location_id": location_id, "printer": _printer_out((loc or {}).get("printer"))}
+
+
+# =====================================================================
 # Kiosk public endpoints (no auth, but expects kiosk session for payments)
 # =====================================================================
 @api.get("/kiosk/locations")

@@ -2393,8 +2393,13 @@ const fmtPrintDate = (d) => {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-function sendApkPrint(data) {
-  const msg = { type: 'PRINT_RECEIPT', data };
+async function sendApkPrint(data, locationId) {
+  let printer = null;
+  try {
+    const { data: r } = await api.get('/kiosk/printer-settings', { params: { location_id: locationId || undefined } });
+    printer = r.printer;
+  } catch (e) { console.warn('[APK PRINT_RECEIPT] printerinstellingen niet opgehaald', e); }
+  const msg = { type: 'PRINT_RECEIPT', command: printer?.command, printer, data };
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
   try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
@@ -2437,7 +2442,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         methode: METHOD_LABELS[payload.method] || payload.method || '',
         datum: fmtPrintDate(new Date()),
         kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
-      });
+      }, apt?.location_id);
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
