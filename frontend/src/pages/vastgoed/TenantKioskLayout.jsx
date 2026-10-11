@@ -1758,7 +1758,6 @@ export default function TenantKioskLayout() {
   const [prefill, setPrefill] = useState(null);
   const [tenantSetup, setTenantSetup] = useState(null); // { tenant_id, name, has_pin }
   const [branding, setBranding] = useState(() => readCachedBranding());
-  const idleTimer = useRef(null);
 
   // 1) Branding laden — primary color toepassen voor de hele kiosk-achtergrond
   const [needsCompanyPick, setNeedsCompanyPick] = useState(false);
@@ -1849,28 +1848,6 @@ export default function TenantKioskLayout() {
     } finally { setLoading(false); }
   }, [authed]);
   useEffect(() => { if (authed) loadOverview(); }, [authed, loadOverview]);
-
-  // 4) Auto-logout na 90s inactiviteit
-  const resetIdle = useCallback(() => {
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => {
-      if (authed) {
-        localStorage.removeItem(TENANT_TOKEN_KEY);
-        setAuthed(false);
-        setView('dashboard');
-      }
-    }, 90_000);
-  }, [authed]);
-  useEffect(() => {
-    if (!authed) return undefined;
-    resetIdle();
-    const ev = ['mousedown', 'touchstart', 'keydown'];
-    ev.forEach((e) => window.addEventListener(e, resetIdle));
-    return () => {
-      ev.forEach((e) => window.removeEventListener(e, resetIdle));
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
-  }, [authed, resetIdle]);
 
   const logout = () => {
     api.post('/tenant-portal/logout').catch(() => {});

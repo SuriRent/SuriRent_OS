@@ -1351,12 +1351,12 @@ async def issue_device_qr_token(user=Depends(get_current_user)):
     opnieuw PIN te hoeven invoeren. De token kan alleen QR-claim doen,
     geen andere endpoints raadplegen.
 
-    TTL: 90 dagen. Revocable via account-instellingen.
+    TTL: 1 jaar. Revocable via account-instellingen.
     """
     raw_token = secrets.token_urlsafe(32)
     token_hash = hash_password(raw_token)
     now = datetime.now(timezone.utc)
-    expires = now + timedelta(days=90)
+    expires = now + timedelta(days=365)
     await db.device_qr_tokens.insert_one({
         "_id": secrets.token_urlsafe(12),
         "user_id": user["id"],
@@ -1390,7 +1390,7 @@ async def qr_claim(token: str, request: Request, user=Depends(get_current_user_o
         # is dit klein; in productie kun je een lookup via user_id versnellen
         # door de client ook user_id mee te sturen — voor nu houden we het
         # eenvoudig en defensief.
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
         matched_doc = None
         async for doc in db.device_qr_tokens.find({"created_at": {"$gte": cutoff}}, {"_id": 0}):
             try:
@@ -1852,7 +1852,7 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
         await db.users.insert_one(user_doc)
 
     # Sla sessie op. Emergent session_token is 7 dagen geldig.
-    expires_at = now_utc() + timedelta(days=7)
+    expires_at = now_utc() + timedelta(days=365)
     # Wis EERST alle stale sessies op dit apparaat:
     #   1) Eventuele OUDE session_token cookie in de browser → DB rij weg
     #      (behalve als het toevallig hetzelfde token is als het nieuwe).
@@ -1883,7 +1883,7 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
     response.set_cookie(
         key="session_token", value=session_token,
         httponly=True, secure=True, samesite="none", path="/",
-        max_age=7 * 24 * 3600,
+        max_age=365 * 24 * 3600,
     )
     # Frontend gebruikt `needs_onboarding` om de "Kies uw portalnaam" mini-
     # modal te tonen na een fresh Google registratie.
@@ -5706,7 +5706,7 @@ async def set_kiosk_pin(body: SetPinIn, user=Depends(get_current_user)):
 # =====================================================================
 # Tenant portal auth
 # =====================================================================
-TENANT_TOKEN_MIN = 60 * 24  # 24h
+TENANT_TOKEN_MIN = KIOSK_TOKEN_MIN  # 1 jaar
 
 
 async def get_tenant_session(request: Request) -> dict:

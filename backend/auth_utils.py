@@ -18,8 +18,9 @@ from fastapi import HTTPException, Request
 # ---------- Config ----------
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
-ACCESS_MIN = 60 * 12  # 12h — gemakskeuze voor deze app
-KIOSK_TOKEN_MIN = 60 * 8  # kiosk sessie 8h
+SESSION_MIN = 60 * 24 * 365  # 1 jaar — sessies verlopen niet automatisch
+ACCESS_MIN = SESSION_MIN
+KIOSK_TOKEN_MIN = SESSION_MIN
 
 
 # ---------- Password hashing ----------
