@@ -1,0 +1,31 @@
+{
+  "summary": "Verified new window.print() + #bon approach replacing the previous iframe autoprint. Kiosk web E2E (PIN 4321 → location → apartment → Vooruitbetaling SRD 5,00 → Contant → Confirm → ReceiptScreen): after ~3.5s window.__printCalls===1, document.getElementById('bon') exists as a direct body child (bonCount=1), contains receipt text (SuriRent N.V. / KWITANTIE / KW2026-00544 / Kevin Doelahasori / SRD 500,00 / CONTANT), #bon is display:none on screen, and NO iframes with 'print' in id/testid exist. Manual reprint click bumps __printCalls to 2 while bonCount stays exactly 1. Print media emulation: #bon computed display='block', #root computed display='none'. page.pdf(prefer_css_page_size=True) produced a PDF with page width 163.92pt ≈ 58mm, height 246.96pt (dynamic, not A4/Letter), content not clipped. Backend: /api/payments/{id}/print.html?fragment=1 returns a <style> with ALL CSS rules scoped under '#bon' plus <div class=\"sheet\">; ?format=thermal&preview=1 and ?format=a4 still return full HTML 200. 3/3 pytest passes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter72_print_fragment.py",
+    "/app/test_reports/pytest/iter72.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Observation (not a blocker): Under page.emulate_media('print') one unrelated direct body-child iframe (3rd-party/dev widget, no id/testid) still shows computed display:block despite the '!important' rule 'body > *:not(#bon) { display: none !important; }'. The receipt PDF output is clean (only #bon rendered) so this does not affect printing — likely the iframe is injected by Emergent dev tooling and sets display via a shadow/UA stylesheet or late-mounted inline style. No action required but worth noting if we later host a prod widget iframe as a body child.",
+    "lib/kiosk-print.js:fitPageToBon measures offsetHeight after setting bon to position:fixed/left:-10000px/width:54mm — good: it avoids layout shift. The '@page { size: 58mm Xmm }' is written to <style id=bon-page-size>. Make sure fitPageToBon runs BEFORE window.print(); it does (synchronous). ✓",
+    "The APK sendApkPrint() in KioskLayout.jsx still emits 'console.log([APK PRINT_RECEIPT], msg)' BEFORE the ReactNativeWebView check — repeat finding from iter71. Pure noise in web mode (fires once); not blocking.",
+    "Backend _render_receipt_html_thermal fragment branch correctly scopes every rule under '#bon' (prefix 'S' used in comp_css = '#bon '). Verified by regex in test. ✓",
+    "index.css @media print rule 'body > *:not(#bon) { display: none !important }' uses the single-selector :not — fine for a direct child filter; combined with 'html,body { overflow: visible }' this gives a clean 58mm page."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter72_print_fragment.py (new)"
+  ],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% (auto-print, manual reprint, print-media CSS, 58mm PDF all verified)"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin); kiosk PIN 4321 for slug 'my-awesome-rentals-bv'",
+  "seed_data_creation": "Created KW2026-00544 (SRD 500,00 vooruitbetaling November 2026, Studio 1, Kevin Doelahasori) via kiosk Contant flow for the test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 72 confirms the iframe autoprint path is fully removed. Flow: ReceiptScreen → useEffect at ~2950ms calls printReceipt() from lib/kiosk-print.js → fetches /api/payments/{id}/print.html?fragment=1 → injects into (creates if missing) <div id=\"bon\"> at body root → fitPageToBon measures height, writes <style id=\"bon-page-size\"> with '@page { size: 58mm <H>mm; margin: 2mm; }' → window.print(). CSS in index.css hides everything except #bon under @media print. APK path (window.ReactNativeWebView) short-circuits before fetch/print and only postMessages PRINT_RECEIPT (unchanged, see iter71).",
+  "rca_of_the_issue": "N/A — all requested validations pass."
+}

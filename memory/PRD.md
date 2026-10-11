@@ -691,3 +691,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Printerintegraties verwijderd
 - KTP/Sunmi/Bluetooth-printerinstellingen, de endpoints en de sectie Instellingen → Printers zijn verwijderd (locations.printer is uit de database gehaald). De thermische bon heeft een vaste breedte van 58mm via @media print.
 - Web: printen via iframe.contentWindow.print(). APK: PRINT_RECEIPT {type, url (print.html?format=thermal&preview=1), data}; de APK opent het systeem-printvenster (voorbeeld in /app/memory/apk-print.md). In de APK wordt geen iframe-autoprint gedaan. Getest: iteration_71.
+- 2026-06: printen in de web-app via window.print() met de bon in <div id='bon'> (body-child, gevuld via /api/payments/{id}/print.html?fragment=1, met CSS gescoped onder #bon). index.css @media print verbergt alles behalve #bon; @page 58mm auto plus een JS-override met exacte hoogte (style#bon-page-size). De iframe-workaround is verwijderd. Getest: iteration_72.
