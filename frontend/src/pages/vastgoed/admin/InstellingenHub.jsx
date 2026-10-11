@@ -7,7 +7,6 @@ import Branding from './Branding';
 import BackupRestore from './BackupRestore';
 import SettingsPage from './Settings';
 import StripeCompanySettings from './StripeCompanySettings';
-import PrinterSettings from './PrinterSettings';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
 
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
@@ -20,7 +19,6 @@ const RENDER = {
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   kiosk: () => <SettingsPage initialSection="kiosk" hideSubNav />,
   stripe: () => <StripeCompanySettings />,
-  printers: () => <PrinterSettings />,
   backup: () => <BackupRestore />,
 };
 

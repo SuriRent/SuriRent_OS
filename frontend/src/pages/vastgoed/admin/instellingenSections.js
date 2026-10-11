@@ -1,4 +1,4 @@
-import { Crown, Briefcase, Palette, Database, Mail, FileText, KeySquare, CreditCard, Printer } from 'lucide-react';
+import { Crown, Briefcase, Palette, Database, Mail, FileText, KeySquare, CreditCard } from 'lucide-react';
 
 // Eén bron voor de Instellingen-onderdelen: gebruikt door zijmenu-dropdown,
 // mobiele sheet en InstellingenHub.
@@ -10,7 +10,6 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'invoicing', label: 'Facturen automatisering', desc: 'Automatische maand-facturen na grace periode.', icon: FileText },
   { id: 'kiosk', label: 'Kiosk PIN', desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.', icon: KeySquare },
   { id: 'stripe', label: 'Stripe betalingen', desc: 'Laat huurders in de Kiosk betalen met Creditcard of iDEAL.', icon: CreditCard },
-  { id: 'printers', label: 'Printers', desc: 'Kies per locatie het printertype en papierformaat voor de kiosk-bon.', icon: Printer },
   { id: 'backup', label: 'Backup & herstel', desc: 'Maak veilige kopieën en herstel data wanneer nodig.', icon: Database },
 ];
 

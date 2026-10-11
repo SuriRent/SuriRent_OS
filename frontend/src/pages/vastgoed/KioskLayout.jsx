@@ -2393,13 +2393,10 @@ const fmtPrintDate = (d) => {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-async function sendApkPrint(data, locationId) {
-  let printer = null;
-  try {
-    const { data: r } = await api.get('/kiosk/printer-settings', { params: { location_id: locationId || undefined } });
-    printer = r.printer;
-  } catch (e) { console.warn('[APK PRINT_RECEIPT] printerinstellingen niet opgehaald', e); }
-  const msg = { type: 'PRINT_RECEIPT', command: printer?.command, printer, data };
+function sendApkPrint(data, paymentId) {
+  // APK opent zelf het systeem-printvenster; url = print-klare bon (HTML, @media print).
+  const url = paymentId ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?format=thermal&preview=1` : null;
+  const msg = { type: 'PRINT_RECEIPT', url, data };
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
   try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
@@ -2442,7 +2439,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         methode: METHOD_LABELS[payload.method] || payload.method || '',
         datum: fmtPrintDate(new Date()),
         kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
-      }, apt?.location_id);
+      }, data?.id || data?.payment?.id);
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
@@ -2668,6 +2665,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // Gebruikt HTML-versie i.p.v. PDF-blob zodat Chrome's --kiosk-printing
   // vlag het dialoog kan overslaan (PDF-viewer negeert die vlag).
   useEffect(() => {
+    if (window.ReactNativeWebView) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
     const t = setTimeout(() => {
       printReceipt({
         paymentId: payment.id,

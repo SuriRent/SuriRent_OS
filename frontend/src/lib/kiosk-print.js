@@ -35,6 +35,14 @@ export function buildReceiptImageUrl(paymentId) {
  * @returns {Promise<boolean>} true bij succes, false bij fout.
  */
 export async function printReceipt({ paymentId, apiGet, iframeId = 'kiosk-print-iframe' }) {
+  // In de APK: laat de app het systeem-printvenster openen.
+  if (window.ReactNativeWebView?.postMessage) {
+    const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, data: { payment_id: paymentId },
+    }));
+    return true;
+  }
   try {
     const resp = await apiGet(`/payments/${paymentId}/print.html?format=thermal&preview=1`, { responseType: 'text' });
     const html = resp?.data;
