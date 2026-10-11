@@ -107,6 +107,8 @@ async def get_current_user(request: Request) -> dict:
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
+    if user.get("disabled") or user.get("role") == "kiosk":
+        raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
     # Impersonation context carried via JWT payload
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
@@ -1168,6 +1170,14 @@ async def login(body: LoginIn, request: Request, response: Response):
     )
     if not ok:
         raise HTTPException(status_code=401, detail="Onjuiste inloggegevens")
+    if user.get("disabled"):
+        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    if user.get("role") == "kiosk":
+        # Kiosk-medewerker: wachtwoord klopt → volgende stap is de eigen PIN.
+        c = await db.companies.find_one({"id": user.get("company_id")}, {"_id": 0, "id": 1, "slug": 1, "name": 1}) or {}
+        return {"pin_required": True,
+                "user": {"email": user["email"], "name": user.get("name", ""), "role": "kiosk"},
+                "company": c or None}
     token = create_token({
         "sub": user["id"], "email": email, "type": "access",
         "company_id": user.get("company_id"), "role": user.get("role", "admin"),
@@ -1479,19 +1489,33 @@ async def personal_pin_setup(body: _PinSetupIn, user=Depends(get_current_user)):
 
 
 @api.post("/auth/personal-pin/login")
-async def personal_pin_login(body: _PinLoginIn):
+async def personal_pin_login(body: _PinLoginIn, request: Request, response: Response):
     """Login met email + persoonlijke 4-cijferige PIN. Genereert dezelfde
-    JWT als wachtwoord-login zodat de frontend identiek kan reageren."""
+    JWT als wachtwoord-login zodat de frontend identiek kan reageren.
+    Kiosk-medewerkers krijgen een kiosk-sessie i.p.v. een beheer-token."""
     email = (body.email or "").strip().lower()
     pin = (body.pin or "").strip()
     if not email or not pin.isdigit() or len(pin) != 4:
         raise HTTPException(status_code=400, detail="Ongeldige PIN of e-mail")
+    throttle_key = f"ppin:{_client_ip(request)}:{email}"
+    _pin_throttle_check(throttle_key)
     u = await db.users.find_one({"email": email})
-    if not u or not u.get("personal_pin_hash"):
-        # Geen exacte fout-melding om PIN/email enumeratie te voorkomen.
+    if not u or not u.get("personal_pin_hash") or not verify_password(pin, u.get("personal_pin_hash", "")):
+        _pin_throttle_fail(throttle_key)
         raise HTTPException(status_code=401, detail="Onbekende combinatie van e-mail en PIN")
-    if not verify_password(pin, u.get("personal_pin_hash", "")):
-        raise HTTPException(status_code=401, detail="Onbekende combinatie van e-mail en PIN")
+    if u.get("disabled"):
+        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    _pin_throttle_clear(throttle_key)
+    if u.get("role") == "kiosk":
+        cid = u.get("company_id")
+        await _require_plan_feature(cid, "allow_kiosk", "Kiosk terminal")
+        emp = await db.employees.find_one({"id": u.get("employee_id"), "company_id": cid}, {"_id": 0, "id": 1, "name": 1}) or {}
+        c = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
+        ktoken = create_token({"sub": "kiosk", "type": "kiosk", "company_id": cid}, KIOSK_TOKEN_MIN)
+        _set_access_cookie(response, ktoken, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
+        return {"kiosk": True, "token": ktoken, "company": c,
+                "employee": {"id": emp.get("id"), "name": emp.get("name") or u.get("name", ""), "pin": pin},
+                "user": {"email": u["email"], "name": u.get("name", ""), "role": "kiosk"}}
     token = create_token({
         "sub": u["id"], "email": u["email"], "type": "access",
         "company_id": u.get("company_id"), "role": u.get("role", "admin"),
@@ -1501,6 +1525,7 @@ async def personal_pin_login(body: _PinLoginIn):
         "user": {
             "id": u["id"], "email": u["email"], "name": u.get("name", ""),
             "role": u.get("role", "admin"), "company_id": u.get("company_id"),
+            "employee_id": u.get("employee_id"),
         },
     }
 
@@ -9023,7 +9048,7 @@ async def payments_pending_count(user=Depends(get_current_user)):
 
 
 @api.post("/payments/{pid}/approve", response_model=PaymentOut)
-async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require_role("admin"))):
+async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require_role("admin", "boekhouder"))):
     """Beheerder keurt een pending kiosk-betaling goed. Slaat handtekening op
     en koppelt eventueel een openstaande factuur (zelfde logic als nieuwe
     approved betaling), zodat het bedrag NU pas meetelt in de totalen."""
@@ -9151,7 +9176,7 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
 
 
 @api.post("/payments/{pid}/reject", response_model=PaymentOut)
-async def reject_payment(pid: str, body: PaymentRejectIn, user=Depends(require_role("admin"))):
+async def reject_payment(pid: str, body: PaymentRejectIn, user=Depends(require_role("admin", "boekhouder"))):
     """Beheerder wijst een pending betaling af (bv. verkeerd bedrag, geen geld
     ontvangen). Bedrag wordt nooit meegerekend in totalen."""
     q = {"id": pid, **scope(user)}
@@ -13533,13 +13558,76 @@ class EmployeeIn(BaseModel):
     monthly_salary: float = 0
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
     active: bool = True
+    password: Optional[str] = None  # alleen bij aanmaken/wijzigen, wordt niet opgeslagen op employee
+    pin: Optional[str] = None
 
 
-class EmployeeOut(EmployeeIn):
+class EmployeeOut(BaseModel):
     id: str
+    name: str
+    role: Optional[str] = ""
+    app_role: Optional[str] = None
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    monthly_salary: float = 0
+    currency: str = "SRD"
+    active: bool = True
     created_at: str
     has_kiosk_pin: bool = False
+    has_login: bool = False
     ai_assistant_enabled: bool = False
+
+
+async def _check_employee_pin_unique(cid: str, pin: str, exclude_eid: Optional[str] = None) -> None:
+    company_pin = await db.kiosk_pins.find_one({"company_id": cid}, {"_id": 0, "pin_hash": 1})
+    if company_pin and verify_password(pin, company_pin.get("pin_hash", "")):
+        raise HTTPException(status_code=409, detail="Deze PIN is al in gebruik als bedrijfs-PIN, kies een andere")
+    others = await db.employees.find(
+        {"id": {"$ne": exclude_eid}, "company_id": cid, "active": True, "kiosk_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0, "name": 1, "kiosk_pin_hash": 1},
+    ).to_list(2000)
+    for o in others:
+        if verify_password(pin, o.get("kiosk_pin_hash", "")):
+            raise HTTPException(status_code=409, detail=f"Deze PIN is al in gebruik door {o.get('name', 'een andere medewerker')}, kies een andere")
+
+
+def _validate_employee_login(body: "EmployeeIn") -> None:
+    if body.pin is not None and body.pin != "" and not re.fullmatch(r"\d{4}", body.pin.strip()):
+        raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
+    if body.password and len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="Wachtwoord moet minimaal 6 tekens zijn")
+    if body.password and not (body.email or "").strip():
+        raise HTTPException(status_code=400, detail="Vul een e-mailadres in om een login aan te maken")
+
+
+async def _sync_employee_user(emp: dict, password: Optional[str], pin_hash: Optional[str]) -> None:
+    """Maak/werk het login-account (db.users) van een werknemer bij."""
+    email = (emp.get("email") or "").strip().lower()
+    existing = await db.users.find_one({"employee_id": emp["id"]}, {"_id": 0, "id": 1})
+    if email:
+        clash = await db.users.find_one({"email": email, "employee_id": {"$ne": emp["id"]}}, {"_id": 0, "id": 1})
+        if clash:
+            raise HTTPException(status_code=409, detail="Dit e-mailadres is al in gebruik door een ander account")
+    upd = {"name": emp.get("name", ""), "role": emp.get("app_role") or "admin",
+           "company_id": emp.get("company_id"), "disabled": not emp.get("active", True)}
+    if email:
+        upd["email"] = email
+    if password:
+        upd["password_hash"] = await asyncio.to_thread(hash_password, password)
+    if pin_hash:
+        upd["personal_pin_hash"] = pin_hash
+        upd["personal_pin_set_at"] = iso(now_utc())
+    if existing:
+        await db.users.update_one({"id": existing["id"]}, {"$set": upd})
+    elif password and email:
+        await db.users.insert_one({"id": new_id(), "employee_id": emp["id"], "created_at": iso(now_utc()), **upd})
+
+
+async def _employee_out(doc: dict) -> dict:
+    doc = {k: v for k, v in doc.items() if k != "_id"}
+    doc["has_kiosk_pin"] = bool(doc.pop("kiosk_pin_hash", None))
+    doc["has_login"] = bool(await db.users.find_one({"employee_id": doc["id"]}, {"_id": 0, "id": 1}))
+    return doc
 
 
 class EmployeeKioskPinIn(BaseModel):
@@ -13549,9 +13637,11 @@ class EmployeeKioskPinIn(BaseModel):
 @api.get("/employees", response_model=List[EmployeeOut])
 async def list_employees(user=Depends(get_current_user)):
     docs = await db.employees.find(scope(user), {"_id": 0}).sort("name", 1).to_list(500)
-    # Strip pin_hash uit response; voeg has_kiosk_pin boolean toe.
+    ids = [d["id"] for d in docs]
+    with_login = {u["employee_id"] async for u in db.users.find({"employee_id": {"$in": ids}}, {"_id": 0, "employee_id": 1})}
     for d in docs:
         d["has_kiosk_pin"] = bool(d.pop("kiosk_pin_hash", None))
+        d["has_login"] = d["id"] in with_login
     return docs
 
 
@@ -13562,24 +13652,44 @@ async def create_employee(body: EmployeeIn, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
     if user.get("role") != "superadmin" and not user.get("original_user_id"):
         await _enforce_count_limit(cid, "employees", "max_employees", "medewerkers")
-    doc = {"id": new_id(), "company_id": cid, **body.model_dump(), "created_at": iso(now_utc())}
+    _validate_employee_login(body)
+    pin = (body.pin or "").strip()
+    if not pin:
+        raise HTTPException(status_code=400, detail="PIN is verplicht (4 cijfers)")
+    await _check_employee_pin_unique(cid, pin)
+    pin_hash = hash_password(pin)
+    data = body.model_dump(exclude={"password", "pin"})
+    data["email"] = (data.get("email") or "").strip().lower()
+    data["app_role"] = data.get("app_role") or "admin"
+    doc = {"id": new_id(), "company_id": cid, **data, "kiosk_pin_hash": pin_hash, "created_at": iso(now_utc())}
+    await _sync_employee_user(doc, body.password, pin_hash)
     await db.employees.insert_one(doc)
-    doc.pop("_id", None)
-    doc["has_kiosk_pin"] = False
-    return doc
+    return await _employee_out(doc)
 
 
 @api.put("/employees/{eid}", response_model=EmployeeOut)
 async def update_employee(eid: str, body: EmployeeIn, user=Depends(get_current_user)):
-    from pymongo import ReturnDocument
-    res = await db.employees.find_one_and_update(
-        {"id": eid, **scope(user)}, {"$set": body.model_dump()},
-        projection={"_id": 0}, return_document=ReturnDocument.AFTER,
-    )
-    if not res:
+    cur = await db.employees.find_one({"id": eid, **scope(user)}, {"_id": 0})
+    if not cur:
         raise HTTPException(status_code=404, detail="Werknemer niet gevonden")
-    res["has_kiosk_pin"] = bool(res.pop("kiosk_pin_hash", None))
-    return res
+    _validate_employee_login(body)
+    data = body.model_dump(exclude={"password", "pin"})
+    data["email"] = (data.get("email") or "").strip().lower()
+    data["app_role"] = data.get("app_role") or cur.get("app_role") or "admin"
+    pin = (body.pin or "").strip()
+    pin_hash = None
+    if pin:
+        await _check_employee_pin_unique(cur["company_id"], pin, exclude_eid=eid)
+        pin_hash = hash_password(pin)
+        data["kiosk_pin_hash"] = pin_hash
+    merged = {**cur, **data}
+    if body.password and not pin_hash and not cur.get("kiosk_pin_hash"):
+        raise HTTPException(status_code=400, detail="Stel ook een PIN in (4 cijfers) voor deze werknemer")
+    if not pin_hash and body.password and cur.get("kiosk_pin_hash"):
+        pin_hash = cur["kiosk_pin_hash"]
+    await _sync_employee_user(merged, body.password, pin_hash)
+    await db.employees.update_one({"id": eid}, {"$set": data})
+    return await _employee_out(merged)
 
 
 @api.post("/employees/{eid}/kiosk-pin")
@@ -13593,8 +13703,8 @@ async def set_employee_kiosk_pin(eid: str, body: EmployeeKioskPinIn, user=Depend
     mogen dezelfde PINs gebruiken.
     """
     pin = (body.pin or "").strip()
-    if not pin.isdigit() or not (4 <= len(pin) <= 6):
-        raise HTTPException(status_code=400, detail="PIN moet 4-6 cijfers zijn")
+    if not pin.isdigit() or len(pin) != 4:
+        raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
     e = await db.employees.find_one({"id": eid, **scope(user)}, {"_id": 0})
     if not e:
         raise HTTPException(status_code=404, detail="Werknemer niet gevonden")
@@ -13612,7 +13722,8 @@ async def set_employee_kiosk_pin(eid: str, body: EmployeeKioskPinIn, user=Depend
         if verify_password(pin, o.get("kiosk_pin_hash", "")):
             raise HTTPException(status_code=409, detail=f"Deze PIN is al in gebruik door {o.get('name', 'een andere medewerker')}, kies een andere")
     pin_hash = hash_password(pin)
-    await db.employees.update_one({"id": eid}, {"$set": {"kiosk_pin_hash": pin_hash, "app_role": "kiosk"}})
+    await db.employees.update_one({"id": eid}, {"$set": {"kiosk_pin_hash": pin_hash}})
+    await db.users.update_one({"employee_id": eid}, {"$set": {"personal_pin_hash": pin_hash, "personal_pin_set_at": iso(now_utc())}})
     return {"ok": True, "has_kiosk_pin": True}
 
 
@@ -13644,7 +13755,9 @@ async def kiosk_employee_verify(body: KioskEmployeePinIn, kiosk=Depends(get_kios
 
 @api.delete("/employees/{eid}")
 async def delete_employee(eid: str, user=Depends(get_current_user)):
-    await db.employees.delete_one({"id": eid, **scope(user)})
+    res = await db.employees.delete_one({"id": eid, **scope(user)})
+    if res.deleted_count:
+        await db.users.delete_one({"employee_id": eid})
     return {"ok": True}
 
 

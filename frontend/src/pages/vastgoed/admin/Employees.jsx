@@ -4,9 +4,37 @@ import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 
+function EmpActions({ e, load, onPin, onEdit, onDelete }) {
+  const btn = 'inline-flex items-center justify-center w-10 h-10 md:w-8 md:h-8 rounded-lg';
+  const toggleAi = async () => {
+    try {
+      await api.put(`/assistant/employees/${e.id}/access`, { enabled: !e.ai_assistant_enabled });
+      await load();
+    } catch (ex) { alert(formatError(ex)); }
+  };
+  return (
+    <div className="inline-flex items-center gap-1">
+      <button onClick={toggleAi} data-testid={`emp-ai-toggle-${e.id}`} title={e.ai_assistant_enabled ? 'AI-assistent uit' : 'AI-assistent aan'}
+        className={`${btn} ${e.ai_assistant_enabled ? 'bg-orange-50 hover:bg-orange-100 text-[#FF5C00]' : 'bg-slate-50 hover:bg-slate-100 text-slate-400'}`}>
+        <Sparkles className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={() => onPin(e)} data-testid={`emp-pin-${e.id}`} title={e.has_kiosk_pin ? 'PIN wijzigen' : 'PIN instellen'}
+        className={`${btn} ${e.has_kiosk_pin ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}>
+        <KeyRound className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={() => onEdit(e)} data-testid={`emp-edit-${e.id}`} className={`${btn} bg-slate-100 hover:bg-slate-200 text-slate-600`}>
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={() => onDelete(e.id)} data-testid={`emp-delete-${e.id}`} className={`${btn} bg-red-50 hover:bg-red-100 text-red-500`}>
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function PageHeader({ title, subtitle, action }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{title}</h1>
         {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
@@ -17,15 +45,24 @@ function PageHeader({ title, subtitle, action }) {
 }
 
 function EmployeeForm({ initial, onCancel, onSaved }) {
-  const [data, setData] = useState(initial || {
+  const [data, setData] = useState(() => ({
     name: '', role: '', app_role: 'admin', phone: '', email: '', monthly_salary: 0, currency: 'SRD', active: true,
-  });
+    ...(initial || {}), password: '', pin: '',
+  }));
+  const isNew = !initial?.id;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const save = async () => {
-    setLoading(true); setError('');
+    setError('');
+    if (isNew && !/^\d{4}$/.test(data.pin)) { setError('PIN is verplicht (precies 4 cijfers).'); return; }
+    if (data.pin && !/^\d{4}$/.test(data.pin)) { setError('PIN moet uit precies 4 cijfers bestaan.'); return; }
+    if (data.password && data.password.length < 6) { setError('Wachtwoord moet minimaal 6 tekens zijn.'); return; }
+    if (data.password && !data.email.trim()) { setError('Vul een e-mailadres in om een login aan te maken.'); return; }
+    setLoading(true);
     try {
-      const payload = { ...data, monthly_salary: parseFloat(data.monthly_salary) || 0 };
+      const { id, created_at, has_kiosk_pin, has_login, ai_assistant_enabled, ...rest } = data;
+      const payload = { ...rest, monthly_salary: parseFloat(data.monthly_salary) || 0,
+        password: data.password || null, pin: data.pin || null };
       if (initial?.id) {
         const { data: r } = await api.put(`/employees/${initial.id}`, payload);
         onSaved(r);
@@ -79,7 +116,7 @@ function EmployeeForm({ initial, onCancel, onSaved }) {
               placeholder="Bv. Receptionist, Kassier…"
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Telefoon</label>
               <input value={data.phone} onChange={(e) => setData({ ...data, phone: e.target.value })} data-testid="emp-phone"
@@ -91,6 +128,7 @@ function EmployeeForm({ initial, onCancel, onSaved }) {
                 className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
           </div>
+          <LoginFields data={data} setData={setData} isNew={isNew} hasLogin={initial?.has_login} />
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Maandsalaris</label>
@@ -121,6 +159,38 @@ function EmployeeForm({ initial, onCancel, onSaved }) {
         </button>
       </KeyboardSafeModal.Footer>
     </KeyboardSafeModal>
+  );
+}
+
+// Inloggegevens: e-mail (hierboven) + wachtwoord + verplichte 4-cijferige PIN.
+function LoginFields({ data, setData, isNew, hasLogin }) {
+  const inputCls = 'w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none';
+  return (
+    <div className="rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-3 sm:p-4 space-y-3" data-testid="emp-login-fields">
+      <div className="flex items-center gap-2">
+        <KeyRound className="w-4 h-4 text-[#FF5C00]" />
+        <p className="text-sm font-black text-slate-900">Inloggen</p>
+        {hasLogin && <span className="ml-auto text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Login actief</span>}
+      </div>
+      <p className="text-xs text-slate-500 leading-relaxed">
+        De werknemer logt één keer in met e-mail + wachtwoord. Daarna is op dat apparaat alleen de PIN nodig.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Wachtwoord</label>
+          <input type="password" autoComplete="new-password" value={data.password}
+            onChange={(e) => setData({ ...data, password: e.target.value })} data-testid="emp-password"
+            placeholder={isNew || !hasLogin ? 'Min. 6 tekens' : 'Leeg = ongewijzigd'} className={inputCls} />
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">PIN (4 cijfers){isNew && ' *'}</label>
+          <input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={data.pin}
+            onChange={(e) => setData({ ...data, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} data-testid="emp-pin"
+            placeholder={isNew ? '• • • •' : 'Leeg = ongewijzigd'}
+            className={`${inputCls} font-mono tracking-[0.4em] text-center`} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -271,12 +341,12 @@ export default function Employees() {
         action={
           view === 'employees' ? (
             <button onClick={() => setCreatingEmp(true)} data-testid="emp-new-btn"
-              className="inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
               <Plus className="w-4 h-4" /> Nieuwe werknemer
             </button>
           ) : (
             <button onClick={() => setCreatingSal(true)} data-testid="sal-new-btn"
-              className="inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
               <Plus className="w-4 h-4" /> Nieuwe loonstrook
             </button>
           )
@@ -299,7 +369,32 @@ export default function Employees() {
             <div className="p-10 text-center"><UsersIcon className="w-10 h-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-semibold">Geen werknemers.</p></div>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <div className="md:hidden divide-y divide-slate-100" data-testid="emp-cards">
+              {employees.map((e) => (
+                <div key={e.id} data-testid={`emp-card-${e.id}`} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 truncate">{e.name}</p>
+                      {e.role && <p className="text-[11px] text-slate-400 truncate">{e.role}</p>}
+                    </div>
+                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-bold ${e.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {e.active ? 'Actief' : 'Inactief'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <RoleBadge appRole={e.app_role} hasKioskPin={e.has_kiosk_pin} />
+                    {e.has_login && <span className="text-[10px] uppercase tracking-wider font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Login</span>}
+                  </div>
+                  {(e.email || e.phone) && <p className="mt-2 text-xs text-slate-500 break-all">{[e.phone, e.email].filter(Boolean).join(' · ')}</p>}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="font-black text-slate-900">{fmtMoney(e.monthly_salary, e.currency)}</p>
+                    <EmpActions e={e} load={load} onPin={setPinFor} onEdit={setEditing} onDelete={delEmp} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <table className="hidden md:table w-full text-sm">
               <thead className="bg-slate-50/70 text-left">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="px-5 py-3">Naam</th>
@@ -319,6 +414,7 @@ export default function Employees() {
                     </td>
                     <td className="px-5 py-3">
                       <RoleBadge appRole={e.app_role} hasKioskPin={e.has_kiosk_pin} />
+                      {e.has_login && <span className="mt-1 inline-block text-[10px] uppercase tracking-wider font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Login</span>}
                     </td>
                     <td className="px-5 py-3 hidden md:table-cell text-slate-500 text-xs">
                       <p>{e.phone || '—'}</p><p>{e.email}</p>
@@ -329,46 +425,14 @@ export default function Employees() {
                         {e.active ? 'Actief' : 'Inactief'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right space-x-1">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await api.put(`/assistant/employees/${e.id}/access`, {
-                              enabled: !e.ai_assistant_enabled,
-                            });
-                            await load();
-                          } catch (ex) { alert(formatError(ex)); }
-                        }}
-                        data-testid={`emp-ai-toggle-${e.id}`}
-                        title={e.ai_assistant_enabled ? 'AI-assistent uit' : 'AI-assistent aan'}
-                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${
-                          e.ai_assistant_enabled
-                            ? 'bg-orange-50 hover:bg-orange-100 text-[#FF5C00]'
-                            : 'bg-slate-50 hover:bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                      </button>
-                      {e.app_role === 'kiosk' && (
-                        <button onClick={() => setPinFor(e)} data-testid={`emp-pin-${e.id}`}
-                          title={e.has_kiosk_pin ? 'PIN wijzigen' : 'PIN instellen'}
-                          className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${e.has_kiosk_pin ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}>
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button onClick={() => setEditing(e)} data-testid={`emp-edit-${e.id}`}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => delEmp(e.id)} data-testid={`emp-delete-${e.id}`}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-500">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <td className="px-5 py-3 text-right">
+                      <EmpActions e={e} load={load} onPin={setPinFor} onEdit={setEditing} onDelete={delEmp} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       ) : (
@@ -380,7 +444,7 @@ export default function Employees() {
             <table className="w-full text-sm">
               <thead className="bg-orange-50/50 text-left">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <th className="px-5 py-3">Werknemer</th>
+                  <th className="px-3 sm:px-5 py-3">Werknemer</th>
                   <th className="px-5 py-3">Periode</th>
                   <th className="px-5 py-3 text-right hidden md:table-cell">Bruto</th>
                   <th className="px-5 py-3 text-right hidden md:table-cell">Aftrek</th>
@@ -446,8 +510,8 @@ function RoleBadge({ appRole, hasKioskPin }) {
       <span className={`inline-block text-[10px] uppercase tracking-wider font-black px-2 py-0.5 rounded-full border ${v.cls}`}>
         {v.label}
       </span>
-      {appRole === 'kiosk' && !hasKioskPin && (
-        <span className="text-[10px] text-amber-600 font-bold" title="Stel een kiosk-PIN in om betalingen te kunnen registreren">
+      {!hasKioskPin && (
+        <span className="text-[10px] text-amber-600 font-bold" title="Stel een PIN in zodat deze werknemer kan inloggen">
           ⚠ PIN
         </span>
       )}
@@ -465,7 +529,7 @@ function KioskPinModal({ employee, onCancel, onSaved }) {
   const [err, setErr] = useState('');
   const submit = async () => {
     setErr('');
-    if (!/^\d{4,6}$/.test(pin)) { setErr('PIN moet 4-6 cijfers zijn'); return; }
+    if (!/^\d{4}$/.test(pin)) { setErr('PIN moet uit precies 4 cijfers bestaan'); return; }
     if (pin !== pin2) { setErr('PIN herhalen klopt niet'); return; }
     setSaving(true);
     try {
@@ -482,26 +546,26 @@ function KioskPinModal({ employee, onCancel, onSaved }) {
             <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center">
               <KeyRound className="w-5 h-5 text-amber-700" />
             </div>
-            <h3 className="text-lg font-black text-slate-900">Kiosk PIN</h3>
+            <h3 className="text-lg font-black text-slate-900">PIN instellen</h3>
           </div>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
         <p className="text-sm text-slate-500 mt-2">
-          PIN voor <span className="font-bold text-slate-900">{employee.name}</span> om in te loggen op de kiosk vóór elke betaling.
+          PIN voor <span className="font-bold text-slate-900">{employee.name}</span> om snel in te loggen op een vertrouwd apparaat{employee.app_role === 'kiosk' ? ' en betalingen op de kiosk te registreren' : ''}.
         </p>
       </KeyboardSafeModal.Header>
       <KeyboardSafeModal.Body>
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Nieuwe PIN (4-6 cijfers)</label>
-            <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              data-testid="kiosk-pin-input" type="password" inputMode="numeric" maxLength={6}
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Nieuwe PIN (4 cijfers)</label>
+            <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              data-testid="kiosk-pin-input" type="password" inputMode="numeric" maxLength={4}
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-amber-500 outline-none font-mono text-lg tracking-widest text-center" />
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Herhaal PIN</label>
-            <input value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              data-testid="kiosk-pin-input-2" type="password" inputMode="numeric" maxLength={6}
+            <input value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              data-testid="kiosk-pin-input-2" type="password" inputMode="numeric" maxLength={4}
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-amber-500 outline-none font-mono text-lg tracking-widest text-center" />
           </div>
         </div>

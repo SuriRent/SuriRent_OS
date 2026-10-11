@@ -512,8 +512,12 @@ const SUPER_TABS = [
   { id: 'saas_settings', label: 'Instellingen', icon: SettingsIcon },
 ];
 
+const BOEKHOUDER_TABS = ['overview', 'tenants', 'payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld', 'notifications'];
+
 function getTabsFor(user) {
-  return user?.role === 'superadmin' ? SUPER_TABS : BASE_TABS;
+  if (user?.role === 'superadmin') return SUPER_TABS;
+  if (user?.role === 'boekhouder') return BASE_TABS.filter((t) => BOEKHOUDER_TABS.includes(t.id));
+  return BASE_TABS;
 }
 
 // Sidebar sectie-groepering voor moderne layout: groepeert tabs onder
@@ -4223,7 +4227,7 @@ export default function AdminDashboard() {
   // vertraagt). Zo is er GEEN skeleton of empty state bij de eerste
   // tabwissel; data staat al klaar. SSE globalMutate houdt daarna
   // alles vers.
-  const isAdmin = user && (user.role === 'admin' || user.role === 'employee');
+  const isAdmin = user && ['admin', 'employee', 'boekhouder'].includes(user.role);
   usePrefetchAdmin(
     isAdmin ? [
       '/tenants', '/apartments', '/contracts', '/invoices',
@@ -4251,7 +4255,7 @@ export default function AdminDashboard() {
     if (data?.type !== 'change' && data?.type !== 'notification') return;
     // NB: SWR-invalidatie + `surirent:live-change` custom event worden nu
     // automatisch door de singleton gedaan — hier hoeven we niets meer.
-  }, { enabled: !!user && (user.role === 'admin' || user.role === 'employee') });
+  }, { enabled: !!user && ['admin', 'employee', 'boekhouder'].includes(user.role) });
   const location = useLocation();
   const { count: badgeCount } = useBadge();
 

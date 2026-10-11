@@ -83,6 +83,16 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
+    if (data?.pin_required) {
+      // Kiosk-medewerker: wachtwoord klopt, nu de eigen PIN op het bedrijfsportaal.
+      try {
+        localStorage.setItem('device_user_email', data.user.email);
+        localStorage.setItem('device_user_name', data.user.name || data.user.email.split('@')[0]);
+        if (data.company?.slug) localStorage.setItem('pwa_company_slug', String(data.company.slug).toLowerCase());
+      } catch { /* ignore */ }
+      window.location.assign(data.company?.slug ? `/${data.company.slug}/login?target=kiosk` : '/login');
+      return data;
+    }
     if (data?.token) localStorage.setItem('admin_token', data.token);
     setUser(data.user);
     // Onthoud welke gebruiker hier inlogde, voor persoonlijke PIN-flow op PWA.

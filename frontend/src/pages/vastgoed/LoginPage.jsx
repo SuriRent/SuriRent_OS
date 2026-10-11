@@ -323,11 +323,12 @@ export default function LoginPage() {
   // AuthProvider /auth/me opnieuw uitvoerde. Dat veroorzaakte echter een
   // full page reload + spinner flash. We doen nu refresh() (vernieuw /auth/me
   // in dezelfde React tree) en daarna een soft navigate. Geen flash, instant.
-  const onPinSuccess = async () => {
+  const onPinSuccess = async (forced) => {
     setAuthenticating(true); // mask numpad totdat navigate klaar is
+    if (forced === 'kiosk') { navigate('/kiosk', { replace: true }); return; }
     let hasAdmin = false;
     try { hasAdmin = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
-    if (pwaTarget === 'admin' && hasAdmin) {
+    if ((pwaTarget === 'admin' || forced === 'admin') && hasAdmin) {
       setPreferredRole('admin');
       // Refresh AuthProvider zodat de nieuwe admin_token meteen actief is.
       // Soft navigate naar /admin nadat user state is bijgewerkt.

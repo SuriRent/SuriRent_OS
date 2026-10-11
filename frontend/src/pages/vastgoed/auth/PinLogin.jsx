@@ -59,6 +59,15 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         const { data } = await api.post('/auth/personal-pin/login', {
           email: deviceUser.email, pin: code,
         });
+        if (data?.kiosk) {
+          try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
+          if (data.token) localStorage.setItem('kiosk_token', data.token);
+          if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
+          setKioskEmployee({ id: data.employee.id, name: data.employee.name || 'Medewerker', pin: data.employee.pin || code });
+          setPreferredRole('kiosk');
+          onSuccess('kiosk');
+          return;
+        }
         if (data?.access_token) localStorage.setItem('admin_token', data.access_token);
         setPreferredRole('admin');
         // Fire-and-forget: device_qr_token issuing in achtergrond zodat de
@@ -70,7 +79,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
             try { localStorage.setItem('device_qr_token', r.data.device_qr_token); } catch { /* ignore */ }
           }
         }).catch(() => { /* niet-kritiek */ });
-        onSuccess();
+        onSuccess(data?.user?.employee_id ? 'admin' : undefined);
         return;
       }
       // Geen onthouden gebruiker → val terug op gedeelde kiosk PIN.

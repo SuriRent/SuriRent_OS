@@ -44,3 +44,8 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 ## Wipe-all endpoint (superadmin only)
 - `POST /api/superadmin/wipe-all-companies` body `{"confirm":"WIPE ALL COMPANIES"}`
 - UI: SaaS Overzicht → "Danger Zone" → "Toon opties"
+
+## Werknemer-logins (bedrijf my-awesome-rentals-bv, aangemaakt via Werknemers)
+- Kiosk medewerker: `kiosk.medewerker@surirent.sr` / `test1234`, PIN `5566` → na e-mail+wachtwoord volgt de PIN op /my-awesome-rentals-bv/login?target=kiosk, daarna naar /kiosk
+- Boekhouder: `boekhouder@surirent.sr` / `test1234`, PIN `6677` → /admin met alleen de financiële tabbladen
+- Volgende keer op hetzelfde apparaat: alleen PIN via `POST /api/auth/personal-pin/login` {email, pin}
