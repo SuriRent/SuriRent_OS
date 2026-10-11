@@ -9581,7 +9581,7 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 # Printerinstellingen per locatie (APK bonprinter)
 # =====================================================================
 PRINTER_COMMANDS = {"ktp": "PRINT_KTP", "sunmi": "PRINT_SUNMI", "bluetooth": "PRINT_BLUETOOTH"}
-DEFAULT_PRINTER = {"type": "sunmi", "paper": "80mm", "width_mm": 80}
+DEFAULT_PRINTER = {"type": "sunmi", "paper": "58mm", "width_mm": 58}
 
 
 class PrinterSettingsIn(BaseModel):
@@ -9614,6 +9614,21 @@ async def put_printer_settings(loc_id: str, body: PrinterSettingsIn, user=Depend
     if not res.matched_count:
         raise HTTPException(status_code=404, detail="Locatie niet gevonden")
     return {"id": loc_id, "printer": _printer_out(cfg)}
+
+
+@api.get("/locations/{loc_id}/test-print.html", response_class=HTMLResponse)
+async def location_test_print(loc_id: str, user=Depends(require_role("admin"))):
+    loc = await db.locations.find_one({"id": loc_id, **scope(user)}, {"_id": 0})
+    if not loc:
+        raise HTTPException(status_code=404, detail="Locatie niet gevonden")
+    brand = await _company_brand_info(loc.get("company_id"))
+    pr = _printer_out(loc.get("printer"))
+    sample = {**brand, "receipt_number": "TEST-0001", "paid_at": iso(now_utc()),
+              "tenant_name": "Proefbon Huurder", "apartment_number": "A-101", "location_name": loc.get("name", ""),
+              "amount": 1250.0, "currency": "SRD", "method": "contant", "category": "huur",
+              "note": f"Testprint · {pr['type'].upper()} · {pr['width_mm']}mm", "_title": "PROEFBON"}
+    html = _render_receipt_html(sample, fmt="thermal", preview=False, paper_width_mm=pr["width_mm"])
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
 @api.get("/kiosk/printer-settings")
@@ -11432,15 +11447,33 @@ async def payment_print_html(
         if fmt not in ("a4", "thermal"):
             fmt = "a4"
 
-    html = _render_receipt_html(p, fmt=fmt, preview=bool(preview))
+    width_mm = None
+    if fmt == "thermal":
+        width_mm = await _payment_paper_width(p)
+    html = _render_receipt_html(p, fmt=fmt, preview=bool(preview), paper_width_mm=width_mm)
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
+async def _payment_paper_width(p: dict) -> int:
+    """Papierbreedte (mm) uit de printerinstelling van de locatie van de betaling."""
+    loc_id = p.get("location_id")
+    if not loc_id and p.get("apartment_id"):
+        apt = await db.apartments.find_one({"id": p["apartment_id"]}, {"_id": 0, "location_id": 1})
+        loc_id = (apt or {}).get("location_id")
+    if not loc_id and p.get("tenant_id"):
+        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "apartment_id": 1})
+        if t and t.get("apartment_id"):
+            apt = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "location_id": 1})
+            loc_id = (apt or {}).get("location_id")
+    loc = await db.locations.find_one({"id": loc_id}, {"_id": 0, "printer": 1}) if loc_id else None
+    return _printer_out((loc or {}).get("printer"))["width_mm"]
 
 
 _NL_MONTHS_FULL = ["januari", "februari", "maart", "april", "mei", "juni",
                    "juli", "augustus", "september", "oktober", "november", "december"]
 
 
-def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str:
+def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_width_mm: Optional[int] = None) -> str:
     """Bouwt een compact, print-ready HTML-document voor een betaling.
 
     fmt="a4"      → A4 staand, klassieke 'blue house' layout (2 kolommen partijen)
@@ -11503,6 +11536,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False) -> str
             preview=preview, company_email=p.get("company_email") or "",
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
+            paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE",
         )
 
     # ------ A4 layout (default) ------
@@ -11644,10 +11678,16 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  amount, currency, outstanding_after, method,
                                  note, desc, fmt_money, preview: bool = False,
                                  company_email: str = "", company_tagline: str = "",
-                                 company_kkf: str = "") -> str:
-    """80mm bonprinter layout — POS-stijl, monospaced, 1 kolom.
-    @page size 80mm auto laat de printer zelf de lengte bepalen (bon-rol).
-    """
+                                 company_kkf: str = "", paper_width_mm: int = 58,
+                                 title: str = "KWITANTIE") -> str:
+    """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
+    printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
+    W = int(paper_width_mm or 58)
+    k = 0.78 if W <= 60 else 1.0
+
+    def pt(x: float) -> str:
+        return f"{round(x * k, 1)}pt"
+    pad = "1mm 0.5mm" if W <= 60 else "2mm 3mm"
     method_label = {
         "cash": "CONTANT", "contant": "CONTANT", "bank": "BANKOVERSCHRIJVING",
         "card": "PIN", "creditcard": "CREDITCARD", "ideal": "IDEAL", "other": "ANDERS",
@@ -11676,31 +11716,33 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
 <style>
-  /* 58mm bonrol — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
+  /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
   @media print {{
-    @page {{ size: 58mm auto; margin: 2mm; }}
-    body {{ margin: 0; width: 58mm; max-width: 58mm; }}
+    @page {{ size: {W}mm auto; margin: 2mm; }}
+    body {{ margin: 0; width: {W}mm; max-width: {W}mm; }}
     .no-print {{ display: none !important; }}
   }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: 11pt; color: #000; margin: 0; padding: 0; background: #fff; }}
-  /* Scherm-preview: volledige iframe-breedte; bij printen geldt 58mm. */
+    font-size: {pt(11)}; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
+  /* Scherm-preview: volledige iframe-breedte; bij printen geldt {W}mm. */
   @media screen {{
     body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
   }}
-  .sheet {{ padding: 2mm 3mm; }}
+  .sheet {{ padding: {pad}; }}
   .center {{ text-align: center; }}
-  .row {{ display: flex; justify-content: space-between; }}
-  .h1 {{ font-size: 13pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 1mm; }}
-  .h2 {{ font-size: 10pt; letter-spacing: 3px; margin: 0 0 2mm; }}
-  .sep {{ border-top: 1px dashed #000; margin: 2mm 0; }}
-  .lbl {{ font-size: 8.5pt; color: #333; text-transform: uppercase;
-    letter-spacing: 1px; }}
-  .val {{ font-size: 10pt; font-weight: 700; word-break: break-word; }}
-  .big {{ font-size: 14pt; font-weight: 900; }}
+  .row {{ display: flex; justify-content: space-between; gap: 1.5mm; }}
+  .row > .lbl {{ white-space: nowrap; flex-shrink: 0; }}
+  .row > .val {{ text-align: right; }}
+  .h1 {{ font-size: {pt(13)}; font-weight: 900; letter-spacing: {'0' if k < 1 else '1px'}; margin: 0 0 1mm; }}
+  .h2 {{ font-size: {pt(10)}; letter-spacing: {'1px' if k < 1 else '3px'}; margin: 0 0 {'1mm' if k < 1 else '2mm'}; }}
+  .sep {{ border-top: 1px dashed #000; margin: {'1mm' if k < 1 else '2mm'} 0; }}
+  .lbl {{ font-size: {pt(8.5)}; color: #333; text-transform: uppercase;
+    letter-spacing: {'0' if k < 1 else '1px'}; }}
+  .val {{ font-size: {pt(10)}; font-weight: 700; word-break: break-word; }}
+  .big {{ font-size: {pt(14)}; font-weight: 900; white-space: nowrap; }}
   .paid {{ font-weight: 900; }}
   .due {{ font-weight: 700; }}
-  .footer {{ font-size: 8pt; text-align: center; margin-top: 3mm; }}
+  .footer {{ font-size: {pt(8)}; text-align: center; margin-top: {'2mm' if k < 1 else '3mm'}; }}
   .no-print {{ position: fixed; top: 4px; right: 4px; }}
   .no-print button {{ background: #000; color: #fff; border: 0; padding: 4px 8px;
     border-radius: 4px; font-size: 10pt; cursor: pointer; }}
@@ -11715,7 +11757,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     {f'<div class="center lbl" style="text-transform:none">{h(company_email)}</div>' if company_email else ''}
     {f'<div class="center lbl">KKF: {h(company_kkf)}</div>' if company_kkf else ''}
     <div class="sep"></div>
-    <div class="center h2">KWITANTIE</div>
+    <div class="center h2">{h(title)}</div>
     <div class="row"><span class="lbl">Nr.</span><span class="val">{h(receipt_number)}</span></div>
     <div class="row"><span class="lbl">Datum</span><span class="val">{h(paid_at)}</span></div>
     <div class="sep"></div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Printer, Check, Loader2, MapPin, Bluetooth, Smartphone, Cpu } from 'lucide-react';
+import { Printer, Check, Loader2, MapPin, Bluetooth, Smartphone, Cpu, ReceiptText } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 
@@ -19,12 +19,40 @@ function Choice({ active, onClick, children, testId }) {
   );
 }
 
+// Proefbon: in de APK via de print-bridge, in de browser via het printvenster.
+async function testPrint(loc) {
+  const pr = loc.printer;
+  if (window.ReactNativeWebView?.postMessage) {
+    const msg = { type: 'PRINT_RECEIPT', command: pr.command, printer: pr, test: true, data: {
+      naam: 'Proefbon Huurder', appartement: 'A-101', bedrag: 'SRD 1.250,00', methode: 'Contant',
+      datum: new Date().toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' }).replace(',', ''),
+      kwitantie: 'TEST-0001', locatie: loc.name } };
+    console.log('[APK PRINT_RECEIPT]', msg);
+    window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+    return 'Proefbon verstuurd naar de printer';
+  }
+  const w = window.open('', '_blank', 'width=420,height=700');
+  const { data } = await api.get(`/locations/${loc.id}/test-print.html`, { responseType: 'text' });
+  if (!w) throw new Error('Pop-up geblokkeerd — sta pop-ups toe om de proefbon te printen');
+  w.document.open(); w.document.write(data); w.document.close();
+  return 'Proefbon geopend in het printvenster';
+}
+
 function LocationPrinterCard({ loc, onSaved }) {
   const [type, setType] = useState(loc.printer.type);
   const [paper, setPaper] = useState(loc.printer.paper);
   const [width, setWidth] = useState(loc.printer.paper === 'custom' ? String(loc.printer.width_mm) : '');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [testing, setTesting] = useState(false);
+  const runTest = async () => {
+    setTesting(true); setMsg(null);
+    try { setMsg({ ok: true, t: await testPrint(loc) }); }
+    catch (e) { setMsg({ ok: false, t: e?.response ? formatError(e) : e.message }); }
+    finally { setTesting(false); }
+  };
+  const dirty = type !== loc.printer.type || paper !== loc.printer.paper
+    || (paper === 'custom' && Number(width) !== loc.printer.width_mm);
   const save = async () => {
     if (paper === 'custom' && !(Number(width) >= 30 && Number(width) <= 120)) {
       setMsg({ ok: false, t: 'Vul een papierbreedte tussen 30 en 120 mm in' }); return;
@@ -74,10 +102,18 @@ function LocationPrinterCard({ loc, onSaved }) {
           <span className="text-sm text-slate-500 font-semibold">mm breed</span>
         </div>
       )}
-      <button onClick={save} disabled={saving} data-testid={`printer-save-${loc.id}`}
-        className="mt-5 w-full sm:w-auto h-11 px-6 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Opslaan
-      </button>
+      <div className="mt-5 flex flex-col sm:flex-row gap-2">
+        <button onClick={save} disabled={saving} data-testid={`printer-save-${loc.id}`}
+          className="w-full sm:w-auto h-11 px-6 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Opslaan
+        </button>
+        <button onClick={runTest} disabled={testing || dirty} data-testid={`printer-test-${loc.id}`}
+          title={dirty ? 'Sla eerst de wijzigingen op' : 'Print een proefbon met deze instellingen'}
+          className="w-full sm:w-auto h-11 px-6 rounded-xl border-2 border-slate-200 hover:border-[#FF5C00] text-slate-800 font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ReceiptText className="w-4 h-4" />} Testbon printen
+        </button>
+      </div>
+      {dirty && <p className="mt-2 text-xs text-slate-500">Sla eerst op om met de nieuwe instellingen te testen.</p>}
       {msg && (
         <p data-testid={`printer-msg-${loc.id}`}
           className={`mt-3 text-sm font-semibold rounded-xl px-3 py-2 ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{msg.t}</p>
