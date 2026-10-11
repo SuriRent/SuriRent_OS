@@ -1,0 +1,31 @@
+{
+  "summary": "Verified complete removal of KTP/Sunmi/Bluetooth printer SDK integration and the admin Printer settings section. Backend: 4 removed endpoints return 404/405, thermal receipt HTML still works with '@media print' + '@page { size: 58mm' (no 'auto'), a4 format still works. All 7 pytest cases pass. Admin UI: Instellingen sidebar/hub contain NO 'Printers' section (0 occurrences of 'printer' in page body); /admin/instellingen#printers hash gracefully falls back to 'Mijn abonnement' without crash — all other sections (abonnement/bedrijf/branding/smtp/invoicing/kiosk/stripe/backup) still visible. Kiosk web (no APK): after Vooruitbetaling→Contant→Bevestig, exactly 1 hidden iframe 'kiosk-autoprint-iframe' is created and iframe.contentWindow.print() is called once (__printCalls=1); window.__rnMsgs stays null; no requests to /api/kiosk/printer-settings. Kiosk APK (window.ReactNativeWebView mocked): exactly ONE PRINT_RECEIPT postMessage with keys {type,url,data} (no 'printer'/'command'); url ends '/api/payments/<id>/print.html?format=thermal&preview=1'; data has exact 6 keys naam/appartement/bedrag/methode/datum/kwitantie; NO autoprint iframe is created and __printCalls=0. Manual reprint button in APK mode sends one additional PRINT_RECEIPT with the same url.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter71_printer_removal.py",
+    "/app/test_reports/pytest/iter71_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: sendApkPrint() in KioskLayout.jsx (~L2400) emits 'console.log([APK PRINT_RECEIPT], msg)' BEFORE the ReactNativeWebView check — so the log fires even in a plain web browser (no RN postMessage happens, just console noise). Harmless, but misleading in dev tools; consider moving the log inside the if-block.",
+    "In APK mode the auto-send (PaymentConfirm.sendApkPrint) sends rich data {naam,appartement,bedrag,methode,datum,kwitantie} but the manual reprint path goes through printReceipt() in lib/kiosk-print.js which sends only data:{payment_id}. Both include the url, so the APK can render either way, but the shapes diverge. If the APK relies on the data object for rendering, consider unifying the two senders.",
+    "In the thermal preview response, the backend injects a client-side 'page_fit_script' that still runs 'window.print()' inside '<script>'. In an iframe sandbox (as created by the autoprint iframe) scripts are blocked ('Blocked script execution ... sandboxed and allow-scripts not set') — chrome prints a sandbox warning in console. Since the iframe already calls contentWindow.print() from the parent window, this is not a functional problem, but the warning is noisy. Consider adding sandbox='allow-scripts allow-same-origin' on the iframe or skipping the fit-script when preview=1.",
+    "Admin Instellingen sections: fallback hash handler (activeInstellingenSection) correctly returns 'abonnement' for unknown hashes like '#printers' — no crash. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter71_printer_removal.py (new)",
+    "/app/backend/tests/test_printer_settings.py (deleted — printer feature removed)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (web auto-print + APK PRINT_RECEIPT + admin UI all verified)"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin); kiosk PIN 4321 for slug 'my-awesome-rentals-bv'",
+  "seed_data_creation": "Created 2 vooruitbetalingen on Studio 1 (SRD 5,00 each) via kiosk Contant flow — KW2026-00542 and KW2026-00543.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Printer SDK/Sunmi/Bluetooth/KTP code is fully removed as of iteration 71. Backend endpoints /api/locations/printer-settings, /api/locations/{id}/printer, /api/locations/{id}/test-print.html, /api/kiosk/printer-settings all return 404/405. Admin Instellingen has NO Printers section (sections list: abonnement/bedrijf/branding/smtp/invoicing/kiosk/stripe/backup). Web kiosk auto-prints via hidden iframe #kiosk-autoprint-iframe + window.print(). APK kiosk sends PRINT_RECEIPT via window.ReactNativeWebView.postMessage with shape {type,url,data{naam,appartement,bedrag,methode,datum,kwitantie}}. Regression test file: /app/backend/tests/test_iter71_printer_removal.py.",
+  "rca_of_the_issue": "N/A — all tests pass; this iteration verified a clean removal."
+}

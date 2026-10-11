@@ -687,3 +687,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: de print-CSS van de thermische bon is nu 58mm: @media print { @page { size: 58mm auto; margin: 2mm } body { width/max-width: 58mm } }. De schermweergave is ongewijzigd.
 - 2026-06: de thermische print-CSS volgt nu de papierbreedte van de locatie (_payment_paper_width; standaard 58mm). Bij ≤60mm een compacte opmaak (lettertype ×0,78, minder witruimte, labels nowrap). Knop 'Testbon printen' per locatie: in de APK PRINT_RECEIPT met test:true, in de browser GET /api/locations/{id}/test-print.html (PROEFBON) in een printvenster.
 - 2026-06 FIX: 'size: Wmm auto' is ongeldige CSS, waardoor Chrome terugviel op A4/Letter. Nu @page size Wmm 297mm als terugval, plus een script (page-fit) dat de bonlengte meet en een exacte @page-hoogte zet (DOMContentLoaded/load/beforeprint). Body bij printen W-4mm vanwege de 2mm marges. Geverifieerd via PDF: 58×85mm en 80×122mm.
+
+## 2026-06 — Printerintegraties verwijderd
+- KTP/Sunmi/Bluetooth-printerinstellingen, de endpoints en de sectie Instellingen → Printers zijn verwijderd (locations.printer is uit de database gehaald). De thermische bon heeft een vaste breedte van 58mm via @media print.
+- Web: printen via iframe.contentWindow.print(). APK: PRINT_RECEIPT {type, url (print.html?format=thermal&preview=1), data}; de APK opent het systeem-printvenster (voorbeeld in /app/memory/apk-print.md). In de APK wordt geen iframe-autoprint gedaan. Getest: iteration_71.
