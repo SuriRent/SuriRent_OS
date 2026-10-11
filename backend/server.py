@@ -11696,11 +11696,11 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
         try {
           var b = document.body, prev = b.style.width;
           b.style.width = W + 'mm';
-          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 4;
+          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 8;
           b.style.width = prev;
           var el = document.getElementById('page-fit');
           if (!el) { el = document.createElement('style'); el.id = 'page-fit'; document.head.appendChild(el); }
-          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 0; } }';
+          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 2mm; } }';
         } catch (e) {}
       }
       document.addEventListener('DOMContentLoaded', fit);
@@ -11746,18 +11746,13 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
 <style>
-  /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
-  @media print {{
-    html {{ font-size: 14px; }}
-    @page {{ size: {W}mm 297mm; margin: 0; }}
-    body {{ margin: 0; width: {W}mm; max-width: {W}mm; }}
-    .no-print {{ display: none !important; }}
-  }}
+  /* Bonrol {W}mm — geen A4: pagina én body staan direct op {W}mm. */
+  @page {{ size: {W}mm auto; margin: 2mm; }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: 13px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
-  /* Scherm-preview: volledige iframe-breedte; bij printen geldt {W}mm. */
-  @media screen {{
-    body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
+    font-size: 14px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
+  body {{ width: {W}mm; }}
+  @media print {{
+    .no-print {{ display: none !important; }}
   }}
 {comp_css("")}
   .no-print {{ position: fixed; top: 4px; right: 4px; }}
