@@ -1,0 +1,23 @@
+{
+  "summary": "Verified full APK PRINT_RECEIPT data payload (iter73). Backend GET /api/kiosk/payments/{id}/print-data: 401 without kiosk session, 404 for unknown id, 200 returns exactly the required 13 keys {bedrijfsnaam, adres, telefoon, kwitantie, datum, naam, appartement, vestiging, omschrijving, bedrag, openstaand, methode, opmerking} with datum in DD-MM-YYYY HH:MM format and bedrag/openstaand prefixed 'SRD '. Frontend E2E in APK mock: injected window.ReactNativeWebView.postMessage, kiosk PIN 4321 → Filiaal — Nieuw Nickerie → Studio 1 → amount SRD 1.000,00 → Contant → confirm. Exactly ONE PRINT_RECEIPT message after confirm {type:'PRINT_RECEIPT', url:'.../print.html?format=thermal&preview=1', data:{...13 keys}} with values matching the ReceiptScreen (KW2026-00548, Kevin Doelahasori, Studio 1, SRD 1.000,00, Contant, 11-10-2026 19:49, SuriRent N.V., 'Filiaal — Nieuw Nickerie', 'Vooruitbetaling — November 2026', openstaand SRD 3.500,00, opmerking 'Vooruitbetaling voor november 2026'). Clicking 'Print bon opnieuw' emits a 2nd PRINT_RECEIPT with 14 keys (same 13 + payment_id) and identical values. 3/3 pytest pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter73_print_data.py",
+    "/app/test_reports/pytest/iter73.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Observation: in this seeded tenant/location (Filiaal — Nieuw Nickerie), the location record has no phone, so data.telefoon came back as an empty string. The backend fallback chain is (location.phone || payment.company_phone || payment.company_whatsapp) — correct — but if the main agent wants a non-empty telefoon on the APK bon it should ensure company admin profile phone is seeded, OR add 'company_whatsapp' lookup from companies collection as another fallback (currently only read from the already-enriched payment doc).",
+    "sendApkPrint in KioskLayout.jsx:2395 does an extra GET /kiosk/payments/{id}/print-data after submit, while lib/kiosk-print.js's APK branch does the same on reprint. The confirm path currently merges the local {naam, appartement, bedrag, methode, datum, kwitantie} with the backend data via spread {...data, ...full}, which means backend values win — good (keeps formatting consistent). But if print-data fails (network), the user still gets a partial 6-key payload instead of the required 13. Suggest adding a user-visible warning or falling back to a direct re-fetch of a cached receipt view.",
+    "The console.log('[APK PRINT_RECEIPT]', msg) fires BEFORE the ReactNativeWebView check — leftover noise in web mode (pre-existing from iter71/72)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter73_print_data.py (new)"],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% (PRINT_RECEIPT confirm + reprint both verified with all 13 keys + payment_id on reprint)"},
+  "test_credentials": "kiosk PIN 4321 for slug 'my-awesome-rentals-bv'",
+  "seed_data_creation": "Created KW2026-00548 (SRD 1.000,00 vooruitbetaling November 2026, Studio 1, Kevin Doelahasori) via kiosk Contant flow in APK mock.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "APK mock: await page.add_init_script(\"window.ReactNativeWebView={postMessage:m=>(window.__rnMsgs=window.__rnMsgs||[]).push(m)}\"). Amount keypad data-testid: keypad-{d} (desktop) + mobile-key-{d} (mobile hidden). Method tile: method-contant. Submit: confirm-submit. Receipt reprint button text: 'Print bon opnieuw'. Backend endpoint /api/kiosk/payments/{id}/print-data returns the 13 keys {bedrijfsnaam, adres, telefoon, kwitantie, datum, naam, appartement, vestiging, omschrijving, bedrag, openstaand, methode, opmerking}; reprint path (lib/kiosk-print.js) adds a 14th key 'payment_id'.",
+  "rca_of_the_issue": "N/A — all requested validations pass."
+}

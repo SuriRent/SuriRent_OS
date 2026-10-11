@@ -4,7 +4,7 @@ De web-app stuurt na een betaling (en bij "Print bon opnieuw"):
 ```json
 { "type": "PRINT_RECEIPT",
   "url": "https://<domein>/api/payments/<id>/print.html?format=thermal&preview=1",
-  "data": { "naam": "...", "appartement": "...", "bedrag": "SRD 25,00", "methode": "Contant", "datum": "09-10-2026 21:37", "kwitantie": "KW2026-00528" } }
+  "data": { "bedrijfsnaam","adres","telefoon","kwitantie","datum","naam","appartement","vestiging","omschrijving","bedrag","openstaand","methode","opmerking" } }
 ```
 `url` is een print-klare HTML-bon (58mm, @media print). De APK opent hiermee het Android-printvenster.
 
