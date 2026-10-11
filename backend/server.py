@@ -11676,16 +11676,15 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
 <style>
-  /* 80mm bonrol — auto hoogte zodat printer zelf snijdt. */
-  @page {{ size: 80mm auto; margin: 2mm; }}
+  /* 58mm bonrol — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
   @media print {{
-    body {{ margin: 0; width: 76mm; }}
+    @page {{ size: 58mm auto; margin: 2mm; }}
+    body {{ margin: 0; width: 58mm; max-width: 58mm; }}
     .no-print {{ display: none !important; }}
   }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
     font-size: 11pt; color: #000; margin: 0; padding: 0; background: #fff; }}
-  /* Scherm-preview: gebruik volledige iframe breedte i.p.v. vaste 76mm.
-     Bij daadwerkelijk printen valt het @media print terug op 76mm. */
+  /* Scherm-preview: volledige iframe-breedte; bij printen geldt 58mm. */
   @media screen {{
     body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
   }}

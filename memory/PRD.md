@@ -684,3 +684,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Printerinstellingen per locatie
 - Instellingen → Printers (#printers): per locatie printertype (ktp/sunmi/bluetooth) en papier (58mm/80mm/aangepast 30-120mm), opgeslagen in locations.printer. API: GET /api/locations/printer-settings, PUT /api/locations/{id}/printer (alleen admin), GET /api/kiosk/printer-settings?location_id= (standaard sunmi/80mm).
 - De kiosk haalt vóór het printen de instellingen van de locatie van het appartement op. PRINT_RECEIPT = {type, command: PRINT_KTP|PRINT_SUNMI|PRINT_BLUETOOTH, printer:{type,command,paper,width_mm,chars_per_line,configured}, data:{...}}. Getest: iteration_70 (backend 11/11) + handmatige controle.
+- 2026-06: de print-CSS van de thermische bon is nu 58mm: @media print { @page { size: 58mm auto; margin: 2mm } body { width/max-width: 58mm } }. De schermweergave is ongewijzigd.
