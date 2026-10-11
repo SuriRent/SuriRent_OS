@@ -26,9 +26,12 @@ function fitPageToBon(bon) {
 export async function printReceipt({ paymentId, apiGet }) {
   if (window.ReactNativeWebView?.postMessage) {
     const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, data: { payment_id: paymentId },
-    }));
+    let data = { payment_id: paymentId };
+    try { data = { ...data, ...((await apiGet(`/kiosk/payments/${paymentId}/print-data`)).data || {}) }; } catch { /* alleen url */ }
+    const msg = { type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, data };
+    // eslint-disable-next-line no-console
+    console.log('[APK PRINT_RECEIPT]', msg);
+    window.ReactNativeWebView.postMessage(JSON.stringify(msg));
     return true;
   }
   try {

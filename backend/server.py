@@ -11347,6 +11347,56 @@ async def payment_pdf(payment_id: str):
     return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
 
 
+_PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankoverschrijving",
+                        "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
+
+
+@api.get("/kiosk/payments/{payment_id}/print-data")
+async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_session)):
+    """Gestructureerde bon-gegevens voor het PRINT_RECEIPT bericht naar de APK."""
+    p = await db.payments.find_one({"id": payment_id, **kiosk_scope(_session)}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
+    p = await _enrich_payment(p)
+    apt_id = p.get("apartment_id")
+    if not apt_id and p.get("tenant_id"):
+        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "apartment_id": 1})
+        apt_id = (t or {}).get("apartment_id")
+    apt = await db.apartments.find_one({"id": apt_id}, {"_id": 0, "location_id": 1}) if apt_id else None
+    loc = await db.locations.find_one({"id": (apt or {}).get("location_id")}, {"_id": 0, "name": 1, "address": 1, "phone": 1}) if apt else None
+    cur = p.get("currency") or "SRD"
+
+    def money(v):
+        v = float(v or 0)
+        return f"{cur} " + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    pm, py = p.get("period_month"), p.get("period_year")
+    desc = (p.get("category") or "Huurbetaling").capitalize()
+    if isinstance(pm, int) and 1 <= pm <= 12 and py:
+        desc += f" — {_NL_MONTHS_FULL[pm - 1].capitalize()} {py}"
+    paid = p.get("paid_at") or p.get("created_at") or iso(now_utc())
+    try:
+        d = datetime.fromisoformat(str(paid).replace("Z", "+00:00")).astimezone(timezone(timedelta(hours=-3)))
+        datum = d.strftime("%d-%m-%Y %H:%M")
+    except Exception:
+        datum = str(paid)[:16]
+    return {
+        "bedrijfsnaam": (p.get("company_name") or "").strip() or "SuriRent",
+        "adres": (loc or {}).get("address") or p.get("company_address") or "",
+        "telefoon": (loc or {}).get("phone") or p.get("company_phone") or p.get("company_whatsapp") or "",
+        "kwitantie": p.get("receipt_number") or "",
+        "datum": datum,
+        "naam": p.get("tenant_name") or "",
+        "appartement": p.get("apartment_number") or "",
+        "vestiging": (loc or {}).get("name") or p.get("location_name") or "",
+        "omschrijving": desc,
+        "bedrag": money(p.get("amount")),
+        "openstaand": money(p.get("outstanding_after")),
+        "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
+        "opmerking": p.get("note") or "",
+    }
+
+
 @api.get("/payments/{payment_id}/print.html", response_class=HTMLResponse)
 async def payment_print_html(
     payment_id: str,

@@ -2392,10 +2392,16 @@ const fmtPrintDate = (d) => {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-function sendApkPrint(data, paymentId) {
+async function sendApkPrint(data, paymentId) {
+  // Volledige bon-gegevens (bedrijf/locatie, saldo, omschrijving…) uit de backend.
+  let full = {};
+  if (paymentId) {
+    try { full = (await api.get(`/kiosk/payments/${paymentId}/print-data`)).data || {}; }
+    catch (e) { console.warn('[APK PRINT_RECEIPT] print-data niet opgehaald', e); }
+  }
   // APK opent zelf het systeem-printvenster; url = print-klare bon (HTML, @media print).
   const url = paymentId ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?format=thermal&preview=1` : null;
-  const msg = { type: 'PRINT_RECEIPT', url, data };
+  const msg = { type: 'PRINT_RECEIPT', url, data: { ...data, ...full } };
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
   try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
