@@ -127,6 +127,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
         // waar de gebruiker zelf toegang toe heeft — niet ideaal voor gedeelde
         // kiosks, daarom uitvink-baar).
         try {
+          localStorage.removeItem('auto_login_paused');
           if (remember) {
             localStorage.setItem('saved_login_email', email);
             localStorage.setItem('saved_login_password', password);

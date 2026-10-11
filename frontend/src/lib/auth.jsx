@@ -16,6 +16,25 @@ const ACTIVE_COMPANY_KEY = 'active_company_id';
  * ZONDER opnieuw in te hoeven loggen of PIN te tikken. Token is alleen
  * geldig voor QR-claim — kan niet voor andere API endpoints worden gebruikt.
  */
+// "Onthoud mij": automatisch inloggen met opgeslagen gegevens bij het openen
+// van de app (niet na een bewuste uitlog, tot de volgende handmatige login).
+async function autoLoginWithSaved() {
+  let email = null; let password = null;
+  try {
+    if (localStorage.getItem('auto_login_paused') === '1') return null;
+    email = localStorage.getItem('saved_login_email');
+    password = localStorage.getItem('saved_login_password');
+  } catch { return null; }
+  if (!email || !password) return null;
+  try {
+    const { data } = await api.post('/auth/login', { email, password });
+    if (!data?.token) return null; // bv. kiosk-medewerker (PIN-stap) → handmatig
+    localStorage.setItem('admin_token', data.token);
+    const { data: me } = await api.get('/auth/me');
+    return me;
+  } catch { return null; }
+}
+
 async function issueDeviceQrTokenSilently() {
   try {
     const { data } = await api.post('/auth/device-qr-token/issue');
@@ -61,8 +80,10 @@ export function AuthProvider({ children }) {
         }
       } catch { /* ignore */ }
     } catch {
-      setUser(null);
-      setActiveCompanyMeta(null);
+      const me = await autoLoginWithSaved();
+      setUser(me || null);
+      setActiveCompanyMeta(me?.active_company || null);
+      if (me?.id) bootstrapAdminEvents();
     } finally {
       setLoading(false);
     }
@@ -142,6 +163,7 @@ export function AuthProvider({ children }) {
       catch { return false; }
     })();
     try { await api.post('/auth/logout'); } catch (err) { console.warn('Admin logout API failed (continuing client-side):', err); }
+    try { localStorage.setItem('auto_login_paused', '1'); } catch { /* ignore */ }
     localStorage.removeItem('admin_token');
     localStorage.removeItem('kiosk_token');
     localStorage.removeItem(ACTIVE_COMPANY_KEY);

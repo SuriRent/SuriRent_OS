@@ -95,8 +95,10 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
     try {
       await login(email.trim(), password);
       try {
+        localStorage.removeItem('auto_login_paused');
         if (remember) {
           localStorage.setItem('saved_login_email', email.trim());
+          localStorage.setItem('saved_login_password', password);
         } else {
           localStorage.removeItem('saved_login_email');
           localStorage.removeItem('saved_login_password');
