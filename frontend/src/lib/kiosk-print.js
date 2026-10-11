@@ -10,12 +10,12 @@ export function buildReceiptImageUrl(paymentId) {
 // daarom meten we #bon en zetten we een @page met vaste hoogte.
 function fitPageToBon(bon) {
   const prev = bon.style.cssText;
-  bon.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:54mm;';
-  const hmm = Math.max(40, Math.ceil(bon.offsetHeight * 25.4 / 96) + 6);
+  bon.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:54mm;font-size:13px;';
+  const hmm = Math.max(40, Math.ceil(bon.offsetHeight * 25.4 / 96) + 4);
   bon.style.cssText = prev;
   let el = document.getElementById('bon-page-size');
   if (!el) { el = document.createElement('style'); el.id = 'bon-page-size'; document.head.appendChild(el); }
-  el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 2mm; } }`;
+  el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 0; } }`;
 }
 
 /**
@@ -36,7 +36,7 @@ export async function printReceipt({ paymentId, apiGet }) {
     if (!resp?.data) return false;
     let bon = document.getElementById('bon');
     if (!bon) { bon = document.createElement('div'); bon.id = 'bon'; document.body.appendChild(bon); }
-    bon.innerHTML = resp.data;
+    bon.innerHTML = String(resp.data).replace(/<script[\s\S]*?<\/script>/gi, '');
     fitPageToBon(bon);
     window.print();
     return true;

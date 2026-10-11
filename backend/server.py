@@ -11645,12 +11645,12 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
       function fit() {
         try {
           var b = document.body, prev = b.style.width;
-          b.style.width = (W - 4) + 'mm';
-          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 8;
+          b.style.width = W + 'mm';
+          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 4;
           b.style.width = prev;
           var el = document.getElementById('page-fit');
           if (!el) { el = document.createElement('style'); el.id = 'page-fit'; document.head.appendChild(el); }
-          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 2mm; } }';
+          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 0; } }';
         } catch (e) {}
       }
       document.addEventListener('DOMContentLoaded', fit);
@@ -11659,61 +11659,38 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     })();
   </script>""" % W
     def comp_css(S: str) -> str:
+        # Vaste px-waardes (geen schaling): naam 16, nr/veldnamen 12, bedrag 18 bold, rest 13.
         return f"""
-  {S}.sheet {{ padding: {pad}; }}
+  {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0; box-sizing: border-box; font-size: 13px; }}
   {S}.center {{ text-align: center; }}
-  {S}.row {{ display: flex; justify-content: space-between; gap: 1.5mm; }}
-  {S}.row > .lbl {{ white-space: nowrap; flex-shrink: 0; }}
-  {S}.row > .val {{ text-align: right; }}
-  {S}.h1 {{ font-size: {pt(13)}; font-weight: 900; letter-spacing: {'0' if k < 1 else '1px'}; margin: 0 0 1mm; }}
-  {S}.h2 {{ font-size: {pt(10)}; letter-spacing: {'1px' if k < 1 else '3px'}; margin: 0 0 {'1mm' if k < 1 else '2mm'}; }}
-  {S}.sep {{ border-top: 1px dashed #000; margin: {'1mm' if k < 1 else '2mm'} 0; }}
-  {S}.lbl {{ font-size: {pt(8.5)}; color: #333; text-transform: uppercase;
-    letter-spacing: {'0' if k < 1 else '1px'}; }}
-  {S}.val {{ font-size: {pt(10)}; font-weight: 700; word-break: break-word; }}
-  {S}.big {{ font-size: {pt(14)}; font-weight: 900; white-space: nowrap; }}
-  {S}.paid {{ font-weight: 900; }}
-  {S}.due {{ font-weight: 700; }}
-  {S}.footer {{ font-size: {pt(8)}; text-align: center; margin-top: {'2mm' if k < 1 else '3mm'}; }}
+  {S}.h1 {{ font-size: 16px; font-weight: 900; margin: 0 0 1mm; text-align: center; word-break: break-word; }}
+  {S}.nr {{ font-size: 12px; text-align: center; }}
+  {S}.sep {{ border-top: 1px dashed #000; margin: 1.5mm 0; }}
+  {S}.f {{ margin: 0 0 1mm; }}
+  {S}.lbl {{ display: block; font-size: 12px; color: #000; text-transform: uppercase; }}
+  {S}.val {{ display: block; font-size: 13px; font-weight: 700; word-break: break-word; }}
+  {S}.big {{ display: block; font-size: 18px; font-weight: 700; white-space: nowrap; }}
+  {S}.footer {{ font-size: 13px; text-align: center; margin-top: 2mm; }}
 """
     sheet_html = f"""
   <div class="sheet">
-    <div class="center h1">{h(company_name)}</div>
-    {f'<div class="center lbl">{h(company_tagline)}</div>' if company_tagline else ''}
-    {f'<div class="center lbl">{h(company_address)}</div>' if company_address else ''}
-    {f'<div class="center lbl">Tel: {h(company_phone)}</div>' if company_phone else ''}
-    {f'<div class="center lbl" style="text-transform:none">{h(company_email)}</div>' if company_email else ''}
-    {f'<div class="center lbl">KKF: {h(company_kkf)}</div>' if company_kkf else ''}
+    <div class="h1">{h(company_name)}</div>
+    <div class="nr">Kwitantie {h(receipt_number)}</div>
     <div class="sep"></div>
-    <div class="center h2">{h(title)}</div>
-    <div class="row"><span class="lbl">Nr.</span><span class="val">{h(receipt_number)}</span></div>
-    <div class="row"><span class="lbl">Datum</span><span class="val">{h(paid_at)}</span></div>
-    <div class="sep"></div>
-    <div class="lbl">Huurder</div>
-    <div class="val">{h(tenant_name)}</div>
-    {f'<div class="lbl">{apt_line}</div>' if apt_line.strip() else ''}
-    <div class="sep"></div>
-    <div class="lbl">Omschrijving</div>
-    <div class="val">{h(desc)}</div>
-    <div class="sep"></div>
-    <div class="row"><span class="lbl">Betaald</span>
-      <span class="big">{h(fmt_money(amount, currency))}</span></div>
-    <div class="row" style="margin-top:1mm">
-      <span class="lbl">Betaalwijze</span>
-      <span class="val">{h(method_label)}</span></div>
-    <div class="sep"></div>
-    <div class="center val">{outstanding_txt}</div>
-    {f'<div class="sep"></div><div class="lbl">Opmerking:</div><div class="val">{h(note)}</div>' if note else ''}
+    <div class="f"><span class="lbl">Huurder</span><span class="val">{h(tenant_name)}</span></div>
+    <div class="f"><span class="lbl">Appartement</span><span class="val">{h(apartment_number or '—')}</span></div>
+    <div class="f"><span class="lbl">Bedrag</span><span class="big">{h(fmt_money(amount, currency))}</span></div>
+    <div class="f"><span class="lbl">Betaalmethode</span><span class="val">{h(method_label)}</span></div>
+    <div class="f"><span class="lbl">Datum</span><span class="val">{h(paid_at)}</span></div>
     <div class="sep"></div>
     <div class="footer">Bedankt voor uw betaling</div>
-    <div class="footer">— {h(receipt_number)} —</div>
   </div>
 """
     if fragment:
         # Voor window.print() in de app: alle regels gescoped onder #bon.
         return f"""<style>
   #bon {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: {pt(11)}; line-height: 1.25; color: #000; background: #fff; }}
+    font-size: 13px; line-height: 1.25; color: #000; background: #fff; }}
 {comp_css('#bon ')}</style>{sheet_html}"""
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
@@ -11721,12 +11698,13 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 <style>
   /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
   @media print {{
-    @page {{ size: {W}mm 297mm; margin: 2mm; }}
-    body {{ margin: 0; width: {W - 4}mm; max-width: {W - 4}mm; }}
+    html {{ font-size: 14px; }}
+    @page {{ size: {W}mm 297mm; margin: 0; }}
+    body {{ margin: 0; width: {W}mm; max-width: {W}mm; }}
     .no-print {{ display: none !important; }}
   }}
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: {pt(11)}; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
+    font-size: 13px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
   /* Scherm-preview: volledige iframe-breedte; bij printen geldt {W}mm. */
   @media screen {{
     body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
