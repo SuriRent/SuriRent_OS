@@ -1135,7 +1135,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   // Stille afdruk: haal de PDF als blob op via de authenticated axios
   // client (window.open naar /api/... werkt niet altijd in de kiosk-PWA
   // want de child-tab krijgt niet automatisch de httpOnly cookies mee).
-  // Blob → verborgen iframe → contentWindow.print().
+  // Bon in #bon → window.print().
   //
   // In Chrome/Edge gestart met de `--kiosk-printing` vlag wordt het
   // printdialoog automatisch overgeslagen en gaat de bon direct naar de
@@ -1147,7 +1147,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     setBusy((prev) => ({ ...prev, [paymentId]: 'print' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig met afdrukken…' } }));
     try {
-      // Universeel via `iframe.contentWindow.print()` — werkt op elk
+      // Universeel via window.print() met #bon — werkt op elk
       // platform (desktop Chrome met --kiosk-printing → geen dialoog;
       // Android/iOS → native print-dialoog). Bij mislukking valt hij
       // terug op de JPG-versie in een nieuw tabblad zodat de operator
@@ -1155,7 +1155,6 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       const ok = await printReceipt({
         paymentId,
         apiGet: api.get,
-        iframeId: 'kiosk-print-iframe',
       });
       if (!ok) {
         openReceiptImage(paymentId);
@@ -2649,43 +2648,23 @@ function ReceiptScreen({ payment, overview, onDone }) {
     return () => clearTimeout(t);
   }, [payment.id]);
 
-  // AUTO-PRINT — direct na de tear-animatie de standaard kwitantie naar de
-  // kiosk-printer sturen. De operator hoeft niet meer via "Betalings-
-  // geschiedenis > Afdruk" te tikken voor elke betaling. Werkt via een
-  // verborgen iframe met de PDF-blob → contentWindow.print(). Faalt stil
-  // wanneer er geen printer geconfigureerd is (browser toont dan de
-  // print-dialoog die de operator gewoon kan annuleren).
-  // Auto-print via universele `iframe.contentWindow.print()`. Werkt op:
-  //   • Desktop Chrome met --kiosk-printing → geen dialoog, direct printen
-  //   • Desktop / Laptop → OS print-dialoog (kies printer of PDF)
-  //   • Android Chrome → native Android print-dialoog (Cloud Print, PDF,
-  //     of "Delen naar" → Bluetooth thermische printer app)
-  //   • iOS Safari → AirPrint dialoog
-  //
-  // Gebruikt HTML-versie i.p.v. PDF-blob zodat Chrome's --kiosk-printing
-  // vlag het dialoog kan overslaan (PDF-viewer negeert die vlag).
+  // AUTO-PRINT — na de tear-animatie: bon in #bon + window.print().
   useEffect(() => {
     if (window.ReactNativeWebView) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
     const t = setTimeout(() => {
       printReceipt({
         paymentId: payment.id,
         apiGet: api.get,
-        iframeId: 'kiosk-autoprint-iframe',
       });
     }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
     return () => clearTimeout(t);
   }, [payment.id]);
 
-  // Manuele "Print bon opnieuw" knop op het ontvangst-scherm. Hergebruikt
-  // dezelfde iframe (via id) of maakt een nieuwe aan. Als de printer-dialoog
-  // om welke reden dan ook geblokkeerd is (bv. iOS popup-blocker), valt
-  // hij terug op de JPG-versie in een nieuw tabblad → gebruiker kan via
-  // de Share Sheet alsnog afdrukken of opslaan in Foto's / WhatsApp.
+  // Manuele "Print bon opnieuw"; valt terug op de JPG-versie als printen faalt.
   const manualPrint = async () => {
     const ok = await printReceipt({
       paymentId: payment.id,
       apiGet: api.get,
-      iframeId: 'kiosk-manualprint-iframe',
     });
     if (!ok) openReceiptImage(payment.id);
   };
@@ -2906,7 +2885,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
         {/* "Print bon" — manuele herprint knop. Werkt overal:
               • Android → RawBT thermische printer
               • iOS/iPad → opent JPG in nieuw tabblad → Share Sheet
-              • Desktop → iframe.print() (of nieuw tabblad als fallback)
+              • Desktop → window.print() (of nieuw tabblad als fallback)
             Alleen gemount als er een payment.id is (voorwaarde). */}
         <button onClick={manualPrint} type="button"
           data-testid="receipt-manual-print"

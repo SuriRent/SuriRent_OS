@@ -288,3 +288,12 @@ html { scroll-behavior: smooth; }
 }
 
 
+
+/* Bon printen via window.print(): alleen #bon is zichtbaar bij printen. */
+#bon { display: none; }
+@media print {
+  @page { size: 58mm auto; margin: 2mm; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+  body > *:not(#bon) { display: none !important; }
+  #bon { display: block !important; width: 54mm; max-width: 54mm; }
+}

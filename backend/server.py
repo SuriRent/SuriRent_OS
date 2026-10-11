@@ -11352,6 +11352,7 @@ async def payment_print_html(
     payment_id: str,
     format: Optional[str] = None,
     preview: Optional[int] = 0,
+    fragment: Optional[int] = 0,
 ):
     """HTML-versie van de kwitantie speciaal voor Chrome's --kiosk-printing
     flag. Die flag onderdrukt alleen het printdialoog voor **HTML** documenten
@@ -11385,7 +11386,9 @@ async def payment_print_html(
         if fmt not in ("a4", "thermal"):
             fmt = "a4"
 
-    html = _render_receipt_html(p, fmt=fmt, preview=bool(preview))
+    if fragment:
+        fmt = "thermal"
+    html = _render_receipt_html(p, fmt=fmt, preview=bool(preview), fragment=bool(fragment))
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
@@ -11394,7 +11397,7 @@ _NL_MONTHS_FULL = ["januari", "februari", "maart", "april", "mei", "juni",
                    "juli", "augustus", "september", "oktober", "november", "december"]
 
 
-def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_width_mm: Optional[int] = None) -> str:
+def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_width_mm: Optional[int] = None, fragment: bool = False) -> str:
     """Bouwt een compact, print-ready HTML-document voor een betaling.
 
     fmt="a4"      → A4 staand, klassieke 'blue house' layout (2 kolommen partijen)
@@ -11457,7 +11460,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             preview=preview, company_email=p.get("company_email") or "",
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
-            paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE",
+            paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
         )
 
     # ------ A4 layout (default) ------
@@ -11600,7 +11603,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  note, desc, fmt_money, preview: bool = False,
                                  company_email: str = "", company_tagline: str = "",
                                  company_kkf: str = "", paper_width_mm: int = 58,
-                                 title: str = "KWITANTIE") -> str:
+                                 title: str = "KWITANTIE", fragment: bool = False) -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
     W = int(paper_width_mm or 58)
@@ -11655,43 +11658,25 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
       window.addEventListener('beforeprint', fit);
     })();
   </script>""" % W
-    return f"""<!doctype html>
-<html lang="nl"><head><meta charset="utf-8">
-<title>Kwitantie {h(receipt_number)}</title>
-<style>
-  /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
-  @media print {{
-    @page {{ size: {W}mm 297mm; margin: 2mm; }}
-    body {{ margin: 0; width: {W - 4}mm; max-width: {W - 4}mm; }}
-    .no-print {{ display: none !important; }}
-  }}
-  html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: {pt(11)}; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
-  /* Scherm-preview: volledige iframe-breedte; bij printen geldt {W}mm. */
-  @media screen {{
-    body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
-  }}
-  .sheet {{ padding: {pad}; }}
-  .center {{ text-align: center; }}
-  .row {{ display: flex; justify-content: space-between; gap: 1.5mm; }}
-  .row > .lbl {{ white-space: nowrap; flex-shrink: 0; }}
-  .row > .val {{ text-align: right; }}
-  .h1 {{ font-size: {pt(13)}; font-weight: 900; letter-spacing: {'0' if k < 1 else '1px'}; margin: 0 0 1mm; }}
-  .h2 {{ font-size: {pt(10)}; letter-spacing: {'1px' if k < 1 else '3px'}; margin: 0 0 {'1mm' if k < 1 else '2mm'}; }}
-  .sep {{ border-top: 1px dashed #000; margin: {'1mm' if k < 1 else '2mm'} 0; }}
-  .lbl {{ font-size: {pt(8.5)}; color: #333; text-transform: uppercase;
+    def comp_css(S: str) -> str:
+        return f"""
+  {S}.sheet {{ padding: {pad}; }}
+  {S}.center {{ text-align: center; }}
+  {S}.row {{ display: flex; justify-content: space-between; gap: 1.5mm; }}
+  {S}.row > .lbl {{ white-space: nowrap; flex-shrink: 0; }}
+  {S}.row > .val {{ text-align: right; }}
+  {S}.h1 {{ font-size: {pt(13)}; font-weight: 900; letter-spacing: {'0' if k < 1 else '1px'}; margin: 0 0 1mm; }}
+  {S}.h2 {{ font-size: {pt(10)}; letter-spacing: {'1px' if k < 1 else '3px'}; margin: 0 0 {'1mm' if k < 1 else '2mm'}; }}
+  {S}.sep {{ border-top: 1px dashed #000; margin: {'1mm' if k < 1 else '2mm'} 0; }}
+  {S}.lbl {{ font-size: {pt(8.5)}; color: #333; text-transform: uppercase;
     letter-spacing: {'0' if k < 1 else '1px'}; }}
-  .val {{ font-size: {pt(10)}; font-weight: 700; word-break: break-word; }}
-  .big {{ font-size: {pt(14)}; font-weight: 900; white-space: nowrap; }}
-  .paid {{ font-weight: 900; }}
-  .due {{ font-weight: 700; }}
-  .footer {{ font-size: {pt(8)}; text-align: center; margin-top: {'2mm' if k < 1 else '3mm'}; }}
-  .no-print {{ position: fixed; top: 4px; right: 4px; }}
-  .no-print button {{ background: #000; color: #fff; border: 0; padding: 4px 8px;
-    border-radius: 4px; font-size: 10pt; cursor: pointer; }}
-</style>{page_fit_script}</head>
-<body>
-  {print_button}
+  {S}.val {{ font-size: {pt(10)}; font-weight: 700; word-break: break-word; }}
+  {S}.big {{ font-size: {pt(14)}; font-weight: 900; white-space: nowrap; }}
+  {S}.paid {{ font-weight: 900; }}
+  {S}.due {{ font-weight: 700; }}
+  {S}.footer {{ font-size: {pt(8)}; text-align: center; margin-top: {'2mm' if k < 1 else '3mm'}; }}
+"""
+    sheet_html = f"""
   <div class="sheet">
     <div class="center h1">{h(company_name)}</div>
     {f'<div class="center lbl">{h(company_tagline)}</div>' if company_tagline else ''}
@@ -11723,6 +11708,37 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div class="footer">Bedankt voor uw betaling</div>
     <div class="footer">— {h(receipt_number)} —</div>
   </div>
+"""
+    if fragment:
+        # Voor window.print() in de app: alle regels gescoped onder #bon.
+        return f"""<style>
+  #bon {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
+    font-size: {pt(11)}; line-height: 1.25; color: #000; background: #fff; }}
+{comp_css('#bon ')}</style>{sheet_html}"""
+    return f"""<!doctype html>
+<html lang="nl"><head><meta charset="utf-8">
+<title>Kwitantie {h(receipt_number)}</title>
+<style>
+  /* Bonrol {W}mm — alleen actief bij printen; auto hoogte zodat printer zelf snijdt. */
+  @media print {{
+    @page {{ size: {W}mm 297mm; margin: 2mm; }}
+    body {{ margin: 0; width: {W - 4}mm; max-width: {W - 4}mm; }}
+    .no-print {{ display: none !important; }}
+  }}
+  html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
+    font-size: {pt(11)}; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
+  /* Scherm-preview: volledige iframe-breedte; bij printen geldt {W}mm. */
+  @media screen {{
+    body {{ width: 100%; max-width: 400px; margin: 0 auto; }}
+  }}
+{comp_css("")}
+  .no-print {{ position: fixed; top: 4px; right: 4px; }}
+  .no-print button {{ background: #000; color: #fff; border: 0; padding: 4px 8px;
+    border-radius: 4px; font-size: 10pt; cursor: pointer; }}
+</style>{page_fit_script}</head>
+<body>
+  {print_button}
+{sheet_html}
   {autoprint_script}
 </body></html>"""
 
