@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('device_user_name', data.user.name || data.user.email.split('@')[0]);
         if (data.company?.slug) localStorage.setItem('pwa_company_slug', String(data.company.slug).toLowerCase());
       } catch { /* ignore */ }
-      window.location.assign(data.company?.slug ? `/${data.company.slug}/login?target=kiosk` : '/login');
+      window.location.assign(data.company?.slug ? `/${data.company.slug}/login?target=kiosk&view=pin` : '/login');
       return data;
     }
     if (data?.token) localStorage.setItem('admin_token', data.token);

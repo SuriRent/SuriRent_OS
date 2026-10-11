@@ -675,3 +675,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Thermische bon met dynamische bedrijfsgegevens
 - /api/payments/{id}/print.html?format=thermal haalt naam, slogan, adres, telefoon, e-mail en KKF op uit het bedrijfsprofiel van de betaling; zonder bedrijfsnaam wordt 'SuriRent' gebruikt. Labels toegevoegd voor CREDITCARD/IDEAL/CONTANT.
+
+## 2026-06 — Werknemer-logins (e-mail + wachtwoord + PIN)
+- Elke rol (Beheerder, Boekhouder, Kiosk) kan een PIN krijgen en de PIN is verplicht (4 cijfers, uniek binnen het bedrijf). De beheerder stelt in het werknemerformulier het wachtwoord en de PIN in, en daarmee wordt een account in db.users aangemaakt (employee_id, rol = app_role).
+- Login: één keer met e-mail + wachtwoord, daarna op hetzelfde apparaat alleen de PIN (personal-pin/login). Kiosk-medewerkers krijgen na het wachtwoord de PIN-stap en daarna een kiosk-sessie, zonder toegang tot beheer. Boekhouders zien in het beheer alleen de financiële tabbladen en mogen betalingen goedkeuren of afwijzen. Inactief of verwijderd → geen login meer.
+- De Werknemers-pagina is responsive gemaakt (kaarten op mobiel). Getest: iteration_69 (backend 15/15, frontend OK).

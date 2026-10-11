@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 69: Verified new Werknemers email+password+PIN login workflow end-to-end. Backend pytest 15/15 pass. Frontend verified for desktop + mobile (390x844): create-with-PIN modal, Dutch 'PIN is verplicht' error, duplicate-PIN 409, PIN button for ALL roles (not kiosk only), 'Login' badge, mobile card list (emp-cards/emp-card-*) with no horizontal overflow, modal usable on mobile. Boekhouder login shows ONLY the 8 finance tabs (geen Werknemers/Instellingen/Locaties/Appartementen/Contracten/Onderhoud). Kiosk employee flow /login → generic email+pw → redirect to /my-awesome-rentals-bv/login?target=kiosk → 'Welkom, Kiosk Test' PIN pad → 5566 → lands on /my-awesome-rentals-bv/kiosk. Kiosk token correctly rejected by GET /api/auth/me (401).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/login (generic) after kiosk employee submit", "issues": ["After generic /login submits kiosk credentials, user is redirected to the branded /<slug>/login?target=kiosk but the admin email+password form (Beheerder Login) is shown by default instead of the PIN pad; user has to click 'Terug naar PIN'. For a kiosk employee that already entered email+password this is an unnecessary extra step — PinLogin.jsx should default to the PIN pad when the preceding /auth/login response said pin_required."]}
+    ]
+  },
+  "verification_details": {
+    "backend_pytest": "/app/backend/tests/test_iter69_employee_login_pin.py — 15/15 PASS (demo admin regression, 3× create per role, missing PIN 400, duplicate PIN 409, kiosk pin_required, admin/boekhouder direct token, personal-pin kiosk→kiosk token (NOT admin), personal-pin admin/boekhouder→access_token, deactivated 403, delete→401, throttle→eventual 429).",
+    "mobile_employees_responsive": "At 390x844, FAB (mobile-fab-menu) opens the sheet which contains tab-sheet-employees. Navigating there shows emp-cards with 4 emp-card-* entries, 6 'Login' badges, no horizontal overflow. 'Nieuwe werknemer' modal is fully usable on mobile (emp-password + emp-pin visible, no horizontal overflow).",
+    "boekhouder_tabs": "Sidebar after boekhouder login shows exactly tab-overview, tab-tenants, tab-payments, tab-invoices, tab-payment_plans, tab-deposits, tab-kasgeld, tab-notifications. tab-employees/instellingen/locations/apartments/contracts/maintenance are absent.",
+    "kiosk_employee_login": "/login submit (kiosk.medewerker@surirent.sr / test1234) redirects to branded PIN pad 'Welkom, Kiosk Test'. Entering 5566 lands on /my-awesome-rentals-bv/kiosk (kiosk UI 'Kies een locatie'). /api/auth/me returns 401 with the kiosk token → kiosk token cannot be used for admin endpoints. Confirmed by backend test test_personal_pin_kiosk_returns_kiosk_token which also asserts /auth/me 401.",
+    "employee_pin_button_all_roles": "On /admin/employees desktop, 8 employee rows → 8 emp-pin-* buttons (equal to emp-edit-* count); PIN button is now visible for every role (admin/boekhouder/kiosk), not just kiosk."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter69_employee_login_pin.py",
+    "/app/test_reports/pytest/iter69.xml"
+  ],
+  "action_items": [
+    "(Nice-to-have, non-blocking) When /auth/login returns pin_required=true and frontend redirects to /<slug>/login?target=kiosk, the branded PinLogin should default to the PIN pad (showing 'Welkom, <name>') instead of the admin login form. Currently user has to click 'Terug naar PIN' to see the pad they're expected to use."
+  ],
+  "critical_code_review_comments": [
+    "server.py _validate_employee_login: body.pin is only checked for digit-format when non-empty, but create_employee enforces 'PIN is verplicht'. In update_employee leaving pin empty is tolerated — behavior matches spec but keep an eye on employees that were created pre-feature (no kiosk_pin_hash). The current update path raises 400 'Stel ook een PIN in' only when password is provided but no existing/new PIN exists — this is correct.",
+    "server.py _sync_employee_user: when password is set but email missing, the create branch silently skips insert. That is OK, but update_employee calls _sync_employee_user with merged doc so email cannot be stripped — fine, just document.",
+    "Employees.jsx EmpActions renders emp-pin-* for every row regardless of role (confirmed in UI). Consider tooltip wording difference for non-kiosk ('Persoonlijke PIN wijzigen' vs 'Kiosk-PIN') to avoid user confusion since the PIN is now the universal login-PIN not kiosk-specific.",
+    "AdminDashboard.jsx mobile dashboard: initial URL /admin/employees redirects to /admin on mobile first mount because the derived tab falls back to 'invoices' when window.innerWidth<768 and the URL hasn't yet rendered. Not a bug (sidebar tab click repaths correctly) but can cause confusion for deep links; consider respecting the explicit URL even on mobile fallback."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter69_employee_login_pin.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of critical flows (mobile werknemers responsive, boekhouder tabs correct, kiosk employee login end-to-end)"},
+  "test_credentials": "demo@surirent.sr/demo1234; kiosk.medewerker@surirent.sr/test1234 PIN 5566; boekhouder@surirent.sr/test1234 PIN 6677 (seed accounts preserved)",
+  "seed_data_creation": "Pytest created 3 TEST_* employees per run (admin/boekhouder/kiosk role) and cleaned up via DELETE /api/employees/{id} teardown fixture. One UI-created 'TEST UI employee' row was abandoned when the save-without-PIN flow was aborted; the modal error prevented actual creation so no residual DB rows.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Testids on Employees page: emp-new-btn, emp-login-fields, emp-password, emp-pin, emp-approle-{admin|boekhouder|kiosk}, emp-save, emp-pin-{id}, emp-edit-{id}, emp-delete-{id}, emp-cards (mobile), emp-card-{id}. Mobile: open [data-testid=mobile-fab-menu] FAB → sheet → [data-testid=tab-sheet-employees]. Kiosk PIN pad digits are rendered as <button> with text like '5 JKL'; keyboard input is NOT wired, must click. Backend endpoints: POST /api/auth/login (kiosk → {pin_required:true}, others → token); POST /api/auth/personal-pin/login (kiosk → {kiosk:true, token (kiosk type), employee:{id,name,pin}}; others → access_token). GET /api/auth/me with kiosk token = 401.",
+  "rca of the issue": "No bugs found. All 7 review items (employees form flow, duplicate-PIN 409, PIN button visibility for all roles, Login badge, mobile responsiveness, kiosk login + no-admin-access guard, boekhouder tabs filter, backend contract) are implemented correctly. The only usability nit is the PinLogin page defaulting to the admin form after a kiosk pin_required redirect — reported as non-blocking action item."
+}
