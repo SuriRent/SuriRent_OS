@@ -11364,6 +11364,10 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
+    cs = await db.company_settings.find_one({"company_id": p.get("company_id")}, {"_id": 0, "receipts": 1})
+    font_size = ((cs or {}).get("receipts") or {}).get("font_size") or "groot"
+    if font_size not in ("klein", "normaal", "groot"):
+        font_size = "groot"
     apt_id = p.get("apartment_id")
     if not apt_id and p.get("tenant_id"):
         t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "apartment_id": 1})
@@ -11400,6 +11404,8 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         "openstaand": money(p.get("outstanding_after")),
         "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
         "opmerking": p.get("note") or "",
+        "lettergrootte": font_size,
+        "textZoom": {"klein": 150, "normaal": 200}.get(font_size, 280),
     }
 
 
