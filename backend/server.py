@@ -11728,6 +11728,14 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {S}.r > span:last-child {{ text-align: right; word-break: break-word; }}
   {S}.big {{ font-size: 16px; font-weight: 900; white-space: nowrap; }}
   {S}.wrap {{ word-break: break-word; }}
+  @media print {{
+    {S}.sheet, {S}.sheet * {{ font-size: 20px; }}
+    {S}.sheet .name {{ font-size: 26px; font-weight: 900; }}
+    {S}.sheet .title {{ font-size: 22px; }}
+    {S}.sheet .big {{ font-size: 28px; font-weight: 900; white-space: normal; }}
+    {S}.r {{ flex-wrap: wrap; }}
+    {S}.r > span:last-child {{ margin-left: auto; }}
+  }}
 """
     city = location_city if location_city and location_city.lower() not in (location_name or "").lower() else ""
     unit_line = " - ".join(x for x in [apartment_number, location_name, city] if x)
@@ -11738,7 +11746,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     {f'<div class="c">TEL: {h(company_phone)}</div>' if company_phone else ''}
     {f'<div class="c wrap">{h(company_email)}</div>' if company_email else ''}
     <div class="sep"></div>
-    <div class="c b">{h(title)}</div>
+    <div class="c b title">{h(title)}</div>
     <div class="sep"></div>
     <div class="r"><span>NR.</span><span>{h(receipt_number)}</span></div>
     <div class="r"><span>DATUM</span><span>{h(paid_at)}</span></div>
@@ -11778,6 +11786,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   body {{ width: {W}mm; }}
   @media print {{
     @page {{ size: {W}mm auto; margin: 0; }}
+    body {{ font-size: 20px; }}
     .no-print {{ display: none !important; }}
   }}
 {comp_css("")}
