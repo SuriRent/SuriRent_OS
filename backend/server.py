@@ -11753,6 +11753,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {S}.r > span:last-child {{ text-align: right; word-break: break-word; }}
   {S}.big {{ font-size: 16px; font-weight: 900; white-space: nowrap; }}
   {S}.wrap {{ word-break: break-word; }}
+  {S}.paid-lbl {{ white-space: nowrap; word-break: keep-all; }}
+  {S}.paid-amt {{ display: block; text-align: right; }}
   {"@media all" if screen_sizes else "@media print"} {{
     {S}.sheet, {S}.sheet * {{ font-size: {fs[0]}px; }}
     {S}.sheet .name {{ font-size: {fs[1]}px; font-weight: 900; }}
@@ -11784,7 +11786,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div>OMSCHRIJVING:</div>
     <div class="b wrap">{h(desc or 'Huurbetaling')}</div>
     <div class="sep"></div>
-    <div class="r"><span>BETAALD</span><span class="big">{h(fmt_money(amount, currency))}</span></div>
+    <div class="paid-lbl">BETAALD</div>
+    <div class="paid-amt big">{h(fmt_money(amount, currency))}</div>
     <div class="r"><span>BETAALWIJZE</span><span class="b">{h(method_label)}</span></div>
     <div class="sep"></div>
     <div class="r one"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
