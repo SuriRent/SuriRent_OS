@@ -2,7 +2,7 @@
 
 De web-app stuurt na een betaling (en bij "Print bon opnieuw"):
 ```json
-{ "type": "PRINT_RECEIPT", "textZoom": 280, "lettergrootte": "groot",
+{ "type": "PRINT_RECEIPT", "textZoom": 420, "lettergrootte": "groot",
   "url": "https://<domein>/api/payments/<id>/print.html?format=thermal&preview=1",
   "data": { "bedrijfsnaam","adres","telefoon","kwitantie","datum","naam","appartement","vestiging","omschrijving","bedrag","openstaand","methode","opmerking" } }
 ```

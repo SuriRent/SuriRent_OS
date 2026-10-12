@@ -11405,7 +11405,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
         "opmerking": p.get("note") or "",
         "lettergrootte": font_size,
-        "textZoom": {"klein": 150, "normaal": 200}.get(font_size, 280),
+        "textZoom": {"klein": 280, "normaal": 350}.get(font_size, 420),
     }
 
 
@@ -11739,6 +11739,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     {S}.sheet .big {{ font-size: {fs[3]}px; font-weight: 900; white-space: normal; }}
     {S}.r {{ flex-wrap: wrap; }}
     {S}.r > span:last-child {{ margin-left: auto; }}
+    {S}.r.one, {S}.r.one * {{ flex-wrap: nowrap; white-space: nowrap; font-size: {min(fs[0], 12)}px; }}
   }}
 """
     city = location_city if location_city and location_city.lower() not in (location_name or "").lower() else ""
@@ -11765,7 +11766,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div class="r"><span>BETAALD</span><span class="big">{h(fmt_money(amount, currency))}</span></div>
     <div class="r"><span>BETAALWIJZE</span><span class="b">{h(method_label)}</span></div>
     <div class="sep"></div>
-    <div class="r"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
+    <div class="r one"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
     <div class="sep"></div>
     <div>OPMERKING:</div>
     <div class="wrap">{h(note or '-')}</div>
@@ -11790,6 +11791,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   body {{ width: {W}mm; }}
   @media print {{
     @page {{ size: {W}mm auto; margin: 0; }}
+    html, body {{ height: auto; min-height: 0; }}
     body {{ font-size: {fs[0]}px; }}
     .no-print {{ display: none !important; }}
   }}

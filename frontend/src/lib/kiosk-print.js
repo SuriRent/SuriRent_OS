@@ -28,7 +28,7 @@ export async function printReceipt({ paymentId, apiGet }) {
     const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
     let data = { payment_id: paymentId };
     try { data = { ...data, ...((await apiGet(`/kiosk/payments/${paymentId}/print-data`)).data || {}) }; } catch { /* alleen url */ }
-    const msg = { type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, textZoom: data.textZoom ?? 280, lettergrootte: data.lettergrootte || 'groot', data };
+    const msg = { type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', data };
     // eslint-disable-next-line no-console
     console.log('[APK PRINT_RECEIPT]', msg);
     window.ReactNativeWebView.postMessage(JSON.stringify(msg));

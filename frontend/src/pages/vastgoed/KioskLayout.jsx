@@ -2401,7 +2401,7 @@ async function sendApkPrint(data, paymentId) {
   }
   // APK opent zelf het systeem-printvenster; url = print-klare bon (HTML, @media print).
   const url = paymentId ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?format=thermal&preview=1` : null;
-  const msg = { type: 'PRINT_RECEIPT', url, textZoom: full.textZoom ?? 280, lettergrootte: full.lettergrootte || 'groot', data: { ...data, ...full } };
+  const msg = { type: 'PRINT_RECEIPT', url, textZoom: full.textZoom ?? 420, lettergrootte: full.lettergrootte || 'groot', data: { ...data, ...full } };
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
   try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
