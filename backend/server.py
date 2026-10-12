@@ -11353,6 +11353,31 @@ async def payment_pdf(payment_id: str):
     return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
 
 
+_FONT_PRESETS = {"klein": (12, 16, 13, 18), "normaal": (16, 20, 18, 22), "groot": (20, 26, 22, 28)}
+_ZOOM_PRESETS = {"klein": 280, "normaal": 350, "groot": 420}
+
+
+def _clamp_int(v, lo: int, hi: int, default: int) -> int:
+    try:
+        return max(lo, min(hi, int(float(v))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _receipt_fonts(rcfg: dict) -> tuple:
+    """(naam, (basis, bedrijfsnaam, KWITANTIE, bedrag) px, textZoom) uit receipts-instellingen."""
+    name = rcfg.get("font_size") or "groot"
+    if name == "aangepast":
+        c = rcfg.get("custom_fonts") or {}
+        d = _FONT_PRESETS["groot"]
+        fs = (_clamp_int(c.get("base"), 8, 48, d[0]), _clamp_int(c.get("name"), 8, 60, d[1]),
+              _clamp_int(c.get("title"), 8, 60, d[2]), _clamp_int(c.get("amount"), 8, 72, d[3]))
+        return name, fs, _clamp_int(c.get("text_zoom"), 50, 800, 420)
+    if name not in _FONT_PRESETS:
+        name = "groot"
+    return name, _FONT_PRESETS[name], _ZOOM_PRESETS[name]
+
+
 _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankoverschrijving",
                         "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
 
@@ -11365,9 +11390,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
     cs = await db.company_settings.find_one({"company_id": p.get("company_id")}, {"_id": 0, "receipts": 1})
-    font_size = ((cs or {}).get("receipts") or {}).get("font_size") or "groot"
-    if font_size not in ("klein", "normaal", "groot"):
-        font_size = "groot"
+    font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
     apt_id = p.get("apartment_id")
     if not apt_id and p.get("tenant_id"):
         t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "apartment_id": 1})
@@ -11405,7 +11428,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
         "opmerking": p.get("note") or "",
         "lettergrootte": font_size,
-        "textZoom": {"klein": 280, "normaal": 350}.get(font_size, 420),
+        "textZoom": text_zoom,
     }
 
 
@@ -11442,7 +11465,7 @@ async def payment_print_html(
         fmt = rcfg.get("print_format") if rcfg.get("print_format") in ("a4", "thermal") else "a4"
     if fragment:
         fmt = "thermal"
-    p["_font_size"] = rcfg.get("font_size") or "groot"
+    p["_font_px"] = _receipt_fonts(rcfg)[1]
     html = _render_receipt_html(p, fmt=fmt, preview=bool(preview), fragment=bool(fragment))
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
@@ -11516,7 +11539,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
             paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
-            location_city=p.get("location_city") or "", font_size=p.get("_font_size") or "groot",
+            location_city=p.get("location_city") or "", font_px=p.get("_font_px"),
             screen_sizes=bool(p.get("_screen_sizes")),
         )
 
@@ -11661,7 +11684,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_email: str = "", company_tagline: str = "",
                                  company_kkf: str = "", paper_width_mm: int = 58,
                                  title: str = "KWITANTIE", fragment: bool = False,
-                                 location_city: str = "", font_size: str = "groot",
+                                 location_city: str = "", font_px: Optional[tuple] = None,
                                  screen_sizes: bool = False) -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
@@ -11718,7 +11741,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     })();
   </script>""" % W
     # Lettergrootte bij printen (instelbaar): basis, bedrijfsnaam, KWITANTIE, bedrag.
-    fs = {"klein": (12, 16, 13, 18), "normaal": (16, 20, 18, 22)}.get(font_size, (20, 26, 22, 28))
+    fs = tuple(font_px) if font_px else (20, 26, 22, 28)
 
     def comp_css(S: str) -> str:
         return f"""
@@ -15013,11 +15036,10 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
 
 # Placeholder test endpoints — actual implementations come in Fases B-F.
 @api.get("/settings/receipts/preview.html", response_class=HTMLResponse)
-async def receipts_preview(font_size: str = "groot", user=Depends(get_current_user)):
+async def receipts_preview(font_size: str = "groot", base: Optional[int] = None, name: Optional[int] = None,
+                           title: Optional[int] = None, amount: Optional[int] = None, user=Depends(get_current_user)):
     """Live bonvoorbeeld (58mm) met de gekozen lettergrootte, ook op het scherm."""
     cid = company_id_of(user)
-    if font_size not in ("klein", "normaal", "groot"):
-        font_size = "groot"
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
     if p:
@@ -15026,7 +15048,8 @@ async def receipts_preview(font_size: str = "groot", user=Depends(get_current_us
         p = {**brand, "receipt_number": "KW-VOORBEELD", "paid_at": iso(now_utc()), "tenant_name": "Voorbeeld Huurder",
              "apartment_number": "A-101", "location_name": "Hoofdvestiging", "amount": 2500.0, "currency": "SRD",
              "method": "contant", "category": "huur", "outstanding_after": 0, "note": "Voorbeeldbon"}
-    p["_font_size"] = font_size
+    p["_font_px"] = _receipt_fonts({"font_size": font_size,
+                                    "custom_fonts": {"base": base, "name": name, "title": title, "amount": amount}})[1]
     p["_screen_sizes"] = True
     html = _render_receipt_html(p, fmt="thermal", preview=True)
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})

@@ -658,8 +658,13 @@ function ReceiptsForm({ initial }) {
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
-        <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
-        <BonPreview fontSize={d.font_size || 'groot'} />
+        <div className="space-y-4">
+          <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
+          {d.font_size === 'aangepast' && (
+            <BonCustomFonts value={d.custom_fonts || {}} onChange={(v) => s.onField('custom_fonts', v)} />
+          )}
+        </div>
+        <BonPreview fontSize={d.font_size || 'groot'} custom={d.font_size === 'aangepast' ? (d.custom_fonts || {}) : null} />
       </div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
         <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
@@ -677,13 +682,51 @@ const BON_FONTS = [
   { id: 'klein', label: 'Klein', sample: 12, desc: 'Compact — korte bon, meer tekst per regel' },
   { id: 'normaal', label: 'Normaal', sample: 16, desc: 'Gebalanceerd en goed leesbaar' },
   { id: 'groot', label: 'Groot', sample: 20, desc: 'Extra groot — makkelijk te lezen, langere bon' },
+  { id: 'aangepast', label: 'Aangepast', sample: 16, desc: 'Stel zelf elke lettergrootte in (px)' },
 ];
+
+const CUSTOM_FONT_FIELDS = [
+  { k: 'base', label: 'Overige tekst', def: 20, min: 8, max: 48 },
+  { k: 'name', label: 'Bedrijfsnaam', def: 26, min: 8, max: 60 },
+  { k: 'title', label: 'KWITANTIE', def: 22, min: 8, max: 60 },
+  { k: 'amount', label: 'Bedrag', def: 28, min: 8, max: 72 },
+  { k: 'text_zoom', label: 'APK textZoom', def: 420, min: 50, max: 800, step: 10, unit: '%' },
+];
+
+function BonCustomFonts({ value, onChange }) {
+  const set = (k, v) => onChange({ ...value, [k]: v === '' ? '' : Number(v) });
+  return (
+    <div className="rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-4" data-testid="bon-custom-fonts">
+      <p className="text-sm font-black text-slate-900 mb-3">Eigen lettergroottes</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {CUSTOM_FONT_FIELDS.map((f) => {
+          const v = value[f.k] ?? f.def;
+          return (
+            <label key={f.k} className="block">
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{f.label}</span>
+              <div className="mt-1 flex items-center gap-2">
+                <button type="button" onClick={() => set(f.k, Math.max(f.min, Number(v || f.def) - (f.step || 1)))}
+                  data-testid={`bon-font-${f.k}-minus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">−</button>
+                <input type="number" inputMode="numeric" min={f.min} max={f.max} step={f.step || 1} value={v}
+                  onChange={(e) => set(f.k, e.target.value)} data-testid={`bon-font-${f.k}-input`}
+                  className="w-20 h-11 px-2 text-center rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none font-bold" />
+                <button type="button" onClick={() => set(f.k, Math.min(f.max, Number(v || f.def) + (f.step || 1)))}
+                  data-testid={`bon-font-${f.k}-plus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">+</button>
+                <span className="text-xs font-semibold text-slate-500">{f.unit || 'px'}</span>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function BonFontPicker({ value, onChange }) {
   return (
     <div data-testid="bon-font-picker">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Lettergrootte van de bon</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {BON_FONTS.map((f) => (
           <button key={f.id} type="button" onClick={() => onChange(f.id)} data-testid={`bon-font-${f.id}`}
             className={`text-left p-4 rounded-2xl border-2 transition-colors ${value === f.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
@@ -700,19 +743,21 @@ function BonFontPicker({ value, onChange }) {
 }
 
 // Live voorbeeld van de 58mm-bon (laatste echte kwitantie of voorbeelddata).
-function BonPreview({ fontSize }) {
+function BonPreview({ fontSize, custom }) {
   const [html, setHtml] = useState('');
   const [height, setHeight] = useState(420);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    api.get('/settings/receipts/preview.html', { params: { font_size: fontSize }, responseType: 'text' })
+    const params = { font_size: fontSize };
+    if (custom) ['base', 'name', 'title', 'amount'].forEach((k) => { if (custom[k] !== '' && custom[k] != null) params[k] = custom[k]; });
+    api.get('/settings/receipts/preview.html', { params, responseType: 'text' })
       .then(({ data }) => { if (alive) setHtml(String(data).replace(/<script[\s\S]*?<\/script>/gi, '')); })
       .catch(() => { if (alive) setHtml('<p style="font-family:sans-serif;padding:8px">Voorbeeld niet beschikbaar</p>'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [fontSize]);
+  }, [fontSize, custom?.base, custom?.name, custom?.title, custom?.amount]);
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
