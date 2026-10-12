@@ -11429,21 +11429,14 @@ async def payment_print_html(
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
     p = await _enrich_payment(p)
 
+    cs = await db.company_settings.find_one({"company_id": p.get("company_id")}, {"_id": 0, "receipts": 1})
+    rcfg = (cs or {}).get("receipts") or {}
     fmt = (format or "").strip().lower()
     if fmt not in ("a4", "thermal"):
-        try:
-            cs = await db.company_settings.find_one(
-                {"company_id": p.get("company_id")},
-                {"_id": 0, "receipts": 1},
-            )
-            fmt = ((cs or {}).get("receipts") or {}).get("print_format") or "a4"
-        except Exception:  # noqa: BLE001
-            fmt = "a4"
-        if fmt not in ("a4", "thermal"):
-            fmt = "a4"
-
+        fmt = rcfg.get("print_format") if rcfg.get("print_format") in ("a4", "thermal") else "a4"
     if fragment:
         fmt = "thermal"
+    p["_font_size"] = rcfg.get("font_size") or "groot"
     html = _render_receipt_html(p, fmt=fmt, preview=bool(preview), fragment=bool(fragment))
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
@@ -11517,7 +11510,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
             paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
-            location_city=p.get("location_city") or "",
+            location_city=p.get("location_city") or "", font_size=p.get("_font_size") or "groot",
         )
 
     # ------ A4 layout (default) ------
@@ -11661,7 +11654,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_email: str = "", company_tagline: str = "",
                                  company_kkf: str = "", paper_width_mm: int = 58,
                                  title: str = "KWITANTIE", fragment: bool = False,
-                                 location_city: str = "") -> str:
+                                 location_city: str = "", font_size: str = "groot") -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
     W = int(paper_width_mm or 58)
@@ -11716,6 +11709,9 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
       window.addEventListener('beforeprint', fit);
     })();
   </script>""" % W
+    # Lettergrootte bij printen (instelbaar): basis, bedrijfsnaam, KWITANTIE, bedrag.
+    fs = {"klein": (12, 16, 13, 18), "normaal": (16, 20, 18, 22)}.get(font_size, (20, 26, 22, 28))
+
     def comp_css(S: str) -> str:
         return f"""
   {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0; box-sizing: border-box; font-size: 12px; }}
@@ -11729,10 +11725,10 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {S}.big {{ font-size: 16px; font-weight: 900; white-space: nowrap; }}
   {S}.wrap {{ word-break: break-word; }}
   @media print {{
-    {S}.sheet, {S}.sheet * {{ font-size: 20px; }}
-    {S}.sheet .name {{ font-size: 26px; font-weight: 900; }}
-    {S}.sheet .title {{ font-size: 22px; }}
-    {S}.sheet .big {{ font-size: 28px; font-weight: 900; white-space: normal; }}
+    {S}.sheet, {S}.sheet * {{ font-size: {fs[0]}px; }}
+    {S}.sheet .name {{ font-size: {fs[1]}px; font-weight: 900; }}
+    {S}.sheet .title {{ font-size: {fs[2]}px; }}
+    {S}.sheet .big {{ font-size: {fs[3]}px; font-weight: 900; white-space: normal; }}
     {S}.r {{ flex-wrap: wrap; }}
     {S}.r > span:last-child {{ margin-left: auto; }}
   }}
@@ -11786,7 +11782,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   body {{ width: {W}mm; }}
   @media print {{
     @page {{ size: {W}mm auto; margin: 0; }}
-    body {{ font-size: 20px; }}
+    body {{ font-size: {fs[0]}px; }}
     .no-print {{ display: none !important; }}
   }}
 {comp_css("")}

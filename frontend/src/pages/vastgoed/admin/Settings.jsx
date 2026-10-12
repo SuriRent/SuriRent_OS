@@ -628,8 +628,8 @@ function ReceiptsForm({ initial }) {
     },
     {
       id: 'thermal',
-      title: '80mm bonprinter (thermisch)',
-      desc: 'Compacte 1-kolom POS-stijl bon voor 80mm bonrol. Ideaal voor kassa-achtige setups met een thermische bonprinter.',
+      title: '58mm bonprinter (thermisch)',
+      desc: 'Compacte 1-kolom POS-stijl bon voor 58mm bonrol. Ideaal voor kassa-achtige setups met een thermische bonprinter.',
     },
   ];
   const current = d.print_format || 'a4';
@@ -657,6 +657,7 @@ function ReceiptsForm({ initial }) {
           </button>
         ))}
       </div>
+      <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
         <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
         worden met de vlag <code className="bg-white px-1 rounded">--kiosk-printing</code>.
@@ -665,6 +666,33 @@ function ReceiptsForm({ initial }) {
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
+  );
+}
+
+// Lettergrootte van de geprinte bon (klein / normaal / groot).
+const BON_FONTS = [
+  { id: 'klein', label: 'Klein', sample: 12, desc: 'Compact — korte bon, meer tekst per regel' },
+  { id: 'normaal', label: 'Normaal', sample: 16, desc: 'Gebalanceerd en goed leesbaar' },
+  { id: 'groot', label: 'Groot', sample: 20, desc: 'Extra groot — makkelijk te lezen, langere bon' },
+];
+
+function BonFontPicker({ value, onChange }) {
+  return (
+    <div data-testid="bon-font-picker">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Lettergrootte van de bon</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {BON_FONTS.map((f) => (
+          <button key={f.id} type="button" onClick={() => onChange(f.id)} data-testid={`bon-font-${f.id}`}
+            className={`text-left p-4 rounded-2xl border-2 transition-colors ${value === f.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-black text-slate-900" style={{ fontSize: f.sample }}>{f.label}</span>
+              {value === f.id && <Check className="w-4 h-4 text-[#FF5C00]" />}
+            </div>
+            <p className="text-xs text-slate-500 mt-1 leading-snug">{f.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

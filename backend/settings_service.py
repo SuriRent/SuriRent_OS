@@ -122,6 +122,7 @@ def empty_section(section: str) -> dict:
         # 'thermal' = 80mm-brede bonprinter (compacte 1-kolom layout).
         "receipts": {
             "print_format": "a4",
+            "font_size": "groot",  # klein | normaal | groot (bonprint)
         },
     }.get(section, {})
 
