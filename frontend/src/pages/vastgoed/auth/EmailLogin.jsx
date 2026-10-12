@@ -121,7 +121,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
     setLoading(true); setError('');
     try {
       if (mode === 'login') {
-        const loginResult = await login(email, password);
+        const loginResult = await login(email, password, remember);
         if (loginResult?.pin_required) return;
         // "Onthoud mij": sla email + wachtwoord lokaal op (alleen op apparaten
         // waar de gebruiker zelf toegang toe heeft — niet ideaal voor gedeelde

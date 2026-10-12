@@ -102,7 +102,7 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, remember) => {
     const { data } = await api.post('/auth/login', { email, password });
     if (data?.pin_required) {
       // Kiosk-medewerker: wachtwoord klopt, nu de eigen PIN op het bedrijfsportaal.
@@ -115,6 +115,16 @@ export function AuthProvider({ children }) {
       return data;
     }
     if (data?.token) localStorage.setItem('admin_token', data.token);
+    // "Onthoud mij" vóór setUser opslaan (setUser triggert direct de redirect).
+    try {
+      localStorage.removeItem('auto_login_paused');
+      if (remember === true) {
+        localStorage.setItem('saved_login_email', email);
+        localStorage.setItem('saved_login_password', password);
+      } else if (remember === false) {
+        localStorage.removeItem('saved_login_password');
+      }
+    } catch { /* ignore */ }
     setUser(data.user);
     // Onthoud welke gebruiker hier inlogde, voor persoonlijke PIN-flow op PWA.
     try {

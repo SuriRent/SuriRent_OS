@@ -96,7 +96,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
     e?.preventDefault();
     setLoading(true); setError('');
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, remember);
       try {
         localStorage.removeItem('auto_login_paused');
         if (remember) {
