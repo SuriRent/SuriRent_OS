@@ -657,7 +657,10 @@ function ReceiptsForm({ initial }) {
           </button>
         ))}
       </div>
-      <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+        <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
+        <BonPreview fontSize={d.font_size || 'groot'} />
+      </div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
         <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
         worden met de vlag <code className="bg-white px-1 rounded">--kiosk-printing</code>.
@@ -680,7 +683,7 @@ function BonFontPicker({ value, onChange }) {
   return (
     <div data-testid="bon-font-picker">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Lettergrootte van de bon</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-3">
         {BON_FONTS.map((f) => (
           <button key={f.id} type="button" onClick={() => onChange(f.id)} data-testid={`bon-font-${f.id}`}
             className={`text-left p-4 rounded-2xl border-2 transition-colors ${value === f.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
@@ -691,6 +694,37 @@ function BonFontPicker({ value, onChange }) {
             <p className="text-xs text-slate-500 mt-1 leading-snug">{f.desc}</p>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// Live voorbeeld van de 58mm-bon (laatste echte kwitantie of voorbeelddata).
+function BonPreview({ fontSize }) {
+  const [html, setHtml] = useState('');
+  const [height, setHeight] = useState(420);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    api.get('/settings/receipts/preview.html', { params: { font_size: fontSize }, responseType: 'text' })
+      .then(({ data }) => { if (alive) setHtml(String(data).replace(/<script[\s\S]*?<\/script>/gi, '')); })
+      .catch(() => { if (alive) setHtml('<p style="font-family:sans-serif;padding:8px">Voorbeeld niet beschikbaar</p>'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [fontSize]);
+  return (
+    <div className="lg:sticky lg:top-4" data-testid="bon-preview">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
+        Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+      </p>
+      <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
+        <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 transition-opacity"
+          style={{ opacity: loading ? 0.5 : 1 }}>
+          <iframe title="Bonvoorbeeld" srcDoc={html} data-testid="bon-preview-frame" scrolling="no"
+            onLoad={(e) => { try { setHeight(e.target.contentDocument.body.scrollHeight + 8); } catch { /* ignore */ } }}
+            style={{ width: '58mm', height, border: 0, display: 'block' }} />
+        </div>
       </div>
     </div>
   );

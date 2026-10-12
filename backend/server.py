@@ -11511,6 +11511,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             company_kkf=p.get("kkf_number") or "",
             paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
             location_city=p.get("location_city") or "", font_size=p.get("_font_size") or "groot",
+            screen_sizes=bool(p.get("_screen_sizes")),
         )
 
     # ------ A4 layout (default) ------
@@ -11654,7 +11655,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_email: str = "", company_tagline: str = "",
                                  company_kkf: str = "", paper_width_mm: int = 58,
                                  title: str = "KWITANTIE", fragment: bool = False,
-                                 location_city: str = "", font_size: str = "groot") -> str:
+                                 location_city: str = "", font_size: str = "groot",
+                                 screen_sizes: bool = False) -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
     W = int(paper_width_mm or 58)
@@ -11724,7 +11726,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {S}.r > span:last-child {{ text-align: right; word-break: break-word; }}
   {S}.big {{ font-size: 16px; font-weight: 900; white-space: nowrap; }}
   {S}.wrap {{ word-break: break-word; }}
-  @media print {{
+  {"@media all" if screen_sizes else "@media print"} {{
     {S}.sheet, {S}.sheet * {{ font-size: {fs[0]}px; }}
     {S}.sheet .name {{ font-size: {fs[1]}px; font-weight: 900; }}
     {S}.sheet .title {{ font-size: {fs[2]}px; }}
@@ -15002,6 +15004,26 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
 
 
 # Placeholder test endpoints — actual implementations come in Fases B-F.
+@api.get("/settings/receipts/preview.html", response_class=HTMLResponse)
+async def receipts_preview(font_size: str = "groot", user=Depends(get_current_user)):
+    """Live bonvoorbeeld (58mm) met de gekozen lettergrootte, ook op het scherm."""
+    cid = company_id_of(user)
+    if font_size not in ("klein", "normaal", "groot"):
+        font_size = "groot"
+    brand = await _company_brand_info(cid)
+    p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
+    if p:
+        p = await _enrich_payment(p)
+    else:
+        p = {**brand, "receipt_number": "KW-VOORBEELD", "paid_at": iso(now_utc()), "tenant_name": "Voorbeeld Huurder",
+             "apartment_number": "A-101", "location_name": "Hoofdvestiging", "amount": 2500.0, "currency": "SRD",
+             "method": "contant", "category": "huur", "outstanding_after": 0, "note": "Voorbeeldbon"}
+    p["_font_size"] = font_size
+    p["_screen_sizes"] = True
+    html = _render_receipt_html(p, fmt="thermal", preview=True)
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
 @api.post("/settings/{section}/test")
 async def test_settings_section(section: str, user=Depends(get_current_user)):
     if section not in VALID_SETTINGS_SECTIONS:
