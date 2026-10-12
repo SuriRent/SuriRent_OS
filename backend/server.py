@@ -8125,6 +8125,8 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
     tenant_phone = None
     apt_number = None
     location_name = None
+    location_city = ""
+    location_address = ""
     if p.get("tenant_id"):
         t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1, "phone": 1})
         if t:
@@ -8137,9 +8139,11 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
         if a:
             apt_number = a.get("number")
             if a.get("location_id"):
-                loc = await db.locations.find_one({"id": a["location_id"]}, {"_id": 0, "name": 1})
+                loc = await db.locations.find_one({"id": a["location_id"]}, {"_id": 0, "name": 1, "address": 1})
                 if loc:
                     location_name = loc.get("name")
+                    location_city = ((loc.get("address") or "").split(",")[-1]).strip() if loc.get("address") else ""
+                    location_address = loc.get("address") or ""
     # Bedrijfsinfo voor de PDF-header (branding-look uit voorbeeld).
     # BELANGRIJK: brand info bevat MEERDERE raw bytes velden
     # (`company_logo_bytes`, `landlord_signature_bytes`) die FastAPI's
@@ -8189,6 +8193,8 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
     return {**p, "tenant_name": tenant_name, "tenant_phone": tenant_phone,
             "apartment_number": apt_number,
             "location_name": location_name,
+            "location_city": location_city,
+            "location_address": location_address,
             "outstanding_after": round(outstanding_after, 2),
             **company_info}
 
@@ -11479,7 +11485,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
     receipt_number = p.get("receipt_number") or ""
     paid_at = fmt_date(p.get("paid_at"))
     company_name = (p.get("company_name") or "").strip() or "SuriRent"
-    company_address = p.get("company_address") or ""
+    company_address = p.get("company_address") or p.get("location_address") or ""
     company_phone = p.get("company_phone") or p.get("company_whatsapp") or ""
     landlord = p.get("landlord") or company_name
     tenant_name = p.get("tenant_name") or "—"
@@ -11511,6 +11517,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
             paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
+            location_city=p.get("location_city") or "",
         )
 
     # ------ A4 layout (default) ------
@@ -11653,7 +11660,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  note, desc, fmt_money, preview: bool = False,
                                  company_email: str = "", company_tagline: str = "",
                                  company_kkf: str = "", paper_width_mm: int = 58,
-                                 title: str = "KWITANTIE", fragment: bool = False) -> str:
+                                 title: str = "KWITANTIE", fragment: bool = False,
+                                 location_city: str = "") -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
     W = int(paper_width_mm or 58)
@@ -11663,7 +11671,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
         return f"{round(x * k, 1)}pt"
     pad = "1mm 0.5mm" if W <= 60 else "2mm 3mm"
     method_label = {
-        "cash": "CONTANT", "contant": "CONTANT", "bank": "BANKOVERSCHRIJVING",
+        "cash": "CONTANT", "contant": "CONTANT", "bank": "OVERSCHRIJVING",
         "card": "PIN", "creditcard": "CREDITCARD", "ideal": "IDEAL", "other": "ANDERS",
     }.get(method, (method or "").upper() or "—")
     outstanding_txt = (
@@ -11696,11 +11704,11 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
         try {
           var b = document.body, prev = b.style.width;
           b.style.width = W + 'mm';
-          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 8;
+          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 2;
           b.style.width = prev;
           var el = document.getElementById('page-fit');
           if (!el) { el = document.createElement('style'); el.id = 'page-fit'; document.head.appendChild(el); }
-          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 2mm; } }';
+          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 0; } }';
         } catch (e) {}
       }
       document.addEventListener('DOMContentLoaded', fit);
@@ -11709,49 +11717,67 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     })();
   </script>""" % W
     def comp_css(S: str) -> str:
-        # Vaste px-waardes (geen schaling): naam 16, nr/veldnamen 12, bedrag 18 bold, rest 13.
         return f"""
-  {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0; box-sizing: border-box; font-size: 13px; }}
-  {S}.center {{ text-align: center; }}
-  {S}.h1 {{ font-size: 16px; font-weight: 900; margin: 0 0 1mm; text-align: center; word-break: break-word; }}
-  {S}.nr {{ font-size: 12px; text-align: center; }}
-  {S}.sep {{ border-top: 1px dashed #000; margin: 1.5mm 0; }}
-  {S}.f {{ margin: 0 0 1mm; }}
-  {S}.lbl {{ display: block; font-size: 12px; color: #000; text-transform: uppercase; }}
-  {S}.val {{ display: block; font-size: 13px; font-weight: 700; word-break: break-word; }}
-  {S}.big {{ display: block; font-size: 18px; font-weight: 700; white-space: nowrap; }}
-  {S}.footer {{ font-size: 13px; text-align: center; margin-top: 2mm; }}
+  {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0; box-sizing: border-box; font-size: 12px; }}
+  {S}.c {{ text-align: center; }}
+  {S}.b {{ font-weight: 700; }}
+  {S}.name {{ font-size: 14px; font-weight: 900; text-align: center; word-break: break-word; }}
+  {S}.sep {{ border-top: 1px dashed #000; margin: 1.5mm 0; height: 0; }}
+  {S}.r {{ display: flex; justify-content: space-between; align-items: baseline; gap: 2mm; }}
+  {S}.r > span:first-child {{ white-space: nowrap; }}
+  {S}.r > span:last-child {{ text-align: right; word-break: break-word; }}
+  {S}.big {{ font-size: 16px; font-weight: 900; white-space: nowrap; }}
+  {S}.wrap {{ word-break: break-word; }}
 """
+    city = location_city if location_city and location_city.lower() not in (location_name or "").lower() else ""
+    unit_line = " - ".join(x for x in [apartment_number, location_name, city] if x)
     sheet_html = f"""
   <div class="sheet">
-    <div class="h1">{h(company_name)}</div>
-    <div class="nr">Kwitantie {h(receipt_number)}</div>
+    <div class="name">{h(company_name)}</div>
+    {f'<div class="c wrap">{h(company_address)}</div>' if company_address else ''}
+    {f'<div class="c">TEL: {h(company_phone)}</div>' if company_phone else ''}
+    {f'<div class="c wrap">{h(company_email)}</div>' if company_email else ''}
     <div class="sep"></div>
-    <div class="f"><span class="lbl">Huurder</span><span class="val">{h(tenant_name)}</span></div>
-    <div class="f"><span class="lbl">Appartement</span><span class="val">{h(apartment_number or '—')}</span></div>
-    <div class="f"><span class="lbl">Bedrag</span><span class="big">{h(fmt_money(amount, currency))}</span></div>
-    <div class="f"><span class="lbl">Betaalmethode</span><span class="val">{h(method_label)}</span></div>
-    <div class="f"><span class="lbl">Datum</span><span class="val">{h(paid_at)}</span></div>
+    <div class="c b">{h(title)}</div>
     <div class="sep"></div>
-    <div class="footer">Bedankt voor uw betaling</div>
+    <div class="r"><span>NR.</span><span>{h(receipt_number)}</span></div>
+    <div class="r"><span>DATUM</span><span>{h(paid_at)}</span></div>
+    <div class="sep"></div>
+    <div>HUURDER:</div>
+    <div class="b wrap">{h(tenant_name)}</div>
+    {f'<div class="wrap">{h(unit_line)}</div>' if unit_line else ''}
+    <div class="sep"></div>
+    <div>OMSCHRIJVING:</div>
+    <div class="b wrap">{h(desc or 'Huurbetaling')}</div>
+    <div class="sep"></div>
+    <div class="r"><span>BETAALD</span><span class="big">{h(fmt_money(amount, currency))}</span></div>
+    <div class="r"><span>BETAALWIJZE</span><span class="b">{h(method_label)}</span></div>
+    <div class="sep"></div>
+    <div class="r"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
+    <div class="sep"></div>
+    <div>OPMERKING:</div>
+    <div class="wrap">{h(note or '-')}</div>
+    <div class="sep"></div>
+    <div class="c">Bedankt voor uw betaling</div>
+    <div class="c">{h(receipt_number)}</div>
   </div>
 """
     if fragment:
         # Voor window.print() in de app: alle regels gescoped onder #bon.
         return f"""<style>
   #bon {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: 13px; line-height: 1.25; color: #000; background: #fff; }}
+    font-size: 12px; line-height: 1.25; color: #000; background: #fff; }}
 {comp_css('#bon ')}</style>{sheet_html}"""
     return f"""<!doctype html>
 <html lang="nl"><head><meta charset="utf-8">
 <title>Kwitantie {h(receipt_number)}</title>
 <style>
-  /* Bonrol {W}mm — geen A4: pagina én body staan direct op {W}mm. */
-  @page {{ size: {W}mm auto; margin: 2mm; }}
+  /* Bonrol {W}mm — geen A4; marge 0 = geen browser-kop/voettekst/URL. */
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
-    font-size: 14px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
+    font-size: 12px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
   body {{ width: {W}mm; }}
   @media print {{
+    @page {{ size: {W}mm auto; margin: 0; }}
     .no-print {{ display: none !important; }}
   }}
 {comp_css("")}

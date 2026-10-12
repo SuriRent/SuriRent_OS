@@ -292,7 +292,7 @@ html { scroll-behavior: smooth; }
 /* Bon printen via window.print(): alleen #bon is zichtbaar bij printen. */
 #bon { display: none; }
 @media print {
-  html { font-size: 14px; }
+  html { font-size: 12px; }
   @page { size: 58mm auto; margin: 2mm; }
   @page { margin: 0; } /* geen browser-kop/voettekst (URL, datum) */
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
