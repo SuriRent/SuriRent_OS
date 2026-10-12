@@ -11367,15 +11367,13 @@ def _clamp_int(v, lo: int, hi: int, default: int) -> int:
 def _receipt_fonts(rcfg: dict) -> tuple:
     """(naam, (basis, bedrijfsnaam, KWITANTIE, bedrag) px, textZoom) uit receipts-instellingen."""
     name = rcfg.get("font_size") or "groot"
-    if name == "aangepast":
-        c = rcfg.get("custom_fonts") or {}
-        d = _FONT_PRESETS["groot"]
-        fs = (_clamp_int(c.get("base"), 8, 48, d[0]), _clamp_int(c.get("name"), 8, 60, d[1]),
-              _clamp_int(c.get("title"), 8, 60, d[2]), _clamp_int(c.get("amount"), 8, 72, d[3]))
-        return name, fs, _clamp_int(c.get("text_zoom"), 50, 800, 420)
     if name not in _FONT_PRESETS:
         name = "groot"
-    return name, _FONT_PRESETS[name], _ZOOM_PRESETS[name]
+    c = ((rcfg.get("presets") or {}).get(name)) or {}
+    d = _FONT_PRESETS[name]
+    fs = (_clamp_int(c.get("base"), 8, 48, d[0]), _clamp_int(c.get("name"), 8, 60, d[1]),
+          _clamp_int(c.get("title"), 8, 60, d[2]), _clamp_int(c.get("amount"), 8, 72, d[3]))
+    return name, fs, _clamp_int(c.get("text_zoom"), 50, 800, _ZOOM_PRESETS[name])
 
 
 _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankoverschrijving",
@@ -15049,7 +15047,7 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
              "apartment_number": "A-101", "location_name": "Hoofdvestiging", "amount": 2500.0, "currency": "SRD",
              "method": "contant", "category": "huur", "outstanding_after": 0, "note": "Voorbeeldbon"}
     p["_font_px"] = _receipt_fonts({"font_size": font_size,
-                                    "custom_fonts": {"base": base, "name": name, "title": title, "amount": amount}})[1]
+                                    "presets": {font_size: {"base": base, "name": name, "title": title, "amount": amount}}})[1]
     p["_screen_sizes"] = True
     html = _render_receipt_html(p, fmt="thermal", preview=True)
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})

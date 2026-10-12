@@ -660,11 +660,12 @@ function ReceiptsForm({ initial }) {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-4">
           <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
-          {d.font_size === 'aangepast' && (
-            <BonCustomFonts value={d.custom_fonts || {}} onChange={(v) => s.onField('custom_fonts', v)} />
-          )}
+          <BonCustomFonts preset={d.font_size || 'groot'}
+            value={{ ...BON_DEFAULTS[d.font_size || 'groot'], ...((d.presets || {})[d.font_size || 'groot'] || {}) }}
+            onChange={(v) => s.onField('presets', { ...(d.presets || {}), [d.font_size || 'groot']: v })} />
         </div>
-        <BonPreview fontSize={d.font_size || 'groot'} custom={d.font_size === 'aangepast' ? (d.custom_fonts || {}) : null} />
+        <BonPreview fontSize={d.font_size || 'groot'}
+          custom={{ ...BON_DEFAULTS[d.font_size || 'groot'], ...((d.presets || {})[d.font_size || 'groot'] || {}) }} />
       </div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
         <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
@@ -682,35 +683,46 @@ const BON_FONTS = [
   { id: 'klein', label: 'Klein', sample: 12, desc: 'Compact — korte bon, meer tekst per regel' },
   { id: 'normaal', label: 'Normaal', sample: 16, desc: 'Gebalanceerd en goed leesbaar' },
   { id: 'groot', label: 'Groot', sample: 20, desc: 'Extra groot — makkelijk te lezen, langere bon' },
-  { id: 'aangepast', label: 'Aangepast', sample: 16, desc: 'Stel zelf elke lettergrootte in (px)' },
 ];
+
+const BON_DEFAULTS = {
+  klein: { base: 12, name: 16, title: 13, amount: 18, text_zoom: 280 },
+  normaal: { base: 16, name: 20, title: 18, amount: 22, text_zoom: 350 },
+  groot: { base: 20, name: 26, title: 22, amount: 28, text_zoom: 420 },
+};
 
 const CUSTOM_FONT_FIELDS = [
-  { k: 'base', label: 'Overige tekst', def: 20, min: 8, max: 48 },
-  { k: 'name', label: 'Bedrijfsnaam', def: 26, min: 8, max: 60 },
-  { k: 'title', label: 'KWITANTIE', def: 22, min: 8, max: 60 },
-  { k: 'amount', label: 'Bedrag', def: 28, min: 8, max: 72 },
-  { k: 'text_zoom', label: 'APK textZoom', def: 420, min: 50, max: 800, step: 10, unit: '%' },
+  { k: 'base', label: 'Overige tekst', min: 8, max: 48 },
+  { k: 'name', label: 'Bedrijfsnaam', min: 8, max: 60 },
+  { k: 'title', label: 'KWITANTIE', min: 8, max: 60 },
+  { k: 'amount', label: 'Bedrag', min: 8, max: 72 },
+  { k: 'text_zoom', label: 'APK textZoom', min: 50, max: 800, step: 10, unit: '%' },
 ];
 
-function BonCustomFonts({ value, onChange }) {
+function BonCustomFonts({ preset, value, onChange }) {
   const set = (k, v) => onChange({ ...value, [k]: v === '' ? '' : Number(v) });
+  const label = BON_FONTS.find((f) => f.id === preset)?.label || preset;
   return (
     <div className="rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-4" data-testid="bon-custom-fonts">
-      <p className="text-sm font-black text-slate-900 mb-3">Eigen lettergroottes</p>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <p className="text-sm font-black text-slate-900">Lettergroottes voor “{label}” aanpassen</p>
+        <button type="button" onClick={() => onChange({ ...BON_DEFAULTS[preset] })} data-testid="bon-font-reset"
+          className="text-xs font-bold text-[#FF5C00] hover:underline">Standaard herstellen</button>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {CUSTOM_FONT_FIELDS.map((f) => {
-          const v = value[f.k] ?? f.def;
+          const def = BON_DEFAULTS[preset][f.k];
+          const v = value[f.k] ?? def;
           return (
             <label key={f.k} className="block">
               <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{f.label}</span>
               <div className="mt-1 flex items-center gap-2">
-                <button type="button" onClick={() => set(f.k, Math.max(f.min, Number(v || f.def) - (f.step || 1)))}
+                <button type="button" onClick={() => set(f.k, Math.max(f.min, Number(v || def) - (f.step || 1)))}
                   data-testid={`bon-font-${f.k}-minus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">−</button>
                 <input type="number" inputMode="numeric" min={f.min} max={f.max} step={f.step || 1} value={v}
                   onChange={(e) => set(f.k, e.target.value)} data-testid={`bon-font-${f.k}-input`}
                   className="w-20 h-11 px-2 text-center rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none font-bold" />
-                <button type="button" onClick={() => set(f.k, Math.min(f.max, Number(v || f.def) + (f.step || 1)))}
+                <button type="button" onClick={() => set(f.k, Math.min(f.max, Number(v || def) + (f.step || 1)))}
                   data-testid={`bon-font-${f.k}-plus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">+</button>
                 <span className="text-xs font-semibold text-slate-500">{f.unit || 'px'}</span>
               </div>
@@ -726,7 +738,7 @@ function BonFontPicker({ value, onChange }) {
   return (
     <div data-testid="bon-font-picker">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Lettergrootte van de bon</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {BON_FONTS.map((f) => (
           <button key={f.id} type="button" onClick={() => onChange(f.id)} data-testid={`bon-font-${f.id}`}
             className={`text-left p-4 rounded-2xl border-2 transition-colors ${value === f.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>

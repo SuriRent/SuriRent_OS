@@ -122,8 +122,13 @@ def empty_section(section: str) -> dict:
         # 'thermal' = 80mm-brede bonprinter (compacte 1-kolom layout).
         "receipts": {
             "print_format": "a4",
-            "font_size": "groot",  # klein | normaal | groot | aangepast (bonprint)
-            "custom_fonts": {"base": 20, "name": 26, "title": 22, "amount": 28, "text_zoom": 420},
+            "font_size": "groot",  # klein | normaal | groot (bonprint)
+            # Per stand zelf aan te passen px-waardes + APK textZoom.
+            "presets": {
+                "klein": {"base": 12, "name": 16, "title": 13, "amount": 18, "text_zoom": 280},
+                "normaal": {"base": 16, "name": 20, "title": 18, "amount": 22, "text_zoom": 350},
+                "groot": {"base": 20, "name": 26, "title": 22, "amount": 28, "text_zoom": 420},
+            },
         },
     }.get(section, {})
 
