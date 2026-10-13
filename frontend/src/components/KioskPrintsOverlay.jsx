@@ -48,7 +48,7 @@ function ReceiptRow({ log, onPrint, onApprove, busy }) {
             {pending && <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-bold"><Clock className="w-3 h-3" /> Wacht op goedkeuring</span>}
             {done && (
               <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold" data-testid={`kiosk-print-log-done-${log.id}`}>
-                <Check className="w-3.5 h-3.5" /> Al geprint
+                <Check className="w-3.5 h-3.5" /> Afgedrukt
               </span>
             )}
           </div>
