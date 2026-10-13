@@ -34,3 +34,10 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 - `lines` zijn al opgemaakt op 32 tekens (58mm, font A). APK: per regel uitlijning/vet/grootte zetten en tekst printen via KTPsdk, daarna papier doorvoeren + snijden.
 - Zonder `printer` → huidige afhandeling (url → systeem-printvenster).
 - Live: de kiosk-WebSocket (/api/kiosk/ws) stuurt `{"type":"device_config","printer":"kt-v520"|null}` bij verbinden en bij elke wijziging; de web-app bewaart dit in localStorage `kiosk_printer`.
+
+## KT-V520 printer-modus (op afstand printen vanuit "Bonnen van vandaag")
+1. APK zet vóór het laden van de pagina: `window.__SURIRENT_KTP__ = true;` (injectedJavaScriptBeforeContentLoaded).
+2. De web-app koppelt het toestel automatisch zodra er één keer iemand op de kiosk inlogt (POST /api/kiosk/printers/register → localStorage `ktp_device_token`, blijft bewaard na uitloggen).
+3. Daarna houdt de web-app zelf een WebSocket open (role "printer"), ook op het loginscherm. Bij een opdracht van de beheerder stuurt de web-app naar de APK:
+   `{ type:"PRINT_RECEIPT", printer:"kt-v520", lines:[...], remote:true, job_id:"..." }` → APK print `lines` direct via KTPsdk, zonder dialoog.
+4. Beheer: Instellingen → Kiosk apparaten → Gekoppelde KT-V520 toestellen (hernoemen / ontkoppelen).

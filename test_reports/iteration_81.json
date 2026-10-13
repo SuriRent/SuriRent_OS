@@ -1,0 +1,25 @@
+{
+  "summary": "Tested KT-V520 remote-print feature end-to-end. Backend pytest 5/5 pass: (1) POST /api/kiosk/printers/register with kiosk session returns {printer_id,name,device_token}; without session -> 401. (2) GET/PATCH/DELETE /api/settings/kiosk-printers works as admin; rename empty -> 400, delete unknown -> 404; after delete the row disappears. (3) WS /api/kiosk/ws printer-role with invalid token closes 4401. (4) Full flow: offline printer_id -> 409; after printer connects (printer_ready), admin WS presence contains printers[]; POST remote-print -> job_id; printer WS receives {type:REMOTE_PRINT,job_id,payment_id,data:{lines:[...]}}; printer replies REMOTE_PRINT_DONE ok -> admin WS receives REMOTE_PRINT_DONE with printer name; db.kiosk_print_log.admin_printed_at persisted. (5) After DELETE /api/settings/kiosk-printers/{id}, printer WS auth with same device_token closes 4401. Frontend: Instellingen -> Kiosk apparaten section (/<slug>/admin/instellingen#kiosk-apparaten) renders data-testid=kiosk-devices and data-testid=kiosk-printers. Registered 2 printers via API, both appeared as rows with offline dot (last_seen=0) and 'Offline' label; kiosk-printer-rename-{id} opened a browser prompt and renamed row to 'TEST_UI Printer A (renamed)'. kiosk-printer-remove-{id} button is present (confirm-dialog flow). Preview-DB cleaned (all TEST_ printers deleted via API after test).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_ktp_printer.py", "/app/test_reports/pytest/ktp_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KtpPrintButton timeout (20s) uses setTimeout; if the printer later replies DONE after timeout, the admin WS still updates kiosk_print_log.admin_printed_at but the status bubble already shows 'Geen antwoord van ...'. Consider reconciling late DONE events via subscribeKioskLive (prints version bump already triggers a refresh of the list, so this is minor).",
+    "KioskPrintsOverlay POLL_MS=15000 + queuePrint 2s debounce means a successful remote print may take up to ~2s to show the 'Afgedrukt' badge; acceptable.",
+    "kiosk_remote_print requires kiosk session (cookie kiosk_token); the admin triggers it from inside the kiosk overlay so this works. Good: admin without active kiosk session cannot bypass to trigger prints.",
+    "_online_printers list is derived from last_seen>now-_PRESENCE_TTL_S; on WS close printer.last_seen is reset to 0 so admin presence updates correctly."
+  ],
+  "updated_files": ["/app/backend/tests/test_ktp_printer.py"],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "100% on admin Kiosk apparaten (list render + rename). KioskPrintsOverlay KT button not directly UI-tested (requires live kiosk admin session), but the entire WS flow driving it is verified end-to-end in the backend pytest."},
+  "test_credentials": "admin: demo@surirent.sr/demo1234; kiosk tokens minted via server.create_token({'type':'kiosk','company_id':cid},60) at /app/backend",
+  "seed_data_creation": "Created ephemeral kiosk payment + 3 KT-V520 printers during tests; all cleaned up (DELETE /api/settings/kiosk-printers/{id}, db.payments.delete_one, db.kiosk_print_log.delete_many). Final /api/settings/kiosk-printers list = [].",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest file at /app/backend/tests/test_ktp_printer.py (run with --asyncio-mode=auto). Kiosk apparaten page is at /<company_slug>/admin/instellingen#kiosk-apparaten. Admin dashboard route is slug-prefixed (/my-awesome-rentals-bv/admin). To mint kiosk_token in-process: `python -c \"import server; print(server.create_token({'sub':'kiosk','type':'kiosk','company_id':CID},60))\"` from /app/backend. For a full UI test of KioskPrintsOverlay KT button, open the kiosk via PIN as Anita (PIN 4321, slug my-awesome-rentals-bv), create a payment with kiosk_employee_id set, then run a python ws-client registered as printer; the admin overlay then shows kiosk-print-log-ktp-{logId} buttons.",
+  "rca of the issue": "No issues found."
+}
