@@ -764,3 +764,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 Offline-scherm
 - components/OfflineOverlay.jsx globaal in index.js (alle rollen/platforms); toont bij offline-event of axios network-error na mislukte ping /api/health?t=; poll 5s, verdwijnt vanzelf + dispatch surirent:refresh
+- "Weer verbonden" groene toast 3s na herstel (data-testid online-toast)

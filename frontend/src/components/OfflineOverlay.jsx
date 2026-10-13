@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, WifiOff } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 // Globaal offline-scherm (beheerder, kiosk, huurder; web, PWA, APK).
 // navigator.onLine is onbetrouwbaar → altijd bevestigen met een echte ping.
@@ -19,6 +19,7 @@ async function ping() {
 export function OfflineOverlay() {
   const [offline, setOffline] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [reconnected, setReconnected] = useState(false);
   const busy = useRef(false);
 
   const check = useCallback(async () => {
@@ -27,7 +28,10 @@ export function OfflineOverlay() {
     const ok = await ping();
     busy.current = false; setChecking(false);
     setOffline((was) => {
-      if (was && ok) window.dispatchEvent(new CustomEvent('surirent:refresh')); // data verversen na herstel
+      if (was && ok) {
+        window.dispatchEvent(new CustomEvent('surirent:refresh')); // data verversen na herstel
+        setReconnected(true);
+      }
       return !ok;
     });
   }, []);
@@ -52,7 +56,23 @@ export function OfflineOverlay() {
     return () => clearInterval(id);
   }, [offline, check]);
 
-  if (!offline) return null;
+  // "Weer verbonden" kort tonen.
+  useEffect(() => {
+    if (!reconnected) return undefined;
+    const t = setTimeout(() => setReconnected(false), 3000);
+    return () => clearTimeout(t);
+  }, [reconnected]);
+
+  if (!offline) {
+    if (!reconnected) return null;
+    return (
+      <div data-testid="online-toast" role="status" aria-live="polite"
+        className="fixed left-1/2 -translate-x-1/2 z-[2147483000] flex items-center gap-2.5 bg-emerald-500 text-white font-bold text-sm px-5 py-3 rounded-full shadow-[0_12px_30px_-8px_rgba(16,185,129,0.6)] animate-fade-in"
+        style={{ top: 'max(calc(env(safe-area-inset-top) + 12px), 16px)', fontFamily: "'Outfit', system-ui, sans-serif" }}>
+        <Wifi className="w-5 h-5" strokeWidth={2.4} /> Weer verbonden
+      </div>
+    );
+  }
   return (
     <div data-testid="offline-overlay" role="alertdialog" aria-live="assertive"
       className="fixed inset-0 z-[2147483000] bg-[#FF5C00] text-white flex items-center justify-center text-center px-6"
