@@ -102,12 +102,23 @@ export function prefetchApi(key) {
 export function usePrefetchAdmin(keys, deps = []) {
   const doneRef = useRef(new Set());
   useEffect(() => {
-    (keys || []).forEach((k) => {
+    // Wacht tot de zichtbare pagina geladen is: anders concurreren ~15
+    // achtergrond-requests met de data van het actieve scherm (bv. /admin/stats).
+    const run = () => (keys || []).forEach((k) => {
       if (!k || doneRef.current.has(k)) return;
       doneRef.current.add(k);
       try { swrPreload(k, fetcher); }
       catch { /* niet-fataal — SWR faalt zelfstandig af */ }
     });
+    let idleId = null;
+    const t = setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(run, { timeout: 3000 });
+      else run();
+    }, 1500);
+    return () => {
+      clearTimeout(t);
+      if (idleId && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
+    };
     // eslint-disable-next-line
   }, deps);
 }

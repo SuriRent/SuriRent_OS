@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './admin/instellingenSections';
@@ -1433,7 +1433,14 @@ function Overview() {
   // SWR — instant zichtbaar bij terug-navigeren; live-sync via SSE
   // (AdminDashboard globalMutate) refresht /admin/stats automatisch
   // zodra een mutatie ergens in de app plaatsvindt. Geen polling meer.
-  const { data: stats } = useApiSWR('/admin/stats');
+  // Laatste stats per bedrijf lokaal bewaren → direct zichtbaar bij herladen,
+  // SWR ververst daarna op de achtergrond.
+  const { user: me } = useAuth();
+  const statsKey = `stats_cache_${localStorage.getItem('active_company_id') || me?.company_id || me?.id || 'me'}`;
+  const cached = useMemo(() => { try { return JSON.parse(localStorage.getItem(statsKey) || 'null'); } catch { return null; } }, [statsKey]);
+  const { data: fresh } = useApiSWR('/admin/stats');
+  const stats = fresh || cached;
+  useEffect(() => { if (fresh) { try { localStorage.setItem(statsKey, JSON.stringify(fresh)); } catch { /* vol */ } } }, [fresh, statsKey]);
   const navigate = useBrandedNavigate();
   if (!stats) return <div className="text-slate-400 text-sm">Laden...</div>;
 
@@ -4235,7 +4242,7 @@ export default function AdminDashboard() {
       '/kasgeld/balance',
       '/maintenance', '/employees', '/salaries',
       '/payment-plans?status=active',
-      '/admin/stats', '/companies/me/setup-status',
+      '/companies/me/setup-status',
     ] : [],
     [isAdmin]
   );

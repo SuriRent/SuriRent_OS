@@ -175,6 +175,7 @@ export function AuthProvider({ children }) {
     try { await api.post('/auth/logout'); } catch (err) { console.warn('Admin logout API failed (continuing client-side):', err); }
     try { localStorage.setItem('auto_login_paused', '1'); } catch { /* ignore */ }
     localStorage.removeItem('admin_token');
+    try { Object.keys(localStorage).filter((k) => k.startsWith('stats_cache_')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
     localStorage.removeItem('kiosk_token');
     localStorage.removeItem(ACTIVE_COMPANY_KEY);
     // PWA-state óók opruimen zodat een volgende gebruiker (bv. een
