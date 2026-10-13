@@ -768,3 +768,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - SlowConnectionBanner (index.js): gele "Trage verbinding" pill bij gem. GET-duur >3s (laatste 4, hysterese <1,2s, 20s idle reset) of navigator.connection 2g/rtt>=1500
 - 2026-06 fix: bonnen-venster blijft open zolang medewerker actief (geen sessionStorage-gating, heropent na remount), 15s grace bij kort wegvallen, presence TTL 75s (achtergrond-throttling), visibilitychange → ping/reconnect
 - 2026-06: Bonnen van vandaag = alle kiosk-betalingen (payments.kiosk_employee_id, paid_at>=since) + print-log; blijft zichtbaar als medewerker offline (venster sluit niet automatisch); medewerkers-lijst via GET /kiosk/print-log/employees; markeren via POST /kiosk/print-log/by-payment/{pid}/printed → "Al geprint" (blijft bij herprint medewerker); poll 15s
+- 2026-06: Goedkeuren in bonnen-venster (lazy ApprovePaymentSheet uit Payments.jsx, modalClassName !z-[10050])

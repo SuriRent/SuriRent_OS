@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, Clock, Loader2, Printer, Receipt, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Clock, Loader2, Printer, Receipt, UserRound, X } from 'lucide-react';
 import { api, fmtMoney } from '../lib/api';
 import { printReceipt } from '../lib/kiosk-print';
 
 const todayStartIso = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) : '');
 const POLL_MS = 15000;
+// Lazy: handtekening-sheet uit Betalingen pas laden als de beheerder goedkeurt.
+const ApprovePaymentSheet = lazy(() => import('../pages/vastgoed/admin/Payments').then((m) => ({ default: m.ApprovePaymentSheet })));
 
 function OnlineDot({ online }) {
   return <span className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />;
@@ -29,7 +31,7 @@ function EmployeePicker({ employees, activeKeys, onPick }) {
   );
 }
 
-function ReceiptRow({ log, onPrint, busy }) {
+function ReceiptRow({ log, onPrint, onApprove, busy }) {
   const p = log.payment;
   const done = !!log.admin_printed_at;
   return (
@@ -43,6 +45,12 @@ function ReceiptRow({ log, onPrint, busy }) {
         </p>
       </div>
       <span className="font-black text-slate-900 whitespace-nowrap">{fmtMoney(p.amount, p.currency)}</span>
+      {p.status === 'pending_approval' && (
+        <button onClick={() => onApprove(log)} data-testid={`kiosk-print-log-approve-${log.id}`}
+          className="h-10 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 transition-colors">
+          <CheckCircle2 className="w-4 h-4" /> Goedkeuren
+        </button>
+      )}
       {done && (
         <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold whitespace-nowrap" data-testid={`kiosk-print-log-done-${log.id}`}>
           <Check className="w-4 h-4" /> Al geprint
@@ -61,6 +69,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
   const [todayEmps, setTodayEmps] = useState([]);
   const [logs, setLogs] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [approving, setApproving] = useState(null);
   const activeKeys = useMemo(() => new Set(active.map((e) => e.key)), [active]);
   // Actieve medewerkers + medewerkers met bonnen vandaag (ook offline).
   const employees = useMemo(() => {
@@ -122,8 +131,17 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
         {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
-        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} busy={busyId === l.id} />)}
+        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} busy={busyId === l.id} />)}
       </div>
+      {approving && (
+        <Suspense fallback={null}>
+          <ApprovePaymentSheet
+            payment={{ ...approving.payment, kiosk_employee_name: approving.employee_name }}
+            modalClassName="!z-[10050]"
+            onCancel={() => setApproving(null)}
+            onApproved={() => { setApproving(null); load(); }} />
+        </Suspense>
+      )}
     </div>
   ), document.body);
 }

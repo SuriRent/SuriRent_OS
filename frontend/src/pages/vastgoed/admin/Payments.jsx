@@ -142,7 +142,7 @@ function PendingPaymentCard({ p, onApprove }) {
 // =====================================================================
 // ApprovePaymentSheet — bottom sheet met handtekening canvas + bevestig
 // =====================================================================
-function ApprovePaymentSheet({ payment, onCancel, onApproved }) {
+export function ApprovePaymentSheet({ payment, onCancel, onApproved, modalClassName = '' }) {
   const [sig, setSig] = useState('');
   const [hasSig, setHasSig] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,7 +174,7 @@ function ApprovePaymentSheet({ payment, onCancel, onApproved }) {
   };
 
   return (
-    <KeyboardSafeModal onClose={onCancel} testId="approve-modal">
+    <KeyboardSafeModal onClose={onCancel} testId="approve-modal" className={modalClassName}>
       <KeyboardSafeModal.Header>
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">Goedkeuren</h3>

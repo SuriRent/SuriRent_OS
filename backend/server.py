@@ -10036,7 +10036,8 @@ async def kiosk_print_log(since: str, employee: Optional[str] = None, _session=D
         pq["kiosk_employee_id"] = employee
         lq["emp_key"] = employee
     pay_proj = {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "tenant_id": 1,
-                "method": 1, "status": 1, "paid_at": 1, "kiosk_employee_id": 1, "kiosk_employee_name": 1}
+                "method": 1, "status": 1, "paid_at": 1, "kiosk_employee_id": 1, "kiosk_employee_name": 1,
+                "bank_country": 1, "bank_statement_id": 1}
     pays, logs = await asyncio.gather(
         db.payments.find(pq, pay_proj).to_list(1000),
         db.kiosk_print_log.find(lq, {"_id": 0}).to_list(1000),
