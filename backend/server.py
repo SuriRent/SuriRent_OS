@@ -11073,7 +11073,7 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 # Overzicht-cache: per scope max 60s geldig; elke geslaagde mutatie (POST/PUT/
 # PATCH/DELETE op /api/*) leegt de cache via de live-sync middleware.
 _STATS_CACHE: dict = {}
-_STATS_TTL_S = 60
+_STATS_TTL_S = 10
 
 
 @api.get("/admin/stats")

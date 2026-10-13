@@ -1,6 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api';
 import { bootstrapAdminEvents, closeAdminEvents } from './admin-events';
+import { prefetchApi } from './swr';
+
+// Laad Overzicht-data alvast op de achtergrond zodat het dashboard direct klaarstaat.
+function prefetchDashboard(u) {
+  if (!u?.id || (u.role === 'superadmin' && !localStorage.getItem(ACTIVE_COMPANY_KEY))) return;
+  try { prefetchApi('/admin/stats')?.catch(() => {}); } catch { /* niet-fataal */ }
+}
 
 const AuthContext = createContext(null);
 
@@ -69,6 +76,7 @@ export function AuthProvider({ children }) {
       // useAdminEvents-hook gebruiken (Facturen-lijst, Bedrijven, …).
       // De singleton in admin-events.js voorkomt dubbele connecties.
       if (data?.id) bootstrapAdminEvents();
+      prefetchDashboard(data);
       // Backfill device_qr_token voor gebruikers die al ingelogd waren VOOR
       // we deze feature toevoegden. Eenmalig: als er geen token in
       // localStorage staat én we hebben een geldige sessie → uitgeven.
@@ -84,6 +92,7 @@ export function AuthProvider({ children }) {
       setUser(me || null);
       setActiveCompanyMeta(me?.active_company || null);
       if (me?.id) bootstrapAdminEvents();
+      prefetchDashboard(me);
     } finally {
       setLoading(false);
     }
@@ -115,6 +124,7 @@ export function AuthProvider({ children }) {
       return data;
     }
     if (data?.token) localStorage.setItem('admin_token', data.token);
+    prefetchDashboard(data.user);
     // "Onthoud mij" vóór setUser opslaan (setUser triggert direct de redirect).
     try {
       localStorage.removeItem('auto_login_paused');
