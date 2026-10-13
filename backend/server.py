@@ -5277,6 +5277,128 @@ async def stop_impersonating(response: Response, user=Depends(get_current_user))
 # (SAAS_SETTINGS_ID is declared earlier near the billing helpers)
 
 
+# ---------- Android-app (APK) releases — superadmin upload, publieke download ----------
+import object_storage as _objstore  # noqa: E402
+
+_APK_CHUNK_MAX = 6 * 1024 * 1024
+_APK_MAX_SIZE = 300 * 1024 * 1024
+
+
+class ApkUploadInit(BaseModel):
+    filename: str
+    size: int
+    version: str
+    notes: Optional[str] = ""
+
+
+def _apk_public(r: dict) -> dict:
+    return {k: r.get(k) for k in ("id", "version", "notes", "filename", "size", "created_at", "downloads")}
+
+
+@api.post("/superadmin/apk/upload/init")
+async def apk_upload_init(body: ApkUploadInit, user=Depends(require_role("superadmin"))):
+    if not body.filename.lower().endswith(".apk"):
+        raise HTTPException(status_code=400, detail="Alleen .apk bestanden zijn toegestaan")
+    if body.size <= 0 or body.size > _APK_MAX_SIZE:
+        raise HTTPException(status_code=400, detail="Bestand is te groot (max 300 MB)")
+    if not body.version.strip():
+        raise HTTPException(status_code=400, detail="Versienummer is verplicht")
+    uid = str(uuid.uuid4())
+    await db.apk_uploads.insert_one({"id": uid, "filename": body.filename, "size": body.size,
+                                     "version": body.version.strip(), "notes": (body.notes or "").strip(),
+                                     "created_by": user["id"], "created_at": iso(now_utc())})
+    return {"upload_id": uid, "chunk_size": 4 * 1024 * 1024}
+
+
+@api.put("/superadmin/apk/upload/{upload_id}/chunk/{index}")
+async def apk_upload_chunk(upload_id: str, index: int, request: Request, user=Depends(require_role("superadmin"))):
+    if not await db.apk_uploads.find_one({"id": upload_id}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="Upload niet gevonden")
+    data = await request.body()
+    if not data or len(data) > _APK_CHUNK_MAX:
+        raise HTTPException(status_code=400, detail="Ongeldig stuk")
+    # Stukken in Mongo i.p.v. /tmp: werkt ook met meerdere server-pods.
+    await db.apk_chunks.update_one({"upload_id": upload_id, "index": index},
+                                   {"$set": {"data": data, "at": iso(now_utc())}}, upsert=True)
+    return {"ok": True, "index": index}
+
+
+@api.post("/superadmin/apk/upload/{upload_id}/complete")
+async def apk_upload_complete(upload_id: str, user=Depends(require_role("superadmin"))):
+    up = await db.apk_uploads.find_one({"id": upload_id}, {"_id": 0})
+    if not up:
+        raise HTTPException(status_code=404, detail="Upload niet gevonden")
+    parts = await db.apk_chunks.find({"upload_id": upload_id}, {"_id": 0, "index": 1, "data": 1}).sort("index", 1).to_list(None)
+    blob = b"".join(bytes(p["data"]) for p in parts)
+    if len(blob) != up["size"] or [p["index"] for p in parts] != list(range(len(parts))):
+        raise HTTPException(status_code=400, detail="Upload onvolledig — probeer opnieuw")
+    if blob[:2] != b"PK":
+        raise HTTPException(status_code=400, detail="Dit is geen geldig APK-bestand")
+    rid = str(uuid.uuid4())
+    path = f"{_objstore.APP_NAME}/apk/{rid}.apk"
+    try:
+        res = await asyncio.to_thread(_objstore.put_object, path, blob, "application/vnd.android.package-archive")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Opslaan mislukt: {e}")
+    rel = {"id": rid, "version": up["version"], "notes": up["notes"], "filename": up["filename"],
+           "size": res.get("size") or len(blob), "storage_path": res["path"], "is_deleted": False,
+           "downloads": 0, "created_by": user["id"], "created_at": iso(now_utc())}
+    await db.app_releases.insert_one(rel)
+    await db.apk_chunks.delete_many({"upload_id": upload_id})
+    await db.apk_uploads.delete_one({"id": upload_id})
+    return _apk_public(rel)
+
+
+@api.get("/superadmin/apk")
+async def apk_list(user=Depends(require_role("superadmin"))):
+    docs = await db.app_releases.find({"is_deleted": False}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return [_apk_public(d) for d in docs]
+
+
+@api.delete("/superadmin/apk/{release_id}")
+async def apk_delete(release_id: str, user=Depends(require_role("superadmin"))):
+    res = await db.app_releases.update_one({"id": release_id, "is_deleted": False},
+                                           {"$set": {"is_deleted": True, "deleted_at": iso(now_utc())}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Versie niet gevonden")
+    return {"ok": True}
+
+
+async def _latest_apk():
+    return await db.app_releases.find_one({"is_deleted": False}, {"_id": 0}, sort=[("created_at", -1)])
+
+
+@api.get("/public/apk/latest")
+async def apk_latest_public():
+    r = await _latest_apk()
+    return {"available": bool(r), "release": _apk_public(r) if r else None}
+
+
+@api.get("/public/apk/download")
+async def apk_download_public():
+    r = await _latest_apk()
+    if not r:
+        raise HTTPException(status_code=404, detail="Nog geen app beschikbaar")
+    try:
+        resp = await asyncio.to_thread(_objstore.open_object_stream, r["storage_path"])
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Download mislukt: {e}")
+    await db.app_releases.update_one({"id": r["id"]}, {"$inc": {"downloads": 1}})
+    safe_ver = re.sub(r"[^0-9A-Za-z._-]", "", r["version"]) or "latest"
+
+    def gen():
+        try:
+            yield from resp.iter_content(chunk_size=256 * 1024)
+        finally:
+            resp.close()
+
+    return StreamingResponse(gen(), media_type="application/vnd.android.package-archive", headers={
+        "Content-Disposition": f'attachment; filename="SuriRent-{safe_ver}.apk"',
+        "Content-Length": str(r["size"]),
+        "Cache-Control": "no-store",
+    })
+
+
 @api.get("/superadmin/settings")
 async def get_saas_settings(user=Depends(require_role("superadmin"))):
     doc = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0}) or {}

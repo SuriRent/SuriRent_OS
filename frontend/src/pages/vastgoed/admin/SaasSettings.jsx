@@ -3,6 +3,7 @@ import {
   Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import ApkReleases from './ApkReleases';
 
 function Section({ title, icon: Icon, children, accent }) {
   return (
@@ -378,6 +379,8 @@ export default function SaasSettings() {
             onChange={(v) => upd('branding', { app_url: v })} testid="branding-app-url"
             hint="Gebruikt in welkom-mails en kwitanties. Override van APP_PUBLIC_URL env." />
         </Section>
+
+        <ApkReleases />
       </div>
     </div>
   );

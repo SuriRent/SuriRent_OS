@@ -17,6 +17,33 @@ import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
+const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
+
+// Nieuwste APK-release (superadmin upload); null = geen knop tonen.
+function useLatestApk() {
+  const [rel, setRel] = useState(null);
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/public/apk/latest`)
+      .then((r) => r.json()).then((d) => setRel(d?.release || null)).catch(() => {});
+  }, []);
+  return rel;
+}
+
+function ApkDownloadButton({ rel, variant, testid }) {
+  if (!rel) return null;
+  const mb = `${(rel.size / 1024 / 1024).toFixed(0)} MB`;
+  const cls = variant === 'footer'
+    ? 'inline-flex items-center gap-2 text-[#FF8A3D] hover:text-orange-300 font-bold'
+    : 'inline-flex items-center justify-center gap-2 h-12 lg:h-13 px-6 rounded-md bg-white hover:bg-orange-50 text-[#0F0F0F] text-sm lg:text-base font-black transition-colors';
+  return (
+    <a href={APK_URL} download data-testid={testid} className={cls}>
+      <Download className="w-5 h-5" />
+      <span>Download de Android-app</span>
+      <span className={`text-xs font-bold ${variant === 'footer' ? 'text-white/40' : 'text-slate-500'}`}>v{rel.version} · {mb}</span>
+    </a>
+  );
+}
+
 const SHOTS = {
   overzicht:     'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png',
   locaties:      'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/nlo3hnqf_2.png',
@@ -185,7 +212,7 @@ function SecondaryNav() {
 // =============================================================================
 // Hero — grote ABN-stijl foto banner (vol bleed, lange hoogte) + greeting card
 // =============================================================================
-function Hero({ onDemo, onWhatsApp }) {
+function Hero({ onDemo, onWhatsApp, apk }) {
   const [greeting, setGreeting] = useState('Goedenavond');
   const [query, setQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -265,6 +292,7 @@ function Hero({ onDemo, onWhatsApp }) {
                 <MessageCircle className="w-5 h-5" />
                 <EditableText path="v2.hero.cta_secondary" fallback="WhatsApp ons" as="span" />
               </button>
+              <ApkDownloadButton rel={apk} testid="hero-apk-download" />
             </div>
           </div>
 
@@ -1252,7 +1280,7 @@ function InstallPwaSection({ install, installed, platform, showIosModal, setShow
 // =============================================================================
 // Footer
 // =============================================================================
-function Footer({ onLogin }) {
+function Footer({ onLogin, apk }) {
   return (
     <footer className="bg-[#0F0F0F] text-white/60">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10 py-12 lg:py-16">
@@ -1311,6 +1339,7 @@ function Footer({ onLogin }) {
                   Beheerder inloggen →
                 </button>
               </li>
+              {apk && <li className="pt-1"><ApkDownloadButton rel={apk} variant="footer" testid="footer-apk-download" /></li>}
             </ul>
           </div>
         </div>
@@ -1357,6 +1386,7 @@ export default function MarketingLandingV2() {
   const navigate = useNavigate();
   const { refresh: refreshAuth } = useAuth();
   const pwaInstall = usePwaInstall();
+  const apk = useLatestApk();
 
   // Edit mode wordt geactiveerd via ?edit=1 (alleen wanneer pagina in iframe
   // staat van de LiveLandingEditor superadmin tool).
@@ -1543,7 +1573,7 @@ export default function MarketingLandingV2() {
         )}
         <TopHeader onLogin={onLogin} onRegister={onRegister} />
         <SecondaryNav />
-        <Hero onDemo={onDemo} onWhatsApp={onWhatsApp} />
+        <Hero onDemo={onDemo} onWhatsApp={onWhatsApp} apk={apk} />
         <ProductGrid onDemo={onDemo} onLogin={onLogin} />
         <FeatureRows />
         <KioskSection />
@@ -1555,7 +1585,7 @@ export default function MarketingLandingV2() {
           platform={pwaInstall.platform}
           showIosModal={pwaInstall.showIosModal}
           setShowIosModal={pwaInstall.setShowIosModal} />
-        <Footer onLogin={onLogin} />
+        <Footer onLogin={onLogin} apk={apk} />
       </div>
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={registerPlan} />
     </EditableProvider>
