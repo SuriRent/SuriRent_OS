@@ -5307,7 +5307,8 @@ async def apk_upload_init(body: ApkUploadInit, user=Depends(require_role("supera
     await db.apk_uploads.insert_one({"id": uid, "filename": body.filename, "size": body.size,
                                      "version": body.version.strip(), "notes": (body.notes or "").strip(),
                                      "created_by": user["id"], "created_at": iso(now_utc())})
-    return {"upload_id": uid, "chunk_size": 4 * 1024 * 1024}
+    # 1 MB: blijft onder de body-limiet van proxies/ingress in productie.
+    return {"upload_id": uid, "chunk_size": 1024 * 1024}
 
 
 @api.put("/superadmin/apk/upload/{upload_id}/chunk/{index}")
@@ -5325,28 +5326,52 @@ async def apk_upload_chunk(upload_id: str, index: int, request: Request, user=De
 
 @api.post("/superadmin/apk/upload/{upload_id}/complete")
 async def apk_upload_complete(upload_id: str, user=Depends(require_role("superadmin"))):
+    """Start het opslaan op de achtergrond (grote APK's duren langer dan de
+    proxy-timeout). Frontend pollt GET .../status."""
     up = await db.apk_uploads.find_one({"id": upload_id}, {"_id": 0})
     if not up:
         raise HTTPException(status_code=404, detail="Upload niet gevonden")
-    parts = await db.apk_chunks.find({"upload_id": upload_id}, {"_id": 0, "index": 1, "data": 1}).sort("index", 1).to_list(None)
-    blob = b"".join(bytes(p["data"]) for p in parts)
-    if len(blob) != up["size"] or [p["index"] for p in parts] != list(range(len(parts))):
+    if up.get("state") in ("processing", "done"):
+        return {"state": up["state"]}
+    parts = await db.apk_chunks.find({"upload_id": upload_id}, {"_id": 0, "index": 1}).sort("index", 1).to_list(None)
+    if [p["index"] for p in parts] != list(range(len(parts))):
         raise HTTPException(status_code=400, detail="Upload onvolledig — probeer opnieuw")
-    if blob[:2] != b"PK":
-        raise HTTPException(status_code=400, detail="Dit is geen geldig APK-bestand")
-    rid = str(uuid.uuid4())
-    path = f"{_objstore.APP_NAME}/apk/{rid}.apk"
+    await db.apk_uploads.update_one({"id": upload_id}, {"$set": {"state": "processing"}})
+    asyncio.create_task(_apk_finalize(upload_id, up, user["id"]))
+    return {"state": "processing"}
+
+
+async def _apk_finalize(upload_id: str, up: dict, user_id: str):
+    async def fail(msg):
+        await db.apk_uploads.update_one({"id": upload_id}, {"$set": {"state": "error", "error": msg}})
     try:
-        res = await asyncio.to_thread(_objstore.put_object, path, blob, "application/vnd.android.package-archive")
+        blob = bytearray()
+        async for p in db.apk_chunks.find({"upload_id": upload_id}, {"_id": 0, "data": 1}).sort("index", 1):
+            blob += bytes(p["data"])
+        if len(blob) != up["size"]:
+            return await fail("Upload onvolledig — probeer opnieuw")
+        if blob[:2] != b"PK":
+            return await fail("Dit is geen geldig APK-bestand")
+        rid = str(uuid.uuid4())
+        res = await asyncio.to_thread(_objstore.put_object, f"{_objstore.APP_NAME}/apk/{rid}.apk",
+                                      bytes(blob), "application/vnd.android.package-archive")
+        rel = {"id": rid, "version": up["version"], "notes": up["notes"], "filename": up["filename"],
+               "size": res.get("size") or len(blob), "storage_path": res["path"], "is_deleted": False,
+               "downloads": 0, "created_by": user_id, "created_at": iso(now_utc())}
+        await db.app_releases.insert_one(rel)
+        await db.apk_chunks.delete_many({"upload_id": upload_id})
+        await db.apk_uploads.update_one({"id": upload_id}, {"$set": {"state": "done", "release_id": rid}})
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Opslaan mislukt: {e}")
-    rel = {"id": rid, "version": up["version"], "notes": up["notes"], "filename": up["filename"],
-           "size": res.get("size") or len(blob), "storage_path": res["path"], "is_deleted": False,
-           "downloads": 0, "created_by": user["id"], "created_at": iso(now_utc())}
-    await db.app_releases.insert_one(rel)
-    await db.apk_chunks.delete_many({"upload_id": upload_id})
-    await db.apk_uploads.delete_one({"id": upload_id})
-    return _apk_public(rel)
+        print(f"[apk] finalize failed: {e}")
+        await fail(f"Opslaan mislukt: {e}")
+
+
+@api.get("/superadmin/apk/upload/{upload_id}/status")
+async def apk_upload_status(upload_id: str, user=Depends(require_role("superadmin"))):
+    up = await db.apk_uploads.find_one({"id": upload_id}, {"_id": 0, "state": 1, "error": 1, "release_id": 1})
+    if not up:
+        raise HTTPException(status_code=404, detail="Upload niet gevonden")
+    return {"state": up.get("state") or "uploading", "error": up.get("error"), "release_id": up.get("release_id")}
 
 
 @api.get("/superadmin/apk")

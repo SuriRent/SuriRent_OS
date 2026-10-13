@@ -5,12 +5,27 @@ import { api, formatError } from '../../../lib/api';
 export const fmtSize = (b) => `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 const fmtDate = (s) => new Date(s).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Eén stuk met tot 3 herpogingen (mobiel netwerk kan even haperen).
+async function putChunk(url, blob) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await api.put(url, blob, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 120000 });
+    } catch (e) {
+      if (attempt >= 3 || (e?.response && e.response.status < 500)) throw e;
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+}
+
 function UploadForm({ onDone }) {
   const [file, setFile] = useState(null);
   const [version, setVersion] = useState('');
   const [notes, setNotes] = useState('');
   const [progress, setProgress] = useState(null);
   const [err, setErr] = useState('');
+  const [stage, setStage] = useState('');
   const inputRef = useRef(null);
 
   const upload = async () => {
@@ -21,16 +36,23 @@ function UploadForm({ onDone }) {
       const total = Math.ceil(file.size / cs);
       for (let i = 0; i < total; i += 1) {
         const blob = file.slice(i * cs, (i + 1) * cs);
-        await api.put(`/superadmin/apk/upload/${init.upload_id}/chunk/${i}`, blob, { headers: { 'Content-Type': 'application/octet-stream' } });
-        setProgress(Math.round(((i + 1) / total) * 95));
+        await putChunk(`/superadmin/apk/upload/${init.upload_id}/chunk/${i}`, blob);
+        setProgress(Math.round(((i + 1) / total) * 90));
       }
       await api.post(`/superadmin/apk/upload/${init.upload_id}/complete`);
+      setStage('Opslaan…');
+      for (;;) {
+        await sleep(2000);
+        const { data: st } = await api.get(`/superadmin/apk/upload/${init.upload_id}/status`);
+        if (st.state === 'done') break;
+        if (st.state === 'error') throw new Error(st.error || 'Opslaan mislukt');
+      }
       setProgress(100);
       setFile(null); setVersion(''); setNotes('');
       if (inputRef.current) inputRef.current.value = '';
       onDone();
-    } catch (e) { setErr(formatError(e)); }
-    finally { setTimeout(() => setProgress(null), 800); }
+    } catch (e) { setErr(e?.response ? formatError(e) : (e?.message || 'Upload mislukt')); }
+    finally { setStage(''); setTimeout(() => setProgress(null), 800); }
   };
 
   const busy = progress !== null;
@@ -54,7 +76,7 @@ function UploadForm({ onDone }) {
       <button type="button" onClick={upload} disabled={!file || !version.trim() || busy} data-testid="apk-upload-btn"
         className="w-full h-11 rounded-xl bg-[#FF5C00] hover:bg-[#e65300] text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-        {busy ? `Uploaden… ${progress}%` : file ? `Upload ${file.name} (${fmtSize(file.size)})` : 'Kies eerst een .apk bestand'}
+        {busy ? (stage || `Uploaden… ${progress}%`) : file ? `Upload ${file.name} (${fmtSize(file.size)})` : 'Kies eerst een .apk bestand'}
       </button>
     </div>
   );
