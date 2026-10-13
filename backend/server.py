@@ -283,6 +283,17 @@ async def lifespan(app: FastAPI):
     await db.apartments.create_index("id")
     await db.tenants.create_index("id")
     await db.kasgeld.create_index("company_id")
+    # Lijst-indexen (filter op bedrijf + sortering)
+    await db.apartments.create_index([("company_id", 1), ("number", 1)])
+    await db.apartments.create_index([("company_id", 1), ("location_id", 1)])
+    await db.locations.create_index([("company_id", 1), ("name", 1)])
+    await db.contracts.create_index([("company_id", 1), ("created_at", -1)])
+    await db.deposits.create_index([("company_id", 1), ("created_at", -1)])
+    await db.maintenance.create_index([("company_id", 1), ("created_at", -1)])
+    await db.salaries.create_index([("company_id", 1), ("paid_at", -1)])
+    await db.employees.create_index([("company_id", 1), ("name", 1)])
+    await db.payment_plans.create_index([("company_id", 1), ("created_at", -1)])
+    await db.users.create_index("employee_id")
     await db.invoices.create_index([("tenant_id", 1), ("period_year", 1), ("period_month", 1)])
     await db.invoices.create_index("id")
     await db.invoices.create_index([("company_id", 1), ("status", 1), ("due_date", 1)])
@@ -6722,6 +6733,15 @@ def _strip_doc(doc):
     return doc
 
 
+async def _by_id(coll: str, ids, fields: dict) -> dict:
+    """Batch-lookup {id: doc} voor list-endpoints (vervangt per-item find_one)."""
+    ids = [i for i in set(ids) if i]
+    if not ids:
+        return {}
+    docs = await db[coll].find({"id": {"$in": ids}}, {"_id": 0, "id": 1, **fields}).to_list(None)
+    return {d["id"]: d for d in docs}
+
+
 async def _enrich_apartment(apt: dict) -> dict:
     tenant_name = None
     if apt.get("tenant_id"):
@@ -6732,8 +6752,11 @@ async def _enrich_apartment(apt: dict) -> dict:
 
 @api.get("/apartments", response_model=List[ApartmentOut])
 async def list_apartments(user=Depends(get_current_user)):
-    docs = await db.apartments.find(scope(user), {"_id": 0}).sort("number", 1).to_list(1000)
-    return [await _enrich_apartment(d) for d in docs]
+    async def compute():
+        docs = await db.apartments.find(scope(user), {"_id": 0}).sort("number", 1).to_list(1000)
+        t_by = await _by_id("tenants", [d.get("tenant_id") for d in docs], {"name": 1})
+        return [{**d, "tenant_name": t_by.get(d.get("tenant_id"), {}).get("name")} for d in docs]
+    return await _list_cached("apartments", user, compute)
 
 
 @api.post("/apartments", response_model=ApartmentOut)
@@ -9538,8 +9561,17 @@ async def _enrich_location(loc: dict) -> dict:
 
 @api.get("/locations", response_model=List[LocationOut])
 async def list_locations(user=Depends(get_current_user)):
-    docs = await db.locations.find(scope(user), {"_id": 0}).sort("name", 1).to_list(1000)
-    return [await _enrich_location(d) for d in docs]
+    async def compute():
+        docs = await db.locations.find(scope(user), {"_id": 0}).sort("name", 1).to_list(1000)
+        counts = await db.apartments.aggregate([
+            {"$match": {**scope(user), "location_id": {"$in": [d["id"] for d in docs]}}},
+            {"$group": {"_id": "$location_id", "total": {"$sum": 1},
+                        "occupied": {"$sum": {"$cond": [{"$eq": ["$status", "occupied"]}, 1, 0]}}}},
+        ]).to_list(None)
+        c_by = {c["_id"]: c for c in counts}
+        return [{**d, "apartments_total": c_by.get(d["id"], {}).get("total", 0),
+                 "apartments_occupied": c_by.get(d["id"], {}).get("occupied", 0)} for d in docs]
+    return await _list_cached("locations", user, compute)
 
 
 @api.post("/locations", response_model=LocationOut)
@@ -11742,8 +11774,14 @@ async def list_contracts(user=Depends(get_current_user), tenant_id: Optional[str
     q = dict(scope(user))
     if tenant_id:
         q["tenant_id"] = tenant_id
-    docs = await db.contracts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [await _enrich_contract(d) for d in docs]
+    async def compute():
+        docs = await db.contracts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+        t_by, a_by = await asyncio.gather(
+            _by_id("tenants", [d.get("tenant_id") for d in docs], {"name": 1}),
+            _by_id("apartments", [d.get("apartment_id") for d in docs], {"number": 1}))
+        return [{**d, "tenant_name": t_by.get(d.get("tenant_id"), {}).get("name"),
+                 "apartment_number": a_by.get(d.get("apartment_id"), {}).get("number")} for d in docs]
+    return await _list_cached("contracts", user, compute, tenant_id or "")
 
 
 @api.post("/contracts", response_model=ContractOut)
@@ -13641,6 +13679,10 @@ class EmployeeKioskPinIn(BaseModel):
 
 @api.get("/employees", response_model=List[EmployeeOut])
 async def list_employees(user=Depends(get_current_user)):
+    return await _list_cached("employees", user, lambda: _list_employees_compute(user))
+
+
+async def _list_employees_compute(user: dict):
     docs = await db.employees.find(scope(user), {"_id": 0}).sort("name", 1).to_list(500)
     ids = [d["id"] for d in docs]
     with_login = {u["employee_id"] async for u in db.users.find({"employee_id": {"$in": ids}}, {"_id": 0, "employee_id": 1})}
@@ -13798,8 +13840,11 @@ async def list_salaries(user=Depends(get_current_user), employee_id: Optional[st
     q = dict(scope(user))
     if employee_id:
         q["employee_id"] = employee_id
-    docs = await db.salaries.find(q, {"_id": 0}).sort("paid_at", -1).to_list(500)
-    return [await _enrich_salary(d) for d in docs]
+    async def compute():
+        docs = await db.salaries.find(q, {"_id": 0}).sort("paid_at", -1).to_list(500)
+        e_by = await _by_id("employees", [d.get("employee_id") for d in docs], {"name": 1})
+        return [{**d, "employee_name": e_by.get(d.get("employee_id"), {}).get("name")} for d in docs]
+    return await _list_cached("salaries", user, compute, employee_id or "")
 
 
 @api.post("/salaries", response_model=SalaryOut)
@@ -13882,8 +13927,18 @@ async def _enrich_deposit(d: dict) -> dict:
 
 @api.get("/deposits", response_model=List[DepositOut])
 async def list_deposits(user=Depends(get_current_user)):
-    docs = await db.deposits.find(scope(user), {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [await _enrich_deposit(d) for d in docs]
+    async def compute():
+        docs = await db.deposits.find(scope(user), {"_id": 0}).sort("created_at", -1).to_list(500)
+        t_by = await _by_id("tenants", [d.get("tenant_id") for d in docs], {"name": 1, "apartment_id": 1})
+        a_by = await _by_id("apartments", [t.get("apartment_id") for t in t_by.values()], {"number": 1})
+        out = []
+        for d in docs:
+            t = t_by.get(d.get("tenant_id"))
+            aid = t.get("apartment_id") if t else None
+            out.append({**d, "tenant_name": t["name"] if t else None, "apartment_id": aid,
+                        "apartment_number": a_by.get(aid, {}).get("number") if aid else None})
+        return out
+    return await _list_cached("deposits", user, compute)
 
 
 @api.post("/deposits", response_model=DepositOut)
@@ -13984,8 +14039,11 @@ async def list_maintenance(user=Depends(get_current_user), apartment_id: Optiona
     q = dict(scope(user))
     if apartment_id:
         q["apartment_id"] = apartment_id
-    docs = await db.maintenance.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [await _enrich_maint(d) for d in docs]
+    async def compute():
+        docs = await db.maintenance.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+        a_by = await _by_id("apartments", [d.get("apartment_id") for d in docs], {"number": 1})
+        return [{**d, "apartment_number": a_by.get(d.get("apartment_id"), {}).get("number")} for d in docs]
+    return await _list_cached("maintenance", user, compute, apartment_id or "")
 
 
 @api.post("/maintenance", response_model=MaintenanceOut)
@@ -14077,7 +14135,7 @@ _DUTCH_MONTH_ABBR = [
 ]
 
 
-async def _kasgeld_payment_description(p: dict) -> str:
+async def _kasgeld_payment_description(p: dict, t_by: Optional[dict] = None, a_by: Optional[dict] = None) -> str:
     """`{receipt_number} — HUIS {apt} · Maand {maand-nl}`. Fallback naar
     huurdersnaam wanneer het appartement onbekend is en naar `MM/YYYY`
     wanneer de maand niet vertaalbaar is."""
@@ -14085,7 +14143,7 @@ async def _kasgeld_payment_description(p: dict) -> str:
     apt_id = p.get("apartment_id")
     # Als geen apartment_id op de payment: haal via tenant.
     if not apt_id and p.get("tenant_id"):
-        t = await db.tenants.find_one(
+        t = t_by.get(p["tenant_id"]) if t_by is not None else await db.tenants.find_one(
             {"id": p["tenant_id"]},
             {"_id": 0, "apartment_id": 1, "name": 1},
         )
@@ -14094,7 +14152,7 @@ async def _kasgeld_payment_description(p: dict) -> str:
     else:
         tenant_name = ""
     if apt_id:
-        apt = await db.apartments.find_one(
+        apt = a_by.get(apt_id) if a_by is not None else await db.apartments.find_one(
             {"id": apt_id}, {"_id": 0, "number": 1},
         )
         num = ((apt or {}).get("number") or "").strip()
@@ -14107,7 +14165,7 @@ async def _kasgeld_payment_description(p: dict) -> str:
                 apt_label = f"HUIS {num}"
     # Fallback: huurdersnaam als apartement niet gevonden
     if not apt_label and not tenant_name and p.get("tenant_id"):
-        t = await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
+        t = t_by.get(p["tenant_id"]) if t_by is not None else await db.tenants.find_one({"id": p["tenant_id"]}, {"_id": 0, "name": 1})
         tenant_name = (t or {}).get("name") or ""
     who = apt_label or tenant_name
 
@@ -14136,6 +14194,10 @@ async def _kasgeld_payment_description(p: dict) -> str:
 
 @api.get("/kasgeld", response_model=List[CashEntryOut])
 async def list_cash(user=Depends(get_current_user)):
+    return await _list_cached("kasgeld", user, lambda: _list_cash_compute(user))
+
+
+async def _list_cash_compute(user: dict):
     """Retourneert alle kasmutaties + alle goedgekeurde binnenkomende
     betalingen (uit /betalingen, /facturen, kiosk) als één unified feed.
 
@@ -14157,15 +14219,18 @@ async def list_cash(user=Depends(get_current_user)):
         m["_sort_at"] = m.get("created_at") or ""
 
     payments: list[dict] = []
-    async for p in db.payments.find(
+    pay_docs = await db.payments.find(
         {**scope(user), "status": "approved"},
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
          "tenant_id": 1, "apartment_id": 1, "period_month": 1,
          "period_year": 1, "note": 1,
          "kiosk_employee_id": 1, "kiosk_employee_name": 1, "approved_by": 1},
-    ):
-        desc = await _kasgeld_payment_description(p)
+    ).to_list(None)
+    t_by = await _by_id("tenants", [p.get("tenant_id") for p in pay_docs], {"name": 1, "apartment_id": 1})
+    a_by = await _by_id("apartments", [p.get("apartment_id") or t_by.get(p.get("tenant_id"), {}).get("apartment_id") for p in pay_docs], {"number": 1})
+    for p in pay_docs:
+        desc = await _kasgeld_payment_description(p, t_by, a_by)
         paid_iso = p.get("paid_at") or iso(now_utc())
         # Sort-key = echte insert-tijd van de payment (kan verschillen van
         # paid_at wanneer een payment historisch is gedateerd, bijv. seed).

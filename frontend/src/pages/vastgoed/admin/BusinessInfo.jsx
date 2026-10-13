@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   Save, Loader2, Check, AlertCircle, Building2, Mail, Phone, MapPin, Landmark,
 } from 'lucide-react';
@@ -6,8 +7,8 @@ import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 export default function BusinessInfo() {
-  const [b, setB] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [b, setB] = useState(() => readSeed('/companies/me/branding') || {});
+  const [loading, setLoading] = useState(() => !readSeed('/companies/me/branding'));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -20,7 +21,7 @@ export default function BusinessInfo() {
   const load = useCallback(async () => {
     try {
       const { data } = await api.get('/companies/me/branding');
-      setB(data || {});
+      setB(writeSeed('/companies/me/branding', data) || {});
     } catch (e) { setErr(formatError(e)); }
     finally { setLoading(false); }
   }, []);

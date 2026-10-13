@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { readSeed, writeSeed } from '../../../lib/swr';
 import { CreditCard, Landmark, Check, AlertCircle, Loader2, Save, Zap } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
@@ -40,11 +41,16 @@ export default function StripeCompanySettings() {
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState({ type: '', text: '' });
 
-  const load = useCallback(async () => {
-    const { data } = await api.get('/company/stripe-config');
+  const apply = useCallback((data) => {
     setCfg(data); setMode(data.mode); setMethods({ card: data.card, ideal: data.ideal });
     setKeys({ test: { publishable_key: data.test.publishable_key }, live: { publishable_key: data.live.publishable_key } });
   }, []);
+  const load = useCallback(async () => {
+    const { data } = await api.get('/company/stripe-config');
+    apply(writeSeed('/company/stripe-config', data));
+  }, [apply]);
+  // Laatst bekende config direct tonen; verse data volgt via load().
+  useEffect(() => { const s = readSeed('/company/stripe-config'); if (s) apply(s); }, [apply]);
   useEffect(() => { load().catch((e) => setMsg({ type: 'err', text: formatError(e) })); }, [load]);
 
   const run = async (kind, fn, ok) => {

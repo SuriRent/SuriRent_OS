@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   CheckCircle2, AlertCircle, ArrowUp, ArrowDown, Loader2, Landmark, Banknote, Copy, Check, Crown,
   Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert, AlertTriangle, Clock,
@@ -388,24 +389,25 @@ function BankPanel({ details, invoice, company, onSuccess, onErr }) {
 }
 
 export default function MijnAbonnement() {
-  const [me, setMe] = useState(null);
-  const [plans, setPlans] = useState([]);
-  const [bank, setBank] = useState(null);
-  const [invoices, setInvoices] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const seed = readSeed('/billing/me:bundle');
+  const [me, setMe] = useState(seed?.me ?? null);
+  const [plans, setPlans] = useState(seed?.plans ?? []);
+  const [bank, setBank] = useState(seed?.bank ?? null);
+  const [invoices, setInvoices] = useState(seed?.invoices ?? []);
+  const [payments, setPayments] = useState(seed?.payments ?? []);
+  const [loading, setLoading] = useState(!seed);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-  const [stripeOn, setStripeOn] = useState(false);
+  const [stripeOn, setStripeOn] = useState(() => !!readSeed('/saas-stripe/public-config'));
   const [tab, setTab] = useState('invoices');
-  const [autopay, setAutopay] = useState(null);
+  const [autopay, setAutopay] = useState(() => readSeed('/billing/me/autopay') || null);
   const [apBusy, setApBusy] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    api.get('/saas-stripe/public-config').then(({ data }) => setStripeOn(!!data?.enabled)).catch(() => setStripeOn(false));
+    api.get('/saas-stripe/public-config').then(({ data }) => setStripeOn(!!writeSeed('/saas-stripe/public-config', data?.enabled ? 1 : 0))).catch(() => setStripeOn(false));
   }, []);
 
   const goPay = (invoiceId, method) => {
@@ -424,13 +426,14 @@ export default function MijnAbonnement() {
   };
 
   const load = useCallback(async () => {
-    api.get('/billing/me/autopay').then(({ data }) => setAutopay(data)).catch(() => {});
+    api.get('/billing/me/autopay').then(({ data }) => setAutopay(writeSeed('/billing/me/autopay', data))).catch(() => {});
     try {
       const [m, p, b, inv, pay] = await Promise.all([
         api.get('/billing/me'), api.get('/billing/me/plans'), api.get('/billing/bank-details'),
         api.get('/billing/me/invoices'), api.get('/billing/me/payments'),
       ]);
       setMe(m.data); setPlans(p.data); setBank(b.data); setInvoices(inv.data); setPayments(pay.data);
+      writeSeed('/billing/me:bundle', { me: m.data, plans: p.data, bank: b.data, invoices: inv.data, payments: pay.data });
     } catch (e) { setErr(formatError(e)); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);

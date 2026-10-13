@@ -2,11 +2,18 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { playApproveConfirm, playSwoosh, playErrorBuzz } from '../../../lib/tap-sounds';
+import { useSWRConfig } from 'swr';
 import { useApiSWR } from '../../../lib/swr';
 
 // =====================================================================
 // Top-level — list of payment plans + "Nieuwe regeling" knop
 // =====================================================================
+// Gebruik SWR-cache (gevuld door andere pagina's) en val terug op een verse call.
+const cachedGet = (cache, key) => {
+  const hit = cache.get(key)?.data;
+  return hit ? Promise.resolve({ data: hit }) : api.get(key);
+};
+
 export default function PaymentPlans() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
@@ -61,7 +68,7 @@ export default function PaymentPlans() {
   }, []);
 
   if (detail) {
-    return <PlanDetail planId={detail.id} onBack={() => { setDetail(null); load(); }} />;
+    return <PlanDetail planId={detail.id} initial={detail} onBack={() => { setDetail(null); load(); }} />;
   }
 
   return (
@@ -176,9 +183,10 @@ function CreatePlanSheet({ onClose, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  // Load tenants once
+  // Load tenants once (SWR-cache als die er al is)
+  const { cache } = useSWRConfig();
   useEffect(() => {
-    api.get('/tenants').then((r) => setTenants((r.data || []).filter((t) => t.apartment_id))).catch(() => {});
+    cachedGet(cache, '/tenants').then((r) => setTenants((r.data || []).filter((t) => t.apartment_id))).catch(() => {});
   }, []);
 
   // Wanneer huurder verandert → laad zijn openstaande facturen.
@@ -454,8 +462,8 @@ function CreatePlanSheet({ onClose, onCreated }) {
 // =====================================================================
 // Plan detail — installments + pay-button per termijn + cancel
 // =====================================================================
-function PlanDetail({ planId, onBack }) {
-  const [plan, setPlan] = useState(null);
+function PlanDetail({ planId, initial, onBack }) {
+  const [plan, setPlan] = useState(initial || null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [linkedInvoices, setLinkedInvoices] = useState([]);

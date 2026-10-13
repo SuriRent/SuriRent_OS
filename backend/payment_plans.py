@@ -17,6 +17,7 @@ Data model:
 Termijn-betaling registreert een normale Payment doc met category=
 'betalingsregeling' + metadata.plan_id + metadata.installment_seq.
 """
+import asyncio
 from typing import List, Optional, Literal
 from datetime import datetime, date as date_t, timedelta
 from fastapi import APIRouter, Depends, HTTPException
@@ -130,22 +131,49 @@ def make_router(db, helpers):
             total += max(0.0, amt - paid)
         return round(total + 1e-9, 2)
 
-    async def _enrich_plan(plan: dict) -> dict:
+    async def _prefetch_plans(plans: list) -> dict:
+        """Batch-data voor _enrich_plan zodat een lijst geen N+1 queries doet."""
+        tids = list({p["tenant_id"] for p in plans if p.get("tenant_id")})
+        pids = [p["id"] for p in plans]
+        iids = list({i for p in plans for i in (p.get("invoice_ids") or [])})
+        tenants, insts, invs = await asyncio.gather(
+            db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "apartment_id": 1}).to_list(None),
+            db.payment_plan_installments.find({"plan_id": {"$in": pids}}, {"_id": 0}).sort("sequence", 1).to_list(None),
+            db.invoices.find({"id": {"$in": iids}}, {"_id": 0, "id": 1, "amount": 1, "paid_amount": 1}).to_list(None),
+        )
+        aids = list({t["apartment_id"] for t in tenants if t.get("apartment_id")})
+        apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1}).to_list(None)
+        by_plan: dict = {}
+        for it in insts:
+            by_plan.setdefault(it["plan_id"], []).append(it)
+        return {"t": {t["id"]: t for t in tenants}, "a": {a["id"]: a for a in apts},
+                "inst": by_plan, "inv": {i["id"]: i for i in invs}}
+
+    async def _enrich_plan(plan: dict, pre: Optional[dict] = None) -> dict:
         # tenant + apartment naam ophalen voor UI gemak.
         tenant_name = plan.get("tenant_name") or ""
         apt_number = plan.get("apartment_number") or ""
         if plan.get("tenant_id") and not tenant_name:
-            t = await db.tenants.find_one({"id": plan["tenant_id"]}, {"_id": 0, "name": 1, "apartment_id": 1})
+            if pre is not None:
+                t = pre["t"].get(plan["tenant_id"])
+            else:
+                t = await db.tenants.find_one({"id": plan["tenant_id"]}, {"_id": 0, "name": 1, "apartment_id": 1})
             if t:
                 tenant_name = t.get("name") or ""
                 if t.get("apartment_id"):
-                    a = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "number": 1})
+                    if pre is not None:
+                        a = pre["a"].get(t["apartment_id"])
+                    else:
+                        a = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "number": 1})
                     if a:
                         apt_number = a.get("number") or ""
         installments = []
-        async for inst in db.payment_plan_installments.find(
-            {"plan_id": plan["id"]}, {"_id": 0}
-        ).sort("sequence", 1):
+        if pre is not None:
+            raw_insts = pre["inst"].get(plan["id"], [])
+        else:
+            raw_insts = await db.payment_plan_installments.find(
+                {"plan_id": plan["id"]}, {"_id": 0}).sort("sequence", 1).to_list(None)
+        for inst in raw_insts:
             installments.append({
                 "sequence": inst.get("sequence"),
                 "due_date": inst.get("due_date"),
@@ -157,7 +185,11 @@ def make_router(db, helpers):
         paid_amount = sum(i["amount"] for i in installments if i["status"] == "paid")
         installments_remaining = _round2(plan.get("total_amount", 0) - paid_amount)
         # Cap tegen wat er ECHT nog open staat op de gekoppelde factuur.
-        invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+        if pre is not None:
+            invoice_open = round(sum(max(0.0, float(i.get("amount") or 0) - float(i.get("paid_amount") or 0))
+                                     for i in (pre["inv"].get(x) for x in set(plan.get("invoice_ids") or [])) if i) + 1e-9, 2)
+        else:
+            invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
         # Als de plan-restant groter is dan wat er nog openstaat op de
         # factuur (bijv. omdat er buiten de regeling om al een deelbetaling
         # is gedaan), dan is de "echte" restant het factuur-openstaande.
@@ -295,10 +327,9 @@ def make_router(db, helpers):
             q["status"] = status
         if tenant_id:
             q["tenant_id"] = tenant_id
-        out = []
-        async for p in db.payment_plans.find(q, {"_id": 0}).sort("created_at", -1):
-            out.append(await _enrich_plan(p))
-        return out
+        plans = await db.payment_plans.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+        pre = await _prefetch_plans(plans)
+        return [await _enrich_plan(p, pre) for p in plans]
 
     @router.get("/{plan_id}", response_model=PlanOut)
     async def get_plan(plan_id: str, user=Depends(get_current_user)):
@@ -376,22 +407,32 @@ def _build_pay_core(db, helpers):
             total += max(0.0, amt - paid)
         return round(total + 1e-9, 2)
 
-    async def enrich_plan(plan: dict) -> dict:
+    async def enrich_plan(plan: dict, pre: Optional[dict] = None) -> dict:
+        # `pre` = batch-data uit _prefetch_plans (lijst-endpoint, geen N+1).
         tenant_name = plan.get("tenant_name") or ""
         apt_number = ""
-        t = await db.tenants.find_one(
-            {"id": plan.get("tenant_id")}, {"_id": 0, "name": 1, "apartment_id": 1}
-        ) if plan.get("tenant_id") else None
+        if pre is not None:
+            t = pre["t"].get(plan.get("tenant_id"))
+        else:
+            t = await db.tenants.find_one(
+                {"id": plan.get("tenant_id")}, {"_id": 0, "name": 1, "apartment_id": 1}
+            ) if plan.get("tenant_id") else None
         if t:
             tenant_name = tenant_name or (t.get("name") or "")
             if t.get("apartment_id"):
-                a = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "number": 1})
+                if pre is not None:
+                    a = pre["a"].get(t["apartment_id"])
+                else:
+                    a = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "number": 1})
                 if a:
                     apt_number = a.get("number") or ""
         installments = []
-        async for inst in db.payment_plan_installments.find(
-            {"plan_id": plan["id"]}, {"_id": 0}
-        ).sort("sequence", 1):
+        if pre is not None:
+            raw_insts = pre["inst"].get(plan["id"], [])
+        else:
+            raw_insts = await db.payment_plan_installments.find(
+                {"plan_id": plan["id"]}, {"_id": 0}).sort("sequence", 1).to_list(None)
+        for inst in raw_insts:
             installments.append({
                 "sequence": inst.get("sequence"),
                 "due_date": inst.get("due_date"),
@@ -402,7 +443,11 @@ def _build_pay_core(db, helpers):
             })
         paid_amount = sum(i["amount"] for i in installments if i["status"] == "paid")
         installments_remaining = _round2(plan.get("total_amount", 0) - paid_amount)
-        invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+        if pre is not None:
+            invoice_open = round(sum(max(0.0, float(i.get("amount") or 0) - float(i.get("paid_amount") or 0))
+                                     for i in (pre["inv"].get(x) for x in set(plan.get("invoice_ids") or [])) if i) + 1e-9, 2)
+        else:
+            invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
         if plan.get("invoice_ids"):
             remaining = _round2(min(installments_remaining, invoice_open))
         else:

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   Loader2, Check, Mail,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer,
@@ -182,11 +183,11 @@ export function DomainForm({ initial }) {
   // Haal het echte productie target-host + IP op van de backend zodat de
   // DNS instructie exacte waarden toont (i.p.v. placeholders). Deze
   // env-vars worden op de productie server geconfigureerd door Emergent.
-  const [target, setTarget] = useState({ host: '', ip: '', configured: false, error: '' });
+  const [target, setTarget] = useState(() => readSeed('/settings/domain/target') || { host: '', ip: '', configured: false, error: '' });
   useEffect(() => {
     let alive = true;
     api.get('/settings/domain/target')
-      .then((r) => { if (alive) setTarget(r.data || {}); })
+      .then((r) => { if (alive) setTarget(writeSeed('/settings/domain/target', r.data || {})); })
       .catch(() => { /* stil — fallback naar placeholder */ });
     return () => { alive = false; };
   }, []);
@@ -852,15 +853,15 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
   useEffect(() => {
     if (initialSection) setSection(initialSection);
   }, [initialSection]);
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState(() => readSeed('/settings') || null);
+  const [loading, setLoading] = useState(() => !readSeed('/settings'));
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
     setErr('');
     try {
       const { data } = await api.get('/settings');
-      setSettings(data);
+      setSettings(writeSeed('/settings', data));
     } catch (e) { setErr(formatError(e)); }
     finally { setLoading(false); }
   }, []);

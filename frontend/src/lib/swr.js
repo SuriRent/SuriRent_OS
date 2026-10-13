@@ -122,3 +122,10 @@ export function usePrefetchAdmin(keys, deps = []) {
     // eslint-disable-next-line
   }, deps);
 }
+
+// Seed-cache voor formulier-pagina's (Instellingen): toon direct de laatst
+// bekende data, ververs op de achtergrond. Per sessie/bedrijf genamespaced.
+const _SEED = new Map();
+const _seedNs = () => `${(localStorage.getItem('admin_token') || '').slice(-12)}:${localStorage.getItem('active_company_id') || ''}:`;
+export const readSeed = (key) => _SEED.get(_seedNs() + key);
+export const writeSeed = (key, data) => { _SEED.set(_seedNs() + key, data); return data; };

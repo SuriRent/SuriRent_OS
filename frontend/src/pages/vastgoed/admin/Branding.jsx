@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { readSeed, writeSeed } from '../../../lib/swr';
 import { Palette, Save, Loader2, Upload, Check, AlertCircle, Eye, RotateCcw, Building2, Mail, Phone, MapPin, Landmark } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { resolveLogoUrl, applyBranding } from '../../../lib/branding';
@@ -154,8 +155,8 @@ function LogoUploader({ value, onChange }) {
 }
 
 export default function Branding() {
-  const [b, setB] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [b, setB] = useState(() => readSeed('/companies/me/branding') || null);
+  const [loading, setLoading] = useState(() => !readSeed('/companies/me/branding'));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -163,7 +164,7 @@ export default function Branding() {
   const load = useCallback(async () => {
     try {
       const { data } = await api.get('/companies/me/branding');
-      setB(data);
+      setB(writeSeed('/companies/me/branding', data));
     } catch (e) { setErr(formatError(e)); }
     finally { setLoading(false); }
   }, []);
