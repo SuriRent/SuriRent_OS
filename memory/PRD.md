@@ -766,3 +766,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - components/OfflineOverlay.jsx globaal in index.js (alle rollen/platforms); toont bij offline-event of axios network-error na mislukte ping /api/health?t=; poll 5s, verdwijnt vanzelf + dispatch surirent:refresh
 - "Weer verbonden" groene toast 3s na herstel (data-testid online-toast)
 - SlowConnectionBanner (index.js): gele "Trage verbinding" pill bij gem. GET-duur >3s (laatste 4, hysterese <1,2s, 20s idle reset) of navigator.connection 2g/rtt>=1500
+- 2026-06 fix: bonnen-venster blijft open zolang medewerker actief (geen sessionStorage-gating, heropent na remount), 15s grace bij kort wegvallen, presence TTL 75s (achtergrond-throttling), visibilitychange → ping/reconnect

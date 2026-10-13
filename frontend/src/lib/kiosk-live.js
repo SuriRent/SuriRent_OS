@@ -10,9 +10,9 @@ let retryTimer = null;
 let stopped = true;
 const INITIAL = { connected: false, active: false, count: 0, employees: [], printsVersion: 0, overlayOpen: false };
 let state = INITIAL;
-// Vorige actieve set (sessionStorage) zodat een herlaad het venster niet opnieuw opent.
-const SEEN_KEY = 'kiosk_live_active_emps';
-const readPrevActive = () => { try { return new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } };
+// Grace: kort wegvallen van een medewerker (netwerk-hapering) sluit het venster niet.
+const EMPTY_GRACE_MS = 15000;
+let emptyTimer = null;
 const listeners = new Set();
 
 let presenceTimer = null;
@@ -45,11 +45,21 @@ function queuePresence(msg) {
   clearTimeout(presenceTimer);
   presenceTimer = setTimeout(() => {
     const employees = pendingPresence.employees || [];
-    // Nieuwe medewerker ingelogd → bonnen-venster automatisch openen.
-    const prev = readPrevActive();
-    const isNew = employees.some((e) => !prev.has(e.key));
-    try { sessionStorage.setItem(SEEN_KEY, JSON.stringify(employees.map((e) => e.key))); } catch { /* noop */ }
-    emit({ active: !!pendingPresence.active, count: pendingPresence.count || 0, employees, ...(isNew ? { overlayOpen: true } : {}) });
+    if (employees.length) {
+      // Venster blijft open zolang er een medewerker ingelogd is; een nieuwe
+      // medewerker heropent het ook als de beheerder het had gesloten.
+      clearTimeout(emptyTimer); emptyTimer = null;
+      const prev = new Set(state.employees.map((e) => e.key));
+      const isNew = employees.some((e) => !prev.has(e.key));
+      emit({ active: true, count: employees.length, employees, ...(isNew ? { overlayOpen: true } : {}) });
+    } else if (state.employees.length && !emptyTimer) {
+      emptyTimer = setTimeout(() => {
+        emptyTimer = null;
+        emit({ active: false, count: 0, employees: [], overlayOpen: false });
+      }, EMPTY_GRACE_MS);
+    } else if (!state.employees.length) {
+      emit({ active: false, count: 0 });
+    }
   }, DEBOUNCE_MS);
 }
 
@@ -95,20 +105,29 @@ const onPrinted = (e) => {
   if (role === 'employee' && e.detail?.paymentId) setTimeout(() => sendJson({ type: 'PRINT_RECEIPT', payment_id: e.detail.paymentId }), 0);
 };
 
+// Terug in beeld (APK/PWA uit slaap) → direct pingen of opnieuw verbinden.
+const onVisible = () => {
+  if (document.visibilityState !== 'visible' || stopped) return;
+  if (ws?.readyState === WebSocket.OPEN) sendJson({ type: 'ping' });
+  else if (!ws || ws.readyState === WebSocket.CLOSED) { clearTimeout(retryTimer); connect(); }
+};
+
 export function startKioskLive(asRole) {
   if (!stopped && role === asRole) return;
   stopKioskLive();
   role = asRole;
   stopped = false;
   window.addEventListener('kiosk-receipt-printed', onPrinted);
+  document.addEventListener('visibilitychange', onVisible);
   connect();
 }
 
 export function stopKioskLive() {
   stopped = true;
   window.removeEventListener('kiosk-receipt-printed', onPrinted);
+  document.removeEventListener('visibilitychange', onVisible);
   clearTimeout(retryTimer); clearInterval(pingTimer);
-  clearTimeout(presenceTimer); clearTimeout(printTimer);
+  clearTimeout(presenceTimer); clearTimeout(printTimer); clearTimeout(emptyTimer); emptyTimer = null;
   if (ws) { ws.onclose = null; try { ws.close(); } catch { /* noop */ } ws = null; }
   state = INITIAL;
 }

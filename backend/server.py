@@ -9898,7 +9898,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
 # =====================================================================
 from event_bus import publish as _kb_publish, subscribe as _kb_subscribe, unsubscribe as _kb_unsubscribe  # noqa: E402
 
-_PRESENCE_TTL_S = 10
+_PRESENCE_TTL_S = 75  # ruim boven browser-throttling van timers op de achtergrond (1/min)
 
 
 def _kiosk_admin_channel(cid: str) -> str:
