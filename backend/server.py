@@ -427,29 +427,9 @@ async def lifespan(app: FastAPI):
             "created_at": iso(now_utc()),
         })
 
-    # --- Seed kiosk PIN per company (legacy 'kiosk' settings doc → migrate) ---
-    legacy_kiosk = await db.settings.find_one({"_id": "kiosk"})
-    if legacy_kiosk:
-        # migrate legacy single-PIN to default company kiosk PIN
-        await db.kiosk_pins.update_one(
-            {"company_id": DEFAULT_COMPANY_ID},
-            {"$set": {
-                "company_id": DEFAULT_COMPANY_ID,
-                "pin_hash": legacy_kiosk.get("pin_hash"),
-                "updated_at": iso(now_utc()),
-            }},
-            upsert=True,
-        )
-        await db.settings.delete_one({"_id": "kiosk"})
-    # Ensure default company has a kiosk PIN
-    cur_pin = await db.kiosk_pins.find_one({"company_id": DEFAULT_COMPANY_ID})
-    if not cur_pin:
-        default_pin = os.environ.get("DEFAULT_KIOSK_PIN", "1234")
-        await db.kiosk_pins.insert_one({
-            "company_id": DEFAULT_COMPANY_ID,
-            "pin_hash": hash_password(default_pin),
-            "updated_at": iso(now_utc()),
-        })
+    # Gedeelde kiosk-PIN is afgeschaft: alleen persoonlijke medewerker-PINs.
+    await db.kiosk_pins.delete_many({})
+    await db.settings.delete_one({"_id": "kiosk"})
 
     # --- Idempotent re-seed of demo tenant Jan de Vries PIN (avoid drift) ---
     if os.environ.get("RESEED_DEMO_TENANT_PIN", "1") == "1":
@@ -1029,18 +1009,6 @@ async def register(body: RegisterIn, request: Request, response: Response):
         company_id = c["id"]
         company_payload = {k: c[k] for k in ("id", "slug", "name", "plan")}
 
-        # Persist kiosk PIN if provided (used for kiosk login)
-        if (body.kiosk_pin or "").strip():
-            pin = body.kiosk_pin.strip()
-            if pin.isdigit() and len(pin) == 4:
-                others = await db.kiosk_pins.find({}, {"_id": 0, "pin_hash": 1}).to_list(1000)
-                pin_in_use = any(verify_password(pin, o.get("pin_hash", "")) for o in others)
-                if not pin_in_use:
-                    await db.kiosk_pins.update_one(
-                        {"company_id": company_id},
-                        {"$set": {"company_id": company_id, "pin_hash": hash_password(pin), "updated_at": iso(now)}},
-                        upsert=True,
-                    )
     else:
         # Backwards compat: join the default company when company_name is omitted.
         default = await db.companies.find_one({"slug": DEFAULT_COMPANY_SLUG}, {"_id": 0})
@@ -1076,8 +1044,6 @@ async def register(body: RegisterIn, request: Request, response: Response):
             login_query_url = f"{app_url}/login?c={slug}"
             plan_info = PLAN_PRICES.get(c.get("plan", "starter"), PLAN_PRICES["starter"])
             pin_row = ""
-            if (body.kiosk_pin or "").isdigit() and len(body.kiosk_pin) == 4:
-                pin_row = f"<tr><td>Kiosk PIN</td><td>{body.kiosk_pin}</td></tr>"
             sub_block = ""
             # Generate the onboarding PDF + inline QR for the email body
             try:
@@ -1095,7 +1061,6 @@ async def register(body: RegisterIn, request: Request, response: Response):
                 qr_block = ""
             try:
                 primary_hex = ((c.get("branding") or {}).get("primary_color") or "#FF5C00")
-                kiosk_pin_val = body.kiosk_pin if (body.kiosk_pin or "").isdigit() and len(body.kiosk_pin) == 4 else None
                 onboarding_pdf_bytes = onboarding_pdf(
                     company_name=company_payload["name"],
                     contact_name=body.name,
@@ -1104,7 +1069,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                     plan_price_text=f"{plan_info['currency']} {int(plan_info['amount']):,}/maand".replace(",", "."),
                     login_url=login_query_url,
                     subdomain_url=None,
-                    kiosk_pin=kiosk_pin_val,
+                    kiosk_pin=None,
                     primary_hex=primary_hex,
                 )
             except Exception:
@@ -5603,113 +5568,42 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
     # ook geen medewerker-tokens worden uitgegeven.
     await _require_plan_feature(target_cid, "allow_kiosk", "Kiosk terminal")
 
-    # ---- Probeer eerst de gedeelde bedrijfs-PIN ----
-    pin_doc = await db.kiosk_pins.find_one({"company_id": target_cid}, {"_id": 0})
-    matched_company_id = None
-    if pin_doc and verify_password(body.pin, pin_doc.get("pin_hash", "")):
-        matched_company_id = target_cid
-
-    # ---- NIEUWE FLOW: employee PIN binnen dit bedrijf ----
-    if not matched_company_id:
-        emp_docs = await db.employees.find(
-            {
-                "company_id": target_cid,
-                "active": True,
-                "app_role": "kiosk",
-                "kiosk_pin_hash": {"$exists": True, "$ne": None},
-            },
-            {"_id": 0},
-        ).to_list(2000)
-        matched_emp = None
-        for e in emp_docs:
-            if verify_password(body.pin, e.get("kiosk_pin_hash", "")):
-                matched_emp = e
-                break
-        if matched_emp:
-            _pin_throttle_clear(throttle_key)
-            cid = matched_emp.get("company_id")
-            c = await db.companies.find_one({"id": cid}, {"_id": 0}) if cid else None
-            token = create_token({
-                "sub": "kiosk", "type": "kiosk", "company_id": cid,
-            }, KIOSK_TOKEN_MIN)
-            _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-            return {
-                "token": token,
-                "company": c and {k: c[k] for k in ("id", "slug", "name")},
-                "admin_token": None,
-                "admin_user": None,
-                "employee": {
-                    "id": matched_emp["id"],
-                    "name": matched_emp.get("name", ""),
-                    "pin": body.pin,  # frontend gebruikt dit voor sessionStorage → withKioskEmployee()
-                },
-            }
-        _pin_throttle_fail(throttle_key)
-        raise HTTPException(status_code=401, detail="Ongeldige PIN code")
-    _pin_throttle_clear(throttle_key)
-    c = await db.companies.find_one({"id": matched_company_id}, {"_id": 0})
-    token = create_token({
-        "sub": "kiosk", "type": "kiosk", "company_id": matched_company_id,
-    }, KIOSK_TOKEN_MIN)
-    _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-
-    # Find the company's primary admin (oldest admin user for this company),
-    # so we can also hand back an admin access token. Best-effort: if no admin
-    # exists yet (e.g. orphaned company), just return the kiosk token alone.
-    admin_token = None
-    admin_user_out = None
-    if matched_company_id:
-        admin_user = await db.users.find_one(
-            {"company_id": matched_company_id, "role": "admin"},
-            sort=[("created_at", 1)],
-        )
-        if admin_user:
-            admin_token = create_token({
-                "sub": admin_user["id"], "email": admin_user["email"], "type": "access",
-                "company_id": admin_user.get("company_id"), "role": admin_user.get("role", "admin"),
-            }, ACCESS_MIN)
-            admin_user_out = {
-                "id": admin_user["id"],
-                "email": admin_user["email"],
-                "name": admin_user.get("name", ""),
-                "role": admin_user.get("role", "admin"),
-                "company_id": admin_user.get("company_id"),
-                "created_at": admin_user.get("created_at"),
-            }
-    return {
-        "token": token,
-        "company": c and {k: c[k] for k in ("id", "slug", "name")},
-        "admin_token": admin_token,
-        "admin_user": admin_user_out,
-    }
-
-
-@api.post("/auth/kiosk-set-pin")
-async def set_kiosk_pin(body: SetPinIn, user=Depends(get_current_user)):
-    if not body.pin.isdigit():
-        raise HTTPException(status_code=400, detail="PIN moet 4 cijfers zijn")
-    cid = company_id_of(user)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
-    # Uniqueness alleen BINNEN dit bedrijf — andere bedrijven mogen dezelfde
-    # PIN gebruiken omdat PIN-login altijd company-scoped is.
-    emps = await db.employees.find(
+    # ---- Alleen persoonlijke medewerker-PINs (gedeelde bedrijfs-PIN is afgeschaft) ----
+    emp_docs = await db.employees.find(
         {
-            "company_id": cid,
+            "company_id": target_cid,
             "active": True,
+            "app_role": "kiosk",
             "kiosk_pin_hash": {"$exists": True, "$ne": None},
         },
-        {"_id": 0, "name": 1, "kiosk_pin_hash": 1},
+        {"_id": 0},
     ).to_list(2000)
-    for e in emps:
+    matched_emp = None
+    for e in emp_docs:
         if verify_password(body.pin, e.get("kiosk_pin_hash", "")):
-            raise HTTPException(status_code=409, detail=f"Deze PIN is al in gebruik door medewerker {e.get('name', '')}, kies een andere")
-    await db.kiosk_pins.update_one(
-        {"company_id": cid},
-        {"$set": {"company_id": cid, "pin_hash": hash_password(body.pin), "updated_at": iso(now_utc())}},
-        upsert=True,
-    )
-    return {"ok": True}
+            matched_emp = e
+            break
+    if matched_emp:
+        _pin_throttle_clear(throttle_key)
+        cid = matched_emp.get("company_id")
+        c = await db.companies.find_one({"id": cid}, {"_id": 0}) if cid else None
+        token = create_token({
+            "sub": "kiosk", "type": "kiosk", "company_id": cid,
+        }, KIOSK_TOKEN_MIN)
+        _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
+        return {
+            "token": token,
+            "company": c and {k: c[k] for k in ("id", "slug", "name")},
+            "admin_token": None,
+            "admin_user": None,
+            "employee": {
+                "id": matched_emp["id"],
+                "name": matched_emp.get("name", ""),
+                "pin": body.pin,  # frontend gebruikt dit voor sessionStorage → withKioskEmployee()
+            },
+        }
+    _pin_throttle_fail(throttle_key)
+    raise HTTPException(status_code=401, detail="Ongeldige PIN code")
 
 
 # =====================================================================
@@ -13751,9 +13645,6 @@ class EmployeeOut(BaseModel):
 
 
 async def _check_employee_pin_unique(cid: str, pin: str, exclude_eid: Optional[str] = None) -> None:
-    company_pin = await db.kiosk_pins.find_one({"company_id": cid}, {"_id": 0, "pin_hash": 1})
-    if company_pin and verify_password(pin, company_pin.get("pin_hash", "")):
-        raise HTTPException(status_code=409, detail="Deze PIN is al in gebruik als bedrijfs-PIN, kies een andere")
     others = await db.employees.find(
         {"id": {"$ne": exclude_eid}, "company_id": cid, "active": True, "kiosk_pin_hash": {"$exists": True, "$ne": None}},
         {"_id": 0, "name": 1, "kiosk_pin_hash": 1},
@@ -13881,10 +13772,6 @@ async def set_employee_kiosk_pin(eid: str, body: EmployeeKioskPinIn, user=Depend
     if not e:
         raise HTTPException(status_code=404, detail="Werknemer niet gevonden")
     cid = e.get("company_id")
-    # Uniqueness: company-shared PIN binnen ditzelfde bedrijf
-    company_pin = await db.kiosk_pins.find_one({"company_id": cid}, {"_id": 0, "pin_hash": 1})
-    if company_pin and verify_password(pin, company_pin.get("pin_hash", "")):
-        raise HTTPException(status_code=409, detail="Deze PIN is al in gebruik als bedrijfs-PIN, kies een andere")
     # Uniqueness: andere medewerkers binnen ditzelfde bedrijf
     others = await db.employees.find(
         {"id": {"$ne": eid}, "company_id": cid, "active": True, "kiosk_pin_hash": {"$exists": True, "$ne": None}},

@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Smartphone, Home, User, CheckCircle2, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
-  KeySquare, FileText,
+  FileText,
   Palette, UsersRound,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
   SmtpForm,
-  InvoicingForm, KioskPinForm,
+  InvoicingForm,
 } from './Settings';
 import Branding from './Branding';
 import Locations from './Locations';
@@ -21,7 +21,6 @@ const STEPS = [
   { id: 'branding', label: 'Branding', icon: Palette },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
-  { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, settings: true },
   { id: 'locations', label: 'Locaties', icon: MapPin },
   { id: 'apartment', label: 'Appartementen', icon: Home },
   { id: 'tenant', label: 'Huurders', icon: User },
@@ -301,7 +300,6 @@ function SettingsSectionWrapper({ step, settings }) {
       </div>
       {step.id === 'smtp' && <SmtpForm initial={settings.smtp} />}
       {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
-      {step.id === 'kiosk' && <KioskPinForm />}
     </div>
   );
 }

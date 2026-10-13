@@ -35,7 +35,6 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
   const [telefoon, setTelefoon] = useState('');
   const [address, setAddress] = useState('');
   const [plan, setPlan] = useState('starter');
-  const [kioskPin, setKioskPin] = useState('');
   // Country selection: '' (auto), 'SR', 'NL', 'OTHER'.
   // Initialized from localStorage.preferred_currency (set by landing page toggle).
   const [country, setCountry] = useState(() => {
@@ -114,10 +113,6 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
       setError('Vul de bedrijfsnaam in.');
       return;
     }
-    if (mode === 'register' && kioskPin && !/^\d{4}$/.test(kioskPin)) {
-      setError('Kiosk PIN moet uit precies 4 cijfers bestaan.');
-      return;
-    }
     setLoading(true); setError('');
     try {
       if (mode === 'login') {
@@ -180,7 +175,6 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
           telefoon: telefoon.trim(),
           address: address.trim(),
           plan,
-          kiosk_pin: kioskPin.trim() || null,
           ...(country ? { country } : {}),
         });
         setPreferredRole('admin');
@@ -429,21 +423,12 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
                 <ChevronDown className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180" />
               </summary>
               <div className="p-4 space-y-4">
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">Telefoon</label>
                     <input type="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)} data-testid="auth-telefoon"
                       placeholder="+597 ..."
                       className="w-full h-11 text-sm px-3 rounded-lg border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Kiosk PIN</label>
-                    <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off"
-                      value={kioskPin}
-                      onChange={(e) => setKioskPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      data-testid="auth-kiosk-pin"
-                      placeholder="• • • •"
-                      className="w-full h-11 text-sm px-3 rounded-lg border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition font-mono tracking-[0.4em] text-center" />
                   </div>
                 </div>
                 <div>

@@ -23,12 +23,10 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - **Password**: `super1234` (reset 2026-02-28)
 - **URL**: na login auto-redirect naar `/saas/overzicht`
 
-## Kiosk PIN
-- **Default PIN (my-awesome-rentals-bv)**: `4321`
-- **Company slug voor kiosk login**: `my-awesome-rentals-bv` (demo Rentals company)
-- **Login flow**: `/login?target=kiosk` → PIN-pad
-- **API**: `POST /api/auth/kiosk-pin` body `{"pin":"4321","company_slug":"my-awesome-rentals-bv"}`
-- Reset PIN als 'Ongeldige PIN' error verschijnt via: `db.kiosk_pins.update_one({"company_id":<cid>}, {"$set":{"pin_hash":hash_password("4321")}}, upsert=True)` en `db.pin_throttle.delete_many({})`
+## Kiosk login (gedeelde kiosk-PIN is AFGESCHAFT — alleen persoonlijke medewerker-PIN)
+- **Kiosk-medewerker**: Anita Sewdas — email `anita@demo.sr` / wachtwoord `anita1234` / PIN `4321` (company `my-awesome-rentals-bv`, app_role kiosk)
+- **Login flow**: email+wachtwoord op /login → doorverwijzing naar `/my-awesome-rentals-bv/login?target=kiosk&view=pin` → PIN 4321
+- **API**: `POST /api/auth/kiosk-pin` body `{"pin":"4321","company_slug":"my-awesome-rentals-bv"}` (matcht nu alleen medewerker-PINs)
 
 ## Tenant Portal
 - **URL**: `/huurder` of `/tenant-portal`

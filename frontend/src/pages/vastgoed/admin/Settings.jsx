@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Loader2, Check, KeySquare, Mail,
+  Loader2, Check, Mail,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -10,7 +10,6 @@ const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, desc: 'Automatische maand-facturen na grace periode.' },
   { id: 'receipts', label: 'Kwitantie afdrukformaat', icon: Printer, desc: 'A4 kantoorprinter of 80mm thermische bonprinter.' },
-  { id: 'kiosk', label: 'Kiosk PIN', icon: KeySquare, desc: 'Stel de 4-cijferige toegangs-PIN voor de Kiosk in.' },
 ];
 
 function FieldLabel({ children }) {
@@ -847,50 +846,6 @@ function RecomputeDueDatesButton() {
 }
 
 
-export function KioskPinForm() {
-  const [pin, setPin] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
-  const save = async () => {
-    setErr(''); setMsg('');
-    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) { setErr('PIN moet exact 4 cijfers zijn'); return; }
-    if (pin !== confirm) { setErr('PINs komen niet overeen'); return; }
-    setLoading(true);
-    try {
-      await api.post('/auth/kiosk-set-pin', { pin });
-      setMsg('Kiosk PIN bijgewerkt.'); setPin(''); setConfirm('');
-    } catch (e) { setErr(formatError(e)); }
-    finally { setLoading(false); }
-  };
-  return (
-    <SectionShell msg={msg} err={err}>
-      <p className="text-xs text-slate-500">De PIN moet uniek zijn binnen het platform — geen ander bedrijf kan dezelfde PIN hebben.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Nieuwe PIN</FieldLabel>
-          <input type="password" inputMode="numeric" maxLength={4} value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            data-testid="kiosk-pin"
-            className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-2xl tracking-[0.5em] text-center font-bold" />
-        </div>
-        <div>
-          <FieldLabel>Bevestig PIN</FieldLabel>
-          <input type="password" inputMode="numeric" maxLength={4} value={confirm}
-            onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            data-testid="kiosk-pin-confirm"
-            className="w-full mt-1 h-14 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-2xl tracking-[0.5em] text-center font-bold" />
-        </div>
-      </div>
-      <button onClick={save} disabled={loading || !pin || !confirm} data-testid="settings-save"
-        className="h-11 px-5 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 disabled:opacity-50">
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Opslaan
-      </button>
-    </SectionShell>
-  );
-}
-
 // ============== Main ==============
 export default function SettingsPage({ initialSection, hideSubNav = false }) {
   const [section, setSection] = useState(initialSection || 'smtp');
@@ -932,7 +887,6 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {section === 'receipts' && <ReceiptsForm initial={settings.receipts} />}
       {section === 'domain' && <DomainForm initial={settings.domain} />}
-      {section === 'kiosk' && <KioskPinForm />}
     </>
   );
 
