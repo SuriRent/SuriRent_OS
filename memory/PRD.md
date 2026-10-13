@@ -761,3 +761,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Instellingen: readSeed/writeSeed (lib/swr.js) in BusinessInfo, Branding, Settings (incl. domain target), StripeCompanySettings, MijnAbonnement
 - PaymentPlans: tenants via SWR-cache, PlanDetail initial uit lijst
 - LET OP: .eslintrc root zonder react-app → no-undef wordt NIET gedetecteerd; controleer imports zelf
+
+## 2026-06 Offline-scherm
+- components/OfflineOverlay.jsx globaal in index.js (alle rollen/platforms); toont bij offline-event of axios network-error na mislukte ping /api/health?t=; poll 5s, verdwijnt vanzelf + dispatch surirent:refresh

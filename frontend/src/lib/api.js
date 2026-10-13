@@ -57,6 +57,10 @@ const PUBLIC_401_PATHS = [
 api.interceptors.response.use(
   (r) => r,
   (err) => {
+    // Geen response (geen internet / server onbereikbaar) → offline-scherm laat zelf pingen.
+    if (!err?.response && err?.code !== 'ERR_CANCELED') {
+      try { window.dispatchEvent(new CustomEvent('surirent:network-error')); } catch { /* noop */ }
+    }
     // Note: HTTP 402 billing-blocked flow is DEPRECATED. De backend blokkeert
     // niet meer op verlopen abonnement — klanten mogen doorgebruiken en zien
     // alleen de TrialBanner. We ruimen eventuele oude localStorage sleutels

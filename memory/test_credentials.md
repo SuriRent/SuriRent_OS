@@ -24,6 +24,7 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - **URL**: na login auto-redirect naar `/saas/overzicht`
 
 ## Kiosk login (gedeelde kiosk-PIN is AFGESCHAFT — alleen persoonlijke medewerker-PIN)
+- ⚠️ Demo-omgeving reset elke 30 min (nieuwe employee-IDs, geen PINs). Maak Anita opnieuw kiosk-medewerker via PUT /api/employees/{id} (app_role kiosk, email, password, pin) vóór kiosk-tests.
 - **Kiosk-medewerker**: Anita Sewdas — email `anita@demo.sr` / wachtwoord `anita1234` / PIN `4321` (company `my-awesome-rentals-bv`, app_role kiosk)
 - **Login flow**: email+wachtwoord op /login → doorverwijzing naar `/my-awesome-rentals-bv/login?target=kiosk&view=pin` → PIN 4321
 - **API**: `POST /api/auth/kiosk-pin` body `{"pin":"4321","company_slug":"my-awesome-rentals-bv"}` (matcht nu alleen medewerker-PINs)
