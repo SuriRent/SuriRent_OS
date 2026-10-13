@@ -283,6 +283,9 @@ async def lifespan(app: FastAPI):
     await db.kasgeld.create_index("company_id")
     await db.invoices.create_index([("tenant_id", 1), ("period_year", 1), ("period_month", 1)])
     await db.invoices.create_index("id")
+    await db.invoices.create_index([("company_id", 1), ("status", 1), ("due_date", 1)])
+    await db.invoices.create_index([("company_id", 1), ("period_year", 1), ("period_month", 1)])
+    await db.payment_plans.create_index("invoice_ids")
     await db.companies.create_index("slug", unique=True)
     await db.push_subs.create_index("user_id")
     await db.push_subs.create_index("endpoint", unique=True)
@@ -763,6 +766,7 @@ async def _live_sync_broadcast(request: Request, call_next):
         if response.status_code < 400 and not path.startswith(_CACHE_KEEP_PATHS):
             _STATS_CACHE.clear()
             _KIOSK_CACHE.clear()
+            _INVOICE_CACHE.clear()
         if response.status_code >= 400:
             return response
         # Alleen mutaties op admin/company data — sluit auth/public/events uit.
@@ -7154,7 +7158,12 @@ async def _enrich_tenant(t: dict) -> dict:
 @api.get("/tenants", response_model=List[TenantOut])
 async def list_tenants(user=Depends(get_current_user)):
     docs = await db.tenants.find(scope(user), {"_id": 0}).sort("name", 1).to_list(1000)
-    return [await _enrich_tenant(d) for d in docs]
+    aids = list({d["apartment_id"] for d in docs if d.get("apartment_id")})
+    apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1, "rent_amount": 1, "currency": 1}).to_list(None)
+    a_by = {a["id"]: a for a in apts}
+    return [{**d, "apartment_number": a_by.get(d.get("apartment_id"), {}).get("number"),
+             "rent_amount": a_by.get(d.get("apartment_id"), {}).get("rent_amount"),
+             "currency": a_by.get(d.get("apartment_id"), {}).get("currency")} for d in docs]
 
 
 @api.get("/tenants/credits")
@@ -11894,58 +11903,84 @@ class InvoiceOut(BaseModel):
     due_date: Optional[str] = None        # ISO YYYY-MM-DD — vervaldatum op de PDF, bepaalt ook overdue-punt
 
 
+async def _enrich_invoices_batch(docs: list) -> list:
+    """Verrijk facturen met een vast aantal queries (geen N+1)."""
+    if not docs:
+        return []
+    tids = list({d["tenant_id"] for d in docs if d.get("tenant_id")})
+    aids = list({d["apartment_id"] for d in docs if d.get("apartment_id")})
+    iids = [d["id"] for d in docs]
+    missing_paid = [d["id"] for d in docs if d.get("paid_amount") is None]
+    tenants, apts, plans, paid_rows = await asyncio.gather(
+        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1}).to_list(None),
+        db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1, "location_id": 1}).to_list(None),
+        db.payment_plans.find({"invoice_ids": {"$in": iids}, "status": {"$in": ["active", "completed"]}},
+                              {"_id": 0, "id": 1, "status": 1, "invoice_ids": 1}).to_list(None),
+        db.payments.aggregate([
+            {"$match": {"invoice_id": {"$in": missing_paid}, "status": "approved"}},
+            {"$group": {"_id": "$invoice_id", "total": {"$sum": {"$toDouble": {"$ifNull": ["$amount", 0]}}}}},
+        ]).to_list(None) if missing_paid else asyncio.sleep(0, result=[]),
+    )
+    t_name = {t["id"]: t.get("name") for t in tenants}
+    a_by = {a["id"]: a for a in apts}
+    lids = list({a["location_id"] for a in apts if a.get("location_id")})
+    pids = [pl["id"] for pl in plans]
+    locs, inst = await asyncio.gather(
+        db.locations.find({"id": {"$in": lids}}, {"_id": 0, "id": 1, "name": 1}).to_list(None),
+        db.payment_plan_installments.aggregate([
+            {"$match": {"plan_id": {"$in": pids}}},
+            {"$group": {"_id": "$plan_id", "total": {"$sum": 1},
+                        "paid": {"$sum": {"$cond": [{"$eq": ["$status", "paid"]}, 1, 0]}}}},
+        ]).to_list(None) if pids else asyncio.sleep(0, result=[]),
+    )
+    l_name = {loc["id"]: loc.get("name") for loc in locs}
+    inst_by = {x["_id"]: x for x in inst}
+    paid_by = {x["_id"]: round(float(x["total"]) + 1e-9, 2) for x in paid_rows}
+    plans_by_inv: dict = {}
+    for pl in plans:
+        info = {"id": pl["id"], "status": pl.get("status", "active"),
+                "total_installments": int(inst_by.get(pl["id"], {}).get("total", 0)),
+                "paid_installments": int(inst_by.get(pl["id"], {}).get("paid", 0))}
+        for iid in pl.get("invoice_ids") or []:
+            plans_by_inv.setdefault(iid, []).append(info)
+    out = []
+    for i in docs:
+        a = a_by.get(i.get("apartment_id"))
+        paid_amount = i.get("paid_amount")
+        if paid_amount is None:
+            paid_amount = paid_by.get(i["id"], 0.0)
+        paid_amount = round(float(paid_amount or 0), 2)
+        inv_amt = round(float(i.get("amount") or 0), 2)
+        out.append({**i, "tenant_name": t_name.get(i.get("tenant_id")),
+                    "apartment_number": a["number"] if a else None,
+                    "location_name": l_name.get(a.get("location_id")) if a else None,
+                    "paid_amount": paid_amount,
+                    "remaining_amount": round(max(0.0, inv_amt - paid_amount), 2),
+                    "plans": plans_by_inv.get(i["id"], [])})
+    return out
+
+
 async def _enrich_invoice(i: dict) -> dict:
-    t = await db.tenants.find_one({"id": i["tenant_id"]}, {"_id": 0, "name": 1})
-    a = None
-    location_name = None
-    if i.get("apartment_id"):
-        a = await db.apartments.find_one(
-            {"id": i["apartment_id"]}, {"_id": 0, "number": 1, "location_id": 1}
-        )
-        if a and a.get("location_id"):
-            loc = await db.locations.find_one(
-                {"id": a["location_id"]}, {"_id": 0, "name": 1}
-            )
-            if loc:
-                location_name = loc.get("name")
-    # paid_amount / remaining_amount — fallback uit payments wanneer veld ontbreekt.
-    paid_amount = i.get("paid_amount")
-    if paid_amount is None:
-        try:
-            paid_amount = await _invoice_currently_paid(i["id"])
-        except Exception:
-            paid_amount = 0.0
-    paid_amount = round(float(paid_amount or 0), 2)
-    inv_amt = round(float(i.get("amount") or 0), 2)
-    remaining = round(max(0.0, inv_amt - paid_amount), 2)
-    # Gelinkte betalingsregelingen — toon active + voltooide plannen.
-    plans = []
-    async for plan in db.payment_plans.find(
-        {"invoice_ids": i["id"], "status": {"$in": ["active", "completed"]}}, {"_id": 0}
-    ):
-        total_inst = await db.payment_plan_installments.count_documents(
-            {"plan_id": plan["id"]}
-        )
-        paid_inst = await db.payment_plan_installments.count_documents(
-            {"plan_id": plan["id"], "status": "paid"}
-        )
-        plans.append({
-            "id": plan["id"],
-            "status": plan.get("status", "active"),
-            "total_installments": int(total_inst),
-            "paid_installments": int(paid_inst),
-        })
-    return {**i, "tenant_name": t["name"] if t else None,
-            "apartment_number": a["number"] if a else None,
-            "location_name": location_name,
-            "paid_amount": paid_amount,
-            "remaining_amount": remaining,
-            "plans": plans}
+    return (await _enrich_invoices_batch([i]))[0]
 
 
-@api.get("/invoices", response_model=List[InvoiceOut])
-async def list_invoices(user=Depends(get_current_user)):
-    docs = await db.invoices.find(scope(user), {"_id": 0}).sort("created_at", -1).to_list(500)
+# Facturen-cache (30s) per beheerder+bedrijf; live-sync middleware leegt hem bij elke mutatie.
+_INVOICE_CACHE: dict = {}
+_INVOICE_TTL_S = 30
+
+
+async def _all_invoices_enriched(user: dict) -> list:
+    key = f"{user.get('id')}:{company_id_of(user)}"
+    hit = _INVOICE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < _INVOICE_TTL_S:
+        return hit[1]
+    data = await _build_invoice_list(user)
+    _INVOICE_CACHE[key] = (time.monotonic(), data)
+    return data
+
+
+async def _build_invoice_list(user: dict) -> list:
+    docs = await db.invoices.find(scope(user), {"_id": 0}).sort("created_at", -1).to_list(5000)
     # Bucket berekening — gebruik company-instelling voor grace_workdays
     cid = company_id_of(user)
     grace_wd = 10
@@ -11958,13 +11993,9 @@ async def list_invoices(user=Depends(get_current_user)):
             pass
     today_local = now_utc().date()
     out: list[dict] = []
-    for d in docs:
+    for enriched in await _enrich_invoices_batch([d for d in docs if d.get("id") and d.get("tenant_id")]):
         try:
-            enriched = await _enrich_invoice(d)
-            # Defensief: als een corrupt/incompleet document per abuis in de
-            # collectie zit (bv. AI-assistent die borg-regels aanmaakte zonder
-            # invoice_number/period_*), vullen we defaults zodat pydantic
-            # niet failt en de hele lijst niet 500t.
+            # Defensief: defaults voor corrupte/incomplete documenten zodat de lijst niet 500t.
             if not enriched.get("invoice_number"):
                 enriched["invoice_number"] = f"AUTO-{str(enriched.get('id') or '')[:8]}"
             if not enriched.get("period_month"):
@@ -11992,12 +12023,103 @@ async def list_invoices(user=Depends(get_current_user)):
                     enriched["bucket"] = None
             out.append(enriched)
         except Exception as e:  # noqa: BLE001
-            # Laatste vangnet: als één document niet enrichable is, sla dat
-            # ene document over en log — nooit de hele lijst breken.
             import logging as _logging
-            _logging.getLogger("uvicorn.error").warning("list_invoices: skipping bad doc id=%s err=%s", (d or {}).get("id"), e)
-            continue
+            _logging.getLogger("uvicorn.error").warning("list_invoices: skipping bad doc id=%s err=%s", (enriched or {}).get("id"), e)
     return out
+
+
+@api.get("/invoices", response_model=List[InvoiceOut])
+async def list_invoices(user=Depends(get_current_user)):
+    return (await _all_invoices_enriched(user))[:500]
+
+
+_UNPAID_STATUSES = {"open", "sent", "pending", "overdue", "partial"}
+
+
+def _group_invoices(invs: list, today) -> list:
+    """Python-port van groupByTenant (frontend helpers.js) voor server-side filter/paginering."""
+    groups: dict = {}
+    for inv in invs:
+        g = groups.setdefault(inv["tenant_id"], {
+            "tenant_id": inv["tenant_id"], "tenant_name": inv.get("tenant_name") or "Onbekend",
+            "apartment_number": inv.get("apartment_number"), "currency": inv.get("currency"),
+            "open": [], "invoice_numbers": []})
+        if (inv.get("status") or "").lower() in _UNPAID_STATUSES:
+            g["open"].append(inv)
+            g["invoice_numbers"].append(inv.get("invoice_number") or "")
+        if inv.get("apartment_number"):
+            g["apartment_number"] = inv["apartment_number"]
+    cur = (today.year, today.month)
+
+    def bucket(i):
+        if i.get("bucket"):
+            return i["bucket"]
+        p = (int(i.get("period_year") or 0), int(i.get("period_month") or 0))
+        return "future" if p > cur else "current" if p == cur else "overdue"
+
+    def rem(i):
+        return float(i["remaining_amount"] if i.get("remaining_amount") is not None else i.get("amount") or 0)
+    for g in groups.values():
+        b = [bucket(i) for i in g["open"]]
+        g["openCount"] = len(g["open"])
+        g["overdueCount"] = b.count("overdue")
+        g["totalOpen"] = sum(rem(i) for i in g["open"])
+        g["totalDue"] = sum(rem(i) for i, bb in zip(g["open"], b) if bb in ("overdue", "current"))
+        g["severity"] = "critical" if g["overdueCount"] >= 2 else "late" if g["overdueCount"] == 1 else "ok"
+    order = {"critical": 0, "late": 1, "ok": 2}
+    return sorted(groups.values(), key=lambda g: (order[g["severity"]], -g["totalOpen"], g["tenant_name"].lower()))
+
+
+@api.get("/invoices/grouped")
+async def list_invoices_grouped(
+    tab: str = "all", severity: str = "all", q: str = "", tenant_id: Optional[str] = None,
+    offset: int = 0, limit: int = 25, user=Depends(get_current_user),
+):
+    """Facturen per huurder, gepagineerd (25 huurders). Filter/zoek/KPI's over álle facturen."""
+    invs = await _all_invoices_enriched(user)
+    today = now_utc().date()
+    groups = _group_invoices(invs, today)
+    cur_m, cur_y = today.month, today.year
+    summary = {
+        "allCount": len(groups),
+        "openCount": sum(1 for g in groups if g["overdueCount"] > 0),
+        "paidCount": sum(1 for g in groups if g["openCount"] == 0),
+        "totalOpenAmount": round(sum(g["totalDue"] for g in groups), 2),
+        "currency": (groups[0]["currency"] if groups else None) or "SRD",
+        "totalOpenMonths": len({(i.get("period_year"), i.get("period_month")) for i in invs
+                                if (i.get("status") or "").lower() in _UNPAID_STATUSES and (i.get("bucket") or "") != "future"}),
+        "thisMonthExpected": round(sum(float(i.get("amount") or 0) for i in invs
+                                       if i.get("period_month") == cur_m and i.get("period_year") == cur_y), 2),
+        "hasInvoices": bool(invs),
+    }
+    ql = q.strip().lower()
+
+    def keep(g):
+        if tenant_id and g["tenant_id"] != tenant_id:
+            return False
+        if tab == "open" and g["overdueCount"] == 0:
+            return False
+        if tab == "paid" and g["openCount"] > 0:
+            return False
+        if severity in ("critical", "late", "ok") and g["severity"] != severity:
+            return False
+        if ql:
+            hay = f"{g['tenant_name']} {g.get('apartment_number') or ''} {' '.join(g['invoice_numbers'])}".lower()
+            if ql not in hay:
+                return False
+        return True
+    filtered = [g for g in groups if keep(g)]
+    limit = max(1, min(limit, 100))
+    page = filtered[offset:offset + limit]
+    page_ids = {g["tenant_id"] for g in page}
+    return {
+        "tenant_ids": [g["tenant_id"] for g in page],
+        "invoices": [i for i in invs if i["tenant_id"] in page_ids],
+        "total": len(filtered),
+        "offset": offset,
+        "has_more": offset + limit < len(filtered),
+        "summary": summary,
+    }
 
 
 @api.post("/invoices", response_model=InvoiceOut)

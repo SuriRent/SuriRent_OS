@@ -136,6 +136,8 @@ function _globalInvalidate(data) {
     }
   } catch (e) { _log('primary mutate throw', e); }
 
+  _refreshInfinite(swrKey);
+
   // 2) Cross-collectie afhankelijkheden — bijv. betaling raakt facturen én plans
   const crossInvalidate = ['/admin/stats'];
   if (swrKey.startsWith('/payments')) {
@@ -160,6 +162,7 @@ function _globalInvalidate(data) {
     crossInvalidate.push('/payments', '/payments?status=pending_approval', '/invoices', '/tenants', '/payment-plans?status=active');
   }
   crossInvalidate.forEach((base) => {
+    _refreshInfinite(base);
     try {
       swrGlobalMutate(
         (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
@@ -180,6 +183,7 @@ function _globalInvalidate(data) {
 function _forceFullRevalidate() {
   try {
     swrGlobalMutate((k) => typeof k === 'string' && k.startsWith('/'), undefined, { revalidate: true });
+    _infinite.forEach((e) => e.fn());
   } catch { /* noop */ }
 }
 
@@ -334,4 +338,20 @@ export function useAdminEvents(onEvent, { enabled = true } = {}) {
       // pas expliciet via `closeAdminEvents()` bij logout.
     };
   }, [enabled]);
+}
+
+// useSWRInfinite-keys worden door SWR's filter-mutate overgeslagen; daarom
+// registreren infinite-lijsten (bv. Facturen) hier zelf hun refresh.
+const _infinite = new Set();
+function _refreshInfinite(key) {
+  _infinite.forEach((e) => {
+    if (e.pending || !(key === e.prefix || key.startsWith(e.prefix + '/') || key.startsWith(e.prefix + '?'))) return;
+    e.pending = true; // meerdere events in dezelfde tick → één refresh
+    setTimeout(() => { e.pending = false; e.fn(); }, 0);
+  });
+}
+export function registerInfiniteRefresh(prefix, fn) {
+  const e = { prefix, fn };
+  _infinite.add(e);
+  return () => _infinite.delete(e);
 }

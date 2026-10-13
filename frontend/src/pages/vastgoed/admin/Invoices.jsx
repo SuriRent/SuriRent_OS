@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import useSWRInfinite from 'swr/infinite';
 import {
   Plus, Loader2, FileText, Wand2, Search,
   SlidersHorizontal, CalendarDays, CheckCircle2,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../../../lib/api';
-import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useApiSWR } from '../../../lib/swr';
+import { registerInfiniteRefresh } from '../../../lib/admin-events';
 
-import { fmtAmount, fmtAmountWhole, groupByTenant, isUnpaid } from './invoices/helpers';
+import { fmtAmount, fmtAmountWhole, groupByTenant } from './invoices/helpers';
 import { Tab, MobileFilterPill, KpiCard, FilterMenu, Toast } from './invoices/kpi';
 import { TenantRow, MobileTenantCard } from './invoices/TenantRow';
 import InvoiceForm from './invoices/InvoiceForm';
@@ -20,22 +21,58 @@ import CreditSourcesPopover from './invoices/CreditSourcesPopover';
 // lijsten en de dedicated detail-pagina. Alle sub-componenten leven in
 // `./invoices/` (helpers.js, InvoiceRow.jsx, TenantRow.jsx, ...).
 // =====================================================================
+const PAGE_SIZE = 25;
+const pageFetcher = async (url) => (await api.get(url)).data;
+
+// Laadt de volgende pagina zodra het einde van de lijst in beeld komt.
+function LoadMoreSentinel({ active, onVisible, testid }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!active || !ref.current) return undefined;
+    const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) onVisible(); }, { rootMargin: '400px' });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [active, onVisible]);
+  return (
+    <div ref={ref} data-testid={testid} className="py-3 flex justify-center">
+      {active && <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />}
+    </div>
+  );
+}
+
 export default function Invoices() {
-  // SWR cache — tabwissel serveert instant uit cache
-  const { data: itemsRaw, mutate: refetchI, isLoading: loadingI } = useApiSWR('/invoices');
-  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [tab, setTab] = useState('all');            // 'all' | 'open' | 'paid'
+  const [filterSeverity, setFilterSeverity] = useState('all');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Server-side gepagineerd (25 huurders per pagina); zoeken/filters/KPI's over alle facturen.
+  // 30 s cache: terugnavigeren toont direct de vorige data zonder nieuwe call.
+  const getKey = (i, prev) => (prev && !prev.has_more ? null
+    : `/invoices/grouped?tab=${tab}&severity=${filterSeverity}&q=${encodeURIComponent(debouncedSearch)}&offset=${i * PAGE_SIZE}&limit=${PAGE_SIZE}`);
+  const { data: pages, size, setSize, mutate: refetchI, isLoading: loadingI, isValidating } = useSWRInfinite(getKey, pageFetcher, {
+    revalidateFirstPage: false, revalidateOnFocus: false, revalidateIfStale: true,
+    dedupingInterval: 30000, keepPreviousData: true,
+  });
+  const { data: tenantsRaw, mutate: refetchT } = useApiSWR('/tenants');
   const { data: creditsRaw, mutate: refetchC } = useApiSWR('/tenants/credits');
-  const items = itemsRaw || [];
   const tenants = tenantsRaw || [];
   const credits = creditsRaw || {};
-  const loading = (loadingI || loadingT) && items.length === 0;
+  // Live-sync: factuur/betaling-events verversen alle geladen pagina's.
+  useEffect(() => registerInfiniteRefresh('/invoices', () => refetchI()), [refetchI]);
+  const summary = pages?.[0]?.summary;
+  const hasMore = !!pages?.[pages.length - 1]?.has_more;
+  const loadingMore = isValidating && size > (pages?.length || 0);
+  const loadMore = useCallback(() => { if (!isValidating) setSize((n) => n + 1); }, [isValidating, setSize]);
+  const loading = loadingI && !pages;
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [reminding, setReminding] = useState(null);
   const [reminderChannel, setReminderChannel] = useState('whatsapp');
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('all');            // 'all' | 'open' | 'paid'
-  const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [detail, setDetail] = useState(null);       // dedicated detail page
   const [creditSourcesFor, setCreditSourcesFor] = useState(null); // {tenant_id, tenant_name} — popover trigger
@@ -78,14 +115,11 @@ export default function Invoices() {
     finally { setGenerating(false); }
   };
 
-  const groups = useMemo(() => {
-    const g = groupByTenant(items, MONTHS_NL);
-    const order = { critical: 0, late: 1, ok: 2 };
-    g.sort((a, b) => (order[a.severity] - order[b.severity])
-      || (b.totalOpen - a.totalOpen)
-      || a.tenant_name.localeCompare(b.tenant_name));
-    return g;
-  }, [items]);
+  // Groepeer per pagina en behoud de server-volgorde (severity → bedrag → naam).
+  const groups = useMemo(() => (pages || []).flatMap((pg) => {
+    const byId = new Map(groupByTenant(pg.invoices, MONTHS_NL).map((g) => [g.tenant_id, g]));
+    return pg.tenant_ids.map((id) => byId.get(id)).filter(Boolean);
+  }), [pages]);
 
   // Luister naar `focus-entity` uit de globale zoekbalk — open direct het
   // detail-scherm voor de tenant-groep die deze factuur bevat.
@@ -96,50 +130,26 @@ export default function Invoices() {
       const tid = d.tenant_id;
       if (!tid) return;
       const grp = groups.find((g) => g.tenant_id === tid);
-      if (grp) setDetail(grp);
+      if (grp) { setDetail(grp); return; }
+      // Huurder nog niet geladen (andere pagina) → los ophalen.
+      api.get('/invoices/grouped', { params: { tenant_id: tid } }).then(({ data }) => {
+        const g = groupByTenant(data.invoices, MONTHS_NL)[0];
+        if (g) setDetail(g);
+      }).catch(() => {});
     };
     window.addEventListener('focus-entity', handler);
     return () => window.removeEventListener('focus-entity', handler);
   }, [groups]);
 
-  const allCount = groups.length;
-  const openCount = useMemo(() => groups.filter((g) => (g.overdueCount || 0) > 0).length, [groups]);
-  const paidCount = useMemo(() => groups.filter((g) => g.openCount === 0).length, [groups]);
-  const totalOpenAmount = useMemo(
-    () => groups.reduce((s, g) => s + (g.totalOverdue || 0) + (g.totalCurrent || 0), 0),
-    [groups]
-  );
-  const totalOpenCurrency = groups[0]?.currency || 'SRD';
-  const totalOpenMonths = useMemo(
-    () => new Set(
-      items
-        .filter(isUnpaid)
-        .filter((i) => (i.bucket || '') !== 'future')
-        .map((i) => `${i.period_year}-${i.period_month}`)
-    ).size,
-    [items]
-  );
-  const thisMonthExpected = useMemo(() => {
-    const m = today.getMonth() + 1, y = today.getFullYear();
-    return items.filter((i) => i.period_month === m && i.period_year === y)
-      .reduce((s, i) => s + Number(i.amount || 0), 0);
-  }, [items, today]);
-
-  const filteredGroups = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return groups.filter((g) => {
-      if (tab === 'open' && (g.overdueCount || 0) === 0) return false;
-      if (tab === 'paid' && g.openCount > 0) return false;
-      if (filterSeverity === 'critical' && g.severity !== 'critical') return false;
-      if (filterSeverity === 'late' && g.severity !== 'late') return false;
-      if (filterSeverity === 'ok' && g.severity !== 'ok') return false;
-      if (q) {
-        const hay = `${g.tenant_name} ${g.apartment_number || ''} ${g.open.map((i) => i.invoice_number).join(' ')}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [groups, tab, filterSeverity, search]);
+  const allCount = summary?.allCount || 0;
+  const openCount = summary?.openCount || 0;
+  const paidCount = summary?.paidCount || 0;
+  const totalOpenAmount = summary?.totalOpenAmount || 0;
+  const totalOpenCurrency = summary?.currency || 'SRD';
+  const totalOpenMonths = summary?.totalOpenMonths || 0;
+  const thisMonthExpected = summary?.thisMonthExpected || 0;
+  const hasInvoices = !!summary?.hasInvoices;
+  const filteredGroups = groups;
 
   const openReminder = (group, channel) => {
     setReminderChannel(channel);
@@ -240,7 +250,7 @@ export default function Invoices() {
           <div className="bg-white rounded-2xl border border-orange-100 p-8 text-center" data-testid="mi-empty">
             <FileText className="w-9 h-9 text-orange-300 mx-auto mb-2" />
             <p className="text-[13px] text-slate-500 font-bold">
-              {items.length === 0 ? 'Nog geen facturen.' : 'Geen resultaten.'}
+              {!hasInvoices ? 'Nog geen facturen.' : 'Geen resultaten.'}
             </p>
           </div>
         ) : (
@@ -250,6 +260,7 @@ export default function Invoices() {
                 <MobileTenantCard group={g} credits={credits[g.tenant_id]} onClick={() => setDetail(g)} onCreditClick={() => openCreditSources(g)} onReminder={openReminder} tenants={tenants} />
               </div>
             ))}
+            <LoadMoreSentinel active={hasMore || loadingMore} onVisible={loadMore} testid="mi-load-more" />
           </div>
         )}
       </div>
@@ -339,9 +350,9 @@ export default function Invoices() {
           <div className="bg-white rounded-2xl border border-orange-100 p-10 text-center" data-testid="invoices-empty">
             <FileText className="w-10 h-10 text-orange-300 mx-auto mb-3" />
             <p className="text-slate-500 font-semibold">
-              {items.length === 0 ? 'Geen facturen.' : 'Geen resultaten.'}
+              {!hasInvoices ? 'Geen facturen.' : 'Geen resultaten.'}
             </p>
-            {items.length === 0 && (
+            {!hasInvoices && (
               <p className="text-xs text-slate-400 mt-1">
                 Klik op &quot;Genereer maand&quot; om automatisch facturen aan te maken.
               </p>
@@ -358,6 +369,7 @@ export default function Invoices() {
                 onCreditClick={() => openCreditSources(g)}
                 tenants={tenants} />
             ))}
+            <LoadMoreSentinel active={hasMore || loadingMore} onVisible={loadMore} testid="invoices-load-more" />
           </div>
         )}
       </div>
