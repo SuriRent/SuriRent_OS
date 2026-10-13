@@ -9,13 +9,18 @@ export function buildReceiptImageUrl(paymentId) {
 // Exacte paginahoogte: "size: 58mm auto" negeert Chrome (valt terug op A4),
 // daarom meten we #bon en zetten we een @page met vaste hoogte.
 function fitPageToBon(bon) {
+  // Meet met de print-lettergroottes (html.fitm, zie backend comp_css) zodat
+  // de pagina direct na de laatste regel eindigt — geen witruimte onderaan.
   const prev = bon.style.cssText;
-  bon.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:54mm;font-size:13px;';
-  const hmm = Math.max(40, Math.ceil(bon.offsetHeight * 25.4 / 96) + 4);
+  bon.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:54mm;';
+  document.documentElement.classList.add('fitm');
+  const sheet = bon.querySelector('.sheet') || bon;
+  const hmm = Math.max(20, Math.ceil(sheet.getBoundingClientRect().height * 25.4 / 96) + 1);
+  document.documentElement.classList.remove('fitm');
   bon.style.cssText = prev;
   let el = document.getElementById('bon-page-size');
   if (!el) { el = document.createElement('style'); el.id = 'bon-page-size'; document.head.appendChild(el); }
-  el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 0; } }`;
+  el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 0; } html, body { height: ${hmm}mm !important; min-height: 0 !important; overflow: hidden !important; } }`;
 }
 
 /**

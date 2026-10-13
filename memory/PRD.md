@@ -770,3 +770,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Bonnen van vandaag = alle kiosk-betalingen (payments.kiosk_employee_id, paid_at>=since) + print-log; blijft zichtbaar als medewerker offline (venster sluit niet automatisch); medewerkers-lijst via GET /kiosk/print-log/employees; markeren via POST /kiosk/print-log/by-payment/{pid}/printed → "Al geprint" (blijft bij herprint medewerker); poll 15s
 - 2026-06: Goedkeuren in bonnen-venster (lazy ApprovePaymentSheet uit Payments.jsx, modalClassName !z-[10050])
 - 2026-06: Alles goedkeuren (KioskBulkApproveSheet) — 1 handtekening, sequentiële /payments/{id}/approve calls, voortgang + foutlijst
+- 2026-06: Bon (thermal) eindigt direct na laatste regel: .sheet padding-bottom 0, meting met print-lettergroottes via html.fitm, @page hoogte exact (+1mm), html/body height vast + overflow hidden (server print.html + kiosk-print.js fitPageToBon)

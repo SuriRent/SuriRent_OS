@@ -11573,13 +11573,15 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
       var W = %d;
       function fit() {
         try {
-          var b = document.body, prev = b.style.width;
-          b.style.width = W + 'mm';
-          var hmm = Math.ceil(b.scrollHeight * 25.4 / 96) + 2;
-          b.style.width = prev;
+          // Meet de .sheet met de print-lettergroottes → pagina eindigt direct na de laatste regel.
+          var d = document.documentElement, sh = document.querySelector('.sheet');
+          if (!sh) return;
+          d.classList.add('fitm');
+          var hmm = Math.ceil(sh.getBoundingClientRect().height * 25.4 / 96) + 1;
+          d.classList.remove('fitm');
           var el = document.getElementById('page-fit');
           if (!el) { el = document.createElement('style'); el.id = 'page-fit'; document.head.appendChild(el); }
-          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 40) + 'mm; margin: 0; } }';
+          el.textContent = '@media print { @page { size: ' + W + 'mm ' + Math.max(hmm, 20) + 'mm; margin: 0; } html, body { height: ' + hmm + 'mm; overflow: hidden; } }';
         } catch (e) {}
       }
       document.addEventListener('DOMContentLoaded', fit);
@@ -11592,7 +11594,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 
     def comp_css(S: str) -> str:
         return f"""
-  {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0; box-sizing: border-box; font-size: 12px; }}
+  {S}.sheet {{ width: 54mm; max-width: 54mm; margin: 0 auto; padding: 2mm 0 0; box-sizing: border-box; font-size: 12px; }}
+  {S}.sheet > :last-child {{ margin-bottom: 0; padding-bottom: 0; }}
   {S}.c {{ text-align: center; }}
   {S}.b {{ font-weight: 700; }}
   {S}.name {{ font-size: 14px; font-weight: 900; text-align: center; word-break: break-word; }}
@@ -11605,15 +11608,20 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   {S}.paid-lbl {{ white-space: nowrap; word-break: keep-all; }}
   {S}.paid-amt {{ display: block; text-align: right; }}
   {"@media all" if screen_sizes else "@media print"} {{
-    {S}.sheet, {S}.sheet * {{ font-size: {fs[0]}px; }}
+{print_sizes(S)}
+  }}
+  /* Zelfde print-maten tijdens het meten van de bonlengte (html.fitm). */
+{print_sizes("html.fitm " + S)}
+"""
+
+    def print_sizes(S: str) -> str:
+        return f"""    {S}.sheet, {S}.sheet * {{ font-size: {fs[0]}px; }}
     {S}.sheet .name {{ font-size: {fs[1]}px; font-weight: 900; }}
     {S}.sheet .title {{ font-size: {fs[2]}px; }}
     {S}.sheet .big {{ font-size: {fs[3]}px; font-weight: 900; white-space: normal; }}
     {S}.r {{ flex-wrap: wrap; }}
     {S}.r > span:last-child {{ margin-left: auto; }}
-    {S}.r.one, {S}.r.one * {{ flex-wrap: nowrap; white-space: nowrap; font-size: {min(fs[0], 12)}px; }}
-  }}
-"""
+    {S}.r.one, {S}.r.one * {{ flex-wrap: nowrap; white-space: nowrap; font-size: {min(fs[0], 12)}px; }}""" 
     city = location_city if location_city and location_city.lower() not in (location_name or "").lower() else ""
     unit_line = " - ".join(x for x in [apartment_number, location_name, city] if x)
     sheet_html = f"""
@@ -11661,10 +11669,11 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
   /* Bonrol {W}mm — geen A4; marge 0 = geen browser-kop/voettekst/URL. */
   html, body {{ font-family: "Courier New", ui-monospace, Menlo, monospace;
     font-size: 12px; line-height: 1.25; color: #000; margin: 0; padding: 0; background: #fff; }}
-  body {{ width: {W}mm; }}
+  body {{ width: {W}mm; min-height: 0; }}
   @media print {{
-    @page {{ size: {W}mm auto; margin: 0; }}
-    html, body {{ height: auto; min-height: 0; }}
+    /* Fallback; page-fit script zet de exacte hoogte van de bon. */
+    @page {{ size: {W}mm 150mm; margin: 0; }}
+    html, body {{ height: auto; min-height: 0; padding: 0; margin: 0; }}
     body {{ font-size: {fs[0]}px; }}
     .no-print {{ display: none !important; }}
   }}
