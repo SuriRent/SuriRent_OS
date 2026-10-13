@@ -771,3 +771,5 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Goedkeuren in bonnen-venster (lazy ApprovePaymentSheet uit Payments.jsx, modalClassName !z-[10050])
 - 2026-06: Alles goedkeuren (KioskBulkApproveSheet) — 1 handtekening, sequentiële /payments/{id}/approve calls, voortgang + foutlijst
 - 2026-06: Bon (thermal) eindigt direct na laatste regel: .sheet padding-bottom 0, meting met print-lettergroottes via html.fitm, @page hoogte exact (+1mm), html/body height vast + overflow hidden (server print.html + kiosk-print.js fitPageToBon)
+
+- 2026-06: Bon: BETAALD-bedrag op één regel, normale lettergrootte (vet), niet meer extra groot.

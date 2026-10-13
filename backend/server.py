@@ -11643,8 +11643,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div>OMSCHRIJVING:</div>
     <div class="b wrap">{h(desc or 'Huurbetaling')}</div>
     <div class="sep"></div>
-    <div class="paid-lbl">BETAALD</div>
-    <div class="paid-amt big">{h(fmt_money(amount, currency))}</div>
+    <div class="r"><span>BETAALD</span><span class="b">{h(fmt_money(amount, currency))}</span></div>
     <div class="r"><span>BETAALWIJZE</span><span class="b">{h(method_label)}</span></div>
     <div class="sep"></div>
     <div class="r one"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
