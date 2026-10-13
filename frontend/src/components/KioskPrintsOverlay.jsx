@@ -57,9 +57,9 @@ export function KioskPrintsOverlay({ employees, printsVersion, onClose }) {
       const { data } = await api.get('/kiosk/print-log', { params: { since: todayStartIso(), employee: emp.key } });
       setLogs(data);
     } catch { setLogs((l) => l || []); }
-  }, [emp?.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setLogs(null); load(); }, [emp?.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (printsVersion) load(); }, [printsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [emp?.key]);
+  useEffect(() => { setLogs(null); load(); }, [emp?.key]);
+  useEffect(() => { if (printsVersion) load(); }, [printsVersion]);
 
   const onPrint = async (log) => {
     setBusyId(log.id);
