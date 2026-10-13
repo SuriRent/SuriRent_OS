@@ -16,6 +16,7 @@ export const api = axios.create({
 
 // Attach bearer token if present (fallback to cookie auth)
 api.interceptors.request.use((config) => {
+  config._t0 = performance.now(); // voor trage-verbinding detectie
   const adminToken = localStorage.getItem('admin_token');
   const kioskToken = localStorage.getItem('kiosk_token');
   const tenantToken = localStorage.getItem('tenant_token');
@@ -54,8 +55,14 @@ const PUBLIC_401_PATHS = [
   '/auth/login', '/auth/register', '/auth/kiosk-pin',
   '/tenant-portal/login', '/tenant-portal/pin-login',
 ];
+// Meet duur van gewone GET-calls (geen blobs) voor de "Trage verbinding"-melding.
+const reportTiming = (cfg) => {
+  if (!cfg?._t0 || (cfg.method || 'get') !== 'get' || cfg.responseType === 'blob') return;
+  try { window.dispatchEvent(new CustomEvent('surirent:req-time', { detail: performance.now() - cfg._t0 })); } catch { /* noop */ }
+};
+
 api.interceptors.response.use(
-  (r) => r,
+  (r) => { reportTiming(r.config); return r; },
   (err) => {
     // Geen response (geen internet / server onbereikbaar) → offline-scherm laat zelf pingen.
     if (!err?.response && err?.code !== 'ERR_CANCELED') {

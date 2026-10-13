@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { OfflineOverlay } from './components/OfflineOverlay';
+import { SlowConnectionBanner } from './components/SlowConnectionBanner';
 import './index.css';
 
 // =====================================================================
@@ -97,5 +98,6 @@ root.render(
   <BrowserRouter>
     <App />
     <OfflineOverlay />
+    <SlowConnectionBanner />
   </BrowserRouter>
 );
