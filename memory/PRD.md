@@ -739,3 +739,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - WS /api/kiosk/ws (auth via eerste bericht {type:auth, role, token, admin_token|name}); presence in kiosk_presence (TTL 10s, ping 5s); PRINT_RECEIPT via event_bus kanaal kiosk-admin:{cid}
 - Frontend lib/kiosk-live.js (store buiten React, 2s debounce, merge per payment_id) + components/KioskLiveStatus.jsx (bolletje rechtsboven alleen beheerder-kiosk, toast met Afdrukken)
 - printReceipt/sendApkPrint dispatchen window event kiosk-receipt-printed; beheerder print met relay:false
+- 2026-06 update: geen auto-print meer bij beheerder; kiosk_print_log (1 regel per bon, admin_printed_at vinkje); GET /api/kiosk/print-log?since=&employee=, POST /api/kiosk/print-log/{id}/printed; fullscreen KioskPrintsOverlay opent automatisch bij nieuwe medewerker (sessionStorage kiosk_live_active_emps), medewerker-keuze bij >1 actief

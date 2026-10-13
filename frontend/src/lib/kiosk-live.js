@@ -1,6 +1,3 @@
-import { printReceipt } from './kiosk-print';
-import { api } from './api';
-
 // Kiosk live-kanaal (WebSocket). Draait buiten React: alleen abonnees
 // (het statusbolletje) renderen bij een wijziging.
 const DEBOUNCE_MS = 2000;
@@ -11,13 +8,16 @@ let role = null;
 let pingTimer = null;
 let retryTimer = null;
 let stopped = true;
-let state = { connected: false, active: false, count: 0, toast: null };
+const INITIAL = { connected: false, active: false, count: 0, employees: [], printsVersion: 0, overlayOpen: false };
+let state = INITIAL;
+// Vorige actieve set (sessionStorage) zodat een herlaad het venster niet opnieuw opent.
+const SEEN_KEY = 'kiosk_live_active_emps';
+const readPrevActive = () => { try { return new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } };
 const listeners = new Set();
 
 let presenceTimer = null;
 let pendingPresence = null;
 let printTimer = null;
-const pendingPrints = new Map(); // payment_id -> employee
 
 const emit = (patch) => {
   state = { ...state, ...patch };
@@ -32,7 +32,10 @@ const wsUrl = () => `${(process.env.REACT_APP_BACKEND_URL || window.location.ori
 function helloMsg() {
   const m = { type: 'auth', role, token: localStorage.getItem('kiosk_token') || '' };
   if (role === 'admin') m.admin_token = localStorage.getItem('admin_token') || '';
-  else m.name = localStorage.getItem('kiosk_emp_name') || localStorage.getItem('device_user_name') || '';
+  else {
+    m.name = localStorage.getItem('kiosk_emp_name') || localStorage.getItem('device_user_name') || '';
+    m.employee_id = localStorage.getItem('kiosk_emp_id') || localStorage.getItem('device_user_email') || '';
+  }
   return m;
 }
 
@@ -41,23 +44,19 @@ function queuePresence(msg) {
   pendingPresence = msg;
   clearTimeout(presenceTimer);
   presenceTimer = setTimeout(() => {
-    emit({ active: !!pendingPresence.active, count: pendingPresence.count || 0 });
+    const employees = pendingPresence.employees || [];
+    // Nieuwe medewerker ingelogd → bonnen-venster automatisch openen.
+    const prev = readPrevActive();
+    const isNew = employees.some((e) => !prev.has(e.key));
+    try { sessionStorage.setItem(SEEN_KEY, JSON.stringify(employees.map((e) => e.key))); } catch { /* noop */ }
+    emit({ active: !!pendingPresence.active, count: pendingPresence.count || 0, employees, ...(isNew ? { overlayOpen: true } : {}) });
   }, DEBOUNCE_MS);
 }
 
-function queuePrint(msg) {
-  pendingPrints.set(msg.payment_id, msg.employee || '');
+// Bon-berichten samenvoegen: na 2 s rust één refresh van de bonnenlijst.
+function queuePrint() {
   clearTimeout(printTimer);
-  printTimer = setTimeout(async () => {
-    const batch = [...pendingPrints.entries()];
-    pendingPrints.clear();
-    const who = batch.map(([, e]) => e).filter(Boolean)[0];
-    emit({ toast: { ids: batch.map(([id]) => id), who, at: Date.now() } });
-    for (const [paymentId] of batch) {
-      // eslint-disable-next-line no-await-in-loop
-      await printReceipt({ paymentId, apiGet: api.get, relay: false });
-    }
-  }, DEBOUNCE_MS);
+  printTimer = setTimeout(() => emit({ printsVersion: state.printsVersion + 1 }), DEBOUNCE_MS);
 }
 
 function connect() {
@@ -71,7 +70,7 @@ function connect() {
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === 'presence') queuePresence(msg);
-    else if (msg.type === 'PRINT_RECEIPT' && msg.payment_id) queuePrint(msg);
+    else if (msg.type === 'PRINT_RECEIPT' && msg.payment_id) queuePrint();
   };
   ws.onclose = () => {
     clearInterval(pingTimer);
@@ -110,9 +109,8 @@ export function stopKioskLive() {
   window.removeEventListener('kiosk-receipt-printed', onPrinted);
   clearTimeout(retryTimer); clearInterval(pingTimer);
   clearTimeout(presenceTimer); clearTimeout(printTimer);
-  pendingPrints.clear();
   if (ws) { ws.onclose = null; try { ws.close(); } catch { /* noop */ } ws = null; }
-  state = { connected: false, active: false, count: 0, toast: null };
+  state = INITIAL;
 }
 
-export function clearKioskLiveToast() { emit({ toast: null }); }
+export const setKioskOverlayOpen = (open) => emit({ overlayOpen: open });

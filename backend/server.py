@@ -290,6 +290,7 @@ async def lifespan(app: FastAPI):
     await db.kiosk_pins.create_index("company_id", unique=True)
     await db.kiosk_presence.create_index([("company_id", 1), ("last_seen", 1)])
     await db.kiosk_presence.delete_many({})
+    await db.kiosk_print_log.create_index([("company_id", 1), ("printed_at", -1)])
     await db.payment_plans.create_index([("company_id", 1), ("status", 1)])
     await db.payment_plans.create_index([("tenant_id", 1), ("status", 1)])
     await db.payment_plan_installments.create_index([("plan_id", 1), ("sequence", 1)], unique=True)
@@ -9793,8 +9794,13 @@ def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
     return cid
 
 
-async def _active_employee_count(cid: str) -> int:
-    return await db.kiosk_presence.count_documents({"company_id": cid, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}})
+async def _active_employees(cid: str) -> list:
+    docs = await db.kiosk_presence.find(
+        {"company_id": cid, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}},
+        {"_id": 0, "emp_key": 1, "name": 1},
+    ).to_list(200)
+    uniq = {d.get("emp_key") or d.get("name") or "medewerker": d.get("name") or "Medewerker" for d in docs}
+    return [{"key": k, "name": v} for k, v in sorted(uniq.items(), key=lambda x: x[1])]
 
 
 @api.websocket("/kiosk/ws")
@@ -9807,7 +9813,8 @@ async def kiosk_ws(ws: WebSocket):
         await ws.close(code=4400)
         return
     role = "admin" if hello.get("role") == "admin" else "employee"
-    name = str(hello.get("name") or "")
+    name = str(hello.get("name") or "")[:60]
+    emp_key = str(hello.get("employee_id") or name or "medewerker")[:80]
     cid = _ws_company(str(hello.get("token") or ""), role, str(hello.get("admin_token") or ""))
     if not cid:
         await ws.close(code=4401)
@@ -9816,12 +9823,12 @@ async def kiosk_ws(ws: WebSocket):
     if role == "admin":
         await _kiosk_ws_admin(ws, cid, channel)
     else:
-        await _kiosk_ws_employee(ws, cid, channel, name[:60])
+        await _kiosk_ws_employee(ws, cid, channel, name, emp_key)
 
 
-async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str):
+async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, emp_key: str):
     conn_id = str(uuid.uuid4())
-    await db.kiosk_presence.insert_one({"conn_id": conn_id, "company_id": cid, "name": name, "last_seen": time.time()})
+    await db.kiosk_presence.insert_one({"conn_id": conn_id, "company_id": cid, "name": name, "emp_key": emp_key, "last_seen": time.time()})
     await _kb_publish(channel, {"type": "presence_changed"})
     try:
         while True:
@@ -9832,7 +9839,14 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str):
             elif kind == "PRINT_RECEIPT" and msg.get("payment_id"):
                 pid = str(msg["payment_id"])
                 if await db.payments.find_one({"id": pid, "company_id": cid}, {"_id": 1}):
-                    await _kb_publish(channel, {"type": "PRINT_RECEIPT", "payment_id": pid, "employee": name})
+                    # Eén logregel per bon; herprint werkt de tijd bij en reset het vinkje.
+                    await db.kiosk_print_log.update_one(
+                        {"company_id": cid, "payment_id": pid},
+                        {"$set": {"emp_key": emp_key, "employee_name": name, "printed_at": iso(now_utc()), "admin_printed_at": None},
+                         "$setOnInsert": {"id": str(uuid.uuid4())}},
+                        upsert=True,
+                    )
+                    await _kb_publish(channel, {"type": "PRINT_RECEIPT", "payment_id": pid, "employee": name, "emp_key": emp_key})
     except (WebSocketDisconnect, RuntimeError, ValueError):
         pass
     finally:
@@ -9842,13 +9856,13 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str):
 
 async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
     queue = _kb_subscribe(channel, maxsize=64)
-    last = {"count": None}
+    last = {"emps": None}
 
     async def push_presence():
-        n = await _active_employee_count(cid)
-        if n != last["count"]:
-            last["count"] = n
-            await ws.send_json({"type": "presence", "active": n > 0, "count": n})
+        emps = await _active_employees(cid)
+        if emps != last["emps"]:
+            last["emps"] = emps
+            await ws.send_json({"type": "presence", "active": bool(emps), "count": len(emps), "employees": emps})
 
     async def forward():
         while True:
@@ -9876,6 +9890,30 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
         pass
     finally:
         _kb_unsubscribe(channel, queue)
+
+
+@api.get("/kiosk/print-log")
+async def kiosk_print_log(since: str, employee: Optional[str] = None, _session=Depends(get_kiosk_session)):
+    """Bonnen die kiosk-medewerkers sinds `since` (lokale middernacht) printten."""
+    q = {"company_id": _session["company_id"], "printed_at": {"$gte": since}}
+    if employee:
+        q["emp_key"] = employee
+    logs = await db.kiosk_print_log.find(q, {"_id": 0}).sort("printed_at", -1).to_list(500)
+    pays = await db.payments.find(
+        {"id": {"$in": [l["payment_id"] for l in logs]}},
+        {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "tenant_name": 1, "method": 1},
+    ).to_list(500)
+    p_by_id = {p["id"]: p for p in pays}
+    return [{**l, "payment": p_by_id.get(l["payment_id"])} for l in logs if l["payment_id"] in p_by_id]
+
+
+@api.post("/kiosk/print-log/{log_id}/printed")
+async def kiosk_print_log_mark(log_id: str, _session=Depends(get_kiosk_session)):
+    res = await db.kiosk_print_log.update_one(
+        {"id": log_id, "company_id": _session["company_id"]}, {"$set": {"admin_printed_at": iso(now_utc())}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Bon niet gevonden")
+    return {"ok": True}
 
 
 @api.post("/kiosk/payments", response_model=PaymentOut)
