@@ -14,7 +14,7 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
@@ -288,6 +288,8 @@ async def lifespan(app: FastAPI):
     await db.push_subs.create_index("endpoint", unique=True)
     await db.employees.create_index([("company_id", 1), ("active", 1), ("app_role", 1)])
     await db.kiosk_pins.create_index("company_id", unique=True)
+    await db.kiosk_presence.create_index([("company_id", 1), ("last_seen", 1)])
+    await db.kiosk_presence.delete_many({})
     await db.payment_plans.create_index([("company_id", 1), ("status", 1)])
     await db.payment_plans.create_index([("tenant_id", 1), ("status", 1)])
     await db.payment_plan_installments.create_index([("plan_id", 1), ("sequence", 1)], unique=True)
@@ -9756,6 +9758,124 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "has_history": bool(has_payment or has_invoice),
         "due_reminders": due_notes,
     }
+
+
+# =====================================================================
+# Kiosk live-kanaal (WebSocket): medewerker-aanwezigheid + PRINT_RECEIPT
+# naar de kiosk van de beheerder. Cross-replica via event_bus.
+# =====================================================================
+from event_bus import publish as _kb_publish, subscribe as _kb_subscribe, unsubscribe as _kb_unsubscribe  # noqa: E402
+
+_PRESENCE_TTL_S = 10
+
+
+def _kiosk_admin_channel(cid: str) -> str:
+    return f"kiosk-admin:{cid}"
+
+
+def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
+    try:
+        p = decode_token(token)
+    except Exception:  # noqa: BLE001
+        return None
+    if p.get("type") != "kiosk" or not p.get("company_id"):
+        return None
+    cid = p["company_id"]
+    if role == "admin":
+        try:
+            a = decode_token(admin_token)
+        except Exception:  # noqa: BLE001
+            return None
+        if a.get("type") != "access" or a.get("role") not in ("admin", "superadmin"):
+            return None
+        if a.get("role") == "admin" and a.get("company_id") != cid:
+            return None
+    return cid
+
+
+async def _active_employee_count(cid: str) -> int:
+    return await db.kiosk_presence.count_documents({"company_id": cid, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}})
+
+
+@api.websocket("/kiosk/ws")
+async def kiosk_ws(ws: WebSocket):
+    # Tokens komen in het eerste bericht (niet in de URL → niet in access-logs).
+    await ws.accept()
+    try:
+        hello = await asyncio.wait_for(ws.receive_json(), timeout=10)
+    except Exception:  # noqa: BLE001
+        await ws.close(code=4400)
+        return
+    role = "admin" if hello.get("role") == "admin" else "employee"
+    name = str(hello.get("name") or "")
+    cid = _ws_company(str(hello.get("token") or ""), role, str(hello.get("admin_token") or ""))
+    if not cid:
+        await ws.close(code=4401)
+        return
+    channel = _kiosk_admin_channel(cid)
+    if role == "admin":
+        await _kiosk_ws_admin(ws, cid, channel)
+    else:
+        await _kiosk_ws_employee(ws, cid, channel, name[:60])
+
+
+async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str):
+    conn_id = str(uuid.uuid4())
+    await db.kiosk_presence.insert_one({"conn_id": conn_id, "company_id": cid, "name": name, "last_seen": time.time()})
+    await _kb_publish(channel, {"type": "presence_changed"})
+    try:
+        while True:
+            msg = await ws.receive_json()
+            kind = msg.get("type")
+            if kind == "ping":
+                await db.kiosk_presence.update_one({"conn_id": conn_id}, {"$set": {"last_seen": time.time()}})
+            elif kind == "PRINT_RECEIPT" and msg.get("payment_id"):
+                pid = str(msg["payment_id"])
+                if await db.payments.find_one({"id": pid, "company_id": cid}, {"_id": 1}):
+                    await _kb_publish(channel, {"type": "PRINT_RECEIPT", "payment_id": pid, "employee": name})
+    except (WebSocketDisconnect, RuntimeError, ValueError):
+        pass
+    finally:
+        await db.kiosk_presence.delete_one({"conn_id": conn_id})
+        await _kb_publish(channel, {"type": "presence_changed"})
+
+
+async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
+    queue = _kb_subscribe(channel, maxsize=64)
+    last = {"count": None}
+
+    async def push_presence():
+        n = await _active_employee_count(cid)
+        if n != last["count"]:
+            last["count"] = n
+            await ws.send_json({"type": "presence", "active": n > 0, "count": n})
+
+    async def forward():
+        while True:
+            try:
+                ev = await asyncio.wait_for(queue.get(), timeout=3.0)
+            except asyncio.TimeoutError:
+                await push_presence()  # TTL-verloop detecteren zonder event
+                continue
+            if ev.get("type") == "presence_changed":
+                await push_presence()
+            elif ev.get("type") == "PRINT_RECEIPT":
+                await ws.send_json(ev)
+
+    async def receive():
+        while True:
+            await ws.receive_text()  # pings; disconnect beëindigt de loop
+
+    try:
+        await push_presence()
+        tasks = [asyncio.create_task(forward()), asyncio.create_task(receive())]
+        _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        _kb_unsubscribe(channel, queue)
 
 
 @api.post("/kiosk/payments", response_model=PaymentOut)

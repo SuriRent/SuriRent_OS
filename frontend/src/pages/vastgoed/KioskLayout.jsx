@@ -20,6 +20,7 @@ import {
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage } from '../../lib/kiosk-print';
+import { KioskLiveStatus } from '../../components/KioskLiveStatus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 
 prefetchKioskSelect();
@@ -2338,6 +2339,7 @@ async function sendApkPrint(data, paymentId) {
   const msg = { type: 'PRINT_RECEIPT', url, textZoom: full.textZoom ?? 420, lettergrootte: full.lettergrootte || 'groot', fontSizes: full.fontSizes, data: { ...data, ...full } };
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
+  if (paymentId) window.dispatchEvent(new CustomEvent('kiosk-receipt-printed', { detail: { paymentId } }));
   try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
 }
 
@@ -4861,6 +4863,7 @@ export default function KioskLayout() {
 
   return (
     <div className="kiosk-fullscreen bg-orange-500" data-testid="kiosk-root">
+      <KioskLiveStatus isAdmin={hasAdminAccess} />
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
           error). De statische "tap hint" is weggehaald op verzoek. */}

@@ -23,7 +23,9 @@ function fitPageToBon(bon) {
  * CSS (index.css) verbergt al het andere. In de APK opent de app zelf het
  * systeem-printvenster via PRINT_RECEIPT.
  */
-export async function printReceipt({ paymentId, apiGet }) {
+export async function printReceipt({ paymentId, apiGet, relay = true }) {
+  // Meld de print aan het kiosk live-kanaal (beheerder-kiosk drukt mee af).
+  if (relay) window.dispatchEvent(new CustomEvent('kiosk-receipt-printed', { detail: { paymentId } }));
   if (window.ReactNativeWebView?.postMessage) {
     const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
     let data = { payment_id: paymentId };

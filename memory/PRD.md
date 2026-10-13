@@ -734,3 +734,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Kiosk: push-heartbeat, reset-beacon, live-preview, klant-initiated payment/method polling verwijderd
 - Backend: alle /kiosk/customer-display en /public/customer-display endpoints weg; customer_display collectie wordt bij startup gedropt; MyUrl/QR klantenscherm-link weg
 - event_bus blijft (admin live-sync)
+
+## 2026-06 Kiosk live-status (WebSocket)
+- WS /api/kiosk/ws (auth via eerste bericht {type:auth, role, token, admin_token|name}); presence in kiosk_presence (TTL 10s, ping 5s); PRINT_RECEIPT via event_bus kanaal kiosk-admin:{cid}
+- Frontend lib/kiosk-live.js (store buiten React, 2s debounce, merge per payment_id) + components/KioskLiveStatus.jsx (bolletje rechtsboven alleen beheerder-kiosk, toast met Afdrukken)
+- printReceipt/sendApkPrint dispatchen window event kiosk-receipt-printed; beheerder print met relay:false
