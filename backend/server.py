@@ -9962,6 +9962,16 @@ def _kiosk_admin_channel(cid: str) -> str:
     return f"kiosk-admin:{cid}"
 
 
+def _device_config_msg(cfg: dict) -> dict:
+    on = bool((cfg or {}).get("kt_v520_enabled"))
+    return {"type": "device_config", "kt_v520_enabled": on, "printer": "kt-v520" if on else None}
+
+
+async def _kiosk_device_config(cid: str) -> dict:
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "kiosk_devices": 1})
+    return _device_config_msg((cs or {}).get("kiosk_devices") or {})
+
+
 def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
     try:
         p = decode_token(token)
@@ -10020,7 +10030,18 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
     await _kb_publish(channel, {"type": "presence_changed"})
     asyncio.create_task(_kiosk_emp_login(cid, emp_key, name))
     bye = False
+    queue = _kb_subscribe(channel, maxsize=16)
+
+    async def forward_config():
+        # Alleen apparaat-instellingen doorsturen naar de medewerker-kiosk.
+        while True:
+            ev = await queue.get()
+            if ev.get("type") == "device_config":
+                await ws.send_json(ev)
+
+    fwd = asyncio.create_task(forward_config())
     try:
+        await ws.send_json(await _kiosk_device_config(cid))
         while True:
             msg = await ws.receive_json()
             kind = msg.get("type")
@@ -10043,6 +10064,8 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
     except (WebSocketDisconnect, RuntimeError, ValueError):
         pass
     finally:
+        fwd.cancel()
+        _kb_unsubscribe(channel, queue)
         await db.kiosk_presence.delete_one({"conn_id": conn_id})
         await _kb_publish(channel, {"type": "presence_changed"})
         # Expliciet uitloggen → direct; verbinding weg → pas na grace (netwerk-hapering).
@@ -10111,7 +10134,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") == "PRINT_RECEIPT":
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config"):
                 await ws.send_json(ev)
 
     async def receive():
@@ -10119,6 +10142,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
             await ws.receive_text()  # pings; disconnect beëindigt de loop
 
     try:
+        await ws.send_json(await _kiosk_device_config(cid))
         await push_presence()
         tasks = [asyncio.create_task(forward()), asyncio.create_task(receive())]
         _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -11378,7 +11402,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         datum = d.strftime("%d-%m-%Y %H:%M")
     except Exception:
         datum = str(paid)[:16]
-    return {
+    out = {
         "bedrijfsnaam": (p.get("company_name") or "").strip() or "SuriRent",
         "adres": (loc or {}).get("address") or p.get("company_address") or "",
         "telefoon": (loc or {}).get("phone") or p.get("company_phone") or p.get("company_whatsapp") or "",
@@ -11396,6 +11420,49 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         "textZoom": text_zoom,
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
     }
+    out["printer"] = (await _kiosk_device_config(p["company_id"]))["printer"]
+    out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"))
+    return out
+
+
+_RECEIPT_COLS = 32  # 58mm thermisch, standaard font A
+
+
+def _receipt_text_lines(d: dict, title: str) -> list:
+    """Bon als tekstregels voor ESC/POS-printers (KT-V520 via KTPsdk)."""
+    W = _RECEIPT_COLS
+    dash = "-" * W
+
+    def row(label, value):
+        label, value = str(label), str(value)
+        gap = W - len(label) - len(value)
+        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label}\n{value.rjust(W)}"
+
+    def L(text, align="left", bold=False, size="normal"):
+        return {"text": text, "align": align, "bold": bold, "size": size}
+
+    lines = [L(d["bedrijfsnaam"], "center", True, "large")]
+    for extra in (d.get("adres"), d.get("telefoon") and f"Tel: {d['telefoon']}"):
+        if extra:
+            lines.append(L(extra, "center"))
+    lines += [L(dash), L(title, "center", True), L(dash)]
+    if d.get("kwitantie"):
+        lines.append(L(row("Nr:", d["kwitantie"])))
+    lines.append(L(row("Datum:", d["datum"])))
+    lines.append(L(dash))
+    lines.append(L("HUURDER:", bold=True))
+    lines.append(L(d.get("naam") or "-"))
+    if d.get("appartement") or d.get("vestiging"):
+        lines.append(L(" - ".join(x for x in (d.get("appartement") and f"App. {d['appartement']}", d.get("vestiging")) if x)))
+    lines += [L(dash), L(d["omschrijving"])]
+    if d.get("methode"):
+        lines.append(L(row("Methode:", d["methode"])))
+    lines.append(L(row("BETAALD", d["bedrag"]), bold=True))
+    lines.append(L(row("Openstaand:", d["openstaand"])))
+    if d.get("opmerking"):
+        lines += [L(dash), L(f"Opmerking: {d['opmerking']}")]
+    lines += [L(dash), L("Bedankt voor uw betaling!", "center"), L(""), L("")]
+    return lines
 
 
 @api.get("/payments/{payment_id}/print.html", response_class=HTMLResponse)
@@ -15038,7 +15105,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts", "kiosk_devices"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:
@@ -15147,6 +15214,8 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
         {"$set": update, "$setOnInsert": {"company_id": cid, "created_at": iso(now_utc())}},
         upsert=True,
     )
+    if section == "kiosk_devices":
+        await _kb_publish(_kiosk_admin_channel(cid), _device_config_msg(merged))
     return {"section": section, "data": _mask_section(section, merged)}
 
 

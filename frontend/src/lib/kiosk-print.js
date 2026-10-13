@@ -23,6 +23,14 @@ function fitPageToBon(bon) {
   el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 0; } html, body { height: ${hmm}mm !important; min-height: 0 !important; overflow: hidden !important; } }`;
 }
 
+// PRINT_RECEIPT voor de APK. printer 'kt-v520' → APK print `lines` via KTPsdk.
+export function apkPrintMessage(url, data) {
+  const printer = data.printer !== undefined ? data.printer : localStorage.getItem('kiosk_printer');
+  const msg = { type: 'PRINT_RECEIPT', url, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', fontSizes: data.fontSizes, data };
+  if (printer === 'kt-v520' && data.lines) { msg.printer = 'kt-v520'; msg.lines = data.lines; }
+  return msg;
+}
+
 /**
  * Print de bon via window.print(): de bon staat in #bon en de @media print
  * CSS (index.css) verbergt al het andere. In de APK opent de app zelf het
@@ -35,7 +43,7 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
     const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
     let data = { payment_id: paymentId };
     try { data = { ...data, ...((await apiGet(`/kiosk/payments/${paymentId}/print-data`)).data || {}) }; } catch { /* alleen url */ }
-    const msg = { type: 'PRINT_RECEIPT', url: `${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', fontSizes: data.fontSizes, data };
+    const msg = apkPrintMessage(`${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, data);
     // eslint-disable-next-line no-console
     console.log('[APK PRINT_RECEIPT]', msg);
     window.ReactNativeWebView.postMessage(JSON.stringify(msg));

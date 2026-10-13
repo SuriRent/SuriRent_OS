@@ -19,7 +19,7 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { printReceipt, openReceiptImage } from '../../lib/kiosk-print';
+import { printReceipt, openReceiptImage, apkPrintMessage } from '../../lib/kiosk-print';
 import { KioskLiveStatus } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
@@ -2337,7 +2337,7 @@ async function sendApkPrint(data, paymentId) {
   }
   // APK opent zelf het systeem-printvenster; url = print-klare bon (HTML, @media print).
   const url = paymentId ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?format=thermal&preview=1` : null;
-  const msg = { type: 'PRINT_RECEIPT', url, textZoom: full.textZoom ?? 420, lettergrootte: full.lettergrootte || 'groot', fontSizes: full.fontSizes, data: { ...data, ...full } };
+  const msg = apkPrintMessage(url, { ...data, ...full });
   console.log('[APK PRINT_RECEIPT]', msg);
   if (!window.ReactNativeWebView?.postMessage) return;
   if (paymentId) window.dispatchEvent(new CustomEvent('kiosk-receipt-printed', { detail: { paymentId } }));

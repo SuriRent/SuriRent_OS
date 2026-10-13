@@ -82,6 +82,11 @@ function connect() {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === 'presence') queuePresence(msg);
     else if (msg.type === 'PRINT_RECEIPT' && msg.payment_id) queuePrint();
+    else if (msg.type === 'device_config') {
+      // Live printer-keuze (Instellingen → Kiosk apparaten); bewaard voor offline.
+      if (msg.printer) localStorage.setItem('kiosk_printer', msg.printer); else localStorage.removeItem('kiosk_printer');
+      emit({ printer: msg.printer || null });
+    }
   };
   ws.onclose = () => {
     clearInterval(pingTimer);

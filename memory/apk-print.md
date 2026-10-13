@@ -23,3 +23,14 @@ const onMessage = async (e) => {
 <WebView source={{ uri: 'https://<domein>/kiosk' }} onMessage={onMessage} />
 ```
 Zonder Expo: `react-native-print` → `RNPrint.print({ html })`.
+
+## KingTop KT-V520 (KTPsdk.aar) — Instellingen → Kiosk apparaten
+Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
+```json
+{ "type": "PRINT_RECEIPT", "printer": "kt-v520",
+  "lines": [ {"text":"SuriRent N.V.","align":"center","bold":true,"size":"large"},
+             {"text":"BETAALD             SRD 4.000,00","align":"left","bold":true,"size":"normal"} ] }
+```
+- `lines` zijn al opgemaakt op 32 tekens (58mm, font A). APK: per regel uitlijning/vet/grootte zetten en tekst printen via KTPsdk, daarna papier doorvoeren + snijden.
+- Zonder `printer` → huidige afhandeling (url → systeem-printvenster).
+- Live: de kiosk-WebSocket (/api/kiosk/ws) stuurt `{"type":"device_config","printer":"kt-v520"|null}` bij verbinden en bij elke wijziging; de web-app bewaart dit in localStorage `kiosk_printer`.

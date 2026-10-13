@@ -130,6 +130,8 @@ def empty_section(section: str) -> dict:
                 "groot": {"base": 20, "name": 26, "title": 22, "amount": 28, "text_zoom": 420},
             },
         },
+        # Kiosk apparaten: KingTop KT-V520 (KTPsdk.aar in de APK) voor alle kiosks.
+        "kiosk_devices": {"kt_v520_enabled": False},
     }.get(section, {})
 
 
