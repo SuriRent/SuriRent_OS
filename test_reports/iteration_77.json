@@ -1,0 +1,29 @@
+{
+  "summary": "Backend + frontend verified for new /api/payments/paged and /api/tenants/paged endpoints (25-per-page, server-side search/filter/summary) and 30s cache with immediate invalidation on mutations. Backend 11/11 pytest green. Frontend desktop (Betalingen + Huurders) and mobile (Betalingen) acceptance flows pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter77_paged.py",
+    "/app/test_reports/pytest/iter77_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:7190 /tenants/paged computes natural-sort over the full filtered list on every call; fine today (bounded to 1000 tenants in _tenants_enriched) but tenant limit=1000 and payments find limit=5000 are hard caps that should be revisited when a company exceeds those thresholds.",
+    "/app/backend/server.py:8866 /payments/paged limits month fetch to 5000 docs — single busy month at scale could silently cap; add log/warning or switch to real DB-side pagination when count approaches cap.",
+    "_list_cached shares the same process-local _INVOICE_CACHE as invoices; single-worker safe but will diverge across workers if scaled horizontally."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter77_paged.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% desktop + mobile acceptance"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin, slug my-awesome-rentals-bv)",
+  "seed_data_creation": "Used existing Testhuurder 00..39 perf-test seed from iter 76. Also created+deleted one TEST_iter77_cacheinv tenant for cache-invalidation test — self-cleaned.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend verified: GET /api/tenants/paged default returns 25 items, has_more=true, summary.counts={all:45,with_apt:5,without_apt:40}, totalCount=45. Natural sort by apartment_number then no-apt by name. id= returns single tenant. q=Testhuurder 39 finds tenant outside first page. GET /api/payments/paged?start=&end=&today_start= returns 25 items; summary has totalCount(46 overall)/todaySum/monthCount(44)/monthSum(30780)/currency; summary is q-independent (unchanged when searching). Pagination offset=25 returns remaining 19 with no overlap. Cache cleared immediately on POST+DELETE /api/tenants. GET /api/tenants and GET /api/payments shape unchanged. Frontend Betalingen desktop: header 'XX kwitanties geregistreerd' uses totalCount, MonthStepper shows monthCount·monthSum, payments-load-more sentinel loads 25→44 on scroll, payment-search 'Testhuurder 39' narrows to 1. Mobile mp-card-* 25 initial → 44 after scroll via mp-load-more. Huurders desktop: 25 initial via tenants-load-more → 45, tenant-filter-all/with_apt/without_apt counters show 45/5/40 server-side, tenant-search finds Testhuurder 39, click opens detail and back works.",
+  "rca of the issue": "Not applicable — no regression found."
+}

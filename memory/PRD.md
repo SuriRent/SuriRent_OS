@@ -747,3 +747,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - _INVOICE_CACHE 30s per user+company, geleegd door middleware bij mutaties
 - Indexen invoices (company_id,status,due_date), (company_id,period_year,period_month); payment_plans.invoice_ids
 - Frontend Invoices.jsx: useSWRInfinite + IntersectionObserver auto-load, dedupingInterval 30s; admin-events registerInfiniteRefresh (SWR filter-mutate slaat $inf$ keys over)
+
+## 2026-06 Betalingen + Huurders paginering
+- GET /api/payments/paged (maand start/end/today_start, q, 25/pagina, summary) en GET /api/tenants/paged (filter, q, id, natural sort, summary counts/avatars)
+- _list_cached (30s, deelt _INVOICE_CACHE → middleware leegt bij mutatie)
+- Frontend lib/use-paged-list.jsx (usePagedList, LoadMoreSentinel, useDebounced) gebruikt door Payments.jsx en Tenants (AdminDashboard.jsx)
+- Indexen payments (company_id,status,paid_at), tenants (company_id,name)
