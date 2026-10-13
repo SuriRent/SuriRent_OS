@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 79 — Validated the five notification/push fixes from the request. Backend: 7/7 pytest green covering (a) POST /api/push/notify-overdue shape + Dutch money format + consistency vs invoices list, (b) GET /api/payments/pending-ids shape + create-pending-via-kiosk → id appears → approve → id disappears, (c) POST /api/kiosk/kasgeld → SSE 'Kasgeld · Inkomen/Uitgave SRD x,xx' event received by admin SSE stream, (d) /api/kiosk/payment-plans/quick → SSE 'Nieuwe betalingsregeling vanuit kiosk' event (confirms the _notify_company_admins kwarg bug is fixed — no new log entries), (e) WebSocket /api/kiosk/ws employee auth → one 'Kiosk · <name> is ingelogd' SSE, then {type:'BYE'} → prompt 'is uitgelogd' SSE, no duplicate login notifications. Frontend smoke: /admin loads clean, Notificaties tab opens, Achterstand badge shows 1 huurder (consistent with backend overdue_count=1).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter79_notifs.py",
+    "/app/test_reports/pytest/iter79_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:15006 push_notify_overdue builds its own send-loop for THIS admin only and never calls _notify_company_admins. That means the manual 'Overdue overzicht' button does NOT broadcast an SSE to other admin tabs — unlike the daily job in _send_overdue_pushes which does. If a boekhouder presses the button, the owner tab won't update. Consider using _notify_company_admins for consistency.",
+    "/app/backend/server.py:10264 pending-approval push title uses US-format '{amount:,.2f}' ('SRD 1,000.00') instead of the Dutch helper _nl_money (would give 'SRD 1.000,00'). All other new notifications (kasgeld, quick plan, overdue) use _nl_money — inconsistent money formatting between notification types.",
+    "/app/backend/server.py:10066 kiosk login/logout notification body hard-codes Suriname offset UTC-3 via timezone(timedelta(hours=-3)) rather than a company-configured TZ. Harmless today but will drift if the SaaS adds non-SR tenants.",
+    "/app/backend/server.py:10052 _LOGOUT_GRACE_S = 90 is defined AFTER _kiosk_ws_employee uses it — Python resolves it at call-time so it works, but reads as a forward reference. Move the constant above the function for clarity.",
+    "/app/backend/server.py:14716 _notify_company_admins returns 0 if no admins exist and silently skips both SSE and push — but the SSE broadcast is already done before that check (good). Just a readability nit: the early-return comment above says 'SSE ALTIJD broadcasten' and it does, consistent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter79_notifs.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% smoke"},
+  "test_credentials": "demo@surirent.sr/demo1234 (admin, company my-awesome-rentals-bv); kiosk PIN 4321 (Anita) with employee token returned by /api/auth/kiosk-pin",
+  "seed_data_creation": "Tests create and self-cleanup: one TEST_iter79 pending kiosk payment (approved during test), one TEST_iter79 kasgeld entry (deleted via DELETE /api/kasgeld/{id}), one quick payment-plan (best-effort delete). Mongo collection kiosk_emp_state gets one extra row with emp_key suffix '-iter79' (online=false after test) — harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All five fixes work end-to-end on SSE. Push to real device cannot be verified in CI — we rely on _notify_company_admins always broadcasting SSE. Historical '[push] kiosk quick plan notify failed: unexpected keyword url' entries in /var/log/supervisor/backend.out.log are PRE-FIX (last at log line 14272); no new occurrences during iter79 tests. Kiosk WS: first msg must be {type:'auth' optional, role:'employee', token, name, employee_id} — role defaults to 'employee' if omitted. The ingelogd notification is deduped per (company_id, emp_key) via kiosk_emp_state.online. Mind that _notify_company_admins requires at least one SSE listener (which the test opens) because push_subs is empty in test env.",
+  "rca of the issue": "Not applicable — all requested fixes verified working."
+}
