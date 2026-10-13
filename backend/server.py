@@ -5303,6 +5303,12 @@ async def apk_upload_init(body: ApkUploadInit, user=Depends(require_role("supera
         raise HTTPException(status_code=400, detail="Bestand is te groot (max 300 MB)")
     if not body.version.strip():
         raise HTTPException(status_code=400, detail="Versienummer is verplicht")
+    # Opruimen: afgebroken uploads ouder dan 1 dag.
+    stale = [u["id"] async for u in db.apk_uploads.find(
+        {"created_at": {"$lt": iso(now_utc() - timedelta(days=1))}}, {"_id": 0, "id": 1})]
+    if stale:
+        await db.apk_chunks.delete_many({"upload_id": {"$in": stale}})
+        await db.apk_uploads.delete_many({"id": {"$in": stale}})
     uid = str(uuid.uuid4())
     await db.apk_uploads.insert_one({"id": uid, "filename": body.filename, "size": body.size,
                                      "version": body.version.strip(), "notes": (body.notes or "").strip(),
@@ -5354,7 +5360,7 @@ async def _apk_finalize(upload_id: str, up: dict, user_id: str):
             return await fail("Dit is geen geldig APK-bestand")
         rid = str(uuid.uuid4())
         res = await asyncio.to_thread(_objstore.put_object, f"{_objstore.APP_NAME}/apk/{rid}.apk",
-                                      bytes(blob), "application/vnd.android.package-archive")
+                                      io.BytesIO(blob), "application/vnd.android.package-archive")
         rel = {"id": rid, "version": up["version"], "notes": up["notes"], "filename": up["filename"],
                "size": res.get("size") or len(blob), "storage_path": res["path"], "is_deleted": False,
                "downloads": 0, "created_by": user_id, "created_at": iso(now_utc())}
