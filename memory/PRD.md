@@ -723,3 +723,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Frontend lib/kiosk-cache.js: prefetch bij laden chunk + localStorage kiosk_select_cache_v1 (stale-while-revalidate); kiosk start direct op step select (geen check->select animatie)
 - Stripe.js lazy via @stripe/stripe-js/pure (alleen bij betaalstap)
 - Bekend (pre-existing): Appt. aanmaken in kiosk met gedeelde PIN (4321) geeft 401 op POST /api/apartments
+
+## 2026-06 Gedeelde kiosk-PIN verwijderd
+- /auth/kiosk-pin matcht alleen nog persoonlijke medewerker-PINs (app_role kiosk); /auth/kiosk-set-pin verwijderd; kiosk_pins collectie wordt bij startup geleegd
+- Kiosk PIN uit Instellingen, Setup Wizard en registratieformulier gehaald
+- Testaccount kiosk-medewerker: anita@demo.sr / anita1234 / PIN 4321

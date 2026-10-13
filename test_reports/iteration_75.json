@@ -1,0 +1,32 @@
+{
+  "summary": "Verified removal of shared kiosk-PIN. Backend: POST /api/auth/kiosk-pin now only accepts employee kiosk-PINs scoped per company (correct employee PIN 4321 -> 200 with employee object + admin_token null; wrong PIN -> 401 'Ongeldige PIN code'; missing company scope -> 400). POST /api/auth/kiosk-set-pin returns 404 (endpoint removed). POST /api/employees/{id}/kiosk-pin still works and still enforces 409 duplicate (Kevin PIN=4321 rejected; Kevin PIN=9876 accepted). POST /api/auth/register works without kiosk_pin field. Frontend: /login register toggle has NO auth-kiosk-pin input; Admin Instellingen hub lists only abonnement/bedrijf/branding/smtp/invoicing/stripe/bon/backup (no Kiosk PIN tile, no 'gedeelde pin' text); SetupWizard STEPS array = [profile, branding, smtp, invoicing, locations, apartment, tenant, employees] (no kiosk step); Full kiosk flow: anita@demo.sr/anita1234 on /login auto-redirects to /my-awesome-rentals-bv/login?target=kiosk&view=pin, PIN pad entry of 4321 opens /my-awesome-rentals-bv/kiosk with 'Kies een locatie' picker. Employees page shows Anita with KIOSK + LOGIN role badges.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Werknemers", "issues": ["No explicit 'PIN' badge text next to Anita (only KIOSK + LOGIN role badges visible). The brief mentioned 'PIN badge for Anita' - verify intent: current UI uses a key icon in action column + implicit via LOGIN badge. If an explicit text badge is desired, main agent should add it."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter75_kiosk_pin_shared_removed.py",
+    "/app/test_reports/pytest/iter75_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add explicit 'PIN' badge in Werknemers list next to employees with has_kiosk_pin true, if desired by product.",
+    "RegisterIn pydantic model in /app/backend/models.py still has 'kiosk_pin: Optional[str] = None' field (line 25). Backend now ignores it, but it is dead code; main agent can remove the field + any usage in register() flow for cleanliness."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/models.py:25 - kiosk_pin field on RegisterIn is now dead; remove it.",
+    "/app/backend/server.py:1072 - kiosk_pin=None still passed somewhere during register; dead param."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter75_kiosk_pin_shared_removed.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all acceptance flows verified)"},
+  "test_credentials": "demo@surirent.sr/demo1234 (admin for my-awesome-rentals-bv), anita@demo.sr/anita1234 PIN 4321 (kiosk emp). Kevin Boldewijn PIN was changed from unset to 9876 during 409-uniqueness test (as instructed by main agent).",
+  "seed_data_creation": "Registered one throwaway company via /api/auth/register (slug testco-<rand>) with name 'TEST Co' as part of register-without-kiosk_pin test. Safe to leave or purge.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Shared kiosk PIN fully removed. If retesting, use anita@demo.sr/anita1234 PIN 4321 for kiosk employee auth. Kevin Boldewijn now has PIN 9876. All backend tests in test_iter75_kiosk_pin_shared_removed.py pass."
+}
