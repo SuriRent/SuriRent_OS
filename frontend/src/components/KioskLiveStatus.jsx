@@ -2,12 +2,14 @@ import { memo, useEffect, useSyncExternalStore } from 'react';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
+import { ensurePrinterRegistered } from '../lib/ktp-printer';
 
 // Statusbolletje (alleen beheerder-kiosk) + bonnen-venster. Rendert los van
 // de rest van de kiosk via een externe store.
 function KioskLiveStatusInner({ isAdmin }) {
   useEffect(() => {
     startKioskLive(isAdmin ? 'admin' : 'employee');
+    ensurePrinterRegistered();
     return () => stopKioskLive();
   }, [isAdmin]);
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);

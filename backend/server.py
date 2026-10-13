@@ -25,6 +25,7 @@ from contextlib import asynccontextmanager
 import io
 import base64
 import secrets
+import hashlib
 import asyncio
 import json
 import time
@@ -10163,6 +10164,13 @@ async def kiosk_ws(ws: WebSocket):
     except Exception:  # noqa: BLE001
         await ws.close(code=4400)
         return
+    if hello.get("role") == "printer":
+        prn = await _printer_by_token(str(hello.get("device_token") or ""))
+        if not prn:
+            await ws.close(code=4401)
+            return
+        await _kiosk_ws_printer(ws, prn)
+        return
     role = "admin" if hello.get("role") == "admin" else "employee"
     name = str(hello.get("name") or "")[:60]
     emp_key = str(hello.get("employee_id") or name or "medewerker")[:80]
@@ -10268,15 +10276,148 @@ async def _kiosk_emp_logout(cid: str, emp_key: str, name: str, delay: float):
         print(f"[push] kiosk logout notify failed: {e}")
 
 
+# ---------- KT-V520 printer-modus: toestel print ook zonder ingelogde medewerker ----------
+def _hash_device_token(tok: str) -> str:
+    return hashlib.sha256(tok.encode()).hexdigest()
+
+
+async def _printer_by_token(tok: str) -> Optional[dict]:
+    if len(tok) < 20:
+        return None
+    return await db.kiosk_printers.find_one({"token_hash": _hash_device_token(tok), "revoked": {"$ne": True}}, {"_id": 0})
+
+
+async def _online_printers(cid: str) -> list:
+    docs = await db.kiosk_printers.find(
+        {"company_id": cid, "revoked": {"$ne": True}, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}},
+        {"_id": 0, "id": 1, "name": 1, "last_seen": 1},
+    ).sort("last_seen", -1).to_list(50)
+    return [{"id": d["id"], "name": d["name"]} for d in docs]
+
+
+async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
+    cid, pid_ = prn["company_id"], prn["id"]
+    channel = _kiosk_admin_channel(cid)
+    queue = _kb_subscribe(channel, maxsize=32)
+    await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": time.time()}})
+    await _kb_publish(channel, {"type": "presence_changed"})
+
+    async def forward():
+        while True:
+            ev = await queue.get()
+            if ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_:
+                await ws.send_json(ev)
+
+    async def receive():
+        while True:
+            msg = await ws.receive_json()
+            kind = msg.get("type")
+            if kind == "ping":
+                await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": time.time()}})
+            elif kind == "REMOTE_PRINT_DONE" and msg.get("payment_id"):
+                pay_id = str(msg["payment_id"])
+                ok = bool(msg.get("ok"))
+                if ok:
+                    await db.kiosk_print_log.update_one(
+                        {"company_id": cid, "payment_id": pay_id},
+                        {"$set": {"admin_printed_at": iso(now_utc())}, "$setOnInsert": {"id": str(uuid.uuid4())}},
+                        upsert=True)
+                await _kb_publish(channel, {"type": "REMOTE_PRINT_DONE", "job_id": msg.get("job_id"), "payment_id": pay_id,
+                                            "ok": ok, "error": str(msg.get("error") or "")[:200], "printer": prn["name"]})
+
+    try:
+        await ws.send_json({"type": "printer_ready", "name": prn["name"]})
+        tasks = [asyncio.create_task(forward()), asyncio.create_task(receive())]
+        _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+    except (WebSocketDisconnect, RuntimeError, ValueError):
+        pass
+    finally:
+        _kb_unsubscribe(channel, queue)
+        await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": 0}})
+        await _kb_publish(channel, {"type": "presence_changed"})
+
+
+class PrinterRegisterIn(BaseModel):
+    name: Optional[str] = None
+
+
+@api.post("/kiosk/printers/register")
+async def kiosk_printer_register(body: PrinterRegisterIn, _session=Depends(get_kiosk_session)):
+    """KT-V520-toestel koppelen (eenmalig, tijdens een kiosk-sessie). Het toestel
+    bewaart het device-token en print daarna ook zonder ingelogde medewerker."""
+    cid = _session["company_id"]
+    n = await db.kiosk_printers.count_documents({"company_id": cid, "revoked": {"$ne": True}})
+    tok = secrets.token_urlsafe(32)
+    doc = {"id": str(uuid.uuid4()), "company_id": cid, "name": (body.name or "").strip()[:40] or f"KT-V520 #{n + 1}",
+           "token_hash": _hash_device_token(tok), "created_at": iso(now_utc()), "last_seen": 0, "revoked": False}
+    await db.kiosk_printers.insert_one(doc)
+    return {"printer_id": doc["id"], "name": doc["name"], "device_token": tok}
+
+
+@api.get("/settings/kiosk-printers")
+async def kiosk_printers_list(user=Depends(require_role("admin", "superadmin"))):
+    cid = company_id_of(user)
+    docs = await db.kiosk_printers.find({"company_id": cid, "revoked": {"$ne": True}},
+                                        {"_id": 0, "id": 1, "name": 1, "created_at": 1, "last_seen": 1}).sort("created_at", 1).to_list(100)
+    now = time.time()
+    return [{"id": d["id"], "name": d["name"], "created_at": d["created_at"],
+             "online": (d.get("last_seen") or 0) > now - _PRESENCE_TTL_S} for d in docs]
+
+
+@api.patch("/settings/kiosk-printers/{printer_id}")
+async def kiosk_printer_rename(printer_id: str, body: PrinterRegisterIn, user=Depends(require_role("admin", "superadmin"))):
+    name = (body.name or "").strip()[:40]
+    if not name:
+        raise HTTPException(status_code=400, detail="Naam is verplicht")
+    res = await db.kiosk_printers.update_one({"id": printer_id, "company_id": company_id_of(user)}, {"$set": {"name": name}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Printer niet gevonden")
+    await _kb_publish(_kiosk_admin_channel(company_id_of(user)), {"type": "presence_changed"})
+    return {"ok": True}
+
+
+@api.delete("/settings/kiosk-printers/{printer_id}")
+async def kiosk_printer_remove(printer_id: str, user=Depends(require_role("admin", "superadmin"))):
+    res = await db.kiosk_printers.update_one({"id": printer_id, "company_id": company_id_of(user)},
+                                             {"$set": {"revoked": True, "last_seen": 0}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Printer niet gevonden")
+    await _kb_publish(_kiosk_admin_channel(company_id_of(user)), {"type": "presence_changed"})
+    return {"ok": True}
+
+
+class RemotePrintIn(BaseModel):
+    printer_id: str
+
+
+@api.post("/kiosk/print-log/by-payment/{payment_id}/remote-print")
+async def kiosk_remote_print(payment_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
+        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
+    p = await db.payments.find_one({"id": payment_id, "company_id": cid}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Bon niet gevonden")
+    data = await _receipt_print_data(p)
+    job_id = str(uuid.uuid4())
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "payment_id": payment_id,
+                                                  "target": body.printer_id, "data": data})
+    return {"job_id": job_id}
+
+
 async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
     queue = _kb_subscribe(channel, maxsize=64)
     last = {"emps": None}
 
     async def push_presence():
         emps = await _active_employees(cid)
-        if emps != last["emps"]:
-            last["emps"] = emps
-            await ws.send_json({"type": "presence", "active": bool(emps), "count": len(emps), "employees": emps})
+        printers = await _online_printers(cid)
+        if (emps, printers) != last["emps"]:
+            last["emps"] = (emps, printers)
+            await ws.send_json({"type": "presence", "active": bool(emps), "count": len(emps), "employees": emps,
+                                "printers": printers})
 
     async def forward():
         while True:
@@ -10287,7 +10428,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE"):
                 await ws.send_json(ev)
 
     async def receive():
@@ -11530,6 +11671,10 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
     p = await db.payments.find_one({"id": payment_id, **kiosk_scope(_session)}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
+    return await _receipt_print_data(p)
+
+
+async def _receipt_print_data(p: dict) -> dict:
     p = await _enrich_payment(p)
     cs = await db.company_settings.find_one({"company_id": p.get("company_id")}, {"_id": 0, "receipts": 1})
     font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})

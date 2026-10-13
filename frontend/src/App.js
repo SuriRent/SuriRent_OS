@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { startPrinterMode } from './lib/ktp-printer';
 import { AuthProvider, useAuth } from './lib/auth';
 import { useRegisterServiceWorker, InstallPrompt } from './lib/pwa';
 import PersonalPinSetup from './components/PersonalPinSetup';
@@ -298,6 +299,8 @@ export default function App() {
   // op iPhone PWA, Android PWA en desktop. Gebruiker kan uitschakelen
   // via /admin/notifications.
   useEffect(() => { installGlobalTapSounds(); }, []);
+  // KT-V520: printer-modus ook zonder ingelogde medewerker (APK zet de vlag soms iets later).
+  useEffect(() => { startPrinterMode(); const t = setTimeout(startPrinterMode, 3000); return () => clearTimeout(t); }, []);
   const mode = isMarketingHost() ? 'marketing' : (appUrl() ? 'app' : 'hybrid');
   // Tenant custom-domain detectie — als de huidige hostname een geregistreerd
   // custom_domain is van een bedrijf, renderen we DIRECT TenantPublicLanding

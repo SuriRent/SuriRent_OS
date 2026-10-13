@@ -4,6 +4,7 @@ import { ArrowLeft, Check, CheckCircle2, Clock, Loader2, Printer, Receipt, Trash
 import { api, fmtMoney } from '../lib/api';
 import { printReceipt } from '../lib/kiosk-print';
 import { KioskBulkApproveSheet } from './KioskBulkApproveSheet';
+import { KtpPrintButton } from './KtpPrintButton';
 
 const todayStartIso = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) : '');
@@ -32,7 +33,7 @@ function EmployeePicker({ employees, activeKeys, onPick }) {
   );
 }
 
-function ReceiptRow({ log, onPrint, onApprove, onRemove, busy }) {
+function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy }) {
   const p = log.payment;
   const done = !!log.admin_printed_at;
   const pending = p.status === 'pending_approval';
@@ -55,7 +56,7 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, busy }) {
         </div>
         <span className="font-black text-slate-900 whitespace-nowrap text-sm sm:text-base">{fmtMoney(p.amount, p.currency)}</span>
       </div>
-      <div className="flex gap-2 sm:shrink-0">
+      <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:shrink-0">
         {pending && (
           <button onClick={() => onApprove(log)} data-testid={`kiosk-print-log-approve-${log.id}`}
             className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-colors">
@@ -68,6 +69,7 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, busy }) {
             <Trash2 className="w-4 h-4" />
           </button>
         )}
+        <KtpPrintButton log={log} onPrinted={onRemotePrinted} />
         <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
           className={`flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
           {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Afdrukken'}
@@ -163,7 +165,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
         {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
-        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} busy={busyId === l.id} />)}
+        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} onRemotePrinted={load} busy={busyId === l.id} />)}
       </div>
       {bulkOpen && (
         <KioskBulkApproveSheet logs={pendingLogs} employeeName={emp?.name || ''}
