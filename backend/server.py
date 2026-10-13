@@ -430,6 +430,8 @@ async def lifespan(app: FastAPI):
     # Gedeelde kiosk-PIN is afgeschaft: alleen persoonlijke medewerker-PINs.
     await db.kiosk_pins.delete_many({})
     await db.settings.delete_one({"_id": "kiosk"})
+    # Klantenscherm is verwijderd — opgeslagen schermstatus opruimen.
+    await db.customer_display.drop()
 
     # --- Idempotent re-seed of demo tenant Jan de Vries PIN (avoid drift) ---
     if os.environ.get("RESEED_DEMO_TENANT_PIN", "1") == "1":
@@ -774,7 +776,6 @@ async def _live_sync_broadcast(request: Request, call_next):
             "/api/landing/asset/",
             "/api/tenants/ocr-id-card",
             # Kiosk high-frequency / auth endpoints — GEEN broadcast:
-            "/api/kiosk/customer-display",        # heartbeat elke 1.5s
             "/api/kiosk/employee-verify",         # PIN check, geen data-mutatie
         )
         if any(path.startswith(s) for s in skip):
@@ -4282,7 +4283,6 @@ async def get_my_url_info(request: Request, user=Depends(get_current_user)):
     kiosk_url = f"{base_url}/{slug}/kiosk" if base_url else ""
     tenant_kiosk_url = f"{base_url}/{slug}/kiosk/huurder" if base_url else ""
     tenant_portal_url = tenant_kiosk_url
-    customer_display_url = f"{base_url}/{slug}/kiosk/klant" if base_url else ""
 
     # Custom domain (uit Instellingen → Eigen domein). Toon als primary wanneer
     # admin het heeft ingesteld + DNS geverifieerd.
@@ -4308,7 +4308,6 @@ async def get_my_url_info(request: Request, user=Depends(get_current_user)):
         "kiosk_url": kiosk_url,
         "tenant_kiosk_url": tenant_kiosk_url,
         "tenant_portal_url": tenant_portal_url,
-        "customer_display_url": customer_display_url,
         "custom_domain_url": custom_domain_url,
         "app_domain": app_domain,
         # Legacy velden — leeg/none voor backward-compat met oude frontends.
@@ -4325,7 +4324,6 @@ _QR_KIND_PATHS = {
     "login":           "/{slug}",
     "kiosk":           "/{slug}/kiosk",
     "tenant_kiosk":    "/{slug}/kiosk/huurder",
-    "customer_display":"/{slug}/kiosk/klant",
     # Huurportaal = zelfde route als de huurder-kiosk (PIN-only via QR).
     "tenant_portal":   "/{slug}/kiosk/huurder",
     "query":           "/login?c={slug}",
@@ -4376,7 +4374,6 @@ async def onboarding_welcome_pack(body: dict, request: Request):
         "Kiosk (POS / balie)": f"{base}/{slug}/kiosk",
         "Huurder kiosk (self-service)": f"{base}/{slug}/tenant-kiosk",
         "Huurder portal (thuis)": f"{base}/{slug}/tenant-portal",
-        "Klant display (Customer Display)": f"{base}/{slug}/customer-display",
         "Publieke landingspagina": f"{base}/site/{slug}",
     }
 
@@ -9492,7 +9489,7 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 # Kiosk-cache (30s) voor keuzescherm; elke mutatie leegt hem via de live-sync middleware.
 _KIOSK_CACHE: dict = {}
 _KIOSK_TTL_S = 30
-_CACHE_KEEP_PATHS = ("/api/kiosk/customer-display", "/api/kiosk/employee-verify", "/api/admin/events")
+_CACHE_KEEP_PATHS = ("/api/kiosk/employee-verify", "/api/admin/events")
 _NO_LOC_Q = [{"location_id": None}, {"location_id": {"$exists": False}}, {"location_id": ""}]
 
 
@@ -9759,431 +9756,6 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "has_history": bool(has_payment or has_invoice),
         "due_reminders": due_notes,
     }
-
-
-# =====================================================================
-# Customer Display (klantenscherm)
-# =====================================================================
-#
-# REALTIME PUSH — Server-Sent Events
-# ----------------------------------
-# Naast de polling-fallback publiceren we per company-slug op de cross-
-# replica event bus. Bij elke succesvolle PUT signaleren we ALLE ver-
-# bonden klantenschermen direct — óók als de operator's PUT en het
-# klantenscherm op verschillende backend-replica's zitten (was voorheen
-# stuk want in-memory queues zijn per-pod).
-import asyncio as _asyncio
-from event_bus import (
-    publish as _cd_bus_publish,
-    subscribe as _cd_bus_subscribe,
-    unsubscribe as _cd_bus_unsubscribe,
-)
-
-
-def _cd_channel(slug: str) -> str:
-    return f"cd:{(slug or '').lower()}"
-
-
-async def _cd_publish(slug: str, payload: dict) -> None:
-    """Publiceert klantenscherm-state naar alle verbonden schermen voor
-    deze company-slug (cross-replica via MongoDB event bus)."""
-    if not slug:
-        return
-    await _cd_bus_publish(_cd_channel(slug), payload)
-
-class CustomerDisplayIn(BaseModel):
-    step: str  # 'idle'|'select'|'overview'|'pay'|'method'|'confirm'|'receipt'
-    apartment: Optional[dict] = None
-    tenant: Optional[dict] = None
-    overview: Optional[dict] = None
-    payload: Optional[dict] = None  # selected categories + total
-    payment: Optional[dict] = None  # final receipt
-    note: Optional[str] = ""
-
-
-@api.put("/kiosk/customer-display")
-async def update_customer_display(body: CustomerDisplayIn, request: Request):
-    """Admin Kiosk pusht hier de huidige stap-state naar. Accepteert zowel
-    kiosk-token (PIN sessie) als admin/staff token zodat de push werkt
-    onafhankelijk van welk token de browser meestuurt."""
-    cid = None
-    # Probeer kiosk-token eerst.
-    try:
-        ks = await get_kiosk_session(request)
-        cid = ks.get("company_id")
-    except HTTPException:
-        pass
-    if not cid:
-        # Val terug op admin/staff sessie.
-        try:
-            user = await get_current_user(request)
-            cid = company_id_of(user)
-        except HTTPException:
-            cid = None
-    if not cid:
-        raise HTTPException(status_code=401, detail="Niet ingelogd op kiosk")
-    new_state = body.model_dump()
-    # Smart merge: bewaar de keuze van de klant over heartbeats heen.
-    # Wanneer de klant zelf een methode heeft getikt (method_chosen_at), of de
-    # klant zelf een betaling heeft gestart (customer_initiated), mag de
-    # heartbeat van de admin die niet overschrijven.
-    existing_doc = await db.customer_display.find_one({"company_id": cid}, {"_id": 0})
-    existing_state = (existing_doc or {}).get("state") or {}
-    existing_payload = existing_state.get("payload") or {}
-    new_payload = new_state.get("payload") or {}
-
-    # SESSIE-RESET DETECTIE — wanneer de operator een nieuw appartement
-    # selecteert (of de sessie helemaal afsluit), moeten alle locks (vorige
-    # huurder) wissen, anders blijft het klantenscherm op de oude tenant
-    # vastzitten. Detectie:
-    #   - apartment.id is veranderd t.o.v. bestaande state
-    #   - new step in {idle, check, select} (operator is bij apartment-picker)
-    #   - bestaande state had method_chosen_at / customer_initiated / receipt
-    new_step_lc = (new_state.get("step") or "").lower()
-    new_apt_id = ((new_state.get("apartment") or {}) or {}).get("id")
-    existing_apt_id = ((existing_state.get("apartment") or {}) or {}).get("id")
-    apt_changed = bool(new_apt_id) and bool(existing_apt_id) and (new_apt_id != existing_apt_id)
-    session_reset = new_step_lc in ("idle", "check", "select") or apt_changed
-
-    customer_locked = bool(existing_payload.get("method_chosen_at") or existing_payload.get("customer_initiated"))
-    if session_reset:
-        # Volledige reset — geen lock-overdracht, geen QR-overdracht, geen
-        # methode-overdracht. Customer screen mag direct mee naar nieuwe huurder.
-        customer_locked = False
-        # new_payload mag eigen waarden behouden; we voegen niets toe uit existing.
-    else:
-        # 1) Step-bescherming: terwijl klant betaalt mag admin niet "terug" springen.
-        if customer_locked and existing_state.get("step") in ("method", "confirm", "receipt") \
-                and new_step_lc in ("overview", "pay"):
-            new_state["step"] = existing_state.get("step")
-        # 2) Payload-bescherming: bewaar method + method_chosen_at + customer_initiated.
-        if existing_payload.get("method_chosen_at") and not new_payload.get("method_chosen_at"):
-            new_payload["method"] = existing_payload.get("method")
-            new_payload["method_chosen_at"] = existing_payload.get("method_chosen_at")
-        if existing_payload.get("customer_initiated") and not new_payload.get("customer_initiated"):
-            new_payload["customer_initiated"] = True
-            new_payload["customer_initiated_at"] = existing_payload.get("customer_initiated_at")
-            # Behoud ook bedrag + categorieën die door start-payment zijn gezet.
-            if not new_payload.get("amount") and existing_payload.get("amount"):
-                new_payload["amount"] = existing_payload["amount"]
-                new_payload["currency"] = existing_payload.get("currency") or new_payload.get("currency")
-                new_payload["categories"] = existing_payload.get("categories") or new_payload.get("categories") or []
-    if new_payload:
-        new_state["payload"] = new_payload
-
-    new_state["updated_at"] = iso(now_utc())
-    await db.customer_display.update_one(
-        {"company_id": cid},
-        {"$set": {"company_id": cid, "state": new_state, "updated_at": new_state["updated_at"]}},
-        upsert=True,
-    )
-    # Push instant naar alle verbonden klantenschermen via SSE.
-    try:
-        company = await db.companies.find_one({"id": cid}, {"_id": 0, "slug": 1})
-        slug = (company or {}).get("slug")
-        if slug:
-            await _cd_publish(slug.lower(), {"state": new_state})
-    except Exception:
-        pass
-    return {"ok": True, "updated_at": new_state["updated_at"]}
-
-
-@api.get("/kiosk/customer-display")
-async def kiosk_get_customer_display(request: Request):
-    """Authenticated readback voor admin Kiosk — geen slug nodig, gebruikt
-    de company van de huidige sessie. Zo werkt de polling ook wanneer de
-    pwa_company_slug niet in localStorage staat."""
-    cid = None
-    try:
-        ks = await get_kiosk_session(request)
-        cid = ks.get("company_id")
-    except HTTPException:
-        pass
-    if not cid:
-        try:
-            user = await get_current_user(request)
-            cid = company_id_of(user)
-        except HTTPException:
-            cid = None
-    if not cid:
-        raise HTTPException(status_code=401, detail="Niet ingelogd op kiosk")
-    doc = await db.customer_display.find_one({"company_id": cid}, {"_id": 0})
-    state = (doc or {}).get("state") or {"step": "idle"}
-    return {"state": state}
-
-
-
-
-@api.post("/kiosk/customer-display/reset-beacon")
-async def reset_customer_display_beacon(request: Request):
-    """Beacon-veilige reset zonder auth header — wordt aangeroepen via
-    `navigator.sendBeacon()` wanneer de kiosk-tab sluit, refreshed of
-    gehide wordt. We accepteren het kiosk-cookie OF het admin-cookie als
-    bewijs van eigenaarschap. Geen 401 — beacon-call moet snel falen-of-
-    slagen zonder de browser-unload te blokkeren.
-
-    Resultaat: zet customer_display van het bedrijf op idle, gevolgd door
-    een SSE-push zodat het klantenscherm direct welkom toont."""
-    cid = None
-    try:
-        ks = await get_kiosk_session(request)
-        cid = ks.get("company_id")
-    except HTTPException:
-        pass
-    if not cid:
-        try:
-            user = await get_current_user(request)
-            cid = company_id_of(user)
-        except HTTPException:
-            cid = None
-    if cid:
-        idle_state = {"step": "idle", "updated_at": iso(now_utc())}
-        await db.customer_display.update_one(
-            {"company_id": cid},
-            {"$set": {"state": idle_state, "updated_at": idle_state["updated_at"]}},
-            upsert=True,
-        )
-        try:
-            company = await db.companies.find_one({"id": cid}, {"_id": 0, "slug": 1})
-            slug = (company or {}).get("slug")
-            if slug:
-                await _cd_publish(slug.lower(), {"state": idle_state})
-        except Exception:
-            pass
-    return {"ok": True}
-
-
-@api.delete("/kiosk/customer-display")
-async def clear_customer_display(request: Request):
-    cid = None
-    try:
-        ks = await get_kiosk_session(request)
-        cid = ks.get("company_id")
-    except HTTPException:
-        pass
-    if not cid:
-        try:
-            user = await get_current_user(request)
-            cid = company_id_of(user)
-        except HTTPException:
-            cid = None
-    if cid:
-        await db.customer_display.update_one(
-            {"company_id": cid},
-            {"$set": {"state": {"step": "idle", "updated_at": iso(now_utc())},
-                      "updated_at": iso(now_utc())}},
-            upsert=True,
-        )
-        # Publish reset naar SSE-luisteraars zodat customer screens
-        # direct teruggaan naar welkom (zonder polling-wachttijd).
-        try:
-            company = await db.companies.find_one({"id": cid}, {"_id": 0, "slug": 1})
-            slug = (company or {}).get("slug")
-            if slug:
-                await _cd_publish(slug.lower(), {"state": {"step": "idle", "updated_at": iso(now_utc())}})
-        except Exception:
-            pass
-    return {"ok": True}
-
-
-class CustomerMethodIn(BaseModel):
-    method: Literal["contant", "bank"]
-
-
-def _generate_qr_data_url(payload: str, size_px: int = 480) -> str:
-    """Returns a data:image/png;base64,... URL for the given QR payload."""
-    from pdf_gen import _make_qr_png
-    png = _make_qr_png(payload, size_px=size_px)
-    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-
-
-# NOTE: Mope kiosk QR flow (MOPE_API_BASE, _mope_create_payment_request,
-# /kiosk/mope/create-qr, /integrations/mope/webhook, /admin/integrations/mope,
-# /public/customer-display/{slug}/mope-confirm) is verwijderd. De app
-# ondersteunt geen online betaalproviders meer — alleen contant + bank.
-
-
-@api.post("/public/customer-display/{slug}/select-method")
-async def customer_pick_method(slug: str, body: CustomerMethodIn):
-    """Publiek — wordt aangeroepen door het klantenscherm zelf wanneer de
-    klant op een betaalmethode-tegel tapt. De admin Kiosk poll't dit veld
-    en gaat dan automatisch door naar het bevestig-scherm."""
-    c = await db.companies.find_one({"slug": slug.lower()}, {"_id": 0, "id": 1})
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    doc = await db.customer_display.find_one({"company_id": c["id"]}, {"_id": 0})
-    state = (doc or {}).get("state") or {}
-    if state.get("step") not in ("method", "confirm", "pay"):
-        raise HTTPException(status_code=409, detail="Niet in betaalfase")
-    payload = state.get("payload") or {}
-    payload["method"] = body.method
-    payload["method_chosen_at"] = iso(now_utc())
-    state["payload"] = payload
-    state["updated_at"] = iso(now_utc())
-    await db.customer_display.update_one(
-        {"company_id": c["id"]},
-        {"$set": {"state": state, "updated_at": state["updated_at"]}},
-    )
-    return {"ok": True, "method": body.method}
-
-
-
-class CustomerStartPayIn(BaseModel):
-    pass
-
-
-@api.post("/public/customer-display/{slug}/start-payment")
-async def customer_start_payment(slug: str):
-    """Publiek — de klant tikt zelf op 'Betaal nu' op het klantenscherm
-    tijdens de overview-stap. We zetten de stap meteen naar 'method' en
-    kopiëren het totale openstaande bedrag in het payload. De admin Kiosk
-    poll't dit en gaat automatisch mee."""
-    c = await db.companies.find_one({"slug": slug.lower()}, {"_id": 0, "id": 1})
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    doc = await db.customer_display.find_one({"company_id": c["id"]}, {"_id": 0})
-    state = (doc or {}).get("state") or {}
-    if state.get("step") not in ("overview", "pay"):
-        raise HTTPException(status_code=409, detail="Niet in overzichtsfase")
-    overview = state.get("overview") or {}
-    bal = overview.get("balance") or {}
-    apt = overview.get("apartment") or state.get("apartment") or {}
-    tenant = state.get("tenant") or {}
-    open_rent = max(0.0, float(bal.get("balance") or 0))
-    total_due = float(overview.get("total_due") or open_rent)
-    if total_due <= 0:
-        raise HTTPException(status_code=400, detail="Geen openstaand bedrag")
-    currency = bal.get("currency") or apt.get("currency") or "SRD"
-    categories = []
-    if open_rent > 0:
-        categories.append({"key": "huur", "value": open_rent})
-    state["step"] = "method"
-    state["payload"] = {
-        "amount": total_due,
-        "currency": currency,
-        "categories": categories,
-        "method": None,
-        "customer_initiated": True,
-        "customer_initiated_at": iso(now_utc()),
-    }
-    state["updated_at"] = iso(now_utc())
-    await db.customer_display.update_one(
-        {"company_id": c["id"]},
-        {"$set": {"state": state, "updated_at": state["updated_at"]}},
-    )
-    return {"ok": True, "step": "method", "amount": total_due}
-
-
-@api.get("/public/customer-display/{slug}")
-async def get_customer_display(slug: str, response: Response):
-    """Publiek — het klantenscherm poll't dit endpoint elke ~500ms."""
-    # Strikte no-cache headers — voorkomt dat iPhone Safari / PWA proxy
-    # een gecachte respons teruggeeft tijdens polling.
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    if not slug or len(slug) > 80:
-        raise HTTPException(status_code=400, detail="Ongeldige slug")
-    c = await db.companies.find_one(
-        {"slug": slug.lower()},
-        {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1,
-         "bank_account_sr": 1, "bank_account_nl": 1,
-         "contact_email": 1, "contact_phone": 1, "address": 1},
-    )
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    doc = await db.customer_display.find_one({"company_id": c["id"]}, {"_id": 0})
-    branding = _company_branding_response(c)
-    state = (doc or {}).get("state") or {"step": "idle"}
-    # Auto-idle voor stale states:
-    #  - Receipt (betalingscherm) blijft maximaal 12 seconden zichtbaar zodat
-    #    de klant het ziet en de medewerker tijd heeft om af te ronden. Na 12s
-    #    keert het scherm zelf terug naar idle — dit voorkomt dat het scherm
-    #    "vastloopt" op een oude betaling wanneer de operator vergeet te resetten.
-    #  - Alle andere staten verlopen na 5 minuten van inactiviteit.
-    #  - SCHRIJF DE RESET TERUG NAAR DE DB zodat de volgende operator-PUT
-    #    niet door de oude method_chosen_at lock geblokkeerd wordt.
-    updated_at = state.get("updated_at")
-    try:
-        if updated_at:
-            t = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
-            age = (now_utc() - t).total_seconds()
-            current_step = (state.get("step") or "").lower()
-            should_reset = False
-            if current_step == "receipt" and age > 12:
-                should_reset = True
-            elif age > 60:
-                # Verlaagd van 300s → 60s zodat een verlaten kiosk (operator
-                # ging weg zonder uit te loggen) niet eindeloos op de vorige
-                # huurder blijft hangen. Tijdens een actieve sessie pusht
-                # de kiosk elke 1.5s een heartbeat dus het scherm blijft
-                # gewoon levend zolang de operator daar zit.
-                should_reset = True
-            if should_reset:
-                state = {"step": "idle", "updated_at": iso(now_utc())}
-                await db.customer_display.update_one(
-                    {"company_id": c["id"]},
-                    {"$set": {"state": state, "updated_at": state["updated_at"]}},
-                    upsert=True,
-                )
-    except Exception:
-        pass
-    return {"branding": branding, "state": state}
-
-
-# =====================================================================
-# SSE STREAM — REALTIME PUSH naar het klantenscherm
-# =====================================================================
-# Het klantenscherm subscribet hier via EventSource. Wanneer de operator
-# de Kiosk-state pusht (PUT /kiosk/customer-display), wordt er via
-# _cd_publish() een event op de queue gezet en INSTANT doorgestuurd.
-# Cross-device latency: typisch <50ms ipv 250ms via polling.
-# Polling blijft als fallback voor PWA-clients zonder EventSource-support.
-
-
-@api.get("/public/customer-display/{slug}/stream")
-async def customer_display_stream(slug: str, request: Request):
-    if not slug or len(slug) > 80:
-        raise HTTPException(status_code=400, detail="Ongeldige slug")
-    c = await db.companies.find_one({"slug": slug.lower()}, {"_id": 0, "id": 1})
-    if not c:
-        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    channel = _cd_channel(slug)
-    queue: _asyncio.Queue = _cd_bus_subscribe(channel, maxsize=32)
-
-    async def event_gen():
-        try:
-            # Stuur de huidige state direct bij verbinding zodat de client
-            # niet hoeft te wachten op de volgende PUT.
-            doc = await db.customer_display.find_one({"company_id": c["id"]}, {"_id": 0})
-            initial = (doc or {}).get("state") or {"step": "idle"}
-            yield f"event: state\ndata: {json.dumps({'state': initial})}\n\n"
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    # Korte timeout zodat we periodiek een heartbeat-comment
-                    # kunnen sturen (houdt de SSE-connection open door proxies
-                    # die idle TCP-verbindingen sluiten na ~30s).
-                    msg = await _asyncio.wait_for(queue.get(), timeout=20.0)
-                    yield f"event: state\ndata: {json.dumps(msg)}\n\n"
-                except _asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
-        finally:
-            _cd_bus_unsubscribe(channel, queue)
-
-    return StreamingResponse(
-        event_gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",  # nginx: disable buffering
-            "Connection": "keep-alive",
-        },
-    )
-
-
-
 
 
 @api.post("/kiosk/payments", response_model=PaymentOut)
@@ -16476,28 +16048,6 @@ _PWA_ROLE_MANIFEST: dict[str, dict] = {
             {"src": "/kiosk-icons/kioskpwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
         ],
     },
-    "klant": {
-        "name": "SuriRent Klantenscherm",
-        "short_name": "Klantenscherm",
-        "description": "Klantweergave-scherm voor SuriRent.",
-        "start_url": "/kiosk/klant?source=pwa",
-        "scope": "/",
-        "display": "standalone",
-        "orientation": "any",
-        "background_color": "#3A0764",
-        "theme_color": "#9333EA",
-        "lang": "nl",
-        "dir": "ltr",
-        "categories": ["business"],
-        "id": "/?app=klant",
-        "prefer_related_applications": False,
-        "icons": [
-            {"src": "/kiosk-icons/klant-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any"},
-            {"src": "/kiosk-icons/klant-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
-            {"src": "/kiosk-icons/klant-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/kiosk-icons/klant-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
-        ],
-    },
 }
 
 
@@ -16549,8 +16099,6 @@ def _slug_aware_start_url(role: str, slug: str | None) -> str:
         return _PWA_ROLE_MANIFEST.get(role, _PWA_ROLE_MANIFEST["beheer"])["start_url"]
     if role == "huurder":
         return f"/{slug}/kiosk/huurder?source=pwa"
-    if role == "klant":
-        return f"/{slug}/kiosk/klant?source=pwa"
     if role == "kiosk":
         return f"/{slug}/kiosk?source=pwa"
     return f"/{slug}/login?source=pwa&view=admin"

@@ -23,10 +23,6 @@ const ROLE_CONFIG = {
     name: 'SuriRent Huurder', shortName: 'Huurder',
     theme: '#10B981', icon: 'huurder',
   },
-  klant: {
-    name: 'SuriRent Klantenscherm', shortName: 'Klantenscherm',
-    theme: '#9333EA', icon: 'klant',
-  },
 };
 
 // Gereserveerde root-segmenten die geen bedrijfs-slug zijn.
@@ -43,7 +39,6 @@ const RESERVED_SLUGS = new Set([
 function inSlugStartUrl(role, slug) {
   switch (role) {
     case 'huurder': return `/${slug}/kiosk/huurder?source=pwa`;
-    case 'klant':   return `/${slug}/kiosk/klant?source=pwa`;
     case 'kiosk':   return `/${slug}/kiosk?source=pwa`;
     case 'beheer':
     default:        return `/${slug}/login?source=pwa&view=admin`;
@@ -164,14 +159,12 @@ function pickRole(path = '', search = '') {
   if (!sub.startsWith('/')) sub = '/' + sub;
 
   if (sub.startsWith('/admin')) return 'beheer';
-  if (sub === '/kiosk/klant' || sub.startsWith('/kiosk/klant')) return 'klant';
   if (sub === '/kiosk/huurder' || sub.startsWith('/kiosk/huurder')) return 'huurder';
   if (sub === '/kiosk' || sub.startsWith('/kiosk')) return 'kiosk';
   if (sub === '/login' || sub.startsWith('/login') || sub === '/' || sub === '') {
     const q = (search || '').toLowerCase();
     if (q.includes('target=kiosk')) return 'kiosk';
     if (q.includes('target=huurder')) return 'huurder';
-    if (q.includes('target=klant')) return 'klant';
     return 'beheer';
   }
   return 'beheer';

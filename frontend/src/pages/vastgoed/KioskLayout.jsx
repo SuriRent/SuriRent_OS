@@ -1335,7 +1335,7 @@ const PAY_ITEMS_TEMPLATE = [
   { id: 'boete', label: 'Boetes', icon: AlertCircle, desc: 'Openstaande boetes' },
 ];
 
-function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
+function PaySelect({ overview, onBack, onConfirm }) {
   const { tenant, apartment: apt, balance, total_due, isAdvance = false,
     prefill_advance_amount: prefillAdvance = 0,
     open_invoices: openInvoices = [], open_invoices_total: openInvoicesTotal = 0,
@@ -1485,50 +1485,6 @@ function PaySelect({ overview, onBack, onConfirm, onLiveChange }) {
     return labels.join(' + ');
   };
 
-  // Live-sync naar het klantenscherm: zodra de operator iets aanvinkt of
-  // een bedrag intikt, sturen we het lopende totaal + de geselecteerde
-  // onderdelen door naar KioskLayout. KioskLayout broadcast dit dan
-  // (via BroadcastChannel + PUT) naar het klantenscherm zodat de klant
-  // realtime ziet wat er gebeurt. Dedup wordt door KioskLayout's push-hash
-  // afgehandeld.
-  // Content-hash ref voor live preview — voorkomt dat we onLiveChange
-  // meermaals per render afvuren wanneer de selectie qua INHOUD identiek
-  // is (selectedInvItems/PlanItems zijn nieuwe arrays elke render). Zonder
-  // deze guard zou de parent voor elke re-render setLivePreview triggeren
-  // en zo dubbele renders + onnodige PUTs veroorzaken.
-  const lastLivePreviewKeyRef = useRef('');
-  useEffect(() => {
-    if (typeof onLiveChange !== 'function') return;
-    if (activeAmount <= 0) {
-      if (lastLivePreviewKeyRef.current !== '__null__') {
-        lastLivePreviewKeyRef.current = '__null__';
-        onLiveChange(null);
-      }
-      return;
-    }
-    const cats = [];
-    selectedInvItems.forEach((inv) => {
-      const label = inv.period_month
-        ? `Huur ${MONTHS_NL[inv.period_month - 1]} ${inv.period_year || ''}`.trim()
-        : 'Huur';
-      cats.push({ key: 'huur', label, value: Number(inv.outstanding || 0) });
-    });
-    if (selectedSynCurrent > 0) {
-      cats.push({ key: 'huur', label: 'Huur (huidige maand)', value: selectedSynCurrent });
-    }
-    if (selected.has('boete')) cats.push({ key: 'boete', label: 'Boetes', value: amounts.boete || 0 });
-    selectedPlanItems.forEach((it, i) => {
-      cats.push({ key: 'overig', label: `Regeling termijn ${i + 1}`, value: it.amount });
-    });
-    if (hasCustom) {
-      cats.push({ key: 'overig', label: isAdvance ? 'Vooruitbetaling' : 'Gedeeltelijke betaling', value: parseFloat(custom) });
-    }
-    const key = JSON.stringify({ a: activeAmount, c: cur, cs: cats.map((x) => `${x.key}:${x.label}:${x.value}`) });
-    if (key !== lastLivePreviewKeyRef.current) {
-      lastLivePreviewKeyRef.current = key;
-      onLiveChange({ amount: activeAmount, currency: cur, categories: cats });
-    }
-  }, [activeAmount, hasCustom, custom, cur, isAdvance, selected, selectedInvItems, selectedPlanItems, selectedSynCurrent, amounts.boete, onLiveChange]);
 
 
   const press = (k) => {
@@ -2257,27 +2213,6 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Direct betalen op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Direct naar uw bank', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
   ];
-  // Poll het klantenscherm puur om te VISUALISEREN welke methode de klant
-  // heeft aangeraakt — we navigeren GEEN automatisch door. De medewerker
-  // moet altijd zelf bevestigen via de "Bevestig" knop. Dit voorkomt dat
-  // een per ongeluk geraakte methode de betaling vastlegt.
-  const [customerPicked, setCustomerPicked] = useState(null);
-  useEffect(() => {
-    let stopped = false;
-    let timer;
-    const tick = async () => {
-      try {
-        const { data } = await api.get(`/kiosk/customer-display?t=${Date.now()}`);
-        const m = data?.state?.payload?.method;
-        const at = data?.state?.payload?.method_chosen_at;
-        if (at && m && !stopped) setCustomerPicked(m);
-      } catch { /* ignore */ }
-      if (!stopped) timer = setTimeout(tick, 600);
-    };
-    tick();
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
-  }, []);
-  // GEEN useEffect die automatisch onConfirm aanroept — medewerker bevestigt.
 
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
@@ -2294,9 +2229,6 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
         </div>
       </div>
-      {/* 2026-02-28 — "Wacht op klant"-info verwijderd op user-verzoek
-          omdat deze irrelevant was wanneer er geen customer-display is
-          gekoppeld. Methodes blijven direct selecteerbaar. */}
       <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
         <div className={`grid grid-cols-1 gap-3 sm:gap-4 w-full px-2 ${methods.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-4 max-w-6xl' : 'sm:grid-cols-3 max-w-4xl'}`}>
           {methods.map((m) => {
@@ -4626,12 +4558,6 @@ export default function KioskLayout() {
   const [apartment, setApartment] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
-  // Live-preview voor het klantenscherm tijdens de "pay" stap. Wordt door
-  // PaySelect realtime bijgewerkt naarmate de operator categorieën aanvinkt
-  // of via het keypad een bedrag intikt — zodat de klant op zijn scherm
-  // het lopend totaal en de geselecteerde onderdelen meteen ziet, vóórdat
-  // de operator op "Verder" tikt.
-  const [livePreview, setLivePreview] = useState(null);
   const [paymentResult, setPaymentResult] = useState(null);
   const [company, setCompany] = useState(getKioskCompany());
   const [nfcToast, setNfcToast] = useState(null); // {kind:'ok'|'err', msg}
@@ -4705,38 +4631,6 @@ export default function KioskLayout() {
     };
   }, []);
 
-  // CLEANUP — wanneer het kiosk-component unmount (operator navigeert
-  // weg, sluit tab, refreshed) OF de pagina verborgen wordt, reset het
-  // klantenscherm naar idle. sendBeacon werkt ook tijdens unload (regular
-  // fetch wordt door browser geannuleerd). Dit is een safety-net naast de
-  // explicit `reset()` en `exit()` calls.
-  useEffect(() => {
-    const beaconReset = () => {
-      try {
-        const url = `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/customer-display/reset-beacon`;
-        const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
-        navigator.sendBeacon?.(url, blob);
-      } catch { /* ignore */ }
-    };
-    const onVis = () => {
-      // Wanneer pagina verborgen wordt (tab gewisseld, scherm uit) reset
-      // het klantenscherm zodat het niet eindeloos op de vorige huurder
-      // blijft hangen. Bij terugkeer naar de tab pushed Kiosk gewoon de
-      // current state opnieuw via heartbeat.
-      if (document.visibilityState === 'hidden') beaconReset();
-    };
-    window.addEventListener('pagehide', beaconReset);
-    window.addEventListener('beforeunload', beaconReset);
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      window.removeEventListener('pagehide', beaconReset);
-      window.removeEventListener('beforeunload', beaconReset);
-      document.removeEventListener('visibilitychange', onVis);
-      // Component unmount = navigatie naar andere pagina binnen SPA.
-      // Reset hier ook expliciet zodat ander scherm niet de oude state ziet.
-      beaconReset();
-    };
-  }, []);
 
   // ===================================================================
   // NFC TAP-LISTENER (USB HID-kaartlezer)
@@ -4884,8 +4778,6 @@ export default function KioskLayout() {
   }, [step]);
 
   const exit = useCallback(() => {
-    // Reset customer-display naar idle bij uitloggen.
-    api.delete('/kiosk/customer-display').catch(() => {});
     // VOLLEDIGE reset zodat een volgende gebruiker (vooral een andere
     // medewerker op een gedeeld kiosk-toestel) cleanly bij de PIN-keypad
     // landt zonder oude tokens of role-voorkeur. Anders krijgt de PWA
@@ -4911,98 +4803,6 @@ export default function KioskLayout() {
     window.location.assign('/login?pick=1');
   }, []);
 
-  // Push huidige state naar het klantenscherm. Idempotent — we sturen
-  // alleen waarden die de klant ook mag zien (geen pin_hash, geen company_id).
-  // Combinatie van 3 transports:
-  //  1) BroadcastChannel — instant same-browser sync (2e tab / 2e monitor)
-  //  2) Backend PUT — robuust voor cross-device (klant tablet in andere ruimte)
-  //  3) Heartbeat elke 3s — overwrite stale state in DB, voorkomt vastlopen
-  useEffect(() => {
-    if (step === 'check') return undefined;
-    const pushKeyRef = { current: '' };
-    const buildBody = () => {
-      const apt = apartment ? {
-        id: apartment.id, number: apartment.number, address: apartment.address || '',
-        rent_amount: apartment.rent_amount, currency: apartment.currency,
-        tenant_name: apartment.tenant_name,
-      } : null;
-      const tenant = overview?.tenant ? {
-        name: overview.tenant.name,
-      } : (apartment?.tenant_name ? { name: apartment.tenant_name } : null);
-      const ovw = overview ? {
-        balance: overview.balance, apartment: overview.apartment,
-        total_due: overview.total_due || 0,
-        // Bucket-info toevoegen zodat het klantenscherm EXACT dezelfde
-        // "Achterstallige huur" / "Maandhuur" splitsing kan tonen als de
-        // beheerder-kiosk. Voorheen kreeg het klantenscherm alleen
-        // `balance.balance` (legacy) waardoor Financieel overzicht altijd
-        // op "Volledig bij / SRD 0,00" bleef staan zelfs bij achterstand.
-        open_invoices: Array.isArray(overview.open_invoices) ? overview.open_invoices : [],
-        open_invoices_total: Number(overview.open_invoices_total || 0),
-        current_invoices: Array.isArray(overview.current_invoices) ? overview.current_invoices : [],
-        current_invoices_total: Number(overview.current_invoices_total || 0),
-        future_invoices: Array.isArray(overview.future_invoices) ? overview.future_invoices : [],
-        future_invoices_total: Number(overview.future_invoices_total || 0),
-        current_month_invoice: overview.current_month_invoice || null,
-        credit_balance: Number(overview.credit_balance || 0),
-      } : null;
-      // Tijdens 'pay' tonen we de live preview van de operator-selectie
-      // (categorieën + lopend totaal) zodat het klantenscherm meteen
-      // meebeweegt. Zodra de operator op "Verder" tikt wordt paymentPayload
-      // gevuld en gebruikt — die heeft voorrang.
-      const livePayload = (!paymentPayload && step === 'pay' && livePreview) ? {
-        amount: livePreview.amount, currency: livePreview.currency,
-        categories: livePreview.categories || [],
-      } : null;
-      const payload = paymentPayload ? {
-        amount: paymentPayload.amount, currency: paymentPayload.currency,
-        categories: paymentPayload.categories || [], method: paymentPayload.method,
-      } : livePayload;
-      const payment = paymentResult ? {
-        amount: paymentResult.amount, currency: paymentResult.currency,
-        receipt_number: paymentResult.receipt_number, method: paymentResult.method,
-        paid_at: paymentResult.paid_at,
-      } : null;
-      return { step, apartment: apt, tenant, overview: ovw, payload, payment };
-    };
-    const push = () => {
-      const body = buildBody();
-      // CONTENT-HASH dedup: alleen pushen wanneer er ECHT iets is veranderd.
-      // Anders zou de heartbeat elke 3s dezelfde receipt-state terug-pushen
-      // naar de DB met een nieuwe timestamp, wat het klantenscherm zou laten
-      // flikkeren tussen idle (na 12s TTL) en receipt (door nieuwe push).
-      let contentKey = '';
-      try {
-        contentKey = JSON.stringify({
-          s: body.step,
-          a: body.apartment?.id, t: body.tenant?.name,
-          amt: body.payload?.amount, cur: body.payload?.currency,
-          m: body.payload?.method, mc: body.payload?.method_chosen_at,
-          // Categorieën in de hash zodat live-preview wijzigingen
-          // (b.v. operator vinkt "Boetes" aan) een push triggeren.
-          cats: (body.payload?.categories || []).map((c) => `${c.key || c.label}:${c.value || 0}`).join('|'),
-          r: body.payment?.receipt_number, pa: body.payment?.paid_at,
-        });
-      } catch { contentKey = String(Math.random()); }
-      if (contentKey === pushKeyRef.current) return;
-      pushKeyRef.current = contentKey;
-      try {
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('surirent-customer-display');
-          bc.postMessage({ state: { ...body, updated_at: new Date().toISOString() } });
-          bc.close();
-        }
-      } catch { /* ignore */ }
-      api.put('/kiosk/customer-display', body).catch(() => {});
-    };
-    push();
-    // Heartbeat: elke 1.5s een keepalive push. De content-hash dedup in
-    // `push()` zorgt dat we GEEN onnodige PUTs doen — alleen wanneer de
-    // state daadwerkelijk verandert. 1.5s ipv 3s zodat een stale state
-    // sneller wordt opgemerkt en gecorrigeerd.
-    const hb = setInterval(push, 1500);
-    return () => clearInterval(hb);
-  }, [step, apartment, overview, paymentPayload, paymentResult, livePreview]);
 
   // "Beheerder" knop in de kiosk: als de PIN-login een admin-token heeft
   // afgegeven (PIN is shared secret van het bedrijf), spring direct naar
@@ -5047,43 +4847,11 @@ export default function KioskLayout() {
   }, []);
 
   const reset = () => {
-    // Wis ook DIRECT het klantenscherm zodat een volgende huurder niet de
-    // oude data ziet (vooral belangrijk na een betaling — operator klikt
-    // "Klaar" en de volgende klant moet meteen het welkom-scherm zien).
-    api.delete('/kiosk/customer-display').catch(() => {});
     setApartment(null); setOverview(null); setPaymentPayload(null);
-    setLivePreview(null); setPaymentResult(null);
+    setPaymentResult(null);
     setStep('select');
   };
 
-  // Klant initieert betaling vanaf het klantenscherm — we synchroniseren
-  // hier de admin Kiosk zodat we direct naar de method-pick gaan.
-  useEffect(() => {
-    if (step !== 'overview' || !overview) return undefined;
-    let stopped = false;
-    let timer;
-    const tick = async () => {
-      try {
-        // Geauthenticeerd endpoint — werkt altijd, ongeacht slug-staat.
-        const { data } = await api.get(`/kiosk/customer-display?t=${Date.now()}`);
-        const p = data?.state?.payload;
-        if (!stopped && p?.customer_initiated && p?.amount > 0) {
-          setPaymentPayload({
-            amount: p.amount,
-            currency: p.currency || 'SRD',
-            categories: p.categories || [],
-            tenant_id: overview.tenant?.id,
-            apartment_id: overview.apartment?.id,
-          });
-          setStep('method');
-          return;
-        }
-      } catch { /* ignore */ }
-      if (!stopped) timer = setTimeout(tick, 600);
-    };
-    tick();
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
-  }, [step, overview]);
 
   const showDesktopBar = step !== 'check';
   // Medewerker-PIN systeem is compleet uitgeschakeld: de kiosk-PIN (of
@@ -5139,8 +4907,7 @@ export default function KioskLayout() {
           )}
           {step === 'pay' && overview && (
             <PaySelect overview={overview} onBack={() => setStep('overview')}
-              onLiveChange={setLivePreview}
-              onConfirm={(p) => { setLivePreview(null); setPaymentPayload(p); setStep('method'); }} />
+              onConfirm={(p) => { setPaymentPayload(p); setStep('method'); }} />
           )}
           {step === 'method' && paymentPayload && overview && (
             <MethodSelect payload={paymentPayload} overview={overview} onBack={() => setStep('pay')}

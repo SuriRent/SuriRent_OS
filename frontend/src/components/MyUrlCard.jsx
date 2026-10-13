@@ -211,13 +211,11 @@ export default function MyUrlCard({ compact = false }) {
 
         {/* Kiosk URLs — compacte rij */}
         {!compact && info.kiosk_url && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <KioskUrlPill label="Admin kiosk" url={info.kiosk_url} testid="my-url-kiosk-admin"
               onQr={() => setQr({ kind: 'kiosk', label: 'Admin kiosk', url: info.kiosk_url })} />
             <KioskUrlPill label="Huurder kiosk" url={info.tenant_kiosk_url} testid="my-url-kiosk-huurder"
               onQr={() => setQr({ kind: 'tenant_kiosk', label: 'Huurder kiosk', url: info.tenant_kiosk_url })} />
-            <KioskUrlPill label="Klantenscherm" url={info.customer_display_url} testid="my-url-kiosk-klant"
-              onQr={() => setQr({ kind: 'customer_display', label: 'Klantenscherm', url: info.customer_display_url })} />
           </div>
         )}
 

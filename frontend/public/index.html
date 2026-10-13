@@ -261,7 +261,6 @@
             beheer:    { name: 'Beheer',         theme: '#FFFFFF', icon: 'beheer'    },
             kiosk:     { name: 'Kiosk',          theme: '#FFFFFF', icon: 'kioskpwa'  },
             huurder:   { name: 'Huurder',        theme: '#FFFFFF', icon: 'huurder'   },
-            klant:     { name: 'Klantenscherm',  theme: '#FFFFFF', icon: 'klant'     },
             assistent: { name: 'SuriRent Assistent', theme: '#FFFFFF', icon: 'assistent' }
           };
           var p = (location.pathname || '').toLowerCase();
@@ -273,7 +272,6 @@
           // VOORDAT we de algemene /kiosk match doen, anders worden
           // /kiosk/huurder en /kiosk/klant verkeerd als 'kiosk' herkend.
           else if (sub.indexOf('/admin') === 0) role = 'beheer';
-          else if (sub.indexOf('/kiosk/klant') === 0) role = 'klant';
           else if (sub.indexOf('/kiosk/huurder') === 0) role = 'huurder';
           else if (sub === '/kiosk' || sub.indexOf('/kiosk/') === 0 || sub.indexOf('/kiosk') === 0) role = 'kiosk';
           // /login route met target hint → leid af
@@ -281,7 +279,6 @@
             var qs = location.search || '';
             if (qs.indexOf('target=kiosk') !== -1) role = 'kiosk';
             else if (qs.indexOf('target=huurder') !== -1) role = 'huurder';
-            else if (qs.indexOf('target=klant') !== -1) role = 'klant';
             else if (qs.indexOf('view=admin') !== -1 || qs.indexOf('target=admin') !== -1) role = 'beheer';
             else role = 'beheer';
           }

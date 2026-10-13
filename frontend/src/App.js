@@ -52,7 +52,6 @@ const LoginPage = lazyWithRetry(() => import('./pages/vastgoed/LoginPage'));
 const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboard'));
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
-const CustomerDisplay = lazyWithRetry(() => import('./pages/vastgoed/CustomerDisplay'));
 const ContractSignPage = lazyWithRetry(() => import('./pages/vastgoed/ContractSignPage'));
 const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantSignaturePage'));
 const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback'));
@@ -85,7 +84,6 @@ function BrandedRouteTree() {
         <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
         <Route path="kiosk/huurder" element={<TenantKioskLayout />} />
-        <Route path="kiosk/klant" element={<CustomerDisplay />} />
         {/* Legacy /huurder paths → redirect naar Huurder Kiosk (PIN-only via QR). */}
         <Route path="huurder" element={<Navigate to="../kiosk/huurder" replace />} />
         <Route path="huurder/portaal" element={<Navigate to="../kiosk/huurder" replace />} />
@@ -215,7 +213,6 @@ function AppRoutes() {
       <Route path="/betalen/:token" element={<KioskStripePay />} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
-      <Route path="/kiosk/klant" element={<CustomerDisplay />} />
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />
       <Route path="/onderteken-huurder/:token" element={<TenantSignaturePage />} />
@@ -261,7 +258,6 @@ function HybridRoutes() {
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
-      <Route path="/kiosk/klant" element={<CustomerDisplay />} />
       <Route path="/assistent" element={<AssistantPage />} />
       <Route path="/c/:slug/*" element={<BrandedRouteTree />} />
       <Route path="/onderteken/:token" element={<ContractSignPage />} />

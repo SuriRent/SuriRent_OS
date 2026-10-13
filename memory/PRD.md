@@ -728,3 +728,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - /auth/kiosk-pin matcht alleen nog persoonlijke medewerker-PINs (app_role kiosk); /auth/kiosk-set-pin verwijderd; kiosk_pins collectie wordt bij startup geleegd
 - Kiosk PIN uit Instellingen, Setup Wizard en registratieformulier gehaald
 - Testaccount kiosk-medewerker: anita@demo.sr / anita1234 / PIN 4321
+
+## 2026-06 Klantenscherm verwijderd
+- CustomerDisplay.jsx, routes /kiosk/klant, manifest-klant.json, PWA-rol klant (frontend+backend manifest) verwijderd
+- Kiosk: push-heartbeat, reset-beacon, live-preview, klant-initiated payment/method polling verwijderd
+- Backend: alle /kiosk/customer-display en /public/customer-display endpoints weg; customer_display collectie wordt bij startup gedropt; MyUrl/QR klantenscherm-link weg
+- event_bus blijft (admin live-sync)

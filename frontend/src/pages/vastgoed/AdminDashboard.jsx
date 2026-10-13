@@ -71,7 +71,6 @@ const ADMIN_TAB_LOADERS = [
 // "Open Kiosk" instant opent zonder chunk-download te hoeven wachten.
 const KIOSK_LOADERS = [
   () => import('./KioskLayout'),
-  () => import('./CustomerDisplay'),
 ];
 
 /**
