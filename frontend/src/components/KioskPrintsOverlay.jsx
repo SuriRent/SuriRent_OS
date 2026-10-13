@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft, Check, CheckCircle2, Clock, Loader2, Printer, Receipt, UserRound, X } from 'lucide-react';
 import { api, fmtMoney } from '../lib/api';
 import { printReceipt } from '../lib/kiosk-print';
+import { KioskBulkApproveSheet } from './KioskBulkApproveSheet';
 
 const todayStartIso = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) : '');
@@ -70,6 +71,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
   const [logs, setLogs] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [approving, setApproving] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const activeKeys = useMemo(() => new Set(active.map((e) => e.key)), [active]);
   // Actieve medewerkers + medewerkers met bonnen vandaag (ook offline).
   const employees = useMemo(() => {
@@ -97,6 +99,8 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
     return () => clearInterval(id);
   }, [load, loadEmps]);
 
+  const pendingLogs = (logs || []).filter((l) => l.payment.status === 'pending_approval');
+
   const onPrint = async (log) => {
     setBusyId(log.id);
     try {
@@ -122,6 +126,12 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
             {emp ? <><OnlineDot online={activeKeys.has(emp.key)} />{emp.name}<span className="text-xs font-bold text-white/50">{activeKeys.has(emp.key) ? 'online' : 'offline'}</span></> : 'Kies een medewerker'}
           </p>
         </div>
+        {emp && pendingLogs.length > 1 && (
+          <button onClick={() => setBulkOpen(true)} data-testid="kiosk-prints-approve-all"
+            className="h-11 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 transition-colors">
+            <CheckCircle2 className="w-4 h-4" /> Alles goedkeuren ({pendingLogs.length})
+          </button>
+        )}
         <button onClick={onClose} data-testid="kiosk-prints-close" className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
           <X className="w-5 h-5" />
         </button>
@@ -133,6 +143,11 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
         {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} busy={busyId === l.id} />)}
       </div>
+      {bulkOpen && (
+        <KioskBulkApproveSheet logs={pendingLogs} employeeName={emp?.name || ''}
+          onClose={() => setBulkOpen(false)}
+          onDone={(allOk) => { load(); if (allOk) setBulkOpen(false); }} />
+      )}
       {approving && (
         <Suspense fallback={null}>
           <ApprovePaymentSheet
