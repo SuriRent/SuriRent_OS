@@ -27,6 +27,7 @@ import base64
 import secrets
 import asyncio
 import json
+import time
 
 from pdf_gen import (
     receipt_pdf_blue_house as receipt_pdf,
@@ -275,6 +276,11 @@ async def lifespan(app: FastAPI):
     await db.payments.create_index("invoice_id")
     await db.payments.create_index("id")
     await db.invoices.create_index([("company_id", 1), ("status", 1)])
+    await db.invoices.create_index([("company_id", 1), ("created_at", -1)])
+    await db.apartments.create_index([("company_id", 1), ("status", 1)])
+    await db.apartments.create_index("id")
+    await db.tenants.create_index("id")
+    await db.kasgeld.create_index("company_id")
     await db.invoices.create_index([("tenant_id", 1), ("period_year", 1), ("period_month", 1)])
     await db.invoices.create_index("id")
     await db.companies.create_index("slug", unique=True)
@@ -768,6 +774,8 @@ async def _live_sync_broadcast(request: Request, call_next):
         method = request.method.upper()
         if method in ("GET", "HEAD", "OPTIONS"):
             return response
+        if response.status_code < 400 and _STATS_CACHE:
+            _STATS_CACHE.clear()
         if response.status_code >= 400:
             return response
         path = request.url.path or ""
@@ -11062,42 +11070,71 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 # =====================================================================
 # Dashboard stats
 # =====================================================================
+# Overzicht-cache: per scope max 60s geldig; elke geslaagde mutatie (POST/PUT/
+# PATCH/DELETE op /api/*) leegt de cache via de live-sync middleware.
+_STATS_CACHE: dict = {}
+_STATS_TTL_S = 60
+
+
 @api.get("/admin/stats")
 async def admin_stats(user=Depends(get_current_user)):
     sc = scope(user)
-    total_apts = await db.apartments.count_documents({**sc})
-    occupied = await db.apartments.count_documents({**sc, "status": "occupied"})
-    total_tenants = await db.tenants.count_documents({**sc})
-    # Sum payments this month (per currency)
+    key = json.dumps(sc, sort_keys=True, default=str)
+    hit = _STATS_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < _STATS_TTL_S:
+        return hit[1]
+    data = await _compute_admin_stats(user, sc)
+    _STATS_CACHE[key] = (time.monotonic(), data)
+    return data
+
+
+async def _agg_by_currency(coll, pipeline) -> dict:
+    out = {}
+    async for r in coll.aggregate(pipeline):
+        out[r["_id"]] = {"total": r["total"], "count": r["count"]}
+    return out
+
+
+async def _compute_admin_stats(user: dict, sc: dict) -> dict:
     today = now_utc()
     start = datetime(today.year, today.month, 1, tzinfo=timezone.utc).isoformat()
-    pipeline = [
-        {"$match": {**sc, "paid_at": {"$gte": start}}},
-        {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
-    ]
-    by_currency = {}
-    async for r in db.payments.aggregate(pipeline):
-        by_currency[r["_id"]] = {"total": r["total"], "count": r["count"]}
-
-    # Invoice status distribution (all open + overdue + paid totals for the dashboard).
-    inv_paid = await db.invoices.count_documents({**sc, "status": "paid"})
-    inv_open = await db.invoices.count_documents({**sc, "status": {"$in": ["open", "sent", "pending"]}})
-    inv_overdue = await db.invoices.count_documents({**sc, "status": "overdue"})
-
-    # Outstanding balance — sum of unpaid invoices per currency.
-    outstanding_pipeline = [
-        {"$match": {**sc, "status": {"$nin": ["paid", "cancelled"]}}},
-        {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
-    ]
-    outstanding = {}
-    async for r in db.invoices.aggregate(outstanding_pipeline):
-        outstanding[r["_id"]] = {"total": r["total"], "count": r["count"]}
+    unpaid = {**sc, "status": {"$nin": ["paid", "cancelled"]}}
+    # Alle onafhankelijke tellingen/aggregaties parallel i.p.v. na elkaar.
+    (total_apts, occupied, total_tenants, inv_paid, inv_open, inv_overdue,
+     by_currency, outstanding, recent_pays, recent_invs) = await asyncio.gather(
+        db.apartments.count_documents({**sc}),
+        db.apartments.count_documents({**sc, "status": "occupied"}),
+        db.tenants.count_documents({**sc}),
+        db.invoices.count_documents({**sc, "status": "paid"}),
+        db.invoices.count_documents({**sc, "status": {"$in": ["open", "sent", "pending"]}}),
+        db.invoices.count_documents({**sc, "status": "overdue"}),
+        _agg_by_currency(db.payments, [
+            {"$match": {**sc, "paid_at": {"$gte": start}}},
+            {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]),
+        _agg_by_currency(db.invoices, [
+            {"$match": unpaid},
+            {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]),
+        db.payments.find({**sc}, {"_id": 0, "tenant_id": 1, "apartment_id": 1, "amount": 1, "currency": 1, "paid_at": 1}).sort("paid_at", -1).limit(5).to_list(5),
+        db.invoices.find(unpaid, {"_id": 0, "tenant_id": 1, "apartment_id": 1, "amount": 1, "currency": 1, "created_at": 1,
+                                  "period_month": 1, "period_year": 1}).sort("created_at", -1).limit(5).to_list(5),
+    )
+    # Namen/nummers in één batch i.p.v. 2 queries per regel (N+1).
+    t_ids = list({x.get("tenant_id") for x in recent_pays + recent_invs if x.get("tenant_id")})
+    a_ids = list({x.get("apartment_id") for x in recent_pays + recent_invs if x.get("apartment_id")})
+    t_docs, a_docs = await asyncio.gather(
+        db.tenants.find({"id": {"$in": t_ids}, **sc}, {"_id": 0, "id": 1, "name": 1}).to_list(20),
+        db.apartments.find({"id": {"$in": a_ids}, **sc}, {"_id": 0, "id": 1, "number": 1}).to_list(20),
+    )
+    t_map = {d["id"]: d for d in t_docs}
+    a_map = {d["id"]: d for d in a_docs}
 
     # Recent activity feed — last 8 events (payments received + invoices opened/overdue)
     recent: list = []
-    async for p in db.payments.find({**sc}, {"_id": 0}).sort("paid_at", -1).limit(5):
-        tenant = await db.tenants.find_one({"id": p.get("tenant_id"), **sc}, {"_id": 0, "name": 1})
-        apt = await db.apartments.find_one({"id": p.get("apartment_id"), **sc}, {"_id": 0, "number": 1})
+    for p in recent_pays:
+        tenant = t_map.get(p.get("tenant_id"))
+        apt = a_map.get(p.get("apartment_id"))
         recent.append({
             "type": "payment_received",
             "title": "Betaling ontvangen",
@@ -11106,9 +11143,9 @@ async def admin_stats(user=Depends(get_current_user)):
             "currency": p.get("currency", "SRD"),
             "at": p.get("paid_at"),
         })
-    async for inv in db.invoices.find({**sc, "status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0}).sort("created_at", -1).limit(5):
-        tenant = await db.tenants.find_one({"id": inv.get("tenant_id"), **sc}, {"_id": 0, "name": 1})
-        apt = await db.apartments.find_one({"id": inv.get("apartment_id"), **sc}, {"_id": 0, "number": 1})
+    for inv in recent_invs:
+        tenant = t_map.get(inv.get("tenant_id"))
+        apt = a_map.get(inv.get("apartment_id"))
         recent.append({
             "type": "invoice_open",
             "title": "Betaling openstaand",
