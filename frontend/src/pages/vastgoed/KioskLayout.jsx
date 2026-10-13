@@ -20,6 +20,9 @@ import {
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage } from '../../lib/kiosk-print';
+import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
+
+prefetchKioskSelect();
 
 // Hook: tracked `visualViewport` (iOS/Android). Retourneert de huidige
 // hoogte + offsetTop van de VISUELE viewport (het gebied dat niet door
@@ -186,19 +189,17 @@ function MobileAddFab({ onOpen }) {
 // =====================================================================
 function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
   const navigate = useBrandedNavigate();
-  const [apartments, setApartments] = useState([]);
-  const [locations, setLocations] = useState([]);
+  const [cached] = useState(readKioskSelectCache);
+  const [apartments, setApartments] = useState(() => cached?.apartments || []);
+  const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
   const [selectedLocationId, setSelectedLocationId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      api.get('/kiosk/apartments'),
-      api.get('/kiosk/locations'),
-    ]).then(([aRes, lRes]) => {
-      setApartments(aRes.data);
-      setLocations((lRes.data || []).filter((l) => l.id !== '_none'));
+    fetchKioskSelect().then((d) => {
+      setApartments(d.apartments);
+      setLocations(d.locations.filter((l) => l.id !== '_none'));
     }).catch((e) => {
       // 401 = token ongeldig / verlopen → wis token en stuur terug naar
       // PIN-login. Voorheen bleef de melding "Ongeldig kiosk token" inline
@@ -209,6 +210,7 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
           localStorage.removeItem('kiosk_token');
           localStorage.removeItem('kiosk_company');
         } catch { /* noop */ }
+        clearKioskSelectCache();
         navigate('/login?target=kiosk', { replace: true });
         return;
       }
@@ -4619,7 +4621,8 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
 export default function KioskLayout() {
   useHidePwaSplash();
   const navigate = useBrandedNavigate();
-  const [step, setStep] = useState('check');
+  // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
+  const [step, setStep] = useState(() => (localStorage.getItem('kiosk_token') ? 'select' : 'check'));
   const [apartment, setApartment] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
@@ -5161,7 +5164,7 @@ export default function KioskLayout() {
           onClose={() => setShowAddTenant(false)}
           onSaved={() => {
             setShowAddTenant(false);
-            setApartmentsReloadKey((k) => k + 1);
+            invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
       {showAddApartment && (
@@ -5169,7 +5172,7 @@ export default function KioskLayout() {
           onClose={() => setShowAddApartment(false)}
           onSaved={() => {
             setShowAddApartment(false);
-            setApartmentsReloadKey((k) => k + 1);
+            invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
       {showAddLocation && (
@@ -5177,7 +5180,7 @@ export default function KioskLayout() {
           onClose={() => setShowAddLocation(false)}
           onSaved={() => {
             setShowAddLocation(false);
-            setApartmentsReloadKey((k) => k + 1);
+            invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
       {showAddContract && (

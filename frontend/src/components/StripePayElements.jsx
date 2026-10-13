@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe } from '@stripe/stripe-js/pure';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Loader2, Lock, AlertCircle } from 'lucide-react';
 

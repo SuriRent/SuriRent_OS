@@ -774,11 +774,12 @@ async def _live_sync_broadcast(request: Request, call_next):
         method = request.method.upper()
         if method in ("GET", "HEAD", "OPTIONS"):
             return response
-        if response.status_code < 400 and _STATS_CACHE:
+        path = request.url.path or ""
+        if response.status_code < 400 and not path.startswith(_CACHE_KEEP_PATHS):
             _STATS_CACHE.clear()
+            _KIOSK_CACHE.clear()
         if response.status_code >= 400:
             return response
-        path = request.url.path or ""
         # Alleen mutaties op admin/company data — sluit auth/public/events uit.
         # Kiosk-endpoints doen we WEL broadcasten (kasgeld/payment door
         # medewerker moet live bij admin verschijnen), behalve de high-
@@ -9594,28 +9595,50 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 # =====================================================================
 # Kiosk public endpoints (no auth, but expects kiosk session for payments)
 # =====================================================================
+# Kiosk-cache (30s) voor keuzescherm; elke mutatie leegt hem via de live-sync middleware.
+_KIOSK_CACHE: dict = {}
+_KIOSK_TTL_S = 30
+_CACHE_KEEP_PATHS = ("/api/kiosk/customer-display", "/api/kiosk/employee-verify", "/api/admin/events")
+_NO_LOC_Q = [{"location_id": None}, {"location_id": {"$exists": False}}, {"location_id": ""}]
+
+
+async def _kiosk_cached(name: str, sc: dict, compute):
+    key = name + json.dumps(sc, sort_keys=True, default=str)
+    hit = _KIOSK_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < _KIOSK_TTL_S:
+        return hit[1]
+    data = await compute()
+    _KIOSK_CACHE[key] = (time.monotonic(), data)
+    return data
+
+
 @api.get("/kiosk/locations")
 async def kiosk_list_locations(_session=Depends(get_kiosk_session)):
     """List locations for the kiosk's company, with apartment counts."""
     sc = kiosk_scope(_session)
-    docs = await db.locations.find(sc, {"_id": 0}).sort("name", 1).to_list(500)
-    out = []
-    for loc in docs:
-        total = await db.apartments.count_documents({**sc, "location_id": loc["id"]})
-        occupied = await db.apartments.count_documents({**sc, "location_id": loc["id"], "status": "occupied"})
-        out.append({**loc, "apartments_total": total, "apartments_occupied": occupied})
-    # Also surface "no location" group when there are unassigned apartments.
-    unassigned = await db.apartments.count_documents({
-        **sc, "$or": [{"location_id": None}, {"location_id": {"$exists": False}}, {"location_id": ""}]
-    })
-    if unassigned > 0:
-        out.append({
-            "id": "_none", "name": "Overige appartementen",
-            "address": "", "photo_url": "",
-            "apartments_total": unassigned, "apartments_occupied": 0,
-            "created_at": "",
-        })
-    return out
+
+    async def compute():
+        docs, counts = await asyncio.gather(
+            db.locations.find(sc, {"_id": 0}).sort("name", 1).to_list(500),
+            db.apartments.aggregate([
+                {"$match": sc},
+                {"$group": {"_id": {"$ifNull": ["$location_id", ""]}, "total": {"$sum": 1},
+                            "occupied": {"$sum": {"$cond": [{"$eq": ["$status", "occupied"]}, 1, 0]}}}},
+            ]).to_list(1000),
+        )
+        by_loc = {c["_id"]: c for c in counts}
+        out = [{**loc, "apartments_total": by_loc.get(loc["id"], {}).get("total", 0),
+                "apartments_occupied": by_loc.get(loc["id"], {}).get("occupied", 0)} for loc in docs]
+        unassigned = by_loc.get("", {}).get("total", 0)
+        if unassigned > 0:
+            out.append({
+                "id": "_none", "name": "Overige appartementen",
+                "address": "", "photo_url": "",
+                "apartments_total": unassigned, "apartments_occupied": 0,
+                "created_at": "",
+            })
+        return out
+    return await _kiosk_cached("loc", sc, compute)
 
 
 @api.get("/kiosk/apartments")
@@ -9625,59 +9648,40 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
     q = {**sc}
     if location_id is not None:
         if location_id in ("_none", ""):
-            q["$or"] = [{"location_id": None}, {"location_id": {"$exists": False}}, {"location_id": ""}]
+            q["$or"] = _NO_LOC_Q
         else:
             q["location_id"] = location_id
-    docs = await db.apartments.find(q, {"_id": 0}).sort("number", 1).to_list(1000)
+    return await _kiosk_cached("apt", q, lambda: _kiosk_apartments_compute(q))
+
+
+async def _kiosk_apartments_compute(q: dict) -> list:
+    proj = {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1, "currency": 1,
+            "status": 1, "tenant_id": 1, "show_tenant_photo": 1, "location_id": 1}
+    docs = await db.apartments.find(q, proj).sort("number", 1).to_list(1000)
+    tids = list({a["tenant_id"] for a in docs if a.get("tenant_id")})
+    tenants, invoices = await asyncio.gather(
+        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1}).to_list(len(tids) or 1),
+        db.invoices.find(
+            {"tenant_id": {"$in": tids}, "status": {"$ne": "paid"}, "kind": {"$in": [None, "huur"]}},
+            {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1},
+        ).to_list(None),
+    )
+    t_by_id = {t["id"]: t for t in tenants}
+    # Betaal-status: "unpaid" (min. 1 factuur 0 betaald) > "partial" > "paid".
+    status_by_tid: dict = {}
+    for inv in invoices:
+        amt = float(inv.get("amount") or 0)
+        paid = float(inv.get("paid_amount") or 0)
+        if amt > 0 and paid >= amt * 0.95:
+            continue  # feitelijk betaald ondanks stale status
+        tid = inv["tenant_id"]
+        if paid > 0:
+            status_by_tid.setdefault(tid, "partial")
+        else:
+            status_by_tid[tid] = "unpaid"
     out = []
     for a in docs:
-        tenant_name = None
-        tenant_avatar_url = None
-        tenant_id_photo_url = None
-        # Betaal-status voor de kiosk-apartement-picker badge.
-        # Waardes:
-        #   "paid"     → Betaald   (geen openstaande facturen; groen)
-        #   "partial"  → Deels     (min. 1 factuur is deels betaald,
-        #                           geen enkele volledig open; geel)
-        #   "unpaid"   → Niet bet. (min. 1 factuur is 0 betaald; rood)
-        pay_status = "paid"  # default: geen facturen = niets openstaand
-        if a.get("tenant_id"):
-            t = await db.tenants.find_one(
-                {"id": a["tenant_id"]},
-                {"_id": 0, "name": 1, "avatar_url": 1, "id_photo_url": 1},
-            )
-            if t:
-                tenant_name = t.get("name")
-                tenant_avatar_url = t.get("avatar_url") or None
-                tenant_id_photo_url = t.get("id_photo_url") or None
-            # Bepaal status uit ALLE facturen die niet 'paid' zijn (dus open
-            # + partial). We kijken door alle openstaande maanden — niet
-            # alleen huidige — zodat een achterstand ook zichtbaar is als
-            # "Niet betaald" ondanks een betaalde huidige maand.
-            has_fully_unpaid = False
-            has_partial = False
-            async for inv in db.invoices.find(
-                {"tenant_id": a["tenant_id"],
-                 "status": {"$ne": "paid"},
-                 "kind": {"$in": [None, "huur"]}},
-                {"_id": 0, "amount": 1, "paid_amount": 1, "status": 1},
-            ):
-                amt = float(inv.get("amount") or 0)
-                paid = float(inv.get("paid_amount") or 0)
-                # Beschouw als volledig betaald wanneer paid ≥ 95% van amount
-                # (95%-drempel matcht de rest van de backend logica).
-                if amt > 0 and paid >= amt * 0.95:
-                    continue  # feitelijk betaald ondanks stale status
-                if paid > 0:
-                    has_partial = True
-                else:
-                    has_fully_unpaid = True
-            if has_fully_unpaid:
-                pay_status = "unpaid"
-            elif has_partial:
-                pay_status = "partial"
-            else:
-                pay_status = "paid"
+        t = t_by_id.get(a.get("tenant_id")) or {}
         out.append({
             "id": a["id"],
             "number": a["number"],
@@ -9686,12 +9690,12 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
             "currency": a["currency"],
             "status": a["status"],
             "tenant_id": a.get("tenant_id"),
-            "tenant_name": tenant_name,
-            "tenant_avatar_url": tenant_avatar_url,
-            "tenant_id_photo_url": tenant_id_photo_url,
+            "tenant_name": t.get("name"),
+            "tenant_avatar_url": t.get("avatar_url") or None,
+            "tenant_id_photo_url": t.get("id_photo_url") or None,
             "show_tenant_photo": bool(a.get("show_tenant_photo") or False),
             "location_id": a.get("location_id"),
-            "pay_status": pay_status,
+            "pay_status": status_by_tid.get(a.get("tenant_id"), "paid"),
         })
     return out
 
@@ -9701,23 +9705,38 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
     t = await db.tenants.find_one({"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    apt = None
-    if t.get("apartment_id"):
-        apt = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0})
-    balance = await _calc_balance(t)
-    # Bereken huidig positief saldo (vooruitbetaald krediet, nog niet
-    # verrekend met een factuur). Wordt zichtbaar gemaakt in de Kiosk
-    # Financieel Overzicht zodat huurder/medewerker zien dat ze
-    # vooruit hebben betaald.
-    credit = 0.0
-    async for p in db.payments.find(
-        {"tenant_id": tenant_id, "credit_remaining": {"$gt": 0},
-         "status": "approved"},
-        {"_id": 0, "credit_remaining": 1, "currency": 1},
-    ):
-        # Aanname: huurder werkt in 1 valuta (SRD) — anders zou je per
-        # valuta moeten optellen. Voor nu enkel SRD/lokaal.
-        credit += float(p.get("credit_remaining") or 0)
+    today_iso = now_utc().date().isoformat()
+
+    async def _apt():
+        return await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0}) if t.get("apartment_id") else None
+
+    # Alle onafhankelijke queries tegelijk uitvoeren.
+    apt, balance, credit_docs, cs, invoices, has_payment_doc, has_invoice_doc, due_notes = await asyncio.gather(
+        _apt(),
+        _calc_balance(t),
+        db.payments.find(
+            {"tenant_id": tenant_id, "credit_remaining": {"$gt": 0}, "status": "approved"},
+            {"_id": 0, "credit_remaining": 1},
+        ).to_list(None),
+        db.company_settings.find_one({"company_id": _session.get("company_id")}, {"_id": 0, "invoicing": 1}),
+        db.invoices.find(
+            {"tenant_id": tenant_id, "status": {"$ne": "paid"}},
+            {"_id": 0, "id": 1, "period_month": 1, "period_year": 1,
+             "amount_due": 1, "amount": 1, "paid_amount": 1, "currency": 1,
+             "due_date": 1, "status": 1, "kind": 1, "label": 1,
+             "invoice_number": 1},
+        ).sort([("period_year", 1), ("period_month", 1), ("due_date", 1)]).to_list(None),
+        db.payments.find_one({"tenant_id": tenant_id, "status": "approved"}, {"_id": 1}),
+        db.invoices.find_one({"tenant_id": tenant_id}, {"_id": 1}),
+        db.tenant_notes.find({
+            "tenant_id": tenant_id,
+            "company_id": _session.get("company_id"),
+            "remind_at": {"$ne": None, "$lte": today_iso},
+            "dismissed_at": None,
+        }, {"_id": 0}).sort("remind_at", 1).to_list(20),
+    )
+    # Vooruitbetaald krediet (aanname: 1 valuta per huurder).
+    credit = sum(float(p.get("credit_remaining") or 0) for p in credit_docs)
 
     # ----- Open facturen ophalen — 3 buckets -----
     # achterstand (overdue): periode-einde + grace_workdays is verstreken
@@ -9729,7 +9748,6 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
     # `current_month_invoice` is de eerste current voor backwards-compat (één regel).
     grace_wd = 10
     try:
-        cs = await db.company_settings.find_one({"company_id": _session.get("company_id")}, {"_id": 0, "invoicing": 1})
         if cs and isinstance(cs.get("invoicing"), dict):
             grace_wd = int(cs["invoicing"].get("grace_workdays") or 10)
     except Exception:  # noqa: BLE001
@@ -9741,13 +9759,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
     overdue_total = 0.0
     current_total = 0.0
     future_total = 0.0
-    async for inv in db.invoices.find(
-        {"tenant_id": tenant_id, "status": {"$ne": "paid"}},
-        {"_id": 0, "id": 1, "period_month": 1, "period_year": 1,
-         "amount_due": 1, "amount": 1, "paid_amount": 1, "currency": 1,
-         "due_date": 1, "status": 1, "kind": 1, "label": 1,
-         "invoice_number": 1},
-    ).sort([("period_year", 1), ("period_month", 1), ("due_date", 1)]):
+    for inv in invoices:
         total = float(inv.get("amount_due") or inv.get("amount") or 0)
         paid = float(inv.get("paid_amount") or 0)
         outstanding = max(total - paid, 0)
@@ -9822,21 +9834,8 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
     # als prominente knop toont (nieuwe huurder) of gewoon de kleine
     # "Vooruitbetaling registreren" (bestaande huurder, alles voldaan).
     # Nieuwe huurder = 0 betalingen ooit én 0 facturen (paid of unpaid).
-    has_payment = await db.payments.find_one({"tenant_id": tenant_id, "status": "approved"},
-                                              {"_id": 1}) is not None
-    has_invoice = await db.invoices.find_one({"tenant_id": tenant_id},
-                                              {"_id": 1}) is not None
-
-    # Reminder-notities die vandaag (of eerder) hun herinner-datum bereiken
-    # en die nog niet zijn afgesloten. Deze tonen we als popup bij binnenkomst
-    # in de Kiosk zodat de medewerker meteen ziet wat er is afgesproken.
-    today_iso = now_utc().date().isoformat()
-    due_notes = await db.tenant_notes.find({
-        "tenant_id": tenant_id,
-        "company_id": _session.get("company_id"),
-        "remind_at": {"$ne": None, "$lte": today_iso},
-        "dismissed_at": None,
-    }, {"_id": 0}).sort("remind_at", 1).to_list(20)
+    has_payment = has_payment_doc is not None
+    has_invoice = has_invoice_doc is not None
     return {
         "tenant": {
             "id": t["id"],
