@@ -773,3 +773,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Bon (thermal) eindigt direct na laatste regel: .sheet padding-bottom 0, meting met print-lettergroottes via html.fitm, @page hoogte exact (+1mm), html/body height vast + overflow hidden (server print.html + kiosk-print.js fitPageToBon)
 
 - 2026-06: Bon: BETAALD-bedrag op één regel, normale lettergrootte (vet), niet meer extra groot.
+- 2026-06: Notificaties-pagina opgeschoond: Guided Access-uitleg, Beveiligde PDF-sectie, AES-256-kaart en API-uitleg verwijderd.

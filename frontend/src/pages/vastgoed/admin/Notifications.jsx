@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, BellOff, Loader2, Check, AlertTriangle, Send, Shield, FileText, RotateCw, Smartphone, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Bell, BellOff, Loader2, Check, AlertTriangle, Send, Shield, RotateCw, Smartphone, Trash2, Volume2, VolumeX } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useBadge } from '../../../lib/pwa';
 import { playPendingApprovalDing } from '../../../lib/notify-sound';
@@ -228,10 +228,10 @@ export default function Notifications() {
     <div data-testid="notifications-page">
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Notificaties & Beveiliging</h1>
-        <p className="text-sm text-slate-500 mt-1">PWA push notificaties met geluid + beveiligde PDFs</p>
+        <p className="text-sm text-slate-500 mt-1">Push notificaties, geluiden en gekoppelde apparaten</p>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
         <div className="bg-white border border-orange-100 rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${subscribed ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -258,18 +258,6 @@ export default function Notifications() {
           <p className="text-xs text-slate-500">Totaal aantal apparaten geregistreerd op dit account.</p>
         </div>
 
-        <div className="bg-white border border-orange-100 rounded-2xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#FF5C00] flex items-center justify-center">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Beveiligde PDFs</p>
-              <p className="font-black text-slate-900">AES-256 + QR</p>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">Kwitanties met digitale handtekening.</p>
-        </div>
       </div>
 
       {!supported ? (
@@ -359,22 +347,6 @@ export default function Notifications() {
             )}
           </div>
 
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-5" data-testid="guided-access-info">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-200/60 text-amber-700 flex items-center justify-center shrink-0">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-black text-amber-900">iPhone PWA + Guided Access</h3>
-                <p className="text-sm text-amber-900/85 mt-1 leading-relaxed">
-                  Apple blokkeert <b>alle</b> system-meldingen tijdens Guided Access — dat geldt voor
-                  élke app, ook native. Goed nieuws: zolang de app open is (en Guided Access houdt 'm letterlijk open),
-                  tonen wij de melding <b>binnen de app</b>: een oranje banner bovenaan + ding-ding-geluid.
-                  Dit werkt instant zonder dat je je telefoon hoeft te ontgrendelen.
-                </p>
-              </div>
-            </div>
-          </div>
 
           <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="tap-sounds-section">
             <div className="flex items-center gap-3 mb-2">
@@ -486,29 +458,6 @@ export default function Notifications() {
             </p>
           </div>
 
-          <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="w-5 h-5 text-[#FF5C00]" />
-              <h3 className="font-black text-slate-900">Beveiligde PDF download</h3>
-            </div>
-            <p className="text-sm text-slate-500 mb-4">
-              Vanuit Betalingen tab kun je een gewone PDF downloaden. Voor extra beveiliging is er ook een{' '}
-              <code className="bg-slate-100 px-1 py-0.5 rounded">/secure-pdf</code> endpoint met QR-verificatiestempel en optionele AES-256 versleuteling.
-            </p>
-            <div className="grid sm:grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="font-bold uppercase tracking-widest text-slate-500 mb-1">Standaard PDF</p>
-                <code className="text-slate-700">/api/payments/{'{id}'}/pdf</code>
-              </div>
-              <div className="bg-orange-50 rounded-xl p-3 border border-orange-200">
-                <p className="font-bold uppercase tracking-widest text-[#FF5C00] mb-1">Beveiligde PDF</p>
-                <code className="text-slate-700">/api/payments/{'{id}'}/secure-pdf?encrypted=true</code>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-slate-500">
-              Scan de QR-code op de beveiligde PDF om de echtheid online te verifiëren via <code>/api/verify/{'{token}'}</code>.
-            </p>
-          </div>
         </>
       )}
 
