@@ -715,3 +715,11 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 Overzicht laadtijd
 - /admin/stats cache-TTL verlaagd van 60s naar 10s (backend _STATS_TTL_S)
 - Overzicht-data (/admin/stats) wordt alvast op de achtergrond geladen bij login, auto-login (Onthouden) en sessieherstel (auth.jsx prefetchDashboard)
+
+## 2026-06 Kiosk laadsnelheid
+- /kiosk/apartments: huurders+facturen in batch ($in) i.p.v. per appartement; /kiosk/locations: 1 aggregatie
+- _KIOSK_CACHE (30s) — geleegd door live-sync middleware bij elke mutatie (behalve customer-display/employee-verify/admin/events, _CACHE_KEEP_PATHS)
+- /kiosk/tenants/{id}/overview: queries parallel via asyncio.gather
+- Frontend lib/kiosk-cache.js: prefetch bij laden chunk + localStorage kiosk_select_cache_v1 (stale-while-revalidate); kiosk start direct op step select (geen check->select animatie)
+- Stripe.js lazy via @stripe/stripe-js/pure (alleen bij betaalstap)
+- Bekend (pre-existing): Appt. aanmaken in kiosk met gedeelde PIN (4321) geeft 401 op POST /api/apartments

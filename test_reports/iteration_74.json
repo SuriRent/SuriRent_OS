@@ -1,0 +1,34 @@
+{
+  "summary": "Verified kiosk perf-optimization PR (iter74): parallel loading, 30s backend cache + invalidation on mutations, localStorage prefetch cache, lazy Stripe. Backend: 7/7 pytest pass covering GET /kiosk/apartments shape+filters (location_id, _none), /kiosk/locations counts, cache invalidation after POST /apartments reflects new apt immediately, PUT /kiosk/customer-display heartbeat does NOT clear cache (returns 200), /kiosk/tenants/{id}/overview full structure + 404 for unknown tenant, and /admin/stats. Frontend: PIN 4321 login → localStorage key kiosk_select_cache_v1 populated with {apartments:5, locations:2} after first fetch; reload serves cache instantly; location picker renders 'Filiaal — Nieuw Nickerie (1 appt)' + 'Hoofdvestiging — Paramaribo (4 appt)'; opening Hoofdvestiging shows apt cards with correct pay badges (HUIS 1A=Niet betaald/unpaid, 1B=Betaald, 2C=Deels betaald/partial, Penthouse=Betaald) — exactly matching backend pay_status. Stripe.js scripts list in page is [] on PIN/location/apt-select steps, confirming Stripe is only loaded at the payment step as planned.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Kiosk 'Appt.' quick-create (shared-PIN session)", "issue": "POST /api/apartments requires admin access_token; a plain /auth/kiosk-pin session (cookie kiosk_token only) gets 401 'Niet ingelogd'. The AddApartmentModal catch-block sets err but after the 401 the kiosk app appears to drop back to the location picker instead of showing the error in-modal (verified by curl: 401 'Niet ingelogd'). This likely still works for personal-PIN employee sessions that carry both access_token+kiosk_token, but is broken for the shared 4321 PIN. Pre-existing issue, not caused by this PR.", "affected_selectors": ["[data-testid=\"add-apartment-save\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter74_kiosk_cache.py",
+    "/app/test_reports/pytest/iter74.xml"
+  ],
+  "action_items": [
+    "Decide if Appt. quick-create button should be hidden for shared-PIN kiosk sessions, OR allow POST /apartments from a kiosk_token (adding `get_current_user_or_kiosk` style dep). Right now shared-PIN users see the button, fill the form, click save and get silently bounced to the picker.",
+    "Nice-to-have: emit a toast error in AddApartmentModal when api.post('/apartments') fails so the user understands what happened instead of landing back on the picker."
+  ],
+  "critical_code_review_comments": [
+    "server.py _live_sync_broadcast (~L771): clearing _KIOSK_CACHE on every non-GET to any /api/* path EXCEPT _CACHE_KEEP_PATHS is correct and already excludes /kiosk/customer-display + /kiosk/employee-verify + /api/admin/events — nice. BUT the clear happens *before* the status_code<400 guard check… actually re-reading: it's inside `if response.status_code < 400 and not path.startswith(_CACHE_KEEP_PATHS)` so 4xx won't clear — good.",
+    "_kiosk_cached uses `json.dumps(sc, sort_keys=True, default=str)` as key — fine, but note that if two companies ever share the same sc dict (shouldn't) collisions are theoretically possible. The key is per-company via kiosk_scope so OK.",
+    "_kiosk_apartments_compute uses `kiosk_scope` scoping on apartments and tenants join via `{\"id\":{\"$in\":tids}}` — missing company scope on tenants lookup. If two companies had colliding tenant ids (uuid, very unlikely) data could leak. Low risk but worth a scope filter for defense-in-depth.",
+    "kiosk_tenant_overview excellent parallel pattern via asyncio.gather. Confirmed response contains all required blocks (tenant, apartment, balance, credit_balance, open_invoices, current_invoices, future_invoices, *_total, fines_total, has_history, due_reminders).",
+    "lib/kiosk-cache.js: `prefetchKioskSelect` guards on localStorage.getItem('kiosk_token') — but the real cookie is httpOnly `kiosk_token`, not accessible to JS. There IS a localStorage flag that gets set elsewhere; verify it's set before prefetch runs or the first-after-login prefetch may silently no-op (observed cache DID populate in test so it works, just confirming the check isn't redundant/incorrect)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter74_kiosk_cache.py (new)"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% on in-scope checks (cache, pay badges, Stripe lazy)"},
+  "test_credentials": "kiosk PIN 4321 slug my-awesome-rentals-bv; admin fallback demo@surirent.sr/demo1234",
+  "seed_data_creation": "test_cache_invalidation_on_apartment_create creates+deletes a TEST-<ts> apartment via admin API (idempotent cleanup in finally).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Kiosk PIN 4321, slug my-awesome-rentals-bv. Login flow: /{slug}/login?target=kiosk → click 'Terug naar PIN' if beheerder-login shown first → tap digit buttons. localStorage key: kiosk_select_cache_v1 (schema: {scope, apartments:[], locations:[]}). The seed in this preview has 5 apartments / 2 locations (Hoofdvestiging has HUIS 1A/1B/2C/Penthouse; Filiaal has Studio 1). Pay badges in UI: Niet betaald=unpaid, Deels betaald=partial, Betaald=paid. Backend _KIOSK_CACHE TTL=30s, cleared by middleware on any successful non-GET /api/* except _CACHE_KEEP_PATHS=(/api/kiosk/customer-display, /api/kiosk/employee-verify, /api/admin/events).",
+  "rca_of_the_issue": "N/A for the in-scope PR; one pre-existing side observation: POST /api/apartments requires access_token (admin JWT) so the kiosk 'Appt.' quick-create modal is non-functional for a shared-PIN kiosk session. Reproduce: curl /api/auth/kiosk-pin 200 → curl POST /api/apartments → 401 'Niet ingelogd'. Mitigation: either add kiosk-aware auth dep on POST /apartments, or hide the Appt. button when the session only has kiosk_token."
+}
