@@ -307,6 +307,8 @@ async def lifespan(app: FastAPI):
     await db.kiosk_presence.create_index([("company_id", 1), ("last_seen", 1)])
     await db.kiosk_presence.delete_many({})
     await db.kiosk_print_log.create_index([("company_id", 1), ("printed_at", -1)])
+    await db.kiosk_print_log.create_index([("company_id", 1), ("payment_id", 1)])
+    await db.payments.create_index([("company_id", 1), ("kiosk_employee_id", 1), ("paid_at", -1)])
     await db.payment_plans.create_index([("company_id", 1), ("status", 1)])
     await db.payment_plans.create_index([("tenant_id", 1), ("status", 1)])
     await db.payment_plan_installments.create_index([("plan_id", 1), ("sequence", 1)], unique=True)
@@ -9970,10 +9972,10 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
             elif kind == "PRINT_RECEIPT" and msg.get("payment_id"):
                 pid = str(msg["payment_id"])
                 if await db.payments.find_one({"id": pid, "company_id": cid}, {"_id": 1}):
-                    # Eén logregel per bon; herprint werkt de tijd bij en reset het vinkje.
+                    # Eén logregel per bon; herprint werkt de tijd bij (vinkje 'al geprint' blijft).
                     await db.kiosk_print_log.update_one(
                         {"company_id": cid, "payment_id": pid},
-                        {"$set": {"emp_key": emp_key, "employee_name": name, "printed_at": iso(now_utc()), "admin_printed_at": None},
+                        {"$set": {"emp_key": emp_key, "employee_name": name, "printed_at": iso(now_utc())},
                          "$setOnInsert": {"id": str(uuid.uuid4())}},
                         upsert=True,
                     )
@@ -10025,17 +10027,71 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
 
 @api.get("/kiosk/print-log")
 async def kiosk_print_log(since: str, employee: Optional[str] = None, _session=Depends(get_kiosk_session)):
-    """Bonnen die kiosk-medewerkers sinds `since` (lokale middernacht) printten."""
-    q = {"company_id": _session["company_id"], "printed_at": {"$gte": since}}
+    """Bonnen van vandaag: alle kiosk-betalingen van de medewerker (ook als hij
+    offline printte) + door hem geprinte bonnen, met 'al geprint door beheerder'-status."""
+    cid = _session["company_id"]
+    pq = {"company_id": cid, "kiosk_employee_id": {"$ne": None}, "paid_at": {"$gte": since}}
+    lq = {"company_id": cid, "printed_at": {"$gte": since}}
     if employee:
-        q["emp_key"] = employee
-    logs = await db.kiosk_print_log.find(q, {"_id": 0}).sort("printed_at", -1).to_list(500)
-    pays = await db.payments.find(
-        {"id": {"$in": [l["payment_id"] for l in logs]}},
-        {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "tenant_name": 1, "method": 1},
-    ).to_list(500)
-    p_by_id = {p["id"]: p for p in pays}
-    return [{**l, "payment": p_by_id.get(l["payment_id"])} for l in logs if l["payment_id"] in p_by_id]
+        pq["kiosk_employee_id"] = employee
+        lq["emp_key"] = employee
+    pay_proj = {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "tenant_id": 1,
+                "method": 1, "status": 1, "paid_at": 1, "kiosk_employee_id": 1, "kiosk_employee_name": 1}
+    pays, logs = await asyncio.gather(
+        db.payments.find(pq, pay_proj).to_list(1000),
+        db.kiosk_print_log.find(lq, {"_id": 0}).to_list(1000),
+    )
+    have = {p["id"] for p in pays}
+    extra = [l["payment_id"] for l in logs if l["payment_id"] not in have]
+    if extra:
+        pays += await db.payments.find({"id": {"$in": extra}, "company_id": cid}, pay_proj).to_list(1000)
+    # Admin-print-status ook voor betalingen zonder print-event.
+    all_logs = {l["payment_id"]: l for l in await db.kiosk_print_log.find(
+        {"company_id": cid, "payment_id": {"$in": [p["id"] for p in pays]}}, {"_id": 0}).to_list(2000)}
+    t_by = await _by_id("tenants", [p.get("tenant_id") for p in pays], {"name": 1})
+    out = []
+    for p in pays:
+        l = all_logs.get(p["id"]) or {}
+        out.append({
+            "id": p["id"], "payment_id": p["id"],
+            "emp_key": p.get("kiosk_employee_id") or l.get("emp_key"),
+            "employee_name": p.get("kiosk_employee_name") or l.get("employee_name") or "",
+            "printed_at": l.get("printed_at") or p.get("paid_at"),
+            "employee_printed": bool(l.get("printed_at")),
+            "admin_printed_at": l.get("admin_printed_at"),
+            "payment": {**p, "tenant_name": t_by.get(p.get("tenant_id"), {}).get("name")},
+        })
+    out.sort(key=lambda r: r["printed_at"] or "", reverse=True)
+    return out
+
+
+@api.get("/kiosk/print-log/employees")
+async def kiosk_print_log_employees(since: str, _session=Depends(get_kiosk_session)):
+    """Medewerkers met bonnen vandaag (ook als ze nu offline zijn)."""
+    cid = _session["company_id"]
+    rows = await db.payments.aggregate([
+        {"$match": {"company_id": cid, "kiosk_employee_id": {"$ne": None}, "paid_at": {"$gte": since}}},
+        {"$group": {"_id": "$kiosk_employee_id", "name": {"$first": "$kiosk_employee_name"}}},
+    ]).to_list(200)
+    logs = await db.kiosk_print_log.aggregate([
+        {"$match": {"company_id": cid, "printed_at": {"$gte": since}}},
+        {"$group": {"_id": "$emp_key", "name": {"$first": "$employee_name"}}},
+    ]).to_list(200)
+    emps = {r["_id"]: r.get("name") or "Medewerker" for r in logs + rows if r["_id"]}
+    return [{"key": k, "name": v} for k, v in sorted(emps.items(), key=lambda x: x[1])]
+
+
+@api.post("/kiosk/print-log/by-payment/{payment_id}/printed")
+async def kiosk_print_log_mark_payment(payment_id: str, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    if not await db.payments.find_one({"id": payment_id, "company_id": cid}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="Bon niet gevonden")
+    await db.kiosk_print_log.update_one(
+        {"company_id": cid, "payment_id": payment_id},
+        {"$set": {"admin_printed_at": iso(now_utc())}, "$setOnInsert": {"id": str(uuid.uuid4())}},
+        upsert=True,
+    )
+    return {"ok": True}
 
 
 @api.post("/kiosk/print-log/{log_id}/printed")

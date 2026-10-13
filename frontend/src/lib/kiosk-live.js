@@ -55,7 +55,8 @@ function queuePresence(msg) {
     } else if (state.employees.length && !emptyTimer) {
       emptyTimer = setTimeout(() => {
         emptyTimer = null;
-        emit({ active: false, count: 0, employees: [], overlayOpen: false });
+        // Venster blijft open: bonnen van vandaag blijven zichtbaar, ook als de medewerker offline is.
+        emit({ active: false, count: 0, employees: [] });
       }, EMPTY_GRACE_MS);
     } else if (!state.employees.length) {
       emit({ active: false, count: 0 });
