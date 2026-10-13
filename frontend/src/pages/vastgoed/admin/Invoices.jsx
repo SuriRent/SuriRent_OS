@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import useSWRInfinite from 'swr/infinite';
 import {
   Plus, Loader2, FileText, Wand2, Search,
@@ -7,6 +7,7 @@ import {
 import { api, formatError, MONTHS_NL } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import { registerInfiniteRefresh } from '../../../lib/admin-events';
+import { LoadMoreSentinel } from '../../../lib/use-paged-list';
 
 import { fmtAmount, fmtAmountWhole, groupByTenant } from './invoices/helpers';
 import { Tab, MobileFilterPill, KpiCard, FilterMenu, Toast } from './invoices/kpi';
@@ -23,22 +24,6 @@ import CreditSourcesPopover from './invoices/CreditSourcesPopover';
 // =====================================================================
 const PAGE_SIZE = 25;
 const pageFetcher = async (url) => (await api.get(url)).data;
-
-// Laadt de volgende pagina zodra het einde van de lijst in beeld komt.
-function LoadMoreSentinel({ active, onVisible, testid }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!active || !ref.current) return undefined;
-    const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) onVisible(); }, { rootMargin: '400px' });
-    io.observe(ref.current);
-    return () => io.disconnect();
-  }, [active, onVisible]);
-  return (
-    <div ref={ref} data-testid={testid} className="py-3 flex justify-center">
-      {active && <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />}
-    </div>
-  );
-}
 
 export default function Invoices() {
   const [search, setSearch] = useState('');

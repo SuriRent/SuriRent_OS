@@ -268,11 +268,13 @@ async def lifespan(app: FastAPI):
     await db.tenants.create_index("name")
     await db.tenants.create_index([("company_id", 1), ("apartment_id", 1)])
     await db.tenants.create_index("company_id")
+    await db.tenants.create_index([("company_id", 1), ("name", 1)])
     await db.payments.create_index("paid_at")
     await db.payments.create_index("receipt_number", unique=True)
     await db.payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("tenant_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("company_id", 1), ("status", 1)])
+    await db.payments.create_index([("company_id", 1), ("status", 1), ("paid_at", -1)])
     await db.payments.create_index("invoice_id")
     await db.payments.create_index("id")
     await db.invoices.create_index([("company_id", 1), ("status", 1)])
@@ -7155,8 +7157,7 @@ async def _enrich_tenant(t: dict) -> dict:
     return {**t, "apartment_number": apt_number, "rent_amount": rent, "currency": cur}
 
 
-@api.get("/tenants", response_model=List[TenantOut])
-async def list_tenants(user=Depends(get_current_user)):
+async def _tenants_enriched(user: dict) -> list:
     docs = await db.tenants.find(scope(user), {"_id": 0}).sort("name", 1).to_list(1000)
     aids = list({d["apartment_id"] for d in docs if d.get("apartment_id")})
     apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1, "rent_amount": 1, "currency": 1}).to_list(None)
@@ -7164,6 +7165,56 @@ async def list_tenants(user=Depends(get_current_user)):
     return [{**d, "apartment_number": a_by.get(d.get("apartment_id"), {}).get("number"),
              "rent_amount": a_by.get(d.get("apartment_id"), {}).get("rent_amount"),
              "currency": a_by.get(d.get("apartment_id"), {}).get("currency")} for d in docs]
+
+
+async def _list_cached(name: str, user: dict, compute, extra: str = ""):
+    """30s cache per beheerder+bedrijf (gedeeld met facturen; middleware leegt bij mutatie)."""
+    key = f"{name}:{user.get('id')}:{company_id_of(user)}:{extra}"
+    hit = _INVOICE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < _INVOICE_TTL_S:
+        return hit[1]
+    data = await compute()
+    _INVOICE_CACHE[key] = (time.monotonic(), data)
+    return data
+
+
+def _natural_key(v: str):
+    return [int(x) if x.isdigit() else x.lower() for x in re.split(r"(\d+)", v or "")]
+
+
+@api.get("/tenants", response_model=List[TenantOut])
+async def list_tenants(user=Depends(get_current_user)):
+    return await _tenants_enriched(user)
+
+
+@api.get("/tenants/paged")
+async def list_tenants_paged(filter: str = "all", q: str = "", id: Optional[str] = None,
+                             offset: int = 0, limit: int = 25, user=Depends(get_current_user)):
+    """Huurders gepagineerd (25), zoeken/filter/tellers over álle huurders."""
+    allt = await _list_cached("tenants", user, lambda: _tenants_enriched(user))
+    ql = q.strip().lower()
+    by_search = [t for t in allt if not ql or ql in (t.get("name") or "").lower()]
+    counts = {"all": len(by_search),
+              "with_apt": sum(1 for t in by_search if t.get("apartment_number")),
+              "without_apt": sum(1 for t in by_search if not t.get("apartment_number"))}
+    if id:
+        rows = [t for t in allt if t["id"] == id]
+    else:
+        rows = [t for t in by_search if filter == "all"
+                or (filter == "with_apt" and t.get("apartment_number"))
+                or (filter == "without_apt" and not t.get("apartment_number"))]
+        # Natural sort op appartementnummer; zonder appartement onderaan op naam.
+        rows.sort(key=lambda t: (0, _natural_key(str(t["apartment_number"]))) if t.get("apartment_number")
+                  else (1, _natural_key(t.get("name") or "")))
+    limit = max(1, min(limit, 100))
+    page = rows[offset:offset + limit]
+    return {
+        "items": [TenantOut.model_validate(t).model_dump() for t in page],
+        "total": len(rows), "offset": offset, "has_more": offset + limit < len(rows),
+        "summary": {"totalCount": len(allt), "counts": counts,
+                    "missingAvatars": sum(1 for t in allt if t.get("id_photo_url") and not t.get("avatar_url")),
+                    "withAvatars": sum(1 for t in allt if t.get("avatar_url"))},
+    }
 
 
 @api.get("/tenants/credits")
@@ -8810,6 +8861,45 @@ async def list_payments(
         q["status"] = {"$ne": "pending_approval"}
     docs = await db.payments.find(q, {"_id": 0}).sort("paid_at", -1).to_list(limit)
     return await _enrich_payments_bulk(docs)
+
+
+@api.get("/payments/paged")
+async def list_payments_paged(start: str, end: str, today_start: str, q: str = "",
+                              offset: int = 0, limit: int = 25, user=Depends(get_current_user)):
+    """Goedgekeurde betalingen van één maand (start..end, lokale grenzen), 25 per pagina.
+    Zoeken + totalen server-side over de hele maand."""
+    base = {**scope(user), "status": {"$ne": "pending_approval"}}
+
+    async def month_compute():
+        docs = await db.payments.find({**base, "paid_at": {"$gte": start, "$lt": end}}, {"_id": 0}).sort("paid_at", -1).to_list(5000)
+        return await _enrich_payments_bulk(docs)
+
+    async def summary_compute():
+        total_count, today_rows = await asyncio.gather(
+            db.payments.count_documents(base),
+            db.payments.aggregate([
+                {"$match": {**base, "paid_at": {"$gte": today_start}}},
+                {"$group": {"_id": None, "sum": {"$sum": {"$toDouble": {"$ifNull": ["$amount", 0]}}}}},
+            ]).to_list(1),
+        )
+        return {"totalCount": total_count, "todaySum": round(float(today_rows[0]["sum"]) if today_rows else 0.0, 2)}
+
+    month, extra = await asyncio.gather(
+        _list_cached("payments-month", user, month_compute, f"{start}|{end}"),
+        _list_cached("payments-summary", user, summary_compute, today_start),
+    )
+    ql = q.strip().lower()
+    rows = [p for p in month if not ql or ql in
+            f"{p.get('tenant_name') or ''} {p.get('receipt_number') or ''} {p.get('apartment_number') or ''} {p.get('location_name') or ''}".lower()]
+    limit = max(1, min(limit, 100))
+    page = rows[offset:offset + limit]
+    return {
+        "items": [PaymentOut.model_validate(p).model_dump() for p in page],
+        "total": len(rows), "offset": offset, "has_more": offset + limit < len(rows),
+        "summary": {**extra, "monthCount": len(month),
+                    "monthSum": round(sum(float(p.get("amount") or 0) for p in month), 2),
+                    "currency": (month[0].get("currency") if month else None) or "SRD"},
+    }
 
 
 @api.delete("/payments/{payment_id}")

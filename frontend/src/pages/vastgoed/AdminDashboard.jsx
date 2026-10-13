@@ -26,6 +26,7 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import KeyboardSafeModal from '../../components/KeyboardSafeModal';
 import OnboardingModal from '../../components/OnboardingModal';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
+import { usePagedList, LoadMoreSentinel, useDebounced } from '../../lib/use-paged-list';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
 import { useAdminEvents, closeAdminEvents } from '../../lib/admin-events';
@@ -3139,11 +3140,18 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
 function Tenants() {
   // SWR cache — bij tabwissel wordt de vorige data direct getoond en
   // achtergrond-revalidate hoeven we niet af te wachten.
-  const { data: itemsRaw, mutate: refetchTenants, isLoading: loadingT } = useApiSWR('/tenants');
-  const { data: aptsRaw, mutate: refetchApts, isLoading: loadingA } = useApiSWR('/apartments');
-  const items = itemsRaw || [];
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
+  const debouncedQ = useDebounced(q.trim());
+  // Server-side: 25 huurders per pagina; zoeken/filter/tellers over alle huurders.
+  const tenantParams = useMemo(() => ({ filter, q: debouncedQ }), [filter, debouncedQ]);
+  const paged = usePagedList('/tenants/paged', tenantParams, { liveKey: '/tenants' });
+  const refetchTenants = paged.refetch;
+  const { data: aptsRaw, mutate: refetchApts } = useApiSWR('/apartments');
+  const items = paged.items;
   const apts = aptsRaw || [];
-  const loaded = !loadingT && !loadingA;   // pas skeleton verbergen als beide klaar zijn
+  const summary = paged.summary || {};
+  const loaded = !paged.loading;
   const load = useCallback(async () => {
     // Handmatige refresh — bv. na create/delete. Beide keys parallel her-fetchen.
     await Promise.all([refetchTenants(), refetchApts()]);
@@ -3153,8 +3161,6 @@ function Tenants() {
   const [creating, setCreating] = useState(false);
   const [pinFor, setPinFor] = useState(null);
   const [detailId, setDetailId] = useState(null);  // huurder in detail-view
-  const [q, setQ] = useState('');
-  const [filter, setFilter] = useState('all'); // all | with_apt | without_apt
   const [backfilling, setBackfilling] = useState(false);
   // POLLING VERWIJDERD (per user verzoek 2026-02-28): SWR cache + SSE
   // dekken alle huurder-updates. Vroeger stond hier een 45s useAutoRefresh.
@@ -3169,6 +3175,15 @@ function Tenants() {
     window.addEventListener('focus-entity', handler);
     return () => window.removeEventListener('focus-entity', handler);
   }, []);
+  // Huurder niet in de geladen pagina's (bv. via zoekbalk) → los ophalen.
+  const [detailTenant, setDetailTenant] = useState(null);
+  const detailInList = !!detailId && items.some((x) => x.id === detailId);
+  useEffect(() => {
+    if (!detailId || detailInList || paged.loading) return;
+    api.get('/tenants/paged', { params: { id: detailId } })
+      .then(({ data }) => { if (data.items?.[0]) setDetailTenant(data.items[0]); else setDetailId(null); })
+      .catch(() => setDetailId(null));
+  }, [detailId, detailInList, paged.loading]);
   const del = async (id) => {
     if (!window.confirm('Huurder verwijderen?')) return;
     await api.delete(`/tenants/${id}`);
@@ -3192,8 +3207,8 @@ function Tenants() {
 
   // Detail-view — dezelfde patroon als Appartementen/PlanDetail.
   if (detailId) {
-    const t = items.find((x) => x.id === detailId);
-    if (!t) { setDetailId(null); return null; }
+    const t = items.find((x) => x.id === detailId) || (detailTenant?.id === detailId ? detailTenant : null);
+    if (!t) return <ListSkeleton rows={3} testid="tenant-detail-loading" />;
     return (
       <>
         <TenantDetail tenant={t}
@@ -3207,31 +3222,10 @@ function Tenants() {
     );
   }
 
-  const bySearch = items.filter((t) => !q || (t.name || '').toLowerCase().includes(q.toLowerCase()));
-  const filtered = bySearch.filter((t) => {
-    if (filter === 'all') return true;
-    if (filter === 'with_apt') return !!t.apartment_number;
-    return !t.apartment_number;
-  });
-  // Sorteer op appartement-nummer (natural / alfanumeriek) zodat
-  // "HUIS 7A" vóór "HUIS 7B" komt en "HUIS 10A" na "HUIS 9C" —
-  // op user-verzoek 2026-02-28. Huurders zonder appartement zakken
-  // onderaan, alfabetisch op naam als fallback.
-  filtered.sort((a, b) => {
-    const aptA = (a.apartment_number || '').toString();
-    const aptB = (b.apartment_number || '').toString();
-    if (!aptA && !aptB) return (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' });
-    if (!aptA) return 1;
-    if (!aptB) return -1;
-    return aptA.localeCompare(aptB, 'nl', { numeric: true, sensitivity: 'base' });
-  });
-  const counts = {
-    all: bySearch.length,
-    with_apt: bySearch.filter((t) => !!t.apartment_number).length,
-    without_apt: bySearch.filter((t) => !t.apartment_number).length,
-  };
-  const missingAvatars = items.filter((t) => t.id_photo_url && !t.avatar_url).length;
-  const withAvatars = items.filter((t) => t.avatar_url).length;
+  const filtered = items;
+  const counts = summary.counts || { all: 0, with_apt: 0, without_apt: 0 };
+  const missingAvatars = summary.missingAvatars || 0;
+  const withAvatars = summary.withAvatars || 0;
   const runBackfill = async (force = false) => {
     const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
     if (!window.confirm(`${label}? Dit duurt ~2s per huurder.`)) return;
@@ -3253,7 +3247,7 @@ function Tenants() {
       <div className="flex items-center justify-between gap-3 flex-nowrap">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Huurders</h1>
-          <p className="text-sm text-slate-500 mt-0.5 truncate">{items.length} huurders geregistreerd.</p>
+          <p className="text-sm text-slate-500 mt-0.5 truncate">{summary.totalCount || 0} huurders geregistreerd.</p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="tenant-new-btn"
           className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
@@ -3336,6 +3330,7 @@ function Tenants() {
               onPoster={() => openAuthedPdf(`/tenants/${t.id}/portal-poster.pdf`, { filename: `huurportaal-${t.name || t.id}.pdf` })}
               onDelete={() => del(t.id)} />
           ))}
+          <LoadMoreSentinel active={paged.hasMore || paged.loadingMore} onVisible={paged.loadMore} testid="tenants-load-more" />
         </div>
       )}
 
@@ -4237,7 +4232,7 @@ export default function AdminDashboard() {
   usePrefetchAdmin(
     isAdmin ? [
       '/tenants', '/apartments', '/contracts', '/invoices',
-      '/payments', '/locations', '/deposits', '/kasgeld',
+      '/locations', '/deposits', '/kasgeld',
       '/kasgeld/balance',
       '/maintenance', '/employees', '/salaries',
       '/payment-plans?status=active',

@@ -7,6 +7,7 @@ import {
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useAdminEvents } from '../../../lib/admin-events';
+import { usePagedList, LoadMoreSentinel, useDebounced } from '../../../lib/use-paged-list';
 import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
 import SignaturePad from '../../../components/SignaturePad';
@@ -916,24 +917,37 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // =====================================================================
 export default function Payments() {
   // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
-  const { data: itemsRaw, mutate: refetchP, isLoading: loadingP } = useApiSWR('/payments');
-  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const today = useMemo(() => new Date(), []);
+  // Maand-picker — default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth()); // 0-11
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search.trim());
+  // Server-side: 25 betalingen per pagina binnen de gekozen maand; zoeken + totalen over de hele maand.
+  const pagedParams = useMemo(() => ({
+    start: new Date(selectedYear, selectedMonth, 1).toISOString(),
+    end: new Date(selectedYear, selectedMonth + 1, 1).toISOString(),
+    today_start: startOfDayUTC(today).toISOString(),
+    q: debouncedSearch,
+  }), [selectedYear, selectedMonth, today, debouncedSearch]);
+  const paged = usePagedList('/payments/paged', pagedParams, { liveKey: '/payments' });
+  const refetchP = paged.refetch;
+  const { data: tenantsRaw, mutate: refetchT } = useApiSWR('/tenants');
   const { data: pendingRaw, mutate: refetchPend } = useApiSWR('/payments?status=pending_approval');
-  const items = itemsRaw || [];
+  const filteredItems = paged.items;
   const tenants = tenantsRaw || [];
   const pending = pendingRaw || [];
-  const loading = (loadingP || loadingT) && items.length === 0;
+  const loading = paged.loading;
+  const summary = paged.summary || {};
   const [approveFor, setApproveFor] = useState(null);
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [search, setSearch] = useState('');
   const [tab] = useState('month'); // altijd op Maand; vandaag-tab/methodes verwijderd
   const [detailPayment, setDetailPayment] = useState(null);
   const [expanded, setExpanded] = useState(null); // Alleen voor MOBILE inline-expand
   const toggleExpandMobile = (id) => setExpanded((cur) => (cur === id ? null : id));
-  const today = useMemo(() => new Date(), []);
 
   const load = useCallback(async () => {
     await Promise.all([refetchP(), refetchT(), refetchPend()]);
@@ -1032,56 +1046,15 @@ export default function Payments() {
 
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-  // Maand-picker — selectie van een specifieke (jaar, maand) waarop "Maand"
-  // tab filtert. Default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth()); // 0-11
   const stepMonth = (delta) => {
     const d = new Date(selectedYear, selectedMonth + delta, 1);
     setSelectedYear(d.getFullYear());
     setSelectedMonth(d.getMonth());
   };
   const isCurrentMonth = selectedYear === today.getFullYear() && selectedMonth === today.getMonth();
-
-  // Sorteer: nieuwste eerst
-  const sorted = useMemo(() => {
-    return [...items].sort((a, b) => new Date(b.paid_at) - new Date(a.paid_at));
-  }, [items]);
-
-  // KPI metrics
-  const totalAmount = useMemo(() => sorted.reduce((s, p) => s + Number(p.amount || 0), 0), [sorted]);
-  const currency = sorted[0]?.currency || 'SRD';
-  const startOfToday = startOfDayUTC(today);
-  const startOfWeek = new Date(startOfToday); startOfWeek.setDate(startOfWeek.getDate() - 7);
-  const monthStart = new Date(selectedYear, selectedMonth, 1);
-  const monthEnd = new Date(selectedYear, selectedMonth + 1, 1);
-
-  const todayItems = useMemo(() => sorted.filter((p) => new Date(p.paid_at) >= startOfToday), [sorted, startOfToday]);
-  const weekItems = useMemo(() => sorted.filter((p) => new Date(p.paid_at) >= startOfWeek), [sorted, startOfWeek]);
-  const monthItems = useMemo(() => sorted.filter((p) => {
-    const d = new Date(p.paid_at);
-    return d >= monthStart && d < monthEnd;
-  }), [sorted, monthStart, monthEnd]);
-
-  const sumOf = (arr) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const todaySum = sumOf(todayItems);
-  const monthSum = sumOf(monthItems);
-  const avgPerPayment = sorted.length > 0 ? totalAmount / sorted.length : 0;
-
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let base = sorted;
-    if (tab === 'today') base = todayItems;
-    if (tab === 'week') base = weekItems;
-    if (tab === 'month') base = monthItems;
-    return base.filter((p) => {
-      if (q) {
-        const hay = `${p.tenant_name || ''} ${p.receipt_number || ''} ${p.apartment_number || ''} ${p.location_name || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [sorted, tab, search, todayItems, monthItems]);
+  const currency = summary.currency || 'SRD';
+  const todaySum = summary.todaySum || 0;
+  const totalCount = summary.totalCount || 0;
 
   const toggleExpand = toggleExpandMobile;
 
@@ -1128,7 +1101,7 @@ export default function Payments() {
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Betalingen</h1>
             <p className="text-sm text-slate-500 mt-0.5 truncate">
-              {items.length} kwitantie{items.length !== 1 ? 's' : ''}
+              {totalCount} kwitantie{totalCount !== 1 ? 's' : ''}
               {todaySum > 0 ? ` · Vandaag ${currency} ${fmtAmountWhole(todaySum)}` : ''}
             </p>
           </div>
@@ -1142,7 +1115,7 @@ export default function Payments() {
           <MonthStepper year={selectedYear} month={selectedMonth}
             onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
             isCurrent={isCurrentMonth}
-            count={monthItems.length} sum={sumOf(monthItems)} currency={currency} />
+            count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
         )}
 
         {/* PENDING APPROVAL — sectie bovenaan, vóór de approved-lijst.
@@ -1172,7 +1145,7 @@ export default function Payments() {
           <div className="bg-white rounded-2xl border border-orange-100 p-8 text-center" data-testid="mp-empty">
             <Receipt className="w-9 h-9 text-orange-300 mx-auto mb-2" />
             <p className="text-[13px] text-slate-500 font-bold">
-              {items.length === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze filter.'}
+              {totalCount === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze filter.'}
             </p>
           </div>
         ) : (
@@ -1224,6 +1197,7 @@ export default function Payments() {
                 )}
               </div>
             ))}
+            <LoadMoreSentinel active={paged.hasMore || paged.loadingMore} onVisible={paged.loadMore} testid="mp-load-more" />
           </div>
         )}
       </div>
@@ -1241,7 +1215,7 @@ export default function Payments() {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight truncate">Betalingen</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">
-            {items.length} kwitantie{items.length === 1 ? '' : 's'} geregistreerd — beoordeel pending en registreer nieuwe betalingen.
+            {totalCount} kwitantie{totalCount === 1 ? '' : 's'} geregistreerd — beoordeel pending en registreer nieuwe betalingen.
           </p>
         </div>
         <button onClick={() => setCreating(true)} data-testid="payment-new-btn"
@@ -1279,7 +1253,7 @@ export default function Payments() {
         <MonthStepper year={selectedYear} month={selectedMonth}
           onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
           isCurrent={isCurrentMonth}
-          count={monthItems.length} sum={sumOf(monthItems)} currency={currency} />
+          count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
       )}
 
       {/* SEARCH */}
@@ -1303,7 +1277,7 @@ export default function Payments() {
         <div className="bg-white rounded-2xl border border-orange-100 p-10 text-center" data-testid="payments-empty">
           <Receipt className="w-10 h-10 text-orange-300 mx-auto mb-3" />
           <p className="text-slate-500 font-semibold">
-            {items.length === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze filter.'}
+            {totalCount === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze filter.'}
           </p>
         </div>
       ) : (
@@ -1311,6 +1285,7 @@ export default function Payments() {
           {filteredItems.map((p) => (
             <PaymentRow key={p.id} p={p} onOpen={setDetailPayment} />
           ))}
+          <LoadMoreSentinel active={paged.hasMore || paged.loadingMore} onVisible={paged.loadMore} testid="payments-load-more" />
         </div>
       )}
       </div>
