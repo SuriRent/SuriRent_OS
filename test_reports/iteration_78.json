@@ -1,0 +1,30 @@
+{
+  "summary": "Iter 78 — regression + cache-invalidation verified for the list endpoints behind _list_cached (/apartments, /locations, /contracts, /payment-plans, /deposits, /kasgeld, /maintenance, /employees, /salaries) and frontend Instellingen seed-cache + tab navigation. Backend 14/14 pytest green. Frontend: all 8 admin tabs render with 0 meaningful console errors, payment-plan detail opens from list seed within 2s with installments + linked invoices, all 8 Instellingen sub-sections render, 2nd visit to a section renders instantly (no 'Laden...' flash). Dirty test data (business name = 'SuriRent N.V. T78') reverted via API.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter78_list_cache.py",
+    "/app/test_reports/pytest/iter78_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:7193 _list_cached shares _INVOICE_CACHE across list types and uses process-local dict — correct for single-worker but will diverge across horizontally scaled workers; same caveat noted in iter 77.",
+    "/app/backend/server.py:772 middleware clears entire _INVOICE_CACHE for every non-GET non-auth path, including unrelated mutations (e.g. push devices, SSE acks if any). Simple and safe but costs the whole cache on every write. Fine today, consider per-resource invalidation if cache size grows.",
+    "/app/backend/server.py:7184 _tenants_enriched hard-caps to 1000 tenants — same cap flagged in iter 77; revisit when a company passes that threshold.",
+    "Apartment PUT endpoint rejects partial payloads (requires number + rent_amount) — not a regression but means UI must send full doc; consider PATCH semantics."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter78_list_cache.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% — 8 admin tabs + plan detail + 8 instellingen sections all clean"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin, slug my-awesome-rentals-bv)",
+  "seed_data_creation": "Created+deleted one TEST_iter78 maintenance item and one TEST_iter78 kasgeld entry inside backend tests (self-cleaning). Frontend test tweaked company name to 'SuriRent N.V. T78' then reverted to 'SuriRent N.V.' via /api/companies/me/profile.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend _list_cached verified: GET /apartments (tenant_name present), /locations (apartments_total+apartments_occupied), /contracts (?tenant_id= filter works, tenant_name+apartment_number), /deposits (tenant_name+apartment_id+apartment_number), /maintenance (?apartment_id= filter works, apartment_number present), /salaries (employee_name), /employees (has_kiosk_pin+has_login), /payment-plans (installments, paid/remaining_amount, next_due_date/amount, overdue_count, linked_invoice_open), /payment-plans?status=active, GET /payment-plans/{id}, /kasgeld, /kasgeld/balance. Cache invalidation: POST /maintenance → next GET immediately shows new item (not cached stale); DELETE /maintenance/{id} → removed on next GET. PUT /apartments/{id} → next GET immediately shows updated description. POST /kasgeld → next GET immediately shows new entry. Frontend: tabs locations/apartments/contracts/payment_plans/deposits/kasgeld/maintenance/employees all render content and 0 meaningful console errors. Payment-plans has 1 plan (data-testid=plan-row-...), clicking opens plan-detail-page within 2s showing 2 installment rows and plan-linked-invoices box. Instellingen dropdown exposes 8 sub-items (abonnement, bedrijf, branding, smtp, invoicing, stripe, bon, backup) all opening cleanly. Only console error observed is a benign 401 on /api/auth/me before login completes.",
+  "rca of the issue": "Not applicable — no regression found."
+}

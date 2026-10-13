@@ -753,3 +753,11 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - _list_cached (30s, deelt _INVOICE_CACHE → middleware leegt bij mutatie)
 - Frontend lib/use-paged-list.jsx (usePagedList, LoadMoreSentinel, useDebounced) gebruikt door Payments.jsx en Tenants (AdminDashboard.jsx)
 - Indexen payments (company_id,status,paid_at), tenants (company_id,name)
+
+## 2026-06 Overige pagina snelheid
+- _by_id batch helper; N+1 weg in apartments, locations (aggregate), contracts, deposits, maintenance, salaries, kasgeld feed; payment_plans core enrich_plan(plan, pre) + _prefetch_plans
+- _list_cached (30s) op alle bovenstaande + employees + kasgeld
+- Extra indexen (company_id + sort velden) voor apartments/locations/contracts/deposits/maintenance/salaries/employees/payment_plans, users.employee_id
+- Instellingen: readSeed/writeSeed (lib/swr.js) in BusinessInfo, Branding, Settings (incl. domain target), StripeCompanySettings, MijnAbonnement
+- PaymentPlans: tenants via SWR-cache, PlanDetail initial uit lijst
+- LET OP: .eslintrc root zonder react-app → no-undef wordt NIET gedetecteerd; controleer imports zelf
