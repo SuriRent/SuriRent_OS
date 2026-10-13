@@ -472,6 +472,7 @@ import PhotoUpload from '../../components/PhotoUpload';
 import { installPendingApprovalDingListener } from '../../lib/notify-sound';
 import { useForegroundPendingNotify } from '../../lib/foreground-notify';
 import { useMorningBriefing } from '../../lib/morning-briefing';
+import { useApprovalNotifySync } from '../../lib/approval-notify-sync';
 
 const BASE_TABS = [
   { id: 'overview', label: 'Overzicht', icon: LayoutDashboard },
@@ -4287,6 +4288,7 @@ export default function AdminDashboard() {
   // Guided Access mode waar system-push geblokkeerd is. Pollt elke 5s,
   // toast + ding-ding bij elke nieuwe pending betaling.
   useForegroundPendingNotify({ enabled: true });
+  useApprovalNotifySync();
 
   // Dagelijkse briefing — toont 1× per dag tussen 06:00-12:00 een modal
   // met overdue overzicht + nieuwe activiteit van vandaag.

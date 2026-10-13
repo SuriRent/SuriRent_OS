@@ -21,6 +21,7 @@ import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage } from '../../lib/kiosk-print';
 import { KioskLiveStatus } from '../../components/KioskLiveStatus';
+import { kioskLiveBye } from '../../lib/kiosk-live';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 
 prefetchKioskSelect();
@@ -4780,6 +4781,7 @@ export default function KioskLayout() {
   }, [step]);
 
   const exit = useCallback(() => {
+    kioskLiveBye();
     // VOLLEDIGE reset zodat een volgende gebruiker (vooral een andere
     // medewerker op een gedeeld kiosk-toestel) cleanly bij de PIN-keypad
     // landt zonder oude tokens of role-voorkeur. Anders krijgt de PWA

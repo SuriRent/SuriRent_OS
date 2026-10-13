@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { closeApprovalNotification } from '../lib/approval-notify-sync';
 import { CheckCircle2, Loader2, X } from 'lucide-react';
 import KeyboardSafeModal from './KeyboardSafeModal';
 import SignaturePad from './SignaturePad';
@@ -24,6 +25,7 @@ export function KioskBulkApproveSheet({ logs, employeeName, onClose, onDone }) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await api.post(`/payments/${logs[i].payment_id}/approve`, { signature_data_url: sig });
+        closeApprovalNotification(logs[i].payment_id);
       } catch (e) { bad.push(`${logs[i].payment.receipt_number}: ${formatError(e)}`); }
     }
     setProgress(null);

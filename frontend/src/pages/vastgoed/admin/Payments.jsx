@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
   Plus, X, Check, Loader2, Search, FileText, Mail, ShieldCheck, ChevronRight, ChevronLeft,
   ChevronDown, CalendarDays, Banknote, CheckCircle2, Clock,
@@ -158,6 +159,7 @@ export function ApprovePaymentSheet({ payment, onCancel, onApproved, modalClassN
     setErr(''); setSaving(true);
     try {
       await api.post(`/payments/${payment.id}/approve`, { signature_data_url: sig });
+      closeApprovalNotification(payment.id);
       playApproveConfirm();
       onApproved();
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }

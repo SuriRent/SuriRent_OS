@@ -681,6 +681,63 @@ async def _reminder_loop():
         await _aio.sleep(6 * 3600)
 
 
+async def _company_overdue_tenants(cid: str) -> list:
+    """Huurders met achterstallige facturen (vervaldatum verstreken), zelfde
+    bucket-logica als het kiosk-overzicht. Gesorteerd op hoogste achterstand."""
+    grace_wd = 10
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
+    try:
+        if cs and isinstance(cs.get("invoicing"), dict):
+            grace_wd = int(cs["invoicing"].get("grace_workdays") or 10)
+    except Exception:  # noqa: BLE001
+        pass
+    today_local = now_utc().date()
+    per_tenant: dict = {}
+    async for inv in db.invoices.find(
+        {"company_id": cid, "status": {"$in": list(_UNPAID_STATUSES)}},
+        {"_id": 0, "tenant_id": 1, "amount": 1, "amount_due": 1, "paid_amount": 1,
+         "currency": 1, "period_month": 1, "period_year": 1, "due_date": 1},
+    ):
+        total = float(inv.get("amount_due") or inv.get("amount") or 0)
+        outstanding = max(total - float(inv.get("paid_amount") or 0), 0)
+        if outstanding <= 0 or not inv.get("tenant_id"):
+            continue
+        if _classify_invoice_bucket(inv.get("period_month"), inv.get("period_year"), today_local,
+                                    grace_wd, due_date=inv.get("due_date")) != "overdue":
+            continue
+        cur = inv.get("currency") or "SRD"
+        t = per_tenant.setdefault(inv["tenant_id"], {"amounts": {}, "count": 0})
+        t["amounts"][cur] = t["amounts"].get(cur, 0) + outstanding
+        t["count"] += 1
+    if not per_tenant:
+        return []
+    names = {}
+    async for t in db.tenants.find({"company_id": cid, "id": {"$in": list(per_tenant)}}, {"_id": 0, "id": 1, "name": 1}):
+        names[t["id"]] = t.get("name") or "Huurder"
+    out = [{"tenant_id": tid, "name": names.get(tid, "Huurder"), "amounts": v["amounts"], "count": v["count"]}
+           for tid, v in per_tenant.items() if tid in names]
+    out.sort(key=lambda x: -sum(x["amounts"].values()))
+    return out
+
+
+def _nl_money(cur: str, v) -> str:
+    return f"{cur or 'SRD'} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _overdue_summary_text(overdue: list) -> str:
+    if not overdue:
+        return "Geen achterstallige facturen — alles is voldaan!"
+    totals: dict = {}
+    for o in overdue:
+        for cur, amt in o["amounts"].items():
+            totals[cur] = totals.get(cur, 0) + amt
+    tot_txt = " + ".join(_nl_money(cur, amt) for cur, amt in sorted(totals.items()))
+    top = ", ".join(f"{o['name']} ({' + '.join(_nl_money(c, a) for c, a in o['amounts'].items())})" for o in overdue[:3])
+    extra = f" +{len(overdue) - 3} anderen" if len(overdue) > 3 else ""
+    n = len(overdue)
+    return f"{n} huurder{'s' if n != 1 else ''} achterstallig, totaal {tot_txt} — {top}{extra}"
+
+
 async def _send_overdue_pushes():
     """Eén pass over alle companies: voor elke company telt hoeveel huurders
     een openstaande balance hebben en stuurt een push naar de admins van
@@ -690,23 +747,15 @@ async def _send_overdue_pushes():
         if c.get("overdue_push_last") == today_key:
             continue  # al verstuurd vandaag
         cid = c["id"]
-        overdue = []
-        async for t in db.tenants.find({"company_id": cid, "apartment_id": {"$ne": None}}, {"_id": 0}):
-            try:
-                bal = await _calc_balance(t)
-                if bal.get("balance", 0) > 0:
-                    overdue.append((t["name"], bal["balance"], bal["currency"]))
-            except Exception:
-                continue
+        try:
+            overdue = await _company_overdue_tenants(cid)
+        except Exception as e:  # noqa: BLE001
+            print(f"[push] overdue calc failed for company={cid}: {e}")
+            continue
         if not overdue:
             await db.companies.update_one({"id": cid}, {"$set": {"overdue_push_last": today_key}})
             continue
-        top = overdue[:3]
-        names = ", ".join(n for n, _, _ in top)
-        extra = f" +{len(overdue) - 3} anderen" if len(overdue) > 3 else ""
-        cur = top[0][2]
-        total = sum(b for _, b, _ in overdue)
-        body = f"{len(overdue)} huurders openstaand ({cur} {total:,.2f}) — {names}{extra}"
+        body = _overdue_summary_text(overdue)
         try:
             await _notify_company_admins(
                 cid, "Achterstallige huur",
@@ -9032,6 +9081,12 @@ async def delete_payment(
     }
 
 
+@api.get("/payments/pending-ids")
+async def payments_pending_ids(user=Depends(get_current_user)):
+    docs = await db.payments.find({**scope(user), "status": "pending_approval"}, {"_id": 0, "id": 1}).to_list(1000)
+    return {"ids": [d["id"] for d in docs]}
+
+
 @api.get("/payments/pending-count")
 async def payments_pending_count(user=Depends(get_current_user)):
     """Lichte endpoint voor de bell-badge: telling + meta van de meest
@@ -9963,10 +10018,15 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
     conn_id = str(uuid.uuid4())
     await db.kiosk_presence.insert_one({"conn_id": conn_id, "company_id": cid, "name": name, "emp_key": emp_key, "last_seen": time.time()})
     await _kb_publish(channel, {"type": "presence_changed"})
+    asyncio.create_task(_kiosk_emp_login(cid, emp_key, name))
+    bye = False
     try:
         while True:
             msg = await ws.receive_json()
             kind = msg.get("type")
+            if kind == "BYE":
+                bye = True
+                break
             if kind == "ping":
                 await db.kiosk_presence.update_one({"conn_id": conn_id}, {"$set": {"last_seen": time.time()}})
             elif kind == "PRINT_RECEIPT" and msg.get("payment_id"):
@@ -9985,6 +10045,51 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
     finally:
         await db.kiosk_presence.delete_one({"conn_id": conn_id})
         await _kb_publish(channel, {"type": "presence_changed"})
+        # Expliciet uitloggen → direct; verbinding weg → pas na grace (netwerk-hapering).
+        asyncio.create_task(_kiosk_emp_logout(cid, emp_key, name, 0 if bye else _LOGOUT_GRACE_S))
+
+
+_LOGOUT_GRACE_S = 90
+
+
+async def _kiosk_emp_login(cid: str, emp_key: str, name: str):
+    try:
+        prev = await db.kiosk_emp_state.find_one_and_update(
+            {"company_id": cid, "emp_key": emp_key},
+            {"$set": {"online": True, "name": name, "since": iso(now_utc())}},
+            upsert=True,
+        )
+        if prev and prev.get("online"):
+            return
+        await _notify_company_admins(
+            cid, f"Kiosk · {name or 'Medewerker'} is ingelogd",
+            f"Ingelogd om {datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-3))).strftime('%H:%M')}",
+            {"kind": "kiosk_login", "url": "/admin"},
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[push] kiosk login notify failed: {e}")
+
+
+async def _kiosk_emp_logout(cid: str, emp_key: str, name: str, delay: float):
+    try:
+        if delay:
+            await asyncio.sleep(delay)
+        if await db.kiosk_presence.find_one(
+            {"company_id": cid, "emp_key": emp_key, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}}, {"_id": 1}
+        ):
+            return
+        prev = await db.kiosk_emp_state.find_one_and_update(
+            {"company_id": cid, "emp_key": emp_key, "online": True}, {"$set": {"online": False}},
+        )
+        if not prev:
+            return
+        await _notify_company_admins(
+            cid, f"Kiosk · {name or 'Medewerker'} is uitgelogd",
+            f"Uitgelogd om {datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-3))).strftime('%H:%M')}",
+            {"kind": "kiosk_logout", "url": "/admin"},
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[push] kiosk logout notify failed: {e}")
 
 
 async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
@@ -14529,6 +14634,13 @@ async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_sessio
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)
+    soort = "Inkomen" if doc["type"] == "in" else "Uitgave"
+    asyncio.create_task(_notify_company_admins(
+        cid,
+        f"Kasgeld · {soort} {_nl_money(doc['currency'], doc['amount'])}",
+        f"Door {doc['created_by_name']} · {doc.get('description') or '-'}",
+        {"kind": "kasgeld", "url": "/admin/kasgeld", "entry_id": doc["id"]},
+    ))
     return doc
 
 
@@ -14883,24 +14995,17 @@ async def push_test(body: PushTestIn, user=Depends(get_current_user)):
 
 @api.post("/push/notify-overdue")
 async def push_notify_overdue(user=Depends(get_current_user)):
-    """Send admin a summary push of overdue tenants."""
-    overdue = []
-    async for t in db.tenants.find({**scope(user), "apartment_id": {"$ne": None}}, {"_id": 0}):
-        bal = await _calc_balance(t)
-        if bal["balance"] > 0:
-            overdue.append((t["name"], bal["balance"], bal["currency"]))
-    if not overdue:
-        msg = "Geen openstaande betalingen — alles is voldaan!"
-    else:
-        top = overdue[:3]
-        names = ", ".join(n for n, _, _ in top)
-        extra = f" +{len(overdue) - 3} anderen" if len(overdue) > 3 else ""
-        msg = f"{len(overdue)} huurders openstaand: {names}{extra}"
+    """Stuur de admin een push-overzicht van huurders met achterstallige facturen."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    overdue = await _company_overdue_tenants(cid)
+    msg = _overdue_summary_text(overdue)
     sent = 0
     async for sub in db.push_subs.find({"user_id": user["id"]}, {"_id": 0}):
         if send_push(
             {"endpoint": sub["endpoint"], "keys": sub["keys"]},
-            "Openstaande huur",
+            "Achterstallige huur",
             msg,
             {"kind": "overdue", "count": len(overdue), "url": "/admin/invoices"},
         ):
@@ -16876,9 +16981,9 @@ async def kiosk_quick_payment_plan(body: KioskQuickPlanIn, request: Request):
     try:
         await _notify_company_admins(
             cid,
-            title="Nieuwe betalingsregeling vanuit kiosk",
-            body=f"{tenant.get('name', 'Huurder')} — {body.currency} {body.total_amount:.2f} in {n} termijnen",
-            url="/admin/payment_plans",
+            "Nieuwe betalingsregeling vanuit kiosk",
+            f"{tenant.get('name', 'Huurder')} — {_nl_money(body.currency, body.total_amount)} in {n} termijnen",
+            {"kind": "payment_plan", "url": "/admin/payment_plans", "plan_id": plan_id},
         )
     except Exception as e:
         print(f"[push] kiosk quick plan notify failed: {e}")

@@ -123,7 +123,13 @@ export function startKioskLive(asRole) {
   connect();
 }
 
+// Medewerker logt uit → server meldt dit direct aan de beheerders.
+export function kioskLiveBye() {
+  if (role === 'employee') sendJson({ type: 'BYE' });
+}
+
 export function stopKioskLive() {
+  kioskLiveBye();
   stopped = true;
   window.removeEventListener('kiosk-receipt-printed', onPrinted);
   document.removeEventListener('visibilitychange', onVisible);

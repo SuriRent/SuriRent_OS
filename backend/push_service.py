@@ -49,6 +49,11 @@ def send_push(subscription: dict, title: str, body: str, data: dict | None = Non
             data=payload,
             vapid_private_key=vv,
             vapid_claims={"sub": VAPID_CONTACT},
+            # TTL=0 (default) laat de pushdienst de melding weggooien als het
+            # toestel even niet bereikbaar is → meldingen kwamen soms nooit aan.
+            ttl=86400,
+            headers={"Urgency": "high"},
+            timeout=10,
         )
         return True
     except WebPushException as e:
