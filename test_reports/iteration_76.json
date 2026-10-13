@@ -1,0 +1,28 @@
+{
+  "summary": "Backend + frontend verified for new /api/invoices/grouped endpoint, 25-tenant pagination, infinite scroll, server-side search/tabs, and 30s cache with immediate invalidation on mutations. Backend 7/7 pytest green. Frontend desktop + mobile acceptance flows pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter76_invoices_grouped.py",
+    "/app/test_reports/pytest/iter76_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:11972 _INVOICE_CACHE uses process-local dict; works for single-worker uvicorn but will diverge across workers if deployed with >1 worker. Fine for current preview setup; main agent should keep in mind if scaling horizontally.",
+    "/app/backend/server.py:12117 /api/invoices/grouped returns ALL invoices for the paged tenant_ids (good) but computes _group_invoices over the full enriched list on every request even when tenant_id filter is supplied — acceptable while list_invoices itself is cached; just noting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter76_invoices_grouped.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% desktop + mobile acceptance"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin, slug my-awesome-rentals-bv)",
+  "seed_data_creation": "None. Used existing Testhuurder 00..39 perf-test seed. Also created+deleted a single future-period invoice (2030-01) under tenant with apartment for cache-invalidation test — self-cleaned.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints verified: GET /api/invoices (shape intact: tenant_name/apartment_number/location_name/paid_amount/remaining_amount/plans/bucket), GET /api/tenants (apartment_number/rent_amount/currency intact), GET /api/invoices/grouped?tab=&severity=&q=&tenant_id=&offset=&limit=25 (default page=25, offset=25 returns remaining, no overlap, summary stable across tabs, q matches tenant 39 outside first page). Cache cleared immediately on POST+DELETE /api/invoices (middleware at server.py:769 clears _INVOICE_CACHE). Frontend Invoices.jsx desktop: tab-all 'Alle (45)', tab-open 'Achterstand (27)', tab-paid 'Betaald (17)'. Infinite scroll via invoices-load-more sentinel loads 25→45 rows. invoice-search 'Testhuurder 39' finds exactly 1 row. tab-open shows 25 (first page of 27). Mobile 390x844: mi-card-* 25 initial → 45 after scroll via mi-load-more; mi-search finds Testhuurder 39. Nav Overzicht↔Facturen within 30s shows list instantly (verified during desktop run).",
+  "rca of the issue": "Not applicable — no regression found."
+}

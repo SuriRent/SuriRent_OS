@@ -740,3 +740,10 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Frontend lib/kiosk-live.js (store buiten React, 2s debounce, merge per payment_id) + components/KioskLiveStatus.jsx (bolletje rechtsboven alleen beheerder-kiosk, toast met Afdrukken)
 - printReceipt/sendApkPrint dispatchen window event kiosk-receipt-printed; beheerder print met relay:false
 - 2026-06 update: geen auto-print meer bij beheerder; kiosk_print_log (1 regel per bon, admin_printed_at vinkje); GET /api/kiosk/print-log?since=&employee=, POST /api/kiosk/print-log/{id}/printed; fullscreen KioskPrintsOverlay opent automatisch bij nieuwe medewerker (sessionStorage kiosk_live_active_emps), medewerker-keuze bij >1 actief
+
+## 2026-06 Facturen performance
+- _enrich_invoices_batch: vaste ~7 queries i.p.v. N+1; /tenants batch apartments
+- GET /api/invoices/grouped (25 huurders/pagina, tab/severity/q/tenant_id server-side, summary KPIs)
+- _INVOICE_CACHE 30s per user+company, geleegd door middleware bij mutaties
+- Indexen invoices (company_id,status,due_date), (company_id,period_year,period_month); payment_plans.invoice_ids
+- Frontend Invoices.jsx: useSWRInfinite + IntersectionObserver auto-load, dedupingInterval 30s; admin-events registerInfiniteRefresh (SWR filter-mutate slaat $inf$ keys over)
