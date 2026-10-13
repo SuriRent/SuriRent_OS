@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, CheckCircle2, Clock, Loader2, Printer, Receipt, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Clock, Loader2, Printer, Receipt, Trash2, UserRound, X } from 'lucide-react';
 import { api, fmtMoney } from '../lib/api';
 import { printReceipt } from '../lib/kiosk-print';
 import { KioskBulkApproveSheet } from './KioskBulkApproveSheet';
@@ -32,7 +32,7 @@ function EmployeePicker({ employees, activeKeys, onPick }) {
   );
 }
 
-function ReceiptRow({ log, onPrint, onApprove, busy }) {
+function ReceiptRow({ log, onPrint, onApprove, onRemove, busy }) {
   const p = log.payment;
   const done = !!log.admin_printed_at;
   const pending = p.status === 'pending_approval';
@@ -60,6 +60,12 @@ function ReceiptRow({ log, onPrint, onApprove, busy }) {
           <button onClick={() => onApprove(log)} data-testid={`kiosk-print-log-approve-${log.id}`}
             className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-colors">
             <CheckCircle2 className="w-4 h-4 shrink-0" /> Goedkeuren
+          </button>
+        )}
+        {done && (
+          <button onClick={() => onRemove(log)} disabled={busy} data-testid={`kiosk-print-log-remove-${log.id}`} title="Uit de lijst verwijderen"
+            className="h-10 w-10 shrink-0 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-50 flex items-center justify-center disabled:opacity-60 transition-colors">
+            <Trash2 className="w-4 h-4" />
           </button>
         )}
         <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
@@ -117,6 +123,16 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
     finally { setBusyId(null); }
   };
 
+  const onRemove = async (log) => {
+    if (!window.confirm(`Bon ${log.payment.receipt_number || ''} van ${log.payment.tenant_name || 'huurder'} uit de lijst verwijderen? De betaling zelf blijft bewaard.`)) return;
+    setBusyId(log.id);
+    try {
+      await api.delete(`/kiosk/print-log/by-payment/${log.payment_id}`);
+      setLogs((ls) => ls.filter((l) => l.id !== log.id));
+    } catch (e) { window.alert(e?.response?.data?.detail || 'Verwijderen mislukt'); }
+    finally { setBusyId(null); }
+  };
+
   return createPortal((
     <div className="fixed inset-0 z-[10000] bg-slate-900/95 backdrop-blur-md flex flex-col" data-testid="kiosk-prints-overlay"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -147,7 +163,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
         {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
-        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} busy={busyId === l.id} />)}
+        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} busy={busyId === l.id} />)}
       </div>
       {bulkOpen && (
         <KioskBulkApproveSheet logs={pendingLogs} employeeName={emp?.name || ''}

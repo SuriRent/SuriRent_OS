@@ -10158,6 +10158,8 @@ async def kiosk_print_log(since: str, employee: Optional[str] = None, _session=D
     out = []
     for p in pays:
         l = all_logs.get(p["id"]) or {}
+        if l.get("hidden_at"):
+            continue
         out.append({
             "id": p["id"], "payment_id": p["id"],
             "emp_key": p.get("kiosk_employee_id") or l.get("emp_key"),
@@ -10197,6 +10199,18 @@ async def kiosk_print_log_mark_payment(payment_id: str, _session=Depends(get_kio
         {"$set": {"admin_printed_at": iso(now_utc())}, "$setOnInsert": {"id": str(uuid.uuid4())}},
         upsert=True,
     )
+    return {"ok": True}
+
+
+@api.delete("/kiosk/print-log/by-payment/{payment_id}")
+async def kiosk_print_log_hide(payment_id: str, _session=Depends(get_kiosk_session)):
+    """Verwijder een al afgedrukte bon uit 'Bonnen van vandaag' (de betaling zelf blijft bestaan)."""
+    cid = _session["company_id"]
+    res = await db.kiosk_print_log.update_one(
+        {"company_id": cid, "payment_id": payment_id, "admin_printed_at": {"$ne": None}},
+        {"$set": {"hidden_at": iso(now_utc())}})
+    if not res.matched_count:
+        raise HTTPException(status_code=400, detail="Alleen afgedrukte bonnen kunnen uit de lijst worden verwijderd")
     return {"ok": True}
 
 
