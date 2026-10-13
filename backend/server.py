@@ -11380,7 +11380,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
         "opmerking": p.get("note") or "",
         "lettergrootte": font_size,
         "textZoom": text_zoom,
-        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[3]},
+        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
     }
 
 

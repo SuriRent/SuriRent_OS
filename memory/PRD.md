@@ -775,3 +775,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Bon: BETAALD-bedrag op één regel, normale lettergrootte (vet), niet meer extra groot.
 - 2026-06: Notificaties-pagina opgeschoond: Guided Access-uitleg, Beveiligde PDF-sectie, AES-256-kaart en API-uitleg verwijderd.
 - 2026-06: Notificaties: kiosk-betalingsregeling-push gerepareerd; Overdue overzicht + dagelijkse achterstand-push rekenen nu met echte achterstallige facturen; nieuwe pushes bij kiosk-medewerker in-/uitloggen en kasgeld-boeking vanuit kiosk; push TTL 24u + Urgency high; goedkeuringsmeldingen sluiten automatisch na goedkeuren (GET /api/payments/pending-ids).
+- 2026-06: APK-bon: print-data fontSizes.bedrag = tekstgrootte (bedrag niet meer groot); instelling "Bedrag"-lettergrootte verwijderd.

@@ -695,7 +695,6 @@ const CUSTOM_FONT_FIELDS = [
   { k: 'base', label: 'Overige tekst', min: 8, max: 48 },
   { k: 'name', label: 'Bedrijfsnaam', min: 8, max: 60 },
   { k: 'title', label: 'KWITANTIE', min: 8, max: 60 },
-  { k: 'amount', label: 'Bedrag', min: 8, max: 72 },
   { k: 'text_zoom', label: 'APK textZoom', min: 50, max: 800, step: 10, unit: '%' },
 ];
 
