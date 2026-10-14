@@ -12,8 +12,10 @@ let pingTimer = null;
 let retryTimer = null;
 let started = false;
 
-// De APK zet window.__SURIRENT_KTP__ = true wanneer KTPsdk.aar is ingebouwd.
-export const isKtpDevice = () => typeof window !== 'undefined' && !!window.ReactNativeWebView && window.__SURIRENT_KTP__ === true;
+// KT-V520 herkennen: APK-vlag window.__SURIRENT_KTP__ óf het toestelmodel in de user-agent.
+const KTP_UA = /KT-?V520|KTV520|KingTop/i;
+export const isKtpDevice = () => typeof window !== 'undefined' && !!window.ReactNativeWebView
+  && (window.__SURIRENT_KTP__ === true || KTP_UA.test(navigator.userAgent || ''));
 
 const wsUrl = () => `${(process.env.REACT_APP_BACKEND_URL || window.location.origin).replace(/^http/, 'ws')}/api/kiosk/ws`;
 
@@ -76,7 +78,7 @@ export async function ensurePrinterRegistered() {
       const { data } = await api.post('/kiosk/printers/register', {});
       localStorage.setItem(TOKEN_KEY, data.device_token);
       localStorage.setItem(NAME_KEY, data.name);
-    } catch { return; }
+    } catch (e) { console.warn('[ktp] koppelen mislukt:', e?.response?.status, e?.message); return; }
   }
   startPrinterMode();
 }
