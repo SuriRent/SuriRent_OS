@@ -6,8 +6,18 @@ import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 const TIMEOUT_MS = 20000;
 
 // "Print via KT-V520": stuurt de bon via de WebSocket naar een gekoppelde KT-V520.
-export function KtpPrintButton({ log, onPrinted }) {
-  const { printers } = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+export function KtpPrintButton({ log, onPrinted, fetchPrinters = false }) {
+  const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState).printers;
+  const [fetched, setFetched] = useState([]);
+  useEffect(() => {
+    if (!fetchPrinters) return undefined;
+    // Medewerker-kiosk krijgt geen presence-lijst via de WS → zelf ophalen.
+    const load = () => api.get('/kiosk/printers/online').then(({ data }) => setFetched(data || [])).catch(() => {});
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, [fetchPrinters]);
+  const printers = live.length ? live : fetched;
   const [status, setStatus] = useState(null); // sending | done | error
   const [msg, setMsg] = useState('');
   const [menu, setMenu] = useState(false);

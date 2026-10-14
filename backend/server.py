@@ -10199,7 +10199,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         # Alleen apparaat-instellingen doorsturen naar de medewerker-kiosk.
         while True:
             ev = await queue.get()
-            if ev.get("type") == "device_config":
+            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE"):
                 await ws.send_json(ev)
 
     fwd = asyncio.create_task(forward_config())
@@ -10412,6 +10412,11 @@ async def kiosk_printer_remove(printer_id: str, user=Depends(require_role("admin
         raise HTTPException(status_code=404, detail="Printer niet gevonden")
     await _kb_publish(_kiosk_admin_channel(company_id_of(user)), {"type": "presence_changed"})
     return {"ok": True}
+
+
+@api.get("/kiosk/printers/online")
+async def kiosk_printers_online(_session=Depends(get_kiosk_session)):
+    return await _online_printers(_session["company_id"])
 
 
 class RemotePrintIn(BaseModel):
@@ -17270,6 +17275,12 @@ async def kiosk_pay_installment(
         kiosk_employee_id=kiosk_emp_id,
         kiosk_employee_name=kiosk_emp_name,
     )
+    # Betaling meegeven zodat de kiosk direct de kwitantie kan tonen/printen.
+    inst = await db.payment_plan_installments.find_one({"plan_id": plan_id, "sequence": seq}, {"_id": 0, "payment_id": 1})
+    if inst and inst.get("payment_id"):
+        pay = await db.payments.find_one({"id": inst["payment_id"]}, {"_id": 0})
+        if pay:
+            out = {**out, "payment": await _enrich_payment(pay)}
     # Notify admins (alleen bij pending_approval, anders is het al approved
     # en zien admins het wel in de feed).
     try:

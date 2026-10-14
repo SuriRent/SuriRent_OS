@@ -22,7 +22,10 @@ import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge } from '../../lib/kiosk-print';
 import { KioskLiveStatus } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
+import { isKtpDevice } from '../../lib/ktp-printer';
+import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
+const noop = () => {};
 
 prefetchKioskSelect();
 
@@ -2356,6 +2359,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
     try {
       const planItems = payload.plan_items || [];
       let planReceipt = '';
+      let planPayment = null;
       for (const pi of planItems) {
         const pr = await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
           method: payload.method,
@@ -2363,6 +2367,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
           note: `Operator Kiosk — termijn ${pi.seq}`,
         });
         planReceipt = planReceipt || pr?.data?.receipt_number || pr?.data?.payment?.receipt_number || '';
+        planPayment = planPayment || pr?.data?.payment || null;
       }
       let data;
       const plainAmount = payload.plain_amount != null ? payload.plain_amount : payload.amount;
@@ -2372,7 +2377,8 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         const res = await api.post(withKioskEmployee('/kiosk/payments'), plainPayload);
         data = res.data;
       } else {
-        data = { kind: 'plan_only', plan_items: planItems };
+        // Alleen termijnen: gebruik de termijnbetaling als kwitantie (anders payment.id = undefined).
+        data = { ...(planPayment || {}), kind: 'plan_only', plan_items: planItems };
       }
       playSuccessPing();
       sendApkPrint({
@@ -2719,7 +2725,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   }, [onDone, partialInv, planMade]);
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col items-center justify-start sm:justify-center p-4 sm:p-8 overflow-hidden">
+    <div className="h-full bg-orange-500 flex flex-col items-center justify-start sm:justify-center p-4 sm:p-8 overflow-y-auto overscroll-contain">
       <div className="text-center mb-3 mt-2 sm:mt-0" data-testid="receipt-thanks">
         <div className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center mx-auto mb-2 shadow-lg">
           <Check className="w-10 h-10 text-emerald-600" strokeWidth={3} />
@@ -2740,20 +2746,12 @@ function ReceiptScreen({ payment, overview, onDone }) {
           <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-12 h-1 bg-slate-700 rounded-full" />
         </div>
 
-        {/* Papier-uitvoer — overflow geclipt, papier schuift van bovenaf "uit" */}
+        {/* Papier-uitvoer — recht, schuift van onder naar boven in beeld */}
         <div className="overflow-hidden mb-4 mt-2">
           <motion.div
-            initial={{ y: '-100%', rotate: 0 }}
-            animate={{
-              y: ['-100%', '0%', '0%', '0%'],
-              rotate: [0, 0, 0, 1.4],
-            }}
-            transition={{
-              duration: 2.95,
-              times: [0, 0.88, 0.93, 1],
-              ease: 'easeOut',
-            }}
-            style={{ transformOrigin: 'top center' }}
+            initial={{ y: '100%' }}
+            animate={{ y: '0%' }}
+            transition={{ duration: 2.6, ease: 'easeOut' }}
             data-testid="receipt-paper">
             <div className="bg-white rounded-b-2xl rounded-t-md text-left border-2 border-dashed border-slate-200 border-t-0 overflow-hidden">
               {/* Prominente medewerker-banner — direct boven het bedrag.
@@ -2831,6 +2829,11 @@ function ReceiptScreen({ payment, overview, onDone }) {
               • iOS/iPad → opent JPG in nieuw tabblad → Share Sheet
               • Desktop → window.print() (of nieuw tabblad als fallback)
             Alleen gemount als er een payment.id is (voorwaarde). */}
+        {!isKtpDevice() && payment.id && (
+          <div className="mt-2" data-testid="receipt-ktp-print">
+            <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters />
+          </div>
+        )}
         <button onClick={manualPrint} type="button"
           data-testid="receipt-manual-print"
           className="w-full h-12 mt-2 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-2xl flex items-center justify-center gap-2 border-2 border-slate-200 transition">
