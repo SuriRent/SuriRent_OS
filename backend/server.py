@@ -10169,6 +10169,7 @@ async def kiosk_ws(ws: WebSocket):
         if not prn:
             await ws.close(code=4401)
             return
+        await _record_device_seen(prn["company_id"], "printer", prn["name"], hello.get("device"))
         await _kiosk_ws_printer(ws, prn)
         return
     role = "admin" if hello.get("role") == "admin" else "employee"
@@ -10179,6 +10180,7 @@ async def kiosk_ws(ws: WebSocket):
         await ws.close(code=4401)
         return
     channel = _kiosk_admin_channel(cid)
+    await _record_device_seen(cid, role, name, hello.get("device"))
     if role == "admin":
         await _kiosk_ws_admin(ws, cid, channel)
     else:
@@ -10274,6 +10276,30 @@ async def _kiosk_emp_logout(cid: str, emp_key: str, name: str, delay: float):
         )
     except Exception as e:  # noqa: BLE001
         print(f"[push] kiosk logout notify failed: {e}")
+
+
+async def _record_device_seen(cid: str, role: str, name: str, dev) -> None:
+    """Diagnose: welke toestellen verbinden met de kiosk (model/brug/KTP-vlag)."""
+    if not isinstance(dev, dict):
+        dev = {}
+    ua = str(dev.get("ua") or "")[:300]
+    key = hashlib.sha1(f"{ua}|{role}|{name}".encode()).hexdigest()
+    info = {k: bool(dev.get(k)) for k in ("rn_bridge", "android_bridge", "ktp_flag", "ktp_detected", "paired")}
+    try:
+        await db.kiosk_devices_seen.update_one(
+            {"company_id": cid, "key": key},
+            {"$set": {"ua": ua, "role": role, "name": name or "", **info, "last_seen": iso(now_utc())}},
+            upsert=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[kiosk] device seen log failed: {e}")
+
+
+@api.get("/settings/kiosk-devices-seen")
+async def kiosk_devices_seen(user=Depends(require_role("admin", "superadmin"))):
+    since = iso(now_utc() - timedelta(days=7))
+    docs = await db.kiosk_devices_seen.find({"company_id": company_id_of(user), "last_seen": {"$gt": since}},
+                                           {"_id": 0, "company_id": 0}).sort("last_seen", -1).to_list(30)
+    return docs
 
 
 # ---------- KT-V520 printer-modus: toestel print ook zonder ingelogde medewerker ----------

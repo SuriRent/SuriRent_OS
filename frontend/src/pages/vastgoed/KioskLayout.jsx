@@ -19,7 +19,7 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { printReceipt, openReceiptImage, apkPrintMessage } from '../../lib/kiosk-print';
+import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge } from '../../lib/kiosk-print';
 import { KioskLiveStatus } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
@@ -2339,9 +2339,10 @@ async function sendApkPrint(data, paymentId) {
   const url = paymentId ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?format=thermal&preview=1` : null;
   const msg = apkPrintMessage(url, { ...data, ...full });
   console.log('[APK PRINT_RECEIPT]', msg);
-  if (!window.ReactNativeWebView?.postMessage) return;
+  const bridge = apkBridge();
+  if (!bridge) return;
   if (paymentId) window.dispatchEvent(new CustomEvent('kiosk-receipt-printed', { detail: { paymentId } }));
-  try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
+  try { bridge(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
 }
 
 function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
@@ -2593,7 +2594,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
 
   // AUTO-PRINT — na de tear-animatie: bon in #bon + window.print().
   useEffect(() => {
-    if (window.ReactNativeWebView) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
+    if (apkBridge()) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
     const t = setTimeout(() => {
       printReceipt({
         paymentId: payment.id,

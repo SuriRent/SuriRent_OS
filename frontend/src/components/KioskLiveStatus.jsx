@@ -1,8 +1,29 @@
-import { memo, useEffect, useSyncExternalStore } from 'react';
+import { memo, useEffect, useState, useSyncExternalStore } from 'react';
+import { Printer } from 'lucide-react';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
-import { ensurePrinterRegistered } from '../lib/ktp-printer';
+import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
+import { apkBridge } from '../lib/kiosk-print';
+
+// Handmatig koppelen als KT-V520 (alleen beheerder, alleen in de APK, nog niet gekoppeld).
+function KtpPairPill() {
+  const [state, setState] = useState(() => (isPairedPrinter() ? 'done' : 'idle'));
+  if (!apkBridge() || state === 'done') return null;
+  const pair = async () => {
+    if (!window.confirm('Dit toestel koppelen als KT-V520 printer? Het print daarna bonnen die de beheerder op afstand stuurt, ook als niemand is ingelogd.')) return;
+    setState('busy');
+    try { const d = await pairThisDevice(); window.alert(`Gekoppeld als ${d.name}`); setState('done'); }
+    catch (e) { window.alert(e?.response?.data?.detail || e?.message || 'Koppelen mislukt'); setState('idle'); }
+  };
+  return (
+    <button type="button" onClick={pair} disabled={state === 'busy'} data-testid="kiosk-ktp-pair-btn"
+      className="fixed z-40 left-2 bottom-2 h-9 px-3 rounded-full bg-slate-900/80 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur disabled:opacity-60"
+      style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <Printer className="w-3.5 h-3.5" /> {state === 'busy' ? 'Koppelen…' : 'Koppel dit toestel als KT-V520'}
+    </button>
+  );
+}
 
 // Statusbolletje (alleen beheerder-kiosk) + bonnen-venster. Rendert los van
 // de rest van de kiosk via een externe store.
@@ -19,6 +40,7 @@ function KioskLiveStatusInner({ isAdmin }) {
   const label = s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief';
   return (
     <>
+      <KtpPairPill />
       <button type="button" onClick={() => setKioskOverlayOpen(true)} title={label} aria-label={label}
         data-testid="kiosk-presence-dot" data-active={s.active ? 'true' : 'false'}
         className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>

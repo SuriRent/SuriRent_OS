@@ -23,6 +23,15 @@ function fitPageToBon(bon) {
   el.textContent = `@media print { @page { size: 58mm ${hmm}mm; margin: 0; } html, body { height: ${hmm}mm !important; min-height: 0 !important; overflow: hidden !important; } }`;
 }
 
+// APK-brug: React Native WebView óf gewone Android-WebView (addJavascriptInterface "Android").
+export function apkBridge() {
+  if (typeof window === 'undefined') return null;
+  if (window.ReactNativeWebView?.postMessage) return (str) => window.ReactNativeWebView.postMessage(str);
+  if (typeof window.Android?.print === 'function') return (str) => window.Android.print(str);
+  if (typeof window.Android?.postMessage === 'function') return (str) => window.Android.postMessage(str);
+  return null;
+}
+
 // PRINT_RECEIPT voor de APK. printer 'kt-v520' → APK print `lines` via KTPsdk.
 export function apkPrintMessage(url, data) {
   const printer = data.printer !== undefined ? data.printer : localStorage.getItem('kiosk_printer');
@@ -39,14 +48,15 @@ export function apkPrintMessage(url, data) {
 export async function printReceipt({ paymentId, apiGet, relay = true }) {
   // Meld de print aan het kiosk live-kanaal (beheerder-kiosk drukt mee af).
   if (relay) window.dispatchEvent(new CustomEvent('kiosk-receipt-printed', { detail: { paymentId } }));
-  if (window.ReactNativeWebView?.postMessage) {
+  const bridge = apkBridge();
+  if (bridge) {
     const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
     let data = { payment_id: paymentId };
     try { data = { ...data, ...((await apiGet(`/kiosk/payments/${paymentId}/print-data`)).data || {}) }; } catch { /* alleen url */ }
     const msg = apkPrintMessage(`${base}/api/payments/${paymentId}/print.html?format=thermal&preview=1`, data);
     // eslint-disable-next-line no-console
     console.log('[APK PRINT_RECEIPT]', msg);
-    window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+    bridge(JSON.stringify(msg));
     return true;
   }
   try {

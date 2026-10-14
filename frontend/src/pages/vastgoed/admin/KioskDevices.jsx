@@ -45,6 +45,42 @@ function PrinterList() {
   );
 }
 
+const Flag = ({ ok, label }) => (
+  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{label}</span>
+);
+const ROLE_NL = { admin: 'Beheerder', employee: 'Medewerker', printer: 'Printer-modus' };
+
+function DevicesSeen() {
+  const [list, setList] = useState(null);
+  const load = useCallback(() => api.get('/settings/kiosk-devices-seen').then(({ data }) => setList(data)).catch(() => setList([])), []);
+  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
+  return (
+    <div className="bg-white rounded-2xl border border-orange-100 p-5" data-testid="kiosk-devices-seen">
+      <p className="font-black text-slate-900">Kiosk-toestellen (diagnose, laatste 7 dagen)</p>
+      <p className="text-sm text-slate-500 mt-0.5">Wat elk toestel meldt bij het verbinden. Een KT-V520 heeft een APK-brug nodig; staat "KT-V520 herkend" uit, koppel hem dan handmatig via de knop op de beheerder-kiosk.</p>
+      {list === null ? <Loader2 className="w-4 h-4 animate-spin text-slate-400 mt-3" /> : list.length === 0 ? (
+        <p className="text-sm text-slate-400 mt-3">Nog geen toestellen gezien.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 mt-3">
+          {list.map((d) => (
+            <li key={d.key} className="py-2.5 space-y-1" data-testid={`kiosk-device-seen-${d.key}`}>
+              <p className="text-sm font-bold text-slate-900">{d.name || 'Onbekend'} <span className="text-xs font-semibold text-slate-400">· {ROLE_NL[d.role] || d.role} · {new Date(d.last_seen).toLocaleString('nl-NL')}</span></p>
+              <div className="flex flex-wrap gap-1">
+                <Flag ok={d.rn_bridge} label="React Native brug" />
+                <Flag ok={d.android_bridge} label="Android-brug" />
+                <Flag ok={d.ktp_flag} label="KTP-vlag" />
+                <Flag ok={d.ktp_detected} label="KT-V520 herkend" />
+                <Flag ok={d.paired} label="Gekoppeld" />
+              </div>
+              <p className="text-[11px] text-slate-400 break-all font-mono">{d.ua || '(geen user-agent)'}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function KioskDevices() {
   const [on, setOn] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -99,6 +135,7 @@ export default function KioskDevices() {
       </p>
     </div>
     <PrinterList />
+    <DevicesSeen />
     </div>
   );
 }

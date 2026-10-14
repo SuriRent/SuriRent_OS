@@ -1,3 +1,4 @@
+import { deviceInfo } from './ktp-printer';
 // Kiosk live-kanaal (WebSocket). Draait buiten React: alleen abonnees
 // (het statusbolletje) renderen bij een wijziging.
 const DEBOUNCE_MS = 2000;
@@ -30,7 +31,7 @@ export const getKioskLiveState = () => state;
 const wsUrl = () => `${(process.env.REACT_APP_BACKEND_URL || window.location.origin).replace(/^http/, 'ws')}/api/kiosk/ws`;
 
 function helloMsg() {
-  const m = { type: 'auth', role, token: localStorage.getItem('kiosk_token') || '' };
+  const m = { type: 'auth', role, token: localStorage.getItem('kiosk_token') || '', device: deviceInfo() };
   if (role === 'admin') m.admin_token = localStorage.getItem('admin_token') || '';
   else {
     m.name = localStorage.getItem('kiosk_emp_name') || localStorage.getItem('device_user_name') || '';
