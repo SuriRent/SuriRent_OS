@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only verification that the Kiosk chat has been fully removed for both kiosk employees (Anita) and admin-kiosk (demo@surirent.sr). Confirmed on desktop and mobile viewports. No chat testids remain anywhere; Bonnen overlay still opens; FAB has no unread badge; status dots render correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_scenarios": {
+    "employee_desktop_toolbar_has_only_receipts_dot_no_chat": true,
+    "employee_desktop_toolbar_html": "single button kiosk-employee-receipts-dot (emerald/connected)",
+    "employee_mobile_fab_no_unread_badge": true,
+    "employee_mobile_sheet_has_receipts_no_chat": true,
+    "employee_mobile_bonnen_overlay_opens": true,
+    "admin_desktop_toolbar_has_only_presence_dot_no_chat": true,
+    "admin_desktop_toolbar_html": "single button kiosk-presence-dot (slate/no employees)",
+    "ktp_pair_pill_hidden_on_non_apk_browser": true,
+    "no_runtime_console_errors_from_chat_module": true,
+    "deleted_files_still_absent": "KioskChat.jsx, KioskChatReceipt.jsx, lib/kiosk-chat.js — confirmed via grep, no residual imports"
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/iter90_emp_desktop.jpeg",
+    "/app/test_reports/screenshots/iter90_emp_mobile_sheet.jpeg",
+    "/app/test_reports/screenshots/iter90_bonnen_overlay.jpeg",
+    "/app/test_reports/screenshots/iter90_admin_kiosk_final.jpeg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KioskLiveStatus.jsx is clean after removal — no dead imports or references to kiosk-chat remain.",
+    "Observation: /demo slug returns 404 'Bedrijf niet gevonden'. demo@surirent.sr actually logs into company my-awesome-rentals-bv. The test_credentials.md says Slug: demo — but preview DB maps the demo admin to my-awesome-rentals-bv. Not related to this iteration, but credentials doc is stale. Low priority."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (6/6 acceptance criteria)"},
+  "test_credentials": "Anita kiosk: anita@demo.sr / anita1234 PIN 4321 (reseeded via /app/test_reports/setup_iter85.py). Admin: demo@surirent.sr / demo1234 → routes to /my-awesome-rentals-bv/admin, then click 'Open Kiosk'.",
+  "seed_data_creation": "Reseed via existing setup_iter85.py.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Chat removal is complete and verified in both kiosk-toolbar (desktop) and kiosk-sheet-live-actions (mobile) for both employee and admin modes. Only data-testids present now are kiosk-employee-receipts-dot (employee), kiosk-presence-dot (admin), kiosk-sheet-receipts, kiosk-mobile-fab (no badge), and conditional kiosk-ktp-pair-btn/kiosk-sheet-ktp-pair (APK + admin + unpaired only — not visible in browser preview).",
+  "rca of the issue": "N/A — removal task, confirmed clean."
+}

@@ -804,3 +804,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Betalingsgeschiedenis: Afdruk-keuzemenu
 - Kiosk Financieel overzicht → Betalingsgeschiedenis: "Afdruk" is nu een menu: "Print via KT-V520" (eerste online toestel, grijs met "Geen KT-V520 online") en "Afdrukken" (lokaal printvenster). Component: components/PrintChoiceMenu.jsx. Getest iteration_89.
+
+## 2026-06 — Kiosk-chat verwijderd
+- Chat (beheerder ↔ medewerker, bon delen in chat) volledig uit de UI verwijderd (KioskChat.jsx, KioskChatReceipt.jsx, lib/kiosk-chat.js). Backend WS chat-handlers ongebruikt. Getest iteration_90.
