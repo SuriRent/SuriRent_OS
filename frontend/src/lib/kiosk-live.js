@@ -2,7 +2,7 @@ import { deviceInfo } from './ktp-printer';
 // Kiosk live-kanaal (WebSocket). Draait buiten React: alleen abonnees
 // (het statusbolletje) renderen bij een wijziging.
 const DEBOUNCE_MS = 2000;
-const PING_MS = 5000;
+const PING_MS = 20000;
 
 let ws = null;
 let role = null;

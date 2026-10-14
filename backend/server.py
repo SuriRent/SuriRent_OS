@@ -791,8 +791,8 @@ app = FastAPI(title="Vastgoed Kiosk API", lifespan=lifespan)
 # Alle moderne browsers (Chrome/Safari/Firefox/Edge) sturen `br` in de
 # Accept-Encoding. Fallback naar gzip voor oude clients / curl.
 # minimum_size=500 → voorkomt compressie-overhead op kleine responses.
-app.add_middleware(BrotliMiddleware, quality=6, minimum_size=500)
-app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
+# Alleen GZip (niveau 4): Brotli+GZip samen kostte te veel CPU op de 0,5-vCPU pod.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*")
 if cors_origins == "*":
@@ -10204,6 +10204,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
                 await ws.send_json(ev)
 
     fwd = asyncio.create_task(forward_config())
+    last_write = time.time()
     try:
         await ws.send_json(await _kiosk_device_config(cid))
         while True:
@@ -10213,7 +10214,10 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
                 bye = True
                 break
             if kind == "ping":
-                await db.kiosk_presence.update_one({"conn_id": conn_id}, {"$set": {"last_seen": time.time()}})
+                # Max. 1 DB-write per 25s per verbinding (TTL = 75s).
+                if time.time() - last_write > 25:
+                    last_write = time.time()
+                    await db.kiosk_presence.update_one({"conn_id": conn_id}, {"$set": {"last_seen": last_write}})
             elif kind == "chat_send":
                 await _chat_send(cid, emp_key, name, "employee", name, msg.get("text"), msg.get("client_id"))
             elif kind == "chat_history":
@@ -10332,7 +10336,8 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
     cid, pid_ = prn["company_id"], prn["id"]
     channel = _kiosk_admin_channel(cid)
     queue = _kb_subscribe(channel, maxsize=32)
-    await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": time.time()}})
+    last_ping = {"t": time.time()}
+    await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": last_ping["t"]}})
     await _kb_publish(channel, {"type": "presence_changed"})
 
     async def forward():
@@ -10346,7 +10351,9 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
             msg = await ws.receive_json()
             kind = msg.get("type")
             if kind == "ping":
-                await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": time.time()}})
+                if time.time() - last_ping["t"] > 25:
+                    last_ping["t"] = time.time()
+                    await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": last_ping["t"]}})
             elif kind == "REMOTE_PRINT_DONE" and msg.get("payment_id"):
                 pay_id = str(msg["payment_id"])
                 ok = bool(msg.get("ok"))
@@ -10364,6 +10371,9 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
         _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
             t.cancel()
+        for t in _done:
+            if not t.cancelled():
+                t.exception()  # ophalen = geen 'never retrieved' traceback-spam bij disconnect
     except (WebSocketDisconnect, RuntimeError, ValueError):
         pass
     finally:
@@ -10540,7 +10550,8 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
     async def forward():
         while True:
             try:
-                ev = await asyncio.wait_for(queue.get(), timeout=3.0)
+                # 20s: TTL-verloop vangnet; presence_changed-events komen direct binnen.
+                ev = await asyncio.wait_for(queue.get(), timeout=20.0)
             except asyncio.TimeoutError:
                 await push_presence()  # TTL-verloop detecteren zonder event
                 continue
@@ -10575,6 +10586,9 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
         _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
             t.cancel()
+        for t in _done:
+            if not t.cancelled():
+                t.exception()  # ophalen = geen 'never retrieved' traceback-spam bij disconnect
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
