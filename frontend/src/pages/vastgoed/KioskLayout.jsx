@@ -2546,6 +2546,49 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
   );
 }
 
+// Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
+// horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
+function FittedReceiptPreview({ paymentId }) {
+  const boxRef = useRef(null);
+  const [size, setSize] = useState({ w: 230, h: 420 });
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const onLoad = (e) => {
+    try {
+      const doc = e.currentTarget.contentDocument;
+      const bon = doc?.getElementById('bon') || doc?.body;
+      if (bon) setSize({ w: Math.max(180, Math.ceil(bon.scrollWidth)), h: Math.max(200, Math.ceil(bon.scrollHeight) + 4) });
+    } catch { /* cross-origin — vaste maat */ }
+  };
+
+  const scale = box.h ? Math.min(1, box.h / size.h, box.w / size.w) : 1;
+  return (
+    <div ref={boxRef} className="flex-1 min-h-0 overflow-hidden flex items-start justify-center" data-testid="receipt-preview-box">
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 1.2, ease: 'easeOut' }}
+        style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
+        <iframe
+          title="Kwitantie preview"
+          data-testid="receipt-preview-iframe"
+          src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${paymentId}/print.html?preview=1&format=thermal`}
+          onLoad={onLoad}
+          sandbox="allow-same-origin"
+          scrolling="no"
+          className="absolute top-0 left-0 bg-white border border-dashed border-slate-200"
+          style={{ width: size.w, height: size.h, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        />
+      </motion.div>
+    </div>
+  );
+}
+
 function ReceiptScreen({ payment, overview, onDone }) {
   // Bereken openstaand saldo NA deze betaling — refetch van backend voor
   // de echte stand (rekening houdend met openstaande maanden + nieuwe
@@ -2601,6 +2644,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // AUTO-PRINT — na de tear-animatie: bon in #bon + window.print().
   useEffect(() => {
     if (apkBridge()) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
+    // Geen automatisch printvenster op iPhone/Android — daar via de knop "Afdruk".
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')) return undefined;
     const t = setTimeout(() => {
       printReceipt({
         paymentId: payment.id,
@@ -2620,101 +2665,6 @@ function ReceiptScreen({ payment, overview, onDone }) {
   };
 
 
-  // Bon-printer geluid — gesynthetiseerd via Web Audio API.
-  // Imiteert een thermische kassa-printer: continue mechanische "zip" met
-  // ritmische clicks (paper feed), gevolgd door een tear-cut en chime.
-  useEffect(() => {
-    let ctx;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      ctx = new AC();
-      const t0 = ctx.currentTime;
-      const PRINT_DUR = 2.6;    // hoofd "zip" 2.6s
-      const TEAR_AT = t0 + 2.65; // korte tear-snap
-      const CHIME_AT = t0 + 2.9; // chime na tear
-
-      // --- 1) Hoofdgeluid: gefilterde ruis met snelle aan/uit modulatie
-      //     (= karakteristiek zoemend papier-voer geluid van een bonprinter)
-      const sr = ctx.sampleRate;
-      const buf = ctx.createBuffer(1, Math.floor(sr * PRINT_DUR), sr);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) {
-        const tt = i / sr;
-        // 95Hz buzz (= papier door rollers) gecombineerd met 14Hz pulse
-        // (= dot-matrix head per regel) en wat ruis voor textuur.
-        const buzz = (Math.sin(tt * 2 * Math.PI * 95) > 0 ? 1 : -1) * 0.55;
-        const headPulse = Math.sin(tt * 2 * Math.PI * 14) * 0.5 + 0.5; // 0..1
-        const noise = (Math.random() * 2 - 1) * 0.45;
-        d[i] = (buzz * 0.55 + noise * 0.7) * (0.35 + headPulse * 0.65);
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 2200;
-      const hp = ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 220;
-      const mainGain = ctx.createGain();
-      mainGain.gain.setValueAtTime(0.0001, t0);
-      mainGain.gain.exponentialRampToValueAtTime(0.32, t0 + 0.08);
-      mainGain.gain.setValueAtTime(0.32, t0 + PRINT_DUR - 0.15);
-      mainGain.gain.exponentialRampToValueAtTime(0.0001, t0 + PRINT_DUR);
-      src.connect(hp).connect(lp).connect(mainGain).connect(ctx.destination);
-      src.start(t0);
-      src.stop(t0 + PRINT_DUR);
-
-      // --- 2) Mechanische clicks bovenop (papier-tand / step motor)
-      const click = (when, vol = 0.18) => {
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = 'square';
-        o.frequency.value = 1800;
-        g.gain.setValueAtTime(0.0001, when);
-        g.gain.exponentialRampToValueAtTime(vol, when + 0.002);
-        g.gain.exponentialRampToValueAtTime(0.0001, when + 0.025);
-        o.connect(g).connect(ctx.destination);
-        o.start(when); o.stop(when + 0.03);
-      };
-      for (let i = 0; i < 18; i++) click(t0 + 0.1 + i * 0.14);
-
-      // --- 3) Tear-snap (paper cut)
-      const tearLen = Math.floor(sr * 0.18);
-      const tearBuf = ctx.createBuffer(1, tearLen, sr);
-      const td = tearBuf.getChannelData(0);
-      for (let i = 0; i < tearLen; i++) {
-        const env = 1 - i / tearLen;
-        td[i] = (Math.random() * 2 - 1) * env * env;
-      }
-      const tear = ctx.createBufferSource();
-      tear.buffer = tearBuf;
-      const tearHp = ctx.createBiquadFilter();
-      tearHp.type = 'highpass';
-      tearHp.frequency.value = 2500;
-      const tearGain = ctx.createGain();
-      tearGain.gain.value = 0.5;
-      tear.connect(tearHp).connect(tearGain).connect(ctx.destination);
-      tear.start(TEAR_AT);
-
-      // --- 4) Chime (success ding-ding)
-      const tone = (freq, start, dur, vol = 0.22) => {
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = freq;
-        g.gain.setValueAtTime(0.0001, start);
-        g.gain.exponentialRampToValueAtTime(vol, start + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-        o.connect(g).connect(ctx.destination);
-        o.start(start); o.stop(start + dur);
-      };
-      tone(880, CHIME_AT, 0.22);
-      tone(1318, CHIME_AT + 0.22, 0.32);
-    } catch { /* audio kan geweigerd zijn — niet kritiek */ }
-
-    return () => { try { ctx && ctx.close(); } catch { /* noop */ } };
-  }, []);
-
   // Auto-terug naar beginscherm na 10 seconden. Pauzeer wanneer de partial-
   // suggestie open is — anders verdwijnt de modal achter het home-scherm voor
   // de huurder hem kan beantwoorden.
@@ -2725,141 +2675,60 @@ function ReceiptScreen({ payment, overview, onDone }) {
   }, [onDone, partialInv, planMade]);
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col items-center justify-start sm:justify-center p-4 sm:p-8 overflow-y-auto overscroll-contain">
-      <div className="text-center mb-3 mt-2 sm:mt-0" data-testid="receipt-thanks">
-        <div className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center mx-auto mb-2 shadow-lg">
-          <Check className="w-10 h-10 text-emerald-600" strokeWidth={3} />
+    <div className="h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden">
+      <div className="text-center mb-2 shrink-0" data-testid="receipt-thanks">
+        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 flex items-center justify-center mx-auto mb-1 shadow-lg">
+          <Check className="w-6 h-6 sm:w-9 sm:h-9 text-emerald-600" strokeWidth={3} />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Bedankt!</h2>
-        <p className="text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
+        <h2 className="text-xl sm:text-3xl font-extrabold text-white leading-tight">Bedankt!</h2>
+        <p className="text-xs sm:text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
       </div>
 
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl" data-testid="receipt-card">
-        {/* Printer-koplabel — blijft vast staan */}
-        <div className="flex items-center justify-center gap-2 mb-2 text-slate-400">
-          <Printer className="w-4 h-4" />
+      <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
+        <div className="flex items-center justify-center gap-2 mb-1 text-slate-400 shrink-0">
+          <Printer className="w-3.5 h-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Bon Printer</span>
         </div>
-        {/* Statische printer-gleuf waar het papier "uit komt" */}
-        <div className="relative h-2 mb-0">
-          <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[3px] bg-slate-900 rounded-full" />
-          <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-12 h-1 bg-slate-700 rounded-full" />
+        {payment.received_by && (
+          <p className="text-center text-[11px] text-slate-500 mb-1 shrink-0 truncate" data-testid="receipt-received-by-banner">
+            Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
+          </p>
+        )}
+        {/* Bon-preview: geschaald zodat alles zonder scrollen past, horizontaal gecentreerd */}
+        <FittedReceiptPreview paymentId={payment.id} />
+        <div className={`flex justify-between items-center px-3 py-1.5 mt-2 rounded-xl shrink-0 ${
+          remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
+        }`} data-testid="receipt-remaining-row">
+          <span className={`text-xs font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
+          <span className={`font-extrabold text-sm ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
+            {remainingLoading ? '…' : fmtMoney(remaining, cur)}
+          </span>
         </div>
 
-        {/* Papier-uitvoer — recht, schuift van onder naar boven in beeld */}
-        <div className="overflow-hidden mb-4 mt-2">
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: '0%' }}
-            transition={{ duration: 2.6, ease: 'easeOut' }}
-            data-testid="receipt-paper">
-            <div className="bg-white rounded-b-2xl rounded-t-md text-left border-2 border-dashed border-slate-200 border-t-0 overflow-hidden">
-              {/* Prominente medewerker-banner — direct boven het bedrag.
-                  Geeft de huurder vertrouwen + helpt bij klachten. */}
-              {payment.received_by && (
-                <div className="bg-orange-50 border-b border-orange-200 px-4 py-2 flex items-center gap-2.5"
-                  data-testid="receipt-received-by-banner">
-                  <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-black shrink-0">
-                    {(payment.received_by || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-700">Ontvangen door</p>
-                    <p className="text-sm font-extrabold text-slate-900 truncate" data-testid="receipt-received-by">{payment.received_by}</p>
-                  </div>
-                </div>
-              )}
-              {/* Exact dezelfde bon als wat er geprint wordt — geladen
-                  via de print.html endpoint in preview-modus. Forceren
-                  thermal (compact, monochrome/zwart-wit) zodat de bon
-                  volledig past zonder scrollen. `preview=1` schakelt
-                  auto-print + de zichtbare printknop uit. */}
-              <iframe
-                title="Kwitantie preview"
-                data-testid="receipt-preview-iframe"
-                src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${payment.id}/print.html?preview=1&format=thermal`}
-                className="w-full block bg-white"
-                style={{ height: '540px', border: 'none' }}
-                onLoad={(e) => {
-                  // Auto-fit iframe hoogte op basis van content — zo
-                  // vermijden we scrollbalken bij zowel korte als lange
-                  // bonnen (bv. met opmerking of zonder).
-                  try {
-                    const doc = e.currentTarget.contentDocument;
-                    if (doc && doc.body) {
-                      const h = Math.min(720, Math.max(360, doc.body.scrollHeight + 8));
-                      e.currentTarget.style.height = `${h}px`;
-                    }
-                  } catch { /* cross-origin — ignoreer, fallback = fixed height */ }
-                }}
-                sandbox="allow-same-origin"
-              />
-              {/* Openstaand-saldo balk BLIJFT los onder de iframe zodat
-                  huurder zwart-op-kleur ziet wat er nog open staat. */}
-              <div className={`flex justify-between items-center px-4 py-2.5 border-t border-slate-200 ${
-                remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
-              }`} data-testid="receipt-remaining-row">
-                <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
-                  Openstaand saldo
-                </span>
-                <span className={`font-extrabold text-base ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
-                  {remainingLoading ? '…' : fmtMoney(remaining, cur)}
-                </span>
+        <div className="shrink-0 mt-2 space-y-2">
+          <button onClick={onDone} data-testid="receipt-done"
+            className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-base font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-colors">
+            <UserRound className="w-5 h-5" strokeWidth={2.6} />
+            Volgende huurder
+          </button>
+          <div className="flex items-start gap-2">
+            {!isKtpDevice() && payment.id && (
+              <div className="flex-1 min-w-0" data-testid="receipt-ktp-print">
+                <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters />
               </div>
-            </div>
-          </motion.div>
+            )}
+            <button onClick={manualPrint} type="button" data-testid="receipt-manual-print"
+              className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 border-2 border-slate-200 transition-colors">
+              <Printer className="w-4 h-4" />
+              Afdruk
+            </button>
+          </div>
+          <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
+            Automatisch terug naar startscherm in 10 seconden
+            {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
+            {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
+          </p>
         </div>
-
-        <motion.button onClick={onDone} data-testid="receipt-done"
-          initial={{ scale: 1, boxShadow: '0 0 0 0 rgba(255,92,0,0)' }}
-          animate={{
-            scale: [1, 1.035, 1],
-            boxShadow: [
-              '0 0 0 0 rgba(255,92,0,0.55)',
-              '0 0 0 14px rgba(255,92,0,0)',
-              '0 0 0 0 rgba(255,92,0,0)',
-            ],
-          }}
-          transition={{ delay: 3.1, duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-          className="w-full h-14 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-2 shadow-xl">
-          <UserRound className="w-5 h-5" strokeWidth={2.6} />
-          Volgende huurder
-        </motion.button>
-        {/* "Print bon" — manuele herprint knop. Werkt overal:
-              • Android → RawBT thermische printer
-              • iOS/iPad → opent JPG in nieuw tabblad → Share Sheet
-              • Desktop → window.print() (of nieuw tabblad als fallback)
-            Alleen gemount als er een payment.id is (voorwaarde). */}
-        {!isKtpDevice() && payment.id && (
-          <div className="mt-2" data-testid="receipt-ktp-print">
-            <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters />
-          </div>
-        )}
-        <button onClick={manualPrint} type="button"
-          data-testid="receipt-manual-print"
-          className="w-full h-12 mt-2 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-2xl flex items-center justify-center gap-2 border-2 border-slate-200 transition">
-          <Printer className="w-4 h-4" />
-          Print bon opnieuw
-        </button>
-        <p className="text-center text-xs text-slate-400 mt-2" data-testid="receipt-autoreturn">
-          Automatisch terug naar startscherm in 10 seconden
-        </p>
-        {emailStatus !== null && (
-          <div className="text-center text-[11px] mt-1 font-medium space-y-0.5" data-testid="receipt-delivery-status">
-            {emailStatus.email?.sent && (
-              <p className="text-emerald-600" data-testid="receipt-email-status">
-                E-mail verzonden naar {emailStatus.email.to}
-              </p>
-            )}
-            {emailStatus.msg?.sent && (
-              <p className="text-emerald-600" data-testid="receipt-whatsapp-status">
-                {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden naar {emailStatus.msg.to}
-              </p>
-            )}
-            {!emailStatus.email?.sent && !emailStatus.msg?.sent && (
-              <p className="text-slate-300">Geen digitale kopie verzonden</p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Partial-payment regeling suggestie — verschijnt na ~1.5s zodat de
