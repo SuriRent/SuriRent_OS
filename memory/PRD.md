@@ -795,3 +795,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Kiosk-snelheid: schermovergang zonder wachten (0.16s), huurder-overzicht prefetch bij aantikken; backend CPU-ontlasting: Brotli verwijderd (alleen GZip lvl4), presence-DB-writes max 1/25s, admin-WS presence-poll 3s→20s, kiosk ping 5s→20s, WS task-exceptions opgehaald. Prod: tier_1 500m CPU, 1 worker — tier-upgrade aanbevolen (RCA_20473e6a).
 - 2026-06: iPhone-PWA zoals Expo Go: status-bar-style "default" + iOS-only theme-color (admin #F7F8FA, kiosk/login oranje) via lib/ios-status-bar.js; admin mobiele header effen #F7F8FA zonder blur.
 - 2026-06: Bonnen van vandaag (desktop): één witte kaart in Financieel-overzicht-stijl (icoontegels, scheidingslijnen, "Totaal vandaag"); donkere overlay-kleuren behouden; mobiel ongewijzigd.
+
+## 2026-06 — Bon printer sectie (Bluetooth)
+- Instellingen → "Bon printer": Geen / KT-V520 / Bluetooth thermische printer (bedrijfsstandaard), papierbreedte 58/80 mm.
+- Per toestel Bluetooth printer koppelen (zoeken, testbon, ontkoppelen) — ook via kiosk "+" menu.
+- Automatisch printen na elke betaling; iOS → AirPrint printvenster; Android-APK via BT_SCAN/BT_SELECT/PRINT_RECEIPT bridge (APK-zijde nog te bouwen, zie memory/apk-print.md).
+- Getest: iteration_88 (backend 7/7, frontend 12/12).

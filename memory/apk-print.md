@@ -47,3 +47,12 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 - Handmatig: knop "Koppel dit toestel als KT-V520" linksboven op de beheerder-kiosk (alleen zichtbaar met APK-brug).
 - Diagnose: Instellingen → Kiosk apparaten → "Kiosk-toestellen (diagnose)" toont user-agent + vlaggen per toestel.
 - Gewone Android-WebView: implementeer `@JavascriptInterface fun print(json: String)` op object "Android" — ontvangt hetzelfde PRINT_RECEIPT JSON.
+
+## Bluetooth thermische printer (Instellingen → Bon printer)
+- Bedrijfsstandaard `kiosk_devices.printer_mode` = none | kt-v520 | bluetooth, `paper_width` 58|80. WS device_config: `{printer, printer_mode, paper_width}` → localStorage `kiosk_printer`, `kiosk_paper_width`.
+- Per toestel gekoppelde printer: localStorage `bt_printer` = {id, name, via:'web'|'apk'}.
+- Browser (Chrome/Edge Android/Windows): Web Bluetooth BLE, ESC/POS in bt-printer.js. iOS: geen Bluetooth → window.print (AirPrint).
+- APK moet implementeren:
+  - `{type:"BT_SCAN"}` → zoek printers, antwoord: `window.dispatchEvent(new CustomEvent('apk-bt-devices',{detail:{devices:[{name,address}]}}))` (via injectJavaScript).
+  - `{type:"BT_SELECT", address, name}` → bewaar printer.
+  - `{type:"PRINT_RECEIPT", printer:"bluetooth", bt_address, paper_width, lines:[...]}` → ESC/POS naar die printer (classic SPP of BLE). Lines al opgemaakt op 32 (58mm) / 48 (80mm) tekens.

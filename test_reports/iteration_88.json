@@ -1,0 +1,26 @@
+{
+  "summary": "Iter88 — Verified new Bon-printer admin feature (none / KT-V520 / Bluetooth) + paper width (58/80mm) end-to-end. Backend pytest /app/backend/tests/test_bon_printer.py: 7/7 PASS. Settings tests: (1) PUT /api/settings/kiosk_devices {printer_mode:'laserjet'} -> 422 'Onbekend printertype'; (2) {printer_mode:'bluetooth', paper_width:80} saves and GET /api/settings returns kiosk_devices.printer_mode='bluetooth', paper_width=80, kt_v520_enabled=false; (3) legacy {kt_v520_enabled:true} maps printer_mode->'kt-v520'; (4) {printer_mode:'none'} saves. Print-data tests (via Anita kiosk session reseeded with /app/test_reports/setup_iter85.py): (5) bluetooth+80 -> printer='bluetooth', paper_width=80, max line length <=48; (6) bluetooth+58 -> paper_width=58, max line <=32; (7) kt-v520 forces paper_width=58 and 32 cols even when stored 80. Frontend Playwright (admin demo@surirent.sr/demo1234 at /my-awesome-rentals-bv/admin/instellingen#bon-printer, 1920x1080): bon-printer-settings container renders; all three mode buttons bon-printer-mode-{none,kt-v520,bluetooth} visible+clickable; clicking Bluetooth reveals bon-printer-bluetooth sub-card with bon-printer-width-58 and bon-printer-width-80 toggles; in headless Chromium navigator.bluetooth is unavailable so bt-printer-unsupported info card is shown (bt-printer-card hidden) as expected; after page reload Bluetooth mode and 80mm width persist (orange border on mode button, bg-white on width-80 chip). Kiosk-apparaten section shows kiosk-devices-printer-hint and no legacy KT-V520 switch (verified no such input). Reset to printer_mode='none' at end as requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_bon_printer.py",
+    "/app/test_reports/pytest/iter88_bon_printer.xml",
+    "/app/test_reports/pytest/iter88_bon_printer_part2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BonPrinter.jsx update() optimistically writes next state and localStorage before awaiting PUT, then rolls back cfg on error — but localStorage ('kiosk_printer'/'kiosk_paper_width') is NOT rolled back on failure. If server returns 422 the local device still believes the new mode is active. Suggest moving the localStorage writes into the try after await, or revert them in catch.",
+    "Backend update_settings_section validates printer_mode but never validates paper_width — any non-'80' string silently becomes 58 (merged['paper_width']=80 if str==... else 58). Not a bug per se but a 400 for unexpected values would be more consistent with the printer_mode error path.",
+    "_receipt_print_data forces paper_width=58 only when printer=='kt-v520'; printer=='none' uses the stored paper_width. If a company has paper_width=80 and mode=none, the API returns paper_width=80 with 48-col lines, but there is no actual 80mm printer paired on the device — mostly a no-op since kiosk-print.js only prints via chosen branch, but worth guarding.",
+    "BtPrinterCard: scanWeb path (support=='web') calls scanWeb() which triggers navigator.bluetooth.requestDevice; no error UI is shown when the user cancels (handled via NotFoundError filter) — good. However when scanApk returns an empty array, bt-scan-empty text appears but the previous msg state is cleared, so a user who scans twice sees only 'Geen printers gevonden' with no retry context. Minor UX.",
+    "Instellingen hub route uses hash-based navigation (#bon-printer). Browser hashchange works, but direct navigation while already on /admin/instellingen reloads the subpage correctly only because InstellingenHub reads location.hash — OK."
+  ],
+  "updated_files": ["/app/backend/tests/test_bon_printer.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (12/12 assertions)"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin). Anita Sewdas kiosk employee PIN 4321 reseeded via /app/test_reports/setup_iter85.py (needed because demo DB resets ~30min).",
+  "seed_data_creation": "Ran /app/test_reports/setup_iter85.py to reseed Anita kiosk + TEST payment (needed for print-data tests). Resets printer_mode to 'none' at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To re-run: python3 /app/test_reports/setup_iter85.py && pytest /app/backend/tests/test_bon_printer.py -v. Frontend hits /my-awesome-rentals-bv/admin/instellingen#bon-printer. In headless Chromium bt-printer-unsupported appears instead of bt-printer-card — this is expected (same as iOS). To test real Bluetooth pairing use a device with navigator.bluetooth or the APK bridge (window.suriprint). Settings PUT /api/settings/kiosk_devices body shape: {printer_mode: 'none'|'kt-v520'|'bluetooth', paper_width: 58|80}; legacy kt_v520_enabled still accepted.",
+  "rca of the issue": "n/a — feature works end-to-end per spec. All backend + UI assertions passed."
+}
