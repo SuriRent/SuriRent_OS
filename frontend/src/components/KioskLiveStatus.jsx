@@ -34,7 +34,7 @@ function KtpPairPill() {
 
 // Statusbolletje (alleen beheerder-kiosk) + bonnen-venster. Rendert los van
 // de rest van de kiosk via een externe store.
-function KioskLiveStatusInner({ isAdmin }) {
+function KioskLiveStatusInner({ isAdmin, onHome = true }) {
   useEffect(() => {
     startKioskLive(isAdmin ? 'admin' : 'employee');
     ensurePrinterRegistered();
@@ -48,12 +48,12 @@ function KioskLiveStatusInner({ isAdmin }) {
     const elabel = s.connected ? 'Bonnen van vandaag' : 'Geen verbinding';
     return (
       <>
-        <KioskChat role="employee" />
-        <button type="button" onClick={() => setKioskOverlayOpen(true)} title={elabel} aria-label={elabel}
+        <KioskChat role="employee" visible={onHome} />
+        {onHome && <button type="button" onClick={() => setKioskOverlayOpen(true)} title={elabel} aria-label={elabel}
           data-testid="kiosk-employee-receipts-dot" data-active={s.connected ? 'true' : 'false'}
           className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>
           <span className={`block w-3 h-3 rounded-full ring-2 ring-white/80 transition-colors duration-300 ${s.connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' : 'bg-slate-400'}`} />
-        </button>
+        </button>}
         {s.overlayOpen && (
           <KioskPrintsOverlay employees={[]} printsVersion={s.printsVersion} employeeMode onClose={() => setKioskOverlayOpen(false)} />
         )}
@@ -64,12 +64,12 @@ function KioskLiveStatusInner({ isAdmin }) {
   return (
     <>
       <KtpPairPill />
-      <KioskChat role="admin" />
-      <button type="button" onClick={() => setKioskOverlayOpen(true)} title={label} aria-label={label}
+      <KioskChat role="admin" visible={onHome} />
+      {onHome && <button type="button" onClick={() => setKioskOverlayOpen(true)} title={label} aria-label={label}
         data-testid="kiosk-presence-dot" data-active={s.active ? 'true' : 'false'}
         className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>
         <span className={`block w-3 h-3 rounded-full ring-2 ring-white/80 transition-colors duration-300 ${s.active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' : 'bg-slate-400'}`} />
-      </button>
+      </button>}
       {s.overlayOpen && (
         <KioskPrintsOverlay employees={s.employees} printsVersion={s.printsVersion} onClose={() => setKioskOverlayOpen(false)} />
       )}

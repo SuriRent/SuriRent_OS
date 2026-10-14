@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, CheckCheck, MessageCircle, Send, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, MessageCircle, Receipt, Send, X } from 'lucide-react';
+import { ChatReceiptCard, ChatReceiptViewer, ChatReceiptPicker, receiptFromLog } from './KioskChatReceipt';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 import {
   subscribeChat, getChatState, totalUnread, installKioskChat, openChat, openThread, closeThread, sendChat,
@@ -8,13 +9,14 @@ import {
 
 const fmtTime = (s) => new Date(s).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 
-function Bubble({ m, mine }) {
+function Bubble({ m, mine, onOpenReceipt }) {
   const read = mine && (m.sender === 'admin' ? m.read_by_emp : m.read_by_admin);
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? 'bg-[#FF5C00] text-white rounded-br-md' : 'bg-white text-slate-900 rounded-bl-md'}`}
+      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${m.receipt ? 'min-w-[230px]' : ''} ${mine ? 'bg-[#FF5C00] text-white rounded-br-md' : 'bg-white text-slate-900 rounded-bl-md'}`}
         data-testid={`kiosk-chat-msg-${m.id}`}>
-        <p className="whitespace-pre-wrap break-words">{m.text}</p>
+        {m.receipt && <ChatReceiptCard receipt={m.receipt} mine={mine} onOpen={() => onOpenReceipt(m.receipt)} />}
+        {m.text && <p className={`whitespace-pre-wrap break-words ${m.receipt ? 'mt-1.5' : ''}`}>{m.text}</p>}
         <p className={`text-[10px] mt-0.5 flex items-center justify-end gap-1 ${mine ? 'text-white/70' : 'text-slate-400'}`}>
           {fmtTime(m.created_at)}
           {mine && (m.pending ? <Check className="w-3 h-3 opacity-60" /> : read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
@@ -26,18 +28,29 @@ function Bubble({ m, mine }) {
 
 function Conversation({ thread, role }) {
   const [text, setText] = useState('');
+  const [viewing, setViewing] = useState(null);
+  const [picking, setPicking] = useState(false);
   const endRef = useRef(null);
   const msgs = thread?.messages || [];
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [msgs.length]);
   const submit = (e) => { e.preventDefault(); sendChat(text); setText(''); };
   return (
     <>
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 bg-orange-50/60" data-testid="kiosk-chat-messages">
         {msgs.length === 0 && <p className="text-center text-xs text-slate-400 mt-6">Nog geen berichten vandaag. Berichten worden alleen vandaag bewaard.</p>}
-        {msgs.map((m) => <Bubble key={m.id} m={m} mine={m.sender === role} />)}
+        {msgs.map((m) => <Bubble key={m.id} m={m} mine={m.sender === role} onOpenReceipt={setViewing} />)}
         <div ref={endRef} />
       </div>
+      {picking && <ChatReceiptPicker onClose={() => setPicking(false)} onPick={(l) => { sendChat('', receiptFromLog(l)); setPicking(false); }} />}
+      {viewing && <ChatReceiptViewer receipt={viewing} onClose={() => setViewing(null)} />}
       <form onSubmit={submit} className="flex items-center gap-2 p-2 border-t border-slate-100 bg-white">
+        {role === 'admin' && (
+          <button type="button" onClick={() => setPicking(true)} data-testid="kiosk-chat-send-receipt" aria-label="Bon sturen" title="Bon sturen"
+            className="w-11 h-11 shrink-0 rounded-full bg-orange-50 text-[#FF5C00] hover:bg-orange-100 flex items-center justify-center transition-colors">
+            <Receipt className="w-5 h-5" />
+          </button>
+        )}
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Typ een bericht…" maxLength={1000}
           data-testid="kiosk-chat-input" autoComplete="off"
           className="flex-1 h-11 px-4 rounded-full bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-orange-300" />
@@ -46,6 +59,7 @@ function Conversation({ thread, role }) {
           <Send className="w-4 h-4" />
         </button>
       </form>
+      </div>
     </>
   );
 }
@@ -103,23 +117,30 @@ function ChatPanel({ role, chat, employees }) {
 }
 
 // Chat-icoon op de kiosk (naast het groene bolletje) voor medewerker en beheerder.
-export function KioskChat({ role }) {
+export function KioskChat({ role, visible = true }) {
   useEffect(() => { installKioskChat(role); }, [role]);
   const chat = useSyncExternalStore(subscribeChat, getChatState);
   const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   const unread = totalUnread(chat);
   return (
     <>
-      <button type="button" onClick={() => openChat(!chat.open)} aria-label="Chat" title="Chat"
+      {!visible && unread > 0 && !chat.open && (
+        <button type="button" onClick={() => openChat(true)} data-testid="kiosk-chat-new-pill"
+          className="fixed z-40 right-2 h-8 px-3 rounded-full bg-slate-900/85 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 6px)' }}>
+          <MessageCircle className="w-3.5 h-3.5" /> Nieuw bericht ({unread})
+        </button>
+      )}
+      {visible && <button type="button" onClick={() => openChat(!chat.open)} aria-label="Chat" title="Chat"
         data-testid="kiosk-chat-btn" className="fixed z-40 p-1" style={{ top: 'env(safe-area-inset-top, 0px)', right: 26 }}>
         <span className="relative block">
-          <MessageCircle className="w-5 h-5 text-slate-700 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" />
+          <MessageCircle className="w-5 h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" />
           {unread > 0 && (
             <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center"
               data-testid="kiosk-chat-unread">{unread}</span>
           )}
         </span>
-      </button>
+      </button>}
       {chat.open && <ChatPanel role={role} chat={chat} employees={live.employees || []} />}
     </>
   );

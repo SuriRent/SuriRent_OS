@@ -10457,7 +10457,7 @@ def _today_start_iso() -> str:
 
 def _chat_public(m: dict) -> dict:
     return {k: m.get(k) for k in ("id", "client_id", "emp_key", "emp_name", "sender", "sender_name", "text",
-                                  "created_at", "read_by_admin", "read_by_emp")}
+                                  "created_at", "read_by_admin", "read_by_emp", "receipt")}
 
 
 async def _chat_today(cid: str, emp_key: str) -> list:
@@ -10470,7 +10470,8 @@ async def _chat_threads(cid: str) -> list:
     pipe = [
         {"$match": {"company_id": cid, "created_at": {"$gte": _today_start_iso()}}},
         {"$sort": {"created_at": 1}},
-        {"$group": {"_id": "$emp_key", "emp_name": {"$last": "$emp_name"}, "last_text": {"$last": "$text"},
+        {"$group": {"_id": "$emp_key", "emp_name": {"$last": "$emp_name"},
+                    "last_text": {"$last": {"$cond": [{"$gt": ["$text", ""]}, "$text", "Bon verstuurd"]}},
                     "last_at": {"$last": "$created_at"},
                     "unread": {"$sum": {"$cond": [{"$and": [{"$eq": ["$sender", "employee"]}, {"$ne": ["$read_by_admin", True]}]}, 1, 0]}}}},
         {"$sort": {"last_at": -1}},
@@ -10482,9 +10483,22 @@ async def _chat_threads(cid: str) -> list:
     return out
 
 
-async def _chat_send(cid: str, emp_key: str, emp_name: str, sender: str, sender_name: str, text, client_id=None):
+async def _chat_receipt(cid: str, payment_id) -> Optional[dict]:
+    """Bon-bijlage voor de chat (beheerder stuurt een bon naar de medewerker)."""
+    if not payment_id:
+        return None
+    p = await db.payments.find_one({"id": str(payment_id), "company_id": cid},
+                                   {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "tenant_id": 1, "paid_at": 1})
+    if not p:
+        return None
+    t = await db.tenants.find_one({"id": p.get("tenant_id")}, {"_id": 0, "name": 1}) if p.get("tenant_id") else None
+    return {"payment_id": p["id"], "receipt_number": p.get("receipt_number"), "amount": p.get("amount"),
+            "currency": p.get("currency") or "SRD", "tenant_name": (t or {}).get("name") or "Huurder", "paid_at": p.get("paid_at")}
+
+
+async def _chat_send(cid: str, emp_key: str, emp_name: str, sender: str, sender_name: str, text, client_id=None, receipt=None):
     text = str(text or "").strip()[:1000]
-    if not text:
+    if not text and not receipt:
         return
     if not emp_name:
         prev = await db.kiosk_chat.find_one({"company_id": cid, "emp_key": emp_key, "sender": "employee"},
@@ -10492,7 +10506,8 @@ async def _chat_send(cid: str, emp_key: str, emp_name: str, sender: str, sender_
         emp_name = (prev or {}).get("emp_name") or "Medewerker"
     m = {"id": str(uuid.uuid4()), "client_id": str(client_id or "")[:64] or None, "company_id": cid,
          "emp_key": emp_key, "emp_name": emp_name, "sender": sender, "sender_name": sender_name, "text": text,
-         "created_at": iso(now_utc()), "read_by_admin": sender == "admin", "read_by_emp": sender == "employee"}
+         "created_at": iso(now_utc()), "read_by_admin": sender == "admin", "read_by_emp": sender == "employee",
+         "receipt": receipt}
     await db.kiosk_chat.insert_one(dict(m))
     # Alleen vandaag bewaren: oudere berichten opruimen.
     await db.kiosk_chat.delete_many({"company_id": cid, "created_at": {"$lt": _today_start_iso()}})
@@ -10549,7 +10564,8 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 await ws.send_json({"type": "chat_history", "emp_key": ek, "messages": await _chat_today(cid, ek)})
             elif kind == "chat_send" and ek:
                 emp_name = str(msg.get("emp_name") or "")[:60]
-                await _chat_send(cid, ek, emp_name, "admin", "Beheer", msg.get("text"), msg.get("client_id"))
+                receipt = await _chat_receipt(cid, msg.get("receipt_payment_id"))
+                await _chat_send(cid, ek, emp_name, "admin", "Beheer", msg.get("text"), msg.get("client_id"), receipt)
             elif kind == "chat_read" and ek:
                 await _chat_mark_read(cid, ek, "admin")
 

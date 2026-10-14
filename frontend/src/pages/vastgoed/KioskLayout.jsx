@@ -4725,7 +4725,7 @@ export default function KioskLayout() {
 
   return (
     <div className="kiosk-fullscreen bg-orange-500" data-testid="kiosk-root">
-      <KioskLiveStatus isAdmin={hasAdminAccess} />
+      <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
           error). De statische "tap hint" is weggehaald op verzoek. */}

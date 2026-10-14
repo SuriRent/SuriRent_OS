@@ -99,16 +99,16 @@ export function openThread(empKey, empName) {
 
 export const closeThread = () => emit({ active: null });
 
-export function sendChat(text) {
-  const clean = text.trim();
-  if (!clean) return;
+export function sendChat(text, receipt = null) {
+  const clean = (text || '').trim();
+  if (!clean && !receipt) return;
   const client_id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const k = role === 'admin' ? state.active : ME;
   if (!k) return;
   const t = state.threads[k] || { messages: [] };
-  const optimistic = { id: client_id, client_id, sender: role, text: clean, created_at: new Date().toISOString(), pending: true };
+  const optimistic = { id: client_id, client_id, sender: role, text: clean, receipt, created_at: new Date().toISOString(), pending: true };
   putThread(k, { messages: [...t.messages, optimistic] });
   sendKioskLive(role === 'admin'
-    ? { type: 'chat_send', emp_key: k, emp_name: t.emp_name, text: clean, client_id }
+    ? { type: 'chat_send', emp_key: k, emp_name: t.emp_name, text: clean, client_id, receipt_payment_id: receipt?.payment_id }
     : { type: 'chat_send', text: clean, client_id });
 }
