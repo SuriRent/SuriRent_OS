@@ -758,6 +758,19 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
 // =====================================================================
 // Tenant overview — split-screen
 // =====================================================================
+// Huurder-overzicht alvast ophalen bij het aantikken (start tijdens de schermovergang).
+const _ovPrefetch = new Map();
+const fetchOverview = (tid) => api.get(`/kiosk/tenants/${tid}/overview`);
+function prefetchOverview(tid) {
+  if (!tid) return;
+  _ovPrefetch.set(tid, { p: fetchOverview(tid), at: Date.now() });
+}
+function takeOverview(tid) {
+  const hit = _ovPrefetch.get(tid);
+  _ovPrefetch.delete(tid);
+  return hit && Date.now() - hit.at < 15000 ? hit.p : fetchOverview(tid);
+}
+
 function TenantOverview({ apartment, onBack, onPay }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -765,9 +778,9 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const [showHistory, setShowHistory] = useState(false);
   const [dueReminder, setDueReminder] = useState(null);
 
-  const reload = useCallback(() => {
+  const reload = useCallback((fresh = false) => {
     if (!apartment?.tenant_id) return;
-    api.get(`/kiosk/tenants/${apartment.tenant_id}/overview`)
+    (fresh ? fetchOverview(apartment.tenant_id) : takeOverview(apartment.tenant_id))
       .then((r) => {
         setData(r.data);
         // Toon de eerste due reminder als popup — zodra de medewerker deze
@@ -1070,7 +1083,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
             if (dismiss) {
               try { await api.post(`/kiosk/tenants/${tenant.id}/notes/${dueReminder.id}/dismiss`); } catch { /* noop */ }
             }
-            reload();  // haalt volgende reminder op, of null als er geen meer is
+            reload(true);  // haalt volgende reminder op, of null als er geen meer is
           }} />
       )}
     </div>
@@ -4754,10 +4767,10 @@ export default function KioskLayout() {
           </div>
         </div>
       )}
-      <AnimatePresence mode="wait">
+      <AnimatePresence initial={false}>
         <motion.div key={step} variants={variants}
           initial="enter" animate="center" exit="exit"
-          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
           className="absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll"
           style={{ paddingTop: 'env(safe-area-inset-top, 0px)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
@@ -4767,7 +4780,7 @@ export default function KioskLayout() {
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
-              onSelect={(a) => { setApartment(a); setStep('overview'); }}
+              onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onKasgeld={() => setStep('kasgeld')}
               onExit={exit} />
