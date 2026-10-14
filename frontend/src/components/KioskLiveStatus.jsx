@@ -9,6 +9,11 @@ import { apkBridge } from '../lib/kiosk-print';
 // Handmatig koppelen als KT-V520 (alleen beheerder, alleen in de APK, nog niet gekoppeld).
 function KtpPairPill() {
   const [state, setState] = useState(() => (isPairedPrinter() ? 'done' : 'idle'));
+  useEffect(() => {
+    const onPaired = () => setState('done');
+    window.addEventListener('ktp-paired', onPaired);
+    return () => window.removeEventListener('ktp-paired', onPaired);
+  }, []);
   if (!apkBridge() || state === 'done') return null;
   const pair = async () => {
     if (!window.confirm('Dit toestel koppelen als KT-V520 printer? Het print daarna bonnen die de beheerder op afstand stuurt, ook als niemand is ingelogd.')) return;
@@ -18,8 +23,8 @@ function KtpPairPill() {
   };
   return (
     <button type="button" onClick={pair} disabled={state === 'busy'} data-testid="kiosk-ktp-pair-btn"
-      className="fixed z-40 left-2 bottom-2 h-9 px-3 rounded-full bg-slate-900/80 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur disabled:opacity-60"
-      style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      className="fixed z-[60] left-2 h-8 px-3 rounded-full bg-slate-900/85 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur disabled:opacity-60"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 6px)' }}>
       <Printer className="w-3.5 h-3.5" /> {state === 'busy' ? 'Koppelen…' : 'Koppel dit toestel als KT-V520'}
     </button>
   );

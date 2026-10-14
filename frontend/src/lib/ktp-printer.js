@@ -90,6 +90,7 @@ async function register(name) {
   const { data } = await api.post('/kiosk/printers/register', name ? { name } : {});
   localStorage.setItem(TOKEN_KEY, data.device_token);
   localStorage.setItem(NAME_KEY, data.name);
+  window.dispatchEvent(new Event('ktp-paired'));
   startPrinterMode();
   return data;
 }

@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 82 — tested KT-V520 fixes A (device diagnostics), B (manual pair pill), C (generic APK bridge + UA auto-detect). Backend pytest 6/6 pass in test_iter82_device_diagnostics.py: (1) GET /api/settings/kiosk-devices-seen requires admin -> 401 unauth; (2) employee kiosk WS hello with device:{ua,rn_bridge,android_bridge,ktp_flag,ktp_detected,paired} upserts to kiosk_devices_seen; GET returns entry with all flags preserved and role=employee; (3) admin WS hello recorded (role=admin, ktp_detected=false); (4) printer WS hello recorded (role=printer, paired=true, ktp_detected=true); (5) response list is <=30 items, sorted desc by last_seen, no _id/company_id leakage; (6) hello without device field still logs entry with ua='' and all flags False. Prior iter_81 ktp pytest (5/5) still green. Frontend: (A) Instellingen -> Kiosk apparaten (/<slug>/admin/instellingen#kiosk-apparaten) renders data-testid=kiosk-devices, kiosk-printers (with empty state 'Nog geen KT-V520 gekoppeld'), kiosk-devices-seen (with empty state 'Nog geen toestellen gezien'). (B) Admin kiosk pair-pill: WITHOUT bridge the pill is NOT rendered (kiosk-presence-dot still shown); WITH window.ReactNativeWebView.postMessage injected via add_init_script the pill renders with text 'Koppel dit toestel als KT-V520'. Clicking the pill (via JS click to bypass obscuring kiosk-add-tenant-btn-desktop overlay) triggers window.confirm, then POST /api/kiosk/printers/register (200), stores ktp_device_token+ktp_device_name in localStorage, then window.alert('Gekoppeld als KT-V520 #2') fires, and the pill hides (state='done'). (C) Auto-detect: with injected RN bridge + user-agent 'KT-V520' the kiosk auto-registers on load (ktp_device_token stored, name='KT-V520 #1') without clicking. (Regression) Without any bridge, apkBridge() returns null → kiosk-print.js falls back to window.print path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KtpPairPill (KioskLiveStatus.jsx)", "issue": "On desktop viewport (>=1024px) the pair pill at fixed left-2 bottom-2 z-40 is fully obscured by the desktop kiosk bottom bar (kiosk-add-tenant-btn-desktop / Huurder button). document.elementFromPoint over the pill returns kiosk-add-tenant-btn-desktop, so the pill is not clickable in the browser. Only visible/clickable on mobile viewport (<=640px) where the KioskBar is laid out differently. Since the APK uses a tablet-sized webview this may be fine in production, but it is a dead button in the admin desktop/tablet landscape view.", "selector": "[data-testid='kiosk-ktp-pair-btn']", "priority": "LOW"},
+      {"component": "KtpPairPill (KioskLiveStatus.jsx)", "issue": "After auto-pair via ensurePrinterRegistered() (fix C, UA auto-detect) the pill does NOT re-hide in the same page session: its state is initialized once from isPairedPrinter() at mount and never re-reads localStorage. In my Playwright test, after a successful auto-register (ktp_device_token present) the pill was still visible until next page reload. Minor cosmetic.", "selector": "[data-testid='kiosk-ktp-pair-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter82_device_diagnostics.py",
+    "/app/test_reports/pytest/iter82.xml"
+  ],
+  "action_items": [
+    "(Optional UI polish) Raise KtpPairPill z-index above KioskBar (z-50) or reposition (e.g. top-2 left-2) so it is reachable on desktop admin kiosk, not only on mobile APK.",
+    "(Optional UI polish) After successful auto-register in ensurePrinterRegistered(), dispatch an event (e.g. 'kiosk-ktp-paired') and have KtpPairPill subscribe to re-check isPairedPrinter() so the pill hides without a reload."
+  ],
+  "critical_code_review_comments": [
+    "_record_device_seen key = sha1(ua|role|name) — if two different browsers share the same role+name and have identical ua (unlikely but possible on same build), they collapse to one row. Acceptable for diagnostic purposes.",
+    "GET /api/settings/kiosk-devices-seen enforces 'since = now - 7 days' via string compare on ISO timestamp — works because ISO 8601 UTC strings sort lexicographically; just make sure iso() always emits Z-suffixed UTC.",
+    "isKtpDevice() in ktp-printer.js now requires apkBridge() AND (KTP flag OR KT UA OR paired token). This correctly keeps a browser without bridge from auto-registering even if the UA somehow matched. Good.",
+    "ensurePrinterRegistered() swallows errors on register; the 401 path leaves the kiosk silently un-paired. For diagnostics the deviceInfo() still gets reported via WS hello, so admin can see 'KT-V520 herkend' but 'Gekoppeld=false' → operator knows to click the manual pill. OK."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter82_device_diagnostics.py"],
+  "success_rate": {"backend": "100% (6/6 iter82 pytest + 5/5 iter81 ktp still green)", "frontend": "100% on functional flows (empty-state render, pill visibility toggle, pair click → register, UA auto-detect). 2 minor cosmetic UI issues reported but non-blocking."},
+  "test_credentials": "admin: demo@surirent.sr/demo1234; kiosk/admin tokens minted via server.create_token({...type kiosk/access ...},60) with CID=demo-company-fixed-uuid-00000000000.",
+  "seed_data_creation": "Created ephemeral kiosk_devices_seen rows + 5 KT-V520 printers (3 TEST_, 2 auto-generated 'KT-V520 #N') during tests. All cleaned at module teardown via admin DELETE /api/settings/kiosk-printers/{id} AND direct motor delete_many on kiosk_devices_seen for TEST_/'KT-V520 #' names. Final db.kiosk_printers for CID == [], kiosk_devices_seen contains only real demo-session artefacts (if any).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pair-pill is at fixed left-2 bottom-2 z-40 — it is physically covered by kiosk-add-tenant-btn-desktop on >=lg viewports. If retesting the click path via Playwright, use page.evaluate('document.querySelector(...).click()') or switch to mobile viewport, otherwise force=True click will hit the Huurder button underneath. Dialog handling: install `page.on('dialog', lambda d: asyncio.ensure_future(d.accept()))` BEFORE the click; alternatively override window.confirm/alert via add_init_script. Backend admin WS auth format: {type:'auth', role:'admin', token:<kiosk_jwt>, admin_token:<access_jwt>, device:{...}} — kiosk token is still required even for admin role (see _ws_company). Device-seen upsert key = sha1(ua|role|name).",
+  "rca of the issue": "None — all required feature paths (A/B/C) work end-to-end. Two cosmetic UI items reported (desktop z-order of pill + stale pill after auto-pair) are non-blocking."
+}

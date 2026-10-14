@@ -41,3 +41,9 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 3. Daarna houdt de web-app zelf een WebSocket open (role "printer"), ook op het loginscherm. Bij een opdracht van de beheerder stuurt de web-app naar de APK:
    `{ type:"PRINT_RECEIPT", printer:"kt-v520", lines:[...], remote:true, job_id:"..." }` → APK print `lines` direct via KTPsdk, zonder dialoog.
 4. Beheer: Instellingen → Kiosk apparaten → Gekoppelde KT-V520 toestellen (hernoemen / ontkoppelen).
+
+## Herkenning & diagnose (update)
+- KT-V520 wordt herkend als: APK-brug aanwezig (window.ReactNativeWebView.postMessage, of window.Android.print / window.Android.postMessage) EN (window.__SURIRENT_KTP__ === true OF user-agent bevat KT-V520/KTV520/KingTop OF al gekoppeld).
+- Handmatig: knop "Koppel dit toestel als KT-V520" linksboven op de beheerder-kiosk (alleen zichtbaar met APK-brug).
+- Diagnose: Instellingen → Kiosk apparaten → "Kiosk-toestellen (diagnose)" toont user-agent + vlaggen per toestel.
+- Gewone Android-WebView: implementeer `@JavascriptInterface fun print(json: String)` op object "Android" — ontvangt hetzelfde PRINT_RECEIPT JSON.
