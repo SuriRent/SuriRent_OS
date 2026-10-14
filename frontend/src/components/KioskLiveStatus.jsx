@@ -2,6 +2,7 @@ import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { Printer } from 'lucide-react';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
+import { KioskChat } from './KioskChat';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
 import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 import { apkBridge } from '../lib/kiosk-print';
@@ -47,6 +48,7 @@ function KioskLiveStatusInner({ isAdmin }) {
     const elabel = s.connected ? 'Bonnen van vandaag' : 'Geen verbinding';
     return (
       <>
+        <KioskChat role="employee" />
         <button type="button" onClick={() => setKioskOverlayOpen(true)} title={elabel} aria-label={elabel}
           data-testid="kiosk-employee-receipts-dot" data-active={s.connected ? 'true' : 'false'}
           className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>
@@ -62,6 +64,7 @@ function KioskLiveStatusInner({ isAdmin }) {
   return (
     <>
       <KtpPairPill />
+      <KioskChat role="admin" />
       <button type="button" onClick={() => setKioskOverlayOpen(true)} title={label} aria-label={label}
         data-testid="kiosk-presence-dot" data-active={s.active ? 'true' : 'false'}
         className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>

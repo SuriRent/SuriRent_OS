@@ -10201,6 +10201,8 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
             ev = await queue.get()
             if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE"):
                 await ws.send_json(ev)
+            elif ev.get("type") in ("chat", "chat_read") and ev.get("emp_key") == emp_key:
+                await ws.send_json(ev)
 
     fwd = asyncio.create_task(forward_config())
     try:
@@ -10213,6 +10215,12 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
                 break
             if kind == "ping":
                 await db.kiosk_presence.update_one({"conn_id": conn_id}, {"$set": {"last_seen": time.time()}})
+            elif kind == "chat_send":
+                await _chat_send(cid, emp_key, name, "employee", name, msg.get("text"), msg.get("client_id"))
+            elif kind == "chat_history":
+                await ws.send_json({"type": "chat_history", "emp_key": emp_key, "messages": await _chat_today(cid, emp_key)})
+            elif kind == "chat_read":
+                await _chat_mark_read(cid, emp_key, "employee")
             elif kind == "PRINT_RECEIPT" and msg.get("payment_id"):
                 pid = str(msg["payment_id"])
                 if await db.payments.find_one({"id": pid, "company_id": cid}, {"_id": 1}):
@@ -10438,6 +10446,71 @@ async def kiosk_remote_print(payment_id: str, body: RemotePrintIn, _session=Depe
     return {"job_id": job_id}
 
 
+# ---------- Kiosk-chat: privégesprek beheer ↔ medewerker, alleen vandaag ----------
+_SR_TZ = timezone(timedelta(hours=-3))
+
+
+def _today_start_iso() -> str:
+    d = datetime.now(_SR_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    return iso(d.astimezone(timezone.utc))
+
+
+def _chat_public(m: dict) -> dict:
+    return {k: m.get(k) for k in ("id", "client_id", "emp_key", "emp_name", "sender", "sender_name", "text",
+                                  "created_at", "read_by_admin", "read_by_emp")}
+
+
+async def _chat_today(cid: str, emp_key: str) -> list:
+    docs = await db.kiosk_chat.find({"company_id": cid, "emp_key": emp_key, "created_at": {"$gte": _today_start_iso()}},
+                                    {"_id": 0}).sort("created_at", 1).to_list(500)
+    return [_chat_public(d) for d in docs]
+
+
+async def _chat_threads(cid: str) -> list:
+    pipe = [
+        {"$match": {"company_id": cid, "created_at": {"$gte": _today_start_iso()}}},
+        {"$sort": {"created_at": 1}},
+        {"$group": {"_id": "$emp_key", "emp_name": {"$last": "$emp_name"}, "last_text": {"$last": "$text"},
+                    "last_at": {"$last": "$created_at"},
+                    "unread": {"$sum": {"$cond": [{"$and": [{"$eq": ["$sender", "employee"]}, {"$ne": ["$read_by_admin", True]}]}, 1, 0]}}}},
+        {"$sort": {"last_at": -1}},
+    ]
+    out = []
+    async for g in db.kiosk_chat.aggregate(pipe):
+        out.append({"emp_key": g["_id"], "emp_name": g.get("emp_name") or "Medewerker", "last_text": g.get("last_text"),
+                    "last_at": g.get("last_at"), "unread": g.get("unread", 0)})
+    return out
+
+
+async def _chat_send(cid: str, emp_key: str, emp_name: str, sender: str, sender_name: str, text, client_id=None):
+    text = str(text or "").strip()[:1000]
+    if not text:
+        return
+    if not emp_name:
+        prev = await db.kiosk_chat.find_one({"company_id": cid, "emp_key": emp_key, "sender": "employee"},
+                                            {"_id": 0, "emp_name": 1}, sort=[("created_at", -1)])
+        emp_name = (prev or {}).get("emp_name") or "Medewerker"
+    m = {"id": str(uuid.uuid4()), "client_id": str(client_id or "")[:64] or None, "company_id": cid,
+         "emp_key": emp_key, "emp_name": emp_name, "sender": sender, "sender_name": sender_name, "text": text,
+         "created_at": iso(now_utc()), "read_by_admin": sender == "admin", "read_by_emp": sender == "employee"}
+    await db.kiosk_chat.insert_one(dict(m))
+    # Alleen vandaag bewaren: oudere berichten opruimen.
+    await db.kiosk_chat.delete_many({"company_id": cid, "created_at": {"$lt": _today_start_iso()}})
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "chat", "emp_key": emp_key, "message": _chat_public(m)})
+    if sender == "employee":
+        asyncio.create_task(_notify_company_admins(
+            cid, f"Kiosk-chat · {emp_name}", text[:140], {"kind": "kiosk_chat", "url": "/kiosk", "emp_key": emp_key}))
+
+
+async def _chat_mark_read(cid: str, emp_key: str, reader: str):
+    field = "read_by_admin" if reader == "admin" else "read_by_emp"
+    other = "employee" if reader == "admin" else "admin"
+    res = await db.kiosk_chat.update_many({"company_id": cid, "emp_key": emp_key, "sender": other, field: {"$ne": True}},
+                                          {"$set": {field: True}})
+    if res.modified_count:
+        await _kb_publish(_kiosk_admin_channel(cid), {"type": "chat_read", "emp_key": emp_key, "reader": reader})
+
+
 async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
     queue = _kb_subscribe(channel, maxsize=64)
     last = {"emps": None}
@@ -10459,12 +10532,26 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "chat", "chat_read"):
                 await ws.send_json(ev)
 
     async def receive():
         while True:
-            await ws.receive_text()  # pings; disconnect beëindigt de loop
+            try:
+                msg = json.loads(await ws.receive_text())
+            except ValueError:
+                continue
+            kind = msg.get("type") if isinstance(msg, dict) else None
+            ek = str(msg.get("emp_key") or "")[:80] if isinstance(msg, dict) else ""
+            if kind == "chat_threads":
+                await ws.send_json({"type": "chat_threads", "threads": await _chat_threads(cid)})
+            elif kind == "chat_history" and ek:
+                await ws.send_json({"type": "chat_history", "emp_key": ek, "messages": await _chat_today(cid, ek)})
+            elif kind == "chat_send" and ek:
+                emp_name = str(msg.get("emp_name") or "")[:60]
+                await _chat_send(cid, ek, emp_name, "admin", "Beheer", msg.get("text"), msg.get("client_id"))
+            elif kind == "chat_read" and ek:
+                await _chat_mark_read(cid, ek, "admin")
 
     try:
         await ws.send_json(await _kiosk_device_config(cid))
