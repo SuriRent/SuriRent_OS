@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -21,7 +21,6 @@ import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge } from '../../lib/kiosk-print';
 import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLiveStatus';
-import { subscribeChat, getChatState, totalUnread } from '../../lib/kiosk-chat';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { printerMode } from '../../lib/bt-printer';
@@ -4740,7 +4739,6 @@ export default function KioskLayout() {
   // geen banner. Payments gaan direct als "approved" (backend accepteert
   // ontbrekende employee_id/employee_pin en houdt status=approved).
 
-  const chatUnread = totalUnread(useSyncExternalStore(subscribeChat, getChatState));
   // Service-worker update mag de kiosk alleen op het startscherm herladen.
   useEffect(() => {
     window.__kioskSafeToReload = step === 'select' && !apartment;
@@ -4887,10 +4885,6 @@ export default function KioskLayout() {
           style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
         >
           <Plus className="w-7 h-7" strokeWidth={2.8} />
-          {chatUnread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 ring-2 ring-white text-white text-[11px] font-black flex items-center justify-center"
-              data-testid="kiosk-mobile-fab-chat-unread">{chatUnread}</span>
-          )}
         </button>
       ), document.body)}
 

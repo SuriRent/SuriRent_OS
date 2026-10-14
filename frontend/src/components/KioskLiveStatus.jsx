@@ -1,17 +1,15 @@
 import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Bluetooth, MessageCircle, Printer, Receipt, X } from 'lucide-react';
+import { Bluetooth, Printer, Receipt, X } from 'lucide-react';
 import { BtPrinterCard } from './BtPrinterCard';
 import { getSavedPrinter } from '../lib/bt-printer';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
-import { KioskChat } from './KioskChat';
-import { subscribeChat, getChatState, totalUnread, openChat, installKioskChat } from '../lib/kiosk-chat';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
 import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 import { apkBridge } from '../lib/kiosk-print';
 
-// Eén nette werkbalk rechtsboven: [printer] [chat] [status-bolletje].
+// Eén nette werkbalk rechtsboven: [printer] [status-bolletje].
 const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors';
 
 function Toolbar({ children }) {
@@ -73,13 +71,12 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
     : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" label={s.connected ? 'Bonnen van vandaag' : 'Geen verbinding'} />;
   return (
     <>
-      {onHome ? (
+      {onHome && (
         <Toolbar>
           {isAdmin && <KtpPairPill />}
-          <KioskChat role={isAdmin ? 'admin' : 'employee'} visible inline />
           {dot}
         </Toolbar>
-      ) : <KioskChat role={isAdmin ? 'admin' : 'employee'} visible={false} />}
+      )}
       {s.overlayOpen && (
         <KioskPrintsOverlay employees={isAdmin ? s.employees : []} printsVersion={s.printsVersion} employeeMode={!isAdmin}
           onClose={() => setKioskOverlayOpen(false)} />
@@ -90,7 +87,7 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
 
 export const KioskLiveStatus = memo(KioskLiveStatusInner);
 
-// Mobiel: chat, Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
+// Mobiel: Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
 function BtPrinterDialog({ onClose }) {
   return createPortal((
     <div className="fixed inset-0 z-[130] bg-black/50 flex items-end sm:items-center justify-center p-3" onClick={onClose} data-testid="kiosk-bt-dialog">
@@ -106,9 +103,7 @@ function BtPrinterDialog({ onClose }) {
 }
 
 export function KioskSheetLiveActions({ isAdmin, onClose }) {
-  useEffect(() => { installKioskChat(isAdmin ? 'admin' : 'employee'); }, [isAdmin]);
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
-  const unread = totalUnread(useSyncExternalStore(subscribeChat, getChatState));
   const [paired, setPaired] = useState(isPairedPrinter);
   const on = isAdmin ? s.active : s.connected;
   const pill = 'relative h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition';
@@ -120,13 +115,9 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
   const showPair = isAdmin && !!apkBridge() && !paired;
   const [btOpen, setBtOpen] = useState(false);
   const showBt = (s.printer ?? localStorage.getItem('kiosk_printer')) === 'bluetooth';
-  const cols = 2 + (showPair ? 1 : 0) + (showBt ? 1 : 0);
+  const cols = 1 + (showPair ? 1 : 0) + (showBt ? 1 : 0);
   return (
-    <div className={`mt-3 grid gap-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} data-testid="kiosk-sheet-live-actions">
-      <button onClick={() => { onClose(); openChat(true); }} data-testid="kiosk-sheet-chat" className={pill}>
-        <MessageCircle className="w-4 h-4" strokeWidth={2.5} /> Chat
-        {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-black flex items-center justify-center" data-testid="kiosk-sheet-chat-unread">{unread}</span>}
-      </button>
+    <div className={`mt-3 grid gap-2 ${cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} data-testid="kiosk-sheet-live-actions">
       <button onClick={() => { onClose(); setKioskOverlayOpen(true); }} data-testid="kiosk-sheet-receipts" className={pill}>
         <span className={`w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'bg-slate-300'}`} />
         <Receipt className="w-4 h-4" strokeWidth={2.5} /> Bonnen
