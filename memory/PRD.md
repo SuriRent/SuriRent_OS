@@ -791,3 +791,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Kiosk-chat: beheerder kan bonnen van vandaag sturen (bonkaart → viewer met Afdruk/Print via KT-V520); chat-icoon wit; chat-icoon en groen bolletje alleen op eerste kioskpagina (step select), elders pill "Nieuw bericht".
 - 2026-06: Kiosk-sessie verloopt nooit: kiosk JWT zonder exp-check (REST + WS), 401-interceptor wist kiosk_token alleen bij echt ongeldige sessie (niet bij foute PIN), service-worker update herlaadt kiosk alleen op startscherm (window.__kioskSafeToReload).
 - 2026-06: Kiosk-werkbalk rechtsboven (glas-pill): KT-V520 koppelen, chat, status-bolletje netjes samen; "Trage verbinding"-melding verplaatst naar onderkant.
+- 2026-06: Mobiel: Chat, Bonnen (groen bolletje) en KT-V520-koppelen verplaatst naar het "+ Snel toevoegen" menu (KioskSheetLiveActions); werkbalk rechtsboven alleen nog op desktop; rood ongelezen-getal op de + knop.

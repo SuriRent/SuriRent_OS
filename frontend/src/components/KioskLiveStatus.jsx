@@ -1,8 +1,9 @@
 import { memo, useEffect, useState, useSyncExternalStore } from 'react';
-import { Printer } from 'lucide-react';
+import { MessageCircle, Printer, Receipt } from 'lucide-react';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { KioskChat } from './KioskChat';
+import { subscribeChat, getChatState, totalUnread, openChat, installKioskChat } from '../lib/kiosk-chat';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
 import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 import { apkBridge } from '../lib/kiosk-print';
@@ -12,7 +13,7 @@ const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white ho
 
 function Toolbar({ children }) {
   return (
-    <div className="fixed z-40 right-2 flex items-center gap-0.5 h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 shadow-lg"
+    <div className="hidden md:flex fixed z-40 right-2 items-center gap-0.5 h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 shadow-lg"
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }} data-testid="kiosk-toolbar">
       {children}
     </div>
@@ -85,3 +86,36 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
 }
 
 export const KioskLiveStatus = memo(KioskLiveStatusInner);
+
+// Mobiel: chat, Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
+export function KioskSheetLiveActions({ isAdmin, onClose }) {
+  useEffect(() => { installKioskChat(isAdmin ? 'admin' : 'employee'); }, [isAdmin]);
+  const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const unread = totalUnread(useSyncExternalStore(subscribeChat, getChatState));
+  const [paired, setPaired] = useState(isPairedPrinter);
+  const on = isAdmin ? s.active : s.connected;
+  const pill = 'relative h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition';
+  const pair = async () => {
+    if (!window.confirm('Dit toestel koppelen als KT-V520 printer? Het print daarna bonnen die de beheerder op afstand stuurt, ook als niemand is ingelogd.')) return;
+    try { const d = await pairThisDevice(); window.alert(`Gekoppeld als ${d.name}`); setPaired(true); }
+    catch (e) { window.alert(e?.response?.data?.detail || e?.message || 'Koppelen mislukt'); }
+  };
+  const showPair = isAdmin && !!apkBridge() && !paired;
+  return (
+    <div className={`mt-3 grid gap-2 ${showPair ? 'grid-cols-3' : 'grid-cols-2'}`} data-testid="kiosk-sheet-live-actions">
+      <button onClick={() => { onClose(); openChat(true); }} data-testid="kiosk-sheet-chat" className={pill}>
+        <MessageCircle className="w-4 h-4" strokeWidth={2.5} /> Chat
+        {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-black flex items-center justify-center" data-testid="kiosk-sheet-chat-unread">{unread}</span>}
+      </button>
+      <button onClick={() => { onClose(); setKioskOverlayOpen(true); }} data-testid="kiosk-sheet-receipts" className={pill}>
+        <span className={`w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'bg-slate-300'}`} />
+        <Receipt className="w-4 h-4" strokeWidth={2.5} /> Bonnen
+      </button>
+      {showPair && (
+        <button onClick={pair} data-testid="kiosk-sheet-ktp-pair" className={pill} aria-label="Koppel dit toestel als KT-V520">
+          <Printer className="w-4 h-4" strokeWidth={2.5} /> KT-V520
+        </button>
+      )}
+    </div>
+  );
+}
