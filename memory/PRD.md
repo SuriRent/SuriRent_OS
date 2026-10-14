@@ -786,3 +786,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Bedankscherm kiosk: past zonder scrollen (FittedReceiptPreview schaalt bon), bon gecentreerd, printergeluid verwijderd, geen auto-printvenster op iPhone/Android, knoppen "Print via KT-V520" + "Afdruk" naast elkaar.
 - 2026-06: Bedankscherm: nooit automatisch printvenster (auto-print verwijderd; APK auto-print alleen op KT-V520), auto-terug 20s, bon-animatie trager (3.5s).
 - 2026-06: Koppelknop KT-V520 op beheerder-kiosk is nu alleen een printer-icoon (tooltip).
+- 2026-06: Medewerker-kiosk: groen bolletje rechtsboven → Bonnen van vandaag (employeeMode: geen goedkeuren/verwijderen; Print via KT-V520 + Afdrukken).
