@@ -27,6 +27,7 @@ import { isKtpDevice } from '../../lib/ktp-printer';
 import { printerMode } from '../../lib/bt-printer';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
+import { PrintChoiceMenu } from '../../components/PrintChoiceMenu';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
 
@@ -1312,15 +1313,9 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                       : <MessageCircle className="w-3 h-3" />}
                     WhatsApp
                   </button>
-                  <button data-testid={`history-print-${p.id}`}
-                    onClick={() => handlePrint(p.id)}
-                    disabled={!!busy[p.id]}
-                    className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
-                    {busy[p.id] === 'print'
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Printer className="w-3 h-3" />}
-                    Afdruk
-                  </button>
+                  <PrintChoiceMenu paymentId={p.id} disabled={busy[p.id] === 'print'}
+                    onLocal={() => handlePrint(p.id)}
+                    onStatus={(st) => setWaState((prev) => ({ ...prev, [p.id]: st }))} />
                 </div>
                 {waState[p.id] && (
                   <p data-testid={`history-print-status-${p.id}`}
