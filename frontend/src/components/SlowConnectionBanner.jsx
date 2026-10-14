@@ -45,7 +45,7 @@ export function SlowConnectionBanner() {
   return (
     <div data-testid="slow-connection-banner" role="status" aria-live="polite"
       className="fixed left-1/2 -translate-x-1/2 z-[2147482000] pointer-events-none flex items-center gap-2 bg-amber-400 text-amber-950 font-bold text-xs px-4 py-2 rounded-full shadow-[0_10px_25px_-8px_rgba(245,158,11,0.7)] animate-fade-in"
-      style={{ top: 'max(calc(env(safe-area-inset-top) + 10px), 14px)', fontFamily: "'Outfit', system-ui, sans-serif" }}>
+      style={{ bottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)', fontFamily: "'Outfit', system-ui, sans-serif" }}>
       <Signal className="w-4 h-4" strokeWidth={2.6} /> Trage verbinding
     </div>
   );

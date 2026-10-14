@@ -117,7 +117,7 @@ function ChatPanel({ role, chat, employees }) {
 }
 
 // Chat-icoon op de kiosk (naast het groene bolletje) voor medewerker en beheerder.
-export function KioskChat({ role, visible = true }) {
+export function KioskChat({ role, visible = true, inline = false }) {
   useEffect(() => { installKioskChat(role); }, [role]);
   const chat = useSyncExternalStore(subscribeChat, getChatState);
   const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
@@ -132,7 +132,9 @@ export function KioskChat({ role, visible = true }) {
         </button>
       )}
       {visible && <button type="button" onClick={() => openChat(!chat.open)} aria-label="Chat" title="Chat"
-        data-testid="kiosk-chat-btn" className="fixed z-40 p-1" style={{ top: 'env(safe-area-inset-top, 0px)', right: 26 }}>
+        data-testid="kiosk-chat-btn"
+        className={inline ? 'w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/15 transition-colors' : 'fixed z-40 p-1'}
+        style={inline ? undefined : { top: 'env(safe-area-inset-top, 0px)', right: 26 }}>
         <span className="relative block">
           <MessageCircle className="w-5 h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" />
           {unread > 0 && (
