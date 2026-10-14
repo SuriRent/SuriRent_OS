@@ -33,7 +33,7 @@ function EmployeePicker({ employees, activeKeys, onPick }) {
   );
 }
 
-function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy }) {
+function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, employeeMode }) {
   const p = log.payment;
   const done = !!log.admin_printed_at;
   const pending = p.status === 'pending_approval';
@@ -57,19 +57,19 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy }
         <span className="font-black text-slate-900 whitespace-nowrap text-sm sm:text-base">{fmtMoney(p.amount, p.currency)}</span>
       </div>
       <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:shrink-0">
-        {pending && (
+        {pending && !employeeMode && (
           <button onClick={() => onApprove(log)} data-testid={`kiosk-print-log-approve-${log.id}`}
             className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-colors">
             <CheckCircle2 className="w-4 h-4 shrink-0" /> Goedkeuren
           </button>
         )}
-        {done && (
+        {done && !employeeMode && (
           <button onClick={() => onRemove(log)} disabled={busy} data-testid={`kiosk-print-log-remove-${log.id}`} title="Uit de lijst verwijderen"
             className="h-10 w-10 shrink-0 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-50 flex items-center justify-center disabled:opacity-60 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         )}
-        <KtpPrintButton log={log} onPrinted={onRemotePrinted} />
+        <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />
         <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
           className={`flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
           {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Afdrukken'}
@@ -79,7 +79,7 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy }
   );
 }
 
-export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }) {
+export function KioskPrintsOverlay({ employees: active, printsVersion, onClose, employeeMode = false }) {
   const [picked, setPicked] = useState(null);
   const [todayEmps, setTodayEmps] = useState([]);
   const [logs, setLogs] = useState(null);
@@ -150,7 +150,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
             {emp ? <><OnlineDot online={activeKeys.has(emp.key)} />{emp.name}<span className="text-xs font-bold text-white/50">{activeKeys.has(emp.key) ? 'online' : 'offline'}</span></> : 'Kies een medewerker'}
           </p>
         </div>
-        {emp && pendingLogs.length > 1 && (
+        {emp && !employeeMode && pendingLogs.length > 1 && (
           <button onClick={() => setBulkOpen(true)} data-testid="kiosk-prints-approve-all"
             className="order-last sm:order-none w-full sm:w-auto h-11 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
             <CheckCircle2 className="w-4 h-4" /> Alles goedkeuren ({pendingLogs.length})
@@ -165,7 +165,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose }
         {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
-        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} onRemotePrinted={load} busy={busyId === l.id} />)}
+        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} onRemotePrinted={load} busy={busyId === l.id} employeeMode={employeeMode} />)}
       </div>
       {bulkOpen && (
         <KioskBulkApproveSheet logs={pendingLogs} employeeName={emp?.name || ''}

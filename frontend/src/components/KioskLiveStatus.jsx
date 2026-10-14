@@ -42,7 +42,22 @@ function KioskLiveStatusInner({ isAdmin }) {
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   useApprovalNotifySync({ enabled: isAdmin });
 
-  if (!isAdmin) return null;
+  if (!isAdmin) {
+    // Medewerker: groen bolletje → Bonnen van vandaag (printen via KT-V520, geen goedkeuren/verwijderen).
+    const elabel = s.connected ? 'Bonnen van vandaag' : 'Geen verbinding';
+    return (
+      <>
+        <button type="button" onClick={() => setKioskOverlayOpen(true)} title={elabel} aria-label={elabel}
+          data-testid="kiosk-employee-receipts-dot" data-active={s.connected ? 'true' : 'false'}
+          className="fixed z-40 p-1.5" style={{ top: 'env(safe-area-inset-top, 0px)', right: 0 }}>
+          <span className={`block w-3 h-3 rounded-full ring-2 ring-white/80 transition-colors duration-300 ${s.connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' : 'bg-slate-400'}`} />
+        </button>
+        {s.overlayOpen && (
+          <KioskPrintsOverlay employees={[]} printsVersion={s.printsVersion} employeeMode onClose={() => setKioskOverlayOpen(false)} />
+        )}
+      </>
+    );
+  }
   const label = s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief';
   return (
     <>
