@@ -785,3 +785,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Na kioskbetaling: fix "Kwitantie niet gevonden" bij alleen-termijn betalingen (installment pay retourneert payment); bon-preview schuift recht van onder naar boven + scrollbaar; knop "Print via KT-V520" op het bonscherm voor niet-KT toestellen (GET /api/kiosk/printers/online, REMOTE_PRINT_DONE ook naar medewerker-WS).
 - 2026-06: Bedankscherm kiosk: past zonder scrollen (FittedReceiptPreview schaalt bon), bon gecentreerd, printergeluid verwijderd, geen auto-printvenster op iPhone/Android, knoppen "Print via KT-V520" + "Afdruk" naast elkaar.
 - 2026-06: Bedankscherm: nooit automatisch printvenster (auto-print verwijderd; APK auto-print alleen op KT-V520), auto-terug 20s, bon-animatie trager (3.5s).
+- 2026-06: Koppelknop KT-V520 op beheerder-kiosk is nu alleen een printer-icoon (tooltip).

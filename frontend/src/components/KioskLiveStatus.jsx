@@ -23,9 +23,10 @@ function KtpPairPill() {
   };
   return (
     <button type="button" onClick={pair} disabled={state === 'busy'} data-testid="kiosk-ktp-pair-btn"
-      className="fixed z-[60] left-2 h-8 px-3 rounded-full bg-slate-900/85 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur disabled:opacity-60"
+      title="Koppel dit toestel als KT-V520" aria-label="Koppel dit toestel als KT-V520"
+      className="fixed z-[60] left-2 h-9 w-9 rounded-full bg-slate-900/85 text-white flex items-center justify-center backdrop-blur disabled:opacity-60"
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 6px)' }}>
-      <Printer className="w-3.5 h-3.5" /> {state === 'busy' ? 'Koppelen…' : 'Koppel dit toestel als KT-V520'}
+      <Printer className={`w-4 h-4 ${state === 'busy' ? 'animate-pulse' : ''}`} />
     </button>
   );
 }
