@@ -788,3 +788,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Koppelknop KT-V520 op beheerder-kiosk is nu alleen een printer-icoon (tooltip).
 - 2026-06: Medewerker-kiosk: groen bolletje rechtsboven → Bonnen van vandaag (employeeMode: geen goedkeuren/verwijderen; Print via KT-V520 + Afdrukken).
 - 2026-06: Kiosk-chat: privégesprekken beheer ↔ medewerker via /api/kiosk/ws (chat_send/chat_history/chat_threads/chat_read), alleen vandaag bewaard (kiosk_chat), pushmelding naar beheerders bij medewerker-bericht, chat-icoon met ongelezen-teller naast groen bolletje.
+- 2026-06: Kiosk-chat: beheerder kan bonnen van vandaag sturen (bonkaart → viewer met Afdruk/Print via KT-V520); chat-icoon wit; chat-icoon en groen bolletje alleen op eerste kioskpagina (step select), elders pill "Nieuw bericht".
