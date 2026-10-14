@@ -38,9 +38,12 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
   const done = !!log.admin_printed_at;
   const pending = p.status === 'pending_approval';
   return (
-    <div className={`rounded-2xl p-3 sm:px-4 sm:py-3 shadow flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${done ? 'bg-emerald-50' : 'bg-white'}`} data-testid={`kiosk-print-log-${log.id}`}>
-      <div className="flex items-start gap-3 flex-1 min-w-0">
-        <Receipt className="w-5 h-5 text-[#FF5C00] shrink-0 mt-0.5" />
+    <div className={`rounded-2xl p-3 sm:px-4 sm:py-3 shadow md:shadow-none md:rounded-xl md:px-2 md:py-2.5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${done ? 'bg-emerald-50' : 'bg-white'}`} data-testid={`kiosk-print-log-${log.id}`}>
+      <div className="flex items-start md:items-center gap-3 flex-1 min-w-0">
+        <span className={`hidden md:flex w-7 h-7 rounded-lg items-center justify-center shrink-0 ${done ? 'bg-emerald-100 text-emerald-600' : pending ? 'bg-amber-50 text-amber-500' : 'bg-orange-100 text-orange-500'}`}>
+          <Receipt className="w-3.5 h-3.5" />
+        </span>
+        <Receipt className="md:hidden w-5 h-5 text-[#FF5C00] shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-900 text-sm sm:text-base break-words">{p.tenant_name || 'Huurder'}</p>
           <p className="text-xs text-slate-400 font-medium break-all">{p.receipt_number}</p>
@@ -160,12 +163,27 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose, 
           <X className="w-5 h-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-3 sm:px-5 pb-6 space-y-3">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-5 pb-6 space-y-3 md:space-y-0">
         {!emp && employees.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-empty">Vandaag nog geen bonnen van kiosk-medewerkers.</p>}
         {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
-        {emp && logs?.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} onRemotePrinted={load} busy={busyId === l.id} employeeMode={employeeMode} />)}
+        {emp && logs?.length > 0 && (
+          // Desktop: één witte kaart zoals "Financieel overzicht"; mobiel: losse kaarten.
+          <div className="space-y-3 md:space-y-0 md:bg-white md:rounded-2xl md:p-5 md:max-w-5xl md:mx-auto md:w-full" data-testid="kiosk-prints-card">
+            <div className="hidden md:flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-slate-900">Bonnen van vandaag</h3>
+              <span className="text-xs font-bold text-slate-400">{logs.length} bon{logs.length === 1 ? '' : 'nen'}</span>
+            </div>
+            <div className="space-y-3 md:space-y-1 md:divide-y md:divide-slate-100">
+              {logs.map((l) => <ReceiptRow key={l.id} log={l} onPrint={onPrint} onApprove={setApproving} onRemove={onRemove} onRemotePrinted={load} busy={busyId === l.id} employeeMode={employeeMode} />)}
+            </div>
+            <div className="hidden md:flex items-center justify-between border-t-2 border-slate-200 mt-2 pt-3" data-testid="kiosk-prints-total">
+              <p className="font-bold text-slate-900">Totaal vandaag</p>
+              <p className="text-xl font-extrabold text-slate-900">{fmtMoney(logs.reduce((n, l) => n + Number(l.payment.amount || 0), 0), logs[0]?.payment.currency || 'SRD')}</p>
+            </div>
+          </div>
+        )}
       </div>
       {bulkOpen && (
         <KioskBulkApproveSheet logs={pendingLogs} employeeName={emp?.name || ''}
