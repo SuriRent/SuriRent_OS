@@ -1,0 +1,37 @@
+{
+  "summary": "Iter91 verifies the kiosk WS backend after removal of the chat functions and the startup drop of kiosk_chat. Added /app/backend/tests/test_iter91_kiosk_ws_no_chat.py (5 tests, 5 passing): (1) kiosk_chat collection no longer exists, (2) employee WS auth+device_config+ping+legacy chat_send/chat_history silently ignored, (3) admin WS receives device_config+presence with employees/printers and survives garbage/non-JSON messages, presence_changed on emp connect/BYE, (4) PRINT_RECEIPT from employee creates kiosk_print_log and reaches admin, (5) remote print flow: printer WS + POST /api/kiosk/print-log/by-payment/{id}/remote-print -> REMOTE_PRINT to printer, REMOTE_PRINT_DONE forwarded to admin. Frontend smoke: admin logged in demo@surirent.sr, Open Kiosk opens /my-awesome-rentals-bv/kiosk; testids present are kiosk-root, kiosk-toolbar, kiosk-presence-dot, locations, kiosk-mobile-fab, kiosk-bottom-bar, kiosk-footer-company, kiosk-add-*-btn-desktop, kiosk-payments-viewer-btn-desktop, kiosk-admin-btn-desktop, kiosk-kasgeld-btn-desktop, kiosk-lock-btn-desktop — NO chat testids anywhere. Only console error is one benign 401 from an unauth probe during initial load.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_scenarios": {
+    "mongo_kiosk_chat_dropped_on_startup": true,
+    "employee_ws_auth_device_config_ping_bye": true,
+    "employee_ws_ignores_chat_send_and_chat_history": true,
+    "admin_ws_device_config_and_presence_with_printers": true,
+    "admin_ws_survives_garbage_and_non_json": true,
+    "admin_ws_receives_presence_changed_on_emp_connect_and_bye": true,
+    "print_receipt_logs_to_kiosk_print_log_and_reaches_admin": true,
+    "remote_print_end_to_end_printer_role_rest_and_done_forwarded": true,
+    "admin_kiosk_frontend_loads_no_chat_testids": true,
+    "no_blocking_console_errors": true
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter91_kiosk_ws_no_chat.py",
+    "/app/test_reports/pytest/iter91.xml",
+    "/app/test_reports/screenshots/iter91_admin_kiosk.jpeg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py startup drops kiosk_chat (idempotent, wrapped in try/except) — clean.",
+    "_kiosk_ws_employee: unknown message kinds (including legacy chat_send/chat_history) fall through silently without closing — matches the Dutch user's intent.",
+    "_kiosk_ws_admin.receive() uses await ws.receive_text() in a bare loop which accepts arbitrary text/binary without reacting — kiosk connection is now lighter as requested.",
+    "Admin WS still requires BOTH a kiosk `token` AND `admin_token` in the hello frame (_ws_company). Frontend already sends both; just worth noting for next test iteration (test uses the kiosk-pin token for admin hello)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter91_kiosk_ws_no_chat.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% smoke (no chat UI, kiosk loads clean)"},
+  "test_credentials": "demo@surirent.sr/demo1234 admin; Anita kiosk PIN 4321 (reseeded via /app/test_reports/setup_iter85.py).",
+  "seed_data_creation": "Ran /app/test_reports/setup_iter85.py which reseeds Anita, creates TEST payment and registers a TEST_Iter85 KT-V520 printer; context written to /tmp/iter85_ctx.json and consumed by test_iter91_kiosk_ws_no_chat.py.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The kiosk-chat removal is now verified end-to-end (DB drop + WS silently ignores legacy chat frames + no chat UI). Reuse /app/test_reports/setup_iter85.py to regenerate /tmp/iter85_ctx.json; then `pytest /app/backend/tests/test_iter91_kiosk_ws_no_chat.py -v`. Admin WS hello requires {role:'admin', token:<kiosk_token>, admin_token:<access_token>}.",
+  "rca of the issue": "N/A — cleanup verification task."
+}

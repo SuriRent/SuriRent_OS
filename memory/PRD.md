@@ -807,3 +807,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Kiosk-chat verwijderd
 - Chat (beheerder ↔ medewerker, bon delen in chat) volledig uit de UI verwijderd (KioskChat.jsx, KioskChatReceipt.jsx, lib/kiosk-chat.js). Backend WS chat-handlers ongebruikt. Getest iteration_90.
+
+## 2026-06 — Chat ook van de server
+- Chat-handlers en helpers uit server.py verwijderd; kiosk_chat collectie wordt bij opstarten gedropt. Getest iteration_91 (5/5).
