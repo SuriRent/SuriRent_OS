@@ -787,3 +787,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Bedankscherm: nooit automatisch printvenster (auto-print verwijderd; APK auto-print alleen op KT-V520), auto-terug 20s, bon-animatie trager (3.5s).
 - 2026-06: Koppelknop KT-V520 op beheerder-kiosk is nu alleen een printer-icoon (tooltip).
 - 2026-06: Medewerker-kiosk: groen bolletje rechtsboven → Bonnen van vandaag (employeeMode: geen goedkeuren/verwijderen; Print via KT-V520 + Afdrukken).
+- 2026-06: Kiosk-chat: privégesprekken beheer ↔ medewerker via /api/kiosk/ws (chat_send/chat_history/chat_threads/chat_read), alleen vandaag bewaard (kiosk_chat), pushmelding naar beheerders bij medewerker-bericht, chat-icoon met ongelezen-teller naast groen bolletje.
