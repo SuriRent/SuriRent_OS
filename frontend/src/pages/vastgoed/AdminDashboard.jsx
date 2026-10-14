@@ -473,6 +473,7 @@ import { installPendingApprovalDingListener } from '../../lib/notify-sound';
 import { useForegroundPendingNotify } from '../../lib/foreground-notify';
 import { useMorningBriefing } from '../../lib/morning-briefing';
 import { useApprovalNotifySync } from '../../lib/approval-notify-sync';
+import { setIosStatusBar } from '../../lib/ios-status-bar';
 
 const BASE_TABS = [
   { id: 'overview', label: 'Overzicht', icon: LayoutDashboard },
@@ -768,7 +769,7 @@ function MobileTopLogo({ user, activeCompany }) {
   const planLabel = user?.role === 'superadmin' ? 'Superadmin' : 'Beheer';
   const planSuffix = activeCompany?.plan ? String(activeCompany.plan).toUpperCase() : 'PRO';
   return (
-    <header className="md:hidden sticky top-0 z-30 bg-[#F7F8FA]/85 backdrop-blur-md"
+    <header className="md:hidden sticky top-0 z-30 bg-[#F7F8FA]"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       data-testid="mobile-top-logo">
       <div className="px-4 md:px-8 py-3 md:py-4 landscape:py-1.5 flex items-center gap-3.5 md:gap-4 landscape:gap-2 max-w-4xl md:mx-auto md:w-full">
@@ -4347,9 +4348,8 @@ export default function AdminDashboard() {
       window.removeEventListener('saas-nav', saasHandler);
     };
   }, [navigate]);
-  // Status-bar kleur wordt centraal beheerd via index.html (meta
-  // theme-color = #FFFFFF). Geen per-mount override meer — dat
-  // veroorzaakte flikkering op Android tussen /admin en /kiosk.
+  // iPhone-PWA: statusbalk effen lichtgrijs zoals de header (zoals Expo Go).
+  useEffect(() => setIosStatusBar('#F7F8FA'), []);
 
   // Auto-open de Setup Wizard sheet voor nieuwe bedrijven. Draait alleen
   // voor gewone admins (niet superadmin) en alleen wanneer de admin de

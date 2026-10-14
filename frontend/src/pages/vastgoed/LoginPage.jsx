@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { useSearchParams } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { useAuth } from '../../lib/auth';
@@ -143,11 +144,13 @@ export default function LoginPage() {
   useEffect(() => {
     const primary = (branding?.primary_color || '#FF5C00');
     document.body.classList.add('login-mode');
+    setIosStatusBar(getComputedStyle(document.body).getPropertyValue('--login-bg').trim() || '#FF5C00');
     document.documentElement.classList.add('login-mode-html');
     document.body.style.setProperty('--login-bg', primary);
     document.documentElement.style.setProperty('--login-bg', primary);
     return () => {
       document.body.classList.remove('login-mode');
+      setIosStatusBar('#F7F8FA');
       document.documentElement.classList.remove('login-mode-html');
       document.body.style.removeProperty('--login-bg');
       document.documentElement.style.removeProperty('--login-bg');

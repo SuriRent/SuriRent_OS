@@ -24,6 +24,7 @@ import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLi
 import { subscribeChat, getChatState, totalUnread } from '../../lib/kiosk-chat';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
+import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -4500,9 +4501,10 @@ export default function KioskLayout() {
     const prevBodyBg = document.body.style.backgroundColor;
     document.documentElement.style.backgroundColor = BODY_BG;
     document.body.style.backgroundColor = BODY_BG;
-    // NB: theme-color wordt NIET meer per-route overschreven — dat gaf
-    // flikkering op Android. Centrale waarde staat in index.html.
+    // iPhone-PWA: statusbalk effen oranje achter klok/batterij (zoals Expo Go).
+    setIosStatusBar('#FF5C00');
     return () => {
+      setIosStatusBar('#F7F8FA');
       document.body.classList.remove('kiosk-mode');
       document.documentElement.style.backgroundColor = prevHtmlBg;
       document.body.style.backgroundColor = prevBodyBg;
