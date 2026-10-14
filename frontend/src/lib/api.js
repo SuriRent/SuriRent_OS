@@ -95,6 +95,10 @@ api.interceptors.response.use(
               sessionStorage.removeItem('tenant_session');
             } catch { /* ignore */ }
           } else if (isKioskContext) {
+            // Alleen uitloggen bij een écht ongeldige kiosk-sessie — niet bij
+            // b.v. een foute medewerker-PIN (ook 401). Kiosk logt nooit vanzelf uit.
+            const detail = String(err.response?.data?.detail || '');
+            if (!/kiosk niet ontgrendeld|ongeldig kiosk token/i.test(detail)) return Promise.reject(err);
             localStorage.removeItem('kiosk_token');
             try {
               sessionStorage.removeItem('kiosk_emp_id');

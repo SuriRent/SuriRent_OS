@@ -4723,6 +4723,12 @@ export default function KioskLayout() {
   // geen banner. Payments gaan direct als "approved" (backend accepteert
   // ontbrekende employee_id/employee_pin en houdt status=approved).
 
+  // Service-worker update mag de kiosk alleen op het startscherm herladen.
+  useEffect(() => {
+    window.__kioskSafeToReload = step === 'select' && !apartment;
+    return () => { window.__kioskSafeToReload = true; };
+  }, [step, apartment]);
+
   return (
     <div className="kiosk-fullscreen bg-orange-500" data-testid="kiosk-root">
       <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />

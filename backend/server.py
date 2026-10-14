@@ -215,11 +215,10 @@ async def get_kiosk_session(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Kiosk niet ontgrendeld")
     payload: dict = {}
     try:
-        payload = decode_token(token)
+        # Kiosk-sessies verlopen nooit (geen automatisch uitloggen); handtekening blijft verplicht.
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
         if payload.get("type") != "kiosk":
             raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Kiosk sessie verlopen")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
     return {"company_id": payload.get("company_id"), "type": "kiosk"}
@@ -10128,7 +10127,7 @@ async def _kiosk_device_config(cid: str) -> dict:
 
 def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
     try:
-        p = decode_token(token)
+        p = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
     except Exception:  # noqa: BLE001
         return None
     if p.get("type") != "kiosk" or not p.get("company_id"):

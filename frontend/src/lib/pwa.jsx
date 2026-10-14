@@ -25,6 +25,13 @@ export function useRegisterServiceWorker() {
         //      snel nieuwe fixes (bv. device QR token backfill) zonder
         //      midden in een actie te worden gestoord.
         let pendingReload = false;
+        // Kiosk: nooit herladen midden in een sessie (huurdergegevens blijven staan).
+        // Alleen op het startscherm (KioskLayout zet window.__kioskSafeToReload).
+        const safeReload = () => {
+          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
+          if (onKiosk && !window.__kioskSafeToReload) { pendingReload = true; return; }
+          window.location.reload();
+        };
         const activate = (newWorker) => {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -42,7 +49,7 @@ export function useRegisterServiceWorker() {
         // pending reload voor de volgende visibility-return.
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (document.visibilityState === 'hidden') {
-            window.location.reload();
+            safeReload();
           } else {
             pendingReload = true;
           }
@@ -50,7 +57,7 @@ export function useRegisterServiceWorker() {
         document.addEventListener('visibilitychange', () => {
           if (pendingReload && document.visibilityState === 'visible') {
             pendingReload = false;
-            window.location.reload();
+            safeReload();
           }
         });
 
