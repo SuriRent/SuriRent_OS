@@ -1,4 +1,4 @@
-import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet } from 'lucide-react';
+import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet, Bluetooth } from 'lucide-react';
 
 // Eén bron voor de Instellingen-onderdelen: gebruikt door zijmenu-dropdown,
 // mobiele sheet en InstellingenHub.
@@ -10,6 +10,7 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'invoicing', label: 'Facturen automatisering', desc: 'Automatische maand-facturen na grace periode.', icon: FileText },
   { id: 'stripe', label: 'Stripe betalingen', desc: 'Laat huurders in de Kiosk betalen met Creditcard of iDEAL.', icon: CreditCard },
   { id: 'bon', label: 'Bon & afdrukken', desc: 'Kies het afdrukformaat en de lettergrootte van de kwitantie.', icon: Printer },
+  { id: 'bon-printer', label: 'Bon printer', desc: 'Kies KT-V520 of een Bluetooth bonprinter en koppel hem.', icon: Bluetooth },
   { id: 'kiosk-apparaten', label: 'Kiosk apparaten', desc: 'Printer-hardware voor alle kiosks van je bedrijf.', icon: Tablet },
   { id: 'backup', label: 'Backup & herstel', desc: 'Maak veilige kopieën en herstel data wanneer nodig.', icon: Database },
 ];

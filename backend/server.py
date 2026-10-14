@@ -10115,9 +10115,22 @@ def _kiosk_admin_channel(cid: str) -> str:
     return f"kiosk-admin:{cid}"
 
 
+_PRINTER_MODES = ("none", "kt-v520", "bluetooth")
+
+
+def _printer_mode(cfg: dict) -> str:
+    cfg = cfg or {}
+    mode = cfg.get("printer_mode")
+    if mode in _PRINTER_MODES:
+        return mode
+    return "kt-v520" if cfg.get("kt_v520_enabled") else "none"
+
+
 def _device_config_msg(cfg: dict) -> dict:
-    on = bool((cfg or {}).get("kt_v520_enabled"))
-    return {"type": "device_config", "kt_v520_enabled": on, "printer": "kt-v520" if on else None}
+    mode = _printer_mode(cfg)
+    width = 80 if str((cfg or {}).get("paper_width")) == "80" else 58
+    return {"type": "device_config", "kt_v520_enabled": mode == "kt-v520", "printer_mode": mode,
+            "paper_width": width, "printer": None if mode == "none" else mode}
 
 
 async def _kiosk_device_config(cid: str) -> dict:
@@ -10448,7 +10461,7 @@ async def kiosk_remote_print(payment_id: str, body: RemotePrintIn, _session=Depe
     p = await db.payments.find_one({"id": payment_id, "company_id": cid}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Bon niet gevonden")
-    data = await _receipt_print_data(p)
+    data = await _receipt_print_data(p, force_ktp=True)
     job_id = str(uuid.uuid4())
     await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "payment_id": payment_id,
                                                   "target": body.printer_id, "data": data})
@@ -11821,7 +11834,7 @@ async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_s
     return await _receipt_print_data(p)
 
 
-async def _receipt_print_data(p: dict) -> dict:
+async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     p = await _enrich_payment(p)
     cs = await db.company_settings.find_one({"company_id": p.get("company_id")}, {"_id": 0, "receipts": 1})
     font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
@@ -11865,17 +11878,21 @@ async def _receipt_print_data(p: dict) -> dict:
         "textZoom": text_zoom,
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
     }
-    out["printer"] = (await _kiosk_device_config(p["company_id"]))["printer"]
-    out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"))
+    cfg = await _kiosk_device_config(p["company_id"])
+    out["printer"] = "kt-v520" if force_ktp else cfg["printer"]
+    out["paper_width"] = 58 if out["printer"] == "kt-v520" else cfg["paper_width"]
+    cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
+    out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
     return out
 
 
 _RECEIPT_COLS = 32  # 58mm thermisch, standaard font A
+_RECEIPT_COLS_80 = 48  # 80mm thermisch
 
 
-def _receipt_text_lines(d: dict, title: str) -> list:
-    """Bon als tekstregels voor ESC/POS-printers (KT-V520 via KTPsdk)."""
-    W = _RECEIPT_COLS
+def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
+    """Bon als tekstregels voor ESC/POS-printers (KT-V520 / Bluetooth)."""
+    W = cols
     dash = "-" * W
 
     def row(label, value):
@@ -15648,6 +15665,14 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
     doc = await _get_company_settings_doc(cid)
     existing_section = doc.get(section) or {}
     merged = _merge_section(section, existing_section, body or {})
+    if section == "kiosk_devices":
+        if (body or {}).get("printer_mode") is not None and body["printer_mode"] not in _PRINTER_MODES:
+            raise HTTPException(status_code=422, detail="Onbekend printertype")
+        if "printer_mode" not in (body or {}) and "kt_v520_enabled" in (body or {}):
+            merged["printer_mode"] = "kt-v520" if body["kt_v520_enabled"] else "none"
+        merged["printer_mode"] = _printer_mode(merged)
+        merged["kt_v520_enabled"] = merged["printer_mode"] == "kt-v520"
+        merged["paper_width"] = 80 if str(merged.get("paper_width")) == "80" else 58
 
     update = {
         f"{section}": merged,

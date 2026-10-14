@@ -8,6 +8,7 @@ import BackupRestore from './BackupRestore';
 import SettingsPage from './Settings';
 import StripeCompanySettings from './StripeCompanySettings';
 import KioskDevices from './KioskDevices';
+import BonPrinter from './BonPrinter';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
 
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
@@ -20,6 +21,7 @@ const RENDER = {
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   stripe: () => <StripeCompanySettings />,
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
+  'bon-printer': () => <BonPrinter />,
   'kiosk-apparaten': () => <KioskDevices />,
   backup: () => <BackupRestore />,
 };

@@ -1,3 +1,5 @@
+import { getSavedPrinter, paperWidth, printLinesBluetooth, printerMode } from './bt-printer';
+
 // Kiosk-print helpers — window.print() met de bon in #bon (zie index.css
 // @media print). Fallback openReceiptImage() opent de JPG-versie.
 
@@ -37,6 +39,10 @@ export function apkPrintMessage(url, data) {
   const printer = data.printer !== undefined ? data.printer : localStorage.getItem('kiosk_printer');
   const msg = { type: 'PRINT_RECEIPT', url, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', fontSizes: data.fontSizes, data };
   if (printer === 'kt-v520' && data.lines) { msg.printer = 'kt-v520'; msg.lines = data.lines; }
+  const bt = getSavedPrinter();
+  if (printer === 'bluetooth' && data.lines && bt?.via === 'apk') {
+    Object.assign(msg, { printer: 'bluetooth', bt_address: bt.id, paper_width: data.paper_width || paperWidth(), lines: data.lines });
+  }
   return msg;
 }
 
@@ -58,6 +64,17 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
     console.log('[APK PRINT_RECEIPT]', msg);
     bridge(JSON.stringify(msg));
     return true;
+  }
+  // Bluetooth bonprinter (Chrome/Edge); lukt dat niet → gewoon printvenster.
+  if (printerMode() === 'bluetooth' && getSavedPrinter()?.via === 'web') {
+    try {
+      const { data } = await apiGet(`/kiosk/payments/${paymentId}/print-data`);
+      if (data?.lines) { await printLinesBluetooth(data.lines); return true; }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[kiosk-print] Bluetooth print mislukt, val terug op printvenster:', e);
+      window.dispatchEvent(new CustomEvent('bt-print-error', { detail: { message: e?.message || String(e) } }));
+    }
   }
   try {
     const resp = await apiGet(`/payments/${paymentId}/print.html?fragment=1`, { responseType: 'text' });

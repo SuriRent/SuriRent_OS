@@ -1,5 +1,8 @@
 import { memo, useEffect, useState, useSyncExternalStore } from 'react';
-import { MessageCircle, Printer, Receipt } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Bluetooth, MessageCircle, Printer, Receipt, X } from 'lucide-react';
+import { BtPrinterCard } from './BtPrinterCard';
+import { getSavedPrinter } from '../lib/bt-printer';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { KioskChat } from './KioskChat';
@@ -88,6 +91,20 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
 export const KioskLiveStatus = memo(KioskLiveStatusInner);
 
 // Mobiel: chat, Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
+function BtPrinterDialog({ onClose }) {
+  return createPortal((
+    <div className="fixed inset-0 z-[130] bg-black/50 flex items-end sm:items-center justify-center p-3" onClick={onClose} data-testid="kiosk-bt-dialog">
+      <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <p className="font-black text-slate-900 flex items-center gap-2"><Bluetooth className="w-5 h-5 text-blue-600" /> Bluetooth printer</p>
+          <button onClick={onClose} data-testid="kiosk-bt-dialog-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center"><X className="w-5 h-5" /></button>
+        </div>
+        <BtPrinterCard />
+      </div>
+    </div>
+  ), document.body);
+}
+
 export function KioskSheetLiveActions({ isAdmin, onClose }) {
   useEffect(() => { installKioskChat(isAdmin ? 'admin' : 'employee'); }, [isAdmin]);
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
@@ -101,8 +118,11 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
     catch (e) { window.alert(e?.response?.data?.detail || e?.message || 'Koppelen mislukt'); }
   };
   const showPair = isAdmin && !!apkBridge() && !paired;
+  const [btOpen, setBtOpen] = useState(false);
+  const showBt = (s.printer ?? localStorage.getItem('kiosk_printer')) === 'bluetooth';
+  const cols = 2 + (showPair ? 1 : 0) + (showBt ? 1 : 0);
   return (
-    <div className={`mt-3 grid gap-2 ${showPair ? 'grid-cols-3' : 'grid-cols-2'}`} data-testid="kiosk-sheet-live-actions">
+    <div className={`mt-3 grid gap-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} data-testid="kiosk-sheet-live-actions">
       <button onClick={() => { onClose(); openChat(true); }} data-testid="kiosk-sheet-chat" className={pill}>
         <MessageCircle className="w-4 h-4" strokeWidth={2.5} /> Chat
         {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-black flex items-center justify-center" data-testid="kiosk-sheet-chat-unread">{unread}</span>}
@@ -116,6 +136,12 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
           <Printer className="w-4 h-4" strokeWidth={2.5} /> KT-V520
         </button>
       )}
+      {showBt && (
+        <button onClick={() => setBtOpen(true)} data-testid="kiosk-sheet-bt-printer" className={pill}>
+          <Bluetooth className="w-4 h-4" strokeWidth={2.5} /> {getSavedPrinter() ? 'Printer' : 'Koppel printer'}
+        </button>
+      )}
+      {btOpen && <BtPrinterDialog onClose={() => setBtOpen(false)} />}
     </div>
   );
 }

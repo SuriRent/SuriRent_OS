@@ -93,6 +93,7 @@ function connect() {
     else if (msg.type === 'device_config') {
       // Live printer-keuze (Instellingen → Kiosk apparaten); bewaard voor offline.
       if (msg.printer) localStorage.setItem('kiosk_printer', msg.printer); else localStorage.removeItem('kiosk_printer');
+      localStorage.setItem('kiosk_paper_width', String(msg.paper_width || 58));
       emit({ printer: msg.printer || null });
     }
   };

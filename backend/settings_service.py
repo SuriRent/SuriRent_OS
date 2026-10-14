@@ -131,7 +131,7 @@ def empty_section(section: str) -> dict:
             },
         },
         # Kiosk apparaten: KingTop KT-V520 (KTPsdk.aar in de APK) voor alle kiosks.
-        "kiosk_devices": {"kt_v520_enabled": False},
+        "kiosk_devices": {"kt_v520_enabled": False, "printer_mode": None, "paper_width": 58},
     }.get(section, {})
 
 

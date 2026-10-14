@@ -24,6 +24,7 @@ import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLi
 import { subscribeChat, getChatState, totalUnread } from '../../lib/kiosk-chat';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
+import { printerMode } from '../../lib/bt-printer';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
@@ -2405,6 +2406,10 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         datum: fmtPrintDate(new Date()),
         kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
       }, data?.id || data?.payment?.id);
+      // Bluetooth bonprinter: automatisch na elke betaling (iOS → printvenster/AirPrint).
+      else if (printerMode() === 'bluetooth' && (data?.id || data?.payment?.id)) {
+        printReceipt({ paymentId: data?.id || data?.payment?.id, apiGet: api.get });
+      }
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
