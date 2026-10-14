@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only verification of new PrintChoiceMenu on Kiosk → Financieel Overzicht → Betalingsgeschiedenis for Anita (my-awesome-rentals-bv). All acceptance criteria passed: Afdruk button renders dropdown via portal above modal, KT-V520 option is correctly disabled with hint 'Geen KT-V520 online' when no printer online, backdrop click closes menu, 'Afdrukken' option fires window.print (local), and WhatsApp button remains functional.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/iter89_history.jpeg",
+    "/app/test_reports/screenshots/iter89_menu_open.jpeg",
+    "/app/test_reports/screenshots/iter89_local_done.jpeg"
+  ],
+  "verified_scenarios": {
+    "menu_opens_on_click": true,
+    "menu_rendered_via_portal_parent_body": true,
+    "ktp_option_disabled_when_no_printer_online": true,
+    "ktp_hint_text": "Geen KT-V520 online",
+    "backdrop_click_closes_menu": true,
+    "local_option_triggers_window_print": true,
+    "window_print_call_count_after_local_click": 1,
+    "whatsapp_button_still_enabled": true
+  },
+  "scenarios_not_executed": [
+    "Live WebSocket-connected KT-V520 printer scenario (optional per request). Only tested the no-printer-online path. Backend remote-print flow was previously verified in iter80-86."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PrintChoiceMenu.jsx L57: sendKtp calls onStatus / first.name without guarding against first being undefined between render and click. UI prevents click via disabled, but if printer disappears between render and click there is still a theoretical TypeError. Low-risk because disabled prevents the handler being called when !first.",
+    "KioskLayout.jsx L1189-1195: setTimeout clears status after 2500ms only when kind==='ok'. For local print this is fine, but if subsequent interactions override state the dangling timer could clear a newer status prematurely. Minor.",
+    "No visible unit test coverage for PrintChoiceMenu. Consider jest/vitest test for the 'first printer wins' behaviour per the user's choice."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (6/6 scenarios)"},
+  "test_credentials": "Anita (kiosk): anita@demo.sr / anita1234, PIN 4321 — reseeded via /app/test_reports/setup_iter85.py",
+  "seed_data_creation": "Reused setup_iter85.py: reseeded Anita, inserted a TEST payment, registered a KT-V520 printer entry (but no live WebSocket, so correctly reported as offline). Used tenant Marlies Sewdien (HUIS 1B) which already has 2 real payments.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PrintChoiceMenu component at /app/frontend/src/components/PrintChoiceMenu.jsx. Testids on each payment row: history-print-{id} (toggle), history-print-menu-{id} (portal), history-print-menu-backdrop-{id}, history-print-ktp-{id} + history-print-ktp-hint-{id}, history-print-local-{id}, history-print-status-{id}. Flow: login anita@demo.sr/anita1234 → PIN 4321 → Hoofdvestiging → HUIS 1B → overview-history-btn. For live printer test, open a WS to /api/kiosk/ws, send {type:'auth', role:'printer', device_token} from setup ctx; the useOnlinePrinters hook should pick it up via subscribeKioskLive.",
+  "rca of the issue": "Not applicable — feature works as specified."
+}

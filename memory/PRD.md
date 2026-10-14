@@ -801,3 +801,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Per toestel Bluetooth printer koppelen (zoeken, testbon, ontkoppelen) — ook via kiosk "+" menu.
 - Automatisch printen na elke betaling; iOS → AirPrint printvenster; Android-APK via BT_SCAN/BT_SELECT/PRINT_RECEIPT bridge (APK-zijde nog te bouwen, zie memory/apk-print.md).
 - Getest: iteration_88 (backend 7/7, frontend 12/12).
+
+## 2026-06 — Betalingsgeschiedenis: Afdruk-keuzemenu
+- Kiosk Financieel overzicht → Betalingsgeschiedenis: "Afdruk" is nu een menu: "Print via KT-V520" (eerste online toestel, grijs met "Geen KT-V520 online") en "Afdrukken" (lokaal printvenster). Component: components/PrintChoiceMenu.jsx. Getest iteration_89.
