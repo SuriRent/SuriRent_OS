@@ -2381,7 +2381,8 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         data = { ...(planPayment || {}), kind: 'plan_only', plan_items: planItems };
       }
       playSuccessPing();
-      sendApkPrint({
+      // Alleen de KT-V520 print automatisch (stil via KTPsdk); elders nooit een automatisch printvenster.
+      if (isKtpDevice()) sendApkPrint({
         naam: tenant?.name || '',
         appartement: apt?.number || '',
         bedrag: fmtMoney(payload.amount, payload.currency || 'SRD'),
@@ -2572,7 +2573,7 @@ function FittedReceiptPreview({ paymentId }) {
   const scale = box.h ? Math.min(1, box.h / size.h, box.w / size.w) : 1;
   return (
     <div ref={boxRef} className="flex-1 min-h-0 overflow-hidden flex items-start justify-center" data-testid="receipt-preview-box">
-      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 1.2, ease: 'easeOut' }}
+      <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 3.5, ease: [0.25, 0.1, 0.25, 1] }}
         style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
         <iframe
           title="Kwitantie preview"
@@ -2641,20 +2642,6 @@ function ReceiptScreen({ payment, overview, onDone }) {
     return () => clearTimeout(t);
   }, [payment.id]);
 
-  // AUTO-PRINT — na de tear-animatie: bon in #bon + window.print().
-  useEffect(() => {
-    if (apkBridge()) return undefined; // APK print via PRINT_RECEIPT (PaymentConfirm)
-    // Geen automatisch printvenster op iPhone/Android — daar via de knop "Afdruk".
-    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')) return undefined;
-    const t = setTimeout(() => {
-      printReceipt({
-        paymentId: payment.id,
-        apiGet: api.get,
-      });
-    }, 2950);  // 50ms na tear-snap voor cleane audio+visual sync
-    return () => clearTimeout(t);
-  }, [payment.id]);
-
   // Manuele "Print bon opnieuw"; valt terug op de JPG-versie als printen faalt.
   const manualPrint = async () => {
     const ok = await printReceipt({
@@ -2670,7 +2657,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // de huurder hem kan beantwoorden.
   useEffect(() => {
     if (partialInv && !planMade) return undefined;
-    const t = setTimeout(onDone, 10000);
+    const t = setTimeout(onDone, 20000);
     return () => clearTimeout(t);
   }, [onDone, partialInv, planMade]);
 
@@ -2724,7 +2711,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
             </button>
           </div>
           <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
-            Automatisch terug naar startscherm in 10 seconden
+            Automatisch terug naar startscherm in 20 seconden
             {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
             {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
           </p>
