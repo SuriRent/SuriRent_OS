@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the FCM tap-to-open deep-link flow end-to-end. Backend: GET /api/payments/{id} returns enriched doc (200) and 404 for unknown; /payments/pending-count and /payments/pending-ids are not shadowed by the {payment_id} route (route order correct). Frontend deep-link flow works perfectly: /{slug}/admin/payments?open=payment:<approved-id> opens payment-detail-page-{id} and strips ?open from URL; pending kiosk payment opens approve-modal immediately; window.onFcmOpen('/admin/payments?open=…') navigates in-app and opens detail; postMessage FCM_OPEN works; unsafe URLs (https://evil.com, //evil, javascript:alert) are ignored. HOWEVER: when the kiosk employee flow creates a pending payment, the SSE notification data.url is '/admin/payments?filter=pending' instead of the expected '/admin/payments?open=payment:<id>'. Root cause: kiosk_create_payment sets kind='payment_pending_approval' which is NOT in _deep_link's whitelist ('payment','payment_pending','approval'), so _deep_link falls back to the pre-set url. For users who get the FCM push and tap it, the APK will land on the pending-filter view instead of directly opening the approve modal.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/kiosk/payments (notification side-effect)", "issue": "Pending kiosk payment notification carries data.url='/admin/payments?filter=pending' instead of '/admin/payments?open=payment:<id>'. _deep_link whitelist ('payment','payment_pending','approval') does not include the kind sent by kiosk_create_payment ('payment_pending_approval'). Review request explicitly says this should deep-link to the specific payment. Fix: either rename kind to 'payment_pending'/'approval' on line 10671, OR add 'payment_pending_approval' to the whitelist in _deep_link (server.py:15162).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/admin/events (SSE)", "issue": "GZipMiddleware wraps the SSE stream (content-encoding: gzip, Transfer-Encoding: chunked) because event payloads do not have Content-Length. GZip buffering can delay/break event flushing for some clients. SSE should bypass gzip. Fix: either exclude text/event-stream from GZipMiddleware or raise minimum_size inspection to skip streaming responses. Observed on localhost:8001; EventSource in Chrome still works but curl/requests experienced buffering until identity encoding was forced."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter94_deep_links.py",
+    "/app/test_reports/pytest/iter94_results.xml"
+  ],
+  "action_items": [
+    "BACKEND HIGH: In server.py:10671 the kiosk pending-payment notification uses kind='payment_pending_approval'; _deep_link doesn't recognize it so the URL stays '/admin/payments?filter=pending'. Either (a) change kind to 'payment_pending' (preferred — matches tenant-portal flow), or (b) add 'payment_pending_approval' to the whitelist at server.py:15162. After fix, the pytest `test_kiosk_pending_payment_notification_has_deep_link` should assert /admin/payments?open=payment:<id>.",
+    "BACKEND MINOR: Exclude SSE (text/event-stream) from GZipMiddleware so clients get immediate flushing."
+  ],
+  "critical_code_review_comments": [
+    "deep-link.js: `p.delete('open'); p.delete('tenant');` — tenant is removed unconditionally for every deep-linked tab even when the tab didn't use ?tenant. Minor but acceptable. If other query params ever use 'tenant', they'd be stripped silently.",
+    "fcm-apk.js openFromNotification: good safety on '/' and '//'. But accepts anything starting with '/' including '/login' or '/kiosk' which would log the admin out of the admin shell. Consider restricting to '/admin/' + known tab-paths or a /{slug}/admin/* allow-list.",
+    "deep_link whitelist is tightly coupled to a fixed set of kinds. Any new notification kind requires adding a case — easy to miss (as happened for kiosk flow). Consider making deep_link dispatch on explicit `payment_id`/`plan_id`/… presence rather than kind."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter94_deep_links.py (new)"
+  ],
+  "success_rate": {
+    "backend": "80% (4/5 — kiosk deep-link bug)",
+    "frontend": "100% (all deep-link + onFcmOpen + postMessage + unsafe-URL + URL-cleanup scenarios pass)"
+  },
+  "test_credentials": "demo@surirent.sr / demo1234 (admin); Anita Sewdas PIN 4321 (kiosk, re-created each run)",
+  "seed_data_creation": "During kiosk pending payment tests, 1-2 small SRD payments created (ids captured and deleted via DELETE /api/payments/{id} after each test).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public URL buffers SSE at Cloudflare; for SSE tests always hit http://localhost:8001/api/admin/events with Accept-Encoding: identity (iter94 test uses this). Backend auto-reset of demo DB wipes Anita's kiosk_pin + app_role every ~30 min — the test fixture restores both via PUT /api/employees/{id} (don't set email because another account already uses anita@demo.sr). Demo admin after login is slug-prefixed: /my-awesome-rentals-bv/admin/<tab>; waiting ~3s after login lets the redirect settle. Direct navigation to /admin/payments without the slug lands you on the dashboard — always derive slug from page.url first. useDeepLink hook strips ?open and ?tenant from URL after firing — test expects both gone.",
+  "rca of the issue": "Reproduction: 1) login admin + open SSE /api/admin/events, 2) login kiosk with Anita PIN 4321, 3) POST /api/kiosk/payments?employee_id=<anita>&employee_pin=4321 with a small amount, 4) observe SSE 'notification' event. Expected data.url='/admin/payments?open=payment:<new id>'. Actual: '/admin/payments?filter=pending'. Flow: kiosk_create_payment (server.py:10617) passes {'kind':'payment_pending_approval','url':'/admin/payments?filter=pending',...} to _notify_company_admins. _notify_company_admins overwrites data['url'] via _deep_link. _deep_link checks `kind in ('payment','payment_pending','approval')` — 'payment_pending_approval' doesn't match, so it falls through to `d.get('url') or '/admin'`, keeping the pending-filter URL. Mitigation: change kind to 'payment_pending' OR extend _deep_link whitelist. Tenant-portal payment (server.py:6869) already uses 'payment_pending' correctly."
+}

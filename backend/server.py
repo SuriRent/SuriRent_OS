@@ -15159,7 +15159,7 @@ async def _deep_link(d: dict) -> str:
     """Directe link naar het juiste item (betaling, goedkeuring, factuur, regeling, onderhoud)."""
     kind = d.get("kind")
     pid = d.get("payment_id")
-    if pid and kind in ("payment", "payment_pending", "approval"):
+    if pid and kind in ("payment", "payment_pending", "payment_pending_approval", "approval"):
         return f"/admin/payments?open=payment:{pid}"
     if d.get("plan_id"):
         return f"/admin/payment_plans?open=plan:{d['plan_id']}"
@@ -15252,7 +15252,7 @@ from fcm_service import send_fcm, fcm_configured  # noqa: E402
 _FCM_KIND_PREF = {
     "payment": "payment", "payment_plan": "payment",
     "overdue": "overdue",
-    "approval": "approval", "payment_pending": "approval",
+    "approval": "approval", "payment_pending": "approval", "payment_pending_approval": "approval",
     "kasgeld": "kasgeld",
     "kiosk_login": "employee", "kiosk_logout": "employee",
     "maintenance": "maintenance",

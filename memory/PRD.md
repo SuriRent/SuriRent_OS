@@ -819,3 +819,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — APK auto-koppelen FCM
 - lib/fcm-apk.js vangt token op via event, postMessage, window.onFcmToken, window-vars, Android.getFcmToken(), localStorage; statuschip "fcm-this-device". Getest iteration_93.
+
+## 2026-06 — Meldingen klikbaar (deep links)
+- _deep_link() zet data.url per melding (betaling/goedkeuring → ?open=payment:id, factuur → ?open=invoice:id&tenant=, regeling → ?open=plan:id, onderhoud → ?open=maintenance:id, kasgeld/medewerker → /admin/kasgeld). Werkt voor FCM, PWA en SSE.
+- lib/deep-link.js useDeepLink; window.onFcmOpen / FCM_OPEN in fcm-apk.js. GET /api/payments/{id}. Getest iteration_94 (+ fix payment_pending_approval).
