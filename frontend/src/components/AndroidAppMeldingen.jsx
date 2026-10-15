@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Send, Smartphone, Trash2 } from 'lucide-react';
 import { api, formatError } from '../lib/api';
-import { isApkApp, requestFcmToken } from '../lib/fcm-apk';
+import { fcmStatus, isApkApp, requestFcmToken } from '../lib/fcm-apk';
 
 const TYPES = [
   { key: 'payment', label: 'Nieuwe betaling' },
@@ -40,6 +40,22 @@ function DeviceList({ devices, onRemove }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function ThisDevice() {
+  const [st, setSt] = useState(fcmStatus);
+  useEffect(() => {
+    const on = () => setSt(fcmStatus());
+    window.addEventListener('fcm-status', on);
+    return () => window.removeEventListener('fcm-status', on);
+  }, []);
+  if (!st.apk) return null;
+  const text = st.registered ? 'Dit toestel is gekoppeld' : st.error ? `Koppelen mislukt: ${st.error}`
+    : 'Wacht op Firebase-token van de app… (de Android-app moet het token doorgeven)';
+  return (
+    <p className={`text-xs font-bold rounded-xl px-3 py-2 border ${st.registered ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}
+      data-testid="fcm-this-device">{text}</p>
   );
 }
 
@@ -103,6 +119,7 @@ export function AndroidAppMeldingen() {
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1">Gekoppelde Android-toestellen</p>
         <DeviceList devices={devices} onRemove={remove} />
       </div>
+      <ThisDevice />
       <div className="flex flex-wrap gap-2">
         <button onClick={test} disabled={busy === 'test' || !devices.length} data-testid="fcm-test-btn"
           className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-50">
