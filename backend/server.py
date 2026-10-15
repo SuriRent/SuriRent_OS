@@ -14883,7 +14883,7 @@ async def _list_cash_compute(user: dict):
     # Sortering op echte insert-tijd → net-toegevoegde items altijd bovenaan,
     # ook wanneer de gebruiker een oudere entry_date koos of het een historische
     # payment betreft.
-    combined.sort(key=lambda x: (x.get("_sort_at") or ""), reverse=True)
+    combined.sort(key=lambda x: str(x.get("_sort_at") or ""), reverse=True)
     # Verwijder interne sortering-key uit output — niet exposen aan clients.
     for item in combined:
         item.pop("_sort_at", None)

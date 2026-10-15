@@ -810,3 +810,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Chat ook van de server
 - Chat-handlers en helpers uit server.py verwijderd; kiosk_chat collectie wordt bij opstarten gedropt. Getest iteration_91 (5/5).
+
+## 2026-06 — FCM Android pushmeldingen
+- fcm_service.py (HTTP v1, service account in env FCM_SERVICE_ACCOUNT_B64 + FCM_PROJECT_ID, project surirent-b7379). Hook in _notify_company_admins → _fcm_notify_company (per bedrijf fcm_prefs: payment, overdue, approval, kasgeld, employee, maintenance, invoices).
+- Endpoints: POST /api/push/fcm/register|unregister|test, GET /api/push/fcm/devices, DELETE /api/push/fcm/devices/{id}. Collectie fcm_tokens. Ongeldige tokens automatisch opgeruimd.
+- UI: Notificaties → "Android App Meldingen" (components/AndroidAppMeldingen.jsx); APK-token via lib/fcm-apk.js (FCM_GET_TOKEN / apk-fcm-token event). APK-zijde nog te bouwen (memory/apk-print.md).
+- Getest iteration_92 (13/13 backend, frontend OK).
