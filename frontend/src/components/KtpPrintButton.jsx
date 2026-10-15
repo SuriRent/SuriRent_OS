@@ -6,7 +6,8 @@ import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 const TIMEOUT_MS = 20000;
 
 // "Print via KT-V520": stuurt de bon via de WebSocket naar een gekoppelde KT-V520.
-export function KtpPrintButton({ log, onPrinted, fetchPrinters = false }) {
+// autoSend: stuur één keer automatisch naar de eerste online KT-V520.
+export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend = false }) {
   const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState).printers;
   const [fetched, setFetched] = useState([]);
   useEffect(() => {
@@ -43,6 +44,13 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false }) {
       timer.current = setTimeout(() => { job.current = null; setStatus('error'); setMsg(`Geen antwoord van ${printer.name}`); }, TIMEOUT_MS);
     } catch (e) { setStatus('error'); setMsg(e?.response?.data?.detail || 'Verzenden mislukt'); }
   };
+
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (!autoSend || autoDone.current || !printers.length) return;
+    autoDone.current = true;
+    send(printers[0]);
+  }, [autoSend, printers]);
 
   const none = !printers.length;
   const onClick = () => (printers.length === 1 ? send(printers[0]) : setMenu((m) => !m));

@@ -11791,6 +11791,8 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
         "kwitantie": p.get("receipt_number") or "",
         "datum": datum,
         "naam": p.get("tenant_name") or "",
+        "huurder_telefoon": p.get("tenant_phone") or "",
+        "medewerker": _receipt_employee(p),
         "appartement": p.get("apartment_number") or "",
         "vestiging": (loc or {}).get("name") or p.get("location_name") or "",
         "omschrijving": desc,
@@ -11812,6 +11814,11 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
 
 _RECEIPT_COLS = 32  # 58mm thermisch, standaard font A
 _RECEIPT_COLS_80 = 48  # 80mm thermisch
+
+
+def _receipt_employee(p: dict) -> str:
+    """Naam van de kiosk-medewerker die de betaling ontving."""
+    return (p.get("kiosk_employee_name") or p.get("received_by") or "").strip()
 
 
 def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
@@ -11838,6 +11845,8 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     lines.append(L(dash))
     lines.append(L("HUURDER:", bold=True))
     lines.append(L(d.get("naam") or "-"))
+    if d.get("huurder_telefoon"):
+        lines.append(L(row("Tel:", d["huurder_telefoon"])))
     if d.get("appartement") or d.get("vestiging"):
         lines.append(L(" - ".join(x for x in (d.get("appartement") and f"App. {d['appartement']}", d.get("vestiging")) if x)))
     lines += [L(dash), L(d["omschrijving"])]
@@ -11845,6 +11854,8 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         lines.append(L(row("Methode:", d["methode"])))
     lines.append(L(row("BETAALD", d["bedrag"]), bold=True))
     lines.append(L(row("Openstaand:", d["openstaand"])))
+    if d.get("medewerker"):
+        lines.append(L(row("Ontvangen door:", d["medewerker"])))
     if d.get("opmerking"):
         lines += [L(dash), L(f"Opmerking: {d['opmerking']}")]
     lines += [L(dash), L("Bedankt voor uw betaling!", "center"), L(""), L("")]
@@ -11960,6 +11971,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             paper_width_mm=paper_width_mm or 58, title=p.get("_title") or "KWITANTIE", fragment=fragment,
             location_city=p.get("location_city") or "", font_px=p.get("_font_px"),
             screen_sizes=bool(p.get("_screen_sizes")),
+            tenant_phone=p.get("tenant_phone") or "", employee=_receipt_employee(p),
         )
 
     # ------ A4 layout (default) ------
@@ -12104,7 +12116,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
                                  company_kkf: str = "", paper_width_mm: int = 58,
                                  title: str = "KWITANTIE", fragment: bool = False,
                                  location_city: str = "", font_px: Optional[tuple] = None,
-                                 screen_sizes: bool = False) -> str:
+                                 screen_sizes: bool = False, tenant_phone: str = "",
+                                 employee: str = "") -> str:
     """Bonprinter layout — POS-stijl, monospaced, 1 kolom. Breedte volgt de
     printerinstelling van de locatie; ≤60mm krijgt een compacte opmaak."""
     W = int(paper_width_mm or 58)
@@ -12210,6 +12223,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div class="sep"></div>
     <div>HUURDER:</div>
     <div class="b wrap">{h(tenant_name)}</div>
+    {f'<div class="r"><span>TEL.</span><span>{h(tenant_phone)}</span></div>' if tenant_phone else ''}
     {f'<div class="wrap">{h(unit_line)}</div>' if unit_line else ''}
     <div class="sep"></div>
     <div>OMSCHRIJVING:</div>
@@ -12219,6 +12233,7 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     <div class="r"><span>BETAALWIJZE</span><span class="b">{h(method_label)}</span></div>
     <div class="sep"></div>
     <div class="r one"><span>Nog openstaand:</span><span>{h(fmt_money(outstanding_after, currency))}</span></div>
+    {f'<div class="r"><span>ONTVANGEN DOOR</span><span class="b">{h(employee)}</span></div>' if employee else ''}
     <div class="sep"></div>
     <div>OPMERKING:</div>
     <div class="wrap">{h(note or '-')}</div>
