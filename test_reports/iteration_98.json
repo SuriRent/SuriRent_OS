@@ -1,0 +1,25 @@
+{
+  "summary": "Iter98 — frontend only: tested the kiosk bonprinter lamp (PrinterLamp) for employee Anita (kiosk_token in localStorage) and admin kiosk (admin-to-kiosk), on desktop 1920x800 and mobile 390x844. All 5 review requirements pass. (1) printer_mode none + no bt_printer: kiosk-printer-lamp count 0 on desktop; kiosk-mobile-printer-lamp-btn count 0 on mobile, and its wrapper is hidden (empty:hidden). Same for admin. (2) PUT printer_mode kt-v520 while the page is open: the WS device_config set localStorage kiosk_printer=kt-v520 and the lamp appeared live without a reload, with data-active=false and aria 'Bonprinter niet verbonden'. The panel row kiosk-printer-lamp-ktp shows 'KT-V520 / Geen KT-V520 online' with no bt row. (3) Fake KT-V520 online (register + WS role printer + last_seen refresh): the employee lamp turned green after ~27s via the 30s poll, the admin lamp after ~1s via live presence. Row shows 'TEST_Iter85 KT-V520 online' and aria 'Bonprinter verbonden'. After the printer stopped, the lamp went red again after ~28s. (4) printer_mode bluetooth without bt_printer: red, row kiosk-printer-lamp-bt 'Nog geen printer gekoppeld op dit toestel'. With APK bridge + bt_printer {AA:BB, Test BT, apk}: green, 'Test BT verbonden'. (5) On mobile the lamp sits at x=342..374, y=14..46 and the title 'Kies een locatie' at x=22..188, so no overlap. The panel closes via kiosk-printer-lamp-close and by tapping the backdrop. printer_mode reset to none at the end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/setup_iter85.py", "/app/test_reports/keep_printer_online_iter98.py"],
+  "action_items": [
+    "Minor: PrinterLamp.jsx line 69 `<Row key={r.key} {...r} />` spreads an object that contains a 'key' prop. React logs the console error 'A props object containing a \"key\" prop is being spread into JSX'. Destructure first: rows.map(({key, ...r}) => <Row key={key} {...r} testid={`kiosk-printer-lamp-${key}`} />).",
+    "Optional/product decision: with printer_mode 'none' but bt_printer still in localStorage, the lamp keeps showing (green, BT row). This follows the code (bt || mode==='bluetooth'), but the admin set 'geen printer'. Decide whether a saved BT printer alone should count as 'configured'.",
+    "Optional: the employee kiosk only sees a KT-V520 go online/offline via the 30s poll (live presence printers seem to reach only the admin channel). Up to 30s delay is acceptable but could be made live."
+  ],
+  "critical_code_review_comments": [
+    "PrinterLamp reads localStorage kiosk_printer during render without subscribing to it. It only re-renders when the kiosk-live store emits; this works because device_config emits {printer}. A localStorage change from BonPrinter.jsx in the same tab only shows on the next store emit.",
+    "Key-spread warning described in action_items."
+  ],
+  "updated_files": ["/app/test_reports/keep_printer_online_iter98.py"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "setup_iter85.py re-seeded Anita (PIN 4321), created a TEST_ payment and registered printer TEST_Iter85 KT-V520. The printer was deleted afterwards via DELETE /api/settings/kiosk-printers/{id} and the TEST_ payment removed. printer_mode reset to 'none'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Employee kiosk: run setup_iter85.py, then set localStorage kiosk_token, kiosk_company, kiosk_emp_id/name/pin and goto /kiosk. Admin kiosk: POST /api/auth/login, then POST /api/auth/admin-to-kiosk (Bearer), then set admin_token + kiosk_token + kiosk_company and goto /kiosk. Plain admin login to /kiosk redirects to /admin. Fake KT-V520 online: python3 /app/test_reports/keep_printer_online_iter98.py <seconds> (reads /tmp/iter85_ctx.json). Lamp testids: kiosk-printer-lamp (desktop, inside kiosk-toolbar), kiosk-mobile-printer-lamp-btn (mobile), kiosk-printer-lamp-panel, kiosk-printer-lamp-ktp, kiosk-printer-lamp-bt, kiosk-printer-lamp-close."
+}

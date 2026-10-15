@@ -837,3 +837,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — FCM-koppeling APK robuuster
 - Productie: 0 register-calls ontvangen (deployer RCA) → token kwam te vroeg (voor AdminDashboard) of faalde regex. Fix: buffer window.onFcmToken in public/index.html (localStorage fcm_token), register na login; regex versoepeld (>=100 tekens), object-tokens, Expo-token melding; foutstatus zichtbaar. Unieke index fcm_tokens.token + dedupe bij start (race gaf dubbele toestellen).
+
+## 2026-06 — Printerstatus-lampje kiosk
+- components/PrinterLamp.jsx in kiosk-toolbar (desktop) + rechtsboven mobiel; alleen bij ingestelde printer (kiosk_printer of bt_printer of KT-V520 toestel). Groen = minstens één printer werkt; tik → paneel per printer. Getest iteration_98.
