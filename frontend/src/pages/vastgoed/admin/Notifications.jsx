@@ -7,6 +7,7 @@ import { isTapSoundsEnabled, setTapSoundsEnabled, playClickTick } from '../../..
 import { playSuccessPing, playErrorBuzz, playSwoosh, playApproveConfirm } from '../../../lib/tap-sounds';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { AndroidAppMeldingen } from '../../../components/AndroidAppMeldingen';
+import { ApprovalSignatureCard } from '../../../components/ApprovalSignatureCard';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -350,6 +351,7 @@ export default function Notifications() {
 
 
           <AndroidAppMeldingen />
+          <ApprovalSignatureCard />
 
           <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="tap-sounds-section">
             <div className="flex items-center gap-3 mb-2">

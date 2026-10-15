@@ -9305,17 +9305,23 @@ async def get_payment(payment_id: str, user=Depends(get_current_user)):
 
 @api.post("/payments/{pid}/approve", response_model=PaymentOut)
 async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require_role("admin", "boekhouder"))):
-    """Beheerder keurt een pending kiosk-betaling goed. Slaat handtekening op
-    en koppelt eventueel een openstaande factuur (zelfde logic als nieuwe
-    approved betaling), zodat het bedrag NU pas meetelt in de totalen."""
-    q = {"id": pid, **scope(user)}
+    """Beheerder keurt een pending kiosk-betaling goed (met handtekening)."""
+    if not (body.signature_data_url or "").startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Handtekening ontbreekt")
+    return await _approve_payment_core(
+        {"id": pid, **scope(user)}, body.signature_data_url,
+        user.get("id") or user.get("sub"), user.get("name") or user.get("email") or "Beheerder",
+    )
+
+
+async def _approve_payment_core(q: dict, signature: str | None, uid: str, uname: str, via: str | None = None):
+    """Goedkeuren + openstaande factuur koppelen, zodat het bedrag NU pas meetelt."""
     p = await db.payments.find_one(q, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Betaling niet gevonden")
     if p.get("status") != "pending_approval":
         raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
-    if not (body.signature_data_url or "").startswith("data:image/"):
-        raise HTTPException(status_code=400, detail="Handtekening ontbreekt")
+    pid = p["id"]
     approved_at = iso(now_utc())
     # Probeer alsnog een openstaande factuur te matchen bij approval.
     matched_invoice = None
@@ -9343,11 +9349,13 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
             )
     update = {
         "status": "approved",
-        "signature_data_url": body.signature_data_url,
+        "signature_data_url": signature or None,
         "approved_at": approved_at,
-        "approved_by_user_id": user.get("id") or user.get("sub"),
-        "approved_by": user.get("name") or user.get("email") or "Beheerder",
+        "approved_by_user_id": uid,
+        "approved_by": f"{uname} (via melding)" if via == "notification" else uname,
     }
+    if via:
+        update["approved_via"] = via
     if matched_invoice:
         update["invoice_id"] = matched_invoice["id"]
         update["invoice_number"] = matched_invoice.get("invoice_number")
@@ -9433,17 +9441,20 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
 
 @api.post("/payments/{pid}/reject", response_model=PaymentOut)
 async def reject_payment(pid: str, body: PaymentRejectIn, user=Depends(require_role("admin", "boekhouder"))):
-    """Beheerder wijst een pending betaling af (bv. verkeerd bedrag, geen geld
-    ontvangen). Bedrag wordt nooit meegerekend in totalen."""
-    q = {"id": pid, **scope(user)}
+    """Beheerder wijst een pending betaling af. Bedrag telt nooit mee in totalen."""
+    return await _reject_payment_core({"id": pid, **scope(user)}, body.reason or "", user.get("id") or user.get("sub"))
+
+
+async def _reject_payment_core(q: dict, reason: str, uid: str):
     p = await db.payments.find_one(q, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Betaling niet gevonden")
     if p.get("status") != "pending_approval":
         raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
-    update = {"status": "rejected", "rejected_reason": (body.reason or "").strip(),
+    pid = p["id"]
+    update = {"status": "rejected", "rejected_reason": (reason or "").strip(),
               "approved_at": iso(now_utc()),
-              "approved_by_user_id": user.get("id") or user.get("sub")}
+              "approved_by_user_id": uid}
     # Revert pending plan-installment to 'pending' zodat huurder/kiosk
     # 'm opnieuw kan betalen.
     plan_id = (p.get("metadata") or {}).get("plan_id") if isinstance(p.get("metadata"), dict) else None
@@ -15235,13 +15246,85 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
         info = {"endpoint": sub["endpoint"], "keys": sub["keys"]}
         # pywebpush is blocking sync — run in threadpool zodat we niet
         # andere subs blokkeren tijdens 1 trage push.
-        ok = await asyncio.to_thread(send_push, info, title, body, data or {})
+        ok = await asyncio.to_thread(send_push, info, title, body, _with_action_token(data, sub.get("user_id"), company_id))
         if not ok:
             await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
         return ok
 
     results = await asyncio.gather(*[_send_one(s) for s in subs], return_exceptions=True)
     return sum(1 for r in results if r is True)
+
+
+# =====================================================================
+# Goedkeuren / Afwijzen vanuit de melding (PWA + Android-app)
+# =====================================================================
+_APPROVAL_KINDS = ("payment_pending", "payment_pending_approval", "approval")
+_ACTION_TTL_S = 7 * 24 * 3600
+
+
+def _with_action_token(data: dict, uid: str | None, cid: str) -> dict:
+    """Voeg per ontvanger een ondertekend actie-token toe aan goedkeuringsmeldingen."""
+    data = data or {}
+    if data.get("kind") not in _APPROVAL_KINDS or not data.get("payment_id") or not uid:
+        return data
+    tok = make_verify_token({"t": "pa", "pid": data["payment_id"], "uid": uid, "cid": cid,
+                             "exp": int(now_utc().timestamp()) + _ACTION_TTL_S})
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    return {**data, "require_approval": True, "action_token": tok,
+            "action_url": f"{base}/api/push/action", "actions": "approve,reject"}
+
+
+class PushActionIn(BaseModel):
+    token: str = Field(min_length=10, max_length=2000)
+    action: str
+
+
+@api.post("/push/action")
+async def push_action(body: PushActionIn):
+    """Goedkeuren/Afwijzen via knop in de melding — het token is de autorisatie."""
+    if body.action not in ("approve", "reject"):
+        raise HTTPException(status_code=422, detail="Onbekende actie")
+    pl = verify_token(body.token) or {}
+    if pl.get("t") != "pa" or int(pl.get("exp") or 0) < int(now_utc().timestamp()):
+        raise HTTPException(status_code=401, detail="Deze melding is verlopen — open de app om goed te keuren")
+    u = await db.users.find_one({"id": pl.get("uid"), "company_id": pl.get("cid")},
+                                {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "approval_signature": 1})
+    if not u or u.get("role") not in ("admin", "owner", "boekhouder"):
+        raise HTTPException(status_code=403, detail="Onvoldoende rechten")
+    q = {"id": pl["pid"], "company_id": pl["cid"]}
+    try:
+        if body.action == "approve":
+            p = await _approve_payment_core(q, u.get("approval_signature"), u["id"],
+                                            u.get("name") or u.get("email") or "Beheerder", via="notification")
+            msg = f"Goedgekeurd: {p.get('tenant_name', '')} {p.get('currency', '')} {float(p.get('amount') or 0):,.2f}"
+        else:
+            p = await _reject_payment_core(q, "Afgewezen via melding", u["id"])
+            msg = f"Afgewezen: {p.get('tenant_name', '')} {p.get('currency', '')} {float(p.get('amount') or 0):,.2f}"
+    except HTTPException as e:
+        if e.status_code == 400:
+            raise HTTPException(status_code=409, detail="Deze betaling is al verwerkt")
+        raise
+    asyncio.create_task(_sse_broadcast(pl["cid"], {"type": "change", "path": f"/api/payments/{pl['pid']}/{body.action}", "method": "POST"}))
+    return {"ok": True, "status": p.get("status"), "message": msg.strip()}
+
+
+class ApprovalSignatureIn(BaseModel):
+    signature_data_url: Optional[str] = Field(default=None, max_length=300_000)
+
+
+@api.get("/me/approval-signature")
+async def get_approval_signature(user=Depends(get_current_user)):
+    u = await db.users.find_one({"id": user.get("id")}, {"_id": 0, "approval_signature": 1})
+    return {"signature_data_url": (u or {}).get("approval_signature")}
+
+
+@api.put("/me/approval-signature")
+async def put_approval_signature(body: ApprovalSignatureIn, user=Depends(get_current_user)):
+    sig = body.signature_data_url or None
+    if sig and not sig.startswith("data:image/"):
+        raise HTTPException(status_code=422, detail="Ongeldige handtekening")
+    await db.users.update_one({"id": user.get("id")}, {"$set": {"approval_signature": sig}})
+    return {"ok": True, "signature_data_url": sig}
 
 
 # =====================================================================
@@ -15266,8 +15349,8 @@ async def _fcm_prefs(cid: str) -> dict:
     return {**_empty_section("fcm_prefs"), **((cs or {}).get("fcm_prefs") or {})}
 
 
-async def _fcm_send_and_clean(tokens: list, title: str, body: str, data: dict) -> int:
-    res = await send_fcm(tokens, title, body, data)
+async def _fcm_send_and_clean(tokens: list, title: str, body: str, data: dict, data_only: bool = False) -> int:
+    res = await send_fcm(tokens, title, body, data, data_only=data_only)
     if res["unregistered"]:
         await db.fcm_tokens.delete_many({"token": {"$in": res["unregistered"]}})
     return res["sent"]
@@ -15281,8 +15364,13 @@ async def _fcm_notify_company(cid: str, title: str, body: str, data: dict) -> in
     try:
         if not (await _fcm_prefs(cid)).get(pref, True):
             return 0
-        tokens = await db.fcm_tokens.distinct("token", {"company_id": cid})
-        return await _fcm_send_and_clean(tokens, title, body, data)
+        docs = await db.fcm_tokens.find({"company_id": cid}, {"_id": 0, "token": 1, "user_id": 1, "capabilities": 1}).to_list(500)
+        sent = await asyncio.gather(*[
+            _fcm_send_and_clean([d["token"]], title, body, _with_action_token(data, d.get("user_id"), cid),
+                                data_only="actions" in (d.get("capabilities") or []))
+            for d in docs
+        ])
+        return sum(sent)
     except Exception as e:  # noqa: BLE001
         print(f"[fcm] notify failed: {e}")
         return 0
@@ -15291,6 +15379,7 @@ async def _fcm_notify_company(cid: str, title: str, body: str, data: dict) -> in
 class FcmRegisterIn(BaseModel):
     token: str = Field(min_length=20, max_length=4096)
     device_name: Optional[str] = Field(default=None, max_length=80)
+    capabilities: Optional[List[str]] = Field(default=None, max_length=10)
 
 
 def _fcm_admin(user) -> str:
@@ -15309,7 +15398,8 @@ async def fcm_register(body: FcmRegisterIn, user=Depends(get_current_user)):
     await db.fcm_tokens.update_one(
         {"token": body.token},
         {"$set": {"company_id": cid, "user_id": user["id"], "user_name": user.get("name") or user.get("email"),
-                  "device_name": (body.device_name or "Android-toestel").strip(), "platform": "android", "updated_at": now},
+                  "device_name": (body.device_name or "Android-toestel").strip(), "platform": "android", "updated_at": now,
+                  "capabilities": [str(c)[:30] for c in (body.capabilities or [])]},
          "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
         upsert=True,
     )
@@ -15325,7 +15415,7 @@ async def fcm_unregister(body: FcmRegisterIn, user=Depends(get_current_user)):
 @api.get("/push/fcm/devices")
 async def fcm_devices(user=Depends(get_current_user)):
     cid = _fcm_admin(user)
-    docs = await db.fcm_tokens.find({"company_id": cid}, {"_id": 0, "token": 0}).sort("updated_at", -1).to_list(200)
+    docs = await db.fcm_tokens.find({"company_id": cid}, {"_id": 0, "token": 0, "capabilities": 0}).sort("updated_at", -1).to_list(200)
     return {"configured": fcm_configured(), "devices": docs}
 
 

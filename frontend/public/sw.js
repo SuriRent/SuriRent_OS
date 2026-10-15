@@ -6,7 +6,7 @@
  * - Network-first for API GETs met stale cache-fallback bij offline
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v108';
+const CACHE_VERSION = 'surirent-v109';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target
@@ -331,7 +331,10 @@ self.addEventListener('push', (event) => {
     badge: '/kiosk-icons/kiosk-72.png',
     data: data.data || {},
     vibrate: requireApproval ? [300, 100, 300, 100, 300, 100, 500] : [200, 100, 200, 100, 300],
-    actions: requireApproval ? [
+    actions: (data.data && data.data.action_token) ? [
+      { action: 'approve', title: 'Goedkeuren' },
+      { action: 'reject', title: 'Afwijzen' },
+    ] : requireApproval ? [
       { action: 'open', title: 'Bekijk + goedkeuren' },
       { action: 'dismiss', title: 'Later' },
     ] : [
@@ -385,6 +388,31 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   if (event.action === 'dismiss') return;
   const data = event.notification.data || {};
+  // Goedkeuren / Afwijzen direct vanuit de melding — app hoeft niet open.
+  if ((event.action === 'approve' || event.action === 'reject') && data.action_token) {
+    event.waitUntil((async () => {
+      let title = 'SuriRent';
+      let body = '';
+      try {
+        const r = await fetch(data.action_url || '/api/push/action', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: data.action_token, action: event.action }),
+        });
+        const j = await r.json().catch(() => ({}));
+        title = r.ok ? (event.action === 'approve' ? 'Goedgekeurd' : 'Afgewezen') : 'Niet gelukt';
+        body = r.ok ? (j.message || '') : (j.detail || 'Probeer het opnieuw in de app');
+      } catch {
+        title = 'Niet gelukt'; body = 'Geen verbinding — probeer het opnieuw in de app';
+      }
+      await self.registration.showNotification(title, {
+        body, icon: '/kiosk-icons/kiosk-192.png', badge: '/kiosk-icons/kiosk-72.png',
+        tag: `surirent-action-${data.payment_id || Date.now()}`, data: { url: data.url || '/admin/payments' },
+      });
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const c of clients) c.postMessage({ type: 'PAYMENT_ACTION_DONE', payment_id: data.payment_id, action: event.action });
+    })());
+    return;
+  }
   let target = data.url;
   if (!target) {
     switch (data.kind) {

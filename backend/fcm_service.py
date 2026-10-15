@@ -45,14 +45,19 @@ def _http() -> httpx.AsyncClient:
     return _client
 
 
-async def _send_one(token: str, title: str, body: str, data: dict) -> str:
-    """Return 'ok', 'unregistered' of 'error'."""
-    msg = {"message": {
-        "token": token,
-        "notification": {"title": title[:120], "body": body[:1000]},
-        "data": {k: str(v) for k, v in (data or {}).items() if v is not None},
-        "android": {"priority": "HIGH", "notification": {"sound": "default", "channel_id": "surirent_default"}},
-    }}
+async def _send_one(token: str, title: str, body: str, data: dict, data_only: bool = False) -> str:
+    """Return 'ok', 'unregistered' of 'error'. data_only: de app bouwt zelf de melding (met knoppen)."""
+    payload = {k: str(v) for k, v in (data or {}).items() if v is not None and not isinstance(v, (dict, list))}
+    if data_only:
+        payload.update({"title": title[:120], "body": body[:1000]})
+        msg = {"message": {"token": token, "data": payload, "android": {"priority": "HIGH"}}}
+    else:
+        msg = {"message": {
+            "token": token,
+            "notification": {"title": title[:120], "body": body[:1000]},
+            "data": payload,
+            "android": {"priority": "HIGH", "notification": {"sound": "default", "channel_id": "surirent_default"}},
+        }}
     url = f"https://fcm.googleapis.com/v1/projects/{_PROJECT_ID}/messages:send"
     for attempt in range(3):
         try:
@@ -79,11 +84,11 @@ async def _send_one(token: str, title: str, body: str, data: dict) -> str:
     return "error"
 
 
-async def send_fcm(tokens: list, title: str, body: str, data: dict | None = None) -> dict:
+async def send_fcm(tokens: list, title: str, body: str, data: dict | None = None, data_only: bool = False) -> dict:
     """Stuur naar meerdere tokens; geeft {'sent': n, 'unregistered': [tokens]}."""
     if not fcm_configured() or not tokens:
         return {"sent": 0, "unregistered": []}
-    results = await asyncio.gather(*[_send_one(t, title, body, data or {}) for t in tokens], return_exceptions=True)
+    results = await asyncio.gather(*[_send_one(t, title, body, data or {}, data_only) for t in tokens], return_exceptions=True)
     return {
         "sent": sum(1 for r in results if r == "ok"),
         "unregistered": [t for t, r in zip(tokens, results) if r == "unregistered"],

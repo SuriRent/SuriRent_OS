@@ -32,14 +32,15 @@ function deviceName(extra) {
   return m ? m[1].trim() : 'Android-toestel';
 }
 
-async function register(token, name) {
+async function register(token, name, caps) {
   if (!valid(token)) return;
   token = token.trim();
   status.token = token;
   if (token === lastToken && status.registered) return;
   lastToken = token;
   try {
-    await api.post('/push/fcm/register', { token, device_name: deviceName(name) });
+    const capabilities = caps || window.__SURIRENT_FCM_CAPS__;
+    await api.post('/push/fcm/register', { token, device_name: deviceName(name), capabilities: Array.isArray(capabilities) ? capabilities : undefined });
     localStorage.setItem(KEY, token);
     status.registered = true; status.error = '';
     window.dispatchEvent(new Event('fcm-registered'));
@@ -58,7 +59,7 @@ function fromPayload(raw) {
   const src = m.data && typeof m.data === 'object' ? { ...m, ...m.data } : m;
   const token = src.token || src.fcmToken || src.fcm_token || src.pushToken || src.firebaseToken || src.value;
   if (!valid(token) || (src.type && !MSG_TYPES.test(String(src.type)))) return null;
-  return { token, name: src.device_name || src.deviceName || src.model };
+  return { token, name: src.device_name || src.deviceName || src.model, caps: src.capabilities };
 }
 
 function scan() {
@@ -106,12 +107,12 @@ export function installFcmApk() {
     const onMsg = (e) => {
       const url = openPayload(e?.data);
       if (url) { openFromNotification(url); return; }
-      const r = fromPayload(e?.data); if (r) register(r.token, r.name);
+      const r = fromPayload(e?.data); if (r) register(r.token, r.name, r.caps);
     };
-    window.addEventListener('apk-fcm-token', (e) => register(e.detail?.token, e.detail?.device_name));
+    window.addEventListener('apk-fcm-token', (e) => register(e.detail?.token, e.detail?.device_name, e.detail?.capabilities));
     window.addEventListener('message', onMsg);
     document.addEventListener('message', onMsg);
-    window.onFcmToken = (t, name) => register(t, name);
+    window.onFcmToken = (t, name, caps) => register(t, name, caps);
     window.onFcmOpen = openFromNotification;
   }
   if (!isApkApp()) return;
