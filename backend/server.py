@@ -8387,7 +8387,7 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
     # FastAPI's jsonable_encoder laten crashen).
     if not include_logo:
         p = {k: v for k, v in p.items() if not isinstance(v, (bytes, bytearray))}
-    return {**p, "tenant_name": tenant_name, "tenant_phone": tenant_phone,
+    return {**p, "tenant_name": tenant_name, "tenant_phone": tenant_phone or p.get("tenant_phone"),
             "apartment_number": apt_number,
             "location_name": location_name,
             "location_city": location_city,

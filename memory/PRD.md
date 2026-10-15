@@ -828,3 +828,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - POST /api/push/action (ondertekend token per beheerder, 7 dagen, eenmalig via status-check). _approve_payment_core/_reject_payment_core. Opgeslagen handtekening: GET/PUT /api/me/approval-signature (ApprovalSignatureCard). SW toont knoppen bij action_token. FCM: capabilities ["actions"] → data-only bericht. approved_via in PaymentOut.
 - Fix: Notificaties-pagina crashte in headless Chromium (CLEAR_BADGE → Badging API); clearBadge nu stabiel (useCallback) en overgeslagen bij navigator.webdriver.
 - Getest iteration_95 (20/20 backend) + handmatige UI-test handtekening.
+
+## 2026-06 — Auto-print succespagina + bon velden
+- Succespagina kiosk: KtpPrintButton autoSend (eerste online KT-V520 via WS, niet als toestel zelf KT-V520) + BtPrintButton autoSend (gekoppelde BT printer). iOS blijft AirPrint. Bon (lines + thermische HTML): Tel. huurder + Ontvangen door (kiosk_employee_name/received_by). Getest iteration_96.

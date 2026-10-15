@@ -37,7 +37,7 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
   }, [onPrinted]);
 
   const send = async (printer) => {
-    setMenu(false); setStatus('sending'); setMsg('Verzonden…');
+    clearTimeout(timer.current); setMenu(false); setStatus('sending'); setMsg('Verzonden…');
     try {
       const { data } = await api.post(`/kiosk/print-log/by-payment/${log.payment_id}/remote-print`, { printer_id: printer.id });
       job.current = data.job_id;
@@ -56,7 +56,7 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
   const onClick = () => (printers.length === 1 ? send(printers[0]) : setMenu((m) => !m));
   return (
     <div className="relative flex-1 sm:flex-none">
-      <button onClick={onClick} disabled={none || status === 'sending'} data-testid={`kiosk-print-log-ktp-${log.id}`}
+      <button onClick={onClick} disabled={none} data-testid={`kiosk-print-log-ktp-${log.id}`}
         title={none ? 'Geen KT-V520 online' : 'Print via KT-V520'}
         className="w-full h-10 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-40 transition-colors">
         {status === 'sending' ? <Loader2 className="w-4 h-4 animate-spin" /> : status === 'done' ? <Check className="w-4 h-4 text-emerald-400" /> : <Printer className="w-4 h-4" />}
