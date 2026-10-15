@@ -473,6 +473,7 @@ import { installPendingApprovalDingListener } from '../../lib/notify-sound';
 import { useForegroundPendingNotify } from '../../lib/foreground-notify';
 import { useMorningBriefing } from '../../lib/morning-briefing';
 import { useApprovalNotifySync } from '../../lib/approval-notify-sync';
+import { installFcmApk } from '../../lib/fcm-apk';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 
 const BASE_TABS = [
@@ -4290,6 +4291,7 @@ export default function AdminDashboard() {
   // toast + ding-ding bij elke nieuwe pending betaling.
   useForegroundPendingNotify({ enabled: true });
   useApprovalNotifySync();
+  useEffect(() => { installFcmApk(); }, []);
 
   // Dagelijkse briefing — toont 1× per dag tussen 06:00-12:00 een modal
   // met overdue overzicht + nieuwe activiteit van vandaag.

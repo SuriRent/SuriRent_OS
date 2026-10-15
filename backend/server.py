@@ -15186,6 +15186,7 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
         })
     except Exception as e:  # noqa: BLE001
         print(f"[sse] broadcast failed: {e}")
+    asyncio.create_task(_fcm_notify_company(company_id, title, body, data or {}))
 
     if not admin_ids:
         return 0
@@ -15207,6 +15208,110 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
 
     results = await asyncio.gather(*[_send_one(s) for s in subs], return_exceptions=True)
     return sum(1 for r in results if r is True)
+
+
+# =====================================================================
+# Android-app pushmeldingen via Firebase Cloud Messaging (FCM)
+# =====================================================================
+from fcm_service import send_fcm, fcm_configured  # noqa: E402
+
+_FCM_KIND_PREF = {
+    "payment": "payment", "payment_plan": "payment",
+    "overdue": "overdue",
+    "approval": "approval", "payment_pending": "approval",
+    "kasgeld": "kasgeld",
+    "kiosk_login": "employee", "kiosk_logout": "employee",
+    "maintenance": "maintenance",
+    "auto_invoice": "invoices", "invoice_reminder": "invoices",
+}
+_FCM_ADMIN_ROLES = ("admin", "owner", "boekhouder")
+
+
+async def _fcm_prefs(cid: str) -> dict:
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "fcm_prefs": 1})
+    return {**_empty_section("fcm_prefs"), **((cs or {}).get("fcm_prefs") or {})}
+
+
+async def _fcm_send_and_clean(tokens: list, title: str, body: str, data: dict) -> int:
+    res = await send_fcm(tokens, title, body, data)
+    if res["unregistered"]:
+        await db.fcm_tokens.delete_many({"token": {"$in": res["unregistered"]}})
+    return res["sent"]
+
+
+async def _fcm_notify_company(cid: str, title: str, body: str, data: dict) -> int:
+    """Stuur naar alle gekoppelde Android-toestellen van beheerders (als de soort aan staat)."""
+    pref = _FCM_KIND_PREF.get((data or {}).get("kind"))
+    if not cid or not pref or not fcm_configured():
+        return 0
+    try:
+        if not (await _fcm_prefs(cid)).get(pref, True):
+            return 0
+        tokens = await db.fcm_tokens.distinct("token", {"company_id": cid})
+        return await _fcm_send_and_clean(tokens, title, body, data)
+    except Exception as e:  # noqa: BLE001
+        print(f"[fcm] notify failed: {e}")
+        return 0
+
+
+class FcmRegisterIn(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+    device_name: Optional[str] = Field(default=None, max_length=80)
+
+
+def _fcm_admin(user) -> str:
+    if user.get("role") not in _FCM_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Alleen beheerders kunnen Android-meldingen ontvangen")
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    return cid
+
+
+@api.post("/push/fcm/register")
+async def fcm_register(body: FcmRegisterIn, user=Depends(get_current_user)):
+    cid = _fcm_admin(user)
+    now = iso(now_utc())
+    await db.fcm_tokens.update_one(
+        {"token": body.token},
+        {"$set": {"company_id": cid, "user_id": user["id"], "user_name": user.get("name") or user.get("email"),
+                  "device_name": (body.device_name or "Android-toestel").strip(), "platform": "android", "updated_at": now},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+        upsert=True,
+    )
+    return {"ok": True, "configured": fcm_configured()}
+
+
+@api.post("/push/fcm/unregister")
+async def fcm_unregister(body: FcmRegisterIn, user=Depends(get_current_user)):
+    await db.fcm_tokens.delete_one({"token": body.token, "user_id": user["id"]})
+    return {"ok": True}
+
+
+@api.get("/push/fcm/devices")
+async def fcm_devices(user=Depends(get_current_user)):
+    cid = _fcm_admin(user)
+    docs = await db.fcm_tokens.find({"company_id": cid}, {"_id": 0, "token": 0}).sort("updated_at", -1).to_list(200)
+    return {"configured": fcm_configured(), "devices": docs}
+
+
+@api.delete("/push/fcm/devices/{device_id}")
+async def fcm_device_delete(device_id: str, user=Depends(get_current_user)):
+    cid = _fcm_admin(user)
+    res = await db.fcm_tokens.delete_one({"id": device_id, "company_id": cid})
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Toestel niet gevonden")
+    return {"ok": True}
+
+
+@api.post("/push/fcm/test")
+async def fcm_test(user=Depends(get_current_user)):
+    cid = _fcm_admin(user)
+    if not fcm_configured():
+        raise HTTPException(status_code=503, detail="Firebase is niet ingesteld op de server")
+    tokens = await db.fcm_tokens.distinct("token", {"company_id": cid})
+    sent = await _fcm_send_and_clean(tokens, "SuriRent test", "Android-meldingen werken!", {"kind": "test", "url": "/admin/notifications"})
+    return {"sent": sent, "devices": len(tokens)}
 
 
 # =====================================================================
@@ -15472,7 +15577,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts", "kiosk_devices"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts", "kiosk_devices", "fcm_prefs"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:

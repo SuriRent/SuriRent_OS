@@ -132,6 +132,9 @@ def empty_section(section: str) -> dict:
         },
         # Kiosk apparaten: KingTop KT-V520 (KTPsdk.aar in de APK) voor alle kiosks.
         "kiosk_devices": {"kt_v520_enabled": False, "printer_mode": None, "paper_width": 58},
+        # Android-app (FCM) meldingen per soort — één instelling per bedrijf.
+        "fcm_prefs": {"payment": True, "overdue": True, "approval": True, "kasgeld": True,
+                      "employee": True, "maintenance": True, "invoices": True},
     }.get(section, {})
 
 

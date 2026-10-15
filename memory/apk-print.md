@@ -56,3 +56,11 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
   - `{type:"BT_SCAN"}` → zoek printers, antwoord: `window.dispatchEvent(new CustomEvent('apk-bt-devices',{detail:{devices:[{name,address}]}}))` (via injectJavaScript).
   - `{type:"BT_SELECT", address, name}` → bewaar printer.
   - `{type:"PRINT_RECEIPT", printer:"bluetooth", bt_address, paper_width, lines:[...]}` → ESC/POS naar die printer (classic SPP of BLE). Lines al opgemaakt op 32 (58mm) / 48 (80mm) tekens.
+
+## FCM pushmeldingen (Instellingen → Notificaties → Android App Meldingen)
+- Firebase project `surirent-b7379`; backend: fcm_service.py (HTTP v1), env FCM_PROJECT_ID + FCM_SERVICE_ACCOUNT_B64.
+- APK moet: google-services.json (zelfde project), firebase-messaging, POST_NOTIFICATIONS (Android 13+), kanaal `surirent_default`.
+- Token naar web-app: op `{type:"FCM_GET_TOKEN"}` (en bij onNewToken) injecteren:
+  `window.dispatchEvent(new CustomEvent('apk-fcm-token',{detail:{token:'...',device_name:'Samsung A15'}}))`
+  of vóór laden `window.__SURIRENT_FCM_TOKEN__ = '...'`. Web-app registreert dan POST /api/push/fcm/register (ingelogde beheerder).
+- Data in melding: kind, url (+ ids) als strings → bij tik in de WebView naar `url` navigeren.
