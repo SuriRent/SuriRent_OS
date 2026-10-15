@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useDeepLink } from '../../../lib/deep-link';
 import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { playApproveConfirm, playSwoosh, playErrorBuzz } from '../../../lib/tap-sounds';
@@ -18,6 +19,9 @@ export default function PaymentPlans() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState(null); // plan in detail-view
+  useDeepLink('plan', (id) => {
+    api.get(`/payment-plans/${id}`).then(({ data }) => setDetail(data)).catch(() => {});
+  });
 
   // SWR — cache-hit bij navigatie; SSE-broadcast (globalMutate in
   // AdminDashboard) refresht dezelfde key automatisch bij mutaties

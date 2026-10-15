@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useDeepLink } from '../../../lib/deep-link';
 import useSWRInfinite from 'swr/infinite';
 import {
   Plus, Loader2, FileText, Wand2, Search,
@@ -125,6 +126,11 @@ export default function Invoices() {
     window.addEventListener('focus-entity', handler);
     return () => window.removeEventListener('focus-entity', handler);
   }, [groups]);
+  // Melding aangetikt → open direct de facturen van die huurder.
+  useDeepLink('invoice', (id, params) => {
+    const tid = params.get('tenant');
+    if (tid) window.dispatchEvent(new CustomEvent('focus-entity', { detail: { type: 'invoice', id, tenant_id: tid } }));
+  });
 
   const allCount = summary?.allCount || 0;
   const openCount = summary?.openCount || 0;

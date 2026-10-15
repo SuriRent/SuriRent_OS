@@ -84,15 +84,35 @@ export function requestFcmToken() {
 
 let poll = null;
 
+// Tik op melding: APK roept window.onFcmOpen(url) aan of stuurt {type:'FCM_OPEN', url}.
+export function openFromNotification(url) {
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) return;
+  const base = window.location.pathname.match(/^(.*?)\/admin(\/|$)/)?.[1] || '';
+  window.history.pushState({}, '', `${base}${url}`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function openPayload(raw) {
+  let m = raw;
+  if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch { return null; } }
+  if (!m || typeof m !== 'object' || !/^(FCM_OPEN|NOTIFICATION_OPEN|OPEN_URL)$/.test(String(m.type || ''))) return null;
+  return m.url || m.data?.url || null;
+}
+
 // Bij elke (her)start van het beheer opnieuw koppelen: luisteraars één keer, token opnieuw opvragen.
 export function installFcmApk() {
   if (!installed) {
     installed = true;
-    const onMsg = (e) => { const r = fromPayload(e?.data); if (r) register(r.token, r.name); };
+    const onMsg = (e) => {
+      const url = openPayload(e?.data);
+      if (url) { openFromNotification(url); return; }
+      const r = fromPayload(e?.data); if (r) register(r.token, r.name);
+    };
     window.addEventListener('apk-fcm-token', (e) => register(e.detail?.token, e.detail?.device_name));
     window.addEventListener('message', onMsg);
     document.addEventListener('message', onMsg);
     window.onFcmToken = (t, name) => register(t, name);
+    window.onFcmOpen = openFromNotification;
   }
   if (!isApkApp()) return;
   status.registered = false;

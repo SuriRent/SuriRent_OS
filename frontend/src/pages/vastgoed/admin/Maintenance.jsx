@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useDeepLink, flashElement } from '../../../lib/deep-link';
 import { Plus, X, Check, Loader2, Wrench, Trash2 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
@@ -121,6 +122,7 @@ export default function Maintenance() {
   const apartments = aptsRaw || [];
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
+  useDeepLink('maintenance', (id) => { setFilter('all'); flashElement(`[data-testid="maint-card-${id}"]`); });
 
   const load = useCallback(async () => {
     await Promise.all([refetchItems(), refetchApts()]);

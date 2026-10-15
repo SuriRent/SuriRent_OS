@@ -69,3 +69,6 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
   `window.dispatchEvent(new CustomEvent('apk-fcm-token',{detail:{token:'...',device_name:'Samsung A15'}}))`
   of vóór laden `window.__SURIRENT_FCM_TOKEN__ = '...'`. Web-app registreert dan POST /api/push/fcm/register (ingelogde beheerder).
 - Data in melding: kind, url (+ ids) als strings → bij tik in de WebView naar `url` navigeren.
+- Tik op melding: elke FCM-melding bevat `data.url` (bijv. `/admin/payments?open=payment:<id>`, `/admin/invoices?open=invoice:<id>&tenant=<tid>`, `/admin/payment_plans?open=plan:<id>`, `/admin/maintenance?open=maintenance:<id>`, `/admin/kasgeld`).
+  APK: bij tik → als WebView al open: `injectJavaScript("window.onFcmOpen('" + url + "');true;")` of postMessage `{type:'FCM_OPEN', url}`; bij koude start: WebView laden op `https://<domein>` + url.
+  Goedkeuring nodig → opent direct het goedkeuringsscherm (handtekening + Goedkeuren/Afwijzen).

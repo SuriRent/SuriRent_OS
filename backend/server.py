@@ -9295,6 +9295,14 @@ async def payments_pending_count(user=Depends(get_current_user)):
     return {"count": n, "latest": latest}
 
 
+@api.get("/payments/{payment_id}", response_model=PaymentOut)
+async def get_payment(payment_id: str, user=Depends(get_current_user)):
+    doc = await db.payments.find_one({**scope(user), "id": payment_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+    return (await _enrich_payments_bulk([doc]))[0]
+
+
 @api.post("/payments/{pid}/approve", response_model=PaymentOut)
 async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require_role("admin", "boekhouder"))):
     """Beheerder keurt een pending kiosk-betaling goed. Slaat handtekening op
@@ -15147,6 +15155,27 @@ from push_service import send_push  # noqa: E402
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 
 
+async def _deep_link(d: dict) -> str:
+    """Directe link naar het juiste item (betaling, goedkeuring, factuur, regeling, onderhoud)."""
+    kind = d.get("kind")
+    pid = d.get("payment_id")
+    if pid and kind in ("payment", "payment_pending", "approval"):
+        return f"/admin/payments?open=payment:{pid}"
+    if d.get("plan_id"):
+        return f"/admin/payment_plans?open=plan:{d['plan_id']}"
+    if d.get("invoice_id"):
+        inv = await db.invoices.find_one({"id": d["invoice_id"]}, {"_id": 0, "tenant_id": 1})
+        tid = (inv or {}).get("tenant_id") or ""
+        return f"/admin/invoices?open=invoice:{d['invoice_id']}&tenant={tid}"
+    if d.get("maintenance_id"):
+        return f"/admin/maintenance?open=maintenance:{d['maintenance_id']}"
+    if kind in ("kasgeld", "kiosk_login", "kiosk_logout"):
+        return "/admin/kasgeld"
+    if kind in ("overdue", "auto_invoice", "invoice_reminder"):
+        return d.get("url") or "/admin/invoices"
+    return d.get("url") or "/admin"
+
+
 async def _notify_company_admins(company_id: str, title: str, body: str, data: dict | None = None) -> int:
     """Stuur een push naar ALLE admins/owners/boekhouders van een bepaalde
     company. Push-dispatch gebeurt PARALLEL via asyncio.to_thread zodat het
@@ -15163,6 +15192,11 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
     """
     if not company_id:
         return 0
+    data = dict(data or {})
+    try:
+        data["url"] = await _deep_link(data)
+    except Exception as e:  # noqa: BLE001
+        print(f"[notify] deep link failed: {e}")
     # Vind alle admin/owner/boekhouder users van deze company. Boekhouders
     # hebben dezelfde betalingsverwerkings-rechten als admins (geen approval
     # nodig) dus krijgen ook real-time meldingen.
@@ -17363,7 +17397,7 @@ async def tenant_portal_pay_installment(
             tenant.get("company_id"),
             f"Termijnbetaling regeling — {plan.get('currency', '')} {float(body.amount or 0):,.2f}",
             f"{tenant.get('name')} betaalde termijn {seq} via Huurder Kiosk",
-            {"kind": "payment", "url": "/admin/payment_plans", "badge_inc": 1},
+            {"kind": "payment", "url": "/admin/payment_plans", "badge_inc": 1, "plan_id": plan_id},
         )
     except Exception as e:  # noqa: BLE001
         print(f"[push] tenant pay-installment notify failed: {e}")
@@ -17440,7 +17474,8 @@ async def kiosk_pay_installment(
                 cid,
                 "Termijnbetaling wacht op goedkeuring",
                 f"{kiosk_emp_name or 'Kiosk'} ontving termijn {seq} voor {plan.get('tenant_name', 'huurder')}",
-                {"kind": "approval", "url": "/admin/payments", "badge_inc": 1},
+                {"kind": "approval", "url": "/admin/payments", "badge_inc": 1,
+                 "payment_id": (inst or {}).get("payment_id"), "plan_id": plan_id},
             )
     except Exception as e:  # noqa: BLE001
         print(f"[push] kiosk pay-installment notify failed: {e}")

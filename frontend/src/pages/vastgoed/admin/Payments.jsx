@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
   Plus, X, Check, Loader2, Search, FileText, Mail, ShieldCheck, ChevronRight, ChevronLeft,
@@ -948,6 +949,14 @@ export default function Payments() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [tab] = useState('month'); // altijd op Maand; vandaag-tab/methodes verwijderd
   const [detailPayment, setDetailPayment] = useState(null);
+  // Melding aangetikt → open direct de betaling (of het goedkeuringsscherm).
+  useDeepLink('payment', async (id) => {
+    try {
+      const { data } = await api.get(`/payments/${id}`);
+      if (data.status === 'pending_approval') { setDetailPayment(null); setApproveFor(data); refetchPend(); }
+      else setDetailPayment(data);
+    } catch { /* betaling niet (meer) gevonden → lijst blijft staan */ }
+  });
   const [expanded, setExpanded] = useState(null); // Alleen voor MOBILE inline-expand
   const toggleExpandMobile = (id) => setExpanded((cur) => (cur === id ? null : id));
 
