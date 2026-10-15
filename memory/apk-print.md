@@ -60,7 +60,12 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 ## FCM pushmeldingen (Instellingen → Notificaties → Android App Meldingen)
 - Firebase project `surirent-b7379`; backend: fcm_service.py (HTTP v1), env FCM_PROJECT_ID + FCM_SERVICE_ACCOUNT_B64.
 - APK moet: google-services.json (zelfde project), firebase-messaging, POST_NOTIFICATIONS (Android 13+), kanaal `surirent_default`.
-- Token naar web-app: op `{type:"FCM_GET_TOKEN"}` (en bij onNewToken) injecteren:
+- Web-app vangt het token op elk van deze manieren op (één is genoeg):
+  - `webviewRef.injectJavaScript("window.onFcmToken('TOKEN','Model');true;")`
+  - `webviewRef.postMessage(JSON.stringify({type:'FCM_TOKEN', token}))` (web luistert op window/document 'message')
+  - `window.Android.getFcmToken()` (JavascriptInterface) of `window.fcmToken` / `window.__SURIRENT_FCM_TOKEN__` vóór laden
+  - web vraagt erom met postMessage `{type:"FCM_GET_TOKEN"}` (ook GET_FCM_TOKEN / REQUEST_FCM_TOKEN)
+- Token naar web-app (origineel): op `{type:"FCM_GET_TOKEN"}` (en bij onNewToken) injecteren:
   `window.dispatchEvent(new CustomEvent('apk-fcm-token',{detail:{token:'...',device_name:'Samsung A15'}}))`
   of vóór laden `window.__SURIRENT_FCM_TOKEN__ = '...'`. Web-app registreert dan POST /api/push/fcm/register (ingelogde beheerder).
 - Data in melding: kind, url (+ ids) als strings → bij tik in de WebView naar `url` navigeren.

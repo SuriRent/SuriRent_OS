@@ -816,3 +816,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Endpoints: POST /api/push/fcm/register|unregister|test, GET /api/push/fcm/devices, DELETE /api/push/fcm/devices/{id}. Collectie fcm_tokens. Ongeldige tokens automatisch opgeruimd.
 - UI: Notificaties → "Android App Meldingen" (components/AndroidAppMeldingen.jsx); APK-token via lib/fcm-apk.js (FCM_GET_TOKEN / apk-fcm-token event). APK-zijde nog te bouwen (memory/apk-print.md).
 - Getest iteration_92 (13/13 backend, frontend OK).
+
+## 2026-06 — APK auto-koppelen FCM
+- lib/fcm-apk.js vangt token op via event, postMessage, window.onFcmToken, window-vars, Android.getFcmToken(), localStorage; statuschip "fcm-this-device". Getest iteration_93.

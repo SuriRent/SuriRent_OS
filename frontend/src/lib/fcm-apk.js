@@ -82,17 +82,23 @@ export function requestFcmToken() {
   scan();
 }
 
+let poll = null;
+
+// Bij elke (her)start van het beheer opnieuw koppelen: luisteraars één keer, token opnieuw opvragen.
 export function installFcmApk() {
-  if (installed) return;
-  installed = true;
-  const onMsg = (e) => { const r = fromPayload(e?.data); if (r) register(r.token, r.name); };
-  window.addEventListener('apk-fcm-token', (e) => register(e.detail?.token, e.detail?.device_name));
-  window.addEventListener('message', onMsg);
-  document.addEventListener('message', onMsg);
-  window.onFcmToken = (t, name) => register(t, name);
+  if (!installed) {
+    installed = true;
+    const onMsg = (e) => { const r = fromPayload(e?.data); if (r) register(r.token, r.name); };
+    window.addEventListener('apk-fcm-token', (e) => register(e.detail?.token, e.detail?.device_name));
+    window.addEventListener('message', onMsg);
+    document.addEventListener('message', onMsg);
+    window.onFcmToken = (t, name) => register(t, name);
+  }
   if (!isApkApp()) return;
+  status.registered = false;
   requestFcmToken();
+  clearInterval(poll);
   let n = 0;
-  const iv = setInterval(() => { n += 1; if (status.registered || n > 30) clearInterval(iv); else scan(); }, 2000);
+  poll = setInterval(() => { n += 1; if (status.registered || n > 30) clearInterval(poll); else scan(); }, 2000);
   emit();
 }

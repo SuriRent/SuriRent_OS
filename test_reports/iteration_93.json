@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only test of APK → FCM token auto-pairing. Verified installFcmApk picks up tokens from (a) window.fcmToken set before login, (b) window.postMessage JSON {type:FCM_TOKEN,token}, (c) window.onFcmToken(token,name), (d) CustomEvent 'apk-fcm-token'. All four variants triggered POST /api/push/fcm/register with correct device_name. Invalid tokens ('abc', UUID, 'not-valid') were ignored (0 register calls). No APK simulation on desktop browser: 0 register calls and no fcm-this-device chip rendered. APK simulated without token: 0 register calls and FCM_GET_TOKEN was pushed to ReactNativeWebView bridge; UI logic for amber 'Wacht op Firebase-token…' confirmed by code review. Device list in Notificaties tab shows registered device with 'Dit toestel is gekoppeld' green chip. Cleanup done — all 4 fake devices deleted via DELETE /api/push/fcm/devices/{id}.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminDashboard Notificaties tab (headless Chromium only)", "issues": ["Playwright 'Target crashed' intermittently when navigating to /admin/notifications on this preview. Did not reproduce in normal Chrome via screenshot capture; could not be verified further. Most likely heavy SSE + lazy module load combined with headless memory; low priority but worth monitoring."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/screenshots/iter93_fcm_apk.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "fcm-apk.js:lastToken/status is module-level singleton. After logout + login as a different admin, previously-registered token is still cached so re-registering under new user is skipped unless the token changes. Consider resetting status/lastToken on logout.",
+    "fcm-apk.js: `installed = true` means a reload-less bridge switch (APK bridge appearing after mount) won't start the polling interval. Minor edge case for the WebView flow.",
+    "AndroidAppMeldingen ThisDevice chip only updates on 'fcm-status' event. When token later arrives but register fails silently (e.g., 401), the chip still says 'Wacht op…' until a status event is emitted. register() does emit on failure, so this is OK — just document."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a", "frontend": "100% (all required scenarios verified)" },
+  "test_credentials": "demo@surirent.sr / demo1234 (demo tenant)",
+  "seed_data_creation": "4 fake FCM devices created during the register-variant test; all deleted via DELETE /api/push/fcm/devices/{id} after test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To re-test APK pairing: use playwright page.context.add_init_script to inject `window.ReactNativeWebView={postMessage:(m)=>{(window.__sent=window.__sent||[]).push(m)}}` and (optionally) `window.fcmToken='<proj>:<80+chars>'` BEFORE page.goto. Valid token regex: /^[\\w-]{10,}:[\\w-]{80,}$/. After login as demo, admin dashboard calls installFcmApk → scan() → POST /api/push/fcm/register. Variants also accepted: window.postMessage(JSON.stringify({type:'FCM_TOKEN',token,device_name}), '*'); window.onFcmToken(token,name); CustomEvent 'apk-fcm-token' detail{token,device_name}. Navigation via tab click [data-testid=tab-notifications] occasionally crashes the headless browser; use GET /api/push/fcm/devices (via page.evaluate fetch) to verify registration without navigating.",
+  "rca of the issue": "N/A — this was a verification run, not a bug reproduction. The underlying fix in frontend/src/lib/fcm-apk.js correctly handles the 'APK registers Kiosk-ID but web app shows no linked Android device' problem: after login the installed listeners + scan + apkBridge FCM_GET_TOKEN request cover all common APK → WebView token delivery patterns."
+}
