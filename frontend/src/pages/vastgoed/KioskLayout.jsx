@@ -2716,7 +2716,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
           </button>
           <div className="flex items-start gap-2">
             {!isKtpDevice() && payment.id && (
-              <div className="flex-1 min-w-0" data-testid="receipt-ktp-print">
+              <div className="flex-1 min-w-0 empty:hidden" data-testid="receipt-ktp-print">
                 <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters autoSend />
               </div>
             )}

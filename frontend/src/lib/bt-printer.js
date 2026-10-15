@@ -2,6 +2,7 @@
 // - Browser (Chrome/Edge op Android & Windows): Web Bluetooth (BLE).
 // - Android-APK: via de APK-brug (BT_SCAN / PRINT_RECEIPT printer:"bluetooth").
 // - iOS: geen Bluetooth in de browser → printvenster (AirPrint).
+import { useEffect, useState } from 'react';
 import { apkBridge } from './kiosk-print';
 
 const KEY = 'bt_printer';
@@ -143,4 +144,25 @@ export function testLines(width = paperWidth()) {
     { text: 'De printer werkt!', align: 'center', bold: true },
     { text: '', align: 'left' },
   ];
+}
+
+// Is de gekoppelde printer nu echt bereikbaar? (browser: stille verbinding; app: gekoppeld)
+export async function btReady() {
+  const saved = getSavedPrinter();
+  if (!saved || btSupport() === 'none') return false;
+  if (saved.via === 'apk') return !!apkBridge();
+  try { await connectSaved(); return true; } catch { return false; }
+}
+
+export function useBtReady(pollMs = 15000) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () => btReady().then((r) => { if (alive) setReady(r); });
+    check();
+    const id = setInterval(check, pollMs);
+    window.addEventListener('bt-printer-changed', check);
+    return () => { alive = false; clearInterval(id); window.removeEventListener('bt-printer-changed', check); };
+  }, [pollMs]);
+  return ready;
 }

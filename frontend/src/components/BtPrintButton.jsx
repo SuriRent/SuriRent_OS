@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Bluetooth, Check, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
-import { btSupport, getSavedPrinter, printLinesBluetooth } from '../lib/bt-printer';
+import { btSupport, getSavedPrinter, printLinesBluetooth, useBtReady } from '../lib/bt-printer';
 
 // Bon naar de gekoppelde Bluetooth printer van dit toestel (auto + handmatig opnieuw).
 export function BtPrintButton({ paymentId, autoSend = false }) {
@@ -10,6 +10,7 @@ export function BtPrintButton({ paymentId, autoSend = false }) {
   const [status, setStatus] = useState(null);
   const [msg, setMsg] = useState('');
   const autoDone = useRef(false);
+  const ready = useBtReady();
 
   const send = async () => {
     setStatus('sending'); setMsg('');
@@ -26,7 +27,7 @@ export function BtPrintButton({ paymentId, autoSend = false }) {
     send();
   }, [autoSend, usable, paymentId]);
 
-  if (!usable) return null;
+  if (!usable || (!ready && status !== 'done')) return null;
   return (
     <div className="flex-1 min-w-0" data-testid="receipt-bt-print">
       <button onClick={send} disabled={status === 'sending'} data-testid="receipt-bt-print-btn" title={`Print via ${printer.name}`}

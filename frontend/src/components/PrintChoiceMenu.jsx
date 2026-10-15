@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Loader2, Printer, Smartphone } from 'lucide-react';
+import { Bluetooth, ChevronDown, Loader2, Printer, Smartphone } from 'lucide-react';
+import { getSavedPrinter, printLinesBluetooth, useBtReady } from '../lib/bt-printer';
 import { api } from '../lib/api';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 
@@ -27,6 +28,8 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
   statusRef.current = onStatus;
   const printers = useOnlinePrinters(!!pos);
   const first = printers[0];
+  const btReady = useBtReady();
+  const bt = btReady ? getSavedPrinter() : null;
 
   useEffect(() => {
     const onDone = (e) => {
@@ -62,6 +65,16 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
     } catch (e) { setSending(false); onStatus({ kind: 'err', msg: e?.response?.data?.detail || 'Verzenden mislukt' }); }
   };
 
+  const sendBt = async () => {
+    setPos(null); setSending(true); onStatus({ kind: 'sending', msg: `Verzonden naar ${bt.name}…` });
+    try {
+      const { data } = await api.get(`/kiosk/payments/${paymentId}/print-data`);
+      await printLinesBluetooth(data.lines || []);
+      onStatus({ kind: 'ok', msg: `Geprint op ${bt.name}` });
+    } catch (e) { onStatus({ kind: 'err', msg: e?.message || 'Bluetooth printen mislukt' }); }
+    finally { setSending(false); }
+  };
+
   const item = 'w-full text-left px-3 py-2.5 text-sm font-semibold flex items-center gap-2';
   return (
     <>
@@ -74,12 +87,22 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setPos(null)} data-testid={`history-print-menu-backdrop-${paymentId}`} />
           <div className="fixed z-[201] min-w-[220px] bg-white rounded-xl shadow-xl border border-slate-100 py-1" style={pos} data-testid={`history-print-menu-${paymentId}`}>
-            <button onClick={sendKtp} disabled={!first} data-testid={`history-print-ktp-${paymentId}`}
-              className={`${item} text-slate-800 hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent`}>
-              <Printer className="w-4 h-4 text-orange-500" />
-              <span className="flex flex-col"><span>Print via KT-V520</span>
-                <span className="text-[11px] font-medium text-slate-400" data-testid={`history-print-ktp-hint-${paymentId}`}>{first ? first.name : 'Geen KT-V520 online'}</span></span>
-            </button>
+            {first && (
+              <button onClick={sendKtp} data-testid={`history-print-ktp-${paymentId}`}
+                className={`${item} text-slate-800 hover:bg-orange-50`}>
+                <Printer className="w-4 h-4 text-orange-500" />
+                <span className="flex flex-col"><span>Print via KT-V520</span>
+                  <span className="text-[11px] font-medium text-slate-400" data-testid={`history-print-ktp-hint-${paymentId}`}>{first.name}</span></span>
+              </button>
+            )}
+            {bt && (
+              <button onClick={sendBt} data-testid={`history-print-bt-${paymentId}`}
+                className={`${item} text-slate-800 hover:bg-orange-50`}>
+                <Bluetooth className="w-4 h-4 text-blue-600" />
+                <span className="flex flex-col"><span>Print via Bluetooth</span>
+                  <span className="text-[11px] font-medium text-slate-400">{bt.name}</span></span>
+              </button>
+            )}
             <button onClick={() => { setPos(null); onLocal(); }} data-testid={`history-print-local-${paymentId}`}
               className={`${item} text-slate-800 hover:bg-orange-50`}>
               <Smartphone className="w-4 h-4 text-slate-500" /> Afdrukken

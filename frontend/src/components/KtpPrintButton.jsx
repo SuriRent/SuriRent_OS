@@ -53,6 +53,8 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
   }, [autoSend, printers]);
 
   const none = !printers.length;
+  // Alleen tonen als er echt een KT-V520 online is.
+  if (none && status !== 'sending') return null;
   const onClick = () => (printers.length === 1 ? send(printers[0]) : setMenu((m) => !m));
   return (
     <div className="relative flex-1 sm:flex-none">
