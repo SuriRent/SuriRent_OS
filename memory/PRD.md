@@ -831,3 +831,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Auto-print succespagina + bon velden
 - Succespagina kiosk: KtpPrintButton autoSend (eerste online KT-V520 via WS, niet als toestel zelf KT-V520) + BtPrintButton autoSend (gekoppelde BT printer). iOS blijft AirPrint. Bon (lines + thermische HTML): Tel. huurder + Ontvangen door (kiosk_employee_name/received_by). Getest iteration_96.
+
+## 2026-06 — Printknoppen alleen bij actieve printer
+- KtpPrintButton verborgen zonder online KT-V520; BtPrintButton/PrintChoiceMenu-BT alleen bij useBtReady() (web: stille verbinding, APK: gekoppeld). Betalingsgeschiedenis-menu: KT-V520 / Bluetooth / Afdrukken. Getest iteration_97.

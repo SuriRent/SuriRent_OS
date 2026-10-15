@@ -1,0 +1,31 @@
+{
+  "summary": "Iter97 — frontend-only (390x844, kiosk employee flow, geen admin_token). Alle 5 review-eisen rondom conditionele weergave van 'Print via KT-V520' en 'Bluetooth' knoppen bevestigd. (A) Betalingsgeschiedenis — ZONDER actieve printers: menu toont ENKEL [data-testid=history-print-local-{id}] (Afdrukken); history-print-ktp-{id} en history-print-bt-{id} NIET in DOM. (B) Met simulated APK BT (localStorage bt_printer={id:AA:BB,name:'Test BT',via:'apk'} + window.ReactNativeWebView.postMessage bridge): history-print-bt-{id} + history-print-local-{id} aanwezig, GEEN history-print-ktp-{id}. Klik op BT verstuurt 1 PRINT_RECEIPT bericht (printer=bluetooth, 23 lines) en history-print-status-{id} toont 'Geprint op Test BT'. (C) Met fake KT-V520 online (POST /api/kiosk/printers/register + WS /api/kiosk/ws role=printer + keep_online script dat kiosk_printers.last_seen vernieuwt): /api/kiosk/printers/online retourneert de printer; history-print-ktp-{id} (met hint 'TEST_Iter85 KT-V520') + history-print-local-{id} getoond, GEEN BT. (D) Receipt success-pagina ZONDER printers (keep_online gestopt → online=[], geen bt_printer): receipt-thanks rendered met ENKEL [data-testid=receipt-manual-print] (full width 342px, bounding box OK — geen lege gap), kiosk-print-log-ktp-{id} en receipt-bt-print-btn afwezig, receipt-ktp-print wrapper visible=False (empty:hidden collapse) en receipt-bt-print wrapper NIET in DOM. (E) Receipt met KT-V520 online + BT geïnjecteerd: alle 3 knoppen zichtbaar (kiosk-print-log-ktp-{id}, receipt-bt-print-btn, receipt-manual-print); BT auto-send stuurt 1 PRINT_RECEIPT (printer=bluetooth, bt_address=AA:BB, 24 lines) direct na mount. Volledige kiosk flow via location[1]→apt-HUIS 1A→overview-pay-btn→pay-inv-*→payment-next-btn→method-contant→confirm-submit→receipt-thanks werkt met kiosk_token+kiosk_emp_* in localStorage.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/iter97_history_menu_A.jpeg",
+    "/app/test_reports/screenshots/iter97_history_menu_B.jpeg",
+    "/app/test_reports/screenshots/iter97_history_C.jpeg",
+    "/app/test_reports/screenshots/iter97_receipt_noprinter.jpeg",
+    "/app/test_reports/screenshots/iter97_receipt_both.jpeg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KtpPrintButton.jsx:57 — 'if (none && status !== sending) return null;' correct geïmplementeerd: knop verschijnt pas als er een online printer is OF er een lopende print bezig is.",
+    "BtPrintButton.jsx:30 — 'if (!usable || (!ready && status !== done)) return null;' correct — gebruikt useBtReady() voor echte beschikbaarheid-check, niet alleen aanwezigheid in localStorage.",
+    "PrintChoiceMenu.jsx:31 — const bt = btReady ? getSavedPrinter() : null; correct — BT-item verschijnt alleen als useBtReady true is (voor apk: !!apkBridge()).",
+    "PrintChoiceMenu.jsx:30 — first = printers[0]; alleen first item wordt getoond — meerdere KT-V520's niet keuzebaar in Afdruk menu (voor Betalingsgeschiedenis). Niet in de review-request maar iets om te overwegen voor consistentie met KtpPrintButton (dat wel een picker toont).",
+    "KioskLayout.jsx:2718 — [data-testid=receipt-ktp-print] div heeft class 'empty:hidden' zodat de container collapsed als KtpPrintButton null retourneert; getest: box=None, geen lege ruimte in de flex-row."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% — alle 5 review-eisen bevestigd"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin); Anita Sewdas PIN 4321 (kiosk, seeded via /app/test_reports/setup_iter85.py)",
+  "seed_data_creation": "setup_iter85.py reseeded Anita + registreerde KT-V520 printer. Extra inserts: 1 TEST_HIST_* approved payment voor Jan Pieterse (voor Betalingsgeschiedenis test); 2 TEST_INV*_ open huurfacturen (SRD 500 elk) voor pay flow. 2 echte betalingen zijn tijdens receipt-tests uitgevoerd (contant SRD 6000 huur augustus 2026) → persistent in Mongo. Fake KT-V520 WS client (/tmp/ws_printer.py) + heartbeat (/tmp/keep_online.py) gebruikt om printer online te zetten; beide gestopt na testen.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Review-request compleet bevestigd. Betalingsgeschiedenis Afdruk-menu toont 'Print via Bluetooth' alleen als useBtReady==true (apk bridge + bt_printer localStorage), KT-V520 optie alleen als /api/kiosk/printers/online een printer retourneert. Receipt success-pagina verbergt beide printer-knoppen als niet actief; de wrapper div 'receipt-ktp-print' gebruikt empty:hidden om layout-gap te voorkomen (verified: bounding_box=None). Om KT-V520 online te maken buiten echte hardware om: POST /api/kiosk/printers/register (returns device_token) + continue updating kiosk_printers.last_seen=time.time() elke <75s (TTL=75). Een pure WS HELLO-only client wordt na 75s stale omdat de server last_seen pas update als client ping>25s na laatste update stuurt."
+}
