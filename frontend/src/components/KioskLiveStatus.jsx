@@ -5,6 +5,7 @@ import { BtPrinterCard } from './BtPrinterCard';
 import { getSavedPrinter } from '../lib/bt-printer';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
+import { PrinterLamp } from './PrinterLamp';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
 import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 import { apkBridge } from '../lib/kiosk-print';
@@ -74,8 +75,15 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
       {onHome && (
         <Toolbar>
           {isAdmin && <KtpPairPill />}
+          <PrinterLamp />
           {dot}
         </Toolbar>
+      )}
+      {onHome && (
+        <div className="md:hidden fixed z-40 right-3 flex items-center h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 empty:hidden"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }} data-testid="kiosk-mobile-printer-lamp">
+          <PrinterLamp testid="kiosk-mobile-printer-lamp-btn" />
+        </div>
       )}
       {s.overlayOpen && (
         <KioskPrintsOverlay employees={isAdmin ? s.employees : []} printsVersion={s.printsVersion} employeeMode={!isAdmin}
