@@ -823,3 +823,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Meldingen klikbaar (deep links)
 - _deep_link() zet data.url per melding (betaling/goedkeuring → ?open=payment:id, factuur → ?open=invoice:id&tenant=, regeling → ?open=plan:id, onderhoud → ?open=maintenance:id, kasgeld/medewerker → /admin/kasgeld). Werkt voor FCM, PWA en SSE.
 - lib/deep-link.js useDeepLink; window.onFcmOpen / FCM_OPEN in fcm-apk.js. GET /api/payments/{id}. Getest iteration_94 (+ fix payment_pending_approval).
+
+## 2026-06 — Goedkeuren/Afwijzen vanuit melding
+- POST /api/push/action (ondertekend token per beheerder, 7 dagen, eenmalig via status-check). _approve_payment_core/_reject_payment_core. Opgeslagen handtekening: GET/PUT /api/me/approval-signature (ApprovalSignatureCard). SW toont knoppen bij action_token. FCM: capabilities ["actions"] → data-only bericht. approved_via in PaymentOut.
+- Fix: Notificaties-pagina crashte in headless Chromium (CLEAR_BADGE → Badging API); clearBadge nu stabiel (useCallback) en overgeslagen bij navigator.webdriver.
+- Getest iteration_95 (20/20 backend) + handmatige UI-test handtekening.

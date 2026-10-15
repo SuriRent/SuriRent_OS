@@ -1,0 +1,41 @@
+{
+  "summary": "Iter95 — notification action buttons (Goedkeuren/Afwijzen). Backend: all 20 pytest cases pass (100%). Verified regression on existing /payments/{pid}/approve + /reject, _with_action_token scoping (approval kinds+payment_id+uid only), POST /api/push/action full matrix (approve w/ and w/o saved signature → '(via melding)' suffix + approved_via='notification' persisted in Mongo + signature taken from PUT /me/approval-signature; reject → rejected_reason='Afgewezen via melding'; second use → 409; tampered/expired token → 401; unknown action → 422; non-admin uid → 403), /me/approval-signature GET/PUT roundtrip + invalid 422, /push/fcm/register accepts capabilities=['actions'] and GET /push/fcm/devices does not leak `token` or `capabilities`, and fcm_service._send_one(data_only=True) omits `notification{}` block while data_only=False includes it. sw.js push handler + notificationclick code reviewed — correct (actions only when action_token present; event.action approve/reject → fetch /api/push/action with the signed token). Frontend: headless Chromium repeatedly crashes (Target crashed) when loading /{slug}/admin/notifications after login — reproduced 3x with varying viewports/route-blocking. Prevents live UI validation of ApprovalSignatureCard draw→save→preview→delete flow. Backend endpoints behind the card are 100% verified, and the JSX code review of ApprovalSignatureCard.jsx + Notifications.jsx (line 354) + sw.js shows correct test-id wiring and logic.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/{id}", "issue": "`approved_via` is persisted in Mongo but PaymentOut response_model strips it (field missing in models.py). UI/API clients can therefore not distinguish approvals via notification vs direct. Low-impact (approved_by already carries the '(via melding)' suffix) but worth adding `approved_via: Optional[str] = None` to PaymentOut for completeness."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Notifications page (/{slug}/admin/notifications)", "issue": "Headless Chromium (1024x800 / 900x700) tab crashes with 'Target crashed' before any locator resolves. Reproduced 3x with and without blocking /admin/events, /billing/me, /saas-stripe, /cdn-cgi. Live UI test of ApprovalSignatureCard could NOT be completed. Investigate: potentially a memory leak / infinite subscription on Notifications page (AndroidAppMeldingen or SSE reconnect loop). Users on normal browsers may still be fine but should be verified in a desktop Chrome run.", "selector": "[data-testid=\"approval-signature-section\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter95_push_actions.py",
+    "/app/test_reports/pytest/iter95_results.xml"
+  ],
+  "action_items": [
+    "BACKEND MINOR: add `approved_via: Optional[str] = None` to PaymentOut in /app/backend/models.py so clients can see how a payment was approved (direct vs notification). The field is already written in _approve_payment_core (server.py:9358).",
+    "FRONTEND MEDIUM: investigate Notifications page crashing headless Chromium. Possibly runaway SSE/polling or memory growth from AndroidAppMeldingen devices refresh. Manually verify in a desktop Chrome that approval-signature-section renders and draw→save→preview→delete flow works (backend confirmed working)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:15265 _with_action_token: good scoping (approval kinds + payment_id + uid). PUBLIC_BASE_URL not set in backend/.env, so action_url emits as '/api/push/action' (relative) — fine for the service-worker (same origin) but will break if the SW ever runs cross-origin. Consider defaulting to REACT_APP_BACKEND_URL or constructing from request base URL at _notify_company_admins time.",
+    "server.py:15282 /push/action: swallows HTTPException(400) → 409 'al verwerkt'. This also masks real 400s like signature-missing from _approve_payment_core, but since push-action's approve path never passes an empty signature it's fine. Still, consider matching on p.status != pending_approval specifically before converting.",
+    "sw.js:392 notificationclick approve/reject: shows a follow-up notification with tag `surirent-action-${payment_id}` — good UX. No retry on network failure; a user with flaky connectivity will see 'Niet gelukt' only. Acceptable.",
+    "models.py PaymentOut: missing `approved_via` — see backend minor.",
+    "ApprovalSignatureCard.jsx: component correctly uses /me/approval-signature; test-ids complete; busy/error states handled; one tiny: `save(null)` for delete triggers the same busy UI but no explicit confirm prompt — minor UX nit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter95_push_actions.py (new, 20 tests)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "N/A — headless browser crashed on Notifications page; backend endpoints behind the card are fully verified and sw.js reviewed"},
+  "test_credentials": "demo@surirent.sr / demo1234 (admin); Anita Sewdas PIN 4321 (kiosk, re-seeded by test fixture)",
+  "seed_data_creation": "Each push-action test creates one pending_approval SRD 1.00 payment via /api/kiosk/payments (prefixed note=TEST_iter95_pending). Fixture tries DELETE /api/payments/{id} after; approved/rejected payments without a delete endpoint remain as TEST_ amounts in history (~8 small 1 SRD rows). Approval signature on demo admin is CLEARED at end of each PushAction test (`PUT /me/approval-signature` with null).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "pdf_security.make_verify_token can be imported directly in tests (same JWT_SECRET) — see test_iter95_push_actions.py:_mint_token. Create pending payments via POST /api/kiosk/payments?employee_id=<anita>&employee_pin=4321 (needs kiosk_token cookie from /auth/kiosk-pin). approved_via is stored in Mongo but stripped by PaymentOut; use direct Mongo query to assert it. Headless Chromium reliably crashes on /{slug}/admin/notifications — if next iter tests that page, use a desktop Chrome (non-headless) or test ApprovalSignatureCard in isolation via a mount test.",
+  "rca of the issue": "N/A — primary flow (notification action buttons) works end-to-end at the backend level. Frontend crash is an environmental issue (headless browser OOM/crash on a heavy page), not a product bug confirmed."
+}

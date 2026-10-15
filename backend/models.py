@@ -169,6 +169,7 @@ class PaymentOut(BaseModel):
     kiosk_employee_name: Optional[str] = None
     approved_at: Optional[str] = None
     approved_by_user_id: Optional[str] = None
+    approved_via: Optional[str] = None
     signature_data_url: Optional[str] = None  # base64 PNG van handtekening
     rejected_reason: Optional[str] = None
     # Bankoverschrijving-velden (alleen aanwezig als method=="bank")

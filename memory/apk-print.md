@@ -72,3 +72,9 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 - Tik op melding: elke FCM-melding bevat `data.url` (bijv. `/admin/payments?open=payment:<id>`, `/admin/invoices?open=invoice:<id>&tenant=<tid>`, `/admin/payment_plans?open=plan:<id>`, `/admin/maintenance?open=maintenance:<id>`, `/admin/kasgeld`).
   APK: bij tik → als WebView al open: `injectJavaScript("window.onFcmOpen('" + url + "');true;")` of postMessage `{type:'FCM_OPEN', url}`; bij koude start: WebView laden op `https://<domein>` + url.
   Goedkeuring nodig → opent direct het goedkeuringsscherm (handtekening + Goedkeuren/Afwijzen).
+
+## Goedkeuren/Afwijzen-knoppen in de Android-melding
+- Registreer het token met capabilities: `window.onFcmToken(token, 'Model', ['actions'])` (of detail.capabilities). Dan stuurt de server voor dat toestel **data-only** berichten (title/body in data) → APK bouwt zelf de melding (notifee / NotificationCompat) in onMessageReceived / setBackgroundMessageHandler.
+- Goedkeuringsmeldingen bevatten: `action_token`, `action_url` (/api/push/action), `actions` = "approve,reject", `payment_id`, `url`.
+- Knop tik → `POST <domein>/api/push/action` JSON `{token: action_token, action: "approve"|"reject"}` (geen login nodig, token 7 dagen geldig, per beheerder). Antwoord `{ok, message}`; 409 = al verwerkt, 401 = verlopen. Toon resultaat als nieuwe melding.
+- Zonder capability 'actions' blijft het een gewone melding (tik opent het goedkeuringsscherm).

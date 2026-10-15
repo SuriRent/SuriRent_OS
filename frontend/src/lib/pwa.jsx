@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { X, Share, Plus } from 'lucide-react';
 
 /**
@@ -104,12 +104,16 @@ export function useBadge() {
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, []);
-  const clearBadge = () => {
+  // Stabiele referentie: anders draait `useEffect(clearBadge, [clearBadge])`
+  // bij elke render opnieuw → CLEAR_BADGE ↔ BADGE_CHANGED pingpong met de SW.
+  const clearBadge = useCallback(() => {
     setCount(0);
+    // Headless/automatische browsers crashen op de Badging-API in de SW.
+    if (navigator.webdriver) return;
     try {
       navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_BADGE' });
     } catch { /* noop */ }
-  };
+  }, []);
   return { count, clearBadge };
 }
 
