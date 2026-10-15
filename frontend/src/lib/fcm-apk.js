@@ -9,21 +9,24 @@ import { api } from './api';
 import { apkBridge } from './kiosk-print';
 
 const KEY = 'fcm_token_registered';
-const FCM_RE = /^[\w-]{10,}:[\w-]{80,}$/;
+// FCM-registratietoken (meestal 'xxx:APA91b…'); Expo-tokens zijn geen FCM-tokens.
+const FCM_RE = /^[\w.:-]{100,4096}$/;
 const WIN_KEYS = ['__SURIRENT_FCM_TOKEN__', '__FCM_TOKEN__', 'fcmToken', 'FCM_TOKEN', 'fcm_token', 'firebaseToken', 'pushToken', 'devicePushToken'];
 const LS_KEYS = ['fcm_token', 'fcmToken', 'FCM_TOKEN', 'firebase_token', 'pushToken', 'push_token'];
 const GETTERS = ['getFcmToken', 'getFCMToken', 'getFirebaseToken', 'getPushToken', 'getToken'];
 const MSG_TYPES = /fcm|push|firebase|token/i;
 
 let installed = false;
+let inflight = false;
 let lastToken = '';
 const status = { apk: false, token: '', registered: false, error: '' };
 
 export const isApkApp = () => !!apkBridge() || typeof window.Android === 'object';
-export const fcmStatus = () => ({ ...status, apk: isApkApp() });
+export const fcmStatus = () => ({ ...status, apk: isApkApp() || !!status.token || !!status.error });
 const emit = () => window.dispatchEvent(new Event('fcm-status'));
 
-const valid = (t) => typeof t === 'string' && FCM_RE.test(t.trim());
+const norm = (t) => (t && typeof t === 'object' ? (t.token || t.data || t.fcmToken || '') : t);
+const valid = (t) => { t = norm(t); return typeof t === 'string' && FCM_RE.test(t.trim()); };
 
 function deviceName(extra) {
   if (extra) return String(extra).slice(0, 80);
@@ -33,11 +36,17 @@ function deviceName(extra) {
 }
 
 async function register(token, name, caps) {
-  if (!valid(token)) return;
+  token = norm(token);
+  if (typeof token === 'string' && token.startsWith('ExponentPushToken')) {
+    status.error = 'De app stuurt een Expo-token, geen Firebase (FCM)-token'; emit(); return;
+  }
+  if (!valid(token)) { if (token) { status.error = 'Ongeldig Firebase-token ontvangen'; emit(); } return; }
   token = token.trim();
+  try { localStorage.setItem('fcm_token', token); } catch { /* noop */ }
   status.token = token;
-  if (token === lastToken && status.registered) return;
+  if (token === lastToken && (status.registered || inflight)) return;
   lastToken = token;
+  inflight = true;
   try {
     const capabilities = caps || window.__SURIRENT_FCM_CAPS__;
     await api.post('/push/fcm/register', { token, device_name: deviceName(name), capabilities: Array.isArray(capabilities) ? capabilities : undefined });
@@ -48,6 +57,7 @@ async function register(token, name, caps) {
     status.registered = false; lastToken = '';
     status.error = e?.response?.data?.detail || 'Koppelen mislukt';
   }
+  inflight = false;
   emit();
 }
 
@@ -113,6 +123,11 @@ export function installFcmApk() {
     window.addEventListener('message', onMsg);
     document.addEventListener('message', onMsg);
     window.onFcmToken = (t, name, caps) => register(t, name, caps);
+    // Token dat al vóór het inloggen binnenkwam (buffer in index.html / localStorage).
+    if (window.__SURIRENT_FCM_TOKEN__ || localStorage.getItem('fcm_token')) {
+      register(window.__SURIRENT_FCM_TOKEN__ || localStorage.getItem('fcm_token'),
+        window.__SURIRENT_DEVICE_NAME__ || localStorage.getItem('fcm_device_name'), window.__SURIRENT_FCM_CAPS__);
+    }
     window.onFcmOpen = openFromNotification;
   }
   if (!isApkApp()) return;

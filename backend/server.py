@@ -14,6 +14,7 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
+from pymongo.errors import DuplicateKeyError
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -504,6 +505,16 @@ async def lifespan(app: FastAPI):
         import logging as _l
         _l.getLogger("uvicorn.error").warning(f"event_bus startup: {_exc}")
 
+    # FCM-tokens: één document per token (dubbele van gelijktijdige registraties opruimen).
+    try:
+        seen = set()
+        async for d in db.fcm_tokens.find({}, {"_id": 1, "token": 1}).sort("updated_at", -1):
+            if d.get("token") in seen:
+                await db.fcm_tokens.delete_one({"_id": d["_id"]})
+            seen.add(d.get("token"))
+        await db.fcm_tokens.create_index("token", unique=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[fcm] index failed: {e}")
     # Kiosk-chat is verwijderd: oude chatberichten wissen (idempotent).
     try:
         await db.kiosk_chat.drop()
@@ -15410,6 +15421,14 @@ def _fcm_admin(user) -> str:
 async def fcm_register(body: FcmRegisterIn, user=Depends(get_current_user)):
     cid = _fcm_admin(user)
     now = iso(now_utc())
+    try:
+        await _fcm_upsert(body, cid, user, now)
+    except DuplicateKeyError:
+        await _fcm_upsert(body, cid, user, now)
+    return {"ok": True, "configured": fcm_configured()}
+
+
+async def _fcm_upsert(body, cid: str, user: dict, now: str):
     await db.fcm_tokens.update_one(
         {"token": body.token},
         {"$set": {"company_id": cid, "user_id": user["id"], "user_name": user.get("name") or user.get("email"),
@@ -15418,7 +15437,6 @@ async def fcm_register(body: FcmRegisterIn, user=Depends(get_current_user)):
          "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
         upsert=True,
     )
-    return {"ok": True, "configured": fcm_configured()}
 
 
 @api.post("/push/fcm/unregister")

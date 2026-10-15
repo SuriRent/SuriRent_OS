@@ -834,3 +834,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Printknoppen alleen bij actieve printer
 - KtpPrintButton verborgen zonder online KT-V520; BtPrintButton/PrintChoiceMenu-BT alleen bij useBtReady() (web: stille verbinding, APK: gekoppeld). Betalingsgeschiedenis-menu: KT-V520 / Bluetooth / Afdrukken. Getest iteration_97.
+
+## 2026-06 — FCM-koppeling APK robuuster
+- Productie: 0 register-calls ontvangen (deployer RCA) → token kwam te vroeg (voor AdminDashboard) of faalde regex. Fix: buffer window.onFcmToken in public/index.html (localStorage fcm_token), register na login; regex versoepeld (>=100 tekens), object-tokens, Expo-token melding; foutstatus zichtbaar. Unieke index fcm_tokens.token + dedupe bij start (race gaf dubbele toestellen).

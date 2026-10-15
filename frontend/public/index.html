@@ -1,6 +1,20 @@
 <!DOCTYPE html>
 <html lang="nl">
   <head>
+    <script>
+      // Android-app: FCM-token bufferen vóór React laadt (APK kan direct window.onFcmToken aanroepen).
+      (function () {
+        function pick(t) { if (t && typeof t === 'object') t = t.token || t.data || t.fcmToken || ''; return String(t || '').trim(); }
+        window.onFcmToken = function (t, name, caps) {
+          t = pick(t); if (!t) return;
+          window.__SURIRENT_FCM_TOKEN__ = t;
+          if (name) window.__SURIRENT_DEVICE_NAME__ = name;
+          if (caps) window.__SURIRENT_FCM_CAPS__ = caps;
+          try { localStorage.setItem('fcm_token', t); if (name) localStorage.setItem('fcm_device_name', name); } catch (e) {}
+          try { window.dispatchEvent(new CustomEvent('apk-fcm-token', { detail: { token: t, device_name: name, capabilities: caps } })); } catch (e) {}
+        };
+      })();
+    </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
     <!-- STATUS-BAR KLEUR — consistent voor de HELE app zodat Android
