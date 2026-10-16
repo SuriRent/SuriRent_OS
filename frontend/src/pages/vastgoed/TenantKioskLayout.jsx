@@ -1866,7 +1866,7 @@ export default function TenantKioskLayout() {
     position: 'fixed', inset: 0,
     background: `linear-gradient(155deg, ${primary} 0%, ${primary} 55%, rgba(0,0,0,0.18) 100%), ${primary}`,
     overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-    paddingTop: 'env(safe-area-inset-top, 0px)',
+    paddingTop: 'var(--kiosk-sat)',
     paddingLeft: 'env(safe-area-inset-left, 0px)',
     paddingRight: 'env(safe-area-inset-right, 0px)',
   };
@@ -1967,7 +1967,7 @@ export default function TenantKioskLayout() {
       <button onClick={logout}
         data-testid="tk-logout"
         title="Uitloggen"
-        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+        style={{ top: 'calc(var(--kiosk-sat) + 12px)' }}
         className="fixed right-4 z-50 bg-white/95 hover:bg-white text-slate-700 font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow-lg">
         <LogOut className="w-3.5 h-3.5" /> Uit
       </button>

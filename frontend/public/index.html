@@ -2,6 +2,23 @@
 <html lang="nl">
   <head>
     <script>
+      // Android-APK: window.SURIRENT_KTP === true → class 'apk-ktp' op <html>
+      // (APK zet zelf statusbalk-padding; kiosk-CSS zet safe-area-inset-top dan op 0px).
+      (function () {
+        var root = document.documentElement;
+        function apply(v) { if (v === true) root.classList.add('apk-ktp'); else root.classList.remove('apk-ktp'); }
+        var cur = window.SURIRENT_KTP;
+        try {
+          Object.defineProperty(window, 'SURIRENT_KTP', {
+            configurable: true, enumerable: true,
+            get: function () { return cur; },
+            set: function (v) { cur = v; apply(v); },
+          });
+        } catch (e) {}
+        apply(cur);
+      })();
+    </script>
+    <script>
       // Android-app: FCM-token bufferen vóór React laadt (APK kan direct window.onFcmToken aanroepen).
       (function () {
         function pick(t) { if (t && typeof t === 'object') t = t.token || t.data || t.fcmToken || ''; return String(t || '').trim(); }

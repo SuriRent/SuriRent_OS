@@ -140,7 +140,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose, 
 
   return createPortal((
     <div className="fixed inset-0 z-[10000] bg-slate-900/95 backdrop-blur-md flex flex-col" data-testid="kiosk-prints-overlay"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      style={{ paddingTop: 'var(--kiosk-sat)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-4 sm:px-5 py-3 sm:py-4 text-white">
         {picked && employees.length > 1 && (
           <button onClick={() => setPicked(null)} data-testid="kiosk-prints-back" className="h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 flex items-center gap-1.5 text-sm font-bold">

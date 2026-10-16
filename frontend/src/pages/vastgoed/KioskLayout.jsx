@@ -670,7 +670,7 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
         className="bg-white w-full sm:max-w-lg sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[85vh] overflow-hidden"
         data-testid="notes-modal">
         <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div>
             <h3 className="text-lg font-black text-slate-900">Notities</h3>
             <p className="text-xs text-slate-500">{tenantName}</p>
@@ -1246,7 +1246,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   return (
     <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
       style={{
-        paddingTop: 'max(env(safe-area-inset-top, 0px), 1rem)',
+        paddingTop: 'max(var(--kiosk-sat), 1rem)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1rem)',
         /* Brand-georiënteerde overlay zodat in PWA-kiosk de home-indicator
            gebied dezelfde oranje kleur houdt als de rest van de kiosk,
@@ -2846,7 +2846,7 @@ function KasgeldPanel({ onBack }) {
 
   return (
     <div className="h-full w-full bg-[#FF5C00] flex flex-col"
-      style={{ padding: '1.5vh 1.5vw 0', paddingTop: 'max(env(safe-area-inset-top,0px), 12px)' }}>
+      style={{ padding: '1.5vh 1.5vw 0', paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
       {/* Oranje header — Terug links, operator-context rechts (zelfde patroon
           als TenantOverview "Financieel overzicht") */}
       <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
@@ -3242,7 +3242,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
             titel toch onder de notch/statusbalk zit. */}
         <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div className="flex items-center gap-2">
             {step === 'details' && (
               <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
@@ -3475,7 +3475,7 @@ function IdScanCameraModal({ onClose, onCaptured }) {
       data-testid="id-scan-camera-overlay">
       {/* Header */}
       <div className="flex-none flex items-center justify-between px-4 pb-2 text-white"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}>
+        style={{ paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
         <div className="flex items-center gap-2">
           <Camera className="w-5 h-5" />
           <h3 className="text-lg font-black">Scan ID-kaart</h3>
@@ -3855,7 +3855,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
         data-testid={`${testId}-form`}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
         <div className="flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}>
+          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
               <Icon className="w-5 h-5 text-white sm:text-orange-600" />
@@ -4370,7 +4370,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
         style={{
-          paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+          paddingTop: 'max(var(--kiosk-sat), 16px)',
           paddingBottom: 12,
         }}>
         <div className="flex items-center gap-2">
@@ -4775,7 +4775,7 @@ export default function KioskLayout() {
           initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.16, ease: 'easeOut' }}
           className="absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll"
-          style={{ paddingTop: 'env(safe-area-inset-top, 0px)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex items-center justify-center">
               <Loader2 className="w-10 h-10 text-white animate-spin" />

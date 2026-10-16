@@ -848,3 +848,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Papierstatus in printerlampje
 - Printer-WS PRINTER_STATUS/PAPER_STATUS → kiosk_printers.paper (+presence_changed); _online_printers bevat paper; medewerker-WS krijgt {type:printers}. ktp-printer.js: window.onKtpPaperStatus / event / postMessage → WS. PrinterLamp: oranje (bijna op) / rood (leeg) + waarschuwing in paneel.
+
+## 2026-06 — APK safe-area fix
+- CSS-var --kiosk-sat (= env(safe-area-inset-top)) in kiosk-bestanden (KioskLayout, KioskLiveStatus, KioskPrintsOverlay, TenantKioskLayout, PinLogin, .kiosk-fullscreen). html.apk-ktp → 0px; class gezet in public/index.html als window.SURIRENT_KTP === true (ook als APK het later zet, via property-setter).

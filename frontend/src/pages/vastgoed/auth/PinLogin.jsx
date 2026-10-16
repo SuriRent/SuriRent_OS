@@ -149,7 +149,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         position: 'fixed', inset: 0,
         backgroundColor: primary,
         overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingTop: 'var(--kiosk-sat)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         paddingLeft: 'env(safe-area-inset-left, 0px)',
         paddingRight: 'env(safe-area-inset-right, 0px)',
@@ -273,7 +273,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
     <div className="flex flex-col text-white relative overflow-hidden" style={{
       position: 'fixed', inset: 0,
       backgroundColor: primary,
-      paddingTop: 'env(safe-area-inset-top, 0px)',
+      paddingTop: 'var(--kiosk-sat)',
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       paddingLeft: 'env(safe-area-inset-left, 0px)',
       paddingRight: 'env(safe-area-inset-right, 0px)',

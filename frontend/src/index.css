@@ -93,6 +93,9 @@ html.kiosk-mode-html,
 body.kiosk-mode { background-color: #FF5C00; }
 
 /* Utility for screens that should respect safe area manually. */
+:root { --kiosk-sat: env(safe-area-inset-top, 0px); }
+/* Android-APK (window.SURIRENT_KTP === true) zet zelf al padding voor de statusbalk. */
+html.apk-ktp { --kiosk-sat: 0px; }
 .safe-top { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
@@ -104,6 +107,7 @@ body.kiosk-mode { background-color: #FF5C00; }
 @media (max-width: 767px) {
   .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .mobile-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+  html.apk-ktp .kiosk-fullscreen .mobile-safe-top { padding-top: 0px; }
 }
 
 /* Kiosk-content scroll padding: op mobiel geen FAB meer (verwijderd 2026-02-22)
@@ -165,7 +169,7 @@ html { scroll-behavior: smooth; }
   background: #FF5C00;
   overflow: hidden;
   box-sizing: border-box;
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--kiosk-sat);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   /* Auto-reageert op Android navigatiebalk én iOS home-indicator:

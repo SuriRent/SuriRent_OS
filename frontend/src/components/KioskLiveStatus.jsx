@@ -16,7 +16,7 @@ const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white ho
 function Toolbar({ children }) {
   return (
     <div className="hidden md:flex fixed z-40 right-2 items-center gap-0.5 h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 shadow-lg"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }} data-testid="kiosk-toolbar">
+      style={{ top: 'calc(var(--kiosk-sat) + 8px)' }} data-testid="kiosk-toolbar">
       {children}
     </div>
   );
@@ -81,7 +81,7 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
       )}
       {onHome && (
         <div className="md:hidden fixed z-40 right-3 flex items-center h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 empty:hidden"
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }} data-testid="kiosk-mobile-printer-lamp">
+          style={{ top: 'calc(var(--kiosk-sat) + 10px)' }} data-testid="kiosk-mobile-printer-lamp">
           <PrinterLamp testid="kiosk-mobile-printer-lamp-btn" />
         </div>
       )}
