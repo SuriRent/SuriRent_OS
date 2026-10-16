@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend retest of the KT-V520 paper status in the kiosk printer lamp, after the iteration_100 fixes. Fake printers were driven over WS by timed schedules. All requested flows pass.\n(1) Employee kiosk (Anita PIN, 768px), single printer: lamp amber 'Papier bijna op'. Printer WS closed at 17:36:41; at 17:36:42 the lamp showed red data-level=off 'Bonprinter niet verbonden' and the panel row kiosk-printer-lamp-ktp read active=false 'Geen KT-V520 online'. It stayed red for 29s across a 30s REST poll, so the stale fallback is gone. Reconnect at 17:37:11 turned the lamp amber immediately, and 'ok' turned it green.\n(2) Two printers, one empty and one ok: lamp data-level=low; rows kiosk-printer-lamp-ktp and kiosk-printer-lamp-ktp-1 each show their own name, and the 'Papier leeg' warning appears only on the empty one. Both empty gave data-level=empty with two warnings. Both disconnected gave off.\n(3) Admin kiosk (1920px): low -> off within about 1s of the printer closing, panel 'Geen KT-V520 online', then low again on reconnect.\n(4) PrintChoiceMenu (admin, Betalingsgeschiedenis -> Afdruk): the 'Print via KT-V520' option disappeared within 4s of going offline (only 'Afdrukken' was left) and came back within 2s of reconnecting.\n(5) KtpPrintButton (employee 'Bonnen van vandaag' overlay, fetchPrinters=true): 10 'Print via KT-V520' buttons dropped to 0 within 2s of going offline (no stale REST fallback) and returned to 10 within 2s of reconnecting.\n(6) Backend: 'none'/'NONE' are now ignored and paper stays at the previous low/empty.\nReset done: printer_mode none, both TEST printers revoked, /kiosk/printers/online returns [].",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Printer panel (multiple printers)", "issues": ["Row order is not stable. When paper changes, the printers swap places (ktp vs ktp-1), probably because of the server order. Consider sorting by name/id.", "Every row has the same label 'KT-V520'; the printer name is only in the small detail line. Consider using the printer name as the label."]},
+      {"screen": "Employee 'Bonnen van vandaag' overlay", "issues": ["The header shows 'Anita Sewdas offline' to the logged-in employee herself (seen in screenshot); likely pre-existing, not part of this change"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/fake_printer_iter101.py", "/app/test_reports/sched_iter101_t1.sh", "/app/test_reports/sched_iter101_t2.sh", "/app/test_reports/sched_iter101_t3.sh", "/app/test_reports/sched_iter101_t4.sh"],
+  "action_items": [
+    "Optional: sort printers in the panel by a stable key so rows do not reorder",
+    "Optional: when the kiosk's own WS drops, kiosk-live onclose sets printersKnown=false but keeps state.printers, so the hooks fall back to the last live list or the stale REST snapshot. Consider clearing printers on close, or showing 'unknown'."
+  ],
+  "critical_code_review_comments": [
+    "The useKtpOnline / useOnlinePrinters / KtpPrintButton printer-selection logic (`printersKnown || live.length ? live : fetched` plus the REST poll) is duplicated in 3 files. Extract it into one shared hook (e.g. useOnlineKtpPrinters in lib/kiosk-live.js).",
+    "kiosk-live.js onclose: printersKnown=false but `printers` is not reset, so `live.length` can still be truthy and show a stale list while the kiosk WS is reconnecting (3s retry). This is low impact."
+  ],
+  "updated_files": ["/app/test_reports/fake_printer_iter101.py", "/app/test_reports/sched_iter101_t1.sh", "/app/test_reports/sched_iter101_t2.sh", "/app/test_reports/sched_iter101_t3.sh", "/app/test_reports/sched_iter101_t4.sh"],
+  "success_rate": {"backend": "skipped (only the 'none' alias was spot-checked: pass)", "frontend": "100% (5/5 requested flows)"},
+  "seed_data_creation": "setup_iter85.py rerun (Anita reseed, TEST_ payment), plus 2 TEST printers (TEST_Iter85 KT-V520 and TEST_Iter101 Second), both revoked afterwards. printer_mode reset to none.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "1. Setup: run python /app/test_reports/setup_iter85.py, register a second printer via POST /api/kiosk/printers/register (kiosk_token cookie) and store its token as ctx['device_token2'] in /tmp/iter85_ctx.json, then PUT /api/settings/kiosk_devices {printer_mode:'kt-v520'}.\n2. Fake printer: python fake_printer_iter101.py DURATION TOKEN_KEY CMD_FILE. Write ok/low/empty to CMD_FILE to change the paper status; write 'quit' to disconnect.\n3. The browser sandbox cannot drive local files, so use the background sched_*.sh timelines.\n4. The lamp only renders on the kiosk home screen (onHome).\n5. Admin kiosk: set localStorage admin_token + kiosk_token, then open /my-awesome-rentals-bv/kiosk. PrintChoiceMenu path: location -> paid apt -> overview-history-btn -> Afdruk."
+}

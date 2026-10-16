@@ -71,8 +71,8 @@ export function PrinterLamp({ className = '', testid = 'kiosk-printer-lamp' }) {
   const rows = [];
   if (wantKtp && (self || !ktp.length)) rows.push({ key: 'ktp', icon: Printer, label: 'KT-V520', ok: ktpOk, paper: self ? localPaper : undefined,
     detail: self ? 'Ingebouwde printer van dit toestel' : 'Geen KT-V520 online' });
-  else if (wantKtp) ktp.forEach((p, i) => rows.push({ key: i ? `ktp-${i}` : 'ktp', icon: Printer, label: 'KT-V520', ok: true,
-    paper: p.paper, detail: `${p.name} online` }));
+  else if (wantKtp) [...ktp].sort((a, b) => a.name.localeCompare(b.name)).forEach((p, i) => rows.push({ key: i ? `ktp-${i}` : 'ktp',
+    icon: Printer, label: p.name, ok: true, paper: p.paper, detail: 'KT-V520 · online' }));
   if (bt || mode === 'bluetooth') rows.push({ key: 'bt', icon: Bluetooth, label: 'Bluetooth printer', ok: btReady,
     detail: !bt ? 'Nog geen printer gekoppeld op dit toestel' : btReady ? `${bt.name} verbonden` : `${bt.name} niet bereikbaar` });
   const on = rows.some((r) => r.ok);
