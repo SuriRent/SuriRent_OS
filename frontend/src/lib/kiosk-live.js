@@ -81,6 +81,10 @@ function connect() {
   };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'printers') {
+      if (JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [] });
+      return;
+    }
     if (msg.type === 'presence') {
       if (JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [] });
       queuePresence(msg);

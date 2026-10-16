@@ -10275,12 +10275,23 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
     bye = False
     queue = _kb_subscribe(channel, maxsize=16)
 
+    last_printers = {"v": None}
+
+    async def push_printers():
+        prns = await _online_printers(cid)
+        if prns != last_printers["v"]:
+            last_printers["v"] = prns
+            await ws.send_json({"type": "printers", "printers": prns})
+
     async def forward_config():
-        # Alleen apparaat-instellingen doorsturen naar de medewerker-kiosk.
+        # Apparaat-instellingen + printerstatus (online/papier) naar de medewerker-kiosk.
+        await push_printers()
         while True:
             ev = await queue.get()
             if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE"):
                 await ws.send_json(ev)
+            elif ev.get("type") == "presence_changed":
+                await push_printers()
 
     fwd = asyncio.create_task(forward_config())
     last_write = time.time()
@@ -10400,9 +10411,21 @@ async def _printer_by_token(tok: str) -> Optional[dict]:
 async def _online_printers(cid: str) -> list:
     docs = await db.kiosk_printers.find(
         {"company_id": cid, "revoked": {"$ne": True}, "last_seen": {"$gt": time.time() - _PRESENCE_TTL_S}},
-        {"_id": 0, "id": 1, "name": 1, "last_seen": 1},
+        {"_id": 0, "id": 1, "name": 1, "last_seen": 1, "paper": 1},
     ).sort("last_seen", -1).to_list(50)
-    return [{"id": d["id"], "name": d["name"]} for d in docs]
+    return [{"id": d["id"], "name": d["name"], "paper": d.get("paper") or "ok"} for d in docs]
+
+
+_PAPER_ALIASES = {
+    "ok": "ok", "normal": "ok", "full": "ok",
+    "low": "low", "near_end": "low", "nearly_empty": "low", "almost_empty": "low", "near_empty": "low",
+    "empty": "empty", "out": "empty", "no_paper": "empty", "paper_out": "empty", "none": "empty",
+}
+
+
+def _paper_status(msg: dict) -> Optional[str]:
+    raw = msg.get("paper", msg.get("paper_status", msg.get("status")))
+    return _PAPER_ALIASES.get(str(raw or "").strip().lower())
 
 
 async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
@@ -10427,6 +10450,13 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
                 if time.time() - last_ping["t"] > 25:
                     last_ping["t"] = time.time()
                     await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": last_ping["t"]}})
+            elif kind in ("PRINTER_STATUS", "PAPER_STATUS"):
+                paper = _paper_status(msg)
+                if paper:
+                    prev = await db.kiosk_printers.find_one_and_update(
+                        {"id": pid_}, {"$set": {"paper": paper, "paper_at": iso(now_utc())}}, projection={"_id": 0, "paper": 1})
+                    if (prev or {}).get("paper", "ok") != paper:
+                        await _kb_publish(channel, {"type": "presence_changed"})
             elif kind == "REMOTE_PRINT_DONE" and msg.get("payment_id"):
                 pay_id = str(msg["payment_id"])
                 ok = bool(msg.get("ok"))

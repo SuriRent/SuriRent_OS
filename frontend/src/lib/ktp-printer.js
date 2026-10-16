@@ -37,6 +37,31 @@ function send(obj) {
   if (ws?.readyState === WebSocket.OPEN) { try { ws.send(JSON.stringify(obj)); } catch { /* noop */ } }
 }
 
+// Papierstatus van de ingebouwde printer: APK → web → server (WebSocket).
+const PAPER_KEY = 'ktp_paper';
+const PAPER_ALIASES = { ok: 'ok', normal: 'ok', full: 'ok', low: 'low', near_end: 'low', nearly_empty: 'low', almost_empty: 'low', near_empty: 'low', empty: 'empty', out: 'empty', no_paper: 'empty', paper_out: 'empty' };
+export const getLocalPaper = () => localStorage.getItem(PAPER_KEY) || 'ok';
+
+export function reportPaperStatus(raw) {
+  const paper = PAPER_ALIASES[String(raw?.paper ?? raw?.status ?? raw ?? '').trim().toLowerCase()];
+  if (!paper) return;
+  localStorage.setItem(PAPER_KEY, paper);
+  window.dispatchEvent(new CustomEvent('ktp-paper-changed', { detail: { paper } }));
+  send({ type: 'PRINTER_STATUS', paper });
+}
+
+if (typeof window !== 'undefined') {
+  window.onKtpPaperStatus = reportPaperStatus;
+  window.addEventListener('ktp-paper-status', (e) => reportPaperStatus(e.detail));
+  const onMsg = (e) => {
+    let m = e?.data;
+    if (typeof m === 'string') { try { m = JSON.parse(m); } catch { return; } }
+    if (m && typeof m === 'object' && /^(PRINTER_STATUS|PAPER_STATUS)$/.test(String(m.type || ''))) reportPaperStatus(m);
+  };
+  window.addEventListener('message', onMsg);
+  document.addEventListener('message', onMsg);
+}
+
 function handleRemotePrint(msg) {
   try {
     const url = `${process.env.REACT_APP_BACKEND_URL}/api/payments/${msg.payment_id}/print.html?format=thermal&preview=1`;
@@ -58,6 +83,7 @@ function connect() {
   try { ws = new WebSocket(wsUrl()); } catch { scheduleRetry(); return; }
   ws.onopen = () => {
     send({ type: 'auth', role: 'printer', device_token: token, device: deviceInfo() });
+    if (localStorage.getItem(PAPER_KEY)) send({ type: 'PRINTER_STATUS', paper: getLocalPaper() });
     pingTimer = setInterval(() => send({ type: 'ping' }), PING_MS);
   };
   ws.onmessage = (e) => {
