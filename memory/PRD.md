@@ -858,3 +858,10 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — NFC op /kiosk/huurder
 - TenantKioskLayout luistert nu ook op nfc-bus (APK window.onNfcTag/event/postMessage) naast Web NFC/HID/URL-tag. Onbekende tag → "Deze NFC-tag is onbekend" + uitleg. Zelf getest (screenshot).
+
+
+## 2026-06 — Mobiele login + één PIN-scherm
+- Fix: e-mail+wachtwoord login na uitloggen (?loggedout=1) navigeert nu direct naar /admin (MobileEmailLogin navigeert zelf).
+- Eén PIN-scherm ("Vul je 4-cijferige pin in om verder te gaan"), "Andere gebruiker" verwijderd. /auth/kiosk-pin herkent medewerker-PIN (eerst) én persoonlijke beheerder-PIN; fallback naar /auth/personal-pin/login voor onthouden gebruiker.
+- Beveiliging: PIN-uniciteit binnen bedrijf (beheerders + medewerkers, 409), bedrijfsbrede throttle (30 pogingen), personal_pin_hash niet meer in /auth/me, access_token cookie bij beheerder-PIN.
+- Getest: iteration_103, iteration_104.

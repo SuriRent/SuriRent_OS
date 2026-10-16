@@ -1,0 +1,35 @@
+{
+  "summary": "RETEST of iteration_103. All five fixes verified: (a) no 429 for employees on an admin-remembered device, in the UI (10x) and the API (15x); (b) PIN collision is now rejected with 409 in both directions; (c) the company-wide throttle locks after 30 failures even with spoofed XFF; (d) /auth/me has no personal_pin_hash; (e) the kiosk-pin admin branch sets an httpOnly access_token cookie and cookie-only /auth/me works. Mobile regression all passes: logout -> /login?loggedout=1 -> 'Inloggen met e-mail' -> /admin directly; the PIN text is present; 'Andere gebruiker' is gone; admin PIN -> /admin and employee PIN -> /kiosk, with and without device_user_email. Pytest 18/19. One new bug: the 409 uniqueness check self-collides for non-kiosk employees (boekhouder/admin app_role) when their own PIN is re-entered. A wrong PIN with a remembered device shows 'Onbekende combinatie van e-mail en PIN' instead of 'Ongeldige PIN code'. Backend was restarted after the throttle test.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/employees/{id} and POST /api/employees/{id}/kiosk-pin", "issue": "Self-collision: for an employee with app_role boekhouder or admin, _sync_employee_user stores kiosk_pin_hash as users.personal_pin_hash. _check_employee_pin_unique(cid, pin, exclude_eid=eid) is called WITHOUT exclude_uid, so the employee's own users doc matches. Re-entering or keeping the same PIN returns 409 'Deze PIN is al in gebruik binnen dit bedrijf'. Reproduced: create a boekhouder with PIN X, then PUT with the same PIN X gives 409. Fix: in the admins query also exclude {employee_id: eid} (or pass exclude_uid of the linked user)."},
+      {"endpoint": "/api/auth/kiosk-pin throttle", "issue": "The per-IP key can still be bypassed by spoofing X-Forwarded-For: 10 wrong PINs with different XFF all returned 401, versus 429 at attempt 9 without spoofing. CF-Connecting-IP evidently does not reach the backend, and a client-supplied CF-Connecting-IP is blocked by Cloudflare (403). The company key (30 per 5 min) does cap brute force, but full 10k coverage still takes about 28h. Side effect: anyone who knows the public slug can lock out ALL employees and admins of a company for 5 min with 30 wrong PINs (DoS); a valid PIN during the lock gets 429. The kiosk-co counter is never cleared on success and has no time window, so typos accumulate. Consider a sliding window, progressive delay, or clearing on success."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Wrong PIN with device_user_email remembered", "issue": "verify() falls back to personal-pin/login, whose 401 detail 'Onbekende combinatie van e-mail en PIN' is shown instead of 'Ongeldige PIN code'. Map a fallback 401 to 'Ongeldige PIN code'.", "affected_selectors": ["[data-testid=pin-error]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter104_pin_security.py", "/app/backend/tests/test_single_pin_screen.py", "/app/backend/tests/manual_iter104_throttle.py", "/app/test_reports/pytest/pytest_iter104.xml"],
+  "action_items": [
+    "Fix _check_employee_pin_unique self-collision for non-kiosk employees: exclude the users doc linked to exclude_eid (employee_id) in update_employee and set_employee_kiosk_pin.",
+    "PinLogin.verify: show 'Ongeldige PIN code' when the personal-pin fallback returns 401.",
+    "Optional: make the per-IP key robust (CF-Connecting-IP is not forwarded here, so XFF[0] is still used) and give the kiosk-co throttle a time window or clear it on success to reduce DoS and typo accumulation."
+  ],
+  "critical_code_review_comments": [
+    "_check_employee_pin_unique runs bcrypt over up to 200 admins + 2000 employees per save; kiosk-pin does the same per attempt. This is CPU-heavy, and the sync verify_password blocks the event loop. Consider asyncio.to_thread or a per-company PIN fingerprint (HMAC) lookup.",
+    "The 409 message for an admin collision ('al in gebruik binnen dit bedrijf') reveals that some account has that PIN. This is acceptable for admins setting PINs, but note it is an oracle for admins."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter104_pin_security.py", "/app/backend/tests/manual_iter104_throttle.py"],
+  "success_rate": {"backend": "95% (18/19)", "frontend": "100% of requested flows; 1 minor message inconsistency"},
+  "seed_data_creation": "Anita (my-awesome-rentals-bv) re-saved as kiosk with anita@demo.sr/anita1234/PIN 4321; demo admin personal PIN 8642. A TEST_boekhouder employee was created and deleted (cleaned up).",
+  "test_credentials": "demo@surirent.sr/demo1234 (admin PIN 8642), Anita PIN 4321, slug my-awesome-rentals-bv",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Restart the backend after running manual_iter104_throttle.py (it locks kiosk-co for the company). Spoofing CF-Connecting-IP returns a 403 from Cloudflare. test_non_kiosk_employee_resave_own_pin reproduces the self-collision bug.",
+  "rca of the issue": "Self-collision: update_employee -> _check_employee_pin_unique(cid, pin, exclude_eid=eid), with exclude_uid=None. The admins query (role != kiosk) includes the employee's own users doc, whose personal_pin_hash equals its own PIN (set by _sync_employee_user / set_employee_kiosk_pin), so verify_password matches and returns 409."
+}

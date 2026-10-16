@@ -77,7 +77,9 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         }));
       } catch (e) {
         if (e?.response?.status !== 401 || !deviceUser) throw e;
-        const { data: p } = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code });
+        const p = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code })
+          .then((r) => r.data)
+          .catch((err) => { throw err?.response?.status === 401 ? e : err; });
         if (p?.kiosk) { enterKiosk(p, code); return; }
         enterAdmin(p.access_token);
         return;

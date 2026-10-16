@@ -5828,6 +5828,7 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
         # Pakket-gate: Kiosk terminal moet in het abonnement zitten.
         await _require_plan_feature(target_cid, "allow_kiosk", "Kiosk terminal")
         _pin_throttle_clear(throttle_key)
+        _pin_throttle_clear(co_key)
         cid = matched_emp.get("company_id")
         c = await db.companies.find_one({"id": cid}, {"_id": 0}) if cid else None
         token = create_token({
@@ -5855,6 +5856,7 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
     for u in admin_docs:
         if verify_password(body.pin, u.get("personal_pin_hash", "")):
             _pin_throttle_clear(throttle_key)
+            _pin_throttle_clear(co_key)
             atoken = create_token({
                 "sub": u["id"], "email": u["email"], "type": "access",
                 "company_id": u.get("company_id"), "role": u.get("role", "admin"),
@@ -14425,9 +14427,12 @@ class EmployeeOut(BaseModel):
 
 async def _check_employee_pin_unique(cid: str, pin: str, exclude_eid: Optional[str] = None,
                                      exclude_uid: Optional[str] = None) -> None:
+    q = {"id": {"$ne": exclude_uid}, "company_id": cid, "role": {"$ne": "kiosk"},
+         "personal_pin_hash": {"$exists": True, "$ne": None}}
+    if exclude_eid:
+        q["employee_id"] = {"$ne": exclude_eid}
     admins = await db.users.find(
-        {"id": {"$ne": exclude_uid}, "company_id": cid, "role": {"$ne": "kiosk"},
-         "personal_pin_hash": {"$exists": True, "$ne": None}},
+        q,
         {"_id": 0, "name": 1, "personal_pin_hash": 1},
     ).to_list(200)
     for a in admins:
