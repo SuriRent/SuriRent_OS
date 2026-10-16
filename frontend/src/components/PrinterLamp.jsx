@@ -7,7 +7,8 @@ import { getSavedPrinter, useBtReady } from '../lib/bt-printer';
 import { getLocalPaper, isKtpDevice } from '../lib/ktp-printer';
 
 function useKtpOnline(enabled) {
-  const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState).printers || [];
+  const liveState = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const live = liveState.printers || [];
   const [fetched, setFetched] = useState([]);
   useEffect(() => {
     if (!enabled) return undefined;
@@ -16,7 +17,7 @@ function useKtpOnline(enabled) {
     const id = setInterval(load, 30000);
     return () => clearInterval(id);
   }, [enabled]);
-  return live.length ? live : fetched;
+  return liveState.printersKnown || live.length ? live : fetched;
 }
 
 function useLocalPaper() {
@@ -67,10 +68,11 @@ export function PrinterLamp({ className = '', testid = 'kiosk-printer-lamp' }) {
   if (!wantKtp && !bt && mode !== 'bluetooth') return null;
 
   const ktpOk = self || ktp.length > 0;
-  const ktpPaper = self ? localPaper : (ktp.find((p) => p.paper === 'empty') || ktp.find((p) => p.paper === 'low') || ktp[0])?.paper;
   const rows = [];
-  if (wantKtp) rows.push({ key: 'ktp', icon: Printer, label: 'KT-V520', ok: ktpOk, paper: ktpOk ? ktpPaper : undefined,
-    detail: self ? 'Ingebouwde printer van dit toestel' : ktpOk ? `${ktp[0].name} online` : 'Geen KT-V520 online' });
+  if (wantKtp && (self || !ktp.length)) rows.push({ key: 'ktp', icon: Printer, label: 'KT-V520', ok: ktpOk, paper: self ? localPaper : undefined,
+    detail: self ? 'Ingebouwde printer van dit toestel' : 'Geen KT-V520 online' });
+  else if (wantKtp) ktp.forEach((p, i) => rows.push({ key: i ? `ktp-${i}` : 'ktp', icon: Printer, label: 'KT-V520', ok: true,
+    paper: p.paper, detail: `${p.name} online` }));
   if (bt || mode === 'bluetooth') rows.push({ key: 'bt', icon: Bluetooth, label: 'Bluetooth printer', ok: btReady,
     detail: !bt ? 'Nog geen printer gekoppeld op dit toestel' : btReady ? `${bt.name} verbonden` : `${bt.name} niet bereikbaar` });
   const on = rows.some((r) => r.ok);

@@ -8,13 +8,14 @@ import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 const TIMEOUT_MS = 20000;
 
 function useOnlinePrinters(open) {
-  const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState).printers;
+  const liveState = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const live = liveState.printers || [];
   const [fetched, setFetched] = useState([]);
   useEffect(() => {
     if (!open) return;
     api.get('/kiosk/printers/online').then(({ data }) => setFetched(data || [])).catch(() => setFetched([]));
   }, [open]);
-  return live.length ? live : fetched;
+  return liveState.printersKnown || live.length ? live : fetched;
 }
 
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.

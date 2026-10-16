@@ -8,7 +8,8 @@ const TIMEOUT_MS = 20000;
 // "Print via KT-V520": stuurt de bon via de WebSocket naar een gekoppelde KT-V520.
 // autoSend: stuur één keer automatisch naar de eerste online KT-V520.
 export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend = false }) {
-  const live = useSyncExternalStore(subscribeKioskLive, getKioskLiveState).printers;
+  const liveState = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const live = liveState.printers || [];
   const [fetched, setFetched] = useState([]);
   useEffect(() => {
     if (!fetchPrinters) return undefined;
@@ -18,7 +19,7 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
     const id = setInterval(load, 15000);
     return () => clearInterval(id);
   }, [fetchPrinters]);
-  const printers = live.length ? live : fetched;
+  const printers = liveState.printersKnown || live.length ? live : fetched;
   const [status, setStatus] = useState(null); // sending | done | error
   const [msg, setMsg] = useState('');
   const [menu, setMenu] = useState(false);

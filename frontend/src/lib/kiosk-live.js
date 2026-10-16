@@ -9,7 +9,7 @@ let role = null;
 let pingTimer = null;
 let retryTimer = null;
 let stopped = true;
-const INITIAL = { connected: false, active: false, count: 0, employees: [], printers: [], printsVersion: 0, overlayOpen: false };
+const INITIAL = { connected: false, active: false, count: 0, employees: [], printers: [], printersKnown: false, printsVersion: 0, overlayOpen: false };
 let state = INITIAL;
 // Grace: kort wegvallen van een medewerker (netwerk-hapering) sluit het venster niet.
 const EMPTY_GRACE_MS = 15000;
@@ -82,11 +82,11 @@ function connect() {
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === 'printers') {
-      if (JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [] });
+      if (!state.printersKnown || JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [], printersKnown: true });
       return;
     }
     if (msg.type === 'presence') {
-      if (JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [] });
+      if (!state.printersKnown || JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [], printersKnown: true });
       queuePresence(msg);
     } else if (msg.type === 'REMOTE_PRINT_DONE') {
       window.dispatchEvent(new CustomEvent('ktp-remote-print-done', { detail: msg }));
@@ -102,7 +102,7 @@ function connect() {
   };
   ws.onclose = () => {
     clearInterval(pingTimer);
-    emit({ connected: false });
+    emit({ connected: false, printersKnown: false });
     scheduleRetry();
   };
 }

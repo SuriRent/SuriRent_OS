@@ -10419,7 +10419,7 @@ async def _online_printers(cid: str) -> list:
 _PAPER_ALIASES = {
     "ok": "ok", "normal": "ok", "full": "ok",
     "low": "low", "near_end": "low", "nearly_empty": "low", "almost_empty": "low", "near_empty": "low",
-    "empty": "empty", "out": "empty", "no_paper": "empty", "paper_out": "empty", "none": "empty",
+    "empty": "empty", "out": "empty", "no_paper": "empty", "paper_out": "empty",
 }
 
 

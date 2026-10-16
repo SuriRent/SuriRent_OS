@@ -845,3 +845,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Kiosk-betalingen + termijnen door medewerker → direct status approved (approved_by = medewerker), melding kind "payment". Startup-migratie _auto_approve_pending_kiosk_payments (alleen met kiosk_employee_id). _approve_payment_core nu atomair geclaimd (status approving) → nooit dubbel geboekt. Getest iteration_99 + race-test.
 - LET OP: oudere tests (iter79/94/95, payment_approval_workflow, pending_count_latest, push_pending_notification, employee_pin_login) verwachten nog pending_approval via kiosk → verouderd.
 - Open vraag gebruiker: Android meldingsgeluid (SuriRent-geluid vs standaard; ook in open app).
+
+## 2026-06 — Papierstatus in printerlampje
+- Printer-WS PRINTER_STATUS/PAPER_STATUS → kiosk_printers.paper (+presence_changed); _online_printers bevat paper; medewerker-WS krijgt {type:printers}. ktp-printer.js: window.onKtpPaperStatus / event / postMessage → WS. PrinterLamp: oranje (bijna op) / rood (leeg) + waarschuwing in paneel.

@@ -1,0 +1,30 @@
+{
+  "summary": "Tested the KT-V520 paper status (papierstatus) feature in the receipt-printer lamp/panel. Backend: 11/11 pytest pass. Printer WS PRINTER_STATUS/PAPER_STATUS works, aliases are mapped correctly (near_end/NEAR_END via paper_status->low, out/no_paper/paper_out->empty, normal->ok) and invalid values (bogus/null/123) are ignored. kiosk_printers.paper is stored and /kiosk/printers/online returns paper with 'ok' as default. Admin WS presence carries printers[].paper (~0.1s). Employee WS sends {type:'printers'} on connect and on every change (~0.06s). Frontend: on the employee kiosk (Anita PIN, 768px) and the admin kiosk (1920px) the lamp goes ok(green) -> low(amber, animate-pulse, 'Papier bijna op — vervang binnenkort de rol') -> empty(red, pulse, 'Papier leeg — vervang de rol') -> ok(green, warning gone). Updates arrive live without reload, about 0.5s on employee and 0.5-2.6s on admin. Local APK path: onKtpPaperStatus('empty') sets localStorage ktp_paper=empty, the lamp turns red with the warning and the server paper becomes empty. A postMessage PAPER_STATUS near_end gives low, the status survives a reload, and 'ok' resets it. One real bug found: when the printer drops offline, the lamp falls back to stale data.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "_PAPER_ALIASES vs frontend PAPER_ALIASES", "issue": "Backend maps 'none'->empty, frontend ktp-printer.js doesn't (inconsistent; 'none' as empty is also ambiguous)"},
+    {"endpoint": "kiosk_printers.paper", "issue": "Paper value persists across disconnects; a stale 'empty' stays until the APK reports again on reconnect (web client resends only if ktp_paper in localStorage — OK, but native/other clients may not)"}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PrinterLamp useKtpOnline", "issue": "When the KT-V520 disconnects, the server pushes printers:[] but `live.length ? live : fetched` falls back to the stale REST list loaded at page start. Repro: employee kiosk, paper low (amber), kill printer WS -> lamp turns GREEN 'Bonprinter verbonden' with paper 'ok' for up to 30s (verified 16s+). The lamp shows the wrong state: it says connected and drops the paper warning while the printer is offline.", "selector": "[data-testid='kiosk-printer-lamp']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Printer panel (multiple printers)", "issues": ["Row aggregates the worst paper of all online printers; with 2 printers (one empty, one ok) the lamp is red 'Papier leeg' even though one printer works, and it only names ktp[0]. Consider listing per-printer rows."]}]
+  },
+  "test_report_links": ["/app/backend/tests/test_printer_paper_iter100.py", "/app/test_reports/fake_printer_paper_iter100.py", "/app/test_reports/pytest/pytest_iter100.xml"],
+  "action_items": [
+    "Fix PrinterLamp useKtpOnline: once a live 'printers'/'presence' message has arrived, use the live list even if it is empty (e.g. track a printersKnown flag in kiosk-live state, or write the live list into `fetched`), so the lamp does not show green with stale paper=ok after the printer goes offline",
+    "Optional: align the 'none' alias between frontend and backend"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 18k lines and should be split (kiosk WS/printer code into its own module)",
+    "Admin WS hello needs kiosk token AND admin_token; this is documented here for tests"
+  ],
+  "updated_files": ["/app/backend/tests/test_printer_paper_iter100.py", "/app/test_reports/fake_printer_paper_iter100.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "90% (all requested flows pass; offline-fallback stale-state bug)"},
+  "seed_data_creation": "setup_iter85.py run (Anita reseed, TEST_ payment, TEST_Iter85 printer) + TEST_Iter100 Local printer. Reset done: printer_mode 'none', all TEST_ printers revoked with paper 'ok'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run python /app/test_reports/setup_iter85.py, PUT /api/settings/kiosk_devices {printer_mode:'kt-v520'}, then pytest /app/backend/tests/test_printer_paper_iter100.py. For UI: nohup python /app/test_reports/fake_printer_paper_iter100.py 900 & and write ok/low/empty to /tmp/paper_cmd to drive status. Admin kiosk: set localStorage admin_token + kiosk_token, go to /my-awesome-rentals-bv/kiosk. Admin WS hello = {role:'admin', token:kiosk_token, admin_token}. The browser automation sandbox has no pymongo. Reset afterwards: printer_mode none + DELETE /api/settings/kiosk-printers/{id}.",
+  "rca of the issue": "PrinterLamp.jsx useKtpOnline returns `live.length ? live : fetched`. An empty live list (printer offline) is treated the same as 'no live data yet', so it falls back to the `fetched` REST snapshot (polled every 30s). That snapshot still lists the printer online with paper 'ok'. Fix: tell 'not received' apart from 'received empty'."
+}

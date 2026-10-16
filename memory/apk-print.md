@@ -78,3 +78,7 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 - Goedkeuringsmeldingen bevatten: `action_token`, `action_url` (/api/push/action), `actions` = "approve,reject", `payment_id`, `url`.
 - Knop tik → `POST <domein>/api/push/action` JSON `{token: action_token, action: "approve"|"reject"}` (geen login nodig, token 7 dagen geldig, per beheerder). Antwoord `{ok, message}`; 409 = al verwerkt, 401 = verlopen. Toon resultaat als nieuwe melding.
 - Zonder capability 'actions' blijft het een gewone melding (tik opent het goedkeuringsscherm).
+
+## Papierstatus KT-V520 (printerlampje)
+- APK meldt papierstatus aan de web-app (één van): `injectJavaScript("window.onKtpPaperStatus('low');true;")`, window event `ktp-paper-status` {detail:{paper}}, of postMessage `{type:'PRINTER_STATUS', paper:'ok'|'low'|'empty'}` (ook near_end/out/no_paper geaccepteerd).
+- Web stuurt dit via de printer-WebSocket `{type:'PRINTER_STATUS', paper}` naar de server → kiosk_printers.paper → alle kiosks (beheerder + medewerker) zien het in het lampje (oranje = bijna op, rood = leeg) en paneel.
