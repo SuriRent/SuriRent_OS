@@ -5802,6 +5802,28 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             detail="PIN-login werkt alleen op uw bedrijfs-portaal. Open de link uw bedrijf u stuurde, of gebruik e-mail + wachtwoord.",
         )
 
+    # Eén PIN-scherm: eerst persoonlijke PIN van beheerders van dit bedrijf.
+    if body.pin.isdigit() and len(body.pin) == 4:
+        admin_docs = await db.users.find(
+            {"company_id": target_cid, "role": {"$ne": "kiosk"},
+             "disabled": {"$ne": True}, "personal_pin_hash": {"$exists": True, "$ne": None}},
+            {"_id": 0},
+        ).to_list(200)
+        for u in admin_docs:
+            if verify_password(body.pin, u.get("personal_pin_hash", "")):
+                _pin_throttle_clear(throttle_key)
+                atoken = create_token({
+                    "sub": u["id"], "email": u["email"], "type": "access",
+                    "company_id": u.get("company_id"), "role": u.get("role", "admin"),
+                }, ACCESS_MIN)
+                c = await db.companies.find_one({"id": target_cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
+                return {
+                    "token": None, "company": c, "admin_token": atoken,
+                    "admin_user": {"id": u["id"], "email": u["email"], "name": u.get("name", ""),
+                                   "role": u.get("role", "admin")},
+                    "employee": None,
+                }
+
     # Pakket-gate: Kiosk terminal moet in het abonnement zitten. Zonder deze
     # check kon een Starter-bedrijf gewoon PIN-inloggen ook al staat
     # `allow_kiosk: false` in de plan_catalog. Blokkeert nu vroeg zodat er

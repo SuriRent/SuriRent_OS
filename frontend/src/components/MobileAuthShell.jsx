@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { RESERVED_SLUGS } from '../lib/branded-nav';
+import { RESERVED_SLUGS, useBrandedNavigate } from '../lib/branded-nav';
+import { setPreferredRole } from '../lib/pwaRole';
 import { publicMarketingUrl } from '../lib/env';
 import PasswordStrength from './PasswordStrength';
 
@@ -74,6 +75,7 @@ function OrangeShell({ children, primary = '#FF5C00' }) {
 // =====================================================================
 export function MobileEmailLogin({ onBack, onForgot, branding }) {
   const { login } = useAuth();
+  const navigate = useBrandedNavigate();
   const [email, setEmail] = useState(() => {
     try { return localStorage.getItem('saved_login_email') || ''; } catch { return ''; }
   });
@@ -96,7 +98,8 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
     e?.preventDefault();
     setLoading(true); setError('');
     try {
-      await login(email.trim(), password, remember);
+      const res = await login(email.trim(), password, remember);
+      if (res?.pin_required) return;
       try {
         localStorage.removeItem('auto_login_paused');
         if (remember) {
@@ -107,6 +110,14 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
           localStorage.removeItem('saved_login_password');
         }
       } catch { /* ignore */ }
+      // Zelf navigeren: na uitloggen (?loggedout=1) slaat LoginPage de auto-redirect over.
+      setPreferredRole('admin');
+      let pendingQr = null;
+      try { pendingQr = sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
+      const userSlug = res?.company?.slug || res?.user?.company_slug;
+      if (pendingQr) navigate(`/qr-link?token=${encodeURIComponent(pendingQr)}`);
+      else if (userSlug && /^\/login(\/|$)/i.test(window.location.pathname)) window.location.assign(`/${userSlug}/admin`);
+      else navigate('/admin', { replace: true });
     } catch (err) {
       setError(formatError(err, 'Inloggen mislukt'));
     } finally { setLoading(false); }

@@ -15,7 +15,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
   // Persoonlijke PIN-modus: als dit apparaat een onthouden gebruiker heeft,
   // gebruiken we PIN-by-email (in plaats van de gedeelde kiosk-PIN). Dit
   // activeert de "Welkom [naam]" ervaring zoals ABN AMRO.
-  const [deviceUser, setDeviceUser] = useState(() => {
+  const [deviceUser] = useState(() => {
     try {
       const email = localStorage.getItem('device_user_email') || '';
       const name = localStorage.getItem('device_user_name') || '';
@@ -43,22 +43,18 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
     };
   }, [primary]);
 
-  const forgetDevice = () => {
-    try {
-      localStorage.removeItem('device_user_email');
-      localStorage.removeItem('device_user_name');
-    } catch { /* ignore */ }
-    setDeviceUser(null);
-  };
-
   const verify = async (code) => {
     setLoading(true); setError('');
     try {
+      // Eén PIN-scherm: eerst persoonlijke PIN van de onthouden gebruiker,
+      // anders (of bij mismatch) medewerker-/beheerder-PIN van dit bedrijf.
       if (deviceUser) {
-        // Persoonlijke PIN login — gebruikt user.personal_pin_hash op backend.
-        const { data } = await api.post('/auth/personal-pin/login', {
-          email: deviceUser.email, pin: code,
-        });
+        let data = null;
+        try {
+          ({ data } = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code }));
+        } catch (e) {
+          if (e?.response?.status !== 401 && e?.response?.status !== 400) throw e;
+        }
         if (data?.kiosk) {
           try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
           if (data.token) localStorage.setItem('kiosk_token', data.token);
@@ -68,19 +64,17 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
           onSuccess('kiosk');
           return;
         }
-        if (data?.access_token) localStorage.setItem('admin_token', data.access_token);
-        setPreferredRole('admin');
-        // Fire-and-forget: device_qr_token issuing in achtergrond zodat de
-        // gebruiker er NIET op moet wachten. Dit voorkomt 200-500ms extra
-        // latency bij elke PIN-login. AuthProvider.refresh() backfilt
-        // sowieso bij volgende session-restore.
-        api.post('/auth/device-qr-token/issue').then((r) => {
-          if (r?.data?.device_qr_token) {
-            try { localStorage.setItem('device_qr_token', r.data.device_qr_token); } catch { /* ignore */ }
-          }
-        }).catch(() => { /* niet-kritiek */ });
-        onSuccess(data?.user?.employee_id ? 'admin' : undefined);
-        return;
+        if (data?.access_token) {
+          localStorage.setItem('admin_token', data.access_token);
+          setPreferredRole('admin');
+          api.post('/auth/device-qr-token/issue').then((r) => {
+            if (r?.data?.device_qr_token) {
+              try { localStorage.setItem('device_qr_token', r.data.device_qr_token); } catch { /* ignore */ }
+            }
+          }).catch(() => { /* niet-kritiek */ });
+          onSuccess('admin');
+          return;
+        }
       }
       // Geen onthouden gebruiker → val terug op gedeelde kiosk PIN.
       const { data } = await api.post('/auth/kiosk-pin', {
@@ -100,7 +94,16 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         setPreferredRole('kiosk');
       } else {
         try { clearKioskEmployee(); } catch { /* ignore */ }
-        if (data?.admin_token) localStorage.setItem('admin_token', data.admin_token);
+        if (data?.admin_token) {
+          localStorage.setItem('admin_token', data.admin_token);
+          if (data.admin_user?.email) {
+            localStorage.setItem('device_user_email', data.admin_user.email);
+            localStorage.setItem('device_user_name', data.admin_user.name || data.admin_user.email.split('@')[0]);
+          }
+          setPreferredRole('admin');
+          onSuccess('admin');
+          return;
+        }
         setPreferredRole(isAdminTarget ? 'admin' : 'kiosk');
       }
       onSuccess();
@@ -173,12 +176,10 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
                 <KeyRound className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight" data-testid="pin-welcome">
-                {deviceUser ? `Welkom, ${deviceUser.name}` : 'PIN Login'}
+                PIN Login
               </h2>
               <p className="text-sm text-slate-400 mt-1" data-testid="pin-company-name">
-                {deviceUser
-                  ? 'Vul uw persoonlijke PIN in om verder te gaan'
-                  : `Vul de 4-cijferige PIN in voor ${appName}`}
+                Vul je 4-cijferige pin in om verder te gaan
               </p>
             </div>
 
@@ -230,20 +231,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
 
             {/* Footer links */}
             <div className="flex items-center justify-center gap-4 mt-6 pt-4 border-t border-slate-100 text-xs font-bold flex-wrap">
-              {deviceUser ? (
-                <>
-                  <button onClick={forgetDevice} data-testid="login-switch-user-btn"
-                    className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
-                    <KeyRound className="w-3.5 h-3.5" /> Andere gebruiker
-                  </button>
-                  <span className="text-slate-300">•</span>
-                  <button onClick={onPassword} data-testid="login-password-btn"
-                    className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
-                    <LogIn className="w-3.5 h-3.5" /> Inloggen met wachtwoord
-                  </button>
-                </>
-              ) : (
-                <>
+              <>
                   <button onClick={onPassword} data-testid="login-password-btn"
                     className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
                     <KeyRound className="w-3.5 h-3.5" /> Inloggen met e-mail
@@ -257,8 +245,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
                       </button>
                     </>
                   )}
-                </>
-              )}
+              </>
             </div>
           </div>
         </div>
@@ -308,7 +295,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         <h1 className="font-black tracking-tight text-white text-center"
           style={{ fontSize: 'clamp(28px, 5vh, 44px)', lineHeight: '1.05' }}
           data-testid="pin-welcome">
-          Welkom{deviceUser ? ',' : ''}
+          Welkom
         </h1>
 
         {/* Profielfoto in cirkel */}
@@ -334,13 +321,11 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         <p className="text-white/90 font-black text-center uppercase tracking-wider"
           style={{ fontSize: 'clamp(13px, 1.8vh, 17px)' }}
           data-testid="pin-company-name">
-          {deviceUser ? deviceUser.name : appName}
+          {appName}
         </p>
         <p className="text-white/80 text-center font-medium mt-2 px-6"
           style={{ fontSize: 'clamp(12px, 1.6vh, 15px)', maxWidth: '340px' }}>
-          {deviceUser
-            ? 'Vul je persoonlijke PIN in om verder te gaan'
-            : 'Vul je 4-cijferige PIN in om verder te gaan'}
+          Vul je 4-cijferige pin in om verder te gaan
         </p>
 
         {error && (
@@ -406,20 +391,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
 
         {/* Onderaan: Beheerder login + nieuw account */}
         <div className="flex items-center gap-4 mt-4 text-xs font-bold flex-wrap justify-center px-4">
-          {deviceUser ? (
-            <>
-              <button onClick={forgetDevice} data-testid="login-switch-user-btn"
-                className="flex items-center gap-1.5 text-white/80 hover:text-white">
-                <KeyRound className="w-3.5 h-3.5" /> Andere gebruiker
-              </button>
-              <span className="text-white/40">•</span>
-              <button onClick={onPassword} data-testid="login-password-btn"
-                className="flex items-center gap-1.5 text-white/80 hover:text-white">
-                <LogIn className="w-3.5 h-3.5" /> Inloggen met wachtwoord
-              </button>
-            </>
-          ) : (
-            <>
+          <>
               <button onClick={onPassword} data-testid="login-password-btn"
                 className="flex items-center gap-1.5 text-white/80 hover:text-white">
                 <KeyRound className="w-3.5 h-3.5" /> Inloggen met e-mail
@@ -433,8 +405,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
                   </button>
                 </>
               )}
-            </>
-          )}
+          </>
         </div>
       </div>
 
