@@ -505,6 +505,7 @@ async def lifespan(app: FastAPI):
         import logging as _l
         _l.getLogger("uvicorn.error").warning(f"event_bus startup: {_exc}")
 
+    asyncio.create_task(_auto_approve_pending_kiosk_payments())
     # FCM-tokens: één document per token (dubbele van gelijktijdige registraties opruimen).
     try:
         seen = set()
@@ -9325,6 +9326,26 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
     )
 
 
+async def _auto_approve_pending_kiosk_payments():
+    """Goedkeuringsstap voor kiosk-medewerkers is verwijderd: wachtende
+    kiosk-betalingen eenmalig (idempotent) direct verwerken."""
+    try:
+        docs = await db.payments.find(
+            {"status": "pending_approval", "kiosk_employee_id": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1, "company_id": 1, "kiosk_employee_name": 1},
+        ).sort("paid_at", 1).to_list(5000)
+        for d in docs:
+            try:
+                await _approve_payment_core({"id": d["id"], "company_id": d["company_id"]}, None, "system",
+                                            d.get("kiosk_employee_name") or "Kiosk")
+            except Exception as e:  # noqa: BLE001
+                print(f"[auto-approve] {d['id']} failed: {e}")
+        if docs:
+            print(f"[auto-approve] {len(docs)} wachtende kiosk-betalingen verwerkt")
+    except Exception as e:  # noqa: BLE001
+        print(f"[auto-approve] failed: {e}")
+
+
 async def _approve_payment_core(q: dict, signature: str | None, uid: str, uname: str, via: str | None = None):
     """Goedkeuren + openstaande factuur koppelen, zodat het bedrag NU pas meetelt."""
     p = await db.payments.find_one(q, {"_id": 0})
@@ -10666,13 +10687,15 @@ async def kiosk_create_payment(
             raise HTTPException(status_code=404, detail="Kiosk-medewerker niet gevonden")
         if not emp.get("kiosk_pin_hash") or not verify_password((employee_pin or "").strip(), emp["kiosk_pin_hash"]):
             raise HTTPException(status_code=401, detail="Ongeldige PIN")
-        kiosk_emp_id, kiosk_emp_name, status = emp["id"], emp.get("name", ""), "pending_approval"
+        # Geen goedkeuringsstap meer: betaling van een medewerker telt direct mee.
+        kiosk_emp_id, kiosk_emp_name = emp["id"], emp.get("name", "")
 
     doc = await _create_payment_doc(
         body, cid,
         status=status,
         kiosk_employee_id=kiosk_emp_id,
         kiosk_employee_name=kiosk_emp_name,
+        **({"approved_by": kiosk_emp_name} if kiosk_emp_name else {}),
     )
     enriched = await _enrich_payment(doc)
 
@@ -10694,7 +10717,7 @@ async def kiosk_create_payment(
             push_url = "/admin/payments?filter=pending"
         else:
             title = f"Betaling {currency} {amount:,.2f}"
-            body_msg = f"{tenant}{apt_str} via {method}"
+            body_msg = f"{tenant}{apt_str} via {method}" + (f" · ontvangen door {kiosk_emp_name}" if kiosk_emp_name else "")
             push_kind = "payment"
             push_url = "/admin/payments"
         await _notify_company_admins(
@@ -17572,7 +17595,6 @@ async def kiosk_pay_installment(
         ):
             raise HTTPException(status_code=401, detail="Ongeldige PIN")
         kiosk_emp_id, kiosk_emp_name = emp["id"], emp.get("name", "")
-        status = "pending_approval"
 
     out = await _plan_core["pay_installment_for"](
         plan, seq,
@@ -17589,15 +17611,14 @@ async def kiosk_pay_installment(
         pay = await db.payments.find_one({"id": inst["payment_id"]}, {"_id": 0})
         if pay:
             out = {**out, "payment": await _enrich_payment(pay)}
-    # Notify admins (alleen bij pending_approval, anders is het al approved
-    # en zien admins het wel in de feed).
+    # Direct verwerkt → beheerders krijgen een gewone betaalmelding.
     try:
-        if status == "pending_approval":
+        if kiosk_emp_name:
             await _notify_company_admins(
                 cid,
-                "Termijnbetaling wacht op goedkeuring",
-                f"{kiosk_emp_name or 'Kiosk'} ontving termijn {seq} voor {plan.get('tenant_name', 'huurder')}",
-                {"kind": "approval", "url": "/admin/payments", "badge_inc": 1,
+                "Termijnbetaling ontvangen",
+                f"{kiosk_emp_name} ontving termijn {seq} voor {plan.get('tenant_name', 'huurder')}",
+                {"kind": "payment", "url": "/admin/payment_plans", "badge_inc": 1,
                  "payment_id": (inst or {}).get("payment_id"), "plan_id": plan_id},
             )
     except Exception as e:  # noqa: BLE001

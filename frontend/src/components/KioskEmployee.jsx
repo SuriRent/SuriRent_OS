@@ -152,7 +152,7 @@ export function KioskEmployeeLoginSheet({ onCancel, onSuccess }) {
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-4">
-          Voer uw 4-cijferige PIN in. Uw betalingen worden ter goedkeuring naar de beheerder gestuurd.
+          Voer uw 4-cijferige PIN in. Uw betalingen worden direct verwerkt.
         </p>
         {/* PIN dots */}
         <div className="flex items-center justify-center gap-2 mb-5">
