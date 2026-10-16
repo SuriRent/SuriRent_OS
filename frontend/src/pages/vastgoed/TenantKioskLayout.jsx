@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { subscribeNfc } from '../../lib/nfc-bus';
 import { useSearchParams } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -248,8 +249,13 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       onLoggedIn();
     } catch (e) {
       try { playErrorBuzz(); } catch { /* noop */ }
-      setError(formatError(e) || 'Onbekende NFC-kaart');
-      setHint('Vraag de beheerder om uw kaart te koppelen.');
+      if (e?.response?.status === 404) {
+        setError('Deze NFC-tag is onbekend');
+        setHint('De tag is niet aan een huurder gekoppeld. Vraag de beheerder of medewerker om hem te koppelen.');
+      } else {
+        setError(formatError(e) || 'Inloggen met NFC mislukt');
+        setHint('Probeer het opnieuw.');
+      }
       // Reset busy zodat de huurder direct opnieuw kan tikken
       setTimeout(() => { busyRef.current = false; }, 500);
     } finally {
@@ -274,6 +280,9 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       }
     } catch { /* ignore */ }
   }, [handleScan]);
+
+  // === Android-app (APK): bestaand NFC-systeem geeft de tag-ID door ===
+  useEffect(() => subscribeNfc(handleScan), [handleScan]);
 
   // === Web NFC (Android Chrome) ===
   useEffect(() => {
