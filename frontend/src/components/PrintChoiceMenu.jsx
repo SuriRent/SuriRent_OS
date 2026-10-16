@@ -80,9 +80,10 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
   return (
     <>
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
-        className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1">
-        {disabled || sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
-        Afdruk <ChevronDown className="w-3 h-3" />
+        aria-label="Afdruk"
+        className="w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform">
+        {disabled || sending ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3 sm:h-3" />}
+        <span className="hidden sm:inline">Afdruk</span> <ChevronDown className="hidden sm:block w-3 h-3" />
       </button>
       {pos && createPortal((
         <>

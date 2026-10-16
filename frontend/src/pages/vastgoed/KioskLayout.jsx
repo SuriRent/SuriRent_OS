@@ -1283,9 +1283,9 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
             </div>
           )}
           {items && items.map((p) => (
-            <div key={p.id} className="py-3 border-b border-slate-100 last:border-0 flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
+            <div key={p.id} data-testid={`history-row-${p.id}`} className="py-3 border-b border-slate-100 last:border-0 flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+              <div className="flex-1 min-w-0 break-words">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-extrabold text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-100 text-orange-700">{p.category}</span>
@@ -1309,11 +1309,12 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                   <button data-testid={`history-whatsapp-${p.id}`}
                     onClick={() => handleWhatsApp(p.id)}
                     disabled={!!busy[p.id]}
-                    className="px-2.5 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-xs flex items-center gap-1">
+                    aria-label="WhatsApp"
+                    className="w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 disabled:opacity-60 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition-transform">
                     {busy[p.id] === 'wa'
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <MessageCircle className="w-3 h-3" />}
-                    WhatsApp
+                      ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" />
+                      : <MessageCircle className="w-4 h-4 sm:w-3 sm:h-3" />}
+                    <span className="hidden sm:inline">WhatsApp</span>
                   </button>
                   <PrintChoiceMenu paymentId={p.id} disabled={busy[p.id] === 'print'}
                     onLocal={() => handlePrint(p.id)}
@@ -1321,7 +1322,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
                 </div>
                 {waState[p.id] && (
                   <p data-testid={`history-print-status-${p.id}`}
-                    className={`text-[10px] font-semibold px-1 ${
+                    className={`text-[10px] font-semibold px-1 max-w-[140px] text-right ${
                       waState[p.id].kind === 'ok' ? 'text-emerald-600'
                       : waState[p.id].kind === 'err' ? 'text-red-500'
                       : 'text-slate-500'
