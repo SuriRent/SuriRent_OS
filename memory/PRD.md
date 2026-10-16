@@ -865,3 +865,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Eén PIN-scherm ("Vul je 4-cijferige pin in om verder te gaan"), "Andere gebruiker" verwijderd. /auth/kiosk-pin herkent medewerker-PIN (eerst) én persoonlijke beheerder-PIN; fallback naar /auth/personal-pin/login voor onthouden gebruiker.
 - Beveiliging: PIN-uniciteit binnen bedrijf (beheerders + medewerkers, 409), bedrijfsbrede throttle (30 pogingen), personal_pin_hash niet meer in /auth/me, access_token cookie bij beheerder-PIN.
 - Getest: iteration_103, iteration_104.
+
+## 2026-06 — Kiosk betalingsgeschiedenis lay-out
+- Rijen horizontaal: info links (afbreekbaar, niet afgekapt), knoppen rechts, verticaal gecentreerd. Mobiel: ronde pictogram-knoppen (WhatsApp, Afdruk) naast elkaar; vanaf sm met tekst. Getest: iteration_105.

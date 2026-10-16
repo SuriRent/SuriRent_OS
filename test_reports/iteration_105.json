@@ -1,0 +1,18 @@
+{
+  "summary": "Frontend-only test of kiosk Betalingsgeschiedenis row layout. Logged in via PIN 4321 (Anita) on /my-awesome-rentals-bv/login?view=pin -> Hoofdvestiging -> apt HUIS 1B (2 payments) -> overview-history-btn. Mobile 390x844: both history-row-{id} are display:flex, flex-direction:row, align-items:center; info column right edge 264px vs button group left edge 276px (12px gap, no overlap); info vertical centre == button-group centre (366/366, 478/478); no text truncation, no horizontal overflow; period text wraps onto 2 lines cleanly. history-whatsapp-{id} and history-print-{id} are 36x36, border-radius 9999px, icon-only (innerText empty), side by side on the same top (WA right 312, Print left 318). Desktop 1920: buttons 96x32 / 91x32 with radius 8px, labels 'WhatsApp' and 'Afdruk' visible, chevron visible, still vertically centred, one-line info. Afdruk dropdown history-print-menu-{id} opens on mobile (only the 'Afdrukken' local option because no KT-V520/BT printer online) and closes via backdrop. WhatsApp button clickable (shows pressed state; handler fetches image/opens share or wa.me).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/ui_history_rows.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KioskLayout.jsx is ~5000 lines - should be split (PaymentHistoryModal could be its own file).",
+    "Tested payments had no received_by/approved_by values, so the 'Ontvangen door / Goedgekeurd door' line was not visually checked; with min-w-0 + break-words on the info column it should wrap fine.",
+    "The Print button was visible (not hidden). No printers were online, so the dropdown only showed 'Afdrukken'."
+  ],
+  "updated_files": ["/app/tests/ui_history_rows.py"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None. Used existing payments on HUIS 1B (tenant 96564114-9e93-4a5f-8bb7-32327dd58b3e).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kiosk PIN 4321 works for my-awesome-rentals-bv. Location testid location-9de8cddc-0a97-4fce-aa2f-bde90aa93484, apartment testid 'apt-HUIS 1B'. Use the ':visible' filter on overview-history-btn because there are several. The measurement script is in /app/tests/ui_history_rows.py."
+}
