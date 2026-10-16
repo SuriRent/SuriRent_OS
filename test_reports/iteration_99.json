@@ -1,0 +1,33 @@
+{
+  "summary": "Iter99: kiosk employee approval step removed. Ran 5/5 backend pytest checks and a restart-based migration script (PASS), plus a Playwright run of the full kiosk flow as Anita (PIN 4321 -> HUIS 1A -> SRD 25 contant -> success page) and the 'Bonnen van vandaag' overlay. Everything works as requested.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup _auto_approve_pending_kiosk_payments", "issue": "_approve_payment_core reads the status and writes it back as two separate steps (not atomic). If several backend replicas start at the same moment, each one can approve the same pending kiosk payment, so the money is booked on the invoice twice. Fix: claim the payment first with an atomic find_one_and_update({id, status:'pending_approval'} -> status:'approving'), or run the migration on one replica only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KioskEmployeeLoginSheet", "issue": "The text 'Uw betalingen worden direct verwerkt.' is correct in the source, but no file imports or renders this component (the kiosk PIN is entered in PinLogin.jsx). Users never see the text; this is dead code.", "selector": "[data-testid=kiosk-emp-login-sheet]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_no_approval_iter99.py", "/app/backend/tests/migration_kiosk_pending_iter99.py", "/app/test_reports/pytest/iter99.xml"],
+  "action_items": [
+    "Optional: make the startup auto-approve atomic or single-replica, so a multi-pod deploy cannot book the same payment twice.",
+    "Optional: remove the stale 'pending_approval' comments in KioskEmployee.jsx (lines 7 and 70), the kiosk_create_payment comment (~10677) and the kiosk_pay_installment docstring (~17576).",
+    "Optional: remove the unused KioskEmployeeLoginSheet, or render it if a PIN modal is still wanted."
+  ],
+  "critical_code_review_comments": [
+    "kiosk_create_payment and kiosk_pay_installment now always use status 'approved'. The notification kind is 'payment' with require_approval=False, and no action_token is added because 'payment' is not in _APPROVAL_KINDS.",
+    "The migration runs on every startup as a fire-and-forget task. It is idempotent per payment status, but see the race-condition note above.",
+    "server.py is about 18k lines; it should be split into modules (existing tech debt)."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_no_approval_iter99.py", "/app/backend/tests/migration_kiosk_pending_iter99.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Anita was reseeded via setup_iter85.py. Test payments created on demo company invoices of Jan Pieterse (HUIS 1A): SRD 7 by API, SRD 11 by the migration, SRD 25 by the UI, plus a SRD 3 TEST_ payment approved by admin. Also a SRD 5 installment on Roy van der Berg's plan and a SRD 2 TEST_ payment that was rejected. The demo resets every 30 minutes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: python /app/test_reports/setup_iter85.py, then pytest /app/backend/tests/test_kiosk_no_approval_iter99.py. Migration check: python tests/migration_kiosk_pending_iter99.py insert && sudo supervisorctl restart backend && sleep 15 && python tests/migration_kiosk_pending_iter99.py check. SSE events are stored in the Mongo collection sse_events, channel admin:{company_id}. Kiosk UI flow: /my-awesome-rentals-bv/login?target=kiosk&view=pin -> keypad-4,3,2,1 -> Hoofdvestiging -> apt-HUIS 1A -> overview-pay-btn -> keypad (visible) -> payment-next-btn -> method-contant -> confirm-submit."
+}

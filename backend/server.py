@@ -9347,12 +9347,22 @@ async def _auto_approve_pending_kiosk_payments():
 
 
 async def _approve_payment_core(q: dict, signature: str | None, uid: str, uname: str, via: str | None = None):
-    """Goedkeuren + openstaande factuur koppelen, zodat het bedrag NU pas meetelt."""
-    p = await db.payments.find_one(q, {"_id": 0})
+    """Goedkeuren + openstaande factuur koppelen. Atomair geclaimd → nooit dubbel geboekt."""
+    p = await db.payments.find_one_and_update(
+        {**q, "status": "pending_approval"}, {"$set": {"status": "approving"}}, projection={"_id": 0},
+    )
     if not p:
+        if await db.payments.find_one(q, {"_id": 1}):
+            raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
         raise HTTPException(status_code=404, detail="Betaling niet gevonden")
-    if p.get("status") != "pending_approval":
-        raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
+    try:
+        return await _approve_claimed(p, signature, uid, uname, via)
+    except BaseException:
+        await db.payments.update_one({"id": p["id"], "status": "approving"}, {"$set": {"status": "pending_approval"}})
+        raise
+
+
+async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str, via: str | None):
     pid = p["id"]
     approved_at = iso(now_utc())
     # Probeer alsnog een openstaande factuur te matchen bij approval.
