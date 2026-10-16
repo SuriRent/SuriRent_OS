@@ -88,7 +88,7 @@ async def get_current_user(request: Request) -> dict:
                 exp = exp.replace(tzinfo=timezone.utc)
             if exp and exp >= now_utc():
                 gu = await db.users.find_one({"user_id": sess["user_id"]},
-                                              {"_id": 0, "password_hash": 0})
+                                              {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
                 if gu:
                     # Zorg dat downstream code de standaard velden vindt.
                     gu.setdefault("id", gu.get("user_id"))
@@ -107,7 +107,7 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Token verlopen")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Ongeldig token")
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
     if user.get("disabled") or user.get("role") == "kiosk":
@@ -1543,6 +1543,9 @@ async def personal_pin_setup(body: _PinSetupIn, user=Depends(get_current_user)):
     pin = (body.pin or "").strip()
     if not pin.isdigit() or len(pin) != 4:
         raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
+    if user.get("company_id"):
+        await _check_employee_pin_unique(user["company_id"], pin, exclude_eid=user.get("employee_id"),
+                                         exclude_uid=user["id"])
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {
@@ -4921,7 +4924,7 @@ async def export_company_backup(user=Depends(get_current_user)):
         "exported_at": now_utc_iso(),
         "company_id": cid,
         "company": company,
-        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0, "password_hash": 0})],
+        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})],
         "collections": {},
     }
     for coll in TENANT_SCOPED_COLLECTIONS:
@@ -5281,7 +5284,7 @@ async def stop_impersonating(response: Response, user=Depends(get_current_user))
     original_id = user.get("original_user_id")
     if not original_id:
         raise HTTPException(status_code=400, detail="Geen impersonatie-sessie actief")
-    super_user = await db.users.find_one({"id": original_id}, {"_id": 0, "password_hash": 0})
+    super_user = await db.users.find_one({"id": original_id}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
     if not super_user or super_user.get("role") != "superadmin":
         raise HTTPException(status_code=403, detail="Origineel account niet gevonden of niet superadmin")
     token = create_token({
@@ -5558,7 +5561,7 @@ class SuperadminAccountIn(BaseModel):
 
 @api.get("/superadmin/account")
 async def get_superadmin_account(user=Depends(require_role("superadmin"))):
-    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
     if not me:
         raise HTTPException(status_code=404, detail="Account niet gevonden")
     return {
@@ -5609,7 +5612,7 @@ async def update_superadmin_account(
     update["updated_at"] = iso(now_utc())
     await db.users.update_one({"id": user["id"]}, {"$set": update})
 
-    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
     return {
         "ok": True,
         "email": (me or {}).get("email"),
@@ -5802,35 +5805,11 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             detail="PIN-login werkt alleen op uw bedrijfs-portaal. Open de link uw bedrijf u stuurde, of gebruik e-mail + wachtwoord.",
         )
 
-    # Eén PIN-scherm: eerst persoonlijke PIN van beheerders van dit bedrijf.
-    if body.pin.isdigit() and len(body.pin) == 4:
-        admin_docs = await db.users.find(
-            {"company_id": target_cid, "role": {"$ne": "kiosk"},
-             "disabled": {"$ne": True}, "personal_pin_hash": {"$exists": True, "$ne": None}},
-            {"_id": 0},
-        ).to_list(200)
-        for u in admin_docs:
-            if verify_password(body.pin, u.get("personal_pin_hash", "")):
-                _pin_throttle_clear(throttle_key)
-                atoken = create_token({
-                    "sub": u["id"], "email": u["email"], "type": "access",
-                    "company_id": u.get("company_id"), "role": u.get("role", "admin"),
-                }, ACCESS_MIN)
-                c = await db.companies.find_one({"id": target_cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
-                return {
-                    "token": None, "company": c, "admin_token": atoken,
-                    "admin_user": {"id": u["id"], "email": u["email"], "name": u.get("name", ""),
-                                   "role": u.get("role", "admin")},
-                    "employee": None,
-                }
+    # Bedrijfsbrede throttle: voorkomt brute-force via wisselende IP-headers.
+    co_key = f"kiosk-co:{target_cid}"
+    _pin_throttle_check(co_key)
 
-    # Pakket-gate: Kiosk terminal moet in het abonnement zitten. Zonder deze
-    # check kon een Starter-bedrijf gewoon PIN-inloggen ook al staat
-    # `allow_kiosk: false` in de plan_catalog. Blokkeert nu vroeg zodat er
-    # ook geen medewerker-tokens worden uitgegeven.
-    await _require_plan_feature(target_cid, "allow_kiosk", "Kiosk terminal")
-
-    # ---- Alleen persoonlijke medewerker-PINs (gedeelde bedrijfs-PIN is afgeschaft) ----
+    # ---- Medewerker-PINs (eerst, zodat een medewerker nooit als beheerder binnenkomt) ----
     emp_docs = await db.employees.find(
         {
             "company_id": target_cid,
@@ -5846,6 +5825,8 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             matched_emp = e
             break
     if matched_emp:
+        # Pakket-gate: Kiosk terminal moet in het abonnement zitten.
+        await _require_plan_feature(target_cid, "allow_kiosk", "Kiosk terminal")
         _pin_throttle_clear(throttle_key)
         cid = matched_emp.get("company_id")
         c = await db.companies.find_one({"id": cid}, {"_id": 0}) if cid else None
@@ -5864,6 +5845,29 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
                 "pin": body.pin,  # frontend gebruikt dit voor sessionStorage → withKioskEmployee()
             },
         }
+
+    # ---- Persoonlijke PIN van beheerders van dit bedrijf (één PIN-scherm) ----
+    admin_docs = await db.users.find(
+        {"company_id": target_cid, "role": {"$ne": "kiosk"},
+         "disabled": {"$ne": True}, "personal_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0},
+    ).to_list(200)
+    for u in admin_docs:
+        if verify_password(body.pin, u.get("personal_pin_hash", "")):
+            _pin_throttle_clear(throttle_key)
+            atoken = create_token({
+                "sub": u["id"], "email": u["email"], "type": "access",
+                "company_id": u.get("company_id"), "role": u.get("role", "admin"),
+            }, ACCESS_MIN)
+            _set_access_cookie(response, atoken)
+            c = await db.companies.find_one({"id": target_cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
+            return {
+                "token": None, "company": c, "admin_token": atoken,
+                "admin_user": {"id": u["id"], "email": u["email"], "name": u.get("name", ""),
+                               "role": u.get("role", "admin")},
+                "employee": None,
+            }
+    _pin_throttle_fail(co_key, max_attempts=30)
     _pin_throttle_fail(throttle_key)
     raise HTTPException(status_code=401, detail="Ongeldige PIN code")
 
@@ -14419,7 +14423,16 @@ class EmployeeOut(BaseModel):
     ai_assistant_enabled: bool = False
 
 
-async def _check_employee_pin_unique(cid: str, pin: str, exclude_eid: Optional[str] = None) -> None:
+async def _check_employee_pin_unique(cid: str, pin: str, exclude_eid: Optional[str] = None,
+                                     exclude_uid: Optional[str] = None) -> None:
+    admins = await db.users.find(
+        {"id": {"$ne": exclude_uid}, "company_id": cid, "role": {"$ne": "kiosk"},
+         "personal_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0, "name": 1, "personal_pin_hash": 1},
+    ).to_list(200)
+    for a in admins:
+        if verify_password(pin, a.get("personal_pin_hash", "")):
+            raise HTTPException(status_code=409, detail="Deze PIN is al in gebruik binnen dit bedrijf, kies een andere")
     others = await db.employees.find(
         {"id": {"$ne": exclude_eid}, "company_id": cid, "active": True, "kiosk_pin_hash": {"$exists": True, "$ne": None}},
         {"_id": 0, "name": 1, "kiosk_pin_hash": 1},
@@ -14551,14 +14564,7 @@ async def set_employee_kiosk_pin(eid: str, body: EmployeeKioskPinIn, user=Depend
     if not e:
         raise HTTPException(status_code=404, detail="Werknemer niet gevonden")
     cid = e.get("company_id")
-    # Uniqueness: andere medewerkers binnen ditzelfde bedrijf
-    others = await db.employees.find(
-        {"id": {"$ne": eid}, "company_id": cid, "active": True, "kiosk_pin_hash": {"$exists": True, "$ne": None}},
-        {"_id": 0, "id": 1, "name": 1, "kiosk_pin_hash": 1},
-    ).to_list(2000)
-    for o in others:
-        if verify_password(pin, o.get("kiosk_pin_hash", "")):
-            raise HTTPException(status_code=409, detail=f"Deze PIN is al in gebruik door {o.get('name', 'een andere medewerker')}, kies een andere")
+    await _check_employee_pin_unique(cid, pin, exclude_eid=eid)
     pin_hash = hash_password(pin)
     await db.employees.update_one({"id": eid}, {"$set": {"kiosk_pin_hash": pin_hash}})
     await db.users.update_one({"employee_id": eid}, {"$set": {"personal_pin_hash": pin_hash, "personal_pin_set_at": iso(now_utc())}})

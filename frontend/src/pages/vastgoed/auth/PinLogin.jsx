@@ -26,7 +26,6 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
   const primary = branding?.primary_color || '#FF5C00';
   const appName = branding?.app_name || 'SuriRent';
   const logoUrl = branding?.logo_url ? branding._logoResolved : '/kiosk-icons/kiosk-512.png';
-  const isAdminTarget = pwaTarget === 'admin';
 
   // Fix witte strook onder home-indicator op iOS PWA: schilder html+body in
   // dezelfde brand-kleur als de PinLanding zelf. `position: fixed; inset: 0`
@@ -43,70 +42,52 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
     };
   }, [primary]);
 
+  const enterKiosk = (data, code) => {
+    try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
+    if (data.token) localStorage.setItem('kiosk_token', data.token);
+    if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
+    setKioskEmployee({ id: data.employee.id, name: data.employee.name || 'Medewerker', pin: data.employee.pin || code });
+    setPreferredRole('kiosk');
+    onSuccess('kiosk');
+  };
+
+  const enterAdmin = (token) => {
+    try { clearKioskEmployee(); } catch { /* ignore */ }
+    localStorage.setItem('admin_token', token);
+    setPreferredRole('admin');
+    api.post('/auth/device-qr-token/issue').then((r) => {
+      if (r?.data?.device_qr_token) {
+        try { localStorage.setItem('device_qr_token', r.data.device_qr_token); } catch { /* ignore */ }
+      }
+    }).catch(() => { /* niet-kritiek */ });
+    onSuccess('admin');
+  };
+
+  // Eén PIN-scherm: de bedrijfs-PIN check herkent medewerker én beheerder.
+  // Alleen bij geen match proberen we de persoonlijke PIN van de onthouden gebruiker.
   const verify = async (code) => {
     setLoading(true); setError('');
     try {
-      // Eén PIN-scherm: eerst persoonlijke PIN van de onthouden gebruiker,
-      // anders (of bij mismatch) medewerker-/beheerder-PIN van dit bedrijf.
-      if (deviceUser) {
-        let data = null;
-        try {
-          ({ data } = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code }));
-        } catch (e) {
-          if (e?.response?.status !== 401 && e?.response?.status !== 400) throw e;
-        }
-        if (data?.kiosk) {
-          try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
-          if (data.token) localStorage.setItem('kiosk_token', data.token);
-          if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
-          setKioskEmployee({ id: data.employee.id, name: data.employee.name || 'Medewerker', pin: data.employee.pin || code });
-          setPreferredRole('kiosk');
-          onSuccess('kiosk');
-          return;
-        }
-        if (data?.access_token) {
-          localStorage.setItem('admin_token', data.access_token);
-          setPreferredRole('admin');
-          api.post('/auth/device-qr-token/issue').then((r) => {
-            if (r?.data?.device_qr_token) {
-              try { localStorage.setItem('device_qr_token', r.data.device_qr_token); } catch { /* ignore */ }
-            }
-          }).catch(() => { /* niet-kritiek */ });
-          onSuccess('admin');
-          return;
-        }
+      let data;
+      try {
+        ({ data } = await api.post('/auth/kiosk-pin', {
+          pin: code,
+          company_slug: branding?.slug || undefined,
+          company_id: branding?.company_id || undefined,
+        }));
+      } catch (e) {
+        if (e?.response?.status !== 401 || !deviceUser) throw e;
+        const { data: p } = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code });
+        if (p?.kiosk) { enterKiosk(p, code); return; }
+        enterAdmin(p.access_token);
+        return;
       }
-      // Geen onthouden gebruiker → val terug op gedeelde kiosk PIN.
-      const { data } = await api.post('/auth/kiosk-pin', {
-        pin: code,
-        company_slug: branding?.slug || undefined,
-        company_id: branding?.company_id || undefined,
-      });
-      if (data?.token) localStorage.setItem('kiosk_token', data.token);
-      if (data?.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
-      if (data?.employee?.id) {
-        try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
-        setKioskEmployee({
-          id: data.employee.id,
-          name: data.employee.name || 'Medewerker',
-          pin: data.employee.pin || code,
-        });
-        setPreferredRole('kiosk');
-      } else {
-        try { clearKioskEmployee(); } catch { /* ignore */ }
-        if (data?.admin_token) {
-          localStorage.setItem('admin_token', data.admin_token);
-          if (data.admin_user?.email) {
-            localStorage.setItem('device_user_email', data.admin_user.email);
-            localStorage.setItem('device_user_name', data.admin_user.name || data.admin_user.email.split('@')[0]);
-          }
-          setPreferredRole('admin');
-          onSuccess('admin');
-          return;
-        }
-        setPreferredRole(isAdminTarget ? 'admin' : 'kiosk');
+      if (data?.employee?.id) { enterKiosk(data, code); return; }
+      if (data?.admin_user?.email) {
+        localStorage.setItem('device_user_email', data.admin_user.email);
+        localStorage.setItem('device_user_name', data.admin_user.name || data.admin_user.email.split('@')[0]);
       }
-      onSuccess();
+      enterAdmin(data.admin_token);
     } catch (e) {
       setError(formatError(e, 'Ongeldige PIN code'));
       setPin(['', '', '', '']);
@@ -178,7 +159,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight" data-testid="pin-welcome">
                 PIN Login
               </h2>
-              <p className="text-sm text-slate-400 mt-1" data-testid="pin-company-name">
+              <p className="text-sm text-slate-600 mt-1" data-testid="pin-company-name">
                 Vul je 4-cijferige pin in om verder te gaan
               </p>
             </div>

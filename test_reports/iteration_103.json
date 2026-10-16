@@ -1,0 +1,44 @@
+{
+  "summary": "Tested the mobile email login after logout and the single PIN screen (frontend at 390x844 plus desktop) and the kiosk-pin admin personal PIN block (backend). Everything the review request asked for works: logout lands on /my-awesome-rentals-bv/login?loggedout=1, then 'Inloggen met e-mail' + credentials goes straight to /admin. The PIN screen shows 'Vul je 4-cijferige pin in om verder te gaan' with no 'Andere gebruiker' button and no 'persoonlijke' text, on mobile and desktop. With a remembered device user, the admin PIN goes to /admin and the employee PIN goes to /kiosk. Without a remembered user, the admin PIN still goes to /admin through kiosk-pin. A wrong PIN shows 'Ongeldige PIN code'. Pytest: 8/8 passed. Found 1 functional bug (429 lockout) and 3 security issues in the new single-PIN design.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/auth/kiosk-pin", "issue": "PIN collision lets an employee in as admin. personal-pin/setup does not check uniqueness against the company's employee kiosk PINs or other admins' PINs, and kiosk-pin checks admin PINs first. Reproduced: set admin PIN 4321, the same as Anita's kiosk PIN, then kiosk-pin 4321 returned admin_token with employee=null, so the kiosk employee got the admin dashboard. Reject PINs already used inside the company, in both directions (admin setup and employee PIN set).", "priority": "HIGH"},
+      {"endpoint": "/api/auth/kiosk-pin (throttle)", "issue": "The brute-force throttle can be bypassed by spoofing X-Forwarded-For. _client_ip takes the first XFF entry, which the client controls. 12 wrong PINs with different XFF headers all returned 401 and never 429; without the header it returned 429 after 8. kiosk-pin now issues ADMIN tokens and only needs the public company slug, so a 4-digit admin PIN can be brute-forced (10k combinations). Use the last trusted proxy hop or the real client IP, and add a per-company throttle.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/auth/me", "issue": "The response includes personal_pin_hash (bcrypt hash of the 4-digit PIN), and a 4-digit hash can be cracked offline easily. Exclude personal_pin_hash and personal_pin_set_at from get_current_user / the me projection."},
+      {"endpoint": "/api/auth/kiosk-pin admin branch", "issue": "Returns admin_token but sets no access_token httpOnly cookie, unlike /auth/login. It relies only on the localStorage Bearer token. Inconsistent with the cookie auth model."},
+      {"endpoint": "/api/employees/{id} PUT", "issue": "After the 30-min demo reset, users.anita@demo.sr is left pointing at a deleted employee_id, so PUT with email anita@demo.sr returns 409. I deleted the orphan user to continue. The demo reset should also clean up the linked users."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Single PIN screen with device_user_email remembered (shared kiosk device)", "issue": "PinLogin.verify() calls /auth/personal-pin/login with the admin's email first. Every employee PIN therefore counts as a failed attempt in the admin's ppin throttle (key ppin:ip:email), and it is only cleared when the admin logs in successfully. After 8 employee logins the endpoint returns 429. verify() only falls through on 400/401, so on 429 it throws and shows 'Te veel mislukte pogingen...' to every user, including valid kiosk employees and the admin, for 5 min. Reproduced in the browser. Fix: kiosk-pin already recognises admin personal PINs, so call kiosk-pin first or only, or at least fall through on 429 as well; on the backend, don't count that failure.", "affected_selectors": ["[data-testid=pin-error]", "[data-testid^=keypad-]"]}
+    ],
+    "design_issues": [
+      {"screen": "Desktop PIN Login card", "issues": ["Subtitle 'Vul je 4-cijferige pin in...' is text-slate-400 on white, which is low contrast."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_single_pin_screen.py", "/app/test_reports/pytest/pytest_iter103.xml"],
+  "action_items": [
+    "HIGH: Enforce company-wide PIN uniqueness between admin personal PINs and employee kiosk PINs (personal-pin/setup and employee PIN set/update).",
+    "HIGH: Fix _client_ip so a spoofed X-Forwarded-For cannot bypass the PIN throttle, and add a per-company throttle on kiosk-pin now that it issues admin tokens.",
+    "HIGH: PinLogin.verify(): stop the personal-pin/login pre-call (kiosk-pin handles admin PINs), or fall through on 429, so employee logins on an admin-remembered device don't lock everyone out after 8 logins.",
+    "Remove personal_pin_hash from the /auth/me response.",
+    "Optional: set the access_token cookie in the kiosk-pin admin branch; raise the desktop subtitle contrast."
+  ],
+  "critical_code_review_comments": [
+    "kiosk_pin admin loop runs bcrypt verify over up to 200 users on every PIN attempt, before the plan gate. Fine for now, but it is CPU-heavy under brute force.",
+    "MobileEmailLogin stores saved_login_password in plaintext in localStorage (pre-existing).",
+    "server.py is 18k lines; the auth/PIN routes should be split into their own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_single_pin_screen.py"],
+  "success_rate": {"backend": "100% (8/8 requested checks); 2 security issues found", "frontend": "100% of requested flows (T1-T5) passed; 1 integration bug (429 lockout)"},
+  "seed_data_creation": "Set demo admin (demo@surirent.sr) personal PIN to 8642. Set Anita Sewdas (company my-awesome-rentals-bv) to app_role kiosk with email anita@demo.sr / anita1234 / PIN 4321. Deleted the orphan users doc anita@demo.sr (stale employee_id after demo reset).",
+  "test_credentials": "demo@surirent.sr/demo1234. The demo company slug is my-awesome-rentals-bv, NOT 'demo' (kiosk-pin with company_slug 'demo' returns 400). Admin personal PIN 8642, employee PIN 4321.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile logout: mobile-fab-menu then mobile-sheet-logout. PIN keypad testids: keypad-0..9, pin-error. The ppin throttle for demo@surirent.sr was locked from the test IP during this run (5-min lockout). After a demo reset, re-create Anita through the test fixture; if PUT returns 409, delete the orphan users anita@demo.sr doc.",
+  "rca of the issue": "429 lockout: verify() sends every PIN to /auth/personal-pin/login(device_user_email) first. A non-matching (employee) PIN calls _pin_throttle_fail on key ppin:{ip}:{admin_email}. With PIN_MAX_ATTEMPTS=8 the key locks for 300s, and _pin_throttle_check raises 429. The frontend only swallows 400/401, so the 429 propagates to the catch and the kiosk-pin fallback is never reached. Repro: localStorage device_user_email=demo@surirent.sr, then enter the employee PIN about 8 times, then any PIN shows 'Te veel mislukte pogingen'."
+}

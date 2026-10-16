@@ -78,11 +78,11 @@ def _pin_throttle_check(key: str) -> None:
         )
 
 
-def _pin_throttle_fail(key: str) -> None:
+def _pin_throttle_fail(key: str, max_attempts: Optional[int] = None) -> None:
     import time
     rec = _PIN_ATTEMPTS.get(key, {"attempts": 0, "locked_until": 0})
     rec["attempts"] = rec.get("attempts", 0) + 1
-    if rec["attempts"] >= PIN_MAX_ATTEMPTS:
+    if rec["attempts"] >= (max_attempts or PIN_MAX_ATTEMPTS):
         rec["locked_until"] = time.time() + PIN_LOCKOUT_SECONDS
         rec["attempts"] = 0
     _PIN_ATTEMPTS[key] = rec
@@ -93,7 +93,8 @@ def _pin_throttle_clear(key: str) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    return (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return (request.headers.get("cf-connecting-ip", "").strip()
+            or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
             or (request.client.host if request.client else "unknown"))
 
 
