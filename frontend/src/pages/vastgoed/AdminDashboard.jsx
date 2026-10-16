@@ -474,6 +474,7 @@ import { useForegroundPendingNotify } from '../../lib/foreground-notify';
 import { useMorningBriefing } from '../../lib/morning-briefing';
 import { useApprovalNotifySync } from '../../lib/approval-notify-sync';
 import { installFcmApk } from '../../lib/fcm-apk';
+import { TenantNfcCard } from '../../components/TenantNfcCard';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 
 const BASE_TABS = [
@@ -3705,6 +3706,8 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
           onClose={() => setCropOpen(false)}
           onSaved={async () => { setCropOpen(false); if (onReload) await onReload(); }} />
       )}
+
+      <TenantNfcCard tenant={t} onReload={onReload} />
 
       {/* Acties */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">

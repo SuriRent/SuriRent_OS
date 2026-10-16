@@ -6044,6 +6044,53 @@ async def admin_assign_tenant_nfc_card(
     return {"ok": True, "tenant_id": tenant_id, "nfc_card_id": uid}
 
 
+# ---------- Kiosk: NFC-tag → huurder (lookup + koppelen door medewerker/beheerder) ----------
+class KioskNfcLookupIn(BaseModel):
+    card_id: str = Field(min_length=4, max_length=64)
+
+
+class KioskNfcLinkIn(KioskNfcLookupIn):
+    tenant_id: str
+    replace: bool = False
+
+
+async def _kiosk_nfc_result(sc: dict, tenant: dict) -> dict:
+    apts = await _kiosk_apartments_compute({**sc, "tenant_id": tenant["id"]})
+    return {"found": True, "tenant": {"id": tenant["id"], "name": tenant.get("name")},
+            "apartment": apts[0] if apts else None}
+
+
+@api.post("/kiosk/nfc-lookup")
+async def kiosk_nfc_lookup(body: KioskNfcLookupIn, _session=Depends(get_kiosk_session)):
+    sc = kiosk_scope(_session)
+    uid = _normalize_nfc_uid(body.card_id)
+    if len(uid) < 4:
+        raise HTTPException(status_code=422, detail="Ongeldige tag-ID")
+    t = await db.tenants.find_one({**sc, "nfc_card_id": uid}, {"_id": 0, "id": 1, "name": 1})
+    if not t:
+        return {"found": False, "card_id": uid}
+    return await _kiosk_nfc_result(sc, t)
+
+
+@api.post("/kiosk/nfc-link")
+async def kiosk_nfc_link(body: KioskNfcLinkIn, _session=Depends(get_kiosk_session)):
+    """Medewerker/beheerder koppelt een onbekende tag aan een huurder (één tag per huurder)."""
+    sc = kiosk_scope(_session)
+    uid = _normalize_nfc_uid(body.card_id)
+    if len(uid) < 4:
+        raise HTTPException(status_code=422, detail="Ongeldige tag-ID")
+    t = await db.tenants.find_one({**sc, "id": body.tenant_id}, {"_id": 0, "id": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    clash = await db.tenants.find_one({**sc, "nfc_card_id": uid, "id": {"$ne": t["id"]}}, {"_id": 0, "id": 1, "name": 1})
+    if clash and not body.replace:
+        raise HTTPException(status_code=409, detail=f"Deze tag is al gekoppeld aan {clash.get('name') or 'een andere huurder'}")
+    if clash:
+        await db.tenants.update_one({"id": clash["id"]}, {"$set": {"nfc_card_id": None}})
+    await db.tenants.update_one({"id": t["id"]}, {"$set": {"nfc_card_id": uid}})
+    return await _kiosk_nfc_result(sc, t)
+
+
 @api.get("/tenant-portal/welcome/{tenant_id}")
 async def tenant_portal_welcome(tenant_id: str):
     """Public lookup endpoint voor persoonlijke huurder-QR.

@@ -8,7 +8,7 @@ import {
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus, Wrench, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
+  UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -28,6 +28,8 @@ import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { PrintChoiceMenu } from '../../components/PrintChoiceMenu';
+import { NfcLinkModal } from '../../components/NfcLinkModal';
+import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
 
@@ -4356,6 +4358,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'invoice',     label: 'Nieuwe factuur',    Icon: Receipt },
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
+    { key: 'nfc',         label: 'NFC-tag koppelen',  Icon: Nfc },
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4442,6 +4445,7 @@ export default function KioskLayout() {
   const [paymentResult, setPaymentResult] = useState(null);
   const [company, setCompany] = useState(getKioskCompany());
   const [nfcToast, setNfcToast] = useState(null); // {kind:'ok'|'err', msg}
+  const [nfcLink, setNfcLink] = useState(null); // {uid} → koppelscherm open
   // Modals voor snel aanmaken vanuit de Kiosk (alle beheerder-shortcuts)
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showAddTenant, setShowAddTenant] = useState(false);
@@ -4475,6 +4479,7 @@ export default function KioskLayout() {
       else if (key === 'payments') setShowPaymentsViewer(true);
       else if (key === 'maintenance') setShowAddMaintenance(true);
       else if (key === 'kasgeld') setStep('kasgeld');
+      else if (key === 'nfc') setNfcLink({ uid: '' });
       else if (key === 'admin') adminRef.current?.();
       else if (key === 'exit') exitRef.current?.();
     }, 100);
@@ -4544,14 +4549,20 @@ export default function KioskLayout() {
           setApartment(apt);
           setStep('overview');
           setNfcToast({ kind: 'ok', msg: `Welkom — ${apt.tenant_name || `App. ${apt.number}`}` });
+        } else if (data && !data.found) {
+          // Onbekende tag → koppelscherm (medewerker kiest de huurder)
+          setNfcLink({ uid: data.card_id || uid });
+          return;
         } else {
-          setNfcToast({ kind: 'err', msg: 'Kaart niet herkend. Geef de admin de kaart om te koppelen.' });
+          setNfcToast({ kind: 'err', msg: 'Deze huurder heeft geen appartement.' });
         }
       } catch (err) {
         setNfcToast({ kind: 'err', msg: 'Kon kaart niet uitlezen. Probeer opnieuw.' });
       }
       setTimeout(() => setNfcToast(null), 4000);
     };
+    // Tag-ID's uit de Android-app (bestaand NFC-systeem van de APK)
+    const unsubNfc = subscribeNfc(handleScan);
 
     // === Web NFC API (Android Chrome) ===
     // Wanneer de Kiosk draait op een Android-tablet/telefoon, kan de
@@ -4571,7 +4582,7 @@ export default function KioskLayout() {
           // serialNumber kan formaten als "04:a1:b2:c3:d4" hebben
           const raw = ev?.serialNumber || '';
           const uid = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (uid.length >= 6) handleScan(uid);
+          if (uid.length >= 6) emitNfc(uid);
         });
       } catch (err) {
         // Permission denied of niet ondersteund — stille fallback (HID/URL werkt nog steeds)
@@ -4597,7 +4608,7 @@ export default function KioskLayout() {
       if (e.key === 'Enter') {
         const candidate = buffer.trim();
         buffer = '';
-        if (candidate.length >= 6) handleScan(candidate);
+        if (candidate.length >= 6) emitNfc(candidate);
         return;
       }
       // Accepteer alleen alfanumeriek (NFC UID's zijn hex)
@@ -4611,6 +4622,7 @@ export default function KioskLayout() {
 
     window.addEventListener('keydown', onKey);
     return () => {
+      unsubNfc();
       window.removeEventListener('keydown', onKey);
       if (timer) clearTimeout(timer);
       // Stop de Web NFC scan op unmount / step-change
@@ -4754,6 +4766,20 @@ export default function KioskLayout() {
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
           error). De statische "tap hint" is weggehaald op verzoek. */}
+      {nfcLink && (
+        <NfcLinkModal uid={nfcLink.uid} onClose={() => setNfcLink(null)}
+          onLinked={(data) => {
+            setNfcLink(null);
+            if (data?.apartment) {
+              const apt = data.apartment;
+              if (data.tenant?.name && !apt.tenant_name) apt.tenant_name = data.tenant.name;
+              setApartment(apt);
+              setStep('overview');
+            }
+            setNfcToast({ kind: 'ok', msg: `Tag gekoppeld aan ${data?.tenant?.name || 'huurder'}` });
+            setTimeout(() => setNfcToast(null), 4000);
+          }} />
+      )}
       {step === 'select' && nfcToast && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
           <div data-testid="kiosk-nfc-toast"
