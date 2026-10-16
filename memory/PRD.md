@@ -851,3 +851,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — APK safe-area fix
 - CSS-var --kiosk-sat (= env(safe-area-inset-top)) in kiosk-bestanden (KioskLayout, KioskLiveStatus, KioskPrintsOverlay, TenantKioskLayout, PinLogin, .kiosk-fullscreen). html.apk-ktp → 0px; class gezet in public/index.html als window.SURIRENT_KTP === true (ook als APK het later zet, via property-setter).
+
+## 2026-06 — NFC-tag koppeling kiosk
+- POST /api/kiosk/nfc-lookup (bestond niet → 404!) en /api/kiosk/nfc-link (409 bij andere huurder, replace=true zet over). lib/nfc-bus.js (window.onNfcTag/event/postMessage; laatste abonnee krijgt scan). NfcLinkModal (onbekende tag of Snel toevoegen → NFC-tag koppelen). TenantNfcCard in huurderdetail (bekijken/wijzigen/verwijderen).
+- Na iteration_102: desktop-knop kiosk-nfc-link-btn-desktop, modal toont "gekoppeld aan X" bij al gekoppelde tag, oude NFC-kaart knop/modal in huurderdetail verwijderd (TenantNfcCard blijft).

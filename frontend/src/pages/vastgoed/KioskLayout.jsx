@@ -4776,8 +4776,6 @@ export default function KioskLayout() {
               setApartment(apt);
               setStep('overview');
             }
-            setNfcToast({ kind: 'ok', msg: `Tag gekoppeld aan ${data?.tenant?.name || 'huurder'}` });
-            setTimeout(() => setNfcToast(null), 4000);
           }} />
       )}
       {step === 'select' && nfcToast && (
@@ -4968,6 +4966,10 @@ export default function KioskLayout() {
                   <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
                     className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
                     <Wrench className="w-4 h-4" /> Onderhoud
+                  </button>
+                  <button onClick={() => setNfcLink({ uid: '' })} data-testid="kiosk-nfc-link-btn-desktop"
+                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    <Nfc className="w-4 h-4" /> NFC-tag
                   </button>
                 </>
               )}

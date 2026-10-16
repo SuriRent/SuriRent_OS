@@ -1,0 +1,35 @@
+{
+  "summary": "Iter102: kiosk NFC-tag linking feature. Backend: 6/6 pytest pass (1 cross-company test skipped because only the demo company has tenants). Tested lookup with an unknown tag (ID normalized to uppercase alphanumeric), 422 for short IDs, 401/403 without a kiosk token, 404 for an invalid tenant, link then lookup (lowercase works), apartment shape matches /kiosk/apartments, 409 'al gekoppeld aan <name>', replace:true moves the tag (old tenant cleared), admin PUT nfc-card set/409/clear, and GET /api/tenants returns nfc_card_id. Frontend (Anita kiosk token): window.onNfcTag with an unknown tag opens nfc-link-modal with uid 04TEST1234. Search, pick and save go to the Jan Pieterse overview. A lowercase rescan opens the overview directly with no modal. postMessage(JSON string) and the 'apk-nfc-tag' CustomEvent (dashed id) open the overview directly. An unknown tag sent as a postMessage object {type:'NFC', uid} opens the modal. Mobile: kiosk-fab-plus opens the sheet, the kiosk-tile-nfc tile opens the modal in nfc-link-waiting state with save disabled. A scan while the modal is open fills the uid and does NOT navigate the kiosk behind it. Clash flow (tag on Jan, pick Marlies) shows nfc-link-clash, nfc-link-replace moves the tag and opens Marlies' overview. Admin UI: TenantNfcCard shows the value, edit/save normalizes 04adm5678 to 04ADM5678, delete with confirm shows tenant-nfc-empty. All test tags cleaned up (no tenant has nfc_card_id).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/tenants/{id}", "issue": "No single-tenant GET exists (405). nfc_card_id is only returned via the GET /api/tenants list. That is fine for the UI; just noting it because the review request said 'GET tenant'."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Kiosk desktop/tablet bottom bar (md+, >=768px)", "issue": "The 'NFC-tag koppelen' tile is only in the mobile KioskAddSheet (kiosk-fab-plus / kiosk-mobile-fab are md:hidden). The desktop kiosk-bottom-bar has Huurder/Appt./Locatie/Contract/Factuur/Betalingen/Onderhoud/Kasgeld buttons but no NFC button. On kiosk tablets >=768px wide the manual 'NFC-tag koppelen' entry cannot be reached (only the auto-open on an unknown scan works).", "selector": "[data-testid=kiosk-bottom-bar]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "NfcLinkModal", "issues": ["When opened from the sheet and an ALREADY-linked tag is scanned, the text still says 'Tag X is nog niet gekoppeld' even though it is linked (the clash only appears on save). Consider a lookup on scan inside the modal so it can show 'gekoppeld aan <name>'.", "The modal lists only tenants that have an apartment (it uses /kiosk/apartments), so tenants without an apartment cannot get a tag on the kiosk."]},
+      {"screen": "Kiosk after link", "issues": ["The toast 'Tag gekoppeld aan <name>' is set in onLinked, but toasts only render when step==='select'. onLinked navigates to the overview, so the success toast is never visible."]},
+      {"screen": "Admin TenantDetail", "issues": ["The new TenantNfcCard 'NFC-TAG' section and the older 'NFC-kaart' button in Acties both manage the same field. That is duplicate UI; consider removing one."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_nfc_link.py", "/app/test_reports/pytest/pytest_iter102.xml"],
+  "action_items": [
+    "Add an NFC-tag koppelen button to the desktop/tablet kiosk-bottom-bar (md+), e.g. data-testid kiosk-nfc-btn-desktop, calling setNfcLink({uid:''})",
+    "Optional: in NfcLinkModal, look up the scanned tag and show the current link instead of 'nog niet gekoppeld'",
+    "Optional: show the 'Tag gekoppeld' toast on the overview step too (or drop it)",
+    "Optional: remove the duplicate NFC-kaart action button in TenantDetail"
+  ],
+  "critical_code_review_comments": [
+    "nfc-bus: the last subscriber wins. This works because NfcLinkModal mounts after the kiosk listener. The kiosk listener re-subscribes only when step changes, which cannot happen while the modal is open, so it is OK.",
+    "kiosk_nfc_link replace: the clear and set are two separate update_one calls with no unique index on (company_id, nfc_card_id). Concurrent links could create duplicates; acceptable at kiosk scale.",
+    "The tenant QR endpoints (~7190, ~7254) auto-generate nfc_card_id when it is missing. Deleting a tag in admin, then printing a QR plate, silently creates a new random tag ID. Be aware this interacts with the 'remove link' feature."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_nfc_link.py"],
+  "success_rate": {"backend": "100%", "frontend": "95% (all requested flows pass; desktop entry point missing)"},
+  "seed_data_creation": "Ran setup_iter85.py (Anita reseeded, a TEST_ payment and a TEST_ printer inserted). NFC test tags 04TEST1234/04ADM5678/04PYTEST9911/04PYADM77 were all removed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk: set localStorage kiosk_token (from /tmp/iter85_ctx.json after running setup_iter85.py) and kiosk_company, then open /my-awesome-rentals-bv/kiosk. Tenants: Jan Pieterse 23d7d743-..., Marlies Sewdien 6934ff76-.... Admin: set localStorage admin_token, open /admin, then tab-tenants and tenant-row-{id}. The admin-launched kiosk session was not tested separately; it uses the same kiosk_scope code path."
+}

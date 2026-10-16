@@ -82,3 +82,7 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 ## Papierstatus KT-V520 (printerlampje)
 - APK meldt papierstatus aan de web-app (één van): `injectJavaScript("window.onKtpPaperStatus('low');true;")`, window event `ktp-paper-status` {detail:{paper}}, of postMessage `{type:'PRINTER_STATUS', paper:'ok'|'low'|'empty'}` (ook near_end/out/no_paper geaccepteerd).
 - Web stuurt dit via de printer-WebSocket `{type:'PRINTER_STATUS', paper}` naar de server → kiosk_printers.paper → alle kiosks (beheerder + medewerker) zien het in het lampje (oranje = bijna op, rood = leeg) en paneel.
+
+## NFC-tags (kiosk)
+- APK geeft tag-ID door via één van: `window.onNfcTag('04A1B2C3')`, window event `apk-nfc-tag` {detail:{id}}, of postMessage `{type:'NFC_TAG'|'NFC'|'NFC_SCAN', id|tag|uid|card_id}`. Ook USB-HID (toetsenbord) en Web NFC werken.
+- Bekende tag → overzicht huurder; onbekende → koppelscherm (POST /api/kiosk/nfc-link). Eén tag per huurder (tenants.nfc_card_id). Beheer: huurderdetail → NFC-tag kaart.

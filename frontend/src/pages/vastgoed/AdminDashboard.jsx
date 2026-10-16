@@ -8,7 +8,7 @@ import {
   Building2, Users, Receipt, LayoutDashboard, LogOut, Plus, Trash2, Pencil,
   X, Check, Loader2, Search, Home, Banknote, KeySquare, ChevronRight, ChevronDown, Wallet, CreditCard,
   FileText, ShieldCheck, Wrench, FileSignature, Bell, Briefcase, Mail,
-  Zap, Power, Menu, MoreHorizontal, MapPin, Paintbrush,
+  Power, Menu, MoreHorizontal, MapPin, Paintbrush,
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
@@ -3526,7 +3526,6 @@ function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
 function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
-  const [nfcOpen, setNfcOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
   const [cropOpen, setCropOpen] = useState(false); // Manuele crop-tool voor pasfoto
   // Scroll altijd naar boven bij openen — anders kan een verborgen file-
@@ -3721,10 +3720,6 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
             className="h-11 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-sm flex items-center justify-center gap-1.5">
             <KeySquare className="w-3.5 h-3.5" /> Portal PIN
           </button>
-          <button onClick={() => setNfcOpen(true)} data-testid="tenant-detail-nfc"
-            className="h-11 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-sm flex items-center justify-center gap-1.5">
-            <Zap className="w-3.5 h-3.5" /> NFC-kaart
-          </button>
           <button onClick={() => setSigOpen(true)} data-testid="tenant-detail-signature"
             className="h-11 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center gap-1.5">
             <PenTool className="w-3.5 h-3.5" /> {t.signature_url ? 'Bekijk handtekening' : 'Handtekening'}
@@ -3752,42 +3747,6 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
         </div>
       )}
 
-      {/* NFC-kaart koppel-modal — geopend vanuit de Acties grid. */}
-      {nfcOpen && (
-        <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
-          data-testid="tenant-nfc-modal">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-black text-slate-900">NFC-kaart · {t.name}</h3>
-              <button onClick={() => setNfcOpen(false)} data-testid="tenant-nfc-close"
-                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-500 mb-4">
-              Koppel een fysieke NFC-kaart aan deze huurder voor snelle kiosk-login.
-            </p>
-            <TenantNfcField
-              tenantId={t.id}
-              value={t.nfc_card_id || ''}
-              onChange={async (uid) => {
-                try {
-                  await api.put(`/admin/tenants/${t.id}/nfc-card`, { card_id: uid || null });
-                  if (onReload) await onReload();
-                } catch (e) {
-                  window.alert('NFC koppelen mislukt: ' + (e?.response?.data?.detail || e.message));
-                }
-              }}
-            />
-            <div className="mt-5 flex justify-end">
-              <button onClick={() => setNfcOpen(false)}
-                className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">
-                Sluiten
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

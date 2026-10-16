@@ -14,7 +14,14 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
   const [err, setErr] = useState('');
   const [clash, setClash] = useState('');
 
+  const [linkedTo, setLinkedTo] = useState('');
   useEffect(() => subscribeNfc((id) => { setUid(id); setErr(''); setClash(''); }), []);
+  // Gescande tag al gekoppeld? Toon aan wie (koppelen zet hem dan over).
+  useEffect(() => {
+    setLinkedTo('');
+    if (!uid) return;
+    api.post('/kiosk/nfc-lookup', { card_id: uid }).then(({ data }) => setLinkedTo(data?.found ? (data.tenant?.name || 'een huurder') : '')).catch(() => {});
+  }, [uid]);
   useEffect(() => {
     api.get('/kiosk/apartments').then(({ data }) => setApts((data || []).filter((a) => a.tenant_id))).catch(() => setApts([]));
   }, []);
@@ -44,7 +51,8 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
         </div>
         <div className="p-4 space-y-3 overflow-y-auto">
           {uid ? (
-            <p className="text-sm text-slate-600">Tag <span className="font-mono font-bold text-slate-900" data-testid="nfc-link-uid">{uid}</span> is nog niet gekoppeld. Kies de huurder:</p>
+            <p className="text-sm text-slate-600">Tag <span className="font-mono font-bold text-slate-900" data-testid="nfc-link-uid">{uid}</span>{' '}
+              {linkedTo ? <>is gekoppeld aan <b data-testid="nfc-link-linked-to">{linkedTo}</b>. Kies een huurder om hem over te zetten:</> : 'is nog niet gekoppeld. Kies de huurder:'}</p>
           ) : (
             <p className="text-sm font-bold text-[#FF5C00] bg-orange-50 rounded-xl px-3 py-3 flex items-center gap-2" data-testid="nfc-link-waiting">
               <Loader2 className="w-4 h-4 animate-spin" /> Houd de NFC-tag tegen de lezer…
