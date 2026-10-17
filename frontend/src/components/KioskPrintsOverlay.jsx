@@ -18,7 +18,7 @@ function OnlineDot({ online }) {
   return <span className={`w-2.5 h-2.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />;
 }
 
-function EmployeePicker({ employees, activeKeys, onPick }) {
+function EmployeePicker({ employees, activeKeys, onPick, employeeMode }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="kiosk-prints-employee-picker">
       {employees.map((e) => (
@@ -27,7 +27,7 @@ function EmployeePicker({ employees, activeKeys, onPick }) {
           <span className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><UserRound className="w-6 h-6" /></span>
           <span className="flex-1 min-w-0">
             <span className="block font-bold text-slate-900 text-lg truncate">{e.name}</span>
-            <span className="flex items-center gap-1.5 text-xs text-slate-500"><OnlineDot online={activeKeys.has(e.key)} />{activeKeys.has(e.key) ? 'Online' : 'Offline'}</span>
+            {!employeeMode && <span className="flex items-center gap-1.5 text-xs text-slate-500"><OnlineDot online={activeKeys.has(e.key)} />{activeKeys.has(e.key) ? 'Online' : 'Offline'}</span>}
           </span>
         </button>
       ))}
@@ -172,7 +172,7 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose, 
       </div>
       <div className="flex-1 overflow-y-auto px-3 sm:px-5 pb-6 space-y-3 md:space-y-0">
         {!emp && employees.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-empty">Vandaag nog geen bonnen van kiosk-medewerkers.</p>}
-        {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} />}
+        {!emp && employees.length > 1 && <EmployeePicker employees={employees} activeKeys={activeKeys} onPick={setPicked} employeeMode={employeeMode} />}
         {emp && logs === null && <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
         {emp && logs?.length === 0 && <p className="text-white/60 text-center mt-20" data-testid="kiosk-prints-none">{emp.name} heeft vandaag nog geen bonnen.</p>}
         {emp && logs?.length > 0 && (

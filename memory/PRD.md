@@ -884,3 +884,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Numpad standaard ingeklapt
 - "Wat wilt u betalen?": mobiele numpad weer standaard dicht (medewerker- en huurderkiosk). Getest: iteration_108.
+
+## 2026-06 — Printeropties per toestel
+- isKtpDevice() (APK-vlag/UA/token) → alleen "Ingebouwde printer". Gewone Android/iPhone/desktop → geen systeem-printvenster; alleen "Print via KT-V520" (online via WS) en Bluetooth (gekoppeld). Geldt voor succespagina, betalingsgeschiedenis, Bonnen van vandaag, financiële bon. Printknop/rij verdwijnt als er geen optie is. usePrintOptions() in PrintChoiceMenu.jsx. iOS auto-printvenster verwijderd.
+- Getest: iteration_109, iteration_110.

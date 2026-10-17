@@ -1,0 +1,25 @@
+{
+  "summary": "Iter110 FRONTEND ONLY, mobile 390x844, employee kiosk (Anita PIN 4321, my-awesome-rentals-bv). Retest of the iteration_109 fixes, with a real fake-printer WebSocket client keeping 'TEST KTP iter110' online. All requested checks passed. (B-fix) Simulated KT-V520 (ReactNativeWebView + __SURIRENT_KTP__) while a KT-V520 is online: the history-print-{id} menu shows only history-print-local-{id} 'Ingebouwde printer', with no history-print-ktp-*. The voice-modal history-print-fin menu also shows only 'Ingebouwde printer'. In Bonnen van vandaag each row has only kiosk-print-log-print-{id} 'Ingebouwde printer': a single line, height 40px with scrollHeight 40, and no 'Print via KT-V520' button. (Voice row) Normal browser, no printers: voice-modal-print-row is not rendered and the 'Financiële bon' text is absent. With a KT-V520 online: the row is rendered and history-print-fin offers only history-print-ktp-fin. With a fake Bluetooth printer the row is also rendered. (Header) In employee mode the Bonnen header shows only the name, with no online/offline label. In admin mode (admin_token in localStorage) 'offline' is fully visible (scrollWidth 36 = clientWidth 36); the name is truncated with an ellipsis ('Anita Se…'). (Regression) A: normal browser with no printers shows no history-print-*, no voice row and no Bonnen print buttons, and window.print was called 0 times. C: normal browser with a KT-V520 online shows only KTP in the history menu, the fin menu and Bonnen (kiosk-print-log-ktp-{id}), and no built-in option. D: fake Web Bluetooth shows history-print-bt-{id} 'Print via Bluetooth — BT Test Printer'; clicking it wrote 38 chunks and the status reads 'Geprint op BT Test Printer'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bonnen van vandaag employee picker (employee mode)", "issues": ["Still left over from iter109 and not part of this retest scope: every employee card in kiosk-prints-employee-{key} shows 'Offline' in employee mode, including the employee who is logged in. Consider hiding the online/offline badge in employeeMode, as the header now does."]},
+      {"screen": "Bonnen van vandaag header (admin mode, 390px)", "issues": ["Cosmetic: the employee name is cut to 'Anita Se…' to make room for the 'offline' label. It is acceptable, but a 2-line layout or a smaller label would show more of the name."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/setup_iter110.py", "/app/test_reports/reg_iter110.py", "/app/test_reports/fake_printer_iter110.py", "/app/test_reports/pay_iter110.py", "/app/test_reports/logs_iter110.py", "/app/test_reports/cleanup_iter110.py"],
+  "action_items": ["Optional: hide the online/offline badge on employee picker cards in employeeMode (KioskPrintsOverlay line ~29)."],
+  "critical_code_review_comments": [
+    "usePrintOptions centralizes the option logic: builtIn means first=null, so a KT-V520 never offers itself. KioskPrintsOverlay gates KtpPrintButton with !isKtpDevice(). The voice row is gated on printOpts.any. All of this is clean.",
+    "Every simulated KT-V520 session with fresh localStorage still auto-registers 'KT-V520 #N' (6 were created during this run). This is expected on real hardware, but consider reusing an existing device by fingerprint to avoid printer clutter."
+  ],
+  "updated_files": ["/app/test_reports/setup_iter110.py", "/app/test_reports/reg_iter110.py", "/app/test_reports/fake_printer_iter110.py", "/app/test_reports/pay_iter110.py", "/app/test_reports/logs_iter110.py", "/app/test_reports/cleanup_iter110.py"],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% of requested checks (B-fix 3/3, voice row 3/3, header 2/2, regression A/C/D all pass)"},
+  "test_credentials": "The demo was reset mid-run, which gave Anita a new employee id c78cf40c-.... PUT /api/employees with email anita.iter110@demo.sr then returned 409, so I used anita.iter110b@demo.sr / anita1234 / PIN 4321. setup_iter110.py restores this (change the email if it returns 409).",
+  "seed_data_creation": "Two SRD 10 cash kiosk payments for Roy van der Berg (HUIS 2C) by Anita: KW2026-00633 and KW2026-00634. Printers 'TEST KTP iter110' and the auto-registered KT-V520 #2 to #7 were all revoked via DELETE /api/settings/kiosk-printers/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The demo resets every 30 min (new employee ids, PINs cleared), so rerun setup_iter110.py. HUIS 1B has payment history; HUIS 2C has an amount owed, so the voice button is enabled there. Bonnen needs payments made today: run pay_iter110.py. To get admin-mode Bonnen, set localStorage admin_token to the demo admin token after kiosk PIN login, then reload. The live printers list comes from the WebSocket push, so use fake_printer_iter110.py (python3 fake_printer_iter110.py DEVICE_TOKEN SECONDS) after reg_iter110.py."
+}
