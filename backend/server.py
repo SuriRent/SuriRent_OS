@@ -12067,6 +12067,7 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
         "omschrijving": desc,
         "bedrag": money(p.get("amount")),
         "openstaand": money(p.get("outstanding_after")),
+        "outstanding_after": float(p.get("outstanding_after") or 0),
         "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
         "opmerking": p.get("note") or "",
         "lettergrootte": font_size,

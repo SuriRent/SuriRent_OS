@@ -2643,20 +2643,22 @@ function ReceiptScreen({ payment, overview, onDone }) {
   useEffect(() => {
     const tid = payment.tenant_id || overview?.tenant?.id;
     if (!tid) { setRemainingLoading(false); return; }
-    api.get(`/kiosk/tenants/${tid}/overview`)
+    // Zelfde bedrag als "Nog openstaand" op de bon (outstanding_after van de betaling).
+    const bon = payment.id
+      ? api.get(`/kiosk/payments/${payment.id}/print-data`)
+        .then((r) => { const v = Number(r.data?.outstanding_after); if (Number.isFinite(v)) setRemaining(Math.max(0, v)); })
+        .catch(() => { /* val terug op lokale schatting */ })
+      : Promise.resolve();
+    const ov = api.get(`/kiosk/tenants/${tid}/overview`)
       .then((r) => {
-        const data = r.data || {};
-        const bal = Number(data?.balance?.balance || 0);
-        const open = bal > 0 ? bal : 0;
-        setRemaining(open);
         // Eerste partial-factuur uit de bijgewerkte overview pakken.
-        const invs = Array.isArray(data?.open_invoices) ? data.open_invoices : [];
+        const invs = Array.isArray(r.data?.open_invoices) ? r.data.open_invoices : [];
         const partial = invs.find((inv) => inv.is_partial && inv.outstanding > 0);
         if (partial) setPartialInv(partial);
       })
-      .catch(() => { /* val terug op lokale schatting */ })
-      .finally(() => setRemainingLoading(false));
-  }, [payment.tenant_id, overview]);
+      .catch(() => { /* geen suggestie */ });
+    Promise.all([bon, ov]).finally(() => setRemainingLoading(false));
+  }, [payment.tenant_id, payment.id, overview]);
 
   // Digitale kopie verzenden — e-mail (PDF-bijlage) + WhatsApp/SMS (PDF-link)
   // tegelijk, getriggerd op het tear-moment. Beide endpoints zijn best-effort
