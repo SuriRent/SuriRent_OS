@@ -1407,7 +1407,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
   const [custom, setCustom] = useState(prefillAdvance > 0 ? String(prefillAdvance.toFixed(2)) : '');
   // Ander bedrag / keypad is standaard OPEN op mobiel zodat de huurder direct
   // een bedrag kan invoeren zonder eerst op "Ander bedrag invoeren" te klikken.
-  const [showMobileKeypad, setShowMobileKeypad] = useState(true);
+  const [showMobileKeypad, setShowMobileKeypad] = useState(false);
   const [planInstallments, setPlanInstallments] = useState([]);
   // Set van invoice-ids die door een actieve regeling gedekt worden. Deze
   // facturen filteren we uit `openInvoices`/`currentInvoices` zodat "Alles

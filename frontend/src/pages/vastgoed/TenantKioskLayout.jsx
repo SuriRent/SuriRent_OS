@@ -774,7 +774,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 
   const [selected, setSelected] = useState(new Set());
   const [custom, setCustom] = useState('');
-  const [showMobileKeypad, setShowMobileKeypad] = useState(true);
+  const [showMobileKeypad, setShowMobileKeypad] = useState(false);
   // Actieve betalingsregeling-termijnen — opgehaald bij mount. Lijst van
   // {planId, planCurrency, seq, due_date, amount, label}.
   const [planInstallments, setPlanInstallments] = useState([]);
