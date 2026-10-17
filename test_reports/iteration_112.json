@@ -1,0 +1,20 @@
+{
+  "summary": "Iter112: the fix that makes 'Openstaand saldo' match the receipt's 'Nog openstaand' was tested on backend and frontend (mobile 390x844, Anita PIN 4321, my-awesome-rentals-bv, tenant Jan Pieterse HUIS 1A with SRD 18.000 open). BACKEND: GET /api/kiosk/payments/{id}/print-data returns a numeric outstanding_after. Its formatted 'openstaand' string equals the receipt's print.html 'Nog openstaand' (pytest 2/2 pass). FRONTEND partial payment (SRD 1.000 cash, KW2026-00639): receipt-remaining showed 'SRD 17.000,00' with an orange row (bg-orange-50), and the iframe showed 'Nog openstaand: SRD 17.000,00', so the two match. PartialPlanSuggestion appeared (partial-plan-suggestion, n-2/3/4, skip, confirm). FULL payment (SRD 17.000, KW2026-00640): receipt-remaining showed 'SRD 0,00' with a green row (bg-emerald-50), the iframe showed 'Nog openstaand: SRD 0,00', and no plan suggestion appeared. The fix works.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "_enrich_payment outstanding_after", "issue": "outstanding_after is computed live from current open invoices, not stored at payment time. Reprinting or previewing an older receipt later shows the tenant's CURRENT balance, not the balance right after that payment. Consider persisting outstanding_after on the payment doc at creation."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Kiosk receipt (full payment)", "issues": ["Receipt OPMERKING says 'Gedeeltelijke betaling — SRD 17.000,00' even though the payment cleared everything (outstanding 0). The description only shows 'Huur — Augustus 2026' although the payment covered Aug–Oct. Cosmetic/business wording."]}]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_receipt_outstanding_iter112.py", "/app/test_reports/pytest/pytest_iter112.xml", "/app/test_reports/setup_iter112.py", "/app/test_reports/ui_iter112.py"],
+  "action_items": ["Optional: persist outstanding_after at payment creation so historical receipts stay accurate", "Optional: don't label a payment 'Gedeeltelijke betaling' when it leaves outstanding 0"],
+  "critical_code_review_comments": ["ReceiptScreen falls back to overview.total_due - amount if print-data fails. That fallback was the old source of the mismatch (total_due differs from invoice-based outstanding), so a failed print-data call would show the wrong number again silently.", "KioskLayout.jsx is far beyond 700 lines; consider splitting ReceiptScreen/PartialPlanSuggestion into separate modules."],
+  "updated_files": ["/app/backend/tests/test_kiosk_receipt_outstanding_iter112.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "setup_iter112.py re-set Anita (email anita.iter112@demo.sr, PIN 4321, app_role kiosk). Created 2 cash payments for Jan Pieterse HUIS 1A: KW2026-00639 (SRD 1.000) and KW2026-00640 (SRD 17.000). HUIS 1A is now fully paid; no tenant in my-awesome-rentals-bv has open invoices left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run /app/test_reports/setup_iter112.py first to restore Anita's PIN. Kiosk URL is /my-awesome-rentals-bv/kiosk (goto wait_until='commit', wait for keypad-4). Hoofdvestiging location testid is location-6f44a8f1-9c93-44d2-9b69-503e1189205f, then apt-HUIS 1A. Payment flow: overview-pay-btn → mobile-custom-toggle → mobile-key-* → payment-next-btn → method-contant → confirm-submit. Read the receipt text via frame_locator('[data-testid=receipt-preview-iframe]'). All tenants now have 0 open invoices; generate invoices before the next partial-payment test."
+}

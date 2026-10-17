@@ -893,3 +893,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Oorzaak (prod-data): gewone Android-telefoons werden als KT-V520 gezien door opgeslagen ktp_device_token (koppelknop op elk APK-toestel) en soms __SURIRENT_KTP__; UA-regex matchte echte V520 niet.
 - Fix: isKtpDevice() = APK-brug + UA-model V520. Verdwaalde koppel-tokens op gewone toestellen worden lokaal gewist; koppelknop alleen op echte KT-V520. Succespagina stuurt altijd automatisch via WS naar andere online KT-V520 (nooit naar zichzelf: otherPrinters()). KT-V520 print daarnaast ingebouwd.
 - Getest: iteration_111.
+
+## 2026-06 — Openstaand saldo succespagina
+- Oranje "Openstaand saldo" gebruikt nu outstanding_after uit /kiosk/payments/{id}/print-data (zelfde als "Nog openstaand" op de bon). Getest: iteration_112.
+- Open: OPMERKING "Gedeeltelijke betaling" bij volledige betaling; omschrijving toont alleen eerste maand; outstanding_after wordt live berekend (herdruk later toont huidig saldo).

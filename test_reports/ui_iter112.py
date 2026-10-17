@@ -1,0 +1,52 @@
+import re
+await page.set_viewport_size({"width": 390, "height": 844})
+B = "https://vastgoed-app.preview.emergentagent.com"
+AMOUNT = "__AMOUNT__"
+try:
+    await page.goto(B + "/my-awesome-rentals-bv/kiosk", wait_until="commit")
+    await page.wait_for_selector('[data-testid="keypad-4"]', timeout=30000)
+    for k in "4321":
+        await page.click(f'[data-testid="keypad-{k}"]')
+        await page.wait_for_timeout(150)
+    await page.wait_for_selector('[data-testid="location-6f44a8f1-9c93-44d2-9b69-503e1189205f"]', timeout=15000)
+    await page.click('[data-testid="location-6f44a8f1-9c93-44d2-9b69-503e1189205f"]')
+    await page.wait_for_timeout(1500)
+    apt = page.locator('[data-testid="apt-HUIS 1A"]')
+    if await apt.count() == 0:
+        ids = await page.evaluate("() => Array.from(document.querySelectorAll('[data-testid^=\"apt\"]')).map(e=>e.dataset.testid)")
+        print("apt ids", ids)
+    await apt.first.click()
+    await page.wait_for_selector('[data-testid="overview-pay-btn"]', timeout=15000)
+    await page.click('[data-testid="overview-pay-btn"]')
+    await page.wait_for_timeout(1200)
+    if AMOUNT != "FULL":
+        await page.click('[data-testid="mobile-custom-toggle"]')
+        await page.wait_for_timeout(400)
+        for k in AMOUNT:
+            await page.click(f'[data-testid="mobile-key-{k}"]')
+            await page.wait_for_timeout(120)
+    await page.screenshot(path=".screenshots/i112_amount.jpg", quality=40, full_page=False)
+    await page.click('[data-testid="payment-next-btn"]')
+    await page.wait_for_timeout(1000)
+    await page.click('[data-testid="method-contant"]')
+    await page.wait_for_timeout(800)
+    await page.click('[data-testid="confirm-submit"]')
+    await page.wait_for_selector('[data-testid="receipt-remaining"]', timeout=20000)
+    await page.wait_for_timeout(5000)
+    rem = (await page.text_content('[data-testid="receipt-remaining"]')).strip()
+    row_cls = await page.get_attribute('[data-testid="receipt-remaining-row"]', "class")
+    fr = page.frame_locator('[data-testid="receipt-preview-iframe"]')
+    body = await fr.locator("body").inner_text()
+    flat = re.sub(r"\s+", " ", body)
+    m = re.search(r"Nog openstaand:?\s*([A-Z]{3}\s*[\d\.,]+)", flat)
+    print("RECEIPT-REMAINING:", rem, "| row class:", row_cls)
+    print("IFRAME Nog openstaand:", m.group(1) if m else None)
+    print("IFRAME snippet:", flat[:700])
+    print("MATCH:", bool(m) and m.group(1).replace(" ", "").replace("\u00a0", "") == rem.replace(" ", "").replace("\u00a0", ""))
+    plan = await page.locator('[data-testid*="partial-plan"], [data-testid*="plan-suggest"]').count()
+    ids = await page.evaluate("() => Array.from(document.querySelectorAll('[data-testid]')).map(e=>e.dataset.testid).filter(t=>/plan|partial|regeling/i.test(t))")
+    print("plan ids:", ids)
+    await page.screenshot(path=".screenshots/i112_success.jpg", quality=40, full_page=False)
+except Exception as e:
+    print("ERR", e)
+    await page.screenshot(path=".screenshots/i112_err.jpg", quality=40, full_page=False)
