@@ -15453,7 +15453,9 @@ async def kiosk_kasgeld_remote_print(entry_id: str, body: RemotePrintIn, _sessio
 
 
 @api.post("/kiosk/kasgeld", response_model=CashEntryOut)
-async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_session)):
+async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_session),
+                            employee_id: Optional[str] = Query(None),
+                            employee_pin: Optional[str] = Query(None)):
     """Nieuwe kasgeld-mutatie geregistreerd vanuit de Kiosk (medewerker).
     Vereist een geldig kiosk_token. Company_id komt uit de sessie zodat
     kruis-bedrijf schrijven onmogelijk is."""
@@ -15473,14 +15475,19 @@ async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_sessio
             entry_iso = iso(dt)
         except Exception:
             entry_iso = now_iso
+    emp_id, emp_name = None, None
+    if employee_id:
+        emp = await db.employees.find_one({"id": employee_id, "company_id": cid, "active": True}, {"_id": 0})
+        if emp and emp.get("kiosk_pin_hash") and verify_password((employee_pin or "").strip(), emp["kiosk_pin_hash"]):
+            emp_id, emp_name = emp["id"], emp.get("name") or ""
     doc = {
         "id": new_id(), "company_id": cid, **payload,
         "created_at": now_iso,
         "entry_date": entry_iso,
         # Audit: wie heeft dit vanuit de Kiosk ingebracht?
         "created_via": "kiosk",
-        "created_by": _session.get("employee_id"),
-        "created_by_name": _session.get("employee_name") or "Kiosk medewerker",
+        "created_by": emp_id,
+        "created_by_name": emp_name or "Kiosk medewerker",
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)

@@ -25,7 +25,7 @@ window.addEventListener('ktp-remote-print-done', (e) => {
   const name = d.printer || job.printerName || 'KT-V520';
   window.dispatchEvent(new CustomEvent('ktp-toast', {
     detail: d.ok
-      ? { ok: true, msg: `Bon geprint op ${name}` }
+      ? { ok: true, name, msg: `Bon geprint op ${name}` }
       : { ok: false, msg: `Printen mislukt op ${name}${d.error ? ` — ${d.error}` : ''}` },
   }));
 });
@@ -36,7 +36,10 @@ export function KtpPrintToast() {
     let t;
     const onToast = (e) => {
       clearTimeout(t);
-      setToast({ ...e.detail, key: Date.now() });
+      // Meerdere printers tegelijk: namen samenvoegen in één groene balk.
+      setToast((prev) => (prev?.ok && e.detail?.ok && e.detail.name && !prev.names.includes(e.detail.name)
+        ? { ...prev, names: [...prev.names, e.detail.name], msg: `Bon geprint op ${[...prev.names, e.detail.name].join(' en ')}` }
+        : { ...e.detail, names: e.detail?.name ? [e.detail.name] : [], key: Date.now() }));
       t = setTimeout(() => setToast(null), e.detail?.ok ? 4000 : 6000);
     };
     window.addEventListener('ktp-toast', onToast);

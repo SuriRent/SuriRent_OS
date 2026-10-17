@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the kasgeld receipt (bon) feature end to end on mobile 390x844 with Anita's kiosk PIN 4321 (my-awesome-rentals-bv). Backend: 7 of 8 pytest tests passed. These work: balance_after is returned and stored, print-data lines (INLEG/OPNAME, category, amount, remark, Kassaldo, all lines fit within the column width), receipt.png is a valid PNG, 404 for another company's or an unknown entry, 401 without a session, 409 when the printer is offline, and remote-print returns a job_id that a real WS printer receives as REMOTE_PRINT with kasgeld_id and data.lines (printer kt-v520). The one failure: the receipt never shows the employee's name. The Medewerker line always says 'Kiosk medewerker'. Frontend passed every flow. Numpad + Uitgaand + description -> save -> kasgeld-receipt-screen shows the check, the amount (- SRD 37,00), the preview image and the 'Kasgeld bon' title. Klaar closes the screen and the list refreshes with the new entry. With no printers, 'Geen printer actief' shows and no buttons. With 1 fake KT-V520, the bon is auto-sent, ktp-print-toast-ok 'Bon geprint op TEST KTP iter114 A' appears, and the kasgeld-print-ktp reprint sent a 2nd job. With 2 fake printers, both received the job. On the simulated V520 (RN bridge + UA 'Android 11; V520'), PRINT_RECEIPT is auto-posted with printer kt-v520, 20 lines and the receipt.png url. The builtin button works. For Bluetooth, the APK printer was simulated via localStorage bt_printer via:'apk'. PRINT_RECEIPT printer bluetooth (bt_address, paper_width 58, 20 lines) is auto-posted and the kasgeld-print-bt button works.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/kiosk/kasgeld (+ print-data / receipt.png)", "issue": "Employee name missing on the receipt: created_by_name is always 'Kiosk medewerker' (the UI header shows 'Anita Sewdas'). Cause: get_kiosk_session() (server.py ~213-225) only returns {company_id, type}, and the kiosk JWT (create_token at ~5764/5835/1582) has no employee_id/employee_name. So _session.get('employee_name') is always None, and created_by is null too. This also affects the 'Door ...' audit text in the kasgeld list and the admin push notification.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/kiosk/kasgeld", "issue": "balance_after is computed after the insert using a separate aggregate (not atomic). Two saves at the same moment could store the same or a wrong Kassaldo. balance_after is also a snapshot: after an earlier entry is deleted, a reprint shows the old Kassaldo. Acceptable if that is intended."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Auto-print to 2 KT-V520 printers", "issue": "Both printers received and acked the job, but only one success toast appeared ('Bon geprint op TEST KTP iter114 A'). KtpPrintToast keeps a single toast state, so the second ack overwrites the first. Minor: you could show '2 printers' or stack the toasts.", "affected_selectors": ["ktp-print-toast-ok"]}
+    ],
+    "design_issues": [
+      {"screen": "Kasgeld bon modal", "issues": ["The green ktp toast sits over the 'Kasgeld bon' header and close X for about 4s. Acceptable, but you could place it lower."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kasgeld_receipt_iter114.py", "/app/test_reports/pytest/pytest_iter114.xml", "/app/test_reports/setup_iter114.py", "/app/test_reports/reg_iter114.py", "/app/test_reports/fake_printer_iter114.py", "/app/test_reports/cleanup_kasgeld_iter114.py", "/app/test_reports/ui_iter114_flow.py"],
+  "action_items": [
+    "HIGH: put employee_id/employee_name into the kiosk session. Either add them to the kiosk JWT when issuing it from the personal PIN (kiosk-pin / personal-pin login), or look up the employee in get_kiosk_session. That way POST /kiosk/kasgeld stores the real created_by/created_by_name, and the bon 'Medewerker:' line shows e.g. 'Anita Sewdas'.",
+    "Optional: show a toast per printer (or an aggregated one) when auto-printing to several KT-V520s."
+  ],
+  "critical_code_review_comments": [
+    "get_kiosk_session drops all employee context, so every kiosk-side 'created_by_name' write (kasgeld; check also line ~11283) falls back to a generic label.",
+    "KasgeldReceiptScreen auto-print effect: if a printer comes online while the screen is open, it auto-prints at that moment. That is probably fine. The status for the ktp button is 'done' if any one printer succeeds; a partial failure is only reported through the toast.",
+    "server.py is 18k+ lines and should be split into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_kasgeld_receipt_iter114.py"],
+  "success_rate": {"backend": "88% (7/8; failing = employee name)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Anita reset via setup_iter114.py (email anita.iter114@demo.sr, PIN 4321). Cleanup done: all TEST_iter114 kasgeld entries deleted, and the TEST KTP iter114 A/B printers revoked.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run setup_iter114.py, then 'reg_iter114.py A' / 'reg_iter114.py B', then 'nohup python3 fake_printer_iter114.py <device_token> 1800 &'. The fake printer logs kasgeld_id and the line count. Kiosk mobile path: /my-awesome-rentals-bv/kiosk -> keypad-4321 -> kiosk-mobile-fab -> kiosk-tile-kasgeld -> kasgeld-new-btn -> kasgeld-type-out -> kasgeld-npad-key-N -> kasgeld-next-btn -> kasgeld-input-desc -> kasgeld-save. V520 simulation: new_context(user_agent containing 'Android 11; V520') + init script window.ReactNativeWebView.postMessage capture. BT simulation: localStorage bt_printer={id,name,via:'apk'} + RN bridge. Clean up with cleanup_kasgeld_iter114.py. To retest the fix, assert 'Anita' appears in the print-data Medewerker line."
+}

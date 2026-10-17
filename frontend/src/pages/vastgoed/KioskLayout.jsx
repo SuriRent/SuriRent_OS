@@ -3234,7 +3234,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     if (!description.trim()) { setErr('Omschrijving is verplicht'); return; }
     setSaving(true); setErr('');
     try {
-      const { data } = await api.post('/kiosk/kasgeld', {
+      const { data } = await api.post(withKioskEmployee('/kiosk/kasgeld'), {
         type, amount: n, currency,
         description: description.trim(), category,
       });
