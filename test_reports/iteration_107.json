@@ -1,0 +1,29 @@
+{
+  "summary": "Iter107: All requested features PASS.\n\n(1) Total parity:\n- GET /api/tenant-portal/overview total_due = 18000.0, the same as the employee kiosk overview (open 12000 + current 6000) for Jan Pieterse / HUIS 1A.\n- Tenant kiosk tk-balance shows SRD 18.000,00 on mobile and desktop.\n- On the pay screen, 'Huur' is SRD 18.000,00, 'Volgende — SRD 18.000,00' and 'Totaal openstaand: SRD 18.000,00' (desktop keypad).\n\n(2) Financial bon print:\n- GET financial-print-data returns 200 with lines[{text,align,bold,size}], printer, paper_width, cols, lettergrootte, textZoom, fontSizes. The TOTAAL line is SRD 18.000,00 and every line fits within cols.\n- Error codes: 404 for an unknown tenant, 401 without a session.\n- POST financial-remote-print returns 409 'Deze KT-V520 is niet online' for an offline printer, 422 without a body and 401 without a session.\n- financial-receipt.png is still 200 image/png.\n\nUI (390x844 employee kiosk):\n- voice-modal contains voice-modal-print-row with 'Financiële bon', and the history-print-fin button reads 'Bon printen'.\n- history-print-menu-fin shows only 'Afdrukken': no printer online and no BT printer, so the KTP/BT options are correctly hidden.\n- history-print-local-fin with window.print mocked: print was called once, #bon has 1 img (naturalWidth 549) and the modal stays open.\n- 'Genereer & Deel' still shares the mp3 and png, then closes.\n- Regression on HUIS 1B: the payment history menu history-print-{id} opens, and Afdrukken calls window.print with #bon filled.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Voice modal (mobile 390px)", "issues": ["The 'Bon printen' button label wraps onto 2 lines ('Bon / printen'). Add whitespace-nowrap/shrink-0 to the button."]},
+      {"screen": "Tenant kiosk dashboard", "issues": ["The 'Openstaande huur' row shows SRD 18.000,00 but its subtitle names only 'augustus 2026', while the amount covers aug–okt. Consider 'aug – okt 2026' or a split into achterstand and huidige maand like the employee kiosk."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_financial_print_iter107.py", "/app/backend/tests/test_financial_receipt_png.py", "/app/test_reports/pytest/iter107.xml"],
+  "action_items": [
+    "Optional: whitespace-nowrap on the 'Bon printen' button in the voice-modal on mobile.",
+    "Optional: tenant dashboard 'Openstaande huur' subtitle should reflect the full period range."
+  ],
+  "critical_code_review_comments": [
+    "tenant_portal_overview now calls kiosk_tenant_overview(tenant_id, {company_id}), which is correct and keeps one source of truth. _calc_balance is still computed and used only for currency/fallback, an extra DB round-trip.",
+    "PrintChoiceMenu: useOnlinePrinters prefers the live WS state once printersKnown is set, so the fetched /kiosk/printers/online result is ignored. Intended, but the KTP option could not be tested in the UI without a live printer (backend 409 path verified).",
+    "The financial REMOTE_PRINT event carries tenant_id and no payment_id. The REMOTE_PRINT_DONE handler correctly skips the print_log upsert when pay_id is empty and forwards job_id, which matches PrintChoiceMenu's job_id filter.",
+    "PIL rendering still runs synchronously in an async handler (minor)."
+  ],
+  "updated_files": ["/app/backend/tests/test_financial_print_iter107.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all requested flows)"},
+  "seed_data_creation": "None new. Reused kiosk PIN 4321 (Anita) and tenant jan@demo.sr / PIN 7391.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kiosk login: /my-awesome-rentals-bv/login?target=kiosk&view=pin, keypad-{d} testids, then location-436b6062-d865-4e27-a5b7-d49a9f7ae605 and the 'HUIS 1A' text. HUIS 1A has no payments; HUIS 1B has 2 (use it for the history print regression). Tenant kiosk: POST /api/tenant-portal/login {identifier:'jan@demo.sr',pin:'7391'}, set localStorage tenant_token, abort **/api/auth/me, then goto /kiosk/huurder. The KTP menu option cannot be mocked via a route (live WS state wins)."
+}

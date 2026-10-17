@@ -875,3 +875,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Fix: 401 op niet-huurder endpoint logt huurder niet meer uit bij herladen; Uit-knop overlapt titel niet meer.
 - Open punt: huurderkiosk "Totaal openstaand" (SRD 6.000) wijkt af van medewerker-kiosk (SRD 18.000) — nog onderzoeken.
 - Getest: iteration_106.
+
+## 2026-06 — Totaal gelijk + financiële bon printen
+- /tenant-portal/overview geeft total_due (achterstand + huidige maand, zelfde als medewerker-kiosk) en due_periods; huurder-kiosk gebruikt dit (dashboard + betaalscherm).
+- Financiële bon printen in Spraakbericht-venster: GET /kiosk/tenants/{id}/financial-print-data, POST /kiosk/tenants/{id}/financial-remote-print (KT-V520), Bluetooth, Afdrukken (APK PRINT_RECEIPT of printvenster). PrintChoiceMenu kreeg props remoteUrl/printDataUrl/showLabel.
+- REMOTE_PRINT_DONE werkt nu ook zonder payment_id (via job_id).
+- Getest: iteration_107.

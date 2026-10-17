@@ -536,6 +536,13 @@ function ForgotPinSheet({ branding, onClose, onSent }) {
 // =====================================================================
 // DASHBOARD — kiosk-look: financieel overzicht links, grote actie rechts
 // =====================================================================
+function duePeriodsLabel(periods) {
+  if (!periods?.length) return '';
+  const lbl = (p) => `${MONTHS_NL[p.month - 1]} ${p.year}`;
+  const a = periods[0]; const b = periods[periods.length - 1];
+  return periods.length === 1 ? lbl(a) : `${lbl(a)} – ${lbl(b)}`;
+}
+
 function DashboardView({ overview, onAction, onHistory }) {
   const tenant = overview?.tenant;
   const apartment = overview?.apartment;
@@ -582,7 +589,8 @@ function DashboardView({ overview, onAction, onHistory }) {
     { key: 'rent', label: 'Maandhuur', value: apartment?.rent_amount || 0, icon: HomeIcon, muted: false },
     ...(openRent > 0 ? [{
       key: 'open', label: 'Openstaande huur', value: openRent, icon: Wallet, highlight: true,
-      sub: balance.next_period ? `${MONTHS_NL[balance.next_period.month - 1]} ${balance.next_period.year}` : '',
+      sub: duePeriodsLabel(overview?.due_periods)
+        || (balance.next_period ? `${MONTHS_NL[balance.next_period.month - 1]} ${balance.next_period.year}` : ''),
     }] : []),
     { key: 'svc', label: 'Servicekosten', value: 0, icon: Droplets, muted: true },
     // Boetes — alleen zichtbaar wanneer admin "Automatische boetes" heeft

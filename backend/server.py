@@ -6484,6 +6484,9 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
         },
         "balance": bal,
         "total_due": total_due,
+        "due_periods": [{"month": i.get("period_month"), "year": i.get("period_year")}
+                        for i in (kov.get("open_invoices") or []) + (kov.get("current_invoices") or [])
+                        if i.get("period_month")],
         "fines_total": fines_total,
         "fines_currency": fines_currency,
     }

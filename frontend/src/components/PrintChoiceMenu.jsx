@@ -84,7 +84,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
         aria-label="Afdruk"
         className={showLabel
-          ? 'px-3 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-transform'
+          ? 'shrink-0 whitespace-nowrap px-3 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-transform'
           : 'w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform'}>
         {disabled || sending ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3 sm:h-3" />}
         <span className={showLabel ? '' : 'hidden sm:inline'}>{showLabel ? 'Bon printen' : 'Afdruk'}</span> <ChevronDown className={`${showLabel ? '' : 'hidden sm:block'} w-3 h-3`} />
