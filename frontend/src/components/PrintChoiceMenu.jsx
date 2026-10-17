@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bluetooth, ChevronDown, Loader2, Printer, Smartphone } from 'lucide-react';
 import { getSavedPrinter, printLinesBluetooth, useBtReady } from '../lib/bt-printer';
 import { api } from '../lib/api';
-import { isKtpDevice } from '../lib/ktp-printer';
+import { isKtpDevice, otherPrinters } from '../lib/ktp-printer';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 
 const TIMEOUT_MS = 20000;
@@ -31,13 +31,12 @@ function useOnlinePrinters(open) {
   return liveState.printersKnown || live.length ? live : fetched;
 }
 
-// Ingebouwde printer alleen op een echte KT-V520 (dan geen KT-V520 via WS naar zichzelf);
-// elders alleen KT-V520 (WS) en Bluetooth.
+// Ingebouwde printer alleen op een echte KT-V520; KT-V520 via WS altijd naar ándere online KT-V520's.
 export function usePrintOptions(open = false) {
   const printers = useOnlinePrinters(open);
   const btReady = useBtReady();
   const builtIn = isKtpDevice();
-  const first = builtIn ? null : printers[0];
+  const first = otherPrinters(printers)[0];
   const bt = btReady ? getSavedPrinter() : null;
   return { builtIn, first, bt, any: !!(builtIn || first || bt) };
 }

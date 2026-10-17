@@ -74,7 +74,7 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
             <Trash2 className="w-4 h-4" />
           </button>
         )}
-        {!isKtpDevice() && <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />}
+        <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />
         <div className="flex-1 sm:flex-none sm:w-36 empty:hidden" data-testid={`kiosk-print-log-bt-${log.id}`}>
           <BtPrintButton paymentId={log.payment_id} />
         </div>

@@ -7,8 +7,7 @@ import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, s
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { PrinterLamp } from './PrinterLamp';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
-import { ensurePrinterRegistered, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
-import { apkBridge } from '../lib/kiosk-print';
+import { ensurePrinterRegistered, isKtpDevice, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 
 // Eén nette werkbalk rechtsboven: [printer] [status-bolletje].
 const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors';
@@ -38,7 +37,7 @@ function KtpPairPill() {
     window.addEventListener('ktp-paired', onPaired);
     return () => window.removeEventListener('ktp-paired', onPaired);
   }, []);
-  if (!apkBridge() || state === 'done') return null;
+  if (!isKtpDevice() || state === 'done') return null;
   const pair = async () => {
     if (!window.confirm('Dit toestel koppelen als KT-V520 printer? Het print daarna bonnen die de beheerder op afstand stuurt, ook als niemand is ingelogd.')) return;
     setState('busy');
@@ -120,7 +119,7 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
     try { const d = await pairThisDevice(); window.alert(`Gekoppeld als ${d.name}`); setPaired(true); }
     catch (e) { window.alert(e?.response?.data?.detail || e?.message || 'Koppelen mislukt'); }
   };
-  const showPair = isAdmin && !!apkBridge() && !paired;
+  const showPair = isAdmin && isKtpDevice() && !paired;
   const [btOpen, setBtOpen] = useState(false);
   const showBt = (s.printer ?? localStorage.getItem('kiosk_printer')) === 'bluetooth';
   const cols = 1 + (showPair ? 1 : 0) + (showBt ? 1 : 0);

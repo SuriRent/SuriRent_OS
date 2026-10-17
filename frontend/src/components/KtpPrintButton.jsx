@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AlertCircle, Check, ChevronDown, Loader2, Printer } from 'lucide-react';
 import { api } from '../lib/api';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
+import { otherPrinters } from '../lib/ktp-printer';
 
 const TIMEOUT_MS = 20000;
 
@@ -19,7 +20,7 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
     const id = setInterval(load, 15000);
     return () => clearInterval(id);
   }, [fetchPrinters]);
-  const printers = liveState.printersKnown || live.length ? live : fetched;
+  const printers = otherPrinters(liveState.printersKnown || live.length ? live : fetched);
   const [status, setStatus] = useState(null); // sending | done | error
   const [msg, setMsg] = useState('');
   const [menu, setMenu] = useState(false);

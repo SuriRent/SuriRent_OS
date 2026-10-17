@@ -12,12 +12,20 @@ let pingTimer = null;
 let retryTimer = null;
 let started = false;
 
-// KT-V520 herkennen: APK-vlag window.__SURIRENT_KTP__ óf het toestelmodel in de user-agent,
-// óf handmatig gekoppeld (ktp_device_token aanwezig).
-const KTP_UA = /KT-?V520|KTV520|KingTop/i;
-export const isKtpDevice = () => !!apkBridge()
-  && (window.__SURIRENT_KTP__ === true || KTP_UA.test(navigator.userAgent || '') || !!localStorage.getItem(TOKEN_KEY));
-export const isPairedPrinter = () => !!localStorage.getItem(TOKEN_KEY);
+// KT-V520 herkennen via het hardwaremodel in de user-agent (KT-V520 meldt zich als "V520").
+// De APK-vlag en een opgeslagen koppel-token zijn onbetrouwbaar: die stonden ook op gewone telefoons.
+const KTP_UA = /\bV520\b|KT-?V520|KTV520|KingTop/i;
+export const isKtpDevice = () => !!apkBridge() && KTP_UA.test(navigator.userAgent || '');
+export const isPairedPrinter = () => isKtpDevice() && !!localStorage.getItem(TOKEN_KEY);
+// Naam waaronder dit toestel zelf als printer online staat (om zichzelf uit lijsten te filteren).
+export const ownPrinterName = () => (isKtpDevice() ? localStorage.getItem(NAME_KEY) : null);
+export const otherPrinters = (list) => { const own = ownPrinterName(); return (list || []).filter((p) => !own || p.name !== own); };
+
+// Gewone telefoon die ooit (per ongeluk) als KT-V520 gekoppeld is: koppeling lokaal opruimen.
+if (typeof window !== 'undefined' && !isKtpDevice() && localStorage.getItem(TOKEN_KEY)) {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(NAME_KEY);
+}
 
 // Diagnose: wat meldt dit toestel? (meegestuurd met de kiosk-WebSocket)
 export function deviceInfo() {
@@ -132,6 +140,6 @@ export async function ensurePrinterRegistered() {
 
 // Handmatig koppelen (knop op de beheerder-kiosk) als automatische herkenning faalt.
 export async function pairThisDevice(name) {
-  if (!apkBridge()) throw new Error('Dit toestel heeft geen APK-printbrug — open de kiosk in de Android-app.');
+  if (!isKtpDevice()) throw new Error('Dit toestel is geen KT-V520 — alleen een KT-V520 kan als printer gekoppeld worden.');
   return register(name);
 }
