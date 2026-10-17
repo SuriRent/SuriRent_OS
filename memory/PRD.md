@@ -897,3 +897,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Openstaand saldo succespagina
 - Oranje "Openstaand saldo" gebruikt nu outstanding_after uit /kiosk/payments/{id}/print-data (zelfde als "Nog openstaand" op de bon). Getest: iteration_112.
 - Open: OPMERKING "Gedeeltelijke betaling" bij volledige betaling; omschrijving toont alleen eerste maand; outstanding_after wordt live berekend (herdruk later toont huidig saldo).
+
+## 2026-06 — Print-bevestiging KT-V520
+- KtpPrintToast (App.js): groene balk bovenaan "Bon geprint op <printer>" (4s) bij REMOTE_PRINT_DONE ok, rood bij fout (6s) of geen antwoord binnen 20s. Alleen voor jobs vanaf dit toestel (trackKtpJob in KtpPrintButton/PrintChoiceMenu). z-index boven alle overlays.
+- Getest: iteration_113.

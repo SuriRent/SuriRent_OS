@@ -1,0 +1,30 @@
+{
+  "summary": "Iter113 FRONTEND ONLY, mobile 390x844, employee kiosk (Anita PIN 4321, my-awesome-rentals-bv, Roy van der Berg HUIS 2C). A fake KT-V520 WebSocket printer 'TEST KTP iter113' could switch its reply mode between ok, fail ('Geen papier') and silent. PASS (1): success-page auto-send after a SRD 10 cash payment (KW2026-00641). The green bar ktp-print-toast-ok appeared 0.8s after submit at the top (x0 y0, 390x44, bg-emerald-600, z-400) with 'Bon geprint op TEST KTP iter113'. It disappeared after 3.9s. PASS (2): payment history, history-print-{id} then history-print-ktp-{id}. The green bar appeared in 0.2s, showed for 4.3s, and the row status said 'Geprint op ...'. PASS (3): ok:false gave a red ktp-print-toast-error 'Printen mislukt op TEST KTP iter113 — Geen papier', visible for 6.3s. PASS (4): no reply gave a red 'Geen bevestiging van TEST KTP iter113' after 25.4s. PASS (5): a second browser context logged in to the same company DID receive both REMOTE_PRINT_DONE events (checked with a window listener) but showed 0 toasts, so tracking is per device. PASS (6): voice modal financial bon (history-print-fin then history-print-ktp-fin) showed the green bar in 0.2s, above the modal (z 400 vs 100). FAIL (7): Bonnen van vandaag (KioskPrintsOverlay then kiosk-print-log-ktp-{id}). The toast is mounted with the right text, but it is HIDDEN behind the overlay. The overlay has z-[10000] and the toast z-[400]; elementFromPoint at the toast centre returns kiosk-prints-overlay. The user sees no green or red bar there.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KtpPrintToast in Bonnen van vandaag (KioskPrintsOverlay)", "issue": "The toast renders behind the full-screen Bonnen overlay: toast class z-[400], overlay 'fixed inset-0 z-[10000]'. Neither the green nor the red bar is visible in this flow, which the user explicitly asked for. Fix: raise the toast z-index above 10000 (e.g. z-[10050]) in KtpPrintToast.jsx line 51.", "selector": "[data-testid=ktp-print-toast-ok] under [data-testid=kiosk-prints-overlay]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "History row / Bonnen row inline status vs top bar", "issues": ["Inline per-button timeout is 20s ('Geen antwoord van X'), but the top-bar no-ack timeout is 25s ('Geen bevestiging van X'). On no reply the row turns red at 20s and the bar appears 5s later with different wording. If an ack arrives between 20s and 25s, the row stays red ('Geen antwoord') while the top bar turns GREEN. Align both on one timeout and one wording (e.g. a shared constant)."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/setup_iter113.py", "/app/test_reports/reg_iter113.py", "/app/test_reports/fake_printer_iter113.py", "/app/test_reports/cleanup_iter113.py"],
+  "action_items": [
+    "HIGH: KtpPrintToast.jsx: change z-[400] to a value above KioskPrintsOverlay's z-[10000] (e.g. z-[10050]) so the bar shows in Bonnen van vandaag (both employee and admin kiosk).",
+    "Minor: unify TIMEOUT_MS (20s in KtpPrintButton/PrintChoiceMenu) with NO_ACK_MS (25s in KtpPrintToast) and the messages 'Geen antwoord' / 'Geen bevestiging'."
+  ],
+  "critical_code_review_comments": [
+    "The module-level `jobs` Map plus the window listener in KtpPrintToast.jsx is correct for per-device filtering (verified). A side effect is that it registers on import, outside React; fine, but note it for SSR/tests.",
+    "The toast is mounted twice in App.js (lines 362 and 376). If both branches can ever render at the same time, each ktp-toast event would produce two stacked bars. Verify these are mutually exclusive branches.",
+    "Clicking the bar dismisses it, but its 4s/6s timeout is never cleared, which is harmless. A new toast replaces the previous one (clearTimeout t), which is correct."
+  ],
+  "updated_files": ["/app/test_reports/setup_iter113.py", "/app/test_reports/reg_iter113.py", "/app/test_reports/fake_printer_iter113.py", "/app/test_reports/cleanup_iter113.py"],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "86% (6/7 flows; Bonnen van vandaag toast hidden)"},
+  "test_credentials": "anita.iter113@demo.sr / anita1234 / PIN 4321 (set via setup_iter113.py)",
+  "seed_data_creation": "One SRD 10 cash payment for Roy van der Berg HUIS 2C (KW2026-00641; Roy now has SRD 2.990 open, so the voice button is enabled). The fake printer 'TEST KTP iter113' was registered and then revoked via cleanup_iter113.py.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run setup_iter113.py, then reg_iter113.py, then 'nohup python3 fake_printer_iter113.py <device_token> 2400 &'. Write ok|fail|silent to /tmp/iter113_mode to switch the reply (the browser_automation script can write this file directly). For a second device use page.context.browser.new_context(). Bonnen opens from the home screen via JS click on kiosk-employee-receipts-dot; pick the last Anita card. Use reversed() on kiosk-prints-employee-* cards until kiosk-print-log-ktp-* buttons appear. For the retest, check visibility with elementFromPoint at the toast centre inside kiosk-prints-overlay."
+}

@@ -4,14 +4,14 @@ import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 // Alleen print-opdrachten die vanaf dít toestel zijn verstuurd krijgen een melding.
 const jobs = new Map();
-const NO_ACK_MS = 25000;
+const NO_ACK_MS = 20000;
 
 export function trackKtpJob(jobId, printerName) {
   if (!jobId) return;
   const timer = setTimeout(() => {
     if (!jobs.has(jobId)) return;
     jobs.delete(jobId);
-    window.dispatchEvent(new CustomEvent('ktp-toast', { detail: { ok: false, msg: `Geen bevestiging van ${printerName || 'de KT-V520'}` } }));
+    window.dispatchEvent(new CustomEvent('ktp-toast', { detail: { ok: false, msg: `Geen antwoord van ${printerName || 'de KT-V520'}` } }));
   }, NO_ACK_MS);
   jobs.set(jobId, { printerName, timer });
 }
@@ -48,7 +48,7 @@ export function KtpPrintToast() {
     <div key={toast.key} role="status" onClick={() => setToast(null)}
       data-testid={toast.ok ? 'ktp-print-toast-ok' : 'ktp-print-toast-error'}
       style={{ paddingTop: 'max(env(safe-area-inset-top), 0px)' }}
-      className={`fixed top-0 inset-x-0 z-[400] animate-in slide-in-from-top duration-300 ${toast.ok ? 'bg-emerald-600' : 'bg-red-600'} text-white shadow-lg`}>
+      className={`fixed top-0 inset-x-0 z-[10050] animate-in slide-in-from-top duration-300 ${toast.ok ? 'bg-emerald-600' : 'bg-red-600'} text-white shadow-lg`}>
       <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm sm:text-base font-bold">
         <Icon className="w-5 h-5 shrink-0" />
         <span data-testid="ktp-print-toast-msg">{toast.msg}</span>
