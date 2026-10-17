@@ -72,7 +72,10 @@ if (typeof window !== 'undefined') {
 
 function handleRemotePrint(msg) {
   try {
-    const url = `${process.env.REACT_APP_BACKEND_URL}/api/payments/${msg.payment_id}/print.html?format=thermal&preview=1`;
+    // Betalingsbon → print.html; kasbon/financieel overzicht → meegestuurde url (bon-regels in msg.data.lines).
+    const url = msg.payment_id
+      ? `${process.env.REACT_APP_BACKEND_URL}/api/payments/${msg.payment_id}/print.html?format=thermal&preview=1`
+      : `${process.env.REACT_APP_BACKEND_URL}${msg.url || ''}`;
     const out = apkPrintMessage(url, { ...msg.data, printer: 'kt-v520' });
     out.job_id = msg.job_id;
     out.remote = true;
@@ -96,7 +99,7 @@ function connect() {
   };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.type === 'REMOTE_PRINT' && msg.payment_id) handleRemotePrint(msg);
+    if (msg.type === 'REMOTE_PRINT' && (msg.payment_id || msg.data?.lines?.length)) handleRemotePrint(msg);
   };
   ws.onclose = (e) => {
     clearInterval(pingTimer);

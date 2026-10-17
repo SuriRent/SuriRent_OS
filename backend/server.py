@@ -11982,6 +11982,7 @@ async def kiosk_tenant_financial_remote_print(tenant_id: str, body: RemotePrintI
     data = await _financial_receipt_data(tenant_id, _session, force_ktp=True)
     job_id = str(uuid.uuid4())
     await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "tenant_id": tenant_id,
+                                                  "url": f"/api/kiosk/tenants/{tenant_id}/financial-receipt.png",
                                                   "target": body.printer_id, "data": data})
     return {"job_id": job_id}
 
@@ -15448,6 +15449,7 @@ async def kiosk_kasgeld_remote_print(entry_id: str, body: RemotePrintIn, _sessio
     data = await _kasgeld_receipt_data(entry_id, _session, force_ktp=True)
     job_id = str(uuid.uuid4())
     await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "kasgeld_id": entry_id,
+                                                  "url": f"/api/kiosk/kasgeld/{entry_id}/receipt.png",
                                                   "target": body.printer_id, "data": data})
     return {"job_id": job_id}
 
