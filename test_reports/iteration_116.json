@@ -1,0 +1,29 @@
+{
+  "summary": "Iter116 frontend-only retest of the KtpPrintToast early-ack buffer fix (iter115 race). Mobile 390x844, Anita PIN 4321, fake KT-V520 printers that ack instantly. (1) 1 printer x5 kasgeld saves: green 'Bon geprint op TEST KTP iter116 A' 5/5. 0 'Geen antwoord' after a 22s wait. The kasgeld-print-ktp button shows the done check. 1 of the 5 acks arrived before the HTTP response; it was buffered and re-dispatched correctly. (2) 2 printers x5: merged toast 'A en B' 5/5 (once 'B en A', cosmetic). 0 false red toasts. (3) DETERMINISTIC race: page.route delays the remote-print HTTP response by 1.2s, so every ack lands before trackKtpJob. 2 printers x3: merged toast 3/3. All 6 jobs show 2 done events (buffered, then re-dispatched). 0 'Geen antwoord' after 22s. (4) Second device (separate browser context, same kiosk): it received all 6 REMOTE_PRINT_DONE events but showed 0 toasts. (5) ok:false ack ('Geen papier'): red toast 'Printen mislukt op TEST KTP iter116 A — Geen papier'. (6) History modal PrintChoiceMenu (HUIS 2C) under the forced race: history-print-status shows 'Geprint op TEST KTP iter116 A' (emerald), the green toast appears, and nothing turns to a timeout after 25s. (7) KtpPrintButton in the KioskPrintsOverlay was NOT runtime-verified. The overlay lists 3 'Anita Sewdas' cards, but none has a print-log row with a KT-V520 button (likely stale employee IDs from the demo reset). I stopped after 3 attempts. Its code path matches PrintChoiceMenu: job.current is set before trackKtpJob, and the re-dispatch runs in setTimeout 0, after the local timer has started.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KasgeldReceipt kasgeld-print-ktp", "issue": "The button switches to the 'done' check as soon as the POST succeeds, not when the printer acks. With an ok:false ack ('Geen papier') the button still shows a green-check 'done' while the red toast says the print failed. Pre-existing, minor.", "selector": "[data-testid='kasgeld-print-ktp']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "KioskPrintsOverlay employee picker", "issues": ["Shows 3 identical 'Anita Sewdas' cards (one per old employee id after demo resets). Hard to tell apart, and the cards open empty lists. Cosmetic/data issue."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/ui_iter116_race.py", "/app/test_reports/setup_iter116.py", "/app/test_reports/reg_iter116.py", "/app/test_reports/fake_printer_iter116.py", "/app/test_reports/cleanup_kasgeld_iter116.py"],
+  "action_items": [
+    "LOW (optional): in KasgeldReceipt useKasgeldPrint, drive the 'ktp' status from the REMOTE_PRINT_DONE ack (ok/error) instead of the POST result.",
+    "LOW (optional): 2 printers that both fail produce 2 separate red toasts, and the second replaces the first, so only one printer's error is visible. Consider merging error toasts the way ok toasts are merged."
+  ],
+  "critical_code_review_comments": [
+    "The buffer fix is correct. Unmatched acks are stored in the 'early' map for 30s. trackKtpJob consumes the buffer and re-dispatches the ack in setTimeout(0), so component listeners (KtpPrintButton/PrintChoiceMenu) also handle it, because they set job.current before calling trackKtpJob. No 20s timer is started for buffered jobs.",
+    "Minor: the setTimeout(() => early.delete(id), 30000) in the listener is never cancelled. Harmless, because a consumed entry is already deleted. The buffer also collects every other device's acks for 30s (small memory, fine).",
+    "Second-device isolation holds: acks for job_ids that this device never tracked are buffered, then expire without a toast."
+  ],
+  "updated_files": ["/app/test_reports/*_iter116.py (test helpers only; no app code changed)"],
+  "success_rate": {"backend": "skipped (frontend only)", "frontend": "100% of executed checks (13/13 kasgeld runs green, 0 false 'Geen antwoord', second-device isolation OK, failure toast OK, history-print status OK). KtpPrintButton overlay path not runtime-verified."},
+  "seed_data_creation": "Anita reset via setup_iter116.py (anita.iter116@demo.sr, PIN 4321). Cleanup done: all 14 TEST_iter116 kasgeld entries deleted, and printers TEST KTP iter116 A/B revoked.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To force the ack-before-HTTP race deterministically: page.route('**/remote-print', handler) that does route.fetch(), sleeps 1.2s, then route.fulfill(response=resp, body=body). Set the fake printer reply mode via /tmp/iter116_mode (ok|fail|silent). Kiosk login: wait for keypad-4, type 4321, wait 5s (4s is sometimes too short). The receipts dot (kiosk-employee-receipts-dot) only renders at a desktop width; log in at mobile size, then resize."
+}

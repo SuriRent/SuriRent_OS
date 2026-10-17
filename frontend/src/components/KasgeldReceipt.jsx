@@ -13,15 +13,30 @@ function useKasgeldPrint(entryId) {
   const { builtIn, others, bt } = usePrintOptions(true);
   const [status, setStatus] = useState({});
   const set = (k, v) => setStatus((s) => ({ ...s, [k]: v }));
+  const ktpJobs = useRef(new Set());
+
+  // KT-V520 knopstatus volgt de bevestiging van de printer, niet alleen het verzenden.
+  useEffect(() => {
+    const onDone = (e) => {
+      const d = e.detail || {};
+      if (!ktpJobs.current.has(d.job_id)) return;
+      ktpJobs.current.delete(d.job_id);
+      setStatus((s) => ({ ...s, ktp: d.ok ? 'done' : 'error' }));
+    };
+    window.addEventListener('ktp-remote-print-done', onDone);
+    return () => window.removeEventListener('ktp-remote-print-done', onDone);
+  }, []);
 
   const printKtp = async () => {
     if (!others.length) return;
     set('ktp', 'sending');
     const res = await Promise.allSettled(others.map(async (p) => {
       const { data } = await api.post(`/kiosk/kasgeld/${entryId}/remote-print`, { printer_id: p.id });
+      ktpJobs.current.add(data.job_id);
       trackKtpJob(data.job_id, p.name);
     }));
-    set('ktp', res.some((r) => r.status === 'fulfilled') ? 'done' : 'error');
+    if (!res.some((r) => r.status === 'fulfilled')) set('ktp', 'error');
+    else setTimeout(() => setStatus((st) => (st.ktp === 'sending' ? { ...st, ktp: 'error' } : st)), 20000);
   };
   const printBt = async () => {
     if (!bt) return;
