@@ -31,6 +31,17 @@ function useOnlinePrinters(open) {
   return liveState.printersKnown || live.length ? live : fetched;
 }
 
+// Ingebouwde printer alleen op een echte KT-V520 (dan geen KT-V520 via WS naar zichzelf);
+// elders alleen KT-V520 (WS) en Bluetooth.
+export function usePrintOptions(open = false) {
+  const printers = useOnlinePrinters(open);
+  const btReady = useBtReady();
+  const builtIn = isKtpDevice();
+  const first = builtIn ? null : printers[0];
+  const bt = btReady ? getSavedPrinter() : null;
+  return { builtIn, first, bt, any: !!(builtIn || first || bt) };
+}
+
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.
 export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false }) {
   const remotePath = remoteUrl || `/kiosk/print-log/by-payment/${paymentId}/remote-print`;
@@ -42,12 +53,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
   const timer = useRef(null);
   const statusRef = useRef(onStatus);
   statusRef.current = onStatus;
-  const printers = useOnlinePrinters(!!pos);
-  const first = printers[0];
-  const btReady = useBtReady();
-  const bt = btReady ? getSavedPrinter() : null;
-  // Ingebouwde printer alleen op een echte KT-V520; elders alleen KT-V520 (WS) en Bluetooth.
-  const builtIn = isKtpDevice();
+  const { builtIn, first, bt } = usePrintOptions(!!pos);
 
   useEffect(() => {
     const onDone = (e) => {

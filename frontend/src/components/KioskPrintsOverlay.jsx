@@ -74,13 +74,13 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
             <Trash2 className="w-4 h-4" />
           </button>
         )}
-        <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />
+        {!isKtpDevice() && <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />}
         <div className="flex-1 sm:flex-none sm:w-36 empty:hidden" data-testid={`kiosk-print-log-bt-${log.id}`}>
           <BtPrintButton paymentId={log.payment_id} />
         </div>
         {isKtpDevice() && (
           <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
-            className={`flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
+            className={`flex-1 sm:flex-none whitespace-nowrap h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Ingebouwde printer'}
           </button>
         )}
@@ -156,8 +156,8 @@ export function KioskPrintsOverlay({ employees: active, printsVersion, onClose, 
         )}
         <div className="flex-1 min-w-0">
           <p className="text-[11px] sm:text-xs uppercase tracking-widest text-emerald-400 font-bold">Bonnen van vandaag</p>
-          <p className="text-lg sm:text-xl font-black flex items-center gap-2 min-w-0 truncate" data-testid="kiosk-prints-title">
-            {emp ? <><OnlineDot online={activeKeys.has(emp.key)} />{emp.name}<span className="text-xs font-bold text-white/50">{activeKeys.has(emp.key) ? 'online' : 'offline'}</span></> : 'Kies een medewerker'}
+          <p className="text-lg sm:text-xl font-black flex items-center gap-2 min-w-0" data-testid="kiosk-prints-title">
+            {emp ? <>{!employeeMode && <OnlineDot online={activeKeys.has(emp.key)} />}<span className="truncate">{emp.name}</span>{!employeeMode && <span className="shrink-0 text-xs font-bold text-white/50">{activeKeys.has(emp.key) ? 'online' : 'offline'}</span>}</> : 'Kies een medewerker'}
           </p>
         </div>
         {emp && !employeeMode && pendingLogs.length > 1 && (

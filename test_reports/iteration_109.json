@@ -1,0 +1,32 @@
+{
+  "summary": "Iter109 FRONTEND ONLY, mobile 390x844: tested which print options each device gets, using the employee kiosk (PIN 4321, my-awesome-rentals-bv). Checked 4 device setups on the payment history, the voice-modal financial receipt, the success page after a cash payment and 'Bonnen van vandaag'. All 16 checks behaved as the requirements describe. (A) Normal browser: no history-print-{id}, no history-print-fin, no receipt-manual-print, no kiosk-print-log-print-{id}, and window.print was never called. (B) Simulated KT-V520 (ReactNativeWebView + __SURIRENT_KTP__): the menu shows 'Ingebouwde printer' (history-print-local-{id}) and no 'Afdrukken'. Clicking it sends PRINT_RECEIPT over the APK bridge. The success page shows receipt-manual-print 'Ingebouwde printer' and auto-sends PRINT_RECEIPT. In Bonnen van vandaag, kiosk-print-log-print-{id} reads 'Ingebouwde printer' and changes to 'Opnieuw' after printing. (C) Normal browser with a KT-V520 online: the menu shows only history-print-ktp-{id} 'Print via KT-V520' ('Geprint op KT-V520 #1'). The voice modal fin menu is KTP only. The success page auto-sends via KT-V520 and has no manual print. Bonnen shows only the KT-V520 buttons. (D) Simulated paired Bluetooth printer (fake navigator.bluetooth + localStorage bt_printer via 'web'): history-print-bt-{id} 'Print via Bluetooth' appears, and clicking it wrote 38 GATT chunks ('Geprint op BT Test Printer'). The Bluetooth buttons appear in Bonnen. The route mock of /api/kiosk/printers/online does NOT work: the live WebSocket 'printers' push wins, as noted in iter107. For scenario C I used a real fake-printer WebSocket client instead.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PrintChoiceMenu / KioskPrintsOverlay KtpPrintButton on a KT-V520", "issue": "On a real KT-V520 the device registers itself as a printer and appears in /kiosk/printers/online. Its own menu then shows 'Print via KT-V520 — KT-V520 #1' (itself) next to 'Ingebouwde printer'. Bonnen van vandaag also shows a 'Print via KT-V520' button for itself on every row. Printing to itself over the WebSocket is redundant and confusing.", "selector": "history-print-ktp-{id}, kiosk-print-log-{id} KtpPrintButton", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Voice modal (overview-voice-btn), normal device with no printers", "issues": ["The 'Financiële bon — Print het overzicht op de bonprinter' row (voice-modal-print-row) still shows, but with no button. It is a dead row: hide it, or show 'Geen printer beschikbaar', when PrintChoiceMenu returns null."]},
+      {"screen": "Bonnen van vandaag (mobile 390px)", "issues": ["The 'Ingebouwde printer' button text wraps onto 2 lines next to 'Print via KT-V520'.", "The header status 'offline' is cut off to 'offlin'.", "In employee mode every employee shows 'Offline', even the employee who is logged in, because the employees list is [] in employeeMode."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/setup_iter109.py", "/app/test_reports/fake_printer_iter109.py", "/app/test_reports/pw_iter109_flow.py"],
+  "action_items": [
+    "Exclude the KT-V520's own printer from the remote options on that device. Option 1: save printer_id in localStorage at register and filter it out in PrintChoiceMenu/KtpPrintButton. Option 2: have the backend leave the requesting device out of the list.",
+    "Hide voice-modal-print-row, or show a 'geen printer' hint, when no print option is available.",
+    "Minor mobile polish in KioskPrintsOverlay: stop the 'Ingebouwde printer' label wrapping (whitespace-nowrap or shorter label) and fix the 'offlin' truncation in the title."
+  ],
+  "critical_code_review_comments": [
+    "KtpPrintButton/PrintChoiceMenu: once the WebSocket has sent printersKnown, the live list always overrides the fetched list (good for consistency). It also means a route mock cannot simulate printers; testers must use a real WS printer client.",
+    "KioskLayout.jsx is about 5000 lines and should be split.",
+    "On a KT-V520, every session with fresh localStorage auto-registers a new 'KT-V520 #N' (ensurePrinterRegistered). This is expected for a real device, but test runs pile up printers; I revoked mine."
+  ],
+  "updated_files": ["/app/test_reports/setup_iter109.py", "/app/test_reports/fake_printer_iter109.py", "/app/test_reports/pw_iter109_flow.py"],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% of requested scenarios (16/16 checks); 1 medium UX issue + 3 minor design issues"},
+  "test_credentials": "Anita PIN 4321 needed to be restored. PUT /api/employees/{id} with email anita@demo.sr returned 409 'Dit e-mailadres is al in gebruik door een ander account' (probably a stale user from before the demo reset). I set email anita.iter109@demo.sr / anita1234 / PIN 4321 instead. Kiosk PIN login works. Update /app/memory/test_credentials.md.",
+  "seed_data_creation": "Three SRD 10 cash payments on HUIS 1A (Jan Pieterse): KW2026-00630/00631/00632. KT-V520 #1/#2/#3 were auto-registered by the simulated device sessions; all were revoked afterwards via DELETE /api/settings/kiosk-printers/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "On mobile, open Bonnen van vandaag via kiosk-mobile-fab and then kiosk-sheet-receipts; the toolbar dot is hidden below md. Pick employee kiosk-prints-employee-8f6c6607-9aff-4bc6-b316-f941426594f7 (Anita; there are duplicate Anita entries). The voice button is disabled when nothing is owed, so use HUIS 2C. HUIS 1B has 2 payments for the history. Cash method testid is method-contant. Paying a custom amount opens a partial-plan-suggestion sheet ('Nee, later') over the success page. To simulate a KT-V520 that is online: register via a KT-V520 session (POST /kiosk/printers/register gives device_token), then run `python3 /app/test_reports/fake_printer_iter109.py TOKEN 280`. Fake Bluetooth: an init script that mocks navigator.bluetooth (requestDevice/getDevices, gatt.connect → getPrimaryServices → a characteristic with properties.write) plus localStorage bt_printer {id,name,via:'web'}. Admin-mode Bonnen overlay was not tested separately; it uses the same ReceiptRow code path."
+}

@@ -26,7 +26,7 @@ import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
-import { PrintChoiceMenu } from '../../components/PrintChoiceMenu';
+import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMenu';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
@@ -443,6 +443,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const [printState, setPrintState] = useState(null);
+  const printOpts = usePrintOptions();
   const disabled = !(Number(totalDue) > 0);
 
   const openModal = async () => {
@@ -557,7 +558,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
                 <p className="text-[10px] text-slate-400">{(text || '').length} / 2000</p>
                 {err && <p data-testid="voice-modal-error" className="text-[10px] text-red-500 font-semibold">{err}</p>}
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
+              {printOpts.any && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
                 data-testid="voice-modal-print-row">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-800">Financiële bon</p>
@@ -572,7 +573,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
                   onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
                     .then((ok) => !ok && setPrintState({ kind: 'err', msg: 'Printen mislukt' }))}
                   onStatus={setPrintState} />
-              </div>
+              </div>}
             </div>
             <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">
               <button onClick={() => !busy && setOpen(false)}
