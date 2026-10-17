@@ -81,7 +81,7 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
         {isKtpDevice() && (
           <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
             className={`flex-1 sm:flex-none whitespace-nowrap h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
-            {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Ingebouwde printer'}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Ingebouwd'}
           </button>
         )}
       </div>

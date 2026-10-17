@@ -888,3 +888,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Printeropties per toestel
 - isKtpDevice() (APK-vlag/UA/token) → alleen "Ingebouwde printer". Gewone Android/iPhone/desktop → geen systeem-printvenster; alleen "Print via KT-V520" (online via WS) en Bluetooth (gekoppeld). Geldt voor succespagina, betalingsgeschiedenis, Bonnen van vandaag, financiële bon. Printknop/rij verdwijnt als er geen optie is. usePrintOptions() in PrintChoiceMenu.jsx. iOS auto-printvenster verwijderd.
 - Getest: iteration_109, iteration_110.
+
+## 2026-06 — Auto WS-print op Android APK
+- Oorzaak (prod-data): gewone Android-telefoons werden als KT-V520 gezien door opgeslagen ktp_device_token (koppelknop op elk APK-toestel) en soms __SURIRENT_KTP__; UA-regex matchte echte V520 niet.
+- Fix: isKtpDevice() = APK-brug + UA-model V520. Verdwaalde koppel-tokens op gewone toestellen worden lokaal gewist; koppelknop alleen op echte KT-V520. Succespagina stuurt altijd automatisch via WS naar andere online KT-V520 (nooit naar zichzelf: otherPrinters()). KT-V520 print daarnaast ingebouwd.
+- Getest: iteration_111.
