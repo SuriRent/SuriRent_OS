@@ -11898,6 +11898,84 @@ _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankov
                         "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
 
 
+@api.get("/kiosk/tenants/{tenant_id}/financial-receipt.png")
+async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(get_kiosk_session)):
+    """Financieel overzicht als 58mm-bon (monospace) voor delen via WhatsApp."""
+    ov = await kiosk_tenant_overview(tenant_id, _session)
+    t, apt = ov["tenant"], ov.get("apartment") or {}
+    cur = (ov.get("balance") or {}).get("currency") or apt.get("currency") or "SRD"
+    open_inv = ov.get("open_invoices") or []
+    cur_inv = ov.get("current_invoices") or []
+    open_total = float(ov.get("open_invoices_total") or 0)
+    cur_total = float(ov.get("current_invoices_total") or 0)
+    credit = float(ov.get("credit_balance") or 0)
+    company = await db.companies.find_one({"id": _session.get("company_id")}, {"_id": 0, "name": 1}) or {}
+    W, LBL = _RECEIPT_COLS, 14
+
+    def money(v):
+        return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def row(label, value):
+        label = str(label)[:LBL - 1]
+        return f"{label.ljust(LBL)}{value}"
+
+    def period(i):
+        pm, py = i.get("period_month"), i.get("period_year")
+        base = f"{_NL_MONTHS_FULL[pm - 1].capitalize()[:3]} {py}" if isinstance(pm, int) and 1 <= pm <= 12 else (i.get("label") or "Factuur")
+        return base
+
+    dash = "-" * W
+    lines = [(company.get("name") or "SuriRent", "center", True), (dash, "left", False),
+             ("FINANCIEEL OVERZICHT", "center", True), (dash, "left", False),
+             (row("Datum:", datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")), "left", False),
+             (dash, "left", False), ("HUURDER:", "left", True), (t.get("name") or "-", "left", False)]
+    if t.get("phone"):
+        lines.append((row("Tel:", t["phone"]), "left", False))
+    if apt.get("number"):
+        lines.append((f"App. {apt['number']}", "left", False))
+    lines.append((dash, "left", False))
+    if open_inv:
+        lines.append(("ACHTERSTAND:", "left", True))
+        lines += [(row(period(i), money(i.get("outstanding"))), "left", False) for i in open_inv]
+        lines.append((row("Subtotaal:", money(open_total)), "left", True))
+        lines.append((dash, "left", False))
+    if cur_inv:
+        lines.append(("HUIDIGE MAAND:", "left", True))
+        lines += [(row(period(i), money(i.get("outstanding"))), "left", False) for i in cur_inv]
+        lines.append((row("Subtotaal:", money(cur_total)), "left", True))
+        lines.append((dash, "left", False))
+    lines.append((row("Achterstand:", money(open_total)), "left", False))
+    lines.append((row("Huidig:", money(cur_total)), "left", False))
+    if credit > 0:
+        lines.append((row("Tegoed:", money(credit)), "left", False))
+    lines += [(dash, "left", False), (row("TOTAAL:", money(open_total + cur_total)), "left", True),
+              (dash, "left", False), ("Vriendelijk bedankt!", "center", False)]
+
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+    fs = 26
+    try:
+        f_reg = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", fs)
+        f_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", fs)
+    except Exception:
+        f_reg = f_bold = ImageFont.load_default()
+    cw = f_reg.getlength("M")
+    pad, lh = 24, int(fs * 1.35)
+    img_w = int(cw * W + pad * 2)
+    img = Image.new("RGB", (img_w, pad * 2 + lh * len(lines)), "white")
+    d = ImageDraw.Draw(img)
+    y = pad
+    for text, align, bold in lines:
+        text = text[:W]
+        x = pad + (cw * (W - len(text)) / 2 if align == "center" else 0)
+        d.text((x, y), text, fill="black", font=f_bold if bold else f_reg)
+        y += lh
+    buf = BytesIO()
+    img.save(buf, "PNG")
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
 @api.get("/kiosk/payments/{payment_id}/print-data")
 async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_session)):
     """Gestructureerde bon-gegevens voor het PRINT_RECEIPT bericht naar de APK."""

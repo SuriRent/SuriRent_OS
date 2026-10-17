@@ -467,35 +467,34 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
     setBusy(true);
     setErr('');
     try {
-      const resp = await api.post(
-        `/kiosk/tenants/${tenantId}/reminder-voice.mp3`,
-        { text: clean }, { responseType: 'blob' },
-      );
+      const [resp, bonResp] = await Promise.all([
+        api.post(`/kiosk/tenants/${tenantId}/reminder-voice.mp3`, { text: clean }, { responseType: 'blob' }),
+        api.get(`/kiosk/tenants/${tenantId}/financial-receipt.png`, { responseType: 'blob' }).catch(() => null),
+      ]);
       const blob = resp.data;
-      const file = new File(
-        [blob],
-        `herinnering-${(tenantName || 'huurder').replace(/\s+/g, '-')}.mp3`,
-        { type: 'audio/mpeg' },
-      );
+      const slug = (tenantName || 'huurder').replace(/\s+/g, '-');
+      const file = new File([blob], `herinnering-${slug}.mp3`, { type: 'audio/mpeg' });
+      const bon = bonResp?.data ? new File([bonResp.data], `financieel-overzicht-${slug}.png`, { type: 'image/png' }) : null;
       const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
       const totalTxt = Number.isFinite(Number(totalDue))
         ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
         : '';
-      const shareText = `Hallo ${tenantName || ''}, hierbij een gesproken herinnering.${totalTxt}`;
-      if (typeof navigator.canShare === 'function' &&
-          navigator.canShare({ files: [file] })) {
+      const shareText = `Hallo ${tenantName || ''}, hierbij een gesproken herinnering en uw financieel overzicht.${totalTxt}`;
+      const canShare = (files) => typeof navigator.canShare === 'function' && navigator.canShare({ files });
+      const files = bon && canShare([file, bon]) ? [file, bon] : [file];
+      if (canShare(files)) {
         await navigator.share({
-          files: [file], text: shareText,
+          files, text: shareText,
           title: 'Betalingsherinnering',
         });
       } else if (phoneDigits.length >= 7) {
         const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
         window.open(url, '_blank', 'noopener');
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, '_blank', 'noopener');
+        window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+        if (bon) window.open(URL.createObjectURL(bon), '_blank', 'noopener');
       } else {
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, '_blank', 'noopener');
+        window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+        if (bon) window.open(URL.createObjectURL(bon), '_blank', 'noopener');
       }
       setOpen(false);
     } catch (e) {
