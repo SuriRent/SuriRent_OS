@@ -1,0 +1,23 @@
+{
+  "summary": "Iter108 (FRONTEND ONLY, mobile 390x844): the mobile 'Ander bedrag' numpad is now COLLAPSED by default. PASS.\n\nEmployee kiosk (PIN 4321, then location 436b6062, then HUIS 1A, then overview-pay-btn, giving 'Wat wilt u betalen?'):\n- mobile-custom-toggle is visible with the text 'Ander bedrag (SRD) Openen' and there are 0 mobile-key-* buttons initially.\n- Tapping the toggle shows 'Sluiten' and 12 keys, all visible.\n- Typing 1250 shows 'SRD 1250', and the button updates to 'Direct betalen — SRD 1.250,00'.\n- Tapping the toggle again shows 'Openen' with 0 keys, the amount is reset to 'SRD 0,00', and reopening shows an empty 0.00.\n\nTenant kiosk (jan@demo.sr / 7391, then /kiosk/huurder, then tk-tile-pay):\n- tk-mobile-custom-toggle 'Ander bedrag invoeren' is visible by default and there are 0 tk-mobile-key-* buttons.\n- Tapping opens 12 keys. Typing 500 gives tk-payment-next-btn 'Volgende — SRD 500,00'.\n- Sluiten collapses the numpad and the toggle returns.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Employee kiosk pay screen (mobile, numpad collapsed)", "issues": ["With the numpad collapsed, the list card stretches and leaves a large empty white area between the last rent item and the 'Direct betalen' button. This is cosmetic and optional."]},
+      {"screen": "Tenant kiosk pay screen (mobile)", "issues": ["The tenant toggle disappears when open (it is replaced by a header with 'Sluiten'), while the employee kiosk keeps a persistent toggle bar. Minor inconsistency, functionally fine."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KioskLayout.jsx:1410 and TenantKioskLayout.jsx:777 both use useState(false), and no effect forces them open. Closing clears the custom amount in both."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Employee pay screen: PIN 4321 via keypad-{d}, then location-436b6062-d865-4e27-a5b7-d49a9f7ae605, then the 'HUIS 1A' text, then overview-pay-btn. Tenant: POST /api/tenant-portal/login {identifier:'jan@demo.sr',pin:'7391'}, set localStorage tenant_token, abort **/api/auth/me, then goto /kiosk/huurder and click tk-tile-pay."
+}

@@ -881,3 +881,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Financiële bon printen in Spraakbericht-venster: GET /kiosk/tenants/{id}/financial-print-data, POST /kiosk/tenants/{id}/financial-remote-print (KT-V520), Bluetooth, Afdrukken (APK PRINT_RECEIPT of printvenster). PrintChoiceMenu kreeg props remoteUrl/printDataUrl/showLabel.
 - REMOTE_PRINT_DONE werkt nu ook zonder payment_id (via job_id).
 - Getest: iteration_107.
+
+## 2026-06 — Numpad standaard ingeklapt
+- "Wat wilt u betalen?": mobiele numpad weer standaard dicht (medewerker- en huurderkiosk). Getest: iteration_108.
