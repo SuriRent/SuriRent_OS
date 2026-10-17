@@ -909,3 +909,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Kasbon WS-print fix
 - Oorzaak: printer-modus (ktp-printer.js) negeerde REMOTE_PRINT zonder payment_id (kasbon/financieel). Nu: payment_id óf data.lines; url uit bericht. Backend stuurt url mee. Getest met echte printer-modus code: iteration_117.
+
+## 2026-06 — Kasbon eigen sjabloon (APK)
+- Oorzaak: APK print met eigen betalingssjabloon uit data-velden en negeert lines. Web stuurt nu template:"lines" + receipt_type (kasgeld/financieel) top-level en in data; betalingsvelden (kwitantie/naam/totaal) weg uit kasbon-data. APK-instructie in memory/apk-print.md. Wacht op APK-update door gebruiker.

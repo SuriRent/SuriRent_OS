@@ -86,3 +86,7 @@ Staat de schakelaar aan, dan bevat PRINT_RECEIPT extra velden:
 ## NFC-tags (kiosk)
 - APK geeft tag-ID door via één van: `window.onNfcTag('04A1B2C3')`, window event `apk-nfc-tag` {detail:{id}}, of postMessage `{type:'NFC_TAG'|'NFC'|'NFC_SCAN', id|tag|uid|card_id}`. Ook USB-HID (toetsenbord) en Web NFC werken.
 - Bekende tag → overzicht huurder; onbekende → koppelscherm (POST /api/kiosk/nfc-link). Eén tag per huurder (tenants.nfc_card_id). Beheer: huurderdetail → NFC-tag kaart.
+
+## Eigen bonnen zonder betalingssjabloon (kasbon, financieel overzicht)
+PRINT_RECEIPT bevat dan `"template": "lines"` en `"receipt_type": "kasgeld" | "financieel"` (top-level én in `data`).
+APK-regel: **als `msg.template === "lines"` → print uitsluitend `msg.lines`** (per regel align/bold/size via KTPsdk, daarna papier doorvoeren + snijden) en gebruik NIET het betalingssjabloon (Kwitantie/Huurder/Betaald/Nog openstaand). Geldt voor lokaal én remote (`remote:true`) printen en voor `printer:"bluetooth"`.

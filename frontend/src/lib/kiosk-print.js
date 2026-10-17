@@ -39,6 +39,8 @@ export function apkPrintMessage(url, data) {
   const printer = data.printer !== undefined ? data.printer : localStorage.getItem('kiosk_printer');
   const msg = { type: 'PRINT_RECEIPT', url, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', fontSizes: data.fontSizes, data };
   if (printer === 'kt-v520' && data.lines) { msg.printer = 'kt-v520'; msg.lines = data.lines; }
+  // Eigen bon (kasbon, financieel overzicht): APK moet `lines` 1-op-1 printen, niet het betalingssjabloon.
+  if (data.template === 'lines') { msg.template = 'lines'; msg.receipt_type = data.receipt_type; }
   const bt = getSavedPrinter();
   if (printer === 'bluetooth' && data.lines && bt?.via === 'apk') {
     Object.assign(msg, { printer: 'bluetooth', bt_address: bt.id, paper_width: data.paper_width || paperWidth(), lines: data.lines });

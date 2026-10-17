@@ -11961,6 +11961,7 @@ async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool
     lines += [L(dash), L(row("TOTAAL:", money(open_total + cur_total)), bold=True),
               L(dash), L("Vriendelijk bedankt!", "center"), L(""), L("")]
     return {
+        "template": "lines", "receipt_type": "financieel",
         "bedrijfsnaam": company.get("name") or "SuriRent", "naam": t.get("name") or "",
         "datum": datum, "totaal": money(open_total + cur_total),
         "lettergrootte": font_size, "textZoom": text_zoom,
@@ -15422,8 +15423,9 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
         lines += [L(dash), L(row("Kassaldo:", money(e["balance_after"])), bold=True)]
     lines += [L(dash), L("Kasgeld mutatie geregistreerd", "center"), L(""), L("")]
     return {
-        "bedrijfsnaam": company.get("name") or "SuriRent", "naam": e.get("created_by_name") or "",
-        "datum": datum, "totaal": money(e.get("amount")),
+        "template": "lines", "receipt_type": "kasgeld",
+        "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": e.get("created_by_name") or "",
+        "datum": datum, "bedrag": money(e.get("amount")),
         "lettergrootte": font_size, "textZoom": text_zoom,
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
         "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
