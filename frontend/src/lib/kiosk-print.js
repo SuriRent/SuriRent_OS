@@ -93,6 +93,37 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
 }
 
 /**
+ * Financieel overzicht als bon: APK (PRINT_RECEIPT met regels) of
+ * printvenster met de 58mm PNG.
+ */
+export async function printFinancialReceipt({ tenantId, apiGet }) {
+  const base = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+  const bridge = apkBridge();
+  if (bridge) {
+    let data = { tenant_id: tenantId };
+    try { data = { ...data, ...((await apiGet(`/kiosk/tenants/${tenantId}/financial-print-data`)).data || {}) }; } catch { /* alleen url */ }
+    bridge(JSON.stringify(apkPrintMessage(`${base}/api/kiosk/tenants/${tenantId}/financial-receipt.png`, data)));
+    return true;
+  }
+  try {
+    const { data } = await apiGet(`/kiosk/tenants/${tenantId}/financial-receipt.png`, { responseType: 'blob' });
+    const src = URL.createObjectURL(data);
+    let bon = document.getElementById('bon');
+    if (!bon) { bon = document.createElement('div'); bon.id = 'bon'; document.body.appendChild(bon); }
+    bon.innerHTML = `<div class="sheet"><img src="${src}" style="width:54mm;display:block" alt="bon"/></div>`;
+    await new Promise((res) => { const img = bon.querySelector('img'); img.onload = res; img.onerror = res; });
+    fitPageToBon(bon);
+    window.print();
+    setTimeout(() => URL.revokeObjectURL(src), 60000);
+    return true;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[kiosk-print] printFinancialReceipt gefaald:', e);
+    return false;
+  }
+}
+
+/**
  * Fallback: open de JPG-kwitantie in een nieuw tabblad. Handig voor:
  *   • Delen via WhatsApp / iMessage
  *   • Opslaan in Foto's op iOS

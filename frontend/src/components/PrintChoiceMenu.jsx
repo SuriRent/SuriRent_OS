@@ -19,7 +19,9 @@ function useOnlinePrinters(open) {
 }
 
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.
-export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
+export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false }) {
+  const remotePath = remoteUrl || `/kiosk/print-log/by-payment/${paymentId}/remote-print`;
+  const dataPath = printDataUrl || `/kiosk/payments/${paymentId}/print-data`;
   const [pos, setPos] = useState(null);
   const [sending, setSending] = useState(false);
   const btnRef = useRef(null);
@@ -60,7 +62,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
   const sendKtp = async () => {
     setPos(null); setSending(true); onStatus({ kind: 'sending', msg: `Verzonden naar ${first.name}…` });
     try {
-      const { data } = await api.post(`/kiosk/print-log/by-payment/${paymentId}/remote-print`, { printer_id: first.id });
+      const { data } = await api.post(remotePath, { printer_id: first.id });
       job.current = data.job_id;
       timer.current = setTimeout(() => { job.current = null; setSending(false); onStatus({ kind: 'err', msg: `Geen antwoord van ${first.name}` }); }, TIMEOUT_MS);
     } catch (e) { setSending(false); onStatus({ kind: 'err', msg: e?.response?.data?.detail || 'Verzenden mislukt' }); }
@@ -69,7 +71,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
   const sendBt = async () => {
     setPos(null); setSending(true); onStatus({ kind: 'sending', msg: `Verzonden naar ${bt.name}…` });
     try {
-      const { data } = await api.get(`/kiosk/payments/${paymentId}/print-data`);
+      const { data } = await api.get(dataPath);
       await printLinesBluetooth(data.lines || []);
       onStatus({ kind: 'ok', msg: `Geprint op ${bt.name}` });
     } catch (e) { onStatus({ kind: 'err', msg: e?.message || 'Bluetooth printen mislukt' }); }
@@ -81,9 +83,11 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus }) {
     <>
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
         aria-label="Afdruk"
-        className="w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform">
+        className={showLabel
+          ? 'px-3 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-transform'
+          : 'w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform'}>
         {disabled || sending ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3 sm:h-3" />}
-        <span className="hidden sm:inline">Afdruk</span> <ChevronDown className="hidden sm:block w-3 h-3" />
+        <span className={showLabel ? '' : 'hidden sm:inline'}>{showLabel ? 'Bon printen' : 'Afdruk'}</span> <ChevronDown className={`${showLabel ? '' : 'hidden sm:block'} w-3 h-3`} />
       </button>
       {pos && createPortal((
         <>

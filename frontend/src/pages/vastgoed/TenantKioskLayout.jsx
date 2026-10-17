@@ -540,7 +540,8 @@ function DashboardView({ overview, onAction, onHistory }) {
   const tenant = overview?.tenant;
   const apartment = overview?.apartment;
   const balance = overview?.balance || {};
-  const openRent = (balance.balance || 0) > 0 ? balance.balance : 0;
+  const due = overview?.total_due ?? balance.balance ?? 0;
+  const openRent = due > 0 ? due : 0;
   const totalDue = openRent;
   const cur = (balance.currency || apartment?.currency || 'SRD').toUpperCase();
   const hasBalance = totalDue > 0;
@@ -753,7 +754,8 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
   const { tenant, apartment: apt, balance } = overview;
   const cur = (balance.currency || apt?.currency || 'SRD').toUpperCase();
   const fmt = (v) => fmtMoney(v, cur);
-  const openRent = balance.balance > 0 ? balance.balance : 0;
+  const due = overview?.total_due ?? balance.balance ?? 0;
+  const openRent = due > 0 ? due : 0;
   const totalDue = openRent;
 
   const amounts = {

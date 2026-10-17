@@ -19,7 +19,7 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge } from '../../lib/kiosk-print';
+import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt } from '../../lib/kiosk-print';
 import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
@@ -443,6 +443,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
   const [loadingText, setLoadingText] = useState(false);
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
+  const [printState, setPrintState] = useState(null);
   const disabled = !(Number(totalDue) > 0);
 
   const openModal = async () => {
@@ -556,6 +557,22 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
               <div className="flex items-center justify-between mt-1.5">
                 <p className="text-[10px] text-slate-400">{(text || '').length} / 2000</p>
                 {err && <p data-testid="voice-modal-error" className="text-[10px] text-red-500 font-semibold">{err}</p>}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
+                data-testid="voice-modal-print-row">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800">Financiële bon</p>
+                  <p data-testid="voice-modal-print-status"
+                    className={`text-[11px] font-semibold ${printState?.kind === 'ok' ? 'text-emerald-600' : printState?.kind === 'err' ? 'text-red-500' : 'text-slate-500'}`}>
+                    {printState?.msg || 'Print het overzicht op de bonprinter'}
+                  </p>
+                </div>
+                <PrintChoiceMenu paymentId="fin" showLabel
+                  remoteUrl={`/kiosk/tenants/${tenantId}/financial-remote-print`}
+                  printDataUrl={`/kiosk/tenants/${tenantId}/financial-print-data`}
+                  onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
+                    .then((ok) => !ok && setPrintState({ kind: 'err', msg: 'Printen mislukt' }))}
+                  onStatus={setPrintState} />
               </div>
             </div>
             <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">

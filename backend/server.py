@@ -6427,6 +6427,9 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
     if tenant.get("apartment_id"):
         apt = await db.apartments.find_one({"id": tenant["apartment_id"]}, {"_id": 0})
     bal = await _calc_balance(tenant)
+    # Zelfde totaal als de medewerker-kiosk: achterstand + huidige maand.
+    kov = await kiosk_tenant_overview(tenant["id"], {"company_id": tenant.get("company_id")})
+    total_due = round(float(kov.get("open_invoices_total") or 0) + float(kov.get("current_invoices_total") or 0), 2)
     # Boetes (automatische) — zelfde logica als kiosk_tenant_overview, maar
     # vereenvoudigd omdat de tenant-portal geen gedetailleerde buckets kent.
     # We tellen alle open facturen van deze huurder die >grace dagen te laat
@@ -6480,6 +6483,7 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
             "rent_amount": apt["rent_amount"], "currency": apt["currency"],
         },
         "balance": bal,
+        "total_due": total_due,
         "fines_total": fines_total,
         "fines_currency": fines_currency,
     }
@@ -10532,10 +10536,10 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
                         {"id": pid_}, {"$set": {"paper": paper, "paper_at": iso(now_utc())}}, projection={"_id": 0, "paper": 1})
                     if (prev or {}).get("paper", "ok") != paper:
                         await _kb_publish(channel, {"type": "presence_changed"})
-            elif kind == "REMOTE_PRINT_DONE" and msg.get("payment_id"):
-                pay_id = str(msg["payment_id"])
+            elif kind == "REMOTE_PRINT_DONE" and (msg.get("payment_id") or msg.get("job_id")):
+                pay_id = str(msg.get("payment_id") or "")
                 ok = bool(msg.get("ok"))
-                if ok:
+                if ok and pay_id:
                     await db.kiosk_print_log.update_one(
                         {"company_id": cid, "payment_id": pay_id},
                         {"$set": {"admin_printed_at": iso(now_utc())}, "$setOnInsert": {"id": str(uuid.uuid4())}},
@@ -11898,58 +11902,93 @@ _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankov
                         "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
 
 
-@api.get("/kiosk/tenants/{tenant_id}/financial-receipt.png")
-async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(get_kiosk_session)):
-    """Financieel overzicht als 58mm-bon (monospace) voor delen via WhatsApp."""
-    ov = await kiosk_tenant_overview(tenant_id, _session)
+async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool = False) -> dict:
+    """Financieel overzicht als bon-regels (zelfde vorm als _receipt_print_data)."""
+    ov = await kiosk_tenant_overview(tenant_id, session)
     t, apt = ov["tenant"], ov.get("apartment") or {}
+    cid = session.get("company_id")
     cur = (ov.get("balance") or {}).get("currency") or apt.get("currency") or "SRD"
     open_inv = ov.get("open_invoices") or []
     cur_inv = ov.get("current_invoices") or []
     open_total = float(ov.get("open_invoices_total") or 0)
     cur_total = float(ov.get("current_invoices_total") or 0)
     credit = float(ov.get("credit_balance") or 0)
-    company = await db.companies.find_one({"id": _session.get("company_id")}, {"_id": 0, "name": 1}) or {}
-    W, LBL = _RECEIPT_COLS, 14
+    company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
+    cfg = await _kiosk_device_config(cid)
+    printer = "kt-v520" if force_ktp else cfg["printer"]
+    paper = 58 if printer == "kt-v520" else cfg["paper_width"]
+    W = _RECEIPT_COLS_80 if paper == 80 else _RECEIPT_COLS
+    LBL = 14
 
     def money(v):
         return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def row(label, value):
-        label = str(label)[:LBL - 1]
-        return f"{label.ljust(LBL)}{value}"
+        return f"{str(label)[:LBL - 1].ljust(LBL)}{value}"
 
     def period(i):
         pm, py = i.get("period_month"), i.get("period_year")
-        base = f"{_NL_MONTHS_FULL[pm - 1].capitalize()[:3]} {py}" if isinstance(pm, int) and 1 <= pm <= 12 else (i.get("label") or "Factuur")
-        return base
+        if isinstance(pm, int) and 1 <= pm <= 12:
+            return f"{_NL_MONTHS_FULL[pm - 1].capitalize()[:3]} {py}"
+        return i.get("label") or "Factuur"
+
+    def L(text, align="left", bold=False, size="normal"):
+        return {"text": text, "align": align, "bold": bold, "size": size}
 
     dash = "-" * W
-    lines = [(company.get("name") or "SuriRent", "center", True), (dash, "left", False),
-             ("FINANCIEEL OVERZICHT", "center", True), (dash, "left", False),
-             (row("Datum:", datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")), "left", False),
-             (dash, "left", False), ("HUURDER:", "left", True), (t.get("name") or "-", "left", False)]
+    datum = datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L(dash),
+             L("FINANCIEEL OVERZICHT", "center", True), L(dash),
+             L(row("Datum:", datum)), L(dash), L("HUURDER:", bold=True), L(t.get("name") or "-")]
     if t.get("phone"):
-        lines.append((row("Tel:", t["phone"]), "left", False))
+        lines.append(L(row("Tel:", t["phone"])))
     if apt.get("number"):
-        lines.append((f"App. {apt['number']}", "left", False))
-    lines.append((dash, "left", False))
-    if open_inv:
-        lines.append(("ACHTERSTAND:", "left", True))
-        lines += [(row(period(i), money(i.get("outstanding"))), "left", False) for i in open_inv]
-        lines.append((row("Subtotaal:", money(open_total)), "left", True))
-        lines.append((dash, "left", False))
-    if cur_inv:
-        lines.append(("HUIDIGE MAAND:", "left", True))
-        lines += [(row(period(i), money(i.get("outstanding"))), "left", False) for i in cur_inv]
-        lines.append((row("Subtotaal:", money(cur_total)), "left", True))
-        lines.append((dash, "left", False))
-    lines.append((row("Achterstand:", money(open_total)), "left", False))
-    lines.append((row("Huidig:", money(cur_total)), "left", False))
+        lines.append(L(f"App. {apt['number']}"))
+    lines.append(L(dash))
+    for title, items, sub in (("ACHTERSTAND:", open_inv, open_total), ("HUIDIGE MAAND:", cur_inv, cur_total)):
+        if items:
+            lines.append(L(title, bold=True))
+            lines += [L(row(period(i), money(i.get("outstanding")))) for i in items]
+            lines += [L(row("Subtotaal:", money(sub)), bold=True), L(dash)]
+    lines += [L(row("Achterstand:", money(open_total))), L(row("Huidig:", money(cur_total)))]
     if credit > 0:
-        lines.append((row("Tegoed:", money(credit)), "left", False))
-    lines += [(dash, "left", False), (row("TOTAAL:", money(open_total + cur_total)), "left", True),
-              (dash, "left", False), ("Vriendelijk bedankt!", "center", False)]
+        lines.append(L(row("Tegoed:", money(credit))))
+    lines += [L(dash), L(row("TOTAAL:", money(open_total + cur_total)), bold=True),
+              L(dash), L("Vriendelijk bedankt!", "center"), L(""), L("")]
+    return {
+        "bedrijfsnaam": company.get("name") or "SuriRent", "naam": t.get("name") or "",
+        "datum": datum, "totaal": money(open_total + cur_total),
+        "lettergrootte": font_size, "textZoom": text_zoom,
+        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
+        "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
+    }
+
+
+@api.get("/kiosk/tenants/{tenant_id}/financial-print-data")
+async def kiosk_tenant_financial_print_data(tenant_id: str, _session=Depends(get_kiosk_session)):
+    return await _financial_receipt_data(tenant_id, _session)
+
+
+@api.post("/kiosk/tenants/{tenant_id}/financial-remote-print")
+async def kiosk_tenant_financial_remote_print(tenant_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
+        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
+    data = await _financial_receipt_data(tenant_id, _session, force_ktp=True)
+    job_id = str(uuid.uuid4())
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "tenant_id": tenant_id,
+                                                  "target": body.printer_id, "data": data})
+    return {"job_id": job_id}
+
+
+@api.get("/kiosk/tenants/{tenant_id}/financial-receipt.png")
+async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(get_kiosk_session)):
+    """Financieel overzicht als 58mm-bon (monospace) voor delen via WhatsApp."""
+    data = await _financial_receipt_data(tenant_id, _session, force_ktp=True)
+    W = data["cols"]
+    lines = [(ln["text"], ln["align"], ln["bold"]) for ln in data["lines"] if ln["text"]]
 
     from PIL import Image, ImageDraw, ImageFont
     from io import BytesIO
