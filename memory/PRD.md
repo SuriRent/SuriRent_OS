@@ -906,3 +906,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Na opslaan kasmutatie: bevestigingsscherm (KasgeldReceipt.jsx) met bonvoorbeeld, automatisch printen naar ingebouwde printer (echte KT-V520), alle andere online KT-V520s (WS) en Bluetooth; handmatige knoppen voor opnieuw printen.
 - Backend: /kiosk/kasgeld/{id}/print-data, /receipt.png, /remote-print; balance_after opgeslagen; medewerker via employee_id+PIN (withKioskEmployee). _render_receipt_png gedeeld.
 - Toast voegt meerdere printers samen. Getest: iteration_114, iteration_115.
+
+## 2026-06 — Kasbon WS-print fix
+- Oorzaak: printer-modus (ktp-printer.js) negeerde REMOTE_PRINT zonder payment_id (kasbon/financieel). Nu: payment_id óf data.lines; url uit bericht. Backend stuurt url mee. Getest met echte printer-modus code: iteration_117.
