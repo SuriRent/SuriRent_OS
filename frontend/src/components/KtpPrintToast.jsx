@@ -6,8 +6,19 @@ import { CheckCircle2, AlertTriangle } from 'lucide-react';
 const jobs = new Map();
 const NO_ACK_MS = 20000;
 
+// Ack kan via de WebSocket binnenkomen vóór het HTTP-antwoord met job_id: kort bufferen.
+const early = new Map();
+
 export function trackKtpJob(jobId, printerName) {
   if (!jobId) return;
+  const buffered = early.get(jobId);
+  if (buffered) {
+    early.delete(jobId);
+    jobs.set(jobId, { printerName, timer: null });
+    // Opnieuw uitsturen zodat ook de knop-status (job.current is nu gezet) het oppikt.
+    setTimeout(() => window.dispatchEvent(new CustomEvent('ktp-remote-print-done', { detail: buffered })), 0);
+    return;
+  }
   const timer = setTimeout(() => {
     if (!jobs.has(jobId)) return;
     jobs.delete(jobId);
@@ -19,7 +30,13 @@ export function trackKtpJob(jobId, printerName) {
 window.addEventListener('ktp-remote-print-done', (e) => {
   const d = e.detail || {};
   const job = jobs.get(d.job_id);
-  if (!job) return;
+  if (!job) {
+    if (d.job_id && !early.has(d.job_id)) {
+      early.set(d.job_id, d);
+      setTimeout(() => early.delete(d.job_id), 30000);
+    }
+    return;
+  }
   clearTimeout(job.timer);
   jobs.delete(d.job_id);
   const name = d.printer || job.printerName || 'KT-V520';

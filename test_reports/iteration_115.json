@@ -1,0 +1,25 @@
+{
+  "summary": "Iter115 retest of the iter114 kasgeld bon fixes, mobile 390x844, Anita PIN 4321 (my-awesome-rentals-bv). BACKEND 13/13 pass. New test_kasgeld_employee_iter115.py: with a valid employee_id+PIN, created_by and created_by_name='Anita Sewdas' are stored and the print-data line reads 'Medewerker: Anita Sewdas'. With no params, a wrong PIN, an unknown employee id, or an id without PIN, the save falls back to 'Kiosk medewerker' with 200 (no error). The iter114 regression suite passes after updating it to send employee params. FRONTEND: save() posts /kiosk/kasgeld?employee_id=..&employee_pin=4321. The bon preview shows 'Medewerker: Anita Sewdas' and the list shows 'Door Anita Sewdas'. With 2 fake KT-V520s, a single merged green toast 'Bon geprint op TEST KTP iter115 A en TEST KTP iter115 B' appeared in 3 of 5 runs. One run showed only B, and one showed no toast at all, even though both printers received and acked every job. Single printer: 1 of 2 runs showed no green toast, then a FALSE red 'Geen antwoord van TEST KTP iter115 A' after 20s, although the printer had acked. Root cause is a race in KtpPrintToast (below). Payment success page regression passes: the green toast 'Bon geprint op TEST KTP iter115 A' appeared and the button showed 'Geprint op ...'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Kasgeld auto-print to KT-V520 (1 or 2 printers)", "issue": "Race condition. trackKtpJob(job_id) only runs AFTER the POST /kiosk/kasgeld/{id}/remote-print response returns. The printer's REMOTE_PRINT_DONE can arrive over the kiosk WS before that (we measured the HTTP response only about 60ms ahead of the ack). The ack is then dropped ('if (!job) return' in KtpPrintToast.jsx). Result: the green toast is missing or only names one printer, and after 20s a misleading red 'Geen antwoord van <printer>' appears even though the bon printed. Seen in about 2 of 5 runs with 2 printers and 1 of 2 runs with 1 printer, using a fake printer that acks instantly. A real V520 acks slower, so it is less frequent but still possible. The same pattern affects KtpPrintButton and PrintChoiceMenu.", "affected_selectors": ["ktp-print-toast-ok", "ktp-print-toast-error"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_kasgeld_employee_iter115.py", "/app/backend/tests/test_kasgeld_receipt_iter114.py", "/app/test_reports/pytest/pytest_iter115.xml", "/app/test_reports/setup_iter115.py", "/app/test_reports/reg_iter115.py", "/app/test_reports/fake_printer_iter115.py", "/app/test_reports/cleanup_kasgeld_iter115.py"],
+  "action_items": [
+    "MEDIUM: fix the ack race in KtpPrintToast.jsx. In the 'ktp-remote-print-done' listener, buffer unmatched job_ids for about 30s (e.g. a Map early.set(job_id, detail)). In trackKtpJob, first check the buffer: if the ack is already there, dispatch the toast immediately and do not start the 20s 'Geen antwoord' timer. Alternative: let the client generate the job_id, register it before the POST, and send it in the body."
+  ],
+  "critical_code_review_comments": [
+    "kiosk_create_cash verifies the employee PIN correctly against kiosk_pin_hash, scoped to company_id and active=True. A wrong PIN falls back silently, which matches the spec. Note: the PIN travels in the query string (it can end up in proxy/access logs). Existing withKioskEmployee pattern, so acceptable, but a header or body field would be safer.",
+    "KtpPrintToast merge logic works. Names are deduped, and a merge only happens while the previous toast is still an ok toast. It is order-dependent (A en B vs B en A), which is cosmetic."
+  ],
+  "updated_files": ["/app/backend/tests/test_kasgeld_receipt_iter114.py (now posts employee params)", "/app/backend/tests/test_kasgeld_employee_iter115.py (new)"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "Employee name 100%. Merged toast works, but it is flaky because of the ack race (about 40% of runs show a missing or partial toast). Payment toast regression passes."},
+  "seed_data_creation": "Anita reset via setup_iter115.py (email anita.iter115@demo.sr, PIN 4321). Cleanup done: all TEST_iter115 kasgeld entries deleted, the TEST KTP iter115 A/B printers revoked, and test payment KW2026-00642 (Roy HUIS 2C, SRD 10) deleted.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run setup_iter115.py, then 'reg_iter115.py A|B', then 'nohup python3 fake_printer_iter115.py <device_token> 1500 &' (it acks instantly, which exposes the race). Location IDs change after a demo reset, so click by text 'Hoofdvestiging — Paramaribo' and then apt-HUIS 2C. To check the race fix: add_init_script listeners for 'ktp-remote-print-done' and 'ktp-toast', run the kasgeld save 3-5 times, assert every run shows the merged green toast and no 'Geen antwoord' after 22s. Clean up with cleanup_kasgeld_iter115.py."
+}

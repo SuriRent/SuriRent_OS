@@ -901,3 +901,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 ## 2026-06 — Print-bevestiging KT-V520
 - KtpPrintToast (App.js): groene balk bovenaan "Bon geprint op <printer>" (4s) bij REMOTE_PRINT_DONE ok, rood bij fout (6s) of geen antwoord binnen 20s. Alleen voor jobs vanaf dit toestel (trackKtpJob in KtpPrintButton/PrintChoiceMenu). z-index boven alle overlays.
 - Getest: iteration_113.
+
+## 2026-06 — Kasgeld bon auto-print
+- Na opslaan kasmutatie: bevestigingsscherm (KasgeldReceipt.jsx) met bonvoorbeeld, automatisch printen naar ingebouwde printer (echte KT-V520), alle andere online KT-V520s (WS) en Bluetooth; handmatige knoppen voor opnieuw printen.
+- Backend: /kiosk/kasgeld/{id}/print-data, /receipt.png, /remote-print; balance_after opgeslagen; medewerker via employee_id+PIN (withKioskEmployee). _render_receipt_png gedeeld.
+- Toast voegt meerdere printers samen. Getest: iteration_114, iteration_115.

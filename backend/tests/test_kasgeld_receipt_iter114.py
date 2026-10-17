@@ -28,6 +28,11 @@ def kh():
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
+def _emp_params():
+    r = requests.post(f"{API}/auth/kiosk-pin", json={"pin": "4321", "company_slug": "my-awesome-rentals-bv"})
+    return {"employee_id": r.json()["employee"]["id"], "employee_pin": "4321"}
+
+
 @pytest.fixture(scope="module")
 def ah():
     r = requests.post(f"{API}/auth/login", json={"email": "demo@surirent.sr", "password": "demo1234"})
@@ -43,7 +48,7 @@ def created(kh, ah):
 
 
 def _create(kh, created, typ="out", amount=12.5, desc="TEST_iter114 bon schoonmaak middelen voor de kantoor ruimte"):
-    r = requests.post(f"{API}/kiosk/kasgeld", headers=kh,
+    r = requests.post(f"{API}/kiosk/kasgeld", headers=kh, params=_emp_params(),
                       json={"type": typ, "amount": amount, "currency": "SRD", "description": desc, "category": "schoonmaak"})
     assert r.status_code == 200, r.text
     d = r.json()
