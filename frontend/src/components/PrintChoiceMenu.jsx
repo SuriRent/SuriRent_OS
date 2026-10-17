@@ -4,6 +4,7 @@ import { Bluetooth, ChevronDown, Loader2, Printer, Smartphone } from 'lucide-rea
 import { getSavedPrinter, printLinesBluetooth, useBtReady } from '../lib/bt-printer';
 import { api } from '../lib/api';
 import { isKtpDevice, otherPrinters } from '../lib/ktp-printer';
+import { trackKtpJob } from './KtpPrintToast';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 
 const TIMEOUT_MS = 20000;
@@ -84,6 +85,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
     try {
       const { data } = await api.post(remotePath, { printer_id: first.id });
       job.current = data.job_id;
+      trackKtpJob(data.job_id, first.name);
       timer.current = setTimeout(() => { job.current = null; setSending(false); onStatus({ kind: 'err', msg: `Geen antwoord van ${first.name}` }); }, TIMEOUT_MS);
     } catch (e) { setSending(false); onStatus({ kind: 'err', msg: e?.response?.data?.detail || 'Verzenden mislukt' }); }
   };

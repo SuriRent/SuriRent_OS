@@ -3,6 +3,7 @@ import { AlertCircle, Check, ChevronDown, Loader2, Printer } from 'lucide-react'
 import { api } from '../lib/api';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 import { otherPrinters } from '../lib/ktp-printer';
+import { trackKtpJob } from './KtpPrintToast';
 
 const TIMEOUT_MS = 20000;
 
@@ -43,6 +44,7 @@ export function KtpPrintButton({ log, onPrinted, fetchPrinters = false, autoSend
     try {
       const { data } = await api.post(`/kiosk/print-log/by-payment/${log.payment_id}/remote-print`, { printer_id: printer.id });
       job.current = data.job_id;
+      trackKtpJob(data.job_id, printer.name);
       timer.current = setTimeout(() => { job.current = null; setStatus('error'); setMsg(`Geen antwoord van ${printer.name}`); }, TIMEOUT_MS);
     } catch (e) { setStatus('error'); setMsg(e?.response?.data?.detail || 'Verzenden mislukt'); }
   };
