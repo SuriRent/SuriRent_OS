@@ -1,0 +1,69 @@
+{
+ "open_invoices": [
+  {
+   "id": "ccd5c033-cf62-4753-8c3a-3ddb1ac371a5",
+   "invoice_number": "D2026-00101",
+   "period_month": 8,
+   "period_year": 2026,
+   "amount": 6000.0,
+   "amount_paid": 0.0,
+   "outstanding": 6000.0,
+   "currency": "SRD",
+   "due_date": "2026-08-17",
+   "status": "open",
+   "is_partial": false,
+   "kind": "huur",
+   "label": "",
+   "bucket": "overdue"
+  },
+  {
+   "id": "7eb17b61-cb82-4179-ba56-b7761ccefeae",
+   "invoice_number": "D2026-00102",
+   "period_month": 9,
+   "period_year": 2026,
+   "amount": 6000.0,
+   "amount_paid": 0.0,
+   "outstanding": 6000.0,
+   "currency": "SRD",
+   "due_date": "2026-09-16",
+   "status": "open",
+   "is_partial": false,
+   "kind": "huur",
+   "label": "",
+   "bucket": "overdue"
+  }
+ ],
+ "current_invoices": [
+  {
+   "id": "6f9c42d0-7038-44d3-b677-bcdb6e02c33e",
+   "invoice_number": "D2026-00103",
+   "period_month": 10,
+   "period_year": 2026,
+   "amount": 6000.0,
+   "amount_paid": 0.0,
+   "outstanding": 6000.0,
+   "currency": "SRD",
+   "due_date": "2026-10-16",
+   "status": "open",
+   "is_partial": false,
+   "kind": "huur",
+   "label": "",
+   "bucket": "current"
+  }
+ ],
+ "open_invoices_total": 12000.0,
+ "current_invoices_total": 6000.0,
+ "credit_balance": 0,
+ "balance": {
+  "rent_amount": 6000,
+  "currency": "SRD",
+  "months_due": 1,
+  "total_due": 6000,
+  "total_paid": 0.0,
+  "balance": 6000.0,
+  "next_period": {
+   "year": 2026,
+   "month": 8
+  }
+ }
+}

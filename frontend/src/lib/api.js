@@ -90,6 +90,8 @@ api.interceptors.response.use(
         const isKioskContext = url.startsWith('/kiosk/') || path === '/kiosk' || path.startsWith('/kiosk/');
         try {
           if (isTenantContext) {
+            // Alleen een 401 van een huurder-endpoint betekent een ongeldige huurder-sessie.
+            if (!url.startsWith('/tenant-portal/')) return Promise.reject(err);
             localStorage.removeItem('tenant_token');
             try {
               sessionStorage.removeItem('tenant_session');

@@ -1,0 +1,36 @@
+{
+  "summary": "Iter106: Tested (1) GET /api/kiosk/tenants/{id}/financial-receipt.png, (2) the Spraak share on the employee kiosk Financieel overzicht, which now sends mp3 + png, and (3) the mobile numpad on 'Wat wilt u betalen?', which is now open by default in the employee kiosk and in the tenant kiosk. All requested features PASS.\n\nBackend:\n- The endpoint returns 401 without a session, 404 for an unknown tenant and 200 image/png with a valid kiosk token.\n- Rendered bon for Jan Pieterse / HUIS 1A (549x958 px): company name, FINANCIEEL OVERZICHT, date, tenant name/phone/apartment.\n- ACHTERSTAND rows: Aug 2026 and Sep 2026 at SRD 6.000,00 each, Subtotaal SRD 12.000,00.\n- HUIDIGE MAAND row: Okt 2026 SRD 6.000,00, Subtotaal SRD 6.000,00.\n- Achterstand/Huidig summary, then TOTAAL SRD 18.000,00 = 12.000 + 6.000. Correct.\n\nFrontend (390x844):\n- Kiosk PIN 4321 login, location, HUIS 1A, overview-voice-btn, voice-modal, voice-modal-confirm.\n- With navigator.share mocked, the share received files [herinnering-Jan-Pieterse.mp3 audio/mpeg 223KB, financieel-overzicht-Jan-Pieterse.png image/png 56KB]. Text: 'Hallo Jan Pieterse, hierbij een gesproken herinnering en uw financieel overzicht. Totaal openstaand: SRD 18.000,00.' The modal closes afterwards.\n- Fallback: with canShare returning false for 2 files, only the mp3 is shared. PASS.\n- Employee kiosk pay screen: mobile-custom-toggle shows 'Sluiten' and the numpad (mobile-key-*) is visible on first open. Typing works; the toggle closes it ('Openen').\n- Tenant kiosk /kiosk/huurder pay screen: the numpad is open by default (tk-mobile-custom-toggle count 0, 'Sluiten' visible). Closing shows the toggle; reopening works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/kiosk/tenants/{id}/financial-receipt.png", "issue": "Cosmetic: amounts are left-aligned at column 14, not right-aligned like the payment bon (_receipt_text_lines uses a row() that right-aligns). Not a bug."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "lib/api.js 401 interceptor on /kiosk/huurder", "issue": "Pre-existing, outside this task's scope. On a page reload of /kiosk/huurder, AuthContext calls GET /api/auth/me with the tenant bearer token and gets 401. The interceptor treats this as tenant context and removes tenant_token, so a reload always logs the tenant out. Needed a test workaround (abort /api/auth/me).", "selector": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Tenant kiosk 'Wat wilt u betalen?' (mobile 390px)", "issues": ["The 'Uit' logout pill overlaps the 'Wat wilt u betalen?' header title (top-right)."]},
+      {"screen": "Tenant kiosk dashboard (mobile)", "issues": ["Observation, pre-existing: 'Totaal openstaand' shows SRD 6.000,00 while the PER FACTUUR list shows 3 invoices of SRD 6.000 each. The employee kiosk shows SRD 18.000,00 for the same tenant. Possible inconsistency in the tenant overview total."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_financial_receipt_png.py", "/app/test_reports/pytest/iter106.xml"],
+  "action_items": [
+    "Optional: on the tenant kiosk mobile pay screen, keep the 'Uit' pill from overlapping the title.",
+    "Optional: check that the tenant kiosk 'Totaal openstaand' (6.000) matches the per-invoice list (18.000) for Jan Pieterse.",
+    "Optional: stop the /auth/me 401 on /kiosk/huurder from clearing tenant_token (reload logs the tenant out)."
+  ],
+  "critical_code_review_comments": [
+    "financial-receipt.png reuses kiosk_tenant_overview(tenant_id, _session), so it inherits tenant scoping and the 404. Good.",
+    "PIL import and rendering run synchronously inside an async handler. The bon is small, so this is acceptable, but run_in_threadpool would avoid blocking the event loop.",
+    "ShareVoiceButton: the receipt fetch failure is swallowed with .catch(() => null), so the mp3 is still shared. Good resilience. Also good: the text mentions 'financieel overzicht' in both the share text and the fallback."
+  ],
+  "updated_files": ["/app/backend/tests/test_financial_receipt_png.py"],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% (all requested flows)"},
+  "seed_data_creation": "Gave Anita (employee 366eb015...) kiosk PIN 4321 again via PUT /api/employees with email '' (the email anita@demo.sr is already used by another account). Set tenant PIN 7391 for Jan Pieterse (1c9d8b79-d100-4467-a315-ee060cc02569) via /api/auth/tenant-set-pin.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "HUIS 1A is in location 436b6062-d865-4e27-a5b7-d49a9f7ae605 (click location-<id> first). The tenant kiosk only has an NFC login on mobile: inject the tenant_token from POST /api/tenant-portal/login {identifier:'jan@demo.sr', pin:'7391'} into localStorage and abort /api/auth/me via page.route, otherwise the 401 interceptor wipes the token. The mobile tenant dashboard has no tk-tile-pay; use the 'Volgende' button."
+}

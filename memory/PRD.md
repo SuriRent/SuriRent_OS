@@ -868,3 +868,10 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Kiosk betalingsgeschiedenis lay-out
 - Rijen horizontaal: info links (afbreekbaar, niet afgekapt), knoppen rechts, verticaal gecentreerd. Mobiel: ronde pictogram-knoppen (WhatsApp, Afdruk) naast elkaar; vanaf sm met tekst. Getest: iteration_105.
+
+## 2026-06 — Spraakbericht + bon, numpad open
+- GET /api/kiosk/tenants/{id}/financial-receipt.png: 58mm monospace bon (achterstand per factuur, huidige maand, subtotalen, totaal). Spraak-knop deelt mp3 + PNG + tekst (fallback alleen mp3).
+- "Wat wilt u betalen?": mobiele numpad standaard open (medewerker- en huurderkiosk).
+- Fix: 401 op niet-huurder endpoint logt huurder niet meer uit bij herladen; Uit-knop overlapt titel niet meer.
+- Open punt: huurderkiosk "Totaal openstaand" (SRD 6.000) wijkt af van medewerker-kiosk (SRD 18.000) — nog onderzoeken.
+- Getest: iteration_106.

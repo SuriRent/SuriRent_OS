@@ -880,7 +880,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2" data-testid="tk-pay-select">
-      <div className="flex items-center justify-between flex-wrap gap-2 py-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 py-2 pr-20 sm:pr-24">
         <button onClick={onBack} data-testid="tk-payselect-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
