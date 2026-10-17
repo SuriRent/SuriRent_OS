@@ -5,6 +5,8 @@ import { api, fmtMoney } from '../lib/api';
 import { printReceipt } from '../lib/kiosk-print';
 import { KioskBulkApproveSheet } from './KioskBulkApproveSheet';
 import { KtpPrintButton } from './KtpPrintButton';
+import { BtPrintButton } from './BtPrintButton';
+import { isKtpDevice } from '../lib/ktp-printer';
 
 const todayStartIso = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) : '');
@@ -73,10 +75,15 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
           </button>
         )}
         <KtpPrintButton log={log} onPrinted={onRemotePrinted} fetchPrinters={employeeMode} />
-        <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
-          className={`flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Afdrukken'}
-        </button>
+        <div className="flex-1 sm:flex-none sm:w-36 empty:hidden" data-testid={`kiosk-print-log-bt-${log.id}`}>
+          <BtPrintButton paymentId={log.payment_id} />
+        </div>
+        {isKtpDevice() && (
+          <button onClick={() => onPrint(log)} disabled={busy} data-testid={`kiosk-print-log-print-${log.id}`}
+            className={`flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors ${done ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#FF5C00] hover:bg-[#E05200] text-white'}`}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Printer className="w-4 h-4 shrink-0" />} {done ? 'Opnieuw' : 'Ingebouwde printer'}
+          </button>
+        )}
       </div>
     </div>
   );

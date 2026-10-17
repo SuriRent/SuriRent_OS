@@ -3,17 +3,30 @@ import { createPortal } from 'react-dom';
 import { Bluetooth, ChevronDown, Loader2, Printer, Smartphone } from 'lucide-react';
 import { getSavedPrinter, printLinesBluetooth, useBtReady } from '../lib/bt-printer';
 import { api } from '../lib/api';
+import { isKtpDevice } from '../lib/ktp-printer';
 import { subscribeKioskLive, getKioskLiveState } from '../lib/kiosk-live';
 
 const TIMEOUT_MS = 20000;
+
+// Gedeelde cache: veel menu's in één lijst → één request per 15s.
+let printersReq = null;
+let printersAt = 0;
+const fetchOnline = () => {
+  if (!printersReq || Date.now() - printersAt > 15000) {
+    printersAt = Date.now();
+    printersReq = api.get('/kiosk/printers/online').then(({ data }) => data || []).catch(() => []);
+  }
+  return printersReq;
+};
 
 function useOnlinePrinters(open) {
   const liveState = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   const live = liveState.printers || [];
   const [fetched, setFetched] = useState([]);
   useEffect(() => {
-    if (!open) return;
-    api.get('/kiosk/printers/online').then(({ data }) => setFetched(data || [])).catch(() => setFetched([]));
+    let alive = true;
+    fetchOnline().then((d) => alive && setFetched(d));
+    return () => { alive = false; };
   }, [open]);
   return liveState.printersKnown || live.length ? live : fetched;
 }
@@ -33,6 +46,8 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
   const first = printers[0];
   const btReady = useBtReady();
   const bt = btReady ? getSavedPrinter() : null;
+  // Ingebouwde printer alleen op een echte KT-V520; elders alleen KT-V520 (WS) en Bluetooth.
+  const builtIn = isKtpDevice();
 
   useEffect(() => {
     const onDone = (e) => {
@@ -79,6 +94,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
   };
 
   const item = 'w-full text-left px-3 py-2.5 text-sm font-semibold flex items-center gap-2';
+  if (!builtIn && !first && !bt && !sending) return null;
   return (
     <>
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
@@ -109,10 +125,12 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
                   <span className="text-[11px] font-medium text-slate-400">{bt.name}</span></span>
               </button>
             )}
-            <button onClick={() => { setPos(null); onLocal(); }} data-testid={`history-print-local-${paymentId}`}
-              className={`${item} text-slate-800 hover:bg-orange-50`}>
-              <Smartphone className="w-4 h-4 text-slate-500" /> Afdrukken
-            </button>
+            {builtIn && (
+              <button onClick={() => { setPos(null); onLocal(); }} data-testid={`history-print-local-${paymentId}`}
+                className={`${item} text-slate-800 hover:bg-orange-50`}>
+                <Smartphone className="w-4 h-4 text-slate-500" /> Ingebouwde printer
+              </button>
+            )}
           </div>
         </>
       ), document.body)}

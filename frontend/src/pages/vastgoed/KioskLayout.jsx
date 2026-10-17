@@ -23,7 +23,6 @@ import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinanc
 import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
-import { btSupport, printerMode } from '../../lib/bt-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
@@ -2420,11 +2419,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         datum: fmtPrintDate(new Date()),
         kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
       }, data?.id || data?.payment?.id);
-      // iPhone/iPad (geen Bluetooth in browser) → printvenster/AirPrint. Overige
-      // printers (KT-V520 via WebSocket + Bluetooth) print de succespagina automatisch.
-      else if (printerMode() === 'bluetooth' && btSupport() === 'none' && (data?.id || data?.payment?.id)) {
-        printReceipt({ paymentId: data?.id || data?.payment?.id, apiGet: api.get });
-      }
+      // Overige toestellen: KT-V520 via WebSocket + Bluetooth print de succespagina automatisch.
       onSuccess(data);
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
@@ -2740,11 +2735,13 @@ function ReceiptScreen({ payment, overview, onDone }) {
               </div>
             )}
             {payment.id && <BtPrintButton paymentId={payment.id} autoSend />}
-            <button onClick={manualPrint} type="button" data-testid="receipt-manual-print"
-              className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 border-2 border-slate-200 transition-colors">
-              <Printer className="w-4 h-4" />
-              Afdruk
-            </button>
+            {isKtpDevice() && (
+              <button onClick={manualPrint} type="button" data-testid="receipt-manual-print"
+                className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 border-2 border-slate-200 transition-colors">
+                <Printer className="w-4 h-4" />
+                Ingebouwde printer
+              </button>
+            )}
           </div>
           <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
             Automatisch terug naar startscherm in 20 seconden
