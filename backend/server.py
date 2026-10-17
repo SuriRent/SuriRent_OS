@@ -11990,9 +11990,14 @@ async def kiosk_tenant_financial_remote_print(tenant_id: str, body: RemotePrintI
 async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(get_kiosk_session)):
     """Financieel overzicht als 58mm-bon (monospace) voor delen via WhatsApp."""
     data = await _financial_receipt_data(tenant_id, _session, force_ktp=True)
+    return Response(content=_render_receipt_png(data), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
+def _render_receipt_png(data: dict) -> bytes:
+    """Bon-regels → 58mm monospace PNG."""
     W = data["cols"]
     lines = [(ln["text"], ln["align"], ln["bold"]) for ln in data["lines"] if ln["text"]]
-
     from PIL import Image, ImageDraw, ImageFont
     from io import BytesIO
     fs = 26
@@ -12003,8 +12008,7 @@ async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(ge
         f_reg = f_bold = ImageFont.load_default()
     cw = f_reg.getlength("M")
     pad, lh = 24, int(fs * 1.35)
-    img_w = int(cw * W + pad * 2)
-    img = Image.new("RGB", (img_w, pad * 2 + lh * len(lines)), "white")
+    img = Image.new("RGB", (int(cw * W + pad * 2), pad * 2 + lh * len(lines)), "white")
     d = ImageDraw.Draw(img)
     y = pad
     for text, align, bold in lines:
@@ -12014,8 +12018,7 @@ async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(ge
         y += lh
     buf = BytesIO()
     img.save(buf, "PNG")
-    return Response(content=buf.getvalue(), media_type="image/png",
-                    headers={"Cache-Control": "no-store"})
+    return buf.getvalue()
 
 
 @api.get("/kiosk/payments/{payment_id}/print-data")
@@ -15047,6 +15050,7 @@ class CashEntryOut(CashEntryIn):
     # approved_by). Legacy entries zonder deze velden tonen "Onbekend".
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
+    balance_after: Optional[float] = None
 
 
 # =====================================================================
@@ -15359,6 +15363,95 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
     return combined[:200]
 
 
+async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = False) -> dict:
+    """Kasgeld-mutatie als 58mm bon-regels (zelfde vorm als _receipt_print_data)."""
+    cid = session.get("company_id")
+    e = await db.kasgeld.find_one({"id": entry_id, **kiosk_scope(session)}, {"_id": 0})
+    if not e:
+        raise HTTPException(status_code=404, detail="Mutatie niet gevonden")
+    company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
+    cfg = await _kiosk_device_config(cid)
+    printer = "kt-v520" if force_ktp else cfg["printer"]
+    paper = 58 if printer == "kt-v520" else cfg["paper_width"]
+    W = _RECEIPT_COLS_80 if paper == 80 else _RECEIPT_COLS
+    LBL = 12
+    cur = e.get("currency") or "SRD"
+
+    def money(v):
+        return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def row(label, value):
+        return f"{str(label)[:LBL - 1].ljust(LBL)}{value}"
+
+    def L(text, align="left", bold=False, size="normal"):
+        return {"text": text, "align": align, "bold": bold, "size": size}
+
+    def wrap(text, width):
+        out, cur_line = [], ""
+        for w in str(text).split():
+            if len(cur_line) + len(w) + (1 if cur_line else 0) > width:
+                if cur_line:
+                    out.append(cur_line)
+                cur_line = w[:width]
+            else:
+                cur_line = f"{cur_line} {w}".strip()
+        if cur_line:
+            out.append(cur_line)
+        return out
+
+    try:
+        dt = datetime.fromisoformat(str(e.get("created_at")).replace("Z", "+00:00"))
+    except Exception:
+        dt = now_utc()
+    datum = dt.astimezone(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
+    soort = "INLEG" if e.get("type") == "in" else "OPNAME"
+    dash = "-" * W
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L(dash),
+             L("KASGELD BON", "center", True), L(dash),
+             L(row("Datum:", datum)), L(row("Medewerker:", e.get("created_by_name") or "-")), L(dash),
+             L(row("Type:", soort), bold=True)]
+    if e.get("category"):
+        lines.append(L(row("Categorie:", str(e["category"]).capitalize())))
+    lines += [L(dash), L(row("BEDRAG:", ("+ " if e.get("type") == "in" else "- ") + money(e.get("amount"))), bold=True)]
+    if e.get("description"):
+        lines += [L(dash), L("Opmerking:", bold=True)] + [L(x) for x in wrap(e["description"], W)]
+    if e.get("balance_after") is not None:
+        lines += [L(dash), L(row("Kassaldo:", money(e["balance_after"])), bold=True)]
+    lines += [L(dash), L("Kasgeld mutatie geregistreerd", "center"), L(""), L("")]
+    return {
+        "bedrijfsnaam": company.get("name") or "SuriRent", "naam": e.get("created_by_name") or "",
+        "datum": datum, "totaal": money(e.get("amount")),
+        "lettergrootte": font_size, "textZoom": text_zoom,
+        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
+        "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
+    }
+
+
+@api.get("/kiosk/kasgeld/{entry_id}/print-data")
+async def kiosk_kasgeld_print_data(entry_id: str, _session=Depends(get_kiosk_session)):
+    return await _kasgeld_receipt_data(entry_id, _session)
+
+
+@api.get("/kiosk/kasgeld/{entry_id}/receipt.png")
+async def kiosk_kasgeld_receipt_png(entry_id: str, _session=Depends(get_kiosk_session)):
+    data = await _kasgeld_receipt_data(entry_id, _session, force_ktp=True)
+    return Response(content=_render_receipt_png(data), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@api.post("/kiosk/kasgeld/{entry_id}/remote-print")
+async def kiosk_kasgeld_remote_print(entry_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
+        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
+    data = await _kasgeld_receipt_data(entry_id, _session, force_ktp=True)
+    job_id = str(uuid.uuid4())
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "kasgeld_id": entry_id,
+                                                  "target": body.printer_id, "data": data})
+    return {"job_id": job_id}
+
+
 @api.post("/kiosk/kasgeld", response_model=CashEntryOut)
 async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_session)):
     """Nieuwe kasgeld-mutatie geregistreerd vanuit de Kiosk (medewerker).
@@ -15391,6 +15484,9 @@ async def kiosk_create_cash(body: CashEntryIn, _session=Depends(get_kiosk_sessio
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)
+    bal_after = round(float((await kiosk_cash_balance(_session)).get(doc["currency"], 0)), 2)
+    await db.kasgeld.update_one({"id": doc["id"]}, {"$set": {"balance_after": bal_after}})
+    doc["balance_after"] = bal_after
     soort = "Inkomen" if doc["type"] == "in" else "Uitgave"
     asyncio.create_task(_notify_company_admins(
         cid,

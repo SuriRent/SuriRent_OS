@@ -37,9 +37,10 @@ export function usePrintOptions(open = false) {
   const printers = useOnlinePrinters(open);
   const btReady = useBtReady();
   const builtIn = isKtpDevice();
-  const first = otherPrinters(printers)[0];
+  const others = otherPrinters(printers);
+  const first = others[0];
   const bt = btReady ? getSavedPrinter() : null;
-  return { builtIn, first, bt, any: !!(builtIn || first || bt) };
+  return { builtIn, first, others, bt, any: !!(builtIn || first || bt) };
 }
 
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.

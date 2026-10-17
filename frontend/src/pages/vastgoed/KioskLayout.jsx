@@ -27,6 +27,7 @@ import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMenu';
+import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
@@ -3099,6 +3100,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   const [currency, setCurrency] = useState('SRD');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('overig');
+  const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const overlayRef = useRef(null);
@@ -3232,11 +3234,11 @@ function KasgeldMutationModal({ onClose, onSaved }) {
     if (!description.trim()) { setErr('Omschrijving is verplicht'); return; }
     setSaving(true); setErr('');
     try {
-      await api.post('/kiosk/kasgeld', {
+      const { data } = await api.post('/kiosk/kasgeld', {
         type, amount: n, currency,
         description: description.trim(), category,
       });
-      onSaved && onSaved();
+      setSaved(data);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
@@ -3247,7 +3249,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
 
   return createPortal((
     <div ref={overlayRef}
-      onClick={onClose}
+      onClick={saved ? onSaved : onClose}
       className="fixed z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
       style={{
         // Fallback vóór useEffect draait — daarna neemt JS het over
@@ -3263,22 +3265,26 @@ function KasgeldMutationModal({ onClose, onSaved }) {
         <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div className="flex items-center gap-2">
-            {step === 'details' && (
+            {step === 'details' && !saved && (
               <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
                 className="w-9 h-9 -ml-2 rounded-lg hover:bg-slate-100 flex items-center justify-center">
                 <ChevronLeft className="w-5 h-5 text-slate-500" />
               </button>
             )}
             <h3 className="text-lg font-black text-slate-900">
-              {step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
+              {saved ? 'Kasgeld bon' : step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
             </h3>
           </div>
-          <button onClick={onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
-        {step === 'amount' ? (
+        {saved ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <KasgeldReceiptScreen entry={saved} onDone={onSaved} />
+          </div>
+        ) : step === 'amount' ? (
           /* ============ STEP 1: Type + Currency + Bedrag (NumPad) ============
               De sticky footer hieronder handelt de FAB-clearance af — body
               zelf hoeft dus geen extra padding-bottom. */
