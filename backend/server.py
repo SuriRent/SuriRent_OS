@@ -10336,6 +10336,9 @@ async def kiosk_ws(ws: WebSocket):
     # APK-achtergrondservice: alleen ?device=KIOSK-ID + pings, geen auth-bericht.
     if kiosk_id and (not hello or hello.get("type") != "auth"):
         prn = await db.kiosk_printers.find_one({"kiosk_ids": kiosk_id, "revoked": {"$ne": True}}, {"_id": 0})
+        # Alleen een printer van het eigenaar-bedrijf van deze KIOSK-ID.
+        if prn and await _kiosk_id_owner(kiosk_id) != prn["company_id"]:
+            prn = None
         if not prn:
             # Spam-rem: alleen nieuwe ID's opslaan zolang de lijst klein is; oude (>1 dag) opruimen.
             await db.kiosk_unbound_devices.delete_many({"last_seen": {"$lt": iso(now_utc() - timedelta(days=1))}})
@@ -10622,7 +10625,8 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
     async def forward():
         while True:
             ev = await queue.get()
-            if ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_ and _primary_conn(pid_) is me:
+            if (ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_ and ev.get("company_id") == cid
+                    and _primary_conn(pid_) is me):
                 if service:
                     d = ev.get("data") or {}
                     # Ook top-level velden zoals PRINT_RECEIPT ze heeft, voor de achtergrondservice.
@@ -10765,6 +10769,17 @@ async def kiosk_printers_online(_session=Depends(get_kiosk_session)):
     return await _online_printers(_session["company_id"])
 
 
+async def _publish_remote_print(cid: str, printer_id: str, payload: dict) -> str:
+    """Printopdracht strikt binnen het bedrijf: printer moet van dit bedrijf zijn én online."""
+    prn = await db.kiosk_printers.find_one({"id": printer_id, "company_id": cid, "revoked": {"$ne": True}}, {"_id": 0, "id": 1})
+    if not prn or printer_id not in {p["id"] for p in await _online_printers(cid)}:
+        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
+    job_id = str(uuid.uuid4())
+    await _kb_publish(_kiosk_admin_channel(cid), {**payload, "type": "REMOTE_PRINT", "job_id": job_id,
+                                                  "company_id": cid, "target": printer_id})
+    return job_id
+
+
 class RemotePrintIn(BaseModel):
     printer_id: str
 
@@ -10772,16 +10787,11 @@ class RemotePrintIn(BaseModel):
 @api.post("/kiosk/print-log/by-payment/{payment_id}/remote-print")
 async def kiosk_remote_print(payment_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
     cid = _session["company_id"]
-    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
-        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
     p = await db.payments.find_one({"id": payment_id, "company_id": cid}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Bon niet gevonden")
     data = await _receipt_print_data(p, force_ktp=True)
-    job_id = str(uuid.uuid4())
-    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "payment_id": payment_id,
-                                                  "target": body.printer_id, "data": data})
-    return {"job_id": job_id}
+    return {"job_id": await _publish_remote_print(cid, body.printer_id, {"payment_id": payment_id, "data": data})}
 
 
 async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
@@ -12122,14 +12132,9 @@ async def kiosk_tenant_financial_print_data(tenant_id: str, _session=Depends(get
 @api.post("/kiosk/tenants/{tenant_id}/financial-remote-print")
 async def kiosk_tenant_financial_remote_print(tenant_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
     cid = _session["company_id"]
-    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
-        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
     data = await _financial_receipt_data(tenant_id, _session, force_ktp=True)
-    job_id = str(uuid.uuid4())
-    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "tenant_id": tenant_id,
-                                                  "url": f"/api/kiosk/tenants/{tenant_id}/financial-receipt.png",
-                                                  "target": body.printer_id, "data": data})
-    return {"job_id": job_id}
+    return {"job_id": await _publish_remote_print(cid, body.printer_id, {
+        "tenant_id": tenant_id, "url": f"/api/kiosk/tenants/{tenant_id}/financial-receipt.png", "data": data})}
 
 
 @api.get("/kiosk/tenants/{tenant_id}/financial-receipt.png")
@@ -15617,14 +15622,9 @@ async def kiosk_kasgeld_receipt_png(entry_id: str, _session=Depends(get_kiosk_se
 @api.post("/kiosk/kasgeld/{entry_id}/remote-print")
 async def kiosk_kasgeld_remote_print(entry_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
     cid = _session["company_id"]
-    if body.printer_id not in {p["id"] for p in await _online_printers(cid)}:
-        raise HTTPException(status_code=409, detail="Deze KT-V520 is niet online")
     data = await _kasgeld_receipt_data(entry_id, _session, force_ktp=True)
-    job_id = str(uuid.uuid4())
-    await _kb_publish(_kiosk_admin_channel(cid), {"type": "REMOTE_PRINT", "job_id": job_id, "kasgeld_id": entry_id,
-                                                  "url": f"/api/kiosk/kasgeld/{entry_id}/receipt.png",
-                                                  "target": body.printer_id, "data": data})
-    return {"job_id": job_id}
+    return {"job_id": await _publish_remote_print(cid, body.printer_id, {
+        "kasgeld_id": entry_id, "url": f"/api/kiosk/kasgeld/{entry_id}/receipt.png", "data": data})}
 
 
 @api.post("/kiosk/kasgeld", response_model=CashEntryOut)
