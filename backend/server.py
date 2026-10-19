@@ -30,6 +30,7 @@ import hashlib
 import asyncio
 import json
 import time
+import logging as _logging
 
 from pdf_gen import (
     receipt_pdf_blue_house as receipt_pdf,
@@ -263,6 +264,7 @@ async def lifespan(app: FastAPI):
     # Hot-path indexes voor snelle queries op alle collecties die de
     # app gebruikt. Worden bij elke startup idempotent gegarandeerd.
     await db.users.create_index("email", unique=True)
+    await db.kiosk_id_owners.create_index("kiosk_id", unique=True)
     await db.users.create_index([("company_id", 1), ("role", 1)])
     await db.apartments.create_index("number")
     await db.apartments.create_index("company_id")
@@ -10367,6 +10369,10 @@ async def kiosk_ws(ws: WebSocket):
         return
     channel = _kiosk_admin_channel(cid)
     await _record_device_seen(cid, role, name, hello.get("device"))
+    # Koppelverzoek via de eigen APK: ingelogde kiosk/beheerder op dit toestel claimt de KIOSK-ID.
+    claim_id = str(kiosk_id or hello.get("kiosk_id") or "").strip()[:64]
+    if claim_id:
+        await _claim_kiosk_id(cid, claim_id)
     if role == "admin":
         await _kiosk_ws_admin(ws, cid, channel)
     else:
@@ -10546,13 +10552,33 @@ def _ws_parse(frame) -> Optional[dict]:
         return {"type": "ping"}
 
 
+async def _kiosk_id_owner(kiosk_id: str) -> Optional[str]:
+    """Bedrijf dat eigenaar is van een KIOSK-ID: eerste claim of eerdere koppeling (ook ingetrokken printers)."""
+    o = await db.kiosk_id_owners.find_one({"kiosk_id": kiosk_id}, {"_id": 0, "company_id": 1})
+    if o:
+        return o["company_id"]
+    prn = await db.kiosk_printers.find_one({"kiosk_ids": kiosk_id}, {"_id": 0, "company_id": 1}, sort=[("created_at", 1)])
+    if prn:
+        await db.kiosk_id_owners.update_one({"kiosk_id": kiosk_id}, {"$setOnInsert": {"company_id": prn["company_id"], "since": iso(now_utc())}}, upsert=True)
+        return prn["company_id"]
+    return None
+
+
+async def _claim_kiosk_id(cid: str, kiosk_id: str) -> bool:
+    """Eerste bedrijf dat claimt wordt eigenaar; daarna kan geen ander bedrijf hem zien of koppelen."""
+    owner = await _kiosk_id_owner(kiosk_id)
+    if owner:
+        return owner == cid
+    try:
+        await db.kiosk_id_owners.insert_one({"kiosk_id": kiosk_id, "company_id": cid, "since": iso(now_utc())})
+    except Exception:  # noqa: BLE001 — race: ander bedrijf was net eerder
+        return (await _kiosk_id_owner(kiosk_id)) == cid
+    return True
+
+
 async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> bool:
-    """KIOSK-ID aan printer koppelen. Nooit overnemen van een actieve printer van een ánder bedrijf."""
-    if not kiosk_id:
-        return False
-    foreign = await db.kiosk_printers.find_one(
-        {"kiosk_ids": kiosk_id, "company_id": {"$ne": prn["company_id"]}, "revoked": {"$ne": True}}, {"_id": 0, "id": 1})
-    if foreign:
+    """KIOSK-ID aan printer koppelen — alleen voor het eigenaar-bedrijf (of eerste claim)."""
+    if not kiosk_id or not await _claim_kiosk_id(prn["company_id"], kiosk_id):
         return False
     await db.kiosk_printers.update_many({"kiosk_ids": kiosk_id, "id": {"$ne": prn["id"]}}, {"$pull": {"kiosk_ids": kiosk_id}})
     await db.kiosk_printers.update_one({"id": prn["id"]}, {"$addToSet": {"kiosk_ids": kiosk_id}})
@@ -10566,9 +10592,10 @@ _printer_conns: dict = {}
 
 
 def _primary_conn(pid_: str):
+    # App (printer-modus) eerst; achtergrondservice alleen als de app niet verbonden is.
     conns = _printer_conns.get(pid_) or []
-    svc = [c for c in conns if c["service"]]
-    return (svc or conns or [None])[-1]
+    app = [c for c in conns if not c["service"]]
+    return (app or conns or [None])[-1]
 
 
 async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
@@ -10585,12 +10612,20 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
         while True:
             ev = await queue.get()
             if ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_ and _primary_conn(pid_) is me:
+                if service:
+                    d = ev.get("data") or {}
+                    # Ook top-level velden zoals PRINT_RECEIPT ze heeft, voor de achtergrondservice.
+                    ev = {**ev, "printer": "kt-v520", "lines": d.get("lines"), "remote": True,
+                          **({"template": d["template"], "receipt_type": d.get("receipt_type")} if d.get("template") else {})}
+                _logging.getLogger("uvicorn.error").info("[ktp] REMOTE_PRINT job=%s printer=%s via=%s", ev.get("job_id"), pid_, "service" if service else "app")
                 await ws.send_json(ev)
 
     async def receive():
         while True:
             msg = _ws_parse(await ws.receive())
             kind = msg.get("type")
+            if service and kind != "ping":
+                _logging.getLogger("uvicorn.error").info("[ktp] service %s -> %s", pid_, json.dumps(msg)[:300])
             if kind == "ping":
                 if time.time() - last_ping["t"] > 25:
                     last_ping["t"] = time.time()
@@ -10648,7 +10683,12 @@ class LinkKioskIdIn(BaseModel):
 async def kiosk_unbound_devices(user=Depends(require_role("admin", "superadmin"))):
     """Achtergrondservices (?device=KIOSK-ID) die zonder koppeling probeerden te verbinden (laatste 2 uur)."""
     since = iso(now_utc() - timedelta(hours=2))
-    return await db.kiosk_unbound_devices.find({"last_seen": {"$gt": since}}, {"_id": 0}).sort("last_seen", -1).to_list(20)
+    cid = company_id_of(user)
+    owned = [o["kiosk_id"] for o in await db.kiosk_id_owners.find({"company_id": cid}, {"_id": 0, "kiosk_id": 1}).to_list(500)]
+    if not owned:
+        return []
+    return await db.kiosk_unbound_devices.find({"kiosk_id": {"$in": owned}, "last_seen": {"$gt": since}},
+                                               {"_id": 0}).sort("last_seen", -1).to_list(20)
 
 
 @api.post("/settings/kiosk-printers/{printer_id}/link-device")
@@ -10657,7 +10697,7 @@ async def kiosk_printer_link_device(printer_id: str, body: LinkKioskIdIn, user=D
     if not prn:
         raise HTTPException(status_code=404, detail="Printer niet gevonden")
     if not await _bind_kiosk_id(prn, body.kiosk_id.strip()):
-        raise HTTPException(status_code=409, detail="Deze KIOSK-ID is al aan een ander bedrijf gekoppeld")
+        raise HTTPException(status_code=409, detail="Deze KIOSK-ID hoort bij een ander bedrijf")
     return {"ok": True}
 
 
