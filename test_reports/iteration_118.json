@@ -1,0 +1,37 @@
+{
+  "summary": "Iter118: APK background-service WS (?device=KIOSK-ID, no auth, plain 'ping') plus unbound-device linking. Backend: 15/15 pytest passed over real wss. Unknown device gets closed with 4401 in under 6s (with a 'ping' frame or with no frame) and is stored and listed in GET /settings/kiosk-unbound-devices; that endpoint returns 401/403 without a token or with a kiosk token. link-device: 404 for an unknown printer, 404 for another company's printer, 404 for a revoked printer, 422 for a short kiosk_id; on success kiosk_ids is set and the unbound entry is removed. A linked service gets printer_ready and stays open past the 4s hello timeout, also when it sends no first frame, with text or JSON pings. It shows online in /kiosk/printers/online and /settings/kiosk-printers (online:true, kiosk_ids) and goes offline after disconnect. Exclusive delivery: with both a token connection and a service connection open, a kasgeld REMOTE_PRINT reaches ONLY the service connection; after the service disconnects the printer stays online through the token connection and the next job goes to it. A token printer-mode connection with ?device= plus an auth message binds the kiosk_id. register with kiosk_id moves the binding off the old printer. Employee and admin WS auth flows still work; a bad printer token gets 4401. SECURITY FAIL: a company admin can link a kiosk_id that is already bound to ANOTHER company's printer, and _bind_kiosk_id pulls it from that printer, so the device and its print jobs (tenant receipts) can be hijacked. Frontend (/admin/instellingen#kiosk-apparaten, demo admin): the unbound box shows kiosk-unbound-{id}; selecting a printer and clicking Koppelen removes the row and shows kiosk-printer-ids-{pid} 'Achtergrondservice: kiosk-...'. After a browser WebSocket ?device= connected with pings, the row turned Online with a green dot (bg-emerald-500) within the 15s poll.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/settings/kiosk-printers/{printer_id}/link-device", "issue": "Cross-tenant hijack: an admin of company A can link a kiosk_id that is bound to company B's printer. _bind_kiosk_id runs update_many({kiosk_ids: kid, id != prn}) with $pull and no company filter, so B loses the device and A receives its REMOTE_PRINT jobs. Reproduced in test_kiosk_link_cross_company_iter118.py::test_cannot_steal_other_company_kiosk_id (other company's kiosk_ids became []).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/settings/kiosk-unbound-devices", "issue": "Not scoped per company: every company admin sees all unbound KIOSK-IDs from all tenants and can claim them (first come, first served). Consider a pairing code or showing only IDs the company's own kiosks reported."},
+      {"endpoint": "WS /api/kiosk/ws?device=", "issue": "Anyone without auth can upsert any number of random device IDs into db.kiosk_unbound_devices: no rate limit and no TTL index. The list is capped at 20, so spam can push a real device out of the admin list."},
+      {"endpoint": "WS printer connections", "issue": "_printer_conns is in-process memory. With more than one backend replica, exclusive delivery is not guaranteed (the token connection on another replica also prints). The last connection closing on one replica sets last_seen=0 even if another replica still has a connection."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Kiosk apparaten - unbound box", "issues": ["Link errors use window.alert instead of the app's toast", "Online status updates only through the 15s polling (acceptable)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_service_ws_iter118.py", "/app/backend/tests/test_kiosk_link_cross_company_iter118.py", "/app/test_reports/pytest/pytest_iter118.xml"],
+  "action_items": [
+    "In _bind_kiosk_id or link-device: refuse (409) a kiosk_id already bound to a printer of another company, or only $pull within the same company_id. Apply the same rule to /kiosk/printers/register and the token printer-mode bind.",
+    "Scope or harden kiosk-unbound-devices (pairing code, or a company hint) and add a TTL index plus rate limiting on unbound upserts."
+  ],
+  "critical_code_review_comments": [
+    "_bind_kiosk_id has no company filter on its $pull (cross-tenant)",
+    "_printer_conns / _primary_conn are per process, so they do not work across replicas",
+    "server.py is more than 18k lines and should be split; the kiosk WS code belongs in its own module"
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_service_ws_iter118.py", "/app/backend/tests/test_kiosk_link_cross_company_iter118.py"],
+  "success_rate": {"backend": "94% (16/17; 1 security failure)", "frontend": "100%"},
+  "seed_data_creation": "Demo reset had cleared Anita's PIN. Restored with PUT /api/employees/8ffdef09-... {app_role:kiosk, pin:4321}. Setting email anita@demo.sr failed ('al in gebruik') because a users doc with that email already exists. Test printers 'TEST KTP iter118*' were revoked and test unbound entries plus the TEST-other-company printer were deleted.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin page: /admin/instellingen#kiosk-apparaten. The demo admin's company is demo-company-fixed-uuid-00000000000 (= slug my-awesome-rentals-bv). For the service WS use websockets.connect(f'{WS}?device=kiosk-xxx') and send 'ping'; unknown IDs get 4401 within 4s. A linked one receives printer_ready. Cross-company tests insert a printer for company 'TEST-other-company' directly in mongo. In the browser you can open the service WS via page.evaluate(new WebSocket(...)).",
+  "rca of the issue": "_bind_kiosk_id: db.kiosk_printers.update_many({'kiosk_ids': kiosk_id, 'id': {'$ne': prn['id']}}, {'$pull': ...}) runs without a company_id check. link-device only checks that the TARGET printer belongs to the caller, not who currently owns the kiosk_id. Fix: look up the existing owner first; if owner.company_id != prn.company_id, raise 409, otherwise pull only within the same company."
+}

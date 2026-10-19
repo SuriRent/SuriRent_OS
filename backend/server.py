@@ -10330,9 +10330,13 @@ async def kiosk_ws(ws: WebSocket):
     if kiosk_id and (not hello or hello.get("type") != "auth"):
         prn = await db.kiosk_printers.find_one({"kiosk_ids": kiosk_id, "revoked": {"$ne": True}}, {"_id": 0})
         if not prn:
-            await db.kiosk_unbound_devices.update_one(
-                {"kiosk_id": kiosk_id},
-                {"$set": {"last_seen": iso(now_utc())}, "$setOnInsert": {"first_seen": iso(now_utc())}}, upsert=True)
+            # Spam-rem: alleen nieuwe ID's opslaan zolang de lijst klein is; oude (>1 dag) opruimen.
+            await db.kiosk_unbound_devices.delete_many({"last_seen": {"$lt": iso(now_utc() - timedelta(days=1))}})
+            known = await db.kiosk_unbound_devices.find_one({"kiosk_id": kiosk_id}, {"_id": 1})
+            if known or await db.kiosk_unbound_devices.count_documents({}) < 200:
+                await db.kiosk_unbound_devices.update_one(
+                    {"kiosk_id": kiosk_id},
+                    {"$set": {"last_seen": iso(now_utc())}, "$setOnInsert": {"first_seen": iso(now_utc())}}, upsert=True)
             await ws.close(code=4401)
             return
         await _record_device_seen(prn["company_id"], "printer", prn["name"], {"kiosk_id": kiosk_id, "service": True})
@@ -10542,12 +10546,18 @@ def _ws_parse(frame) -> Optional[dict]:
         return {"type": "ping"}
 
 
-async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> None:
+async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> bool:
+    """KIOSK-ID aan printer koppelen. Nooit overnemen van een actieve printer van een ánder bedrijf."""
     if not kiosk_id:
-        return
+        return False
+    foreign = await db.kiosk_printers.find_one(
+        {"kiosk_ids": kiosk_id, "company_id": {"$ne": prn["company_id"]}, "revoked": {"$ne": True}}, {"_id": 0, "id": 1})
+    if foreign:
+        return False
     await db.kiosk_printers.update_many({"kiosk_ids": kiosk_id, "id": {"$ne": prn["id"]}}, {"$pull": {"kiosk_ids": kiosk_id}})
     await db.kiosk_printers.update_one({"id": prn["id"]}, {"$addToSet": {"kiosk_ids": kiosk_id}})
     await db.kiosk_unbound_devices.delete_one({"kiosk_id": kiosk_id})
+    return True
 
 
 # Actieve printerverbindingen per printer (web-app printer-modus en/of APK-achtergrondservice).
@@ -10646,7 +10656,8 @@ async def kiosk_printer_link_device(printer_id: str, body: LinkKioskIdIn, user=D
     prn = await db.kiosk_printers.find_one({"id": printer_id, "company_id": company_id_of(user), "revoked": {"$ne": True}}, {"_id": 0})
     if not prn:
         raise HTTPException(status_code=404, detail="Printer niet gevonden")
-    await _bind_kiosk_id(prn, body.kiosk_id.strip())
+    if not await _bind_kiosk_id(prn, body.kiosk_id.strip()):
+        raise HTTPException(status_code=409, detail="Deze KIOSK-ID is al aan een ander bedrijf gekoppeld")
     return {"ok": True}
 
 

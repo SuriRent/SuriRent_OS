@@ -912,3 +912,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Kasbon eigen sjabloon (APK)
 - Oorzaak: APK print met eigen betalingssjabloon uit data-velden en negeert lines. Web stuurt nu template:"lines" + receipt_type (kasgeld/financieel) top-level en in data; betalingsvelden (kwitantie/naam/totaal) weg uit kasbon-data. APK-instructie in memory/apk-print.md. Wacht op APK-update door gebruiker.
+
+## 2026-06 — APK achtergrondservice WS (?device=KIOSK-ID)
+- Oorzaak (prod): service verbindt met ?device=kiosk-<12hex>, stuurt alleen pings; server wachtte op auth → 4400.
+- Fix: /kiosk/ws accepteert ?device= zonder auth als KIOSK-ID gekoppeld is (kiosk_printers.kiosk_ids); onbekend → 4401 + kiosk_unbound_devices (max 200, 1 dag). Tekst-pings toegestaan. Koppelen: admin Kiosk-apparaten "Achtergrondservice wacht op koppeling" (POST /settings/kiosk-printers/{id}/link-device, 409 cross-company), of automatisch via register/printer-hello kiosk_id (apkKioskId()). Printopdracht exclusief naar service-verbinding (_printer_conns, in-process).
+- Getest: iteration_118 + pytest cross-company fix.
