@@ -923,3 +923,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - REMOTE_PRINT: app (printer-modus, actief <70s) eerst, anders achtergrondservice; service krijgt top-level printer/lines/remote/template. Logs: "[ktp] REMOTE_PRINT ... via=app|service" en "[ktp] service <pid> -> msg".
 - Open: eigenaarschap vrijgeven (superadmin) ontbreekt; APK moet KIOSK-ID aan web-app doorgeven (window.__SURIRENT_KIOSK_ID__ of ?device= in URL) voor eerste claim.
 - Getest: iteration_119 (26 pytest).
+
+## 2026-06 — openstaand_periode op betalingsbon
+- Optioneel veld openstaand_periode (bv. "Aug, Sep 2026") in print-data als outstanding_after>0; lines tonen dan blok "Nog openstaand: / SRD x / Maand(en): …", anders ongewijzigd. Docs: /app/docs/bon_regels_instructies.md.

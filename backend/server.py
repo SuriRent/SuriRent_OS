@@ -8457,21 +8457,26 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
     # Openstaand na deze betaling — som van remaining_amount over alle
     # niet-betaalde facturen van deze huurder, in dezelfde currency.
     outstanding_after = 0.0
+    open_periods = []
     if p.get("tenant_id"):
         try:
             cur = p.get("currency") or "SRD"
             async for inv in db.invoices.find(
                 {"tenant_id": p["tenant_id"], "currency": cur,
                  "status": {"$nin": ["paid", "cancelled"]}},
-                {"_id": 0, "amount": 1, "paid_amount": 1, "id": 1},
+                {"_id": 0, "amount": 1, "paid_amount": 1, "id": 1, "period_month": 1, "period_year": 1},
             ):
                 inv_amt = float(inv.get("amount") or 0)
                 paid = inv.get("paid_amount")
                 if paid is None:
                     paid = await _invoice_currently_paid(inv["id"])
-                outstanding_after += max(0.0, inv_amt - float(paid or 0))
+                rest = max(0.0, inv_amt - float(paid or 0))
+                outstanding_after += rest
+                if rest > 0.005 and isinstance(inv.get("period_month"), int) and inv.get("period_year"):
+                    open_periods.append((int(inv["period_year"]), inv["period_month"]))
         except Exception:
             pass
+    p["openstaand_periode"] = _format_periods(open_periods)
     # Defensive backfill: één corrupt legacy-doc (bv. AI-insert zonder
     # receipt_number/paid_at) mag geen enkel endpoint meer crashen.
     if not p.get("receipt_number"):
@@ -12212,6 +12217,8 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
         "bedrag": money(p.get("amount")),
         "openstaand": money(p.get("outstanding_after")),
         "outstanding_after": float(p.get("outstanding_after") or 0),
+        **({"openstaand_periode": p["openstaand_periode"]}
+           if float(p.get("outstanding_after") or 0) > 0 and p.get("openstaand_periode") else {}),
         "methode": _PRINT_METHOD_LABELS.get((p.get("method") or "").lower(), p.get("method") or ""),
         "opmerking": p.get("note") or "",
         "lettergrootte": font_size,
@@ -12228,6 +12235,26 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
 
 _RECEIPT_COLS = 32  # 58mm thermisch, standaard font A
 _RECEIPT_COLS_80 = 48  # 80mm thermisch
+
+
+def _wrap_text(text: str, width: int) -> list:
+    out, line = [], ""
+    for w in str(text).split():
+        if line and len(line) + 1 + len(w) > width:
+            out.append(line)
+            line = w[:width]
+        else:
+            line = f"{line} {w}".strip()[:width]
+    return out + ([line] if line else [])
+
+
+def _format_periods(periods: list) -> str:
+    """[(2026, 8), (2026, 9), (2027, 1)] → 'Aug, Sep 2026, Jan 2027'."""
+    by_year: dict = {}
+    for y, m in sorted(set(periods)):
+        if 1 <= m <= 12:
+            by_year.setdefault(y, []).append(_NL_MONTHS_FULL[m - 1].capitalize()[:3])
+    return ", ".join(f"{', '.join(ms)} {y}" for y, ms in by_year.items())
 
 
 def _receipt_employee(p: dict) -> str:
@@ -12267,7 +12294,12 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     if d.get("methode"):
         lines.append(L(row("Methode:", d["methode"])))
     lines.append(L(row("BETAALD", d["bedrag"]), bold=True))
-    lines.append(L(row("Openstaand:", d["openstaand"])))
+    if d.get("openstaand_periode"):
+        # Optioneel: openstaand bedrag + maanden als eigen blok onder het bedrag.
+        lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], bold=True)]
+        lines += [L(x) for x in _wrap_text(f"Maand(en): {d['openstaand_periode']}", W)]
+    else:
+        lines.append(L(row("Openstaand:", d["openstaand"])))
     if d.get("medewerker"):
         lines.append(L(row("Ontvangen door:", d["medewerker"])))
     if d.get("opmerking"):
