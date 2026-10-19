@@ -31,6 +31,9 @@ function PrinterList() {
               <span className="flex-1 min-w-0">
                 <span className="block font-bold text-sm text-slate-900 truncate">{p.name}</span>
                 <span className="text-xs text-slate-500">{p.online ? 'Online' : 'Offline'}</span>
+                {p.kiosk_ids?.length > 0 && (
+                  <span className="block text-[11px] text-slate-400 truncate" data-testid={`kiosk-printer-ids-${p.id}`}>Achtergrondservice: {p.kiosk_ids.join(', ')}</span>
+                )}
               </span>
               <button onClick={() => rename(p)} data-testid={`kiosk-printer-rename-${p.id}`} title="Hernoemen"
                 className="h-9 w-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
@@ -40,6 +43,39 @@ function PrinterList() {
           ))}
         </ul>
       )}
+      {list?.length > 0 && <UnboundDevices printers={list} onLinked={load} />}
+    </div>
+  );
+}
+
+// APK-achtergrondservices die met ?device=KIOSK-ID verbinden maar nog aan geen printer gekoppeld zijn.
+function UnboundDevices({ printers, onLinked }) {
+  const [items, setItems] = useState([]);
+  const [pick, setPick] = useState({});
+  const load = useCallback(() => api.get('/settings/kiosk-unbound-devices').then(({ data }) => setItems(data || [])).catch(() => setItems([])), []);
+  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  const link = async (kid) => {
+    const pid = pick[kid] || printers[0].id;
+    try { await api.post(`/settings/kiosk-printers/${pid}/link-device`, { kiosk_id: kid }); load(); onLinked(); } catch (e) { window.alert(formatError(e)); }
+  };
+  if (!items.length) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="kiosk-unbound-devices">
+      <p className="text-sm font-bold text-amber-900">Achtergrondservice wacht op koppeling</p>
+      <p className="text-xs text-amber-800 mt-0.5">Deze KT-V520-service probeert te verbinden. Koppel hem aan de juiste printer.</p>
+      <ul className="mt-2 space-y-2">
+        {items.map((d) => (
+          <li key={d.kiosk_id} className="flex flex-wrap items-center gap-2" data-testid={`kiosk-unbound-${d.kiosk_id}`}>
+            <code className="text-xs font-bold text-slate-800 bg-white rounded px-1.5 py-1">{d.kiosk_id}</code>
+            <select value={pick[d.kiosk_id] || printers[0].id} onChange={(e) => setPick((s) => ({ ...s, [d.kiosk_id]: e.target.value }))}
+              data-testid={`kiosk-unbound-select-${d.kiosk_id}`} className="h-9 rounded-lg border border-slate-200 bg-white text-sm px-2">
+              {printers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button onClick={() => link(d.kiosk_id)} data-testid={`kiosk-unbound-link-${d.kiosk_id}`}
+              className="h-9 px-3 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-sm font-bold">Koppelen</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

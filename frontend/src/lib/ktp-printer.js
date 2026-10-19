@@ -28,6 +28,14 @@ if (typeof window !== 'undefined' && !isKtpDevice() && localStorage.getItem(TOKE
 }
 
 // Diagnose: wat meldt dit toestel? (meegestuurd met de kiosk-WebSocket)
+// KIOSK-ID van de APK-achtergrondservice (zelfde ID als ?device=), als de APK die doorgeeft.
+export function apkKioskId() {
+  try {
+    return String(window.__SURIRENT_KIOSK_ID__ || window.__SURIRENT_DEVICE_ID__
+      || new URLSearchParams(window.location.search).get('device') || localStorage.getItem('kiosk_id') || '').slice(0, 64) || null;
+  } catch { return null; }
+}
+
 export function deviceInfo() {
   return {
     ua: (navigator.userAgent || '').slice(0, 300),
@@ -93,7 +101,7 @@ function connect() {
   if (!token) return;
   try { ws = new WebSocket(wsUrl()); } catch { scheduleRetry(); return; }
   ws.onopen = () => {
-    send({ type: 'auth', role: 'printer', device_token: token, device: deviceInfo() });
+    send({ type: 'auth', role: 'printer', device_token: token, device: deviceInfo(), kiosk_id: apkKioskId() });
     if (localStorage.getItem(PAPER_KEY)) send({ type: 'PRINTER_STATUS', paper: getLocalPaper() });
     pingTimer = setInterval(() => send({ type: 'ping' }), PING_MS);
   };
@@ -124,7 +132,7 @@ export function startPrinterMode() {
 }
 
 async function register(name) {
-  const { data } = await api.post('/kiosk/printers/register', name ? { name } : {});
+  const { data } = await api.post('/kiosk/printers/register', { ...(name ? { name } : {}), kiosk_id: apkKioskId() });
   localStorage.setItem(TOKEN_KEY, data.device_token);
   localStorage.setItem(NAME_KEY, data.name);
   window.dispatchEvent(new Event('ktp-paired'));

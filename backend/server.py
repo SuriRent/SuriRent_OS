@@ -10321,10 +10321,28 @@ async def _active_employees(cid: str) -> list:
 async def kiosk_ws(ws: WebSocket):
     # Tokens komen in het eerste bericht (niet in de URL → niet in access-logs).
     await ws.accept()
+    kiosk_id = str(ws.query_params.get("device") or "").strip()[:64]
     try:
-        hello = await asyncio.wait_for(ws.receive_json(), timeout=10)
+        hello = _ws_parse(await asyncio.wait_for(ws.receive(), timeout=4 if kiosk_id else 10))
     except Exception:  # noqa: BLE001
-        await ws.close(code=4400)
+        hello = None
+    # APK-achtergrondservice: alleen ?device=KIOSK-ID + pings, geen auth-bericht.
+    if kiosk_id and (not hello or hello.get("type") != "auth"):
+        prn = await db.kiosk_printers.find_one({"kiosk_ids": kiosk_id, "revoked": {"$ne": True}}, {"_id": 0})
+        if not prn:
+            await db.kiosk_unbound_devices.update_one(
+                {"kiosk_id": kiosk_id},
+                {"$set": {"last_seen": iso(now_utc())}, "$setOnInsert": {"first_seen": iso(now_utc())}}, upsert=True)
+            await ws.close(code=4401)
+            return
+        await _record_device_seen(prn["company_id"], "printer", prn["name"], {"kiosk_id": kiosk_id, "service": True})
+        await _kiosk_ws_printer(ws, prn, service=True)
+        return
+    if not hello:
+        try:
+            await ws.close(code=4400)
+        except RuntimeError:
+            pass
         return
     if hello.get("role") == "printer":
         prn = await _printer_by_token(str(hello.get("device_token") or ""))
@@ -10332,6 +10350,8 @@ async def kiosk_ws(ws: WebSocket):
             await ws.close(code=4401)
             return
         await _record_device_seen(prn["company_id"], "printer", prn["name"], hello.get("device"))
+        if kiosk_id or hello.get("kiosk_id"):
+            await _bind_kiosk_id(prn, str(kiosk_id or hello.get("kiosk_id"))[:64])
         await _kiosk_ws_printer(ws, prn)
         return
     role = "admin" if hello.get("role") == "admin" else "employee"
@@ -10510,10 +10530,43 @@ def _paper_status(msg: dict) -> Optional[str]:
     return _PAPER_ALIASES.get(str(raw or "").strip().lower())
 
 
-async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
+def _ws_parse(frame) -> Optional[dict]:
+    """WS-frame → dict. Tekst 'ping' of niet-JSON telt als ping (APK-achtergrondservice)."""
+    if not frame or frame.get("type") == "websocket.disconnect":
+        raise WebSocketDisconnect()
+    raw = frame.get("text") if frame.get("text") is not None else (frame.get("bytes") or b"").decode("utf-8", "ignore")
+    try:
+        msg = json.loads(raw)
+        return msg if isinstance(msg, dict) else {"type": "ping"}
+    except Exception:  # noqa: BLE001
+        return {"type": "ping"}
+
+
+async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> None:
+    if not kiosk_id:
+        return
+    await db.kiosk_printers.update_many({"kiosk_ids": kiosk_id, "id": {"$ne": prn["id"]}}, {"$pull": {"kiosk_ids": kiosk_id}})
+    await db.kiosk_printers.update_one({"id": prn["id"]}, {"$addToSet": {"kiosk_ids": kiosk_id}})
+    await db.kiosk_unbound_devices.delete_one({"kiosk_id": kiosk_id})
+
+
+# Actieve printerverbindingen per printer (web-app printer-modus en/of APK-achtergrondservice).
+# Een printopdracht gaat naar precies één verbinding: de achtergrondservice heeft voorrang.
+_printer_conns: dict = {}
+
+
+def _primary_conn(pid_: str):
+    conns = _printer_conns.get(pid_) or []
+    svc = [c for c in conns if c["service"]]
+    return (svc or conns or [None])[-1]
+
+
+async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
     cid, pid_ = prn["company_id"], prn["id"]
     channel = _kiosk_admin_channel(cid)
     queue = _kb_subscribe(channel, maxsize=32)
+    me = {"ws": ws, "service": service}
+    _printer_conns.setdefault(pid_, []).append(me)
     last_ping = {"t": time.time()}
     await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": last_ping["t"]}})
     await _kb_publish(channel, {"type": "presence_changed"})
@@ -10521,12 +10574,12 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
     async def forward():
         while True:
             ev = await queue.get()
-            if ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_:
+            if ev.get("type") == "REMOTE_PRINT" and ev.get("target") == pid_ and _primary_conn(pid_) is me:
                 await ws.send_json(ev)
 
     async def receive():
         while True:
-            msg = await ws.receive_json()
+            msg = _ws_parse(await ws.receive())
             kind = msg.get("type")
             if kind == "ping":
                 if time.time() - last_ping["t"] > 25:
@@ -10563,12 +10616,38 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict):
         pass
     finally:
         _kb_unsubscribe(channel, queue)
-        await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": 0}})
+        conns = _printer_conns.get(pid_) or []
+        if me in conns:
+            conns.remove(me)
+        if not conns:
+            _printer_conns.pop(pid_, None)
+            await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": 0}})
         await _kb_publish(channel, {"type": "presence_changed"})
 
 
 class PrinterRegisterIn(BaseModel):
     name: Optional[str] = None
+    kiosk_id: Optional[str] = None
+
+
+class LinkKioskIdIn(BaseModel):
+    kiosk_id: str = Field(min_length=3, max_length=64)
+
+
+@api.get("/settings/kiosk-unbound-devices")
+async def kiosk_unbound_devices(user=Depends(require_role("admin", "superadmin"))):
+    """Achtergrondservices (?device=KIOSK-ID) die zonder koppeling probeerden te verbinden (laatste 2 uur)."""
+    since = iso(now_utc() - timedelta(hours=2))
+    return await db.kiosk_unbound_devices.find({"last_seen": {"$gt": since}}, {"_id": 0}).sort("last_seen", -1).to_list(20)
+
+
+@api.post("/settings/kiosk-printers/{printer_id}/link-device")
+async def kiosk_printer_link_device(printer_id: str, body: LinkKioskIdIn, user=Depends(require_role("admin", "superadmin"))):
+    prn = await db.kiosk_printers.find_one({"id": printer_id, "company_id": company_id_of(user), "revoked": {"$ne": True}}, {"_id": 0})
+    if not prn:
+        raise HTTPException(status_code=404, detail="Printer niet gevonden")
+    await _bind_kiosk_id(prn, body.kiosk_id.strip())
+    return {"ok": True}
 
 
 @api.post("/kiosk/printers/register")
@@ -10581,6 +10660,8 @@ async def kiosk_printer_register(body: PrinterRegisterIn, _session=Depends(get_k
     doc = {"id": str(uuid.uuid4()), "company_id": cid, "name": (body.name or "").strip()[:40] or f"KT-V520 #{n + 1}",
            "token_hash": _hash_device_token(tok), "created_at": iso(now_utc()), "last_seen": 0, "revoked": False}
     await db.kiosk_printers.insert_one(doc)
+    if body.kiosk_id:
+        await _bind_kiosk_id(doc, body.kiosk_id.strip()[:64])
     return {"printer_id": doc["id"], "name": doc["name"], "device_token": tok}
 
 
@@ -10588,9 +10669,9 @@ async def kiosk_printer_register(body: PrinterRegisterIn, _session=Depends(get_k
 async def kiosk_printers_list(user=Depends(require_role("admin", "superadmin"))):
     cid = company_id_of(user)
     docs = await db.kiosk_printers.find({"company_id": cid, "revoked": {"$ne": True}},
-                                        {"_id": 0, "id": 1, "name": 1, "created_at": 1, "last_seen": 1}).sort("created_at", 1).to_list(100)
+                                        {"_id": 0, "id": 1, "name": 1, "created_at": 1, "last_seen": 1, "kiosk_ids": 1}).sort("created_at", 1).to_list(100)
     now = time.time()
-    return [{"id": d["id"], "name": d["name"], "created_at": d["created_at"],
+    return [{"id": d["id"], "name": d["name"], "created_at": d["created_at"], "kiosk_ids": d.get("kiosk_ids") or [],
              "online": (d.get("last_seen") or 0) > now - _PRESENCE_TTL_S} for d in docs]
 
 
