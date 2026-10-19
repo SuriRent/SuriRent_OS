@@ -168,8 +168,8 @@ def test_exclusive_delivery_service_then_token(ctx):
                 assert r.status_code == 200, r.text
                 job = r.json()["job_id"]
                 s_msgs, t_msgs = await asyncio.gather(_drain(svc, 4), _drain(tok_ws, 4))
-                assert [m["job_id"] for m in t_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
-                assert not [m for m in s_msgs if m.get("type") == "REMOTE_PRINT"], s_msgs
+                assert [m["job_id"] for m in s_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
+                assert not [m for m in t_msgs if m.get("type") == "REMOTE_PRINT"], t_msgs
             await asyncio.sleep(1.5)
             assert await asyncio.to_thread(_online, ctx), "printer should stay online via token conn"
             r = await asyncio.to_thread(requests.post, path, json=body, headers=ctx["kh"])

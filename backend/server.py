@@ -10592,18 +10592,18 @@ async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> bool:
 
 
 # Actieve printerverbindingen per printer (web-app printer-modus en/of APK-achtergrondservice).
-# Een printopdracht gaat naar precies één verbinding: de app (printer-modus) heeft voorrang,
-# mits die recent nog iets stuurde; anders de achtergrondservice.
+# Een printopdracht gaat naar precies één verbinding: de achtergrondservice heeft voorrang,
+# de app (printer-modus) is reserve.
 _printer_conns: dict = {}
 
 
 def _primary_conn(pid_: str):
-    # App (printer-modus) eerst; achtergrondservice alleen als de app niet verbonden is.
+    # Achtergrondservice (?device=) eerst; de app-verbinding is reserve (bij voorkeur een recent actieve).
     conns = _printer_conns.get(pid_) or []
     now = time.time()
-    app = [c for c in conns if not c["service"] and now - c["last"] < _APP_FRESH_S]
     svc = [c for c in conns if c["service"]]
-    return (app or svc or conns or [None])[-1]
+    app = [c for c in conns if not c["service"] and now - c["last"] < _APP_FRESH_S]
+    return (svc or app or conns or [None])[-1]
 
 
 _APP_FRESH_S = 70

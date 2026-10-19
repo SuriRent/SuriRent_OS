@@ -926,3 +926,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — openstaand_periode op betalingsbon
 - Optioneel veld openstaand_periode (bv. "Aug, Sep 2026") in print-data als outstanding_after>0; lines tonen dan blok "Nog openstaand: / SRD x / Maand(en): …", anders ongewijzigd. Docs: /app/docs/bon_regels_instructies.md.
+
+## 2026-06 — Service eerst (op verzoek gebruiker)
+- _primary_conn: ?device= achtergrondservice eerst, app-printer-modus (recent actief) als reserve. Tests iter118/119 aangepast; 24 passed.

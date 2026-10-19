@@ -189,7 +189,7 @@ def _log_tail():
 
 
 # 7. Delivery: both connected -> app only (via=app)
-def test_delivery_app_first(ctx):
+def test_delivery_service_first(ctx):
     path = f"{API}/kiosk/kasgeld/{ctx['entry']['id']}/remote-print"
     body = {"printer_id": ctx["prn_a"]["printer_id"]}
 
@@ -205,12 +205,12 @@ def test_delivery_app_first(ctx):
                 assert r.status_code == 200, r.text
                 job = r.json()["job_id"]
                 s_msgs, t_msgs = await asyncio.gather(_drain(svc, 4), _drain(tok, 4))
-                assert [m["job_id"] for m in t_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
-                assert not [m for m in s_msgs if m.get("type") == "REMOTE_PRINT"], s_msgs
+                assert [m["job_id"] for m in s_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
+                assert not [m for m in t_msgs if m.get("type") == "REMOTE_PRINT"], t_msgs
                 return job
     job = asyncio.run(run())
     time.sleep(1)
-    assert f"REMOTE_PRINT job={job}" in _log_tail() and "via=app" in [l for l in _log_tail().splitlines() if job in l][0]
+    assert f"REMOTE_PRINT job={job}" in _log_tail() and "via=service" in [l for l in _log_tail().splitlines() if job in l][0]
 
 
 # 8. Delivery: only service connected -> service gets REMOTE_PRINT with top-level fields; DONE relays to employee kiosk
