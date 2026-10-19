@@ -30,6 +30,16 @@ def ctx():
     requests.delete(f"{API}/kasgeld/{c['entry']['id']}", headers=ah)
     for pid in [prn["printer_id"], *c["extra"]]:
         requests.delete(f"{API}/settings/kiosk-printers/{pid}", headers=ah)
+    # iter119: clean ownership/unbound docs of test ids
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from dotenv import load_dotenv
+    load_dotenv("/app/backend/.env")
+
+    async def clean():
+        db = AsyncIOMotorClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
+        await db.kiosk_id_owners.delete_many({"kiosk_id": {"$regex": "^kiosk-test"}})
+        await db.kiosk_unbound_devices.delete_many({"kiosk_id": {"$regex": "^kiosk-test"}})
+    asyncio.run(clean())
 
 
 async def _unknown_closed(kid):
@@ -42,13 +52,22 @@ async def _unknown_closed(kid):
         return ei.value.rcvd.code if ei.value.rcvd else None, time.time() - t0
 
 
-# Unknown kiosk id -> 4401 + listed as unbound
+# Unknown kiosk id -> 4401; listed as unbound only after own-company claim (iter119 ownership)
 def test_unknown_device_closed_4401_and_listed(ctx):
     code, dt = asyncio.run(_unknown_closed(KID))
     assert code == 4401
     assert dt < 6
     r = requests.get(f"{API}/settings/kiosk-unbound-devices", headers=ctx["ah"])
     assert r.status_code == 200
+    assert not any(d["kiosk_id"] == KID for d in r.json()), "unclaimed ID must not be listed"
+
+    async def claim():
+        async with websockets.connect(WS) as ws:
+            await ws.send(json.dumps({"type": "auth", "role": "employee", "token": ctx["ktok"], "name": "TEST_iter118", "kiosk_id": KID}))
+            await asyncio.wait_for(ws.recv(), 10)
+            await ws.send(json.dumps({"type": "BYE"}))
+    asyncio.run(claim())
+    r = requests.get(f"{API}/settings/kiosk-unbound-devices", headers=ctx["ah"])
     assert any(d["kiosk_id"] == KID and d.get("last_seen") for d in r.json())
 
 
@@ -132,7 +151,7 @@ async def _drain(ws, secs):
     return got
 
 
-# Exclusive delivery: service conn has priority over token conn
+# Exclusive delivery (iter119: app-first): token conn has priority; service only when app not connected
 def test_exclusive_delivery_service_then_token(ctx):
     path = f"{API}/kiosk/kasgeld/{ctx['entry']['id']}/remote-print"
     body = {"printer_id": ctx["prn"]["printer_id"]}
@@ -149,8 +168,8 @@ def test_exclusive_delivery_service_then_token(ctx):
                 assert r.status_code == 200, r.text
                 job = r.json()["job_id"]
                 s_msgs, t_msgs = await asyncio.gather(_drain(svc, 4), _drain(tok_ws, 4))
-                assert [m["job_id"] for m in s_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
-                assert not [m for m in t_msgs if m.get("type") == "REMOTE_PRINT"], t_msgs
+                assert [m["job_id"] for m in t_msgs if m.get("type") == "REMOTE_PRINT"] == [job]
+                assert not [m for m in s_msgs if m.get("type") == "REMOTE_PRINT"], s_msgs
             await asyncio.sleep(1.5)
             assert await asyncio.to_thread(_online, ctx), "printer should stay online via token conn"
             r = await asyncio.to_thread(requests.post, path, json=body, headers=ctx["kh"])

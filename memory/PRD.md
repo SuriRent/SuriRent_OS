@@ -917,3 +917,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Oorzaak (prod): service verbindt met ?device=kiosk-<12hex>, stuurt alleen pings; server wachtte op auth → 4400.
 - Fix: /kiosk/ws accepteert ?device= zonder auth als KIOSK-ID gekoppeld is (kiosk_printers.kiosk_ids); onbekend → 4401 + kiosk_unbound_devices (max 200, 1 dag). Tekst-pings toegestaan. Koppelen: admin Kiosk-apparaten "Achtergrondservice wacht op koppeling" (POST /settings/kiosk-printers/{id}/link-device, 409 cross-company), of automatisch via register/printer-hello kiosk_id (apkKioskId()). Printopdracht exclusief naar service-verbinding (_printer_conns, in-process).
 - Getest: iteration_118 + pytest cross-company fix.
+
+## 2026-06 — KIOSK-ID eigenaarschap + app-eerst printen
+- kiosk_id_owners (uniek): eigenaar = eerdere koppeling of eerste claim via eigen APK (kiosk/admin WS hello kiosk_id of ?device=, printer register/hello). Wachtlijst + link-device alleen voor eigenaar (409 anders).
+- REMOTE_PRINT: app (printer-modus, actief <70s) eerst, anders achtergrondservice; service krijgt top-level printer/lines/remote/template. Logs: "[ktp] REMOTE_PRINT ... via=app|service" en "[ktp] service <pid> -> msg".
+- Open: eigenaarschap vrijgeven (superadmin) ontbreekt; APK moet KIOSK-ID aan web-app doorgeven (window.__SURIRENT_KIOSK_ID__ of ?device= in URL) voor eerste claim.
+- Getest: iteration_119 (26 pytest).

@@ -10587,22 +10587,28 @@ async def _bind_kiosk_id(prn: dict, kiosk_id: str) -> bool:
 
 
 # Actieve printerverbindingen per printer (web-app printer-modus en/of APK-achtergrondservice).
-# Een printopdracht gaat naar precies één verbinding: de achtergrondservice heeft voorrang.
+# Een printopdracht gaat naar precies één verbinding: de app (printer-modus) heeft voorrang,
+# mits die recent nog iets stuurde; anders de achtergrondservice.
 _printer_conns: dict = {}
 
 
 def _primary_conn(pid_: str):
     # App (printer-modus) eerst; achtergrondservice alleen als de app niet verbonden is.
     conns = _printer_conns.get(pid_) or []
-    app = [c for c in conns if not c["service"]]
-    return (app or conns or [None])[-1]
+    now = time.time()
+    app = [c for c in conns if not c["service"] and now - c["last"] < _APP_FRESH_S]
+    svc = [c for c in conns if c["service"]]
+    return (app or svc or conns or [None])[-1]
+
+
+_APP_FRESH_S = 70
 
 
 async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
     cid, pid_ = prn["company_id"], prn["id"]
     channel = _kiosk_admin_channel(cid)
     queue = _kb_subscribe(channel, maxsize=32)
-    me = {"ws": ws, "service": service}
+    me = {"ws": ws, "service": service, "last": time.time()}
     _printer_conns.setdefault(pid_, []).append(me)
     last_ping = {"t": time.time()}
     await db.kiosk_printers.update_one({"id": pid_}, {"$set": {"last_seen": last_ping["t"]}})
@@ -10623,6 +10629,7 @@ async def _kiosk_ws_printer(ws: WebSocket, prn: dict, service: bool = False):
     async def receive():
         while True:
             msg = _ws_parse(await ws.receive())
+            me["last"] = time.time()
             kind = msg.get("type")
             if service and kind != "ping":
                 _logging.getLogger("uvicorn.error").info("[ktp] service %s -> %s", pid_, json.dumps(msg)[:300])

@@ -1,0 +1,48 @@
+{
+  "summary": "Iter119: tested KIOSK-ID ownership and app-first REMOTE_PRINT delivery over real wss (python websockets) against the public URL. Company A = demo / my-awesome-rentals-bv. Company B = 'Test Co 7ea4bb52', using a temporary TEST admin inserted into the DB and a B kiosk JWT signed with JWT_SECRET; both were removed afterwards. New file test_kiosk_id_ownership_iter119.py: 9/9 passed. (1) An unknown ?device= connection is closed with 4401 and stored in the unbound collection, gets no owner, and is not visible to A or B. (2) A's employee WS hello with kiosk_id claims ownership for A; after the service reconnects, A's GET unbound lists the ID and B's does not. (3) B's kiosk hello with the same kiosk_id does not change the owner. (4) B link-device -> 409 'Deze KIOSK-ID hoort bij een ander bedrijf'. A link-device -> 200, the ID leaves A's unbound list, and the service reconnect gets printer_ready. (5) Fallback works for IDs in another company's kiosk_printers.kiosk_ids, both active and revoked: link -> 409, the other company keeps the ID, and an owner doc is created for it. (6) Race: 3 rounds of 6 simultaneous link-device calls (A and B, 3 each). Each round had exactly one winning company, all responses were 200 or 409, and there was exactly one owner doc whose company matched the printer holding the ID. (7) With token printer-mode and service both connected, the kasgeld job went ONLY to the token connection; the log shows '[ktp] REMOTE_PRINT job=.. via=app'. (8) With only the service connected, the service received REMOTE_PRINT with top-level printer 'kt-v520', remote true, lines equal to data.lines, template 'lines' and receipt_type 'kasgeld'; the log shows via=service. The service's REMOTE_PRINT_DONE was logged as '[ktp] service <pid> -> {...REMOTE_PRINT_DONE...}' and relayed to the employee kiosk WS with ok true and the printer name (green toast path). Regression: updated the iter118 files for the new semantics, and the combined run of 26 tests (iter118 x2 + iter119) passed. In an earlier combined run 1 test failed once with a 'timed out during opening handshake' to the ingress (transient, 1 failure in 2 runs). Frontend, demo admin at /admin/instellingen#kiosk-apparaten: seeded 3 unbound IDs (owned by A, owned by B, unclaimed). The box showed ONLY kiosk-uiown119. Picking a printer and clicking Koppelen removed the row and showed 'Achtergrondservice: kiosk-uiown119' on the printer. All test data was cleaned up: owners, unbound docs, printers, the B user, and the TEST kiosk_devices_seen rows.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /settings/kiosk-printers/{pid}/link-device + kiosk WS hello kiosk_id", "issue": "An unclaimed ID is first-come-first-served. Any company's admin can call link-device, or any company's kiosk session can send a WS hello / open /kiosk?device=X (apkKioskId reads ?device= and localStorage), with a guessed or observed KIOSK-ID before the real owner's APK claims it. Safety therefore depends on KIOSK-ID entropy and on the owner's app connecting first. This matches the chosen design, but it is a residual risk."},
+      {"endpoint": "kiosk_id_owners", "issue": "Ownership cannot be released or transferred: a device sold or moved to another company stays locked to the first owner forever, even after all its printers are revoked. Consider a superadmin or owner 'release' action."},
+      {"endpoint": "_primary_conn / app-first delivery", "issue": "If the app printer-mode socket is half-open (Android WebView in background, no close frame), jobs still go to that dead app connection and the healthy service never prints until the app socket drops. There is no ack timeout and no fallback to the service. Consider re-sending to the service if no REMOTE_PRINT_DONE arrives within N seconds, or preferring the connection with the most recent ping."},
+      {"endpoint": "_printer_conns (in-process)", "issue": "Still in memory, as noted in iter118. Exclusive app-first delivery is not guaranteed with more than one backend replica."},
+      {"endpoint": "server.py ~10590 comment", "issue": "The comment still says 'de achtergrondservice heeft voorrang', which contradicts the new app-first logic."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kiosk_id_ownership_iter119.py",
+    "/app/backend/tests/test_kiosk_service_ws_iter118.py",
+    "/app/backend/tests/test_kiosk_link_cross_company_iter118.py",
+    "/app/backend/tests/setup_iter119_ui.py",
+    "/app/test_reports/pytest/pytest_iter119.xml"
+  ],
+  "action_items": [
+    "Optional: add a fallback to the service connection when the app connection does not ack REMOTE_PRINT (stale app socket)",
+    "Optional: add a release/transfer path for kiosk_id_owners (superadmin)",
+    "Fix the outdated comment above _printer_conns"
+  ],
+  "critical_code_review_comments": [
+    "_claim_kiosk_id handles the unique-index race correctly (insert_one, then re-read the owner on DuplicateKey); this was verified under concurrency.",
+    "_kiosk_id_owner fallback upsert with $setOnInsert on a unique key can, in theory, raise DuplicateKeyError under heavy concurrency; MongoDB retries equality upserts automatically, and the race test did not hit it.",
+    "server.py is more than 18k lines and should be split into modules (kiosk WS / printers belong in their own module).",
+    "Editing files in /app/backend/tests triggers a uvicorn WatchFiles reload, which can kill in-flight WS tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_kiosk_id_ownership_iter119.py (new)",
+    "/app/backend/tests/setup_iter119_ui.py (new)",
+    "/app/backend/tests/test_kiosk_service_ws_iter118.py (unbound list now requires an own-company claim; exclusive delivery switched to app-first; owner/unbound cleanup)",
+    "/app/backend/tests/test_kiosk_link_cross_company_iter118.py (expects 409 + owner cleanup)"
+  ],
+  "success_rate": {"backend": "100% (26/26; 1 transient ingress handshake timeout in an earlier run)", "frontend": "100%"},
+  "test_credentials": "demo@surirent.sr/demo1234 (company A). Kiosk PIN 4321 for my-awesome-rentals-bv had to be restored via PUT /api/employees/{anita_id} {app_role:'kiosk', pin:'4321'}; the email anita@demo.sr is now in use by another account, so it was omitted. Company B: a temporary admin is inserted into the DB by the fixture (CID 9fb04645-..., Test Co 7ea4bb52) and deleted afterwards.",
+  "seed_data_creation": "None persisted. All TEST owners, unbound docs, printers, the B user and kiosk_devices_seen TEST rows were cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_kiosk_id_ownership_iter119.py backend/tests/test_kiosk_service_ws_iter118.py backend/tests/test_kiosk_link_cross_company_iter118.py. The demo reset wipes Anita's PIN, so restore it first via PUT /api/employees/{id}. For UI testing: python backend/tests/setup_iter119_ui.py seed|clean."
+}

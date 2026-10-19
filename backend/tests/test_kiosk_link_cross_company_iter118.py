@@ -32,6 +32,7 @@ def ctx():
     yield {"ah": ah, "own": own["printer_id"], "other": other_id, "kid": kid}
     requests.delete(f"{API}/settings/kiosk-printers/{own['printer_id']}", headers=ah)
     _db(lambda db: db.kiosk_printers.delete_one({"id": other_id}))
+    _db(lambda db: db.kiosk_id_owners.delete_one({"kiosk_id": kid}))
 
 
 def test_link_other_company_printer_404(ctx):
@@ -41,6 +42,7 @@ def test_link_other_company_printer_404(ctx):
 
 def test_cannot_steal_other_company_kiosk_id(ctx):
     r = requests.post(f"{API}/settings/kiosk-printers/{ctx['own']}/link-device", json={"kiosk_id": ctx["kid"]}, headers=ctx["ah"])
+    assert r.status_code == 409, r.text  # iter119: owned by other company via fallback
     other = _db(lambda db: db.kiosk_printers.find_one({"id": ctx["other"]}, {"_id": 0, "kiosk_ids": 1}))
     # Security expectation: a company admin must not be able to unbind another company's device
     assert ctx["kid"] in (other.get("kiosk_ids") or []), f"HIJACK: status {r.status_code}, other company's kiosk_id was pulled"
