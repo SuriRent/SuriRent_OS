@@ -1,0 +1,47 @@
+{
+  "summary": "Iter122, backend only, run against the public URL. All requested features PASS: 8 of 9 tests pass, including the 3/3 iter121 regression. The one failure is a separate bug found during testing (see critical issues). (1) 100% paid threshold. A 1000 SRD invoice paid 960 (96%) via admin POST /api/payments gets status 'partial' with paid_amount 960. 999.99 is still 'partial'. A further 0.01 makes it 'paid'. Deleting payments with also_delete_invoices=false moves it paid -> partial (960) -> open (0). Kiosk POST /api/kiosk/payments (no employee) behaves the same: 960 -> partial, +40 -> paid. In /api/kiosk/apartments, pay_status follows: unpaid -> partial -> paid -> partial -> unpaid. A 96% paid invoice whose status is stale 'open' also shows 'partial', not 'paid'. Reassign-invoice was checked both ways: moving the 960 payment empties the old invoice (open/0) and makes the new one partial (960). Moving 40 out of a paid invoice turns it partial and the target partial. (2) No caching. All endpoints were warmed twice. Then a location, apartment, tenant and invoice were inserted straight into Mongo (bypassing the middleware). Within 0.73s the next requests showed every change: /admin/stats (tenants_total +1, apartments_total +1), /invoices, /invoices/grouped, /tenants/paged, /kiosk/locations, and /kiosk/apartments (pay_status unpaid). Direct DB edits were also visible on the very next request: invoice paid_amount (kiosk shows partial), an apartment rename, and deletes in stats/locations/invoices. An API payment and its deletion showed up at once in /invoices and in admin_stats invoice_status. Code review confirms _kiosk_cached, _list_cached, admin_stats and _all_invoices_enriched compute live, and all thresholds use '>= amount - 0.005'. NEW CRITICAL BUG (it existed before this change, and this partial-payment scenario exposes it): a partial payment above 50% of an invoice that has no paid_amount field is credited twice. Such invoices come from POST /api/invoices, /invoices/historical, the maintenance invoice and demo seed. A SRD 960 FIFO payment produced July paid 960 and August paid 920, so 1880 credited in total. With explicit invoice_ids, the 920 becomes phantom credit_remaining on the payment instead. Allocations are also stored wrong (40 instead of 960), so DELETE /payments then reverts the wrong amount and leaves the invoice 'partial' at 920 instead of 'open'.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/payments, POST /api/kiosk/payments (_create_payment_doc, server.py ~9103-9112)",
+        "issue": "When matched_invoice has no paid_amount, already_paid = _invoice_currently_paid(inv_id). That runs AFTER db.payments.insert_one(doc), and doc already has invoice_id = matched, so it counts the payment being created. Result: open_on_matched = amount - X, primary_chunk = amount - X, and overflow = 2X - amount, which gets allocated again to other open invoices (FIFO) or stored as credit_remaining. _apply_payment_to_invoice fixes paid_amount on the matched invoice by accident, but the allocation it records is wrong (amount - X), which breaks the DELETE /payments revert. Reproduced: 1000 SRD invoices for Jul and Aug, POST /payments 960 without invoice_ids -> Jul paid 960, Aug paid 920, allocations [40, 920]. Fix: use already_paid = max(0, await _invoice_currently_paid(id) - pay_amt), or call it before insert_one, or exclude doc['id']. Also add 'paid_amount': 0.0 to every invoice insert (POST /invoices ~13401, /invoices/historical ~13457, maintenance ~7003, _seed_demo_data ~14535, change_plan/_ensure_open_invoice_for_company).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "server.py dead code",
+        "issue": "_KIOSK_CACHE, _INVOICE_CACHE, _STATS_CACHE dicts, the *_TTL_S constants and their .clear() calls in the middleware and _kiosk_overview_invalidate are now unused. Comments at ~11730 and ~13207 still describe a 60s/30s cache. Remove them to avoid confusion."
+      },
+      {
+        "endpoint": "DELETE /api/payments/{id} (from iter121)",
+        "issue": "Still sends no WS overview_invalidate, so an open employee-kiosk overview stays stale after an admin deletes a payment."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_paid_threshold_nocache_iter122.py",
+    "/app/backend/tests/test_kiosk_total_due_invalidate_iter121.py",
+    "/app/test_reports/pytest/pytest_iter122.xml",
+    "/app/test_reports/probe_iter122.py"
+  ],
+  "action_items": [
+    "CRITICAL: fix the double counting in _create_payment_doc: subtract the current payment from _invoice_currently_paid(), or compute already_paid before insert_one.",
+    "Set paid_amount: 0.0 on every invoice insert path (POST /invoices, historical, maintenance, seed, plan invoices).",
+    "Optional: remove the dead cache dicts, TTLs and .clear() calls, and update the outdated cache comments.",
+    "Optional: call _kiosk_overview_invalidate in delete_payment, approve and reassign."
+  ],
+  "critical_code_review_comments": [
+    "The 0.95 -> '- 0.005' threshold change is applied consistently (lines 422, 8724, 9303, 9687, 9727, 9802, 10080) and in InvoiceRow.jsx isPartial. No '* 0.95' is left in backend/routes.",
+    "delete_payment uses inv.amount_due or amount for the threshold, while the other paths use amount. This is inconsistent if amount_due ever differs.",
+    "server.py is 18.6k lines; split it into routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_paid_threshold_nocache_iter122.py", "/app/test_reports/probe_iter122.py"],
+  "success_rate": {"backend": "89% (8/9; the 1 failure is the newly found double-count bug)", "frontend": "not tested (backend only)"},
+  "seed_data_creation": "The test seeds a TEST_iter122_* apartment and tenant directly in Mongo (company my-awesome-rentals-bv / demo) and removes them in teardown. Verified 0 TEST_iter12* tenants, apartments, payments, locations and invoices left.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_paid_threshold_nocache_iter122.py backend/tests/test_kiosk_total_due_invalidate_iter121.py. test_partial_payment_on_fresh_invoice_no_double_count must pass after the fix. The other threshold tests force paid_amount=0 on new invoices (init_paid=True) to work around the bug; set init_paid=False to retest the full path. Admin login is demo@surirent.sr / demo1234; the kiosk PIN 4321 is ensured by _kiosk().",
+  "rca of the issue": "Double counting: _create_payment_doc inserts the payment with invoice_id set, then falls back to _invoice_currently_paid() when paid_amount is missing, which sums approved payments by invoice_id and so includes the new one. Repro: POST /invoices for 2 periods (rent 1000), POST /payments {amount:960} -> invoice A paid_amount 960 and invoice B paid_amount 920. Mitigation: exclude the current payment from the fallback sum, and always initialise paid_amount on invoice creation."
+}

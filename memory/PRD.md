@@ -937,3 +937,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - /kiosk/tenants/{id}/overview: total_due (open+current) + is_paid; tenant-portal gebruikt die. TenantKioskLayout betaalstatus/Saldo alleen uit total_due/is_paid.
 - _kiosk_overview_invalidate: bij admin betaling create/approve/reject/delete/reassign caches legen + WS overview_invalidate → open kiosk-overview herlaadt. /kiosk/apartments pay_status negeert toekomstige facturen.
 - Getest: iteration_121.
+
+## 2026-06 — 100% betaald + caches uit
+- Factuur pas "paid" bij 100% (>= bedrag - 0.005) i.p.v. 95%, backend + InvoiceRow.
+- Alle server-caches verwijderd (_KIOSK_CACHE, _INVOICE_CACHE/_list_cached, _STATS_CACHE): altijd live uit DB.
+- Bugfix dubbele toerekening: _invoice_currently_paid(exclude_payment_id) bij facturen zonder paid_amount (create/approve/OCR/FIFO).
+- Getest: iteration_122 (9 pytest).

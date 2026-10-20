@@ -851,10 +851,6 @@ async def _live_sync_broadcast(request: Request, call_next):
         if method in ("GET", "HEAD", "OPTIONS"):
             return response
         path = request.url.path or ""
-        if response.status_code < 400 and not path.startswith(_CACHE_KEEP_PATHS):
-            _STATS_CACHE.clear()
-            _KIOSK_CACHE.clear()
-            _INVOICE_CACHE.clear()
         if response.status_code >= 400:
             return response
         # Alleen mutaties op admin/company data — sluit auth/public/events uit.
@@ -6745,7 +6741,7 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
             inv_amt = float(matched_invoice.get("amount") or 0)
             already_paid = matched_invoice.get("paid_amount")
             if already_paid is None:
-                already_paid = await _invoice_currently_paid(matched_invoice["id"])
+                already_paid = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=payment_id)
             open_on = max(0.0, round(inv_amt - float(already_paid or 0), 2))
             pay_amt = float(p.get("amount") or 0)
             primary = min(pay_amt, open_on) if open_on > 0 else pay_amt
@@ -8646,13 +8642,14 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
     return out
 
 
-async def _invoice_currently_paid(invoice_id: str) -> float:
-    """Som van alle approved payments die aan deze factuur gelinkt zijn.
+async def _invoice_currently_paid(invoice_id: str, exclude_payment_id: Optional[str] = None) -> float:
+    """Som van alle approved payments die aan deze factuur gelinkt zijn (optioneel zonder één betaling).
     Wordt gebruikt voor fallback wanneer `paid_amount` nog niet gemigreerd is."""
     total = 0.0
-    async for p in db.payments.find(
-        {"invoice_id": invoice_id, "status": "approved"}, {"_id": 0, "amount": 1},
-    ):
+    q = {"invoice_id": invoice_id, "status": "approved"}
+    if exclude_payment_id:
+        q["id"] = {"$ne": exclude_payment_id}
+    async for p in db.payments.find(q, {"_id": 0, "amount": 1}):
         try:
             total += float(p.get("amount") or 0)
         except Exception:
@@ -8704,11 +8701,11 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
     inv_amt = float(inv.get("amount") or 0)
     # Migratie-fallback: als paid_amount nog niet bestaat, bereken uit payments.
     if inv.get("paid_amount") is None:
-        existing = await _invoice_currently_paid(invoice_id)
-        # Trek de huidige payment_id ervan af als die al meegerekend wordt
-        # — anders dubbel-tellen we. Het payment doc staat al in DB op moment
-        # van aanroep van deze helper, dus we subtraheren `amount` (de delta).
-        base = max(0.0, existing - float(amount or 0))
+        # Huidige betaling niet meetellen (staat al in DB) — anders dubbel-tellen.
+        if payment_id:
+            base = await _invoice_currently_paid(invoice_id, exclude_payment_id=payment_id)
+        else:
+            base = max(0.0, await _invoice_currently_paid(invoice_id) - float(amount or 0))
         await db.invoices.update_one(
             {"id": invoice_id}, {"$set": {"paid_amount": round(base, 2)}}
         )
@@ -8938,7 +8935,7 @@ async def _allocate_payment_to_invoices(
         inv_amt = float(inv.get("amount") or 0)
         # Bepaal hoeveel deze factuur nog open heeft.
         if inv.get("paid_amount") is None:
-            existing = await _invoice_currently_paid(inv["id"])
+            existing = await _invoice_currently_paid(inv["id"], exclude_payment_id=payment_id)
         else:
             existing = float(inv.get("paid_amount") or 0)
         open_amt = max(0.0, round(inv_amt - existing, 2))
@@ -9114,7 +9111,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
             inv_amt = float(matched_invoice.get("amount") or 0)
             already_paid = matched_invoice.get("paid_amount")
             if already_paid is None:
-                already_paid = await _invoice_currently_paid(matched_invoice["id"])
+                already_paid = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=doc["id"])
             open_on_matched = max(0.0, round(inv_amt - float(already_paid or 0), 2))
             pay_amt = float(body.amount or 0)
             primary_chunk = min(pay_amt, open_on_matched) if open_on_matched > 0 else pay_amt
@@ -9499,7 +9496,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
             inv_amt_a = float(matched_invoice.get("amount") or 0)
             already_paid_a = matched_invoice.get("paid_amount")
             if already_paid_a is None:
-                already_paid_a = await _invoice_currently_paid(matched_invoice["id"])
+                already_paid_a = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=p.get("id"))
             open_on_matched_a = max(0.0, round(inv_amt_a - float(already_paid_a or 0), 2))
             pay_amt_a = float(p.get("amount") or 0)
             primary_chunk_a = min(pay_amt_a, open_on_matched_a) if open_on_matched_a > 0 else pay_amt_a
@@ -9609,8 +9606,6 @@ async def _reject_payment_core(q: dict, reason: str, uid: str):
 
 async def _kiosk_overview_invalidate(cid: str, tenant_id: Optional[str]) -> None:
     """Betaling via beheer: kiosk-caches legen en kiosks laten herladen."""
-    _KIOSK_CACHE.clear()
-    _INVOICE_CACHE.clear()
     await _kb_publish(_kiosk_admin_channel(cid), {"type": "overview_invalidate", "tenant_id": tenant_id})
 
 
@@ -10001,9 +9996,6 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 # Kiosk public endpoints (no auth, but expects kiosk session for payments)
 # =====================================================================
 # Kiosk-cache uitgeschakeld: alle kiosk-lijsten lezen live uit de database.
-_KIOSK_CACHE: dict = {}
-_KIOSK_TTL_S = 30
-_CACHE_KEEP_PATHS = ("/api/kiosk/employee-verify", "/api/admin/events")
 _NO_LOC_Q = [{"location_id": None}, {"location_id": {"$exists": False}}, {"location_id": ""}]
 
 
@@ -11727,10 +11719,7 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 # =====================================================================
 # Dashboard stats
 # =====================================================================
-# Overzicht-cache: per scope max 60s geldig; elke geslaagde mutatie (POST/PUT/
-# PATCH/DELETE op /api/*) leegt de cache via de live-sync middleware.
-_STATS_CACHE: dict = {}
-_STATS_TTL_S = 10
+# Overzicht: altijd live berekend (geen cache).
 
 
 @api.get("/admin/stats")
@@ -13204,9 +13193,7 @@ async def _enrich_invoice(i: dict) -> dict:
     return (await _enrich_invoices_batch([i]))[0]
 
 
-# Facturen-cache (30s) per beheerder+bedrijf; live-sync middleware leegt hem bij elke mutatie.
-_INVOICE_CACHE: dict = {}
-_INVOICE_TTL_S = 30
+# Facturenlijst: altijd live berekend (geen cache).
 
 
 async def _all_invoices_enriched(user: dict) -> list:
