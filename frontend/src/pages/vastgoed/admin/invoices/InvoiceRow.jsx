@@ -47,7 +47,7 @@ export function StatusPill({ severity, overdueCount, currentCount, upcomingCount
 // huidige/vooruit facturen. Gebruikt in MobileTenantCard uitklap.
 // =====================================================================
 export function MobileInvoiceLine({ inv, bucket }) {
-  const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) * 0.95);
+  const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) - 0.005);
   // Verwijderen mag voor élke onbetaalde factuur zonder gekoppelde regeling.
   const canDelete = !isPartial && !(inv.plans && inv.plans.length > 0);
   return (
@@ -103,7 +103,7 @@ export function MobileInvoiceLine({ inv, bucket }) {
 // `bucket`: 'overdue' | 'current' | 'future' — bepaalt de styling/badge.
 // =====================================================================
 export function InvoiceRow({ inv, bucket, severity }) {
-  const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) * 0.95);
+  const isPartial = inv.status === 'partial' || (Number(inv.paid_amount || 0) > 0 && Number(inv.paid_amount || 0) < Number(inv.amount || 0) - 0.005);
   const dotCls = bucket === 'future' ? 'bg-blue-500'
     : bucket === 'current' ? 'bg-amber-500'
     : isPartial ? 'bg-amber-500'

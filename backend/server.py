@@ -419,7 +419,7 @@ async def lifespan(app: FastAPI):
             )
             if inv.get("status") != "paid":
                 try:
-                    paid_pct = float(p.get("amount", 0)) >= float(inv.get("amount", 0)) * 0.95
+                    paid_pct = float(p.get("amount", 0)) >= float(inv.get("amount", 0)) - 0.005
                 except Exception:
                     paid_pct = True
                 if paid_pct:
@@ -7502,14 +7502,9 @@ async def _tenants_enriched(user: dict) -> list:
 
 
 async def _list_cached(name: str, user: dict, compute, extra: str = ""):
-    """30s cache per beheerder+bedrijf (gedeeld met facturen; middleware leegt bij mutatie)."""
-    key = f"{name}:{user.get('id')}:{company_id_of(user)}:{extra}"
-    hit = _INVOICE_CACHE.get(key)
-    if hit and time.monotonic() - hit[0] < _INVOICE_TTL_S:
-        return hit[1]
-    data = await compute()
-    _INVOICE_CACHE[key] = (time.monotonic(), data)
-    return data
+    """Lijst live berekenen (cache uitgeschakeld)."""
+    # Geen server-cache meer: altijd live uit de database.
+    return await compute()
 
 
 def _natural_key(v: str):
@@ -8672,7 +8667,7 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
                                     receipt_number: Optional[str] = None) -> dict:
     """Past `amount` toe op factuur:
        • paid_amount += amount (cumulatief — meerdere partial-payments mogelijk)
-       • status → 'paid' wanneer paid_amount >= 95% van het factuurbedrag
+       • status → 'paid' wanneer paid_amount >= 100% van het factuurbedrag
        Retourneert de bijgewerkte factuur (of {} bij ontbreken).
 
     IDEMPOTENCY GUARD (2026-02-14): elke succesvolle allocatie wordt
@@ -8726,13 +8721,13 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
         update["paid_method"] = method
     if receipt_number:
         update["receipt_number"] = receipt_number
-    if inv_amt <= 0 or new_paid >= inv_amt * 0.95:
+    if inv_amt <= 0 or new_paid >= inv_amt - 0.005:
         update["status"] = "paid"
         update["paid_at"] = paid_at or iso(now_utc())
     elif new_paid > 0:
         # Gedeeltelijke betaling — duidelijk te onderscheiden in admin UI
         # (Invoices.jsx) en in OCR-rapportages. Status springt automatisch
-        # naar "paid" zodra cumulatief ≥ 95% van het factuurbedrag binnen is.
+        # naar "paid" zodra cumulatief ≥ 100% van het factuurbedrag binnen is.
         update["status"] = "partial"
     await db.invoices.update_one({"id": invoice_id}, {"$set": update})
     inv.update(update)
@@ -9305,7 +9300,7 @@ async def delete_payment(
             amount = float(inv.get("amount_due") or inv.get("amount") or 0)
             if new_paid <= 0:
                 new_status = "open"
-            elif new_paid >= amount * 0.95:
+            elif new_paid >= amount - 0.005:
                 new_status = "paid"
             else:
                 new_status = "partial"
@@ -9689,7 +9684,7 @@ async def reassign_payment_invoice(
             old_amt = float(old_inv.get("amount") or 0)
             old_paid = float(old_inv.get("paid_amount") or 0)
             new_old_paid = max(0.0, round(old_paid - pay_amt, 2))
-            if old_amt <= 0 or new_old_paid >= old_amt * 0.95:
+            if old_amt <= 0 or new_old_paid >= old_amt - 0.005:
                 new_old_status = "paid"
             elif new_old_paid > 0:
                 new_old_status = "partial"
@@ -9729,7 +9724,7 @@ async def reassign_payment_invoice(
     new_amt = float(new_inv.get("amount") or 0)
     prev_new_paid = float(new_inv.get("paid_amount") or 0)
     new_new_paid = round(prev_new_paid + pay_amt, 2)
-    if new_amt <= 0 or new_new_paid >= new_amt * 0.95:
+    if new_amt <= 0 or new_new_paid >= new_amt - 0.005:
         new_new_status = "paid"
         new_paid_at = p.get("paid_at") or iso(now_utc())
     elif new_new_paid > 0:
@@ -9778,7 +9773,7 @@ async def recompute_tenant_invoices(tenant_id: str, user=Depends(require_role("a
 
     Voor elke factuur:
       • paid_amount = sum(payments.amount where invoice_id=inv.id AND status=approved)
-      • Status → paid als paid_amount ≥ 95% van amount, anders partial/open
+      • Status → paid als paid_amount ≥ 100% van amount, anders partial/open
 
     Retourneert een report per factuur zodat admin ziet wat er is veranderd.
     """
@@ -9804,7 +9799,7 @@ async def recompute_tenant_invoices(tenant_id: str, user=Depends(require_role("a
             real_paid += float(p.get("amount") or 0)
         real_paid = round(real_paid, 2)
         # Bepaal nieuwe status
-        if inv_amt <= 0 or real_paid >= inv_amt * 0.95:
+        if inv_amt <= 0 or real_paid >= inv_amt - 0.005:
             new_status = "paid"
         elif real_paid > 0:
             new_status = "partial"
@@ -9892,7 +9887,7 @@ async def _calc_balance(tenant: dict) -> dict:
     # Nu: kijk direct in de invoices-collectie naar de oudste factuur met
     # `status != "paid"` (dat dekt zowel "open" als "partial") — dat is de
     # single source of truth. `_apply_payment_to_invoice` zet status="paid"
-    # zodra cumulatief ≥ 95% van het factuurbedrag betaald is.
+    # zodra cumulatief ≥ 100% van het factuurbedrag betaald is.
     next_period = None
     oldest_open_inv = await db.invoices.find_one(
         {"tenant_id": tenant["id"], "status": {"$ne": "paid"}},
@@ -10005,7 +10000,7 @@ async def delete_location(loc_id: str, user=Depends(get_current_user)):
 # =====================================================================
 # Kiosk public endpoints (no auth, but expects kiosk session for payments)
 # =====================================================================
-# Kiosk-cache (30s) voor keuzescherm; elke mutatie leegt hem via de live-sync middleware.
+# Kiosk-cache uitgeschakeld: alle kiosk-lijsten lezen live uit de database.
 _KIOSK_CACHE: dict = {}
 _KIOSK_TTL_S = 30
 _CACHE_KEEP_PATHS = ("/api/kiosk/employee-verify", "/api/admin/events")
@@ -10013,13 +10008,8 @@ _NO_LOC_Q = [{"location_id": None}, {"location_id": {"$exists": False}}, {"locat
 
 
 async def _kiosk_cached(name: str, sc: dict, compute):
-    key = name + json.dumps(sc, sort_keys=True, default=str)
-    hit = _KIOSK_CACHE.get(key)
-    if hit and time.monotonic() - hit[0] < _KIOSK_TTL_S:
-        return hit[1]
-    data = await compute()
-    _KIOSK_CACHE[key] = (time.monotonic(), data)
-    return data
+    # Geen server-cache meer: altijd live uit de database.
+    return await compute()
 
 
 @api.get("/kiosk/locations")
@@ -10087,7 +10077,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
     for inv in invoices:
         amt = float(inv.get("amount") or 0)
         paid = float(inv.get("paid_amount") or 0)
-        if amt > 0 and paid >= amt * 0.95:
+        if amt > 0 and paid >= amt - 0.005:
             continue  # feitelijk betaald ondanks stale status
         tid = inv["tenant_id"]
         if paid > 0:
@@ -11746,13 +11736,7 @@ _STATS_TTL_S = 10
 @api.get("/admin/stats")
 async def admin_stats(user=Depends(get_current_user)):
     sc = scope(user)
-    key = json.dumps(sc, sort_keys=True, default=str)
-    hit = _STATS_CACHE.get(key)
-    if hit and time.monotonic() - hit[0] < _STATS_TTL_S:
-        return hit[1]
-    data = await _compute_admin_stats(user, sc)
-    _STATS_CACHE[key] = (time.monotonic(), data)
-    return data
+    return await _compute_admin_stats(user, sc)
 
 
 async def _agg_by_currency(coll, pipeline) -> dict:
@@ -13226,13 +13210,7 @@ _INVOICE_TTL_S = 30
 
 
 async def _all_invoices_enriched(user: dict) -> list:
-    key = f"{user.get('id')}:{company_id_of(user)}"
-    hit = _INVOICE_CACHE.get(key)
-    if hit and time.monotonic() - hit[0] < _INVOICE_TTL_S:
-        return hit[1]
-    data = await _build_invoice_list(user)
-    _INVOICE_CACHE[key] = (time.monotonic(), data)
-    return data
+    return await _build_invoice_list(user)
 
 
 async def _build_invoice_list(user: dict) -> list:
