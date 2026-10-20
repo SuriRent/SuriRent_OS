@@ -929,3 +929,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Service eerst (op verzoek gebruiker)
 - _primary_conn: ?device= achtergrondservice eerst, app-printer-modus (recent actief) als reserve. Tests iter118/119 aangepast; 24 passed.
+
+## 2026-06 — Print per bedrijf gescheiden
+- _publish_remote_print: printer moet van afzenderbedrijf + online zijn, stempelt company_id; printer-forward checkt company_id; service-resolutie op eigenaar-bedrijf; kiosk-token zonder company_id geweigerd. Getest: iteration_120 (31 tests).

@@ -88,6 +88,8 @@ function connect() {
     if (msg.type === 'presence') {
       if (!state.printersKnown || JSON.stringify(msg.printers || []) !== JSON.stringify(state.printers)) emit({ printers: msg.printers || [], printersKnown: true });
       queuePresence(msg);
+    } else if (msg.type === 'overview_invalidate') {
+      window.dispatchEvent(new CustomEvent('kiosk-overview-invalidate', { detail: { tenant_id: msg.tenant_id } }));
     } else if (msg.type === 'REMOTE_PRINT_DONE') {
       window.dispatchEvent(new CustomEvent('ktp-remote-print-done', { detail: msg }));
       if (msg.ok) queuePrint();

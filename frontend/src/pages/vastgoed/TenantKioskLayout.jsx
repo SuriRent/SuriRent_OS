@@ -547,11 +547,11 @@ function DashboardView({ overview, onAction, onHistory }) {
   const tenant = overview?.tenant;
   const apartment = overview?.apartment;
   const balance = overview?.balance || {};
-  const due = overview?.total_due ?? balance.balance ?? 0;
-  const openRent = due > 0 ? due : 0;
+  // Betaalstatus uitsluitend uit de facturen (total_due/is_paid), nooit uit balance.balance.
+  const openRent = Math.max(0, Number(overview?.total_due || 0));
   const totalDue = openRent;
   const cur = (balance.currency || apartment?.currency || 'SRD').toUpperCase();
-  const hasBalance = totalDue > 0;
+  const hasBalance = overview?.is_paid != null ? !overview.is_paid : totalDue > 0;
   // Boetes — alleen tonen wanneer backend `fines_total > 0` meegeeft (admin
   // heeft "Automatische boetes" aangezet). Anders verbergen.
   const finesTotal = Number(overview?.fines_total || 0);
@@ -762,8 +762,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
   const { tenant, apartment: apt, balance } = overview;
   const cur = (balance.currency || apt?.currency || 'SRD').toUpperCase();
   const fmt = (v) => fmtMoney(v, cur);
-  const due = overview?.total_due ?? balance.balance ?? 0;
-  const openRent = due > 0 ? due : 0;
+  const openRent = Math.max(0, Number(overview?.total_due || 0));
   const totalDue = openRent;
 
   const amounts = {
@@ -1653,8 +1652,8 @@ function MeView({ overview, onBack }) {
           <InfoCard label="Maandhuur"
             value={apartment ? fmtMoney(apartment.rent_amount, apartment.currency) : '—'} />
           <InfoCard label="Saldo"
-            value={fmtMoney(balance?.balance || 0, balance?.currency || 'SRD')}
-            accent={(balance?.balance || 0) > 0 ? 'red' : 'emerald'} />
+            value={fmtMoney(overview?.total_due || 0, balance?.currency || 'SRD')}
+            accent={overview?.is_paid === false ? 'red' : 'emerald'} />
         </div>
       </div>
     </div>

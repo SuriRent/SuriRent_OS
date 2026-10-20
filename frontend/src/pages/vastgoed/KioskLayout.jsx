@@ -787,6 +787,8 @@ function prefetchOverview(tid) {
   if (!tid) return;
   _ovPrefetch.set(tid, { p: fetchOverview(tid), at: Date.now() });
 }
+// Betaling via beheer → prefetch-cache weg, zodat de kiosk vers ophaalt.
+window.addEventListener('kiosk-overview-invalidate', () => _ovPrefetch.clear());
 function takeOverview(tid) {
   const hit = _ovPrefetch.get(tid);
   _ovPrefetch.delete(tid);
@@ -815,6 +817,11 @@ function TenantOverview({ apartment, onBack, onPay }) {
   }, [apartment]);
 
   useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    const onInv = (e) => { const t = e.detail?.tenant_id; if (!t || t === apartment?.tenant_id) reload(true); };
+    window.addEventListener('kiosk-overview-invalidate', onInv);
+    return () => window.removeEventListener('kiosk-overview-invalidate', onInv);
+  }, [reload, apartment?.tenant_id]);
 
   if (loading) return <div className="h-full bg-orange-500 flex items-center justify-center"><Loader2 className="w-10 h-10 text-white animate-spin" /></div>;
   if (err || !data) return <div className="h-full bg-orange-500 flex items-center justify-center text-white p-8">{err || 'Geen data'}</div>;

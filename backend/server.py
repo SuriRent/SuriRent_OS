@@ -223,6 +223,9 @@ async def get_kiosk_session(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
+    if not payload.get("company_id"):
+        # Zonder bedrijf geen kiosk-sessie: anders zouden lookups niet per bedrijf gescheiden zijn.
+        raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
     return {"company_id": payload.get("company_id"), "type": "kiosk"}
 
 
@@ -6431,7 +6434,7 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
     bal = await _calc_balance(tenant)
     # Zelfde totaal als de medewerker-kiosk: achterstand + huidige maand.
     kov = await kiosk_tenant_overview(tenant["id"], {"company_id": tenant.get("company_id")})
-    total_due = round(float(kov.get("open_invoices_total") or 0) + float(kov.get("current_invoices_total") or 0), 2)
+    total_due = float(kov.get("total_due") or 0)
     # Boetes (automatische) — zelfde logica als kiosk_tenant_overview, maar
     # vereenvoudigd omdat de tenant-portal geen gedetailleerde buckets kent.
     # We tellen alle open facturen van deze huurder die >grace dagen te laat
@@ -6486,6 +6489,7 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
         },
         "balance": bal,
         "total_due": total_due,
+        "is_paid": bool(kov.get("is_paid")),
         "due_periods": [{"month": i.get("period_month"), "year": i.get("period_year")}
                         for i in (kov.get("open_invoices") or []) + (kov.get("current_invoices") or [])
                         if i.get("period_month")],
@@ -9603,11 +9607,19 @@ async def _reject_payment_core(q: dict, reason: str, uid: str):
     return await _enrich_payment(p)
 
 
+async def _kiosk_overview_invalidate(cid: str, tenant_id: Optional[str]) -> None:
+    """Betaling via beheer: kiosk-caches legen en kiosks laten herladen."""
+    _KIOSK_CACHE.clear()
+    _INVOICE_CACHE.clear()
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "overview_invalidate", "tenant_id": tenant_id})
+
+
 @api.post("/payments", response_model=PaymentOut)
 async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
     cid = company_id_of(user)
     doc = await _create_payment_doc(body, cid, approved_by=user.get("name") or user.get("email"))
     enriched = await _enrich_payment(doc)
+    await _kiosk_overview_invalidate(cid, doc.get("tenant_id"))
     # Push-notificatie naar andere admins van deze company. FIRE-AND-FORGET:
     # WebPush kan 500-2000ms per subscription duren; wij mogen daar NIET op
     # wachten want dat vertraagt óók de live-sync SSE-broadcast (die pas
@@ -10250,6 +10262,8 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         "current_invoices_total": round(current_total, 2),
         "future_invoices": future_invoices,
         "future_invoices_total": round(future_total, 2),
+        "total_due": round(overdue_total + current_total, 2),
+        "is_paid": round(overdue_total + current_total, 2) <= 0.005,
         "current_month_invoice": current_month_invoice,
         "grace_workdays": grace_wd,
         "fines_total": fines_total,
@@ -10335,10 +10349,10 @@ async def kiosk_ws(ws: WebSocket):
         hello = None
     # APK-achtergrondservice: alleen ?device=KIOSK-ID + pings, geen auth-bericht.
     if kiosk_id and (not hello or hello.get("type") != "auth"):
-        prn = await db.kiosk_printers.find_one({"kiosk_ids": kiosk_id, "revoked": {"$ne": True}}, {"_id": 0})
         # Alleen een printer van het eigenaar-bedrijf van deze KIOSK-ID.
-        if prn and await _kiosk_id_owner(kiosk_id) != prn["company_id"]:
-            prn = None
+        owner = await _kiosk_id_owner(kiosk_id)
+        prn = await db.kiosk_printers.find_one(
+            {"kiosk_ids": kiosk_id, "company_id": owner, "revoked": {"$ne": True}}, {"_id": 0}) if owner else None
         if not prn:
             # Spam-rem: alleen nieuwe ID's opslaan zolang de lijst klein is; oude (>1 dag) opruimen.
             await db.kiosk_unbound_devices.delete_many({"last_seen": {"$lt": iso(now_utc() - timedelta(days=1))}})
@@ -10408,7 +10422,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         await push_printers()
         while True:
             ev = await queue.get()
-            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE"):
+            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate"):
                 await ws.send_json(ev)
             elif ev.get("type") == "presence_changed":
                 await push_printers()

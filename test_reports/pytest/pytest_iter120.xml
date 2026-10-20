@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="31" time="167.137" timestamp="2026-10-19T22:48:34.492992+00:00" hostname="agent-env-b6cbd1b3-93cf-4aa3-8980-d84887d5c5aa"><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_unknown_device_not_visible_to_anyone" time="2.199" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_company_a_kiosk_hello_claims" time="0.856" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_company_b_hello_cannot_steal" time="0.435" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_b_link_409_then_a_link_ok" time="0.775" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_previously_linked_fallback_owner[False]" time="0.151" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_previously_linked_fallback_owner[True]" time="0.170" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_race_simultaneous_claims" time="3.368" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_delivery_service_first" time="6.752" /><testcase classname="tests.test_kiosk_id_ownership_iter119" name="test_delivery_service_fallback_and_done_relay" time="12.172" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_unknown_device_closed_4401_and_listed" time="1.871" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_unknown_device_no_frame_closed" time="4.240" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_unbound_requires_admin" time="0.357" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_link_device_404_unknown_printer" time="0.144" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_link_device_validation" time="0.155" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_link_device_binds_and_removes_unbound" time="0.416" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_linked_service_ready_online_then_offline" time="8.273" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_linked_service_no_frame_stays_open" time="6.728" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_exclusive_delivery_service_then_token" time="10.011"><failure message="TimeoutError: timed out during opening handshake">/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:544: in __await_impl__
+    self.connection = await self.create_connection()
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:470: in create_connection
+    _, connection = await loop.create_connection(factory, **kwargs)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:1070: in create_connection
+    sock = await self._connect_sock(
+/usr/local/lib/python3.11/asyncio/base_events.py:974: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/local/lib/python3.11/asyncio/selector_events.py:638: in sock_connect
+    return await fut
+           ^^^^^^^^^
+E   asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:542: in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+/usr/local/lib/python3.11/asyncio/timeouts.py:115: in __aexit__
+    raise TimeoutError from exc_val
+E   TimeoutError
+
+The above exception was the direct cause of the following exception:
+tests/test_kiosk_service_ws_iter118.py:180: in test_exclusive_delivery_service_then_token
+    asyncio.run(run())
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/test_kiosk_service_ws_iter118.py:160: in run
+    async with websockets.connect(WS) as tok_ws:
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:590: in __aenter__
+    return await self
+           ^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:581: in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+E   TimeoutError: timed out during opening handshake</failure></testcase><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_token_auth_with_device_param_binds" time="10.009"><failure message="TimeoutError: timed out during opening handshake">/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:544: in __await_impl__
+    self.connection = await self.create_connection()
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:470: in create_connection
+    _, connection = await loop.create_connection(factory, **kwargs)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:1070: in create_connection
+    sock = await self._connect_sock(
+/usr/local/lib/python3.11/asyncio/base_events.py:974: in _connect_sock
+    await self.sock_connect(sock, address)
+/usr/local/lib/python3.11/asyncio/selector_events.py:638: in sock_connect
+    return await fut
+           ^^^^^^^^^
+E   asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:542: in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+/usr/local/lib/python3.11/asyncio/timeouts.py:115: in __aexit__
+    raise TimeoutError from exc_val
+E   TimeoutError
+
+The above exception was the direct cause of the following exception:
+tests/test_kiosk_service_ws_iter118.py:189: in test_token_auth_with_device_param_binds
+    asyncio.run(run())
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/test_kiosk_service_ws_iter118.py:186: in run
+    async with websockets.connect(f"{WS}?device={KID2}") as ws:
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:590: in __aenter__
+    return await self
+           ^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/websockets/asyncio/client.py:581: in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+E   TimeoutError: timed out during opening handshake</failure></testcase><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_register_with_kiosk_id_moves_binding" time="68.694" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_employee_ws_auth_unaffected" time="0.255" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_admin_ws_auth_unaffected" time="0.240" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_bad_printer_token_4401" time="0.281" /><testcase classname="tests.test_kiosk_service_ws_iter118" name="test_revoked_printer_link_404_and_service_rejected" time="1.460" /><testcase classname="tests.test_kiosk_link_cross_company_iter118" name="test_link_other_company_printer_404" time="1.000" /><testcase classname="tests.test_kiosk_link_cross_company_iter118" name="test_cannot_steal_other_company_kiosk_id" time="0.292" /><testcase classname="tests.test_print_company_isolation_iter120" name="test_b_cannot_print_on_a" time="7.028" /><testcase classname="tests.test_print_company_isolation_iter120" name="test_a_print_only_to_a_service_first" time="9.779" /><testcase classname="tests.test_print_company_isolation_iter120" name="test_b_print_only_to_b" time="5.071" /><testcase classname="tests.test_print_company_isolation_iter120" name="test_inconsistent_owner_rejected" time="1.493" /><testcase classname="tests.test_print_company_isolation_iter120" name="test_settings_isolation" time="2.102" /></testsuite></testsuites>

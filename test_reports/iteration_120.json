@@ -1,0 +1,36 @@
+{
+  "summary": "Iter120 (backend only, real wss/https via public URL): tested strict per-company separation of REMOTE_PRINT. A = demo/my-awesome-rentals-bv (CID demo-company-fixed-uuid-...). B = 'Test Co 7ea4bb52' with a temp admin and a kiosk JWT signed with JWT_SECRET. Each company had a real token printer (registered via /kiosk/printers/register with kiosk_id) plus a service conn (?device=). New file test_print_company_isolation_iter120.py: 5/5 PASS. (1) B kiosk with A's printer_id: A's payment, kasgeld and tenant -> 404 for all 3 endpoints. B's own payment, kasgeld and tenant -> 409 'Deze KT-V520 is niet online' for all 3. A's token and service conns received 0 messages. (2) A sends to A's printer with A's token, A's service, B's token and B's service all connected: all 3 endpoints -> 200 and all 3 jobs went ONLY to A's service conn (service-first), with company_id == A and target == A's printer. A's token conn got 0 and B's conns got 0. After A's service was closed, the next job went to A's token conn. (3) B -> B's printer: only B's token conn received it (company_id == B), A's conns got 0. A's kiosk -> B's printer_id -> 409. (4) Legacy inconsistent data (kiosk_printers row for B with kiosk_ids [X], kiosk_id_owners X -> A): service conn closed with 4401 and the owner did not change. (5) GET /settings/kiosk-unbound-devices, /settings/kiosk-printers and /settings/kiosk-devices-seen: A and B each see only their own IDs, printers and devices, with no overlap and no company_id leaked. Regression: iter119 (9) + iter118 service (15) + iter118 link (2) + iter120 (5) = 31 tests. The combined run had 29 pass and 2 fail; both failures were 'timed out during opening handshake' at the ingress (transient). Re-running test_kiosk_service_ws_iter118.py alone gave 15/15 PASS. All temp data was cleaned up (B user, printers, owners, unbound docs, kasgeld, B tenant/payment, devices_seen TEST rows including leftovers from iter109/118/119).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "kiosk_ws service branch (server.py ~10338)", "issue": "Service printer lookup uses find_one({kiosk_ids: kid}) without filtering on the owner company. If legacy data has the same kiosk_id on rows for both A and B, find_one can pick B's row. The owner check then rejects the legitimate owner A with 4401 (reproduced ad hoc: B row created earlier + A row + owner A -> 4401). This fails closed, so there is no leak, but the device is unusable. Fix: resolve the owner first, then find_one({kiosk_ids: kid, company_id: owner, revoked: {$ne: true}})."},
+      {"endpoint": "get_kiosk_session / kiosk_scope", "issue": "A validly signed kiosk JWT without company_id gives kiosk_scope() == {}, so lookups such as _kasgeld_receipt_data are unscoped across companies. Remote-print is still safe (_publish_remote_print with cid=None -> 409), but get_kiosk_session should reject tokens that have no company_id."},
+      {"endpoint": "server.py ~10598 comment", "issue": "The comments now match the service-first behaviour. iter119 reported app-first, so make sure that semantics change was intentional (the iter118 test expects service-first and passes)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_print_company_isolation_iter120.py",
+    "/app/backend/tests/test_kiosk_id_ownership_iter119.py",
+    "/app/backend/tests/test_kiosk_service_ws_iter118.py",
+    "/app/backend/tests/test_kiosk_link_cross_company_iter118.py",
+    "/app/test_reports/pytest/pytest_iter120.xml"
+  ],
+  "action_items": [
+    "Optional: in the kiosk_ws service branch, look up the printer by owner company (find_one with company_id = _kiosk_id_owner(kid)) so that duplicate legacy kiosk_ids do not lock out the real owner",
+    "Optional: reject kiosk JWTs without company_id in get_kiosk_session"
+  ],
+  "critical_code_review_comments": [
+    "Defense-in-depth is correct at 3 layers: (1) _publish_remote_print checks the printer belongs to cid and is online, and stamps company_id; (2) forward() checks ev.company_id == printer company; (3) the per-company channel _kiosk_admin_channel(cid) means a printer conn never subscribes to another company's events.",
+    "Resource endpoints scope by the session company before publishing (payments/kasgeld/tenant -> 404 for foreign items), so foreign IDs never reach the publish step.",
+    "_printer_conns is in-process: with more than one backend replica, exclusive delivery still relies on the shared channel plus the per-replica _primary_conn (as in iter118/119).",
+    "server.py is more than 18.6k lines; the kiosk WS/printer code should go into its own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_print_company_isolation_iter120.py (new)"],
+  "success_rate": {"backend": "100% (31/31 when transient ingress handshake timeouts are excluded; the combined run had 2 transient failures, which passed on rerun)", "frontend": "N/A (not requested)"},
+  "test_credentials": "demo@surirent.sr/demo1234 (A admin). Kiosk sessions for A and B use JWTs signed with JWT_SECRET {type:kiosk, company_id}. The B admin is temporary and inserted by the fixture.",
+  "seed_data_creation": "None persisted; all cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest backend/tests/test_print_company_isolation_iter120.py (self-contained: it seeds the B admin, printers, tenant, payment and kasgeld, and cleans up). Editing files in backend/tests triggers a uvicorn reload, so wait about 6s before running WS tests. The ingress sometimes times out the WS handshake; retry once."
+}
