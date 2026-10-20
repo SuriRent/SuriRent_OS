@@ -932,3 +932,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Print per bedrijf gescheiden
 - _publish_remote_print: printer moet van afzenderbedrijf + online zijn, stempelt company_id; printer-forward checkt company_id; service-resolutie op eigenaar-bedrijf; kiosk-token zonder company_id geweigerd. Getest: iteration_120 (31 tests).
+
+## 2026-06 — total_due/is_paid kiosk overview + cache-invalidate
+- /kiosk/tenants/{id}/overview: total_due (open+current) + is_paid; tenant-portal gebruikt die. TenantKioskLayout betaalstatus/Saldo alleen uit total_due/is_paid.
+- _kiosk_overview_invalidate: bij admin betaling create/approve/reject/delete/reassign caches legen + WS overview_invalidate → open kiosk-overview herlaadt. /kiosk/apartments pay_status negeert toekomstige facturen.
+- Getest: iteration_121.

@@ -9337,6 +9337,7 @@ async def delete_payment(
 
     # Verwijder de betaling zelf
     await db.payments.delete_one({"id": payment_id})
+    await _kiosk_overview_invalidate(company_id_of(user), None)
 
     return {
         "ok": True,
@@ -9413,10 +9414,12 @@ async def approve_payment(pid: str, body: PaymentApproveIn, user=Depends(require
     """Beheerder keurt een pending kiosk-betaling goed (met handtekening)."""
     if not (body.signature_data_url or "").startswith("data:image/"):
         raise HTTPException(status_code=400, detail="Handtekening ontbreekt")
-    return await _approve_payment_core(
+    out = await _approve_payment_core(
         {"id": pid, **scope(user)}, body.signature_data_url,
         user.get("id") or user.get("sub"), user.get("name") or user.get("email") or "Beheerder",
     )
+    await _kiosk_overview_invalidate(company_id_of(user), (out or {}).get("tenant_id"))
+    return out
 
 
 async def _auto_approve_pending_kiosk_payments():
@@ -9577,7 +9580,9 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
 @api.post("/payments/{pid}/reject", response_model=PaymentOut)
 async def reject_payment(pid: str, body: PaymentRejectIn, user=Depends(require_role("admin", "boekhouder"))):
     """Beheerder wijst een pending betaling af. Bedrag telt nooit mee in totalen."""
-    return await _reject_payment_core({"id": pid, **scope(user)}, body.reason or "", user.get("id") or user.get("sub"))
+    out = await _reject_payment_core({"id": pid, **scope(user)}, body.reason or "", user.get("id") or user.get("sub"))
+    await _kiosk_overview_invalidate(company_id_of(user), (out or {}).get("tenant_id"))
+    return out
 
 
 async def _reject_payment_core(q: dict, reason: str, uid: str):
@@ -9753,6 +9758,7 @@ async def reassign_payment_invoice(
     }
     # Return updated payment
     updated = await db.payments.find_one({"id": pid}, {"_id": 0})
+    await _kiosk_overview_invalidate(company_id_of(user), (updated or {}).get("tenant_id"))
     return {"payment": await _enrich_payment(updated), "report": report}
 
 
@@ -10066,11 +10072,16 @@ async def _kiosk_apartments_compute(q: dict) -> list:
     tenants, invoices = await asyncio.gather(
         db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1}).to_list(len(tids) or 1),
         db.invoices.find(
-            {"tenant_id": {"$in": tids}, "status": {"$ne": "paid"}, "kind": {"$in": [None, "huur"]}},
-            {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1},
+            {"tenant_id": {"$in": tids}, "status": {"$nin": ["paid", "cancelled"]}, "kind": {"$in": [None, "huur"]}},
+            {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1, "period_month": 1, "period_year": 1},
         ).to_list(None),
     )
     t_by_id = {t["id"]: t for t in tenants}
+    # Vooruit gefactureerde maanden tellen niet mee (zelfde regel als total_due in de overview).
+    _now = datetime.now(timezone(timedelta(hours=-3)))
+    _cur_key = _now.year * 12 + _now.month
+    invoices = [i for i in invoices if not (isinstance(i.get("period_month"), int) and i.get("period_year")
+                                            and int(i["period_year"]) * 12 + i["period_month"] > _cur_key)]
     # Betaal-status: "unpaid" (min. 1 factuur 0 betaald) > "partial" > "paid".
     status_by_tid: dict = {}
     for inv in invoices:
