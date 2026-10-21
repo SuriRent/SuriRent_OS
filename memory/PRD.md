@@ -961,3 +961,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Witte modus verfijnd: bovenbalk + menubalk wit, middengedeelte lichtgrijs (#F4F5F7) met witte kaarten.
 - 2026-06: Mobiel: kleurmodus-knop verplaatst van titelrij naar Snel toevoegen (+) sheet ("Witte modus"/"Oranje modus"); + FAB verborgen zolang sheet open is.
 - 2026-06: Snel toevoegen sheet volgt witte modus (lichtgrijs, witte tegels/knoppen, oranje accenten) via .kiosk-sheet-white.
+- 2026-06: Kiosk-vensters (KioskModalShell: huurder, appartement, locatie, contract, factuur, betalingen, onderhoud) volgen witte modus (witte kop op mobiel); + FAB verborgen zolang een venster open is.

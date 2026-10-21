@@ -3936,6 +3936,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   // de scrollbare body verkort, header en footer zichtbaar boven het
   // keyboard.
   const vv = useVisualViewport();
+  const { theme } = useContext(KioskThemeCtx);
   // Op mobiel: forceer top/height op basis van visualViewport (blijft
   // altijd binnen zichtbaar gebied). Op desktop (sm+) valt CSS terug op
   // `inset-0` + centreren via classes. Extra `paddingBottom` reserveert
@@ -3949,7 +3950,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   } : {};
   return createPortal((
     <div
-      className="fixed left-0 right-0 z-[100] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4"
+      className={`fixed left-0 right-0 z-[100] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
       style={mobileStyle}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -3957,7 +3958,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
         className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden"
         data-testid={`${testId}-form`}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
-        <div className="flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
+        <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
@@ -5085,7 +5086,7 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {step === 'select' && !showAddSheet && createPortal((
+      {step === 'select' && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <button
           type="button"
           onClick={() => setShowAddSheet(true)}
