@@ -12,7 +12,7 @@ import {
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
-  ScanLine, RefreshCw, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
+  ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
   UserCircle, Sparkles, StickyNote, Scissors,
 } from 'lucide-react';
 import Cropper from 'react-easy-crop';
@@ -3274,19 +3274,6 @@ export function Tenants() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-xs font-bold disabled:opacity-50">
             {backfilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             {backfilling ? 'Bezig…' : 'Genereer nu'}
-          </button>
-        </div>
-      )}
-
-      {/* "Alles opnieuw" — verschijnt alleen als er al avatars bestaan.
-          Handig na een prompt-update zodat de admin de crop kan verstrakken. */}
-      {withAvatars > 0 && missingAvatars === 0 && (
-        <div className="flex justify-end">
-          <button onClick={() => runBackfill(true)} disabled={backfilling}
-            data-testid="tenants-regenerate-avatars-btn"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold disabled:opacity-50">
-            {backfilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            {backfilling ? 'Bezig…' : `Alle ${withAvatars} pasfoto's opnieuw croppen`}
           </button>
         </div>
       )}

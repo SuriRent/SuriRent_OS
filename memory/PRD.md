@@ -971,3 +971,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Vensters (KeyboardSafeModal .ksm-root) die vanaf kiosk-beheerpagina's openen krijgen ook kiosk-stijl (body.kiosk-admin-active zolang KioskAdminPage open is).
 - 2026-06: Kiosk-beheerpagina's schermvullend wit (geen grijze rand/kaart), menubalk onderaan verborgen zolang een beheerpagina open is (.kiosk-no-bar).
 - 2026-06: Kiosk-beheerpagina's: inhoud gecentreerd max 1500px als witte kaart op lichtgrijze achtergrond.
+- 2026-06: Knop "Alle N pasfoto's opnieuw croppen" verwijderd uit Huurders-pagina (beheer + kiosk).
