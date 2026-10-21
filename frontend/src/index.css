@@ -157,6 +157,13 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
   background-color: #FFFFFF;
   box-shadow: 0 0 0 1px #E2E8F0, 0 10px 28px -14px rgba(15, 23, 42, 0.18);
 }
+/* Snel toevoegen sheet in witte modus. */
+.kiosk-sheet-white.bg-orange-500 { background-color: #F4F5F7; }
+.kiosk-sheet-white .text-white { color: #0F172A; }
+.kiosk-sheet-white svg.text-white { color: #FF5C00; }
+.kiosk-sheet-white [class*="bg-white/"] { background-color: #FFFFFF; }
+.kiosk-sheet-white button[class*="bg-white"] { box-shadow: 0 0 0 1px #E2E8F0, 0 8px 20px -12px rgba(15, 23, 42, 0.18); }
+.kiosk-sheet-white button[data-testid="kiosk-add-sheet-close"] svg { color: #0F172A; }
 /* Staande tablet (iPad): desktop-menubalk blijft, kaarten komen onder elkaar. */
 @media (min-width: 768px) and (orientation: portrait) {
   .kiosk-fullscreen .md\:flex-row { flex-direction: column; }

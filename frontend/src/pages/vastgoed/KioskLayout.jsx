@@ -4454,6 +4454,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   // FAB doorschuift). Geen body-scroll-lock — die veroorzaakt een
   // "sprong" op iOS wat lijkt op een menubalk die omhoog schuift.
   const vv = useVisualViewport();
+  const { theme } = useContext(KioskThemeCtx);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const mobileStyle = isMobile ? {
     top: `${vv.top}px`,
@@ -4480,7 +4481,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   }, [onClose]);
   return createPortal((
     <div
-      className="fixed left-0 right-0 z-[100] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150"
+      className={`fixed left-0 right-0 z-[100] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
       style={mobileStyle}
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
