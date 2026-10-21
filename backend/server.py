@@ -10004,6 +10004,17 @@ async def _kiosk_cached(name: str, sc: dict, compute):
     return await compute()
 
 
+@api.get("/kiosk/bank-details")
+async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
+    c = await db.companies.find_one({"id": _session["company_id"]},
+                                    {"_id": 0, "name": 1, "bank_account_sr": 1, "bank_account_nl": 1}) or {}
+    accounts = [{"label": lbl, "value": (c.get(k) or "").strip()}
+                for k, lbl in (("bank_account_sr", "Suriname"), ("bank_account_nl", "Nederland"))
+                if (c.get(k) or "").strip()]
+    return {"company_name": c.get("name") or "", "accounts": accounts}
+
+
+
 class KioskThemeIn(BaseModel):
     theme: Literal["orange", "white"]
 

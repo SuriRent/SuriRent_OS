@@ -31,6 +31,7 @@ import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMe
 import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
+import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -2309,6 +2310,12 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
   const cur = payload.currency || 'SRD';
   const [stripeCfg, setStripeCfg] = useState(null);
   const [stripeMethod, setStripeMethod] = useState(null);
+  const [bankOpen, setBankOpen] = useState(false);
+  const pick = (m) => {
+    if (m.stripe) setStripeMethod(m.stripe);
+    else if (m.v === 'bank') setBankOpen(true);
+    else onConfirm({ ...payload, method: m.v });
+  };
   useEffect(() => { api.get('/kiosk/stripe/config').then(({ data }) => setStripeCfg(data)).catch(() => {}); }, []);
   const methods = [
     { v: 'contant', l: 'Contant', sub: 'Betaal met contant geld', icon: Banknote, accent: 'emerald' },
@@ -2337,7 +2344,7 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           {methods.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.v} onClick={() => (m.stripe ? setStripeMethod(m.stripe) : onConfirm({ ...payload, method: m.v }))} data-testid={`method-${m.v}`}
+              <button key={m.v} onClick={() => pick(m)} data-testid={`method-${m.v}`}
                 className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] sm:hover:scale-[1.03] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl">
                 <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shrink-0 sm:mb-4 ${
                   m.accent === 'red' ? 'bg-red-50 text-red-500' : m.accent === 'orange' ? 'bg-orange-50 text-[#FF5C00]' : m.accent === 'pink' ? 'bg-pink-50 text-[#CC0066]' : 'bg-emerald-50 text-emerald-500'
@@ -2354,6 +2361,12 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           })}
         </div>
       </div>
+      {bankOpen && (
+        <KioskBankTransferModal amount={payload.amount} currency={cur}
+          description={[`Appt. ${apt.number}`, tenant.name, payload.note].filter(Boolean).join(' – ')}
+          onClose={() => setBankOpen(false)}
+          onDone={() => { setBankOpen(false); onConfirm({ ...payload, method: 'bank' }); }} />
+      )}
       {stripeMethod && (
         <KioskStripePanel payload={payload} method={stripeMethod} tenantName={tenant.name}
           onClose={() => setStripeMethod(null)}
