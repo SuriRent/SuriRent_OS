@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Search, Sun, Palette,
+  Search, Sun, Palette, Menu as MenuIcon,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
@@ -204,22 +204,52 @@ function MobileAddFab({ onOpen }) {
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
 const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
 
-// Beheerder-navigatie in de desktop-kop; items worden later stap voor stap toegevoegd.
-const ADMIN_NAV_ITEMS = [];
+// Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
+const ADMIN_MENU_ITEMS = [];
 
-function KioskAdminNav() {
+function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
   if (!isAdmin) return null;
   return (
-    <nav aria-label="Beheerder navigatie" data-testid="kiosk-admin-nav"
-      className="kiosk-admin-nav hidden md:flex items-center gap-1 h-10 min-w-[180px] px-1 rounded-full bg-white/10 ring-1 ring-white/20">
-      {ADMIN_NAV_ITEMS.map(({ id, label, Icon, onClick }) => (
-        <button key={id} type="button" onClick={onClick} data-testid={`kiosk-admin-nav-${id}`}
-          className="h-8 px-3 rounded-full inline-flex items-center gap-1.5 text-sm font-semibold text-white hover:bg-white/15 transition-colors">
-          {Icon && <Icon className="w-4 h-4" />} {label}
-        </button>
-      ))}
-    </nav>
+    <div ref={ref} className="relative hidden md:block shrink-0">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Beheermenu"
+        data-testid="kiosk-admin-menu-btn"
+        className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${open ? 'bg-white/30' : 'bg-white/15 hover:bg-white/25'}`}>
+        {open ? <X className="w-5 h-5" strokeWidth={2.4} /> : <MenuIcon className="w-5 h-5" strokeWidth={2.4} />}
+      </button>
+      {open && (
+        <div data-testid="kiosk-admin-menu" role="menu"
+          className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,80vw)] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-5 animate-in fade-in slide-in-from-top-2 duration-150">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
+          {ADMIN_MENU_ITEMS.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3">
+              {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (
+                <button key={id} type="button" role="menuitem" data-testid={`kiosk-admin-menu-${id}`}
+                  onClick={() => { setOpen(false); onClick(); }}
+                  className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 p-4 text-sm font-bold text-slate-800 transition-colors">
+                  <Icon className="w-6 h-6 text-[#FF5C00]" /> {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div data-testid="kiosk-admin-menu-empty"
+              className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">
+              Hier komen de beheerfuncties
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -257,7 +287,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
           {company?.name || 'Kiosk'}
         </span>
       </div>
-      <KioskAdminNav />
+      <KioskAdminMenu />
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
         className={`hidden md:flex flex-1 min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
         {loc && <MapPin className="w-5 h-5 shrink-0" />}
