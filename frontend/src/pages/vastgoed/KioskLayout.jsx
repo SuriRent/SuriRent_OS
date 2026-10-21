@@ -4955,7 +4955,7 @@ export default function KioskLayout() {
         </div>
       )}
       {showTopHead && (
-        <div ref={headRef} className="hidden md:block absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
+        <div ref={headRef} className="kiosk-head-wrap hidden md:block absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
             onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>

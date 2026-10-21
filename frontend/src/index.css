@@ -129,9 +129,20 @@ html.apk-ktp { --kiosk-sat: 0px; }
 }
 /* KIOSK witte modus — wit met oranje accenten (bedrijfsbrede instelling). */
 body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
-.kiosk-fullscreen.kiosk-white { background-color: #FFFFFF !important; }
+.kiosk-fullscreen.kiosk-white { background-color: #F4F5F7 !important; }
 .kiosk-white .h-full.bg-orange-500,
-.kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: #FFFFFF; }
+.kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: #F4F5F7; }
+.kiosk-white .kiosk-head-wrap { background-color: #FFFFFF; }
+@media (min-width: 768px) {
+  .kiosk-white [data-testid="kiosk-desktop-header"] {
+    background-color: #FFFFFF;
+    border-bottom: 1px solid #EEF0F3;
+    margin-left: -1.5vw; margin-right: -1.5vw;
+    padding-left: calc(1.5vw + 0.5rem); padding-right: calc(1.5vw + 0.5rem);
+    margin-bottom: 0.75rem;
+  }
+  .kiosk-white .kiosk-head-wrap [data-testid="kiosk-desktop-header"] { margin-bottom: 0; }
+}
 .kiosk-white .h-full > .animate-spin.text-white { color: #FF5C00; }
 .kiosk-white .kiosk-chrome .text-white,
 .kiosk-white .kiosk-chrome [class*="text-white/"] { color: #0F172A; }
