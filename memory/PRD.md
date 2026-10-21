@@ -953,3 +953,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: KIOSK desktop — witte kaarten raken de menubalk niet meer (gemeten --kiosk-bar-h via ResizeObserver + 16px oranje ruimte, ronde hoeken zichtbaar) op alle kiosk-schermen.
 - 2026-06: iPad 10"+ (staand+liggend) krijgt altijd desktop-KIOSK: viewport-forcering in public/index.html (html.ipad-tablet), staand = kaarten onder elkaar (index.css portrait-regels), menubalk-labels truncaten, numpad min-h staand.
 - 2026-06: KIOSK desktop/iPad — bovenbalk (logo, titel per stap, huurders/beheer-knoppen) nu op alle kiosk-pagina's (STEP_TITLES, --kiosk-head-h, .kiosk-has-head).
+- 2026-06: KIOSK desktop/iPad — "Zoek huurder" knop in bovenbalk (startscherm, kasgeld, overzicht; niet tijdens betaling). components/KioskTenantSearch.jsx: zoeken op naam/appartement + betaalstatus-badge, opent direct financieel overzicht.

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  Search,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
@@ -29,6 +30,7 @@ import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMenu';
 import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
+import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -204,7 +206,7 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie',
 };
 
-function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, title = 'Kies uw appartement' }) {
+function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, title = 'Kies uw appartement' }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
@@ -222,6 +224,12 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
         <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-3 shrink-0">
+        {onSearch && (
+          <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
+            className="h-10 rounded-full bg-white text-[#F26A12] hover:bg-white/90 flex items-center gap-2 px-4 font-bold transition-colors">
+            <Search className="w-5 h-5" strokeWidth={2.4} /> Zoek huurder
+          </button>
+        )}
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
           data-testid="kiosk-header-tenants" aria-label="Huurders"
           className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
@@ -237,7 +245,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   );
 }
 
-function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld }) {
+function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch }) {
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -319,7 +327,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld }) {
           <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
         </div>
         {/* Desktop: gecentreerde titel-header */}
-        <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} />
+        <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
         <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
@@ -385,7 +393,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld }) {
       </div>
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
-        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} />
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
 
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
@@ -4815,6 +4823,14 @@ export default function KioskLayout() {
 
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
+  const [searchOpen, setSearchOpen] = useState(false);
+  const pickSearched = (a) => {
+    setSearchOpen(false);
+    prefetchOverview(a?.tenant_id);
+    setOverview(null); setPaymentPayload(null); setPaymentResult(null);
+    setApartment(a);
+    setStep('overview');
+  };
   const barRef = useRef(null);
   const headRef = useRef(null);
   useEffect(() => {
@@ -4880,7 +4896,8 @@ export default function KioskLayout() {
       )}
       {showTopHead && (
         <div ref={headRef} className="hidden md:block absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
-          <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode} />
+          <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
+            onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>
       )}
       <AnimatePresence initial={false}>
@@ -4900,13 +4917,14 @@ export default function KioskLayout() {
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
               onKasgeld={() => setStep('kasgeld')}
+              onSearch={() => setSearchOpen(true)}
               onExit={exit} />
           )}
           {step === 'kasgeld' && (
             <KasgeldPanel onBack={() => setStep('select')} />
           )}
           {step === 'overview' && apartment && (
-            <TenantOverview apartment={apartment} onBack={reset}
+            <TenantOverview key={apartment.id} apartment={apartment} onBack={reset}
               onPay={(d) => { setOverview(d); setStep('pay'); }} />
           )}
           {step === 'pay' && overview && (
@@ -4930,6 +4948,9 @@ export default function KioskLayout() {
       {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk desktop-bar.
           De mobile "+" FAB + Snel Toevoegen sheet zijn verwijderd (user
           request 2026-02-22 — werkten niet naar behoren op iOS PWA). */}
+      {searchOpen && (
+        <KioskTenantSearch onClose={() => setSearchOpen(false)} onPick={pickSearched} />
+      )}
       {showAddTenant && (
         <AddTenantModal
           onClose={() => setShowAddTenant(false)}
