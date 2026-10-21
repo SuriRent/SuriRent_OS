@@ -959,3 +959,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Aantal bonnen van vandaag als getal IN het groene bolletje (GET /api/kiosk/print-log/count; ververst bij nieuwe print, sluiten overlay en elke minuut).
 - 2026-06: KIOSK Betaalmethode "Bankoverschrijving" opent venster (components/KioskBankTransferModal.jsx): bedrag, ten name van, bankrekening(en) SR/NL uit Instellingen → Bedrijf (GET /api/kiosk/bank-details), omschrijving, QR-code, kopieerknoppen; "Overboeking gedaan → verder" gaat naar Bevestigen.
 - 2026-06: Witte modus verfijnd: bovenbalk + menubalk wit, middengedeelte lichtgrijs (#F4F5F7) met witte kaarten.
+- 2026-06: Mobiel: kleurmodus-knop verplaatst van titelrij naar Snel toevoegen (+) sheet ("Witte modus"/"Oranje modus"); + FAB verborgen zolang sheet open is.

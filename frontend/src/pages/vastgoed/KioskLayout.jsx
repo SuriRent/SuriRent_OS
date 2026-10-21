@@ -347,7 +347,6 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         {/* Mobile: kleine titel links, onder de knoppen */}
         <div className="kiosk-chrome md:hidden px-4 pt-3 pb-1 flex items-center justify-between gap-2">
           <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
-          <ThemeToggle testId="kiosk-theme-toggle-mobile" />
         </div>
         {/* Desktop: gecentreerde titel-header */}
         <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
@@ -413,7 +412,6 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         <span className="text-2xl font-black text-white tracking-tight">
           {currentLocation ? currentLocation.name : 'Kies uw appartement'}
         </span>
-        <ThemeToggle testId="kiosk-theme-toggle-mobile" className="ml-auto shrink-0" />
       </div>
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
@@ -4437,6 +4435,18 @@ function AddMaintenanceModal({ onClose, onSaved }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
+function SheetThemeButton() {
+  const { theme, toggle } = useContext(KioskThemeCtx);
+  const white = theme === 'white';
+  return (
+    <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
+      className="mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
+      {white ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
+      {white ? 'Oranje modus' : 'Witte modus'}
+    </button>
+  );
+}
+
 function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   // visualViewport-tracking → sheet krimpt mee met keyboard (hoewel dit
   // sheet zelf geen inputs heeft, blijft consistentie belangrijk voor
@@ -4527,6 +4537,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
           </button>
         </div>
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose} />
+        <SheetThemeButton />
       </div>
     </div>
   ), document.body);
@@ -5073,7 +5084,7 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {step === 'select' && createPortal((
+      {step === 'select' && !showAddSheet && createPortal((
         <button
           type="button"
           onClick={() => setShowAddSheet(true)}
