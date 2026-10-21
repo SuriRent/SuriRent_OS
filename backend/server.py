@@ -10909,6 +10909,12 @@ async def kiosk_print_log(since: str, employee: Optional[str] = None, _session=D
     return out
 
 
+@api.get("/kiosk/print-log/count")
+async def kiosk_print_log_count(since: str, _session=Depends(get_kiosk_session)):
+    return {"count": len(await kiosk_print_log(since=since, employee=None, _session=_session))}
+
+
+
 @api.get("/kiosk/print-log/employees")
 async def kiosk_print_log_employees(since: str, _session=Depends(get_kiosk_session)):
     """Medewerkers met bonnen vandaag (ook als ze nu offline zijn)."""

@@ -7,17 +7,37 @@ import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, s
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
 import { PrinterLamp } from './PrinterLamp';
 import { useApprovalNotifySync } from '../lib/approval-notify-sync';
+import { api } from '../lib/api';
 import { ensurePrinterRegistered, isKtpDevice, isPairedPrinter, pairThisDevice } from '../lib/ktp-printer';
 
 // Eén nette werkbalk rechtsboven: [printer] [status-bolletje].
 const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors';
 
-function StatusDot({ on, label, testid, onClick }) {
+function StatusDot({ on, label, testid, onClick, count }) {
+  const hasCount = typeof count === 'number';
   return (
     <button type="button" onClick={onClick} title={label} aria-label={label} data-testid={testid} data-active={on ? 'true' : 'false'} className={BTN}>
-      <span className={`block w-3 h-3 rounded-full ring-2 ring-white/80 transition-colors duration-300 ${on ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' : 'bg-slate-400'}`} />
+      <span data-testid={hasCount ? 'kiosk-receipts-count' : undefined}
+        className={`flex items-center justify-center rounded-full ring-2 ring-white/80 transition-colors duration-300 text-white font-black leading-none ${hasCount ? 'min-w-[22px] h-[22px] px-1 text-[11px]' : 'w-3 h-3'} ${on ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' : 'bg-slate-400'}`}>
+        {hasCount ? (count > 99 ? '99+' : count) : null}
+      </span>
     </button>
   );
+}
+
+const todayStartIso = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
+
+// Aantal bonnen van vandaag; ververst bij nieuwe prints en elke minuut.
+function useTodayReceiptCount(version) {
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    const load = () => api.get('/kiosk/print-log/count', { params: { since: todayStartIso() } })
+      .then(({ data }) => setCount(data.count)).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, [version]);
+  return count;
 }
 
 // Handmatig koppelen als KT-V520 (alleen beheerder, alleen in de APK, nog niet gekoppeld).
@@ -76,15 +96,16 @@ export const KioskLiveStatus = memo(KioskLiveStatusInner);
 // Desktop-bovenbalk: [KT-V520 koppelen] [printerlampje] [status-bolletje → Bonnen van vandaag].
 export function KioskHeaderLiveButtons({ isAdmin }) {
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const count = useTodayReceiptCount(`${s.printsVersion}-${s.overlayOpen}`);
   const open = () => setKioskOverlayOpen(true);
   return (
     <div className="flex items-center gap-0.5 h-10 px-1 rounded-full bg-white/15" data-testid="kiosk-toolbar">
       {isAdmin && <KtpPairPill />}
       <PrinterLamp />
       {isAdmin
-        ? <StatusDot on={s.active} onClick={open} testid="kiosk-presence-dot"
-            label={s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief'} />
-        : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" label={s.connected ? 'Bonnen van vandaag' : 'Geen verbinding'} />}
+        ? <StatusDot on={s.active} onClick={open} testid="kiosk-presence-dot" count={count ?? undefined}
+            label={`${count ?? 0} bonnen vandaag · ${s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief'}`} />
+        : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" count={count ?? undefined} label={s.connected ? `${count ?? 0} bonnen van vandaag` : 'Geen verbinding'} />}
     </div>
   );
 }
