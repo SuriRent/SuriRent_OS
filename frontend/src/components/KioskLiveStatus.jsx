@@ -12,15 +12,6 @@ import { ensurePrinterRegistered, isKtpDevice, isPairedPrinter, pairThisDevice }
 // Eén nette werkbalk rechtsboven: [printer] [status-bolletje].
 const BTN = 'w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors';
 
-function Toolbar({ children }) {
-  return (
-    <div className="hidden md:flex fixed z-40 right-2 items-center gap-0.5 h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 shadow-lg"
-      style={{ top: 'calc(var(--kiosk-sat) + 8px)' }} data-testid="kiosk-toolbar">
-      {children}
-    </div>
-  );
-}
-
 function StatusDot({ on, label, testid, onClick }) {
   return (
     <button type="button" onClick={onClick} title={label} aria-label={label} data-testid={testid} data-active={on ? 'true' : 'false'} className={BTN}>
@@ -64,20 +55,8 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   useApprovalNotifySync({ enabled: isAdmin });
 
-  const open = () => setKioskOverlayOpen(true);
-  const dot = isAdmin
-    ? <StatusDot on={s.active} onClick={open} testid="kiosk-presence-dot"
-        label={s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief'} />
-    : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" label={s.connected ? 'Bonnen van vandaag' : 'Geen verbinding'} />;
   return (
     <>
-      {onHome && (
-        <Toolbar>
-          {isAdmin && <KtpPairPill />}
-          <PrinterLamp />
-          {dot}
-        </Toolbar>
-      )}
       {onHome && (
         <div className="md:hidden fixed z-40 right-3 flex items-center h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 empty:hidden"
           style={{ top: 'calc(var(--kiosk-sat) + 10px)' }} data-testid="kiosk-mobile-printer-lamp">
@@ -93,6 +72,22 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
 }
 
 export const KioskLiveStatus = memo(KioskLiveStatusInner);
+
+// Desktop-bovenbalk: [KT-V520 koppelen] [printerlampje] [status-bolletje → Bonnen van vandaag].
+export function KioskHeaderLiveButtons({ isAdmin }) {
+  const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
+  const open = () => setKioskOverlayOpen(true);
+  return (
+    <div className="flex items-center gap-0.5 h-10 px-1 rounded-full bg-white/15" data-testid="kiosk-toolbar">
+      {isAdmin && <KtpPairPill />}
+      <PrinterLamp />
+      {isAdmin
+        ? <StatusDot on={s.active} onClick={open} testid="kiosk-presence-dot"
+            label={s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief'} />
+        : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" label={s.connected ? 'Bonnen van vandaag' : 'Geen verbinding'} />}
+    </div>
+  );
+}
 
 // Mobiel: Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
 function BtPrinterDialog({ onClose }) {

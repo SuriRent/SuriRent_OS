@@ -21,7 +21,7 @@ import {
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt } from '../../lib/kiosk-print';
-import { KioskLiveStatus, KioskSheetLiveActions } from '../../components/KioskLiveStatus';
+import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -201,7 +201,12 @@ function MobileAddFab({ onOpen }) {
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
-const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {} });
+const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
+
+function HeaderLive() {
+  const { isAdmin } = useContext(KioskThemeCtx);
+  return <KioskHeaderLiveButtons isAdmin={isAdmin} />;
+}
 
 function ThemeToggle({ testId, className = '' }) {
   const { theme, toggle } = useContext(KioskThemeCtx);
@@ -225,7 +230,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   return (
-    <div className="kiosk-chrome hidden md:flex items-center gap-6 pl-2 pr-16 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
+    <div className="kiosk-chrome hidden md:flex items-center gap-6 pl-2 pr-2 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
       <div className="flex items-center gap-3 min-w-0 shrink-0">
         <Home className="w-10 h-10 text-white" strokeWidth={2.2} />
         <span className="text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
@@ -244,6 +249,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
             <Search className="w-5 h-5" strokeWidth={2.4} /> Zoek huurder
           </button>
         )}
+        <HeaderLive />
         <ThemeToggle testId="kiosk-theme-toggle" />
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
           data-testid="kiosk-header-tenants" aria-label="Huurders"
@@ -4599,7 +4605,6 @@ export default function KioskLayout() {
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
-  const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme }), [kioskTheme, toggleTheme]);
   const isWhite = kioskTheme === 'white';
   useEffect(() => {
     const bg = isWhite ? '#FFFFFF' : '#FF5C00';
@@ -4861,6 +4866,7 @@ export default function KioskLayout() {
   };
 
 
+  const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
   const [searchOpen, setSearchOpen] = useState(false);
