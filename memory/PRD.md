@@ -943,3 +943,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Alle server-caches verwijderd (_KIOSK_CACHE, _INVOICE_CACHE/_list_cached, _STATS_CACHE): altijd live uit DB.
 - Bugfix dubbele toerekening: _invoice_currently_paid(exclude_payment_id) bij facturen zonder paid_amount (create/approve/OCR/FIFO).
 - Getest: iteration_122 (9 pytest).
+
+## 2026-06 — Kasbon opmaak = KT-V520
+- Kasbon-regels (22 kolommen, geen afbrekende streepjes): bedrijfsnaam (groot), KASBON, NR. KB-xxxxxx, DATUM dd-mm-jjjj uu:mm, Kasstorting/Kasopname, Ontvangen/Uitbetaald (vet), Kassaldo, Medewerker, Opmerking. PNG-renderer ondersteunt size large + echte centrering.

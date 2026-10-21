@@ -56,7 +56,7 @@ def test_kasgeld_remote_print_has_url_and_lines(ctx):
     m = asyncio.run(_job(ctx, f"/kiosk/kasgeld/{eid}/remote-print"))
     assert m["kasgeld_id"] == eid
     assert m["url"] == f"/api/kiosk/kasgeld/{eid}/receipt.png"
-    assert any("KASGELD BON" in (l.get("text") or "") for l in m["data"]["lines"])
+    assert any("KASBON" in (l.get("text") or "") for l in m["data"]["lines"])
 
 
 def test_kasgeld_receipt_png(ctx):

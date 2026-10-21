@@ -76,7 +76,7 @@ def test_print_data_lines(kh, created):
     texts = [ln["text"] for ln in data["lines"]]
     joined = "\n".join(texts)
     print(joined)
-    assert "KASGELD BON" in joined
+    assert "KASBON" in joined
     assert "INLEG" in joined
     assert "Anita" in joined
     assert "Kassaldo:" in joined

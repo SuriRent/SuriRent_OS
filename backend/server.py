@@ -12146,25 +12146,28 @@ async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(ge
 def _render_receipt_png(data: dict) -> bytes:
     """Bon-regels → 58mm monospace PNG."""
     W = data["cols"]
-    lines = [(ln["text"], ln["align"], ln["bold"]) for ln in data["lines"] if ln["text"]]
+    lines = [(ln["text"], ln["align"], ln["bold"], ln.get("size") == "large") for ln in data["lines"] if ln["text"]]
     from PIL import Image, ImageDraw, ImageFont
     from io import BytesIO
     fs = 26
     try:
         f_reg = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", fs)
         f_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", fs)
+        f_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(fs * 1.5))
     except Exception:
-        f_reg = f_bold = ImageFont.load_default()
+        f_reg = f_bold = f_large = ImageFont.load_default()
     cw = f_reg.getlength("M")
     pad, lh = 24, int(fs * 1.35)
-    img = Image.new("RGB", (int(cw * W + pad * 2), pad * 2 + lh * len(lines)), "white")
+    img_w = int(cw * W + pad * 2)
+    img = Image.new("RGB", (img_w, pad * 2 + sum(int(lh * 1.5) if lg else lh for *_, lg in lines)), "white")
     d = ImageDraw.Draw(img)
     y = pad
-    for text, align, bold in lines:
+    for text, align, bold, large in lines:
+        font = f_large if large else (f_bold if bold else f_reg)
         text = text[:W]
-        x = pad + (cw * (W - len(text)) / 2 if align == "center" else 0)
-        d.text((x, y), text, fill="black", font=f_bold if bold else f_reg)
-        y += lh
+        x = (img_w - font.getlength(text)) / 2 if align == "center" else pad
+        d.text((x, y), text, fill="black", font=font)
+        y += int(lh * 1.5) if large else lh
     buf = BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
@@ -15543,15 +15546,12 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
     cfg = await _kiosk_device_config(cid)
     printer = "kt-v520" if force_ktp else cfg["printer"]
     paper = 58 if printer == "kt-v520" else cfg["paper_width"]
-    W = _RECEIPT_COLS_80 if paper == 80 else _RECEIPT_COLS
-    LBL = 12
+    # Zelfde opmaak als de KT-V520 kasbon; 22 tekens zodat niets (ook geen streepjes) afbreekt.
+    W = 34 if paper == 80 else 22
     cur = e.get("currency") or "SRD"
 
     def money(v):
         return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-    def row(label, value):
-        return f"{str(label)[:LBL - 1].ljust(LBL)}{value}"
 
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
@@ -15569,25 +15569,32 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
             out.append(cur_line)
         return out
 
+    def pair(label, value, bold=False):
+        # Label + waarde op één regel; past het niet, dan de waarde op de volgende regel.
+        txt = f"{label} {value}"
+        return [L(txt, bold=bold)] if len(txt) <= W else [L(label, bold=bold), L(value, bold=bold)]
+
     try:
         dt = datetime.fromisoformat(str(e.get("created_at")).replace("Z", "+00:00"))
     except Exception:
         dt = now_utc()
-    datum = dt.astimezone(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
-    soort = "INLEG" if e.get("type") == "in" else "OPNAME"
+    local = dt.astimezone(timezone(timedelta(hours=-3)))
+    datum = local.strftime("%d-%m-%Y %H:%M")
+    is_in = e.get("type") == "in"
+    nr = f"KB-{str(e.get('id') or '')[:6].upper()}"
     dash = "-" * W
-    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L(dash),
-             L("KASGELD BON", "center", True), L(dash),
-             L(row("Datum:", datum)), L(row("Medewerker:", e.get("created_by_name") or "-")), L(dash),
-             L(row("Type:", soort), bold=True)]
-    if e.get("category"):
-        lines.append(L(row("Categorie:", str(e["category"]).capitalize())))
-    lines += [L(dash), L(row("BEDRAG:", ("+ " if e.get("type") == "in" else "- ") + money(e.get("amount"))), bold=True)]
-    if e.get("description"):
-        lines += [L(dash), L("Opmerking:", bold=True)] + [L(x) for x in wrap(e["description"], W)]
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("KASBON", "center", True), L(dash),
+             L(f"NR. {nr}"), L(f"DATUM {datum}"), L(dash),
+             L("Kasstorting" if is_in else "Kasopname")]
+    lines += pair("Ontvangen:" if is_in else "Uitbetaald:", money(e.get("amount")), bold=True)
     if e.get("balance_after") is not None:
-        lines += [L(dash), L(row("Kassaldo:", money(e["balance_after"])), bold=True)]
-    lines += [L(dash), L("Kasgeld mutatie geregistreerd", "center"), L(""), L("")]
+        lines += pair("Kassaldo:", money(e["balance_after"]))
+    lines.append(L(dash))
+    lines += pair("Medewerker:", e.get("created_by_name") or "-")
+    if e.get("description"):
+        lines.append(L("Opmerking:"))
+        lines += [L(x) for x in wrap(e["description"], W)]
+    lines += [L(dash), L(""), L("")]
     return {
         "template": "lines", "receipt_type": "kasgeld",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": e.get("created_by_name") or "",
