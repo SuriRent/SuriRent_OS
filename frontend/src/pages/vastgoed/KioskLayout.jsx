@@ -4809,6 +4809,16 @@ export default function KioskLayout() {
 
 
   const showDesktopBar = step !== 'check';
+  const barRef = useRef(null);
+  // Meet de echte hoogte van de desktop-menubalk zodat de witte kaarten er nooit tegenaan lopen.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(() => root.style.setProperty('--kiosk-bar-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.removeProperty('--kiosk-bar-h'); };
+  }, [showDesktopBar]);
   // Medewerker-PIN systeem is compleet uitgeschakeld: de kiosk-PIN (of
   // admin_token) is de enige authenticatie. Geen aparte emp-login sheet,
   // geen banner. Payments gaan direct als "approved" (backend accepteert
@@ -4980,7 +4990,7 @@ export default function KioskLayout() {
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
           ook bovenop een geopende modal (modals gebruiken z-[100]). */}
       {showDesktopBar && createPortal((
-        <nav className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-[#F26A12] border-t border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
+        <nav ref={barRef} className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-[#F26A12] border-t border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             {[

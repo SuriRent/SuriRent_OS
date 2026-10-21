@@ -949,3 +949,5 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Desktop kiosk redesign
 - Desktop (md+): DesktopKioskHeader (huis-icoon + bedrijfsnaam, locatie • Kies uw appartement, huurders-icoon + tandwiel), witte kaarten 5/rij met 80px foto, groot nummer, solide pills Betaald/Gedeeltelijk/Niet betaald, onderste tab-balk (Dashboard…Uitloggen) die bestaande kiosk-modals opent; Beheerder voor iedereen (admin-login). Mobiel ongewijzigd. Getest: iteration_123.
+
+- 2026-06: KIOSK desktop — witte kaarten raken de menubalk niet meer (gemeten --kiosk-bar-h via ResizeObserver + 16px oranje ruimte, ronde hoeken zichtbaar) op alle kiosk-schermen.

@@ -121,7 +121,7 @@ html.apk-ktp { --kiosk-sat: 0px; }
 }
 @media (min-width: 768px) {
   .kiosk-content-scroll {
-    padding-bottom: calc(clamp(48px, 7vh, 64px) + 16px);
+    padding-bottom: calc(var(--kiosk-bar-h, 96px) + 16px);
   }
 }
 
