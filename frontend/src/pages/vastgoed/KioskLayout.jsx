@@ -32,7 +32,7 @@ import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
-import { KioskAdminInvoicesTile, KioskAdminInvoiceForm } from '../../components/KioskAdminInvoices';
+import { KioskAdminInvoicesTile, KioskAdminInvoicesPage } from '../../components/KioskAdminInvoices';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -211,7 +211,6 @@ const ADMIN_MENU_ITEMS = [];
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
-  const [invoiceFormOpen, setInvoiceFormOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -234,7 +233,7 @@ function KioskAdminMenu() {
           className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,80vw)] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-5 animate-in fade-in slide-in-from-top-2 duration-150">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
           <div className="grid grid-cols-3 gap-3">
-            <KioskAdminInvoicesTile onNewInvoice={() => { setOpen(false); setInvoiceFormOpen(true); }} />
+            <KioskAdminInvoicesTile onOpen={() => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'facturen' })); }} />
               {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (
                 <button key={id} type="button" role="menuitem" data-testid={`kiosk-admin-menu-${id}`}
                   onClick={() => { setOpen(false); onClick(); }}
@@ -245,7 +244,6 @@ function KioskAdminMenu() {
           </div>
         </div>
       )}
-      {invoiceFormOpen && <KioskAdminInvoiceForm onClose={() => setInvoiceFormOpen(false)} />}
     </div>
   );
 }
@@ -269,7 +267,7 @@ function ThemeToggle({ testId, className = '' }) {
 
 const STEP_TITLES = {
   kasgeld: 'Kasgeldbeheer', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
-  method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie',
+  method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', facturen: 'Facturen',
 };
 
 function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, title = 'Kies uw appartement' }) {
@@ -4940,6 +4938,11 @@ export default function KioskLayout() {
   const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
+  useEffect(() => {
+    const onNav = (e) => { if (e.detail === 'facturen') setStep('facturen'); };
+    window.addEventListener('kiosk-nav', onNav);
+    return () => window.removeEventListener('kiosk-nav', onNav);
+  }, []);
   const [searchOpen, setSearchOpen] = useState(false);
   const pickSearched = (a) => {
     setSearchOpen(false);
@@ -5037,6 +5040,9 @@ export default function KioskLayout() {
               onKasgeld={() => setStep('kasgeld')}
               onSearch={() => setSearchOpen(true)}
               onExit={exit} />
+          )}
+          {step === 'facturen' && hasAdminAccess && (
+            <KioskAdminInvoicesPage onBack={() => setStep('select')} />
           )}
           {step === 'kasgeld' && (
             <KasgeldPanel onBack={() => setStep('select')} />
