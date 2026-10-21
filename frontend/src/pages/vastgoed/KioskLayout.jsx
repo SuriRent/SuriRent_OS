@@ -199,7 +199,7 @@ function MobileAddFab({ onOpen }) {
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
-function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin }) {
+function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, title = 'Kies uw appartement' }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
@@ -213,8 +213,8 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
       </div>
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
         className={`flex-1 min-w-0 flex items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-        <MapPin className="w-5 h-5 shrink-0" />
-        <span className="truncate">{loc ? `${loc}  •  Kies uw appartement` : 'Kies uw appartement'}</span>
+        {loc && <MapPin className="w-5 h-5 shrink-0" />}
+        <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-3 shrink-0">
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
@@ -314,12 +314,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld }) {
           <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
         </div>
         {/* Desktop: gecentreerde titel-header */}
-        <div className="hidden md:flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
-          <div />
-          <span className="text-sm sm:text-base font-semibold text-white">Kies een locatie</span>
-          <div className="w-16" />
-        </div>
-        <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-3">
+        <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} />
+        <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
               const count = apartments.filter((a) => a.location_id === loc.id && a.status === 'occupied').length;
@@ -5007,7 +5003,7 @@ export default function KioskLayout() {
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
-                  <span className="text-xs lg:text-sm font-semibold truncate max-w-full">{label}</span>
+                  <span className="text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full">{label}</span>
                 </button>
               );
             })}

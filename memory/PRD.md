@@ -946,3 +946,6 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 
 ## 2026-06 — Kasbon opmaak = KT-V520
 - Kasbon-regels (22 kolommen, geen afbrekende streepjes): bedrijfsnaam (groot), KASBON, NR. KB-xxxxxx, DATUM dd-mm-jjjj uu:mm, Kasstorting/Kasopname, Ontvangen/Uitbetaald (vet), Kassaldo, Medewerker, Opmerking. PNG-renderer ondersteunt size large + echte centrering.
+
+## 2026-06 — Desktop kiosk redesign
+- Desktop (md+): DesktopKioskHeader (huis-icoon + bedrijfsnaam, locatie • Kies uw appartement, huurders-icoon + tandwiel), witte kaarten 5/rij met 80px foto, groot nummer, solide pills Betaald/Gedeeltelijk/Niet betaald, onderste tab-balk (Dashboard…Uitloggen) die bestaande kiosk-modals opent; Beheerder voor iedereen (admin-login). Mobiel ongewijzigd. Getest: iteration_123.

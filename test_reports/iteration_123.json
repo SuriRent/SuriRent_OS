@@ -1,0 +1,36 @@
+{
+  "summary": "Iter123, frontend only: redesign of the KIOSK desktop view (/my-awesome-rentals-bv/kiosk, kiosk_token injected from /app/memory/.kt_tmp). Every requested feature PASSES. HEADER at 1440x900: kiosk-header-company shows 'SuriRent N.V.' next to the house icon. back-to-locations shows 'Hoofdvestiging — Paramaribo, Henck Arronstraat 1, Paramaribo • Kies uw appartement' and clicking it returns to the 2 location tiles. kiosk-header-tenants opens add-tenant-overlay. kiosk-header-settings goes to /my-awesome-rentals-bv/login?view=admin when there is no admin session. The live-status dot (x≈1392-1432) does not overlap the gear (right edge 1354). CARDS: white cards with an 80px round icon, a bold uppercase number (HUIS 1A / PENTHOUSE), a user icon with the tenant name, and solid pills. apt-HUIS 1A-unpaid shows 'Niet betaald' (red, X). apt-HUIS 1B-paid shows 'Betaald' (green, check). apt-HUIS 2C-partial shows 'Gedeeltelijk' (amber, clock icon; the request did not name an icon). BOTTOM BAR: all 12 tiles render with icon and label. Tenant, apartment, location, contract, invoice, payments-viewer and maintenance each open their -overlay and close again. NFC opens nfc-link-modal. Kasgeld opens the kasgeld screen; the Kasgeld tile turns active and Dashboard turns inactive. Dashboard goes back to the select screen (active), also from the tenant overview. Beheerder without admin_token goes to /my-awesome-rentals-bv/login?view=admin. Uitloggen clears kiosk_token and goes to /login?pick=1. The bar stays visible on the tenant overview and kasgeld screens. LAYOUT: page.route did not work (probably the service worker), so I cloned cards to 21 in the DOM. That gave 5 cards per row at 1280, 1440 and 1920. After scrolling to the end, the last card's bottom sits 100px above the bar top at every width, so the bar does not cover it. Header children do not overlap, and company and location text are not truncated at any width. At 1280 the 'Appartementen' nav label is truncated with an ellipsis. MOBILE 390x844: unchanged. The desktop header and bottom bar are hidden, kiosk-mobile-fab is visible and opens the Snel toevoegen sheet, back-to-locations-mobile is visible, and pills read 'Niet betaald' / 'Betaald' / 'Deels betaald' / 'Betaald'. A git diff confirms the mobile classes are unchanged; the only change is an added inline-flex/gap on the pill, with icons hidden on mobile.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Desktop bottom bar at 1280px", "issue": "The 'Appartementen' label is truncated to 'Appartemen…' (text-xs lg:text-sm plus truncate on a 12-tile bar). Other labels fit. Suggested fix: use text-[13px] on lg, reduce the tile padding/gap, or allow 2-line wrapping with leading-tight.", "selector": "[data-testid='kiosk-add-apartment-btn-desktop'] span", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Kiosk desktop location picker (shown when there are 2+ locations)", "issues": ["It still uses the old minimal centered 'Kies een locatie' header, without the house icon, company name, tenants icon or gear. The new DesktopKioskHeader appears only on the apartment grid, so the look is inconsistent with the user's screenshot style."]},
+      {"screen": "Kiosk desktop: Dashboard nav from overview/kasgeld", "issues": ["Dashboard always resets to the location picker, not to the grid of the previously selected location. This is acceptable per the spec, but it adds an extra click on kiosks with multiple locations."]},
+      {"screen": "Kiosk modals (pre-existing)", "issues": ["AddContractModal uses native <input type=date> (mm/dd/yyyy) for Startdatum and Einddatum instead of a shadcn calendar, so the format is US-style in a Dutch UI."]},
+      {"screen": "Mobile kiosk (pre-existing, unchanged)", "issues": ["kiosk-mobile-fab is #FF5C00 on an orange-500 background, so the circle barely stands out. Only the white '+' is visible."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "LOW: stop the 'Appartementen' label truncating at 1280px in kiosk-bottom-bar.",
+    "LOW (optional): use DesktopKioskHeader (company and icons) on the desktop location-picker screen too, for consistency.",
+    "OPTIONAL: have kiosk-nav-dashboard remember the last selected location instead of resetting it to null."
+  ],
+  "critical_code_review_comments": [
+    "KioskLayout.jsx is 5020 lines. Split it into modules (ApartmentSelect, the modals, DesktopKioskHeader, the bottom bar).",
+    "DesktopKioskHeader calls JSON.parse(localStorage) on every render. Memoize it with useMemo or read it once in state.",
+    "The header tenants button and the dashboard tile communicate through window CustomEvent('kiosk-nav'). It works, but it is implicit coupling. Callbacks passed as props (onTenants/onDashboard) would be clearer.",
+    "The back-to-locations button is still a focusable <button> when totalGroups <= 1 (onClick undefined). Consider disabled or a <div> for accessibility.",
+    "The partial pill uses a Clock icon. The spec only gave icons for paid (check) and unpaid (X), so this is fine."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend only)", "frontend": "100% of requested flows passed (1 low-priority label truncation at 1280)"},
+  "test_credentials": "kiosk_token from /app/memory/.kt_tmp plus kiosk_company in localStorage. demo@surirent.sr / demo1234 login returned 200.",
+  "seed_data_creation": "None. The extra cards for the 5-per-row check were cloned client-side in the DOM only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "my-awesome-rentals-bv has 2 locations: Filiaal Nieuw Nickerie (STUDIO 1, paid) and Hoofdvestiging Paramaribo (HUIS 1A unpaid, HUIS 1B paid, HUIS 2C partial, Penthouse paid). Use location-<id> nth(1) for the 4-card location. Modals expose <testId>-overlay and <testId>-close (add-tenant, add-apartment, add-location, add-contract, add-invoice, payments-viewer, add-maintenance), plus nfc-link-modal and nfc-link-close. page.route interception of /api/kiosk/* does not work (likely the PWA service worker); clone DOM cards to test layout. kiosk-admin-btn-desktop with a valid admin_token -> window.location.assign('/admin'). This was not verified with a real admin token; a dummy token redirected to /login?view=admin."
+}
