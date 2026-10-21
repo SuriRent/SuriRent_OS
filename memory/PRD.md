@@ -962,3 +962,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Mobiel: kleurmodus-knop verplaatst van titelrij naar Snel toevoegen (+) sheet ("Witte modus"/"Oranje modus"); + FAB verborgen zolang sheet open is.
 - 2026-06: Snel toevoegen sheet volgt witte modus (lichtgrijs, witte tegels/knoppen, oranje accenten) via .kiosk-sheet-white.
 - 2026-06: Kiosk-vensters (KioskModalShell: huurder, appartement, locatie, contract, factuur, betalingen, onderhoud) volgen witte modus (witte kop op mobiel); + FAB verborgen zolang een venster open is.
+- 2026-06: Telefoon-KIOSK lijkt nu op desktop: bovenbalk (logo, bedrijfsnaam, zoek-icoon, bonnen-bolletje) op alle pagina's, appartementkaarten in desktopstijl (groot icoon, HOOFDLETTERS, gekleurde badges); + knop blijft (wit in oranje modus).

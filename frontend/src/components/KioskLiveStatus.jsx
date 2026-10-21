@@ -66,7 +66,7 @@ function KtpPairPill() {
 
 // Statusbolletje (alleen beheerder-kiosk) + bonnen-venster. Rendert los van
 // de rest van de kiosk via een externe store.
-function KioskLiveStatusInner({ isAdmin, onHome = true }) {
+function KioskLiveStatusInner({ isAdmin }) {
   useEffect(() => {
     startKioskLive(isAdmin ? 'admin' : 'employee');
     ensurePrinterRegistered();
@@ -77,12 +77,6 @@ function KioskLiveStatusInner({ isAdmin, onHome = true }) {
 
   return (
     <>
-      {onHome && (
-        <div className="md:hidden fixed z-40 right-3 flex items-center h-10 px-1 rounded-full bg-black/25 backdrop-blur-md ring-1 ring-white/15 empty:hidden"
-          style={{ top: 'calc(var(--kiosk-sat) + 10px)' }} data-testid="kiosk-mobile-printer-lamp">
-          <PrinterLamp testid="kiosk-mobile-printer-lamp-btn" />
-        </div>
-      )}
       {s.overlayOpen && (
         <KioskPrintsOverlay employees={isAdmin ? s.employees : []} printsVersion={s.printsVersion} employeeMode={!isAdmin}
           onClose={() => setKioskOverlayOpen(false)} />

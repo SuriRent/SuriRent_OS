@@ -124,16 +124,14 @@ html.apk-ktp { --kiosk-sat: 0px; }
     padding-bottom: calc(var(--kiosk-bar-h, 96px) + 16px);
   }
 }
-@media (min-width: 768px) {
-  .kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
-}
+.kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
 /* KIOSK witte modus — wit met oranje accenten (bedrijfsbrede instelling). */
 body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
 .kiosk-fullscreen.kiosk-white { background-color: #F4F5F7 !important; }
 .kiosk-white .h-full.bg-orange-500,
 .kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: #F4F5F7; }
 .kiosk-white .kiosk-head-wrap { background-color: #FFFFFF; }
-@media (min-width: 768px) {
+@media (min-width: 0px) {
   .kiosk-white [data-testid="kiosk-desktop-header"] {
     background-color: #FFFFFF;
     border-bottom: 1px solid #EEF0F3;

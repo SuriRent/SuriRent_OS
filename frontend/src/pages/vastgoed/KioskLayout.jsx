@@ -231,35 +231,35 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   return (
-    <div className="kiosk-chrome hidden md:flex items-center gap-6 pl-2 pr-2 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
-      <div className="flex items-center gap-3 min-w-0 shrink-0">
-        <Home className="w-10 h-10 text-white" strokeWidth={2.2} />
-        <span className="text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
+    <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 md:flex-none md:shrink-0">
+        <Home className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" strokeWidth={2.2} />
+        <span className="text-xl md:text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
           {company?.name || 'Kiosk'}
         </span>
       </div>
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
-        className={`flex-1 min-w-0 flex items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+        className={`hidden md:flex flex-1 min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
         {loc && <MapPin className="w-5 h-5 shrink-0" />}
         <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
       </button>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {onSearch && (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
-            className="h-10 rounded-full bg-white text-[#F26A12] hover:bg-white/90 flex items-center gap-2 px-4 font-bold transition-colors">
-            <Search className="w-5 h-5" strokeWidth={2.4} /> Zoek huurder
+            className="h-10 w-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 flex items-center gap-2 md:px-4 font-bold transition-colors">
+            <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
         <HeaderLive />
-        <ThemeToggle testId="kiosk-theme-toggle" />
+        <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
           data-testid="kiosk-header-tenants" aria-label="Huurders"
-          className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
+          className="hidden md:flex w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
           <Users className="w-5 h-5" />
         </button>
-        <span className="w-px h-8 bg-white/40" />
+        <span className="hidden md:block w-px h-8 bg-white/40" />
         <button type="button" onClick={onAdmin} data-testid="kiosk-header-settings" aria-label="Beheerder"
-          className="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-white transition-colors">
+          className="hidden md:flex w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-white transition-colors">
           <SettingsIcon className="w-6 h-6" />
         </button>
       </div>
@@ -345,11 +345,10 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         {/* Mobile: knoppen bovenaan in 1 rij (matcht ontwerp) */}
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
-        <div className="kiosk-chrome md:hidden px-4 pt-3 pb-1 flex items-center justify-between gap-2">
-          <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
-        </div>
-        {/* Desktop: gecentreerde titel-header */}
         <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
+        <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center justify-between gap-2">
+          <span className="text-xl font-black text-white tracking-tight">Kies een locatie</span>
+        </div>
         <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
@@ -402,20 +401,20 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
       {/* Mobile: knoppen bovenaan in 1 rij */}
       <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
       {/* Mobile: kleine titel links, onder de knoppen */}
-      <div className="kiosk-chrome md:hidden px-4 pt-3 pb-1 flex items-center gap-2">
+      {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
+      <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
+      <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0">
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
             className="flex items-center gap-1 text-white/90 font-bold bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs">
             <ArrowLeft className="w-3.5 h-3.5" /> Locaties
           </button>
         )}
-        <span className="text-2xl font-black text-white tracking-tight">
+        <span className="text-xl font-black text-white tracking-tight truncate">
           {currentLocation ? currentLocation.name : 'Kies uw appartement'}
         </span>
       </div>
-      {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
-      <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
-        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
 
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
@@ -435,22 +434,22 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
               : photo;
             return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
-              className="group bg-white/85 md:bg-white backdrop-blur-sm flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white/95 transition border-2 border-transparent hover:border-orange-500 shadow md:shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
+              className="group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               {photoSrc ? (
-                <div className="rounded-full overflow-hidden w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-2 ring-orange-100 md:ring-4 md:ring-slate-100 group-hover:ring-orange-300">
+                <div className="rounded-full overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">
                   <img src={photoSrc} alt={a.tenant_name || ''}
                     data-testid={`apt-${a.number}-photo`}
                     className="w-full h-full object-cover"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 </div>
               ) : (
-                <div className="rounded-full flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
-                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-9 md:h-9 text-orange-500" />
+                <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
+                  <Building2 className="w-7 h-7 md:w-9 md:h-9 text-orange-500" />
                 </div>
               )}
-              <span className="text-base sm:text-lg md:text-2xl font-extrabold md:font-black text-slate-900 mb-0.5 md:mb-1 md:uppercase md:tracking-tight">{a.number}</span>
-              <div className="flex items-center gap-1 md:gap-1.5 text-slate-400 md:text-slate-700 mb-1 md:mb-3 max-w-full">
+              <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
+              <div className="flex items-center gap-1 md:gap-1.5 text-slate-700 mb-2 md:mb-3 max-w-full">
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 shrink-0" />
                 <span className="text-xs sm:text-sm md:text-base truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px] md:max-w-[170px]">{a.tenant_name}</span>
               </div>
@@ -461,17 +460,16 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
                   Wanneer er geen facturen zijn, valt de backend terug op
                   "paid" (geen achterstand). */}
               {a.pay_status === 'paid' ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 md:bg-emerald-600 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-paid`}>
-                  <Check className="hidden md:block w-4 h-4" strokeWidth={3} /> Betaald
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-paid`}>
+                  <Check className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Betaald
                 </span>
               ) : a.pay_status === 'partial' ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 md:bg-amber-500 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-partial`}>
-                  <ClockIcon className="hidden md:block w-4 h-4" strokeWidth={3} />
-                  <span className="md:hidden">Deels betaald</span><span className="hidden md:inline">Gedeeltelijk</span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-500 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-partial`}>
+                  <ClockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Gedeeltelijk
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 md:bg-red-500 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-unpaid`}>
-                  <X className="hidden md:block w-4 h-4" strokeWidth={3} /> Niet betaald
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-red-500 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-unpaid`}>
+                  <X className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Niet betaald
                 </span>
               )}
             </button>
@@ -4968,7 +4966,7 @@ export default function KioskLayout() {
         </div>
       )}
       {showTopHead && (
-        <div ref={headRef} className="kiosk-head-wrap hidden md:block absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
+        <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
             onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>
@@ -5092,7 +5090,7 @@ export default function KioskLayout() {
           onClick={() => setShowAddSheet(true)}
           data-testid="kiosk-mobile-fab"
           aria-label="Snelle acties"
-          className="md:hidden fixed right-4 z-[109] w-14 h-14 rounded-full bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)] flex items-center justify-center active:scale-95 transition"
+          className={`md:hidden fixed right-4 z-[109] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition ${isWhite ? 'bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}
           style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
         >
           <Plus className="w-7 h-7" strokeWidth={2.8} />
