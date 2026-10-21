@@ -963,4 +963,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Snel toevoegen sheet volgt witte modus (lichtgrijs, witte tegels/knoppen, oranje accenten) via .kiosk-sheet-white.
 - 2026-06: Kiosk-vensters (KioskModalShell: huurder, appartement, locatie, contract, factuur, betalingen, onderhoud) volgen witte modus (witte kop op mobiel); + FAB verborgen zolang een venster open is.
 - 2026-06: Telefoon-KIOSK lijkt nu op desktop: bovenbalk (logo, bedrijfsnaam, zoek-icoon, bonnen-bolletje) op alle pagina's, appartementkaarten in desktopstijl (groot icoon, HOOFDLETTERS, gekleurde badges); + knop blijft (wit in oranje modus).
-- 2026-06: Beheer-dropdown (KioskAdminMenu, ADMIN_MENU_ITEMS = [] in KioskLayout.jsx): hamburger naast logo in desktop-kop, grote dropdown onder icoon (raster), sluit bij klik erbuiten/Escape; alleen beheerder (admin_token), md+. Lege strook verwijderd.
+- 2026-06: Beheer-dropdown (KioskAdminMenu, ADMIN_MENU_ITEMS = [] in KioskLayout.jsx): hamburger helemaal links vóór het huis-logo in desktop-kop, grote dropdown onder icoon (raster), sluit bij klik erbuiten/Escape; alleen beheerder (admin_token), md+. Lege strook verwijderd.
