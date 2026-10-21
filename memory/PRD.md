@@ -972,3 +972,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Kiosk-beheerpagina's schermvullend wit (geen grijze rand/kaart), menubalk onderaan verborgen zolang een beheerpagina open is (.kiosk-no-bar).
 - 2026-06: Kiosk-beheerpagina's: inhoud gecentreerd max 1500px als witte kaart op lichtgrijze achtergrond.
 - 2026-06: Knop "Alle N pasfoto's opnieuw croppen" verwijderd uit Huurders-pagina (beheer + kiosk).
+- 2026-06: Zoekknop in kiosk-bovenbalk verborgen op telefoon (alleen md+).

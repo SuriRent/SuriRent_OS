@@ -293,7 +293,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {onSearch && (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
-            className="h-10 w-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 flex items-center gap-2 md:px-4 font-bold transition-colors">
+            className="hidden md:flex h-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 items-center gap-2 md:px-4 font-bold transition-colors">
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
