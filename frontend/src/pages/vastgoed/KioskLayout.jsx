@@ -32,6 +32,7 @@ import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
+import { KioskAdminInvoicesTile, KioskAdminInvoiceForm } from '../../components/KioskAdminInvoices';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -210,6 +211,7 @@ const ADMIN_MENU_ITEMS = [];
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
+  const [invoiceFormOpen, setInvoiceFormOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -231,8 +233,8 @@ function KioskAdminMenu() {
         <div data-testid="kiosk-admin-menu" role="menu"
           className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,80vw)] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-5 animate-in fade-in slide-in-from-top-2 duration-150">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
-          {ADMIN_MENU_ITEMS.length > 0 ? (
-            <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <KioskAdminInvoicesTile onNewInvoice={() => { setOpen(false); setInvoiceFormOpen(true); }} />
               {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (
                 <button key={id} type="button" role="menuitem" data-testid={`kiosk-admin-menu-${id}`}
                   onClick={() => { setOpen(false); onClick(); }}
@@ -240,15 +242,10 @@ function KioskAdminMenu() {
                   <Icon className="w-6 h-6 text-[#FF5C00]" /> {label}
                 </button>
               ))}
-            </div>
-          ) : (
-            <div data-testid="kiosk-admin-menu-empty"
-              className="rounded-2xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">
-              Hier komen de beheerfuncties
-            </div>
-          )}
+          </div>
         </div>
       )}
+      {invoiceFormOpen && <KioskAdminInvoiceForm onClose={() => setInvoiceFormOpen(false)} />}
     </div>
   );
 }
