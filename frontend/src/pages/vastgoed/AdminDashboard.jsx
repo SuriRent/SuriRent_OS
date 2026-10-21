@@ -3141,7 +3141,7 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
   );
 }
 
-function Tenants() {
+export function Tenants() {
   // SWR cache — bij tabwissel wordt de vorige data direct getoond en
   // achtergrond-revalidate hoeven we niet af te wachten.
   const [q, setQ] = useState('');
