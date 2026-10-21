@@ -970,3 +970,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Beheer-pagina's in kiosk krijgen kiosk-stijl via .kiosk-admin-skin (index.css): witte grote kaart op oranje/grijs, grotere letters, knoppen min 44-52px, invoer 54px, oranje schaduw; beheeromgeving zelf ongewijzigd.
 - 2026-06: Vensters (KeyboardSafeModal .ksm-root) die vanaf kiosk-beheerpagina's openen krijgen ook kiosk-stijl (body.kiosk-admin-active zolang KioskAdminPage open is).
 - 2026-06: Kiosk-beheerpagina's schermvullend wit (geen grijze rand/kaart), menubalk onderaan verborgen zolang een beheerpagina open is (.kiosk-no-bar).
+- 2026-06: Kiosk-beheerpagina's: inhoud gecentreerd max 1100px als witte kaart op lichtgrijze achtergrond.
