@@ -954,3 +954,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: iPad 10"+ (staand+liggend) krijgt altijd desktop-KIOSK: viewport-forcering in public/index.html (html.ipad-tablet), staand = kaarten onder elkaar (index.css portrait-regels), menubalk-labels truncaten, numpad min-h staand.
 - 2026-06: KIOSK desktop/iPad — bovenbalk (logo, titel per stap, huurders/beheer-knoppen) nu op alle kiosk-pagina's (STEP_TITLES, --kiosk-head-h, .kiosk-has-head).
 - 2026-06: KIOSK desktop/iPad — "Zoek huurder" knop in bovenbalk (startscherm, kasgeld, overzicht; niet tijdens betaling). components/KioskTenantSearch.jsx: zoeken op naam/appartement + betaalstatus-badge, opent direct financieel overzicht.
+- 2026-06: KIOSK kleurmodus Oranje/Wit (bedrijfsbreed): GET/PUT /api/kiosk/theme (companies.kiosk_theme) + WS "kiosk_theme" live sync; toggle (zon-icoon) in bovenbalk desktop + mobiele titelrij; CSS .kiosk-white/.kiosk-chrome in index.css.

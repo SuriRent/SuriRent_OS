@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Search,
+  Search, Sun, Palette,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
@@ -201,6 +201,20 @@ function MobileAddFab({ onOpen }) {
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
+const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {} });
+
+function ThemeToggle({ testId, className = '' }) {
+  const { theme, toggle } = useContext(KioskThemeCtx);
+  const white = theme === 'white';
+  return (
+    <button type="button" onClick={toggle} data-testid={testId}
+      aria-label={white ? 'Oranje modus' : 'Witte modus'} title={white ? 'Oranje modus' : 'Witte modus'}
+      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${white ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-white/15 text-white hover:bg-white/25'} ${className}`}>
+      {white ? <Palette className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+    </button>
+  );
+}
+
 const STEP_TITLES = {
   kasgeld: 'Kasgeldbeheer', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie',
@@ -211,7 +225,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   return (
-    <div className="hidden md:flex items-center gap-6 pl-2 pr-16 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
+    <div className="kiosk-chrome hidden md:flex items-center gap-6 pl-2 pr-16 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
       <div className="flex items-center gap-3 min-w-0 shrink-0">
         <Home className="w-10 h-10 text-white" strokeWidth={2.2} />
         <span className="text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
@@ -230,6 +244,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
             <Search className="w-5 h-5" strokeWidth={2.4} /> Zoek huurder
           </button>
         )}
+        <ThemeToggle testId="kiosk-theme-toggle" />
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
           data-testid="kiosk-header-tenants" aria-label="Huurders"
           className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
@@ -323,8 +338,9 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         {/* Mobile: knoppen bovenaan in 1 rij (matcht ontwerp) */}
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
-        <div className="md:hidden px-4 pt-3 pb-1">
+        <div className="kiosk-chrome md:hidden px-4 pt-3 pb-1 flex items-center justify-between gap-2">
           <span className="text-2xl font-black text-white tracking-tight">Kies een locatie</span>
+          <ThemeToggle testId="kiosk-theme-toggle-mobile" />
         </div>
         {/* Desktop: gecentreerde titel-header */}
         <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
@@ -380,7 +396,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
       {/* Mobile: knoppen bovenaan in 1 rij */}
       <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
       {/* Mobile: kleine titel links, onder de knoppen */}
-      <div className="md:hidden px-4 pt-3 pb-1 flex items-center gap-2">
+      <div className="kiosk-chrome md:hidden px-4 pt-3 pb-1 flex items-center gap-2">
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
             className="flex items-center gap-1 text-white/90 font-bold bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs">
@@ -390,6 +406,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         <span className="text-2xl font-black text-white tracking-tight">
           {currentLocation ? currentLocation.name : 'Kies uw appartement'}
         </span>
+        <ThemeToggle testId="kiosk-theme-toggle-mobile" className="ml-auto shrink-0" />
       </div>
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
@@ -979,7 +996,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
 
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="overview-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -1716,7 +1733,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
 
   return (
     <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2">
-      <div className="flex items-center justify-between flex-wrap gap-2 py-2">
+      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -2296,7 +2313,7 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
 
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="method-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -2473,7 +2490,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
 
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="confirm-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -2741,7 +2758,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
 
   return (
     <div className="h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden">
-      <div className="text-center mb-2 shrink-0" data-testid="receipt-thanks">
+      <div className="kiosk-chrome text-center mb-2 shrink-0" data-testid="receipt-thanks">
         <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 flex items-center justify-center mx-auto mb-1 shadow-lg">
           <Check className="w-6 h-6 sm:w-9 sm:h-9 text-emerald-600" strokeWidth={3} />
         </div>
@@ -2913,7 +2930,7 @@ function KasgeldPanel({ onBack }) {
       style={{ padding: '1.5vh 1.5vw 0', paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
       {/* Oranje header — Terug links, operator-context rechts (zelfde patroon
           als TenantOverview "Financieel overzicht") */}
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
+      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
         <button onClick={onBack} data-testid="kasgeld-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 active:scale-95 transition">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -4568,15 +4585,38 @@ export default function KioskLayout() {
   // omdat de vaste witte FAB-menubalk onderaan staat — zo krijgen we nooit
   // een oranje strook onder de FAB bij iOS PWA viewport-drift.
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
+  const [kioskTheme, setKioskTheme] = useState(() => localStorage.getItem('kiosk_theme') || 'orange');
   useEffect(() => {
-    const BODY_BG = '#FF5C00';
+    const apply = (t) => { if (t === 'white' || t === 'orange') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
+    const onWs = (e) => apply(e.detail);
+    window.addEventListener('kiosk-theme', onWs);
+    return () => window.removeEventListener('kiosk-theme', onWs);
+  }, []);
+  const toggleTheme = useCallback(() => {
+    const next = kioskTheme === 'white' ? 'orange' : 'white';
+    setKioskTheme(next);
+    localStorage.setItem('kiosk_theme', next);
+    api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
+  }, [kioskTheme]);
+  const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme }), [kioskTheme, toggleTheme]);
+  const isWhite = kioskTheme === 'white';
+  useEffect(() => {
+    const bg = isWhite ? '#FFFFFF' : '#FF5C00';
+    document.documentElement.style.backgroundColor = bg;
+    document.body.style.backgroundColor = bg;
+    document.body.classList.toggle('kiosk-white-body', isWhite);
+    setIosStatusBar(bg);
+  }, [isWhite]);
+  useEffect(() => {
+    const BODY_BG = localStorage.getItem('kiosk_theme') === 'white' ? '#FFFFFF' : '#FF5C00';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
     document.documentElement.style.backgroundColor = BODY_BG;
     document.body.style.backgroundColor = BODY_BG;
     // iPhone-PWA: statusbalk effen oranje achter klok/batterij (zoals Expo Go).
-    setIosStatusBar('#FF5C00');
+    setIosStatusBar(BODY_BG);
     return () => {
       setIosStatusBar('#F7F8FA');
       document.body.classList.remove('kiosk-mode');
@@ -4861,7 +4901,8 @@ export default function KioskLayout() {
   }, [step, apartment]);
 
   return (
-    <div className="kiosk-fullscreen bg-orange-500" data-testid="kiosk-root">
+    <KioskThemeCtx.Provider value={themeCtx}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
       <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
@@ -5030,7 +5071,7 @@ export default function KioskLayout() {
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
           ook bovenop een geopende modal (modals gebruiken z-[100]). */}
       {showDesktopBar && createPortal((
-        <nav ref={barRef} className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-[#F26A12] border-t border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
+        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#F26A12] border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             {[
@@ -5051,7 +5092,7 @@ export default function KioskLayout() {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'}`}>
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
@@ -5061,5 +5102,6 @@ export default function KioskLayout() {
         </nav>
       ), document.body)}
     </div>
+    </KioskThemeCtx.Provider>
   );
 }

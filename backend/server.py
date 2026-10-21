@@ -10004,6 +10004,25 @@ async def _kiosk_cached(name: str, sc: dict, compute):
     return await compute()
 
 
+class KioskThemeIn(BaseModel):
+    theme: Literal["orange", "white"]
+
+
+@api.get("/kiosk/theme")
+async def kiosk_get_theme(_session=Depends(get_kiosk_session)):
+    c = await db.companies.find_one({"id": _session["company_id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
+    return {"theme": c.get("kiosk_theme") or "orange"}
+
+
+@api.put("/kiosk/theme")
+async def kiosk_set_theme(body: KioskThemeIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    await db.companies.update_one({"id": cid}, {"$set": {"kiosk_theme": body.theme}})
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "kiosk_theme", "theme": body.theme})
+    return {"theme": body.theme}
+
+
+
 @api.get("/kiosk/locations")
 async def kiosk_list_locations(_session=Depends(get_kiosk_session)):
     """List locations for the kiosk's company, with apartment counts."""

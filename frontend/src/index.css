@@ -127,6 +127,25 @@ html.apk-ktp { --kiosk-sat: 0px; }
 @media (min-width: 768px) {
   .kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
 }
+/* KIOSK witte modus — wit met oranje accenten (bedrijfsbrede instelling). */
+body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
+.kiosk-fullscreen.kiosk-white { background-color: #FFFFFF !important; }
+.kiosk-white .h-full.bg-orange-500,
+.kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: #FFFFFF; }
+.kiosk-white .h-full > .animate-spin.text-white { color: #FF5C00; }
+.kiosk-white .kiosk-chrome .text-white,
+.kiosk-white .kiosk-chrome [class*="text-white/"] { color: #0F172A; }
+.kiosk-white .kiosk-chrome svg.text-white { color: #FF5C00; }
+.kiosk-white .kiosk-chrome [class*="bg-white/"] { background-color: #FFF1E8; color: #EA580C; }
+.kiosk-white .kiosk-chrome span[class*="bg-white/40"] { background-color: #E2E8F0; }
+.kiosk-white .kiosk-chrome [data-testid^="kiosk-theme-toggle"] { background-color: #FF5C00; color: #FFFFFF; }
+.kiosk-white .kiosk-chrome [data-testid="kiosk-header-search"] { background-color: #FF5C00; color: #FFFFFF; }
+.kiosk-white .kiosk-content-scroll .bg-white.rounded-2xl,
+.kiosk-white .kiosk-content-scroll .bg-white.rounded-3xl,
+.kiosk-white .kiosk-content-scroll button[class*="bg-white/"] {
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 1px #E2E8F0, 0 10px 28px -14px rgba(15, 23, 42, 0.18);
+}
 /* Staande tablet (iPad): desktop-menubalk blijft, kaarten komen onder elkaar. */
 @media (min-width: 768px) and (orientation: portrait) {
   .kiosk-fullscreen .md\:flex-row { flex-direction: column; }
