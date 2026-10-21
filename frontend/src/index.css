@@ -139,7 +139,7 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
 .kiosk-white .kiosk-chrome [class*="bg-white/"] { background-color: #FFF1E8; color: #EA580C; }
 .kiosk-white .kiosk-chrome span[class*="bg-white/40"] { background-color: #E2E8F0; }
 .kiosk-white .kiosk-chrome [data-testid^="kiosk-theme-toggle"] { background-color: #FF5C00; color: #FFFFFF; }
-.kiosk-white .kiosk-chrome [data-testid="kiosk-header-search"] { background-color: #FF5C00; color: #FFFFFF; }
+.kiosk-fullscreen.kiosk-white .kiosk-chrome button[data-testid="kiosk-header-search"] { background-color: #FF5C00; color: #FFFFFF; }
 .kiosk-white .kiosk-content-scroll .bg-white.rounded-2xl,
 .kiosk-white .kiosk-content-scroll .bg-white.rounded-3xl,
 .kiosk-white .kiosk-content-scroll button[class*="bg-white/"] {
