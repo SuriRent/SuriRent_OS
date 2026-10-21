@@ -124,6 +124,9 @@ html.apk-ktp { --kiosk-sat: 0px; }
     padding-bottom: calc(var(--kiosk-bar-h, 96px) + 16px);
   }
 }
+@media (min-width: 768px) {
+  .kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
+}
 /* Staande tablet (iPad): desktop-menubalk blijft, kaarten komen onder elkaar. */
 @media (min-width: 768px) and (orientation: portrait) {
   .kiosk-fullscreen .md\:flex-row { flex-direction: column; }

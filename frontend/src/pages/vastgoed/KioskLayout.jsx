@@ -199,6 +199,11 @@ function MobileAddFab({ onOpen }) {
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
+const STEP_TITLES = {
+  kasgeld: 'Kasgeldbeheer', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
+  method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie',
+};
+
 function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, title = 'Kies uw appartement' }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
@@ -4809,7 +4814,16 @@ export default function KioskLayout() {
 
 
   const showDesktopBar = step !== 'check';
+  const showTopHead = step !== 'check' && step !== 'select';
   const barRef = useRef(null);
+  const headRef = useRef(null);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--kiosk-head-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showTopHead]);
   // Meet de echte hoogte van de desktop-menubalk zodat de witte kaarten er nooit tegenaan lopen.
   useEffect(() => {
     const el = barRef.current;
@@ -4864,11 +4878,16 @@ export default function KioskLayout() {
           </div>
         </div>
       )}
+      {showTopHead && (
+        <div ref={headRef} className="hidden md:block absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
+          <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode} />
+        </div>
+      )}
       <AnimatePresence initial={false}>
         <motion.div key={step} variants={variants}
           initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.16, ease: 'easeOut' }}
-          className="absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll"
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''}`}
           style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex items-center justify-center">
