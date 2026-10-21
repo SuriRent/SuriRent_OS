@@ -29,7 +29,7 @@ export function KioskAdminPage({ id, onBack }) {
   return (
     <div className="h-full bg-[#F4F5F7] flex flex-col" data-testid={`kiosk-admin-page-${id}`}>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6">
-      <div className="kiosk-admin-skin mx-auto w-full max-w-[1100px] bg-white rounded-3xl shadow-[0_10px_30px_-14px_rgba(15,23,42,0.25)] ring-1 ring-slate-100 px-5 sm:px-8 pt-5 pb-8">
+      <div className="kiosk-admin-skin mx-auto w-full max-w-[1300px] bg-white rounded-3xl shadow-[0_10px_30px_-14px_rgba(15,23,42,0.25)] ring-1 ring-slate-100 px-5 sm:px-8 pt-5 pb-8">
         <button onClick={onBack} data-testid="kiosk-admin-page-back"
           className="mb-4 inline-flex items-center gap-2 text-[#FF5C00] font-bold bg-orange-50 hover:bg-orange-100 rounded-xl px-4 transition-colors">
           <ArrowLeft className="w-5 h-5" /> Terug
