@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { FileSignature, Loader2, ArrowLeft, CreditCard, Users } from 'lucide-react';
 
 // Volledige beheer-pagina's die in de kiosk (hamburgermenu) geopend kunnen worden.
@@ -21,6 +21,11 @@ export function KioskAdminPageTile({ id, onOpen }) {
 
 export function KioskAdminPage({ id, onBack }) {
   const { Page } = KIOSK_ADMIN_PAGES[id];
+  // Vensters (portals) die vanaf deze pagina openen krijgen ook de kiosk-stijl.
+  useEffect(() => {
+    document.body.classList.add('kiosk-admin-active');
+    return () => document.body.classList.remove('kiosk-admin-active');
+  }, []);
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }} data-testid={`kiosk-admin-page-${id}`}>
       <div className="kiosk-chrome flex items-center gap-2 px-1 sm:px-2 py-2 shrink-0">

@@ -89,7 +89,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
 
   return createPortal((
     <div
-      className={`fixed inset-0 z-[9999] bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
+      className={`ksm-root fixed inset-0 z-[9999] bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
       onClick={onClose}
       data-testid={testId || 'ksm-modal'}>
       <div
