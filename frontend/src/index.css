@@ -125,6 +125,7 @@ html.apk-ktp { --kiosk-sat: 0px; }
   }
 }
 .kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
+.kiosk-content-scroll.kiosk-no-bar { padding-bottom: 0 !important; }
 /* KIOSK witte modus — wit met oranje accenten (bedrijfsbrede instelling). */
 body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
 .kiosk-fullscreen.kiosk-white { background-color: #F4F5F7 !important; }

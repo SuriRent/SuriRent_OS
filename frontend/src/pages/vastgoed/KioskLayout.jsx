@@ -4938,7 +4938,7 @@ export default function KioskLayout() {
 
 
   const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
-  const showDesktopBar = step !== 'check';
+  const showDesktopBar = step !== 'check' && !step.startsWith('admin:');
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
     const onNav = (e) => { if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail); };
@@ -5027,7 +5027,7 @@ export default function KioskLayout() {
         <motion.div key={step} variants={variants}
           initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.16, ease: 'easeOut' }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'}`}
           style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex items-center justify-center">

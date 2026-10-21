@@ -27,14 +27,12 @@ export function KioskAdminPage({ id, onBack }) {
     return () => document.body.classList.remove('kiosk-admin-active');
   }, []);
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }} data-testid={`kiosk-admin-page-${id}`}>
-      <div className="kiosk-chrome flex items-center gap-2 px-1 sm:px-2 py-2 shrink-0">
+    <div className="h-full bg-white flex flex-col" data-testid={`kiosk-admin-page-${id}`}>
+      <div className="kiosk-admin-skin flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 pt-4 pb-8">
         <button onClick={onBack} data-testid="kiosk-admin-page-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
-          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
+          className="mb-4 inline-flex items-center gap-2 text-[#FF5C00] font-bold bg-orange-50 hover:bg-orange-100 rounded-xl px-4 transition-colors">
+          <ArrowLeft className="w-5 h-5" /> Terug
         </button>
-      </div>
-      <div className="kiosk-admin-skin flex-1 min-h-0 overflow-y-auto bg-white rounded-3xl p-5 sm:p-8 mb-3 shadow-[0_10px_30px_-10px_rgba(120,40,0,0.45)]">
         <Suspense fallback={<Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}>
           <Page />
         </Suspense>
