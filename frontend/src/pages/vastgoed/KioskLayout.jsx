@@ -2071,7 +2071,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
           <div className="grid grid-cols-3 flex-1 gap-1.5">
             {['1','2','3','4','5','6','7','8','9','.','0','DEL'].map((k) => (
               <button key={k} onClick={() => press(k)} data-testid={`keypad-${k}`}
-                className={`rounded-lg font-bold transition active:scale-95 flex items-center justify-center text-base sm:text-lg ${
+                className={`portrait:min-h-[60px] rounded-lg font-bold transition active:scale-95 flex items-center justify-center text-base sm:text-lg ${
                   k === 'DEL' ? 'bg-slate-100 text-red-500 hover:bg-red-50 border border-slate-100' :
                   'bg-slate-50 text-slate-900 hover:bg-orange-50 hover:text-orange-600 border border-slate-100'
                 }`}>{k}</button>
@@ -5013,7 +5013,7 @@ export default function KioskLayout() {
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
-                  <span className="text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full">{label}</span>
+                  <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
               );
             })}

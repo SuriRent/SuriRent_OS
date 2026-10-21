@@ -951,3 +951,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Desktop (md+): DesktopKioskHeader (huis-icoon + bedrijfsnaam, locatie • Kies uw appartement, huurders-icoon + tandwiel), witte kaarten 5/rij met 80px foto, groot nummer, solide pills Betaald/Gedeeltelijk/Niet betaald, onderste tab-balk (Dashboard…Uitloggen) die bestaande kiosk-modals opent; Beheerder voor iedereen (admin-login). Mobiel ongewijzigd. Getest: iteration_123.
 
 - 2026-06: KIOSK desktop — witte kaarten raken de menubalk niet meer (gemeten --kiosk-bar-h via ResizeObserver + 16px oranje ruimte, ronde hoeken zichtbaar) op alle kiosk-schermen.
+- 2026-06: iPad 10"+ (staand+liggend) krijgt altijd desktop-KIOSK: viewport-forcering in public/index.html (html.ipad-tablet), staand = kaarten onder elkaar (index.css portrait-regels), menubalk-labels truncaten, numpad min-h staand.

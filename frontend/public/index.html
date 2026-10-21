@@ -34,6 +34,28 @@
     </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
+    <script>
+      // iPad 10 inch en groter: altijd desktop-breedte forceren (ook bij Safari-zoom / schermzoom).
+      (function () {
+        var ua = navigator.userAgent || '';
+        var isIpad = /iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (!isIpad) return;
+        var s = window.screen || {};
+        var shortSide = Math.min(s.width || 0, s.height || 0) * (window.devicePixelRatio || 1);
+        if (shortSide < 1530) return;
+        document.documentElement.classList.add('ipad-tablet');
+        var apply = function () {
+          var portrait = window.matchMedia('(orientation: portrait)').matches;
+          var sw = portrait ? Math.min(s.width, s.height) : Math.max(s.width, s.height);
+          var w = Math.max(sw || 0, portrait ? 810 : 1080);
+          var m = document.querySelector('meta[name="viewport"]');
+          if (m) m.setAttribute('content', 'width=' + w + ', viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content');
+        };
+        apply();
+        window.addEventListener('orientationchange', function () { setTimeout(apply, 50); });
+      })();
+    </script>
+
     <!-- STATUS-BAR KLEUR — consistent voor de HELE app zodat Android
          geen kleur-flikkering meer laat zien tussen /login → /admin →
          /kiosk. Bruine-oranje (donkerder dan de #FF5C00 brand-oranje)
