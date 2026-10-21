@@ -9,7 +9,7 @@ import {
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
-  Landmark as LandmarkIcon,
+  Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
@@ -198,12 +198,51 @@ function MobileAddFab({ onOpen }) {
 // =====================================================================
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
-function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
+// Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
+function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin }) {
+  let company = null;
+  try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
+  const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
+  return (
+    <div className="hidden md:flex items-center gap-6 pl-2 pr-16 py-3" style={{ minHeight: '7vh' }} data-testid="kiosk-desktop-header">
+      <div className="flex items-center gap-3 min-w-0 shrink-0">
+        <Home className="w-10 h-10 text-white" strokeWidth={2.2} />
+        <span className="text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
+          {company?.name || 'Kiosk'}
+        </span>
+      </div>
+      <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
+        className={`flex-1 min-w-0 flex items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+        <MapPin className="w-5 h-5 shrink-0" />
+        <span className="truncate">{loc ? `${loc}  •  Kies uw appartement` : 'Kies uw appartement'}</span>
+      </button>
+      <div className="flex items-center gap-3 shrink-0">
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
+          data-testid="kiosk-header-tenants" aria-label="Huurders"
+          className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
+          <Users className="w-5 h-5" />
+        </button>
+        <span className="w-px h-8 bg-white/40" />
+        <button type="button" onClick={onAdmin} data-testid="kiosk-header-settings" aria-label="Beheerder"
+          className="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-white transition-colors">
+          <SettingsIcon className="w-6 h-6" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld }) {
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
   const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
   const [selectedLocationId, setSelectedLocationId] = useState(null);
+  useEffect(() => {
+    const onNav = (e) => { if (e.detail === 'dashboard') setSelectedLocationId(null); };
+    window.addEventListener('kiosk-nav', onNav);
+    return () => window.removeEventListener('kiosk-nav', onNav);
+  }, []);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
 
@@ -344,27 +383,15 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
         </span>
       </div>
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
-      <div className="hidden md:flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2" style={{ minHeight: '7vh' }}>
-        <div className="flex items-center gap-2">
-          {totalGroups > 1 && (
-            <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations"
-              className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5">
-              <ArrowLeft className="w-3.5 h-3.5" /> <span className="text-xs">Locaties</span>
-            </button>
-          )}
-        </div>
-        <span className="text-sm sm:text-base font-semibold text-white">
-          {currentLocation ? `${currentLocation.name} · Kies uw appartement` : 'Kies uw appartement'}
-        </span>
-        <div className="w-16" />
-      </div>
+      <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} />
 
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 px-1 sm:px-2">
+      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2">
           {visible.map((a) => {
             // Conditioneel: als beheerder `show_tenant_photo` heeft
             // aangezet EN er is een pasfoto (avatar of ID-kaart) EN het
@@ -377,24 +404,24 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
               : photo;
             return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
-              className="group bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-4 hover:-translate-y-1 hover:bg-white/95 transition border-2 border-transparent hover:border-orange-500 shadow"
+              className="group bg-white/85 md:bg-white backdrop-blur-sm flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white/95 transition border-2 border-transparent hover:border-orange-500 shadow md:shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               {photoSrc ? (
-                <div className="rounded-full overflow-hidden w-10 h-10 sm:w-12 sm:h-12 mb-2 bg-orange-50 ring-2 ring-orange-100 group-hover:ring-orange-300">
+                <div className="rounded-full overflow-hidden w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-2 ring-orange-100 md:ring-4 md:ring-slate-100 group-hover:ring-orange-300">
                   <img src={photoSrc} alt={a.tenant_name || ''}
                     data-testid={`apt-${a.number}-photo`}
                     className="w-full h-full object-cover"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 </div>
               ) : (
-                <div className="rounded-full flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 mb-2 bg-orange-50 group-hover:bg-orange-100">
-                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+                <div className="rounded-full flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
+                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-9 md:h-9 text-orange-500" />
                 </div>
               )}
-              <span className="text-base sm:text-lg font-extrabold text-slate-900 mb-0.5">{a.number}</span>
-              <div className="flex items-center gap-1 text-slate-400 mb-1">
-                <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span className="text-xs sm:text-sm truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px]">{a.tenant_name}</span>
+              <span className="text-base sm:text-lg md:text-2xl font-extrabold md:font-black text-slate-900 mb-0.5 md:mb-1 md:uppercase md:tracking-tight">{a.number}</span>
+              <div className="flex items-center gap-1 md:gap-1.5 text-slate-400 md:text-slate-700 mb-1 md:mb-3 max-w-full">
+                <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 shrink-0" />
+                <span className="text-xs sm:text-sm md:text-base truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px] md:max-w-[170px]">{a.tenant_name}</span>
               </div>
               {/* Betaal-status badge — dynamisch per huurder-status:
                    • paid    → Betaald    (groen)
@@ -403,16 +430,17 @@ function ApartmentSelect({ onSelect, onAdmin, onExit, onKasgeld }) {
                   Wanneer er geen facturen zijn, valt de backend terug op
                   "paid" (geen achterstand). */}
               {a.pay_status === 'paid' ? (
-                <span className="text-xs font-bold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-paid`}>
-                  Betaald
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 md:bg-emerald-600 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-paid`}>
+                  <Check className="hidden md:block w-4 h-4" strokeWidth={3} /> Betaald
                 </span>
               ) : a.pay_status === 'partial' ? (
-                <span className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-partial`}>
-                  Deels betaald
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 md:bg-amber-500 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-partial`}>
+                  <ClockIcon className="hidden md:block w-4 h-4" strokeWidth={3} />
+                  <span className="md:hidden">Deels betaald</span><span className="hidden md:inline">Gedeeltelijk</span>
                 </span>
               ) : (
-                <span className="text-xs font-bold text-red-700 bg-red-50 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-unpaid`}>
-                  Niet betaald
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 md:bg-red-500 md:text-white md:text-sm md:px-5 md:py-1 rounded-full px-2.5 py-0.5" data-testid={`apt-${a.number}-unpaid`}>
+                  <X className="hidden md:block w-4 h-4" strokeWidth={3} /> Niet betaald
                 </span>
               )}
             </button>
@@ -4756,6 +4784,12 @@ export default function KioskLayout() {
   // Snapshot van admin_token aanwezigheid — wordt herberekend wanneer er
   // een medewerker (uit)logt zodat de Beheerder-knop direct verschijnt of
   // verdwijnt.
+  useEffect(() => {
+    const onNav = (e) => { if (e.detail === 'tenants') setShowAddTenant(true); };
+    window.addEventListener('kiosk-nav', onNav);
+    return () => window.removeEventListener('kiosk-nav', onNav);
+  }, []);
+
   const [hasAdminAccess, setHasAdminAccess] = useState(() => {
     try { return !!localStorage.getItem('admin_token'); } catch { return false; }
   });
@@ -4839,6 +4873,7 @@ export default function KioskLayout() {
             <ApartmentSelect key={apartmentsReloadKey}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
+              onAdminAll={adminMode}
               onKasgeld={() => setStep('kasgeld')}
               onExit={exit} />
           )}
@@ -4949,73 +4984,35 @@ export default function KioskLayout() {
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
           ook bovenop een geopende modal (modals gebruiken z-[100]). */}
       {showDesktopBar && createPortal((
-        <div className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-white border-t border-slate-100"
-          data-testid="kiosk-bottom-bar">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="rounded-lg bg-orange-500 flex items-center justify-center w-9 h-9 shrink-0">
-                <Building2 className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-sm sm:text-base font-bold text-slate-800 truncate" data-testid="kiosk-footer-company">
-                {company?.name || 'Kiosk'}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {apartment && step !== 'select' && (
-                <div className="flex items-center gap-2 mr-2">
-                  <span className="text-sm text-slate-400 font-medium hidden lg:inline">{apartment.tenant_name}</span>
-                  <span className="text-sm font-bold text-slate-800">Appt. {apartment.number}</span>
-                </div>
-              )}
-              {step === 'select' && (
-                <>
-                  <button onClick={() => setShowAddTenant(true)} data-testid="kiosk-add-tenant-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <UserPlus className="w-4 h-4" /> Huurder
-                  </button>
-                  <button onClick={() => setShowAddApartment(true)} data-testid="kiosk-add-apartment-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <Home className="w-4 h-4" /> Appt.
-                  </button>
-                  <button onClick={() => setShowAddLocation(true)} data-testid="kiosk-add-location-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <MapPin className="w-4 h-4" /> Locatie
-                  </button>
-                  <button onClick={() => setShowAddContract(true)} data-testid="kiosk-add-contract-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <FileText className="w-4 h-4" /> Contract
-                  </button>
-                  <button onClick={() => setShowAddInvoice(true)} data-testid="kiosk-add-invoice-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <Receipt className="w-4 h-4" /> Factuur
-                  </button>
-                  <button onClick={() => setShowPaymentsViewer(true)} data-testid="kiosk-payments-viewer-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <Banknote className="w-4 h-4" /> Betalingen
-                  </button>
-                  <button onClick={() => setShowAddMaintenance(true)} data-testid="kiosk-add-maintenance-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <Wrench className="w-4 h-4" /> Onderhoud
-                  </button>
-                  <button onClick={() => setNfcLink({ uid: '' })} data-testid="kiosk-nfc-link-btn-desktop"
-                    className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm">
-                    <Nfc className="w-4 h-4" /> NFC-tag
-                  </button>
-                </>
-              )}
-              <button onClick={adminMode} data-testid="kiosk-admin-btn-desktop"
-                className={`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm ${hasAdminAccess ? '' : 'hidden'}`}>Beheerder</button>
-              {step === 'select' && (
-                <button onClick={() => setStep('kasgeld')} data-testid="kiosk-kasgeld-btn-desktop"
-                  className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-5 py-2 text-sm">
-                  <Wallet className="w-4 h-4" /> Kasgeld
+        <nav className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] bg-[#F26A12] border-t border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
+          data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <div className="flex items-stretch gap-1 px-2 py-2">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Home, testid: 'kiosk-nav-dashboard',
+                onClick: () => { setStep('select'); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'dashboard' })); } },
+              { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
+              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
+              { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => setShowAddLocation(true) },
+              { id: 'contracts', label: 'Contracten', icon: FileText, testid: 'kiosk-add-contract-btn-desktop', onClick: () => setShowAddContract(true) },
+              { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
+              { id: 'payments', label: 'Betalingen', icon: CreditCard, testid: 'kiosk-payments-viewer-btn-desktop', onClick: () => setShowPaymentsViewer(true) },
+              { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
+              { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
+              { id: 'admin', label: 'Beheerder', icon: ShieldCheck, testid: 'kiosk-admin-btn-desktop', onClick: adminMode },
+              { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => setStep('kasgeld') },
+              { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
+            ].map(({ id, label, icon: Icon, testid, onClick }) => {
+              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
+              return (
+                <button key={id} type="button" onClick={onClick} data-testid={testid}
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'}`}>
+                  <Icon className="w-7 h-7" strokeWidth={1.8} />
+                  <span className="text-xs lg:text-sm font-semibold truncate max-w-full">{label}</span>
                 </button>
-              )}
-              <button onClick={exit} data-testid="kiosk-lock-btn-desktop"
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg px-5 py-2 text-sm">Uit</button>
-            </div>
+              );
+            })}
           </div>
-        </div>
+        </nav>
       ), document.body)}
     </div>
   );
