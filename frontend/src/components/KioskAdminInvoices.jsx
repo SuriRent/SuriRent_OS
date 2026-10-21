@@ -29,7 +29,7 @@ export function KioskAdminPage({ id, onBack }) {
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto bg-[#F7F8FA] rounded-2xl p-4 sm:p-6 mb-3">
+      <div className="kiosk-admin-skin flex-1 min-h-0 overflow-y-auto bg-white rounded-3xl p-5 sm:p-8 mb-3 shadow-[0_10px_30px_-10px_rgba(120,40,0,0.45)]">
         <Suspense fallback={<Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}>
           <Page />
         </Suspense>

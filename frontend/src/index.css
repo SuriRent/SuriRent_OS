@@ -155,6 +155,28 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
   background-color: #FFFFFF;
   box-shadow: 0 0 0 1px #E2E8F0, 0 10px 28px -14px rgba(15, 23, 42, 0.18);
 }
+/* Beheer-pagina's in de kiosk: aanraakvriendelijke kiosk-stijl (groter, oranje accenten). */
+.kiosk-admin-skin { font-size: 16px; }
+.kiosk-admin-skin h1 { font-size: 2.25rem; line-height: 2.5rem; font-weight: 900; letter-spacing: -0.02em; color: #0F172A; }
+.kiosk-admin-skin h2, .kiosk-admin-skin h3 { font-weight: 900; }
+.kiosk-admin-skin .text-xs { font-size: 0.8125rem; line-height: 1.2rem; }
+.kiosk-admin-skin .text-sm { font-size: 0.9375rem; line-height: 1.4rem; }
+.kiosk-admin-skin .text-\[10px\], .kiosk-admin-skin .text-\[11px\] { font-size: 12px; }
+.kiosk-admin-skin button { min-height: 44px; }
+.kiosk-admin-skin button[class*="w-8"], .kiosk-admin-skin button[class*="w-9"] { min-width: 44px; }
+.kiosk-admin-skin button[class*="bg-[#FF5C00]"], .kiosk-admin-skin button[class*="bg-orange-500"] {
+  min-height: 52px; padding-left: 1.5rem; padding-right: 1.5rem; border-radius: 1rem; font-size: 1rem; font-weight: 800;
+  box-shadow: 0 12px 28px -10px rgba(255, 92, 0, 0.6);
+}
+.kiosk-admin-skin input:not([type="checkbox"]):not([type="radio"]), .kiosk-admin-skin select {
+  min-height: 54px; font-size: 1rem; border-radius: 1rem;
+}
+.kiosk-admin-skin .bg-white.rounded-xl, .kiosk-admin-skin .bg-white.rounded-2xl, .kiosk-admin-skin .bg-white.rounded-3xl {
+  border-radius: 1.25rem; border-color: #F1F2F4;
+  box-shadow: 0 6px 18px -8px rgba(120, 40, 0, 0.25);
+}
+.kiosk-admin-skin [role="tab"], .kiosk-admin-skin [data-testid*="tab"] { font-size: 1rem; font-weight: 800; }
+.kiosk-admin-skin ::selection { background: #FFD5BF; }
 /* Snel toevoegen sheet in witte modus. */
 .kiosk-sheet-white.bg-orange-500 { background-color: #F4F5F7; }
 .kiosk-sheet-white .text-white { color: #0F172A; }
