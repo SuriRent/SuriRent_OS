@@ -204,6 +204,25 @@ function MobileAddFab({ onOpen }) {
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
 const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
 
+// Beheerder-navigatie in de desktop-kop; items worden later stap voor stap toegevoegd.
+const ADMIN_NAV_ITEMS = [];
+
+function KioskAdminNav() {
+  const { isAdmin } = useContext(KioskThemeCtx);
+  if (!isAdmin) return null;
+  return (
+    <nav aria-label="Beheerder navigatie" data-testid="kiosk-admin-nav"
+      className="kiosk-admin-nav hidden md:flex items-center gap-1 h-10 min-w-[180px] px-1 rounded-full bg-white/10 ring-1 ring-white/20">
+      {ADMIN_NAV_ITEMS.map(({ id, label, Icon, onClick }) => (
+        <button key={id} type="button" onClick={onClick} data-testid={`kiosk-admin-nav-${id}`}
+          className="h-8 px-3 rounded-full inline-flex items-center gap-1.5 text-sm font-semibold text-white hover:bg-white/15 transition-colors">
+          {Icon && <Icon className="w-4 h-4" />} {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function HeaderLive() {
   const { isAdmin } = useContext(KioskThemeCtx);
   return <KioskHeaderLiveButtons isAdmin={isAdmin} />;
@@ -238,6 +257,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
           {company?.name || 'Kiosk'}
         </span>
       </div>
+      <KioskAdminNav />
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
         className={`hidden md:flex flex-1 min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
         {loc && <MapPin className="w-5 h-5 shrink-0" />}
