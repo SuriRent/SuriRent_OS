@@ -4971,7 +4971,7 @@ export default function KioskLayout() {
 
 
   const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
-  const showDesktopBar = step !== 'check' && !step.startsWith('admin:');
+  const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
     const onNav = (e) => { if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail); };

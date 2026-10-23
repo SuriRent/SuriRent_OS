@@ -180,6 +180,12 @@ body.kiosk-admin-active .ksm-root label { font-size: 0.9375rem; }
 }
 :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) [role="tab"], :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) [data-testid*="tab"] { font-size: 1rem; font-weight: 800; }
 :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) ::selection { background: #FFD5BF; }
+/* Kiosk Facturen (linkervak): compact + kiosk-accenten zodat alles zonder veel scrollen past. */
+.kiosk-inv-skin .space-y-4 > :not([hidden]) ~ :not([hidden]), .kiosk-inv-skin .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.625rem; }
+.kiosk-inv-skin .bg-white.rounded-2xl { border-color: #FFE4D3; box-shadow: 0 6px 16px -10px rgba(120, 40, 0, 0.35); }
+.kiosk-inv-skin h1, .kiosk-inv-skin h2 { font-weight: 900; letter-spacing: -0.02em; }
+.kiosk-inv-skin .font-bold { font-weight: 800; }
+.kiosk-inv-skin input { height: 2.75rem; border-radius: 0.875rem; }
 /* Snel toevoegen sheet in witte modus. */
 .kiosk-sheet-white.bg-orange-500 { background-color: #F4F5F7; }
 .kiosk-sheet-white .text-white { color: #0F172A; }
