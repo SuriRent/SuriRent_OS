@@ -10004,6 +10004,55 @@ async def _kiosk_cached(name: str, sc: dict, compute):
     return await compute()
 
 
+@api.post("/kiosk/id-scan")
+async def kiosk_id_scan(file: UploadFile = File(...), user_key: str = Form(""),
+                        _session=Depends(get_kiosk_session)):
+    # Telefoon scant ID → OCR + foto bewaren → desktop van dezelfde gebruiker krijgt de gegevens via WS.
+    cid = _session["company_id"]
+    scan = await ocr_id_card(file=file, user={})
+    await file.seek(0)
+    raw = await file.read()
+    raw, ctype = _to_webp_bytes(raw, (file.content_type or "image/jpeg").lower())
+    asset_id = new_id()
+    await db.landing_assets.insert_one({
+        "id": asset_id, "filename": file.filename or "idcard-scan", "content_type": ctype,
+        "data_b64": base64.b64encode(raw).decode("ascii"), "size": len(raw),
+        "uploaded_by": f"kiosk:{user_key or 'onbekend'}", "uploaded_at": iso(now_utc()),
+        "company_id": cid, "kind": "id_scan",
+    })
+    msg = {"type": "id_scan", "user_key": user_key, "scan": scan,
+           "asset_id": asset_id, "id_photo_url": f"/api/landing/asset/{asset_id}"}
+    await _kb_publish(_kiosk_admin_channel(cid), msg)
+    return msg
+
+
+class KioskAttachIdIn(BaseModel):
+    asset_id: str
+
+
+@api.post("/kiosk/tenants/{tenant_id}/attach-id-photo")
+async def kiosk_attach_id_photo(tenant_id: str, body: KioskAttachIdIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "id": 1})
+    a = await db.landing_assets.find_one({"id": body.asset_id, "company_id": cid, "kind": "id_scan"}, {"_id": 0})
+    if not t or not a:
+        raise HTTPException(status_code=404, detail="Huurder of scan niet gevonden")
+    url = f"/api/landing/asset/{body.asset_id}"
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"id_photo_url": url}})
+    avatar_url = None
+    try:
+        avatar_url = await _extract_face_avatar_from_bytes(
+            base64.b64decode(a["data_b64"]), a.get("content_type") or "image/webp", tenant_id,
+            uploaded_by=a.get("uploaded_by"),
+        )
+        if avatar_url:
+            await db.tenants.update_one({"id": tenant_id}, {"$set": {"avatar_url": avatar_url}})
+    except Exception as e:  # noqa: BLE001
+        print(f"[avatar] face extract failed for tenant {tenant_id}: {e}")
+    return {"id_photo_url": url, "avatar_url": avatar_url}
+
+
+
 @api.get("/kiosk/bank-details")
 async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
     c = await db.companies.find_one({"id": _session["company_id"]},
@@ -10445,7 +10494,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         await push_printers()
         while True:
             ev = await queue.get()
-            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate"):
+            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
                 await ws.send_json(ev)
             elif ev.get("type") == "presence_changed":
                 await push_printers()
@@ -10853,7 +10902,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
                 await ws.send_json(ev)
 
     async def receive():

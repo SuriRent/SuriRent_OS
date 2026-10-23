@@ -973,3 +973,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: Kiosk-beheerpagina's: inhoud gecentreerd max 1500px als witte kaart op lichtgrijze achtergrond.
 - 2026-06: Knop "Alle N pasfoto's opnieuw croppen" verwijderd uit Huurders-pagina (beheer + kiosk).
 - 2026-06: Zoekknop in kiosk-bovenbalk verborgen op telefoon (alleen md+).
+- 2026-06: SCAN ID in mobiel + menu (components/PhoneIdScan.jsx): camera → POST /api/kiosk/id-scan (OCR Gemini + foto als landing_asset kind=id_scan) → WS "id_scan" met user_key (device_user_email || kiosk_emp_id) → desktop van zelfde gebruiker opent Nieuwe huurder ingevuld + toast; bij opslaan POST /api/kiosk/tenants/{id}/attach-id-photo (id_photo_url + avatar crop). Fix: kiosk ID-foto upload pad /tenants/{id}/id-photo; WS forward kiosk_theme/id_scan naar employee+admin conns; kiosk-vensters z-[115] boven menubalk.

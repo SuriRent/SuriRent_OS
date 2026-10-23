@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Search, Sun, Palette, Menu as MenuIcon,
+  Search, Sun, Palette, Menu as MenuIcon, ScanLine,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
@@ -22,6 +22,8 @@ import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt } from '../../lib/kiosk-print';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
+import { getKioskUserKey } from '../../lib/kiosk-live';
+import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -3682,19 +3684,19 @@ function IdScanCameraModal({ onClose, onCaptured }) {
 // Body scroll-lock voor iOS zodat de fixed modal niet weg-scrollt tijdens
 // keyboard-open. `apartments` wordt ge-fetched bij mount.
 // =====================================================================
-function AddTenantModal({ onClose, onSaved }) {
-  const [name, setName] = useState('');
+function AddTenantModal({ onClose, onSaved, prefill = null }) {
+  const [name, setName] = useState(prefill?.scan?.name || '');
   const [phone, setPhone] = useState('');
   const [aptId, setAptId] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [idNumber, setIdNumber] = useState('');
+  const [birthDate, setBirthDate] = useState(prefill?.scan?.birth_date || '');
+  const [idNumber, setIdNumber] = useState(prefill?.scan?.id_number || '');
   const [apartments, setApartments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   // ID-scan (live camera) state
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [scanMsg, setScanMsg] = useState('');
+  const [scanMsg, setScanMsg] = useState(prefill ? 'ID-scan ontvangen van telefoon — foto wordt opgeslagen' : '');
   // Bewaar de gescande ID-kaart foto zodat we deze na het opslaan van de
   // huurder direct uploaden naar `/tenants/{id}/upload-id-photo`. Anders
   // ziet de beheerder alleen tekst en niet de originele scan.
@@ -3758,12 +3760,16 @@ function AddTenantModal({ onClose, onSaved }) {
         try {
           const fd = new FormData();
           fd.append('file', scannedIdFile);
-          await api.post(`/tenants/${created.id}/upload-id-photo`, fd, {
+          await api.post(`/tenants/${created.id}/id-photo`, fd, {
             headers: { 'Content-Type': 'multipart/form-data' },
           });
         } catch (upErr) {
           console.warn('ID-foto upload gefaald (huurder wel aangemaakt):', upErr);
         }
+      }
+      if (created?.id && !scannedIdFile && prefill?.asset_id) {
+        await api.post(`/kiosk/tenants/${created.id}/attach-id-photo`, { asset_id: prefill.asset_id })
+          .catch((upErr) => console.warn('ID-foto koppelen gefaald (huurder wel aangemaakt):', upErr));
       }
       onSaved && onSaved(created);
     } catch (e) { setErr(formatError(e)); }
@@ -3801,6 +3807,10 @@ function AddTenantModal({ onClose, onSaved }) {
               data-testid="add-tenant-scan-msg">
               ✓ {scanMsg}
             </div>
+          )}
+          {prefill?.id_photo_url && !scannedIdFile && (
+            <img src={`${process.env.REACT_APP_BACKEND_URL}${prefill.id_photo_url}`} alt="Gescande ID-kaart"
+              data-testid="add-tenant-scan-preview" className="w-full max-h-48 object-contain rounded-xl border border-slate-200 bg-slate-50" />
           )}
           <label className="block">
             <span className={modalLabelCls}>Naam *</span>
@@ -3995,7 +4005,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
   } : {};
   return createPortal((
     <div
-      className={`fixed left-0 right-0 z-[100] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
+      className={`fixed left-0 right-0 z-[115] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
       style={mobileStyle}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -4584,6 +4594,10 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
           </button>
         </div>
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose} />
+        <button type="button" onClick={() => onPick('scanid')} data-testid="kiosk-sheet-scan-id"
+          className="mt-3 w-full h-12 rounded-full font-black text-base inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
+          <ScanLine className="w-5 h-5" strokeWidth={2.5} /> SCAN ID
+        </button>
         <SheetThemeButton />
       </div>
     </div>
@@ -4628,6 +4642,24 @@ export default function KioskLayout() {
 
   // Bottom-sheet tegel selectie → open de bijbehorende modal of
   // navigeer naar het kiosk-niveau scherm (kasgeld / admin / exit).
+  const [phoneScanOpen, setPhoneScanOpen] = useState(false);
+  const [tenantPrefill, setTenantPrefill] = useState(null);
+  const [scanToast, setScanToast] = useState(null);
+  // Desktop: ID-scan van de telefoon van dezelfde gebruiker → Nieuwe huurder opent ingevuld.
+  useEffect(() => {
+    const onScan = (e) => {
+      const msg = e.detail || {};
+      if (window.innerWidth < 768) return;
+      const mine = getKioskUserKey();
+      if ((msg.user_key || '') !== mine) return;
+      setTenantPrefill(msg);
+      setShowAddTenant(true);
+      setScanToast(msg.scan?.name || 'Nieuwe huurder');
+      setTimeout(() => setScanToast(null), 5000);
+    };
+    window.addEventListener('kiosk-id-scan', onScan);
+    return () => window.removeEventListener('kiosk-id-scan', onScan);
+  }, []);
   const handleSheetPick = useCallback((key) => {
     setShowAddSheet(false);
     // Kleine delay zodat de sheet-close animatie niet clashet met modal-open
@@ -4640,6 +4672,7 @@ export default function KioskLayout() {
       else if (key === 'payments') setShowPaymentsViewer(true);
       else if (key === 'maintenance') setShowAddMaintenance(true);
       else if (key === 'kasgeld') setStep('kasgeld');
+      else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
       else if (key === 'admin') adminRef.current?.();
       else if (key === 'exit') exitRef.current?.();
@@ -5077,11 +5110,21 @@ export default function KioskLayout() {
       {searchOpen && (
         <KioskTenantSearch onClose={() => setSearchOpen(false)} onPick={pickSearched} />
       )}
+      {phoneScanOpen && <PhoneIdScan onClose={() => setPhoneScanOpen(false)} CameraModal={IdScanCameraModal} />}
+      {scanToast && (
+        <div data-testid="kiosk-id-scan-toast"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] rounded-2xl bg-emerald-600 text-white font-bold px-5 py-3 shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <ScanLine className="w-5 h-5" /> ID-scan ontvangen: {scanToast}
+        </div>
+      )}
       {showAddTenant && (
         <AddTenantModal
-          onClose={() => setShowAddTenant(false)}
+          key={tenantPrefill?.asset_id || 'manual'}
+          prefill={tenantPrefill}
+          onClose={() => { setShowAddTenant(false); setTenantPrefill(null); }}
           onSaved={() => {
             setShowAddTenant(false);
+            setTenantPrefill(null);
             invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}

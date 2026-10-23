@@ -95,6 +95,9 @@ function connect() {
       if (msg.ok) queuePrint();
     }
     else if (msg.type === 'PRINT_RECEIPT' && msg.payment_id) queuePrint();
+    else if (msg.type === 'id_scan') {
+      window.dispatchEvent(new CustomEvent('kiosk-id-scan', { detail: msg }));
+    }
     else if (msg.type === 'kiosk_theme') {
       window.dispatchEvent(new CustomEvent('kiosk-theme', { detail: msg.theme }));
     }
@@ -164,3 +167,8 @@ export function stopKioskLive() {
 }
 
 export const setKioskOverlayOpen = (open) => emit({ overlayOpen: open });
+
+// Wie is er ingelogd op dit apparaat? Zelfde sleutel op telefoon en desktop = zelfde persoon.
+export const getKioskUserKey = () => (
+  localStorage.getItem('device_user_email') || localStorage.getItem('kiosk_emp_id') || ''
+).trim().toLowerCase();
