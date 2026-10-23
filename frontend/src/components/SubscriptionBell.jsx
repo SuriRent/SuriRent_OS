@@ -43,7 +43,7 @@ const TONES = {
   orange: 'bg-orange-50 text-[#FF5C00]',
 };
 
-export default function SubscriptionBell() {
+export default function SubscriptionBell({ onOpenSub, backPath } = {}) {
   const navigate = useNavigate();
   const slug = useBrandedSlug();
   const [me, setMe] = useState(null);
@@ -96,9 +96,9 @@ export default function SubscriptionBell() {
 
   const pay = (inv, method) => {
     setOpen(false);
-    navigate(`/saas/checkout/${inv.id}?method=${method}&back=${encodeURIComponent(subPath)}`);
+    navigate(`/saas/checkout/${inv.id}?method=${method}&back=${encodeURIComponent(backPath || subPath)}`);
   };
-  const goSub = () => { setOpen(false); navigate(subPath); };
+  const goSub = () => { setOpen(false); if (onOpenSub) onOpenSub(); else navigate(subPath); };
 
   return (
     <div className="relative" ref={panelRef} data-testid="subscription-bell-wrapper">

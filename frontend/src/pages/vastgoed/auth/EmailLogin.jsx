@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { enterKioskAfterLogin } from '../../../lib/kioskEntry';
 import {
   Loader2, KeyRound, ArrowLeft, ArrowRight, Eye, EyeOff, LogIn, Check,
   Globe, Sparkles, Star, ShieldCheck, Zap, ChevronDown,
@@ -157,13 +158,12 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
           // gebruikers die zonder slug-context openen.
           const userSlug = loginResult?.company?.slug || loginResult?.user?.company_slug;
           const onPlainLogin = /^\/login(\/|$)/i.test(window.location.pathname);
-          if (userSlug && onPlainLogin) {
-            // Hard-navigate naar branded admin zodat BrandedShell mount +
-            // branding kleuren + stored_slug worden geactiveerd in PWA storage.
-            window.location.assign(`/${userSlug}/admin`);
-          } else {
-            navigate('/admin');
-          }
+          const goAdmin = () => {
+            if (userSlug && onPlainLogin) window.location.assign(`/${userSlug}/admin`);
+            else navigate('/admin');
+          };
+          // Beheerder/boekhouder → kiosk-beheer; superadmin → beheeromgeving.
+          await enterKioskAfterLogin(loginResult?.user, { fallback: goAdmin });
         }
       } else {
         const result = await register({

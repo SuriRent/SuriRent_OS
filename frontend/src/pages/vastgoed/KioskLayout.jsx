@@ -26,6 +26,7 @@ import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import SubscriptionBell from '../../components/SubscriptionBell';
 import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
@@ -292,6 +293,18 @@ function useAdminRole(isAdmin) {
   return role;
 }
 
+// Abonnement-bel (zelfde als beheeromgeving) — opent Mijn abonnement als kiosk-popup.
+function KioskBell() {
+  const { isAdmin } = useContext(KioskThemeCtx);
+  const role = useAdminRole(isAdmin);
+  if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin') return null;
+  return (
+    <div className="kiosk-bell shrink-0" data-testid="kiosk-subscription-bell">
+      <SubscriptionBell backPath="/kiosk" onOpenSub={() => navAdmin('inst-abonnement')} />
+    </div>
+  );
+}
+
 // Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
 function KioskSettingsMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
@@ -394,6 +407,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
           <Users className="w-5 h-5" />
         </button>
         <span className="hidden md:block w-px h-8 bg-white/40" />
+        <KioskBell />
         <KioskSettingsMenu />
       </div>
     </div>
@@ -4740,7 +4754,7 @@ export default function KioskLayout() {
       else if (key === 'kasgeld') setStep('kasgeld');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
-      else if (key === 'admin') { if (localStorage.getItem('admin_token')) window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' })); else adminRef.current?.(); }
+      else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
   }, []);
@@ -4964,6 +4978,7 @@ export default function KioskLayout() {
       localStorage.removeItem('kiosk_token');
       localStorage.removeItem('kiosk_company');
       localStorage.removeItem('admin_token');
+      localStorage.removeItem('kiosk_admin_cookie');
       localStorage.removeItem('pwa_preferred_role');
       localStorage.removeItem('active_company_id');
     } catch { /* ignore */ }
@@ -4976,8 +4991,9 @@ export default function KioskLayout() {
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
     } catch { /* ignore */ }
+    // Beheerder-sessie (cookie) ook afmelden, anders stuurt de login-pagina direct terug naar de kiosk.
     // Hard reload zodat AuthProvider zijn cached state óók kwijt is.
-    window.location.assign('/login?pick=1');
+    api.post('/auth/logout').catch(() => {}).finally(() => window.location.assign('/login?pick=1&loggedout=1'));
   }, []);
 
 
@@ -5015,11 +5031,12 @@ export default function KioskLayout() {
   }, []);
 
   const [hasAdminAccess, setHasAdminAccess] = useState(() => {
+    if (localStorage.getItem('kiosk_admin_cookie') === '1') return true;
     try { return !!localStorage.getItem('admin_token'); } catch { return false; }
   });
   useEffect(() => {
     const refresh = () => {
-      try { setHasAdminAccess(!!localStorage.getItem('admin_token')); } catch { /* ignore */ }
+      try { setHasAdminAccess(!!localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1'); } catch { /* ignore */ }
     };
     window.addEventListener('storage', refresh);
     window.addEventListener('kiosk-employee-changed', refresh);

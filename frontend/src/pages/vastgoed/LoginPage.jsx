@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { enterKioskAfterLogin } from '../../lib/kioskEntry';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import { useSearchParams } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
@@ -273,7 +274,7 @@ export default function LoginPage() {
       let hasPendingQr = false;
       try { hasPendingQr = !!sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
       if (hasPendingQr) return;
-      navigate('/admin', { replace: true });
+      enterKioskAfterLogin(user, { fallback: () => navigate('/admin', { replace: true }) });
     }
   }, [user, loading, navigate, skipRedirect, searchParams]);
 
@@ -335,8 +336,10 @@ export default function LoginPage() {
       setPreferredRole('admin');
       // Refresh AuthProvider zodat de nieuwe admin_token meteen actief is.
       // Soft navigate naar /admin nadat user state is bijgewerkt.
-      try { await refresh(); } catch { /* niet-fataal */ }
-      navigate('/admin', { replace: true });
+      let me = null;
+      try { me = await refresh(); } catch { /* niet-fataal */ }
+      if (me?.role === 'superadmin') navigate('/admin', { replace: true });
+      else navigate('/kiosk', { replace: true });
     } else {
       navigate('/kiosk', { replace: true });
     }

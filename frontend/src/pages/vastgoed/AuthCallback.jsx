@@ -1,4 +1,5 @@
 // AuthCallback — verwerkt Emergent Google OAuth callback.
+import { enterKioskAfterLogin } from '../../lib/kioskEntry';
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
 // THIS BREAKS THE AUTH. Redirect URL wordt afgeleid van window.location.origin
 // door LoginPage.
@@ -32,7 +33,7 @@ export default function AuthCallback() {
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const user = await r.json();
-        nav('/admin', { replace: true, state: { user } });
+        enterKioskAfterLogin(user?.user || user, { fallback: () => nav('/admin', { replace: true, state: { user } }) });
       })
       .catch(() => {
         nav('/login', { replace: true, state: { error: 'Google login mislukt — probeer opnieuw.' } });

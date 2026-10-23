@@ -33,7 +33,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${kioskToken}`;
   } else if (adminToken) {
     config.headers.Authorization = `Bearer ${adminToken}`;
-  } else if (kioskToken) {
+  } else if (kioskToken && localStorage.getItem('kiosk_admin_cookie') !== '1') {
     config.headers.Authorization = `Bearer ${kioskToken}`;
   } else if (tenantToken) {
     config.headers.Authorization = `Bearer ${tenantToken}`;

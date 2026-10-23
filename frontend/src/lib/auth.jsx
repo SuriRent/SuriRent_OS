@@ -87,12 +87,14 @@ export function AuthProvider({ children }) {
           issueDeviceQrTokenSilently();
         }
       } catch { /* ignore */ }
+      return data;
     } catch {
       const me = await autoLoginWithSaved();
       setUser(me || null);
       setActiveCompanyMeta(me?.active_company || null);
       if (me?.id) bootstrapAdminEvents();
       prefetchDashboard(me);
+      return me || null;
     } finally {
       setLoading(false);
     }

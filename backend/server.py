@@ -5715,7 +5715,7 @@ async def seed_company_admin(cid: str, body: RegisterIn, user=Depends(require_ro
 async def admin_open_kiosk(
     request: Request,
     response: Response,
-    user=Depends(require_role("admin", "superadmin")),
+    user=Depends(require_role("admin", "superadmin", "boekhouder")),
 ):
     """Laat een ingelogde admin/superadmin direct een kiosk-token verkrijgen
     voor zijn huidige actieve bedrijf — zonder dat er een PIN ingevoerd hoeft
@@ -5767,6 +5767,10 @@ async def admin_open_kiosk(
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if user.get("role") != "superadmin":
+        allowed = {user.get("company_id"), user.get("active_company_id"), company_id_of(user), *(user.get("company_ids") or [])}
+        if cid not in allowed and (c.get("contact_email") or "").lower() != (user.get("email") or "").lower():
+            raise HTTPException(status_code=403, detail="Geen toegang tot dit bedrijf")
     token = create_token({
         "sub": "kiosk", "type": "kiosk", "company_id": cid,
     }, KIOSK_TOKEN_MIN)
