@@ -218,7 +218,7 @@ const ADMIN_MENU_ITEMS = [
 ];
 
 // Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
-const HAMBURGER_HIDDEN = ['instellingen'];
+const HAMBURGER_HIDDEN = ['instellingen', 'overzicht'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
 
 // Menu: telefoon = volledig scherm (zoals het + menu), desktop/iPad = popup in het midden.

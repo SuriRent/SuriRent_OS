@@ -1000,3 +1000,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Beheer- en Instellingenmenu via KioskMenuPanel: telefoon volledig scherm (zoals + sheet), desktop/iPad zijpaneel (Beheer links, Instellingen rechts) met wazige achtergrond. KioskAdminPageTile niet meer gebruikt in KioskLayout.
 - 2026-10: KioskMenuPanel desktop = gecentreerde popup (max-w-2xl, 4 kolommen, gedimd zonder blur); telefoon blijft volledig scherm.
 - 2026-10: Menu-popup max-w-4xl. Sluiten van een popup die vanuit Beheer/Instellingen is geopend heropent dat menu (menuOrigin + 'kiosk-open-menu' event, returnToMenu in KioskLayout), ook voor Facturen en op telefoon.
+- 2026-10: Overzicht uit Beheermenu (HAMBURGER_HIDDEN); module blijft bestaan.
