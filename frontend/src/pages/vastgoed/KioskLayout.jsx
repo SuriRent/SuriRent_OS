@@ -230,10 +230,10 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return createPortal((
-    <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 animate-in fade-in duration-150"
+    <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose} data-testid={`${testId}-overlay`}>
       <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
-        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-2xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-3xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
         <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2">
