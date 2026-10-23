@@ -39,7 +39,7 @@ import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
-import { KIOSK_ADMIN_PAGES, KioskAdminPageTile, KioskAdminPage } from '../../components/KioskAdminInvoices';
+import { KIOSK_ADMIN_PAGES, KioskAdminPage } from '../../components/KioskAdminInvoices';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -221,93 +221,105 @@ const ADMIN_MENU_ITEMS = [
 const HAMBURGER_HIDDEN = ['instellingen'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
 
-// Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
-function KioskSettingsMenu() {
-  const { isAdmin } = useContext(KioskThemeCtx);
-  const [open, setOpen] = useState(false);
-  const [role, setRole] = useState(null);
-  const ref = useRef(null);
+// Menu-paneel: telefoon = volledig scherm (zoals het + menu), desktop/iPad = zijpaneel dat inschuift.
+function KioskMenuPanel({ side, title, Icon, items, onClose, testId }) {
+  const { theme } = useContext(KioskThemeCtx);
   useEffect(() => {
-    if (!isAdmin) return;
-    api.get('/auth/me').then((r) => setRole(r?.data?.role || null)).catch(() => {});
-  }, [isAdmin]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
-  }, [open]);
-  if (!isAdmin || !role || role === 'boekhouder') return null;
-  return (
-    <div ref={ref} className="relative block">
-      <button type="button" onClick={() => setOpen((v) => !v)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-        className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${open ? 'bg-white/30' : 'hover:bg-white/15'}`}>
-        {open ? <X className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
-      </button>
-      {open && (
-        <div data-testid="kiosk-settings-menu" role="menu"
-          className="absolute right-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-4 md:p-5 max-h-[75dvh] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Instellingen</p>
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-            {INSTELLINGEN_SECTIONS.map(({ id, label, icon: Icon }) => (
-              <button key={id} type="button" role="menuitem" data-testid={`kiosk-settings-menu-${id}`}
-                onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${id}` })); }}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 ring-1 ring-slate-100 p-5 text-sm font-bold text-slate-800 text-center transition-colors">
-                <span className="w-12 h-12 rounded-xl bg-orange-100 text-[#FF5C00] flex items-center justify-center"><Icon className="w-6 h-6" /></span>
-                {label}
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const left = side === 'left';
+  return createPortal((
+    <div className={`fixed inset-0 z-[120] flex ${left ? 'md:justify-start' : 'md:justify-end'} md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150`}
+      onClick={onClose} data-testid={`${testId}-overlay`}>
+      <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
+        className={`w-full h-full md:w-[440px] bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in ${left ? 'md:slide-in-from-left' : 'md:slide-in-from-right'} duration-200 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
+          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-white/20 md:bg-orange-100 flex items-center justify-center">
+              <Icon className="w-6 h-6 text-white md:text-[#FF5C00]" strokeWidth={2.4} />
+            </div>
+            <h3 className="text-xl font-black text-white md:text-slate-900">{title}</h3>
+          </div>
+          <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
+            className="w-11 h-11 rounded-xl bg-white/20 md:bg-slate-100 md:hover:bg-slate-200 flex items-center justify-center transition">
+            <X className="w-6 h-6 text-white md:text-slate-700" strokeWidth={2.5} />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pt-1 md:pt-5 pb-4"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
+          <div className="grid grid-cols-2 gap-3">
+            {items.map((t, i) => (
+              <button key={t.id} type="button" role="menuitem" data-testid={t.testid} onClick={() => { onClose(); t.onClick(); }}
+                style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 md:bg-slate-50 md:hover:bg-orange-50 md:ring-1 md:ring-slate-100 shadow-lg md:shadow-none py-6 md:py-5 px-3 min-h-[130px] md:min-h-[120px] transition-[background-color,transform] active:scale-95 animate-in fade-in slide-in-from-bottom-1 fill-mode-both">
+                <span className="w-14 h-14 md:w-12 md:h-12 rounded-2xl bg-orange-100 flex items-center justify-center">
+                  <t.Icon className="w-7 h-7 md:w-6 md:h-6 text-orange-600" strokeWidth={2} />
+                </span>
+                <span className="text-sm font-black text-slate-900 leading-tight text-center">{t.label}</span>
               </button>
             ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
+  ), document.body);
+}
+
+const navAdmin = (id) => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${id}` }));
+
+function useAdminRole(isAdmin) {
+  const [role, setRole] = useState(null);
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get('/auth/me').then((r) => setRole(r?.data?.role || null)).catch(() => {});
+  }, [isAdmin]);
+  return role;
+}
+
+// Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
+function KioskSettingsMenu() {
+  const { isAdmin } = useContext(KioskThemeCtx);
+  const [open, setOpen] = useState(false);
+  const role = useAdminRole(isAdmin);
+  const close = useCallback(() => setOpen(false), []);
+  if (!isAdmin || !role || role === 'boekhouder') return null;
+  const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
+    id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`),
+  }));
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
+        className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/15">
+        <SettingsIcon className="w-6 h-6" />
+      </button>
+      {open && <KioskMenuPanel side="right" title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
+    </>
   );
 }
 
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState(null);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!isAdmin) return;
-    api.get('/auth/me').then((r) => setRole(r?.data?.role || r?.data?.user?.role || null)).catch(() => {});
-  }, [isAdmin]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [open]);
+  const role = useAdminRole(isAdmin);
+  const close = useCallback(() => setOpen(false), []);
   if (!isAdmin) return null;
+  const items = [
+    ...Object.keys(KIOSK_ADMIN_PAGES)
+      .filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)))
+      .map((id) => ({ id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon, testid: `kiosk-admin-menu-${id}`, onClick: () => navAdmin(id) })),
+    ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
+  ];
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Beheermenu"
+    <div className="relative shrink-0">
+      <button type="button" onClick={() => setOpen(true)} aria-expanded={open} aria-label="Beheermenu"
         data-testid="kiosk-admin-menu-btn"
-        className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${open ? 'bg-white/30' : 'bg-white/15 hover:bg-white/25'}`}>
-        {open ? <X className="w-5 h-5" strokeWidth={2.4} /> : <MenuIcon className="w-5 h-5" strokeWidth={2.4} />}
+        className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors bg-white/15 hover:bg-white/25">
+        <MenuIcon className="w-5 h-5" strokeWidth={2.4} />
       </button>
-      {open && (
-        <div data-testid="kiosk-admin-menu" role="menu"
-          className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-4 md:p-5 animate-in fade-in slide-in-from-top-2 duration-150">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-            {Object.keys(KIOSK_ADMIN_PAGES).filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))).map((id) => (
-              <KioskAdminPageTile key={id} id={id} onOpen={(pid) => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${pid}` })); }} />
-            ))}
-              {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (
-                <button key={id} type="button" role="menuitem" data-testid={`kiosk-admin-menu-${id}`}
-                  onClick={() => { setOpen(false); onClick(); }}
-                  className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 ring-1 ring-slate-100 p-5 text-sm font-bold text-slate-800 transition-colors">
-                  <span className="w-12 h-12 rounded-xl bg-orange-100 text-[#FF5C00] flex items-center justify-center"><Icon className="w-6 h-6" /></span>
-                  {label}
-                </button>
-              ))}
-          </div>
-        </div>
-      )}
+      {open && <KioskMenuPanel side="left" title="Beheer" Icon={MenuIcon} items={items} onClose={close} testId="kiosk-admin-menu" />}
     </div>
   );
 }
