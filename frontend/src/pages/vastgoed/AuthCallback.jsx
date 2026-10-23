@@ -3,7 +3,9 @@ import { enterKioskAfterLogin } from '../../lib/kioskEntry';
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
 // THIS BREAKS THE AUTH. Redirect URL wordt afgeleid van window.location.origin
 // door LoginPage.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import PersonalPinSetup from '../../components/PersonalPinSetup';
+import { api } from '../../lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
@@ -11,6 +13,7 @@ export default function AuthCallback() {
   const nav = useNavigate();
   const loc = useLocation();
   const processed = useRef(false);
+  const [pinNext, setPinNext] = useState(null);
 
   useEffect(() => {
     // Synchroon flaggen zodat StrictMode geen dubbele exchange doet.
@@ -33,13 +36,23 @@ export default function AuthCallback() {
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const user = await r.json();
-        enterKioskAfterLogin(user?.user || user, { fallback: () => nav('/admin', { replace: true, state: { user } }) });
+        const u = user?.user || user;
+        try {
+          const em = u?.email;
+          if (em) { localStorage.setItem('device_user_email', em); localStorage.setItem('device_user_name', u?.name || em.split('@')[0]); }
+        } catch { /* ignore */ }
+        const proceed = () => enterKioskAfterLogin(u, { fallback: () => nav('/admin', { replace: true, state: { user } }) });
+        // Eerste login op dit apparaat: verplicht een persoonlijke PIN kiezen.
+        const st = await api.get('/auth/personal-pin/status').then((x) => x.data).catch(() => null);
+        if (st && st.has_pin === false && u?.role !== 'superadmin') { setPinNext(() => proceed); return; }
+        proceed();
       })
       .catch(() => {
         nav('/login', { replace: true, state: { error: 'Google login mislukt — probeer opnieuw.' } });
       });
   }, [loc.hash, nav]);
 
+  if (pinNext) return <PersonalPinSetup mandatory onDone={pinNext} />;
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="text-center" data-testid="auth-callback">

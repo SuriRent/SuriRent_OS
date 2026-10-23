@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { enterKioskAfterLogin } from '../../../lib/kioskEntry';
+import PersonalPinSetup from '../../../components/PersonalPinSetup';
 import {
   Loader2, KeyRound, ArrowLeft, ArrowRight, Eye, EyeOff, LogIn, Check,
   Globe, Sparkles, Star, ShieldCheck, Zap, ChevronDown,
@@ -15,7 +16,7 @@ import RegisterSuccess from './RegisterSuccess';
 import Header from './LoginHeader';
 import RegisterModal from '../../../components/RegisterModal';
 
-function PasswordView({ initialMode = 'login', onBack, onRegistered, branding }) {
+function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStart, branding }) {
   const navigate = useBrandedNavigate();
   const { login, register } = useAuth();
   const isMobile = useIsMobile();
@@ -52,6 +53,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
   const [registeredSlug, setRegisteredSlug] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pinSetupNext, setPinSetupNext] = useState(null);
   const [error, setError] = useState('');
 
   // Build the query that drives the plan-currency on the registration form.
@@ -117,6 +119,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
     setLoading(true); setError('');
     try {
       if (mode === 'login') {
+        onLoginStart?.();
         const loginResult = await login(email, password, remember);
         if (loginResult?.pin_required) return;
         // "Onthoud mij": sla email + wachtwoord lokaal op (alleen op apparaten
@@ -163,7 +166,12 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
             else navigate('/admin');
           };
           // Beheerder/boekhouder → kiosk-beheer; superadmin → beheeromgeving.
-          await enterKioskAfterLogin(loginResult?.user, { fallback: goAdmin });
+          const proceed = () => enterKioskAfterLogin(loginResult?.user, { fallback: goAdmin });
+          // Eerste login op dit apparaat: verplicht een persoonlijke PIN kiezen.
+          let hasPin = true;
+          try { hasPin = !!(await api.get('/auth/personal-pin/status')).data?.has_pin; } catch { /* ignore */ }
+          if (!hasPin) { setPinSetupNext(() => proceed); return; }
+          await proceed();
         }
       } else {
         const result = await register({
@@ -190,6 +198,8 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, branding })
       setError(formatError(err, mode === 'login' ? 'Inloggen mislukt' : 'Registratie mislukt'));
     } finally { setLoading(false); }
   };
+
+  if (pinSetupNext) return <PersonalPinSetup mandatory onDone={pinSetupNext} />;
 
   if (showSuccess) {
     const selectedPlan = plans.find((p) => p.id === plan) || { name: plan, amount: 0, currency: 'SRD' };

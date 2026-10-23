@@ -23,6 +23,14 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
     } catch { return null; }
   });
 
+  // "Ander account": vergeet de onthouden gebruiker en ga naar e-mail + wachtwoord.
+  const switchAccount = () => {
+    if (deviceUser) {
+      try { localStorage.removeItem('device_user_email'); localStorage.removeItem('device_user_name'); } catch { /* ignore */ }
+    }
+    onPassword();
+  };
+
   const primary = branding?.primary_color || '#FF5C00';
   const appName = branding?.app_name || 'SuriRent';
   const logoUrl = branding?.logo_url ? branding._logoResolved : '/kiosk-icons/kiosk-512.png';
@@ -69,6 +77,13 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
     setLoading(true); setError('');
     try {
       let data;
+      if (deviceUser) {
+        // Onthouden gebruiker op dit apparaat: eerst zijn persoonlijke PIN.
+        const p = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code })
+          .then((r) => r.data).catch((err) => { if (err?.response?.status === 401) return null; throw err; });
+        if (p?.kiosk) { enterKiosk(p, code); return; }
+        if (p?.access_token) { enterAdmin(p.access_token); return; }
+      }
       try {
         ({ data } = await api.post('/auth/kiosk-pin', {
           pin: code,
@@ -76,13 +91,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
           company_id: branding?.company_id || undefined,
         }));
       } catch (e) {
-        if (e?.response?.status !== 401 || !deviceUser) throw e;
-        const p = await api.post('/auth/personal-pin/login', { email: deviceUser.email, pin: code })
-          .then((r) => r.data)
-          .catch((err) => { throw err?.response?.status === 401 ? e : err; });
-        if (p?.kiosk) { enterKiosk(p, code); return; }
-        enterAdmin(p.access_token);
-        return;
+        throw e;
       }
       if (data?.employee?.id) { enterKiosk(data, code); return; }
       if (data?.admin_user?.email) {
@@ -159,7 +168,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
                 <KeyRound className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight" data-testid="pin-welcome">
-                PIN Login
+                {deviceUser ? `Welkom terug, ${deviceUser.name}` : 'PIN Login'}
               </h2>
               <p className="text-sm text-slate-600 mt-1" data-testid="pin-company-name">
                 Vul je 4-cijferige pin in om verder te gaan
@@ -215,9 +224,9 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
             {/* Footer links */}
             <div className="flex items-center justify-center gap-4 mt-6 pt-4 border-t border-slate-100 text-xs font-bold flex-wrap">
               <>
-                  <button onClick={onPassword} data-testid="login-password-btn"
+                  <button onClick={switchAccount} data-testid="login-password-btn"
                     className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
-                    <KeyRound className="w-3.5 h-3.5" /> Inloggen met e-mail
+                    <KeyRound className="w-3.5 h-3.5" /> {deviceUser ? 'Ander account' : 'Inloggen met e-mail'}
                   </button>
                   {!branding?.slug && (
                     <>
@@ -278,7 +287,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         <h1 className="font-black tracking-tight text-white text-center"
           style={{ fontSize: 'clamp(28px, 5vh, 44px)', lineHeight: '1.05' }}
           data-testid="pin-welcome">
-          Welkom
+          {deviceUser ? `Welkom, ${deviceUser.name.split(' ')[0]}` : 'Welkom'}
         </h1>
 
         {/* Profielfoto in cirkel */}
@@ -375,9 +384,9 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         {/* Onderaan: Beheerder login + nieuw account */}
         <div className="flex items-center gap-4 mt-4 text-xs font-bold flex-wrap justify-center px-4">
           <>
-              <button onClick={onPassword} data-testid="login-password-btn"
+              <button onClick={switchAccount} data-testid="login-password-btn"
                 className="flex items-center gap-1.5 text-white/80 hover:text-white">
-                <KeyRound className="w-3.5 h-3.5" /> Inloggen met e-mail
+                <KeyRound className="w-3.5 h-3.5" /> {deviceUser ? 'Ander account' : 'Inloggen met e-mail'}
               </button>
               {!branding?.slug && (
                 <>

@@ -303,7 +303,7 @@ export default function LoginPage() {
   if (view === 'login') {
     return (
       <PasswordView initialMode={view} onBack={() => setView('pin')}
-        onRegistered={() => setSkipRedirect(true)} branding={branding} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={branding} />
     );
   }
 
@@ -314,7 +314,7 @@ export default function LoginPage() {
   if (!branding?.slug) {
     return (
       <PasswordView initialMode="login" onBack={() => {}}
-        onRegistered={() => setSkipRedirect(true)} branding={null} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={null} />
     );
   }
 
@@ -332,14 +332,13 @@ export default function LoginPage() {
     if (forced === 'kiosk') { navigate('/kiosk', { replace: true }); return; }
     let hasAdmin = false;
     try { hasAdmin = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
-    if ((pwaTarget === 'admin' || forced === 'admin') && hasAdmin) {
+    if (forced === 'admin' || (pwaTarget === 'admin' && hasAdmin)) {
       setPreferredRole('admin');
       // Refresh AuthProvider zodat de nieuwe admin_token meteen actief is.
       // Soft navigate naar /admin nadat user state is bijgewerkt.
       let me = null;
       try { me = await refresh(); } catch { /* niet-fataal */ }
-      if (me?.role === 'superadmin') navigate('/admin', { replace: true });
-      else navigate('/kiosk', { replace: true });
+      await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }) });
     } else {
       navigate('/kiosk', { replace: true });
     }

@@ -9,14 +9,16 @@ import { Loader2, Check, X as XIcon, KeyRound } from 'lucide-react';
 
 const SKIP_KEY = 'personal_pin_setup_skipped';
 
-export default function PersonalPinSetup() {
-  const [open, setOpen] = useState(false);
+// mandatory: na eerste e-mail-login verplicht (geen overslaan); onDone wordt aangeroepen na opslaan.
+export default function PersonalPinSetup({ mandatory = false, onDone } = {}) {
+  const [open, setOpen] = useState(mandatory);
   const [pin, setPin] = useState(['', '', '', '']);
   const [confirm, setConfirm] = useState(['', '', '', '']);
   const [step, setStep] = useState('enter'); // enter | confirm | saving | done
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (mandatory) return undefined;
     // Toon alleen wanneer: (a) PWA standalone, (b) admin token aanwezig,
     // (c) gebruiker heeft nog geen PIN, (d) niet eerder geskipped op dit device.
     if (!isStandalonePWA()) return;
@@ -32,7 +34,7 @@ export default function PersonalPinSetup() {
       } catch { /* gracefully degrade */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [mandatory]);
 
   const enterDigit = (val, slot, setter, arr) => {
     if (!/^\d?$/.test(val)) return;
@@ -77,7 +79,7 @@ export default function PersonalPinSetup() {
     try {
       await api.post('/auth/personal-pin/setup', { pin: pin.join('') });
       setStep('done');
-      setTimeout(() => setOpen(false), 1600);
+      setTimeout(() => { setOpen(false); onDone?.(); }, 1200);
     } catch (e) {
       setStep('confirm');
       setError(formatError(e, 'PIN kon niet worden opgeslagen.'));
@@ -100,10 +102,10 @@ export default function PersonalPinSetup() {
             </span>
             <h3 className="text-lg font-black text-slate-900">Persoonlijke PIN instellen</h3>
           </div>
-          <button onClick={skipForNow} data-testid="personal-pin-skip"
+          {!mandatory && <button onClick={skipForNow} data-testid="personal-pin-skip"
             className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500">
             <XIcon className="w-5 h-5" />
-          </button>
+          </button>}
         </div>
 
         {step === 'done' ? (
@@ -117,7 +119,9 @@ export default function PersonalPinSetup() {
         ) : (
           <>
             <p className="text-sm text-slate-600 leading-relaxed mb-5">
-              {step === 'enter'
+              {step === 'enter' && mandatory
+                ? 'Kies een 4-cijferige PIN. Op dit apparaat log je voortaan alleen met deze PIN in.'
+                : step === 'enter'
                 ? 'Stel een 4-cijferige PIN in. Hiermee kunt u snel re-loggen zonder uw wachtwoord opnieuw te typen.'
                 : 'Voer dezelfde PIN nog een keer in ter bevestiging.'}
             </p>
@@ -157,10 +161,10 @@ export default function PersonalPinSetup() {
                   className="w-full h-12 rounded-xl bg-[#FF5C00] hover:bg-[#C74600] text-white font-black text-sm transition-colors">
                   {step === 'enter' ? 'Volgende →' : 'PIN opslaan'}
                 </button>
-                <button onClick={skipForNow}
+                {!mandatory && <button onClick={skipForNow}
                   className="w-full h-10 text-sm font-bold text-slate-500 hover:text-slate-700">
                   Later instellen
-                </button>
+                </button>}
               </div>
             )}
           </>
