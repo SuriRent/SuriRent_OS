@@ -1,4 +1,5 @@
 import { Trash2, Calendar, Check, History } from 'lucide-react';
+import { hostConfirm } from '../../../../components/EmbedConfirm';
 import { fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { fmtAmountWhole } from './helpers';
 
@@ -77,10 +78,10 @@ export function MobileInvoiceLine({ inv, bucket }) {
       </span>
       {canDelete && (
         <button
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
             const periodLabel = `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}`;
-            if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) verwijderen?`)) return;
+            if (!(await hostConfirm(`Factuur ${inv.invoice_number} (${periodLabel}) verwijderen?`))) return;
             window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
           }}
           data-testid={`mi-invoice-delete-${inv.id}`}
@@ -193,10 +194,10 @@ export function InvoiceRow({ inv, bucket, severity }) {
           het betalingsspoor. Ook facturen met een gekoppelde regeling niet. */}
       {!isPartial && !(inv.plans && inv.plans.length > 0) && (
         <button
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
             const periodLabel = `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}`;
-            if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+            if (!(await hostConfirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`))) return;
             window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
           }}
           data-testid={`invoice-delete-btn-${inv.id}`}

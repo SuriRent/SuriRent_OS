@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hostConfirm } from '../../../../components/EmbedConfirm';
 import {
   ChevronRight, Mail, PiggyBank, Loader2, MessageCircle,
   Calendar, AlertTriangle, Clock, Check, Banknote, Share2, Trash2, RefreshCw,
@@ -413,10 +414,10 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
                       {/* Verwijder-knop: alleen onbetaalde facturen zonder plan */}
                       {!partial && !(inv.plans && inv.plans.length > 0) && (
                         <button type="button"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             const periodLabel = `${monthName} ${inv.period_year}`;
-                            if (!window.confirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`)) return;
+                            if (!(await hostConfirm(`Factuur ${inv.invoice_number} (${periodLabel}) definitief verwijderen?\n\nDit kan niet ongedaan worden gemaakt.`))) return;
                             window.dispatchEvent(new CustomEvent('invoice-delete', { detail: { invoice: inv } }));
                           }}
                           data-testid={`inv-delete-${inv.id}`}

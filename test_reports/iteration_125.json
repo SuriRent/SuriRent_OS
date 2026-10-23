@@ -1,0 +1,44 @@
+{
+  "summary": "I tested only the frontend, using Playwright at 1600x900. Login used boekhouder@surirent.sr as admin_token and kiosk.medewerker PIN 5566 as kiosk_token, then /kiosk. The hamburger menu shows all 11 tiles in the right order. Onderhoud, Werknemers, Notificaties and Borg work in their popups: lists and filters load, forms open inside the popup, the PIN and refund windows open inside the popup, and embed-confirm appears inside the popup for deletes. I created, changed and deleted test records in Onderhoud, Werknemers and Borg, and cleaned all of them up. The regression check also passed: Locaties, Appartementen, Huurders, Contracten, Betalingen, Regelingen and Facturen each open their 'new' form inside the popup and Annuleren closes it without saving. No API errors came from popup actions. The only error was one harmless 401 on /api/auth/me at load. In /admin as boekhouder, Borg and Notificaties show their titles. Onderhoud and Werknemers send the boekhouder back to Overzicht because that role is not allowed there, so I could not check those two pages as boekhouder. The main finding is a permission gap: the kiosk shows every admin tile to a boekhouder, and the backend /employees endpoints do not check the user's role.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST/PUT/DELETE /api/employees, POST /api/employees/{id}/kiosk-pin", "issue": "These endpoints only use Depends(get_current_user) and never check the role (server.py ~14888-14990). With a boekhouder token I created, edited and deleted an employee from the kiosk. A boekhouder can therefore create a 'Beheerder' (admin) employee with a password and PIN, which is a privilege escalation. The /admin sidebar does hide Werknemers from boekhouder.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/companies/me/setup-status", "issue": "Returns 403 repeatedly for boekhouder in /admin, causing console 'Request failed with status code 403' noise (pre-existing)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Deposits detail (Borg popup)", "issue": "The Verwijder button runs `await del(id); setDetail(null)` without checking the answer. Choosing Annuleren in embed-confirm still closes the detail page and returns to the list. Fix: only call setDetail(null) when the confirm returns true.", "selector": "[data-testid=dep-delete-<id>] + [data-testid=embed-confirm-cancel]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Kiosk admin menu permissions", "issue": "KioskLayout shows all 11 tiles whenever an admin_token exists (hasAdminAccess) and never checks the role. A boekhouder gets Onderhoud, Werknemers, Locaties, Appartementen, Contracten and more in the kiosk, but the /admin sidebar (BOEKHOUDER_TABS) blocks those same modules. The kiosk menu should filter tiles by the same per-role list.", "affected_selectors": ["[data-testid^=kiosk-admin-menu-]"]},
+      {"flow": "Confirmations still using window.confirm / alert inside embedded modules", "issue": "These still use window.confirm: Payments handleReassign (Payments.jsx:481), and in Tenants (AdminDashboard.jsx) the bulk action (3261), ID-card photo delete (3582), note delete (3808) and signature delete (3994). InvoiceRow and InvoiceDetailPage deletes also use it. Several alert() calls remain (Employees AI toggle, Contracts copy link, Payments). These show native browser dialogs instead of the in-popup embed-confirm.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "Kiosk admin popups (wide tall shell)", "issues": ["The popup is only ~672px wide on a 1600px screen. The Werknemers table is cramped: names and phone numbers wrap onto 2 lines and salary shows as 'SRD / 0,00'.", "The Onderhoud priority badges show in English (MEDIUM/HIGH/LOW) in an otherwise Dutch interface.", "Several forms use the browser's native date picker (Contracten, Huurders geboortedatum, Regelingen startdatum) instead of the shadcn calendar."]},
+      {"screen": "Regelingen 'Nieuwe regeling' form", "issues": ["The hosted form covers the popup footer, leaving a large empty white area under the inline Annuleren/Aanmaken buttons. It works, but it does not look like the other forms, which keep their buttons in a sticky footer."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add role checks to the /api/employees create, update, delete and kiosk-pin endpoints (for example require_role('admin','owner')). Also review whether the maintenance, locations, apartments and contracts write endpoints should block boekhouder.",
+    "Filter the kiosk hamburger tiles by user role, using the same list as BOEKHOUDER_TABS in AdminDashboard.",
+    "Deposits detail: keep the detail page open when the delete confirm is cancelled.",
+    "Replace the remaining window.confirm and alert calls in embedded modules with useEmbedConfirm or an in-popup message (Payments reassign; Tenants bulk action, ID photo, notes and signature deletes; invoice deletes).",
+    "Optional: widen the popup on large screens and translate the priority badges into Dutch."
+  ],
+  "critical_code_review_comments": [
+    "EmbedConfirm uses `fixed inset-0`. It stays inside the popup only because the shell creates a containing block. A future change to the shell's CSS could make it cover the whole screen, so consider `absolute`, a portal to ModalHostContext, or both.",
+    "EmployeeForm shows its validation error at the top of a scrollable body. If the user has scrolled down to the PIN field, the 'PIN is verplicht' message is off-screen. Scroll it into view or show it next to the field.",
+    "AdminDashboard.jsx is 4494 lines and Payments.jsx is over 1300 lines. Both are far over the 700-line guideline."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend only)", "frontend": "~95% (all requested flows work; 1 low-priority UI bug and 1 high-priority permission issue)"},
+  "seed_data_creation": "None kept. Created and deleted: maintenance ticket 'TEST kiosk ticket' (3e62f257...), employee 'TEST Kiosk Werknemer' (7aa785b1..., kiosk role, PIN 9871), deposit of SRD 1 for Jan Pieterse (6f08abbe...). All three are confirmed gone.",
+  "test_credentials": "boekhouder@surirent.sr/test1234 as admin_token; kiosk.medewerker@surirent.sr PIN 5566 via /api/auth/personal-pin/login",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login: get tokens with page.request.post, set localStorage admin_token, kiosk_token and kiosk_company, then open /kiosk. The popup testid is kiosk-popup-<id>-form. Hosted forms render as .ksm-root inside the popup; the Regelingen form is a different hosted div. Facturen uses the invoices-modal-* prefix. Employee rows appear twice (emp-row and emp-card), so select with :visible. Creating an employee requires a 4-digit PIN. A boekhouder in /admin is redirected to Overzicht for maintenance and employees. To retest the Werknemers and Onderhoud /admin pages, use an admin account; none is listed for this company in test_credentials.md."
+}

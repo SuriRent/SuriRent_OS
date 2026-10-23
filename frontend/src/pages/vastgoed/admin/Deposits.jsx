@@ -161,8 +161,9 @@ export default function Deposits({ embedded = false }) {
     await Promise.all([refetchDeposits(), refetchTenants()]);
   }, [refetchDeposits, refetchTenants]);
   const del = async (id) => {
-    if (!(await askConfirm('Borg verwijderen?'))) return;
+    if (!(await askConfirm('Borg verwijderen?'))) return false;
     await api.delete(`/deposits/${id}`); load();
+    return true;
   };
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
   useEffect(() => {
@@ -253,7 +254,7 @@ export default function Deposits({ embedded = false }) {
                 <FileText className="w-4 h-4" /> PDF bewijs
               </a>
             )}
-            <button onClick={async () => { await del(detail.id); setDetail(null); }}
+            <button onClick={async () => { if (await del(detail.id)) setDetail(null); }}
               data-testid={`dep-delete-${detail.id}`}
               className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border-2 border-red-300 hover:bg-red-500 hover:text-white text-red-600 font-bold rounded-xl text-xs sm:text-sm transition">
               <Trash2 className="w-4 h-4" /> Verwijder

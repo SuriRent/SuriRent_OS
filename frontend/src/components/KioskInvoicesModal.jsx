@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { hostConfirm } from './EmbedConfirm';
 import {
   ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, Banknote, Trash2,
   CheckCircle2, ChevronRight, FileSignature, X, History, RefreshCw,
@@ -182,7 +183,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
     finally { setBusy(false); }
   };
   const del = async (inv) => {
-    if (!window.confirm(`Factuur ${inv.invoice_number} verwijderen?`)) return;
+    if (!(await hostConfirm(`Factuur ${inv.invoice_number} verwijderen?`))) return;
     try { await api.delete(`/invoices/${inv.id}`); setMsg({ ok: true, text: `Factuur ${inv.invoice_number} verwijderd` }); load(); }
     catch (e) { setMsg({ ok: false, text: formatError(e) }); }
   };

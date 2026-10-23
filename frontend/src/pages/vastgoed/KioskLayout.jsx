@@ -214,10 +214,18 @@ const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin
 // Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
 const ADMIN_MENU_ITEMS = [];
 
+// Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
+const BOEKHOUDER_KIOSK_PAGES = ['huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
+
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(null);
   const ref = useRef(null);
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get('/auth/me').then((r) => setRole(r?.data?.role || r?.data?.user?.role || null)).catch(() => {});
+  }, [isAdmin]);
   useEffect(() => {
     if (!open) return undefined;
     const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -238,8 +246,8 @@ function KioskAdminMenu() {
         <div data-testid="kiosk-admin-menu" role="menu"
           className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-4 md:p-5 animate-in fade-in slide-in-from-top-2 duration-150">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
-          <div className="grid grid-cols-3 gap-3">
-            {Object.keys(KIOSK_ADMIN_PAGES).map((id) => (
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+            {Object.keys(KIOSK_ADMIN_PAGES).filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)).map((id) => (
               <KioskAdminPageTile key={id} id={id} onOpen={(pid) => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${pid}` })); }} />
             ))}
               {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (

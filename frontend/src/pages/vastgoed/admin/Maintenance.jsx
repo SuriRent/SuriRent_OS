@@ -182,7 +182,7 @@ export default function Maintenance({ embedded = false }) {
             className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-5 hover:border-slate-200 transition-colors">
             <div className="flex items-start justify-between mb-2 gap-2">
               <p className="text-xs font-bold uppercase tracking-widest text-[#FF5C00]">Appt. {m.apartment_number}</p>
-              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${PRIO_COLORS[m.priority]}`}>{m.priority}</span>
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${PRIO_COLORS[m.priority]}`}>{({ low: 'Laag', medium: 'Normaal', high: 'Hoog', urgent: 'Urgent' })[m.priority] || m.priority}</span>
             </div>
             <h3 className="font-bold text-slate-900 text-base mb-1">{m.title}</h3>
             <p className="text-sm text-slate-500 mb-3 line-clamp-2">{m.description || '—'}</p>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { hostConfirm } from '../../components/EmbedConfirm';
 import { useEmbedConfirm } from '../../components/EmbedConfirm';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
@@ -3202,7 +3203,7 @@ export function Tenants({ embedded = false }) {
   };
   const del = async (id) => {
     if (embedded) { setConfirmDel(id); return; }
-    if (!window.confirm('Huurder verwijderen?')) return;
+    if (!(await hostConfirm('Huurder verwijderen?'))) return;
     doDel(id);
   };
 
@@ -3258,7 +3259,7 @@ export function Tenants({ embedded = false }) {
   const withAvatars = summary.withAvatars || 0;
   const runBackfill = async (force = false) => {
     const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
-    if (!window.confirm(`${label}? Dit duurt ~2s per huurder.`)) return;
+    if (!(await hostConfirm(`${label}? Dit duurt ~2s per huurder.`))) return;
     setBackfilling(true);
     try {
       const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
@@ -3579,7 +3580,7 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
   };
 
   const removePhoto = async () => {
-    if (!window.confirm('ID-kaart foto verwijderen?')) return;
+    if (!(await hostConfirm('ID-kaart foto verwijderen?'))) return;
     try {
       await api.delete(`/tenants/${t.id}/id-photo`);
       if (onReload) await onReload();
@@ -3805,7 +3806,7 @@ function AdminNotesCard({ tenantId, tenantName }) {
   };
 
   const remove = async (id) => {
-    if (!window.confirm('Deze notitie verwijderen?')) return;
+    if (!(await hostConfirm('Deze notitie verwijderen?'))) return;
     try {
       await api.delete(`/tenants/${tenantId}/notes/${id}`);
       await load();
@@ -3991,7 +3992,7 @@ function SignatureModal({ tenant: t, open, onClose, onReload }) {
     } finally { setSaving(false); }
   };
   const removeSig = async () => {
-    if (!window.confirm('Handtekening verwijderen?')) return;
+    if (!(await hostConfirm('Handtekening verwijderen?'))) return;
     await api.delete(`/tenants/${t.id}/signature`);
     if (onReload) await onReload();
     onClose();

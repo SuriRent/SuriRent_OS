@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { hostConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
@@ -478,7 +479,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
       setReassignOpen(false);
       return;
     }
-    if (!window.confirm('Wijzig de gekoppelde factuur van deze betaling? Beide facturen worden automatisch herberekend.')) {
+    if (!(await hostConfirm('Wijzig de gekoppelde factuur van deze betaling? Beide facturen worden automatisch herberekend.'))) {
       return;
     }
     setReassigning(true);

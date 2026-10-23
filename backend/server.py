@@ -199,6 +199,12 @@ def require_role(*roles: str):
     return _dep
 
 
+async def deny_boekhouder(user=Depends(get_current_user)):
+    if user.get("role") == "boekhouder":
+        raise HTTPException(status_code=403, detail="Onvoldoende rechten")
+    return user
+
+
 def scope(user: dict) -> dict:
     """Mongo filter for current company scope."""
     cid = user.get("active_company_id")
@@ -14886,7 +14892,7 @@ async def _list_employees_compute(user: dict):
 
 
 @api.post("/employees", response_model=EmployeeOut)
-async def create_employee(body: EmployeeIn, user=Depends(get_current_user)):
+async def create_employee(body: EmployeeIn, user=Depends(deny_boekhouder)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
@@ -14908,7 +14914,7 @@ async def create_employee(body: EmployeeIn, user=Depends(get_current_user)):
 
 
 @api.put("/employees/{eid}", response_model=EmployeeOut)
-async def update_employee(eid: str, body: EmployeeIn, user=Depends(get_current_user)):
+async def update_employee(eid: str, body: EmployeeIn, user=Depends(deny_boekhouder)):
     cur = await db.employees.find_one({"id": eid, **scope(user)}, {"_id": 0})
     if not cur:
         raise HTTPException(status_code=404, detail="Werknemer niet gevonden")
@@ -14983,7 +14989,7 @@ async def kiosk_employee_verify(body: KioskEmployeePinIn, kiosk=Depends(get_kios
 
 
 @api.delete("/employees/{eid}")
-async def delete_employee(eid: str, user=Depends(get_current_user)):
+async def delete_employee(eid: str, user=Depends(deny_boekhouder)):
     res = await db.employees.delete_one({"id": eid, **scope(user)})
     if res.deleted_count:
         await db.users.delete_one({"employee_id": eid})
@@ -15034,7 +15040,7 @@ async def list_salaries(user=Depends(get_current_user), employee_id: Optional[st
 
 
 @api.post("/salaries", response_model=SalaryOut)
-async def create_salary(body: SalaryIn, user=Depends(get_current_user)):
+async def create_salary(body: SalaryIn, user=Depends(deny_boekhouder)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
@@ -15057,7 +15063,7 @@ async def create_salary(body: SalaryIn, user=Depends(get_current_user)):
 
 
 @api.delete("/salaries/{sid}")
-async def delete_salary(sid: str, user=Depends(get_current_user)):
+async def delete_salary(sid: str, user=Depends(deny_boekhouder)):
     await db.salaries.delete_one({"id": sid, **scope(user)})
     return {"ok": True}
 

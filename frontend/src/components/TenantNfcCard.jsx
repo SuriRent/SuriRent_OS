@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hostConfirm } from './EmbedConfirm';
 import { Check, Loader2, Nfc, Pencil, Trash2, X } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 
@@ -18,7 +19,7 @@ export function TenantNfcCard({ tenant, onReload }) {
       if (onReload) await onReload();
     } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
   };
-  const remove = () => { if (window.confirm('NFC-koppeling verwijderen? De tag opent deze huurder dan niet meer op de kiosk.')) save(''); };
+  const remove = async () => { if (await hostConfirm('NFC-koppeling verwijderen? De tag opent deze huurder dan niet meer op de kiosk.')) save(''); };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5" data-testid="tenant-nfc-card">
