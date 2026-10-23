@@ -1004,3 +1004,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Betaalstappen (Wat wilt u betalen / Hoe wilt u betalen / Bevestig) zonder Terug-knop op desktop/iPad; PaySelect toont foto+naam+appt in linker kaart. Menubalk-Terug gaat vanuit niet-opgeslagen stap naar laatste stabiele scherm. /kiosk/tenants/{id}/overview geeft tenant.avatar_url.
 - 2026-10: Telefoon: tandwiel rechtsboven verborgen; + sheet tegel Beheerder opent het Instellingenmenu (kiosk-open-menu settings) als admin_token aanwezig, anders oude gedrag.
 - 2026-10: Oranje modus: bovenbalk (kiosk-head-wrap/kiosk-desktop-header) en onderste menubalk donker oranje #C94400, midden fel oranje (index.css .kiosk-fullscreen:not(.kiosk-white)).
+- 2026-10: Oranje modus omgedraaid: balken licht #FF7A2E, midden donker #D94A00.

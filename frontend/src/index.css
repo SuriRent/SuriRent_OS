@@ -142,11 +142,14 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
   }
   .kiosk-white .kiosk-head-wrap [data-testid="kiosk-desktop-header"] { margin-bottom: 0; }
 }
-/* KIOSK oranje modus — donkere balken boven/onder, fel oranje midden (zoals de witte modus-indeling). */
-.kiosk-fullscreen:not(.kiosk-white) .kiosk-head-wrap { background-color: #C94400; }
+/* KIOSK oranje modus — lichte balken boven/onder, donker oranje midden (zoals de witte modus-indeling). */
+.kiosk-fullscreen:not(.kiosk-white) { background-color: #D94A00 !important; }
+.kiosk-fullscreen:not(.kiosk-white) .h-full.bg-orange-500,
+.kiosk-fullscreen:not(.kiosk-white) .h-full.bg-\[\#FF5C00\] { background-color: #D94A00; }
+.kiosk-fullscreen:not(.kiosk-white) .kiosk-head-wrap { background-color: #FF7A2E; }
 .kiosk-fullscreen:not(.kiosk-white) [data-testid="kiosk-desktop-header"] {
-  background-color: #C94400;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
+  background-color: #FF7A2E;
+  border-bottom: 1px solid rgba(255,255,255,0.25);
   margin-left: -1.5vw; margin-right: -1.5vw;
   padding-left: calc(1.5vw + 0.5rem); padding-right: calc(1.5vw + 0.5rem);
   margin-bottom: 0.75rem;
