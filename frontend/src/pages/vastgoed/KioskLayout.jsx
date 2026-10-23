@@ -3009,11 +3009,11 @@ function KasgeldPanel({ onBack }) {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className="h-full w-full bg-[#FF5C00] flex flex-col"
-      style={{ padding: '1.5vh 1.5vw 0', paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
+    <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
       {/* Oranje header — Terug links, operator-context rechts (zelfde patroon
           als TenantOverview "Financieel overzicht") */}
-      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
+      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
         <button onClick={onBack} data-testid="kasgeld-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 active:scale-95 transition">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -3030,7 +3030,7 @@ function KasgeldPanel({ onBack }) {
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
         <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
           <div className="row-label-value items-center mb-4">
