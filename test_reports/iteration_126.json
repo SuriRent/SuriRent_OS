@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the new post-login routing (admin/boekhouder go to the kiosk in Beheer mode, superadmin goes to /admin), the SubscriptionBell in the kiosk header, kiosk logout and the /auth/admin-to-kiosk permission checks. Every requested flow passes. Admin demo@surirent.sr lands on /kiosk. The hamburger, settings gear, bell and Uitloggen are all visible. The bell dropdown's 'Naar Mijn abonnement' button opens the 'Mijn abonnement' popup inside the kiosk and the URL stays /kiosk. The Huurders, Betalingen and Facturen popups load data with no API errors. Boekhouder lands on /kiosk and sees 8 tiles (huurders, betalingen, regelingen, facturen, notificaties, borg, nfc, kasgeld). Boekhouder has no settings gear and no bell, and the Betalingen popup loads. Superadmin lands on /my-awesome-rentals-bv/admin, the admin environment, not the kiosk. Uitloggen clears localStorage and the auth cookies and lands on /<slug>/login?pick=1&loggedout=1. It does not bounce back to the kiosk, and visiting /login again does not auto-redirect. Kiosk employee email+password then PIN 5566 lands on /my-awesome-rentals-bv/kiosk with no Beheer menu, settings gear or bell. Injecting a personal-pin/login token via the API and opening /kiosk gives the same result.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/kiosk-pin", "issue": "The PIN-only pad on /my-awesome-rentals-bv/login?target=kiosk&view=pin (no email) rejects PIN 5566 with 401 'Ongeldige PIN code'. The PIN for kiosk.medewerker@surirent.sr is stored on the user document, so the employees query that kiosk-pin uses (kiosk_pin_hash) never finds it. POST /auth/personal-pin/login with email+pin returns 200, and the email+password→PIN flow works. Probably not caused by this change, but a user who taps the PIN alone on a fresh device cannot log in."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter126_admin_to_kiosk.py", "/app/test_reports/pytest/pytest_iter126.xml"],
+  "action_items": [
+    "Optional: make /auth/kiosk-pin (PIN-only pad) also match user-level personal PINs, such as kiosk.medewerker's 5566, or show a hint to use 'Inloggen met e-mail'.",
+    "Optional hardening: enterKioskAfterLogin sends localStorage.active_company_id. If it is stale (for example left over from a superadmin session on the same device) a normal admin gets a 403 and silently falls back to /admin. Send company_id only for superadmin, or retry without company_id when the response is 403."
+  ],
+  "critical_code_review_comments": [
+    "kioskEntry.js: on a 403 from a stale active_company_id the catch block silently falls back to goAdmin(). The user lands in /admin instead of the kiosk with no feedback.",
+    "The backend ownership check for admin-to-kiosk works: a non-superadmin asking for another company gets 403, an unknown company gets 404, and superadmin is allowed any company.",
+    "KioskLayout.jsx is far beyond 700 lines (5000+) and should be split into modules.",
+    "The popup testid is kiosk-popup-inst-abonnement-* (overlay/body), not an exact 'kiosk-popup-inst-abonnement'. Visually confirmed that it opens."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter126_admin_to_kiosk.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% of the requested flows"},
+  "test_credentials": "From /app/memory/test_credentials.md: demo@surirent.sr/demo1234, boekhouder@surirent.sr/test1234, super@surirent.sr/super1234, kiosk.medewerker@surirent.sr/test1234 with PIN 5566.",
+  "seed_data_creation": "None. No data was modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "demo@surirent.sr and boekhouder belong to the SAME company (demo-company-fixed-uuid-00000000000, slug my-awesome-rentals-bv). For 403 tests, take another company id from GET /api/companies as superadmin. The Beheer tile testids are kiosk-admin-menu-<key>. Do not filter by has_text, because the overlay contains every tile's text. The popup testids are kiosk-popup-<key>-body. The 401s on /auth/me before login are expected."
+}
