@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only retest of iteration_127 fixes for the per-device PIN login flow. All 4 requested scenarios pass. (1) Mobile 390: fresh storage, MobileEmailLogin demo -> mandatory personal-pin-setup-modal on solid orange (rgb 255,92,0) background, no skip and no 'Later instellen'; enter+confirm 2468 -> /kiosk with Beheer menu; device_user_name stored as 'Demo Beheerder'. (2) Desktop 1920: demo email login -> no popup -> /kiosk; Uitloggen -> /my-awesome-rentals-bv/login?pick=1&loggedout=1 shows PIN screen 'Welkom terug, Demo Beheerder'; wrong PIN 1111 -> pin-error 'Ongeldige PIN code'; 2468 -> /kiosk admin mode (kiosk-admin-menu-btn present). (3) Superadmin email login: popup never shown (polled 7s) -> /admin SaaS Overzicht. (4) Ander account clears device_user_email and shows email form; boekhouder -> no popup -> /kiosk with Beheer menu; kiosk.medewerker -> /my-awesome-rentals-bv/login?target=kiosk&view=pin -> PIN 5566 -> /my-awesome-rentals-bv/kiosk without Beheer menu.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed_tests": [
+    "Mobile: mandatory PIN popup after MobileEmailLogin, no skip, orange bg, save 2468 -> /kiosk",
+    "Desktop: logout -> PIN screen with full name 'Welkom terug, Demo Beheerder'",
+    "Desktop: wrong PIN -> pin-error; correct PIN 2468 -> /kiosk admin mode",
+    "Superadmin: no PIN popup, lands on /admin",
+    "Ander account -> email form + device forgotten",
+    "Boekhouder (PIN 6677 set) -> no popup -> /kiosk with Beheer menu",
+    "Kiosk medewerker + PIN 5566 -> kiosk without Beheer menu"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "afterPasswordLogin treats a failed /auth/personal-pin/status call as hasPin=true, so a network error silently skips the mandatory PIN step (fail-open). Consider failing closed or retrying.",
+    "PIN pad has no physical-keyboard support on desktop (typing digits does nothing); only on-screen keypad clicks work. Minor UX gap for desktop users."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (all checks passed)"},
+  "test_credentials": "From /app/memory/test_credentials.md: demo@surirent.sr/demo1234 (PIN now 2468), boekhouder@surirent.sr/test1234 PIN 6677, kiosk.medewerker@surirent.sr/test1234 PIN 5566, super@surirent.sr/super1234",
+  "seed_data_creation": "demo@surirent.sr personal PIN set to 2468 via mobile UI popup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Desktop email form testids: auth-email/auth-password/auth-submit. Mobile: mobile-login-email/password/submit. PIN pad: click keypad-<digit> (use :visible, duplicates exist for mobile/desktop layouts); keyboard typing does not work. PIN setup modal: personal-pin-enter-0..3 -> personal-pin-next -> personal-pin-confirm-0..3 -> personal-pin-save. To re-test popup, unset users.personal_pin_hash for demo in Mongo (vastgoed_kiosk)."
+}
