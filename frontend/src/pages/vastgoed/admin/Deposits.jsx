@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
@@ -144,7 +145,8 @@ function RefundForm({ deposit, onCancel, onSaved }) {
   );
 }
 
-export default function Deposits() {
+export default function Deposits({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   // SWR — instant cache-hit bij tabwissel; SSE-broadcast invalideert
   // deze keys automatisch zodra een borg wordt gewijzigd op een ander
   // apparaat. Geen polling.
@@ -159,16 +161,22 @@ export default function Deposits() {
     await Promise.all([refetchDeposits(), refetchTenants()]);
   }, [refetchDeposits, refetchTenants]);
   const del = async (id) => {
-    if (!window.confirm('Borg verwijderen?')) return;
+    if (!(await askConfirm('Borg verwijderen?'))) return;
     await api.delete(`/deposits/${id}`); load();
   };
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
+  useEffect(() => {
+    const onNew = () => { setDetail(null); setCreating(true); };
+    window.addEventListener('kiosk-dep-new', onNew);
+    return () => window.removeEventListener('kiosk-dep-new', onNew);
+  }, []);
 
   // Detail-pagina met terug-knop, analoog aan PlanDetail in Betalingsregelingen.
   if (detail) {
     const isHeld = detail.status === 'held';
     return (
-      <div className="space-y-4 pb-24 sm:pb-6" data-testid={`deposit-detail-page-${detail.id}`}>
+      <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid={`deposit-detail-page-${detail.id}`}>
+        {confirmNode}
         {/* TERUG-PIL */}
         <div className="flex items-center gap-2">
           <button onClick={() => { setDetail(null); load(); }} data-testid="deposit-detail-back"
@@ -262,14 +270,15 @@ export default function Deposits() {
 
   return (
     <div>
-      <PageHeader title="Borg / Deposits" subtitle={`${items.filter((d) => d.status === 'held').length} actief, ${items.filter((d) => d.status === 'refunded').length} gerestitueerd`}
+      {confirmNode}
+      {!embedded && <PageHeader title="Borg / Deposits" subtitle={`${items.filter((d) => d.status === 'held').length} actief, ${items.filter((d) => d.status === 'refunded').length} gerestitueerd`}
         action={
           <button onClick={() => setCreating(true)} data-testid="dep-new-btn"
             className="inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
             <Plus className="w-4 h-4" /> Nieuwe borg
           </button>
         }
-      />
+      />}
       <div>
         {items.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center" data-testid="deposits-empty">

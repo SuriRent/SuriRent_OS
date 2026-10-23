@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Bell, BellOff, Loader2, Check, AlertTriangle, Send, Shield, RotateCw, Smartphone, Trash2, Volume2, VolumeX } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useBadge } from '../../../lib/pwa';
@@ -18,7 +19,8 @@ function urlBase64ToUint8Array(base64String) {
   return output;
 }
 
-export default function Notifications() {
+export default function Notifications({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const { clearBadge } = useBadge();
   const [supported, setSupported] = useState(true);
   const [permission, setPermission] = useState('default');
@@ -183,7 +185,7 @@ export default function Notifications() {
   // tot reRegister wordt gebruikt.
   const removeDevice = async (dev) => {
     if (!dev?.id) return;
-    if (!window.confirm(`Apparaat "${dev.label}" verwijderen? Het ontvangt geen meldingen meer.`)) return;
+    if (!(await askConfirm(`Apparaat "${dev.label}" verwijderen? Het ontvangt geen meldingen meer.`))) return;
     setLoading(true); setError(''); setMsg('');
     try {
       await api.delete(`/push/devices/${dev.id}`);
@@ -228,7 +230,8 @@ export default function Notifications() {
 
   return (
     <div data-testid="notifications-page">
-      <div className="mb-6">
+      {confirmNode}
+      <div className={embedded ? 'hidden' : 'mb-6'}>
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Notificaties & Beveiliging</h1>
         <p className="text-sm text-slate-500 mt-1">Push notificaties, geluiden en gekoppelde apparaten</p>
       </div>

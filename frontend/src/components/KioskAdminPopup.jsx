@@ -3,6 +3,8 @@ import { Loader2, Plus } from 'lucide-react';
 import { KIOSK_ADMIN_PAGES } from './KioskAdminInvoices';
 
 const NEW = {
+  onderhoud: { label: 'Nieuw ticket', event: 'kiosk-maint-new' },
+  borg: { label: 'Nieuwe borg', event: 'kiosk-dep-new' },
   contracten: { label: 'Nieuw contract', event: 'kiosk-contract-new' },
   regelingen: { label: 'Nieuwe regeling', event: 'kiosk-plan-new' },
   locaties: { label: 'Nieuwe locatie', event: 'kiosk-loc-new' },
@@ -20,11 +22,13 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
     return () => document.body.classList.remove('kiosk-admin-active');
   }, []);
   const footer = (
-    <div className="grid grid-cols-2 gap-2">
-      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(nw.event))} data-testid={`kiosk-popup-${id}-new`}
-        className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
-        <Plus className="w-4 h-4" /> {nw.label}
-      </button>
+    <div className={`grid ${nw ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+      {nw && (
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(nw.event))} data-testid={`kiosk-popup-${id}-new`}
+          className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4" /> {nw.label}
+        </button>
+      )}
       <button type="button" onClick={onClose} data-testid={`kiosk-popup-${id}-footer-close`}
         className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Sluiten</button>
     </div>

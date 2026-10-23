@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
@@ -32,10 +33,10 @@ function EmpActions({ e, load, onPin, onEdit, onDelete }) {
   );
 }
 
-function PageHeader({ title, subtitle, action }) {
+function PageHeader({ title, subtitle, action, hideTitle = false }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
-      <div>
+    <div className={`flex flex-col sm:flex-row sm:items-end justify-between gap-3 ${hideTitle ? 'mb-4' : 'mb-6'}`}>
+      <div className={hideTitle ? 'hidden' : ''}>
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{title}</h1>
         {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
       </div>
@@ -309,7 +310,8 @@ function SalaryForm({ employees, onCancel, onSaved }) {
   );
 }
 
-export default function Employees() {
+export default function Employees({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   // SWR + SSE live-sync — geen useEffect fetch, geen polling.
   const { data: empRaw, mutate: refetchEmp } = useApiSWR('/employees');
   const { data: salRaw, mutate: refetchSal } = useApiSWR('/salaries');
@@ -326,18 +328,19 @@ export default function Employees() {
   }, [refetchEmp, refetchSal]);
 
   const delEmp = async (id) => {
-    if (!window.confirm('Werknemer verwijderen?')) return;
+    if (!(await askConfirm('Werknemer verwijderen?'))) return;
     await api.delete(`/employees/${id}`); load();
   };
   const delSal = async (id) => {
-    if (!window.confirm('Loonstrook verwijderen?')) return;
+    if (!(await askConfirm('Loonstrook verwijderen?'))) return;
     await api.delete(`/salaries/${id}`); load();
   };
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
   return (
     <div>
-      <PageHeader title="Werknemers" subtitle={`${employees.filter((e) => e.active).length} actief, ${salaries.length} loonstroken`}
+      {confirmNode}
+      <PageHeader hideTitle={embedded} title="Werknemers" subtitle={`${employees.filter((e) => e.active).length} actief, ${salaries.length} loonstroken`}
         action={
           view === 'employees' ? (
             <button onClick={() => setCreatingEmp(true)} data-testid="emp-new-btn"

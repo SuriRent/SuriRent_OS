@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink, flashElement } from '../../../lib/deep-link';
 import { Plus, X, Check, Loader2, Wrench, Trash2 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
@@ -114,7 +115,8 @@ const STATUS_LABELS = {
   open: 'Open', in_progress: 'In behandeling', done: 'Afgerond',
 };
 
-export default function Maintenance() {
+export default function Maintenance({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   // SWR + SSE live-sync — geen polling meer, geen 30s intervals.
   const { data: itemsRaw, mutate: refetchItems } = useApiSWR('/maintenance');
   const { data: aptsRaw, mutate: refetchApts } = useApiSWR('/apartments');
@@ -133,22 +135,29 @@ export default function Maintenance() {
     load();
   };
   const del = async (id) => {
-    if (!window.confirm('Ticket verwijderen?')) return;
+    if (!(await askConfirm('Ticket verwijderen?'))) return;
     await api.delete(`/maintenance/${id}`); load();
   };
+
+  useEffect(() => {
+    const onNew = () => setCreating(true);
+    window.addEventListener('kiosk-maint-new', onNew);
+    return () => window.removeEventListener('kiosk-maint-new', onNew);
+  }, []);
 
   const filtered = filter === 'all' ? items : items.filter((i) => i.status === filter);
 
   return (
     <div>
-      <PageHeader title="Onderhoud" subtitle={`${items.length} tickets, ${items.filter((i) => i.status !== 'done').length} actief`}
+      {confirmNode}
+      {!embedded && <PageHeader title="Onderhoud" subtitle={`${items.length} tickets, ${items.filter((i) => i.status !== 'done').length} actief`}
         action={
           <button onClick={() => setCreating(true)} data-testid="maint-new-btn"
             className="inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
             <Plus className="w-4 h-4" /> Nieuw ticket
           </button>
         }
-      />
+      />}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
           { id: 'all', label: 'Alle' },
