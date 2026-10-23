@@ -3190,10 +3190,15 @@ export function Tenants({ embedded = false }) {
       .then(({ data }) => { if (data.items?.[0]) setDetailTenant(data.items[0]); else setDetailId(null); })
       .catch(() => setDetailId(null));
   }, [detailId, detailInList, paged.loading]);
-  const del = async (id) => {
-    if (!window.confirm('Huurder verwijderen?')) return;
+  const [confirmDel, setConfirmDel] = useState(null);
+  const doDel = async (id) => {
     await api.delete(`/tenants/${id}`);
-    setDetailId(null); load();
+    setConfirmDel(null); setDetailId(null); load();
+  };
+  const del = async (id) => {
+    if (embedded) { setConfirmDel(id); return; }
+    if (!window.confirm('Huurder verwijderen?')) return;
+    doDel(id);
   };
 
   // Shared modals — moeten ook in de detail-view zichtbaar zijn, anders
@@ -3208,6 +3213,20 @@ export function Tenants({ embedded = false }) {
       {pinFor && <TenantPinModal tenant={pinFor}
         onCancel={() => setPinFor(null)}
         onSaved={() => setPinFor(null)} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" data-testid="tenant-delete-modal" onClick={() => setConfirmDel(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <Trash2 className="w-9 h-9 text-red-500 mx-auto" />
+            <p className="text-lg font-black text-slate-900">Huurder verwijderen?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setConfirmDel(null)} data-testid="tenant-delete-cancel"
+                className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
+              <button type="button" onClick={() => doDel(confirmDel)} data-testid="tenant-delete-confirm"
+                className="h-12 rounded-xl bg-red-500 text-white font-black text-sm">Verwijderen</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 

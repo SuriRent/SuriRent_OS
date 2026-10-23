@@ -1,0 +1,44 @@
+{
+  "summary": "Frontend-only test of the kiosk hamburger admin popups (Betalingen, Huurders), Facturen popup regression, the bottom menubar change, and admin /admin regression. Tested on desktop 1600x900 and mobile 390x844 (on mobile the hamburger is hidden by design (hidden md:block), so the popups were opened by dispatching the kiosk-nav 'admin:<id>' event). No data was created, changed or deleted. Every delete/generate/confirm action was cancelled.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KioskAdminPopup / KioskModalShell", "issue": "Two elements share the same data-testid kiosk-popup-{betalingen|huurders}-close: the X button in the header (from KioskModalShell testId+'-close') and the 'Sluiten' button in the footer (KioskAdminPopup). Both work, but the duplicate testid makes test automation ambiguous.", "selector": "[data-testid=kiosk-popup-betalingen-close]", "priority": "LOW"},
+      {"component": "Huurders popup delete", "issue": "Deleting a tenant (from the row trash icon or tenant-detail-delete) uses the browser's native window.confirm('Huurder verwijderen?'). It does not show a confirm inside the popup the way Betalingen (payment-delete-modal) and Facturen do. This behaviour already existed in admin, but it does not meet the 'everything inside the popup' requirement.", "selector": "[data-testid^=tenant-delete-]", "priority": "LOW"},
+      {"component": "Betalingen popup - Verstuur (email) dialog", "issue": "The email dialog renders inside the popup host, but the strip just below the popup header is not dimmed (y~117-132 at 1600x900). Part of the 'Terug' button of the detail view still shows above the dim layer.", "selector": "[data-testid^=payment-email-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Betalingen popup (mobile 390)", "issues": ["The mobile payments list (mp-row) has no search field. payment-search only appears in the desktop layout. This matches admin mobile.", "The 'Registreer betaling' button in the inline form wraps onto 2 lines at 390px width."]},
+      {"screen": "Kiosk mobile", "issues": ["The hamburger admin menu is hidden below md (768px), so admin users cannot reach the Betalingen/Huurders/Facturen popups from the hamburger on a phone. This is by design in the existing code; confirm it is intended."]}
+    ]
+  },
+  "passed_checks": [
+    "The kiosk desktop bottom menubar no longer shows Betalingen (kiosk-payments-viewer-btn-desktop count 0; no payments-viewer testid on mobile either)",
+    "Hamburger -> Betalingen opens kiosk-popup-betalingen-overlay with sm:backdrop-blur-md, month stepper (prev/next works: Sep 2026 shows 2 rows), search (filter 'Kevin' -> 1 row), 4 payment rows, footer Nieuwe betaling + Sluiten. No pending section (no pending data).",
+    "Nieuwe betaling: payment-modal is a descendant of kiosk-popup-betalingen-form, the 'Betalingen' header stays visible, and Annuleren returns to the list",
+    "Payment row -> detail inside popup with Terug, gekoppelde factuur, Wijzig (reassign panel opens), PDF, Verstuur (email dialog inside popup), Beveiligd, Verwijder (payment-delete-modal inside popup; Annuleren closes it)",
+    "Hamburger -> Huurders: search (Jan -> 1 row), filter bar, 5 rows with PIN/poster/delete icons. Nieuwe huurder opens tenant-modal inside the popup and Annuleren closes it. PIN modal opens inside the popup (both from the row and from the detail view). Poster opens a PDF in a new tab. Delete shows a native confirm, which was dismissed.",
+    "Tenant detail inside popup: Terug, gegevens, ID-kaart dropzone, NFC-tag, notes, Bewerk (tenant-modal inside popup, prefilled), Portal PIN, Handtekening, Verwijder",
+    "Mobile 390x844: Betalingen/Huurders popups are full-screen, and the forms open inline below the popup header",
+    "Facturen regression: popup opens, Genereer oktober shows confirm inside popup (cancelled), Jan Pieterse details show 3 invoice rows each with only a trash button, Nieuwe factuur shows inline form with 'HUIS 1A — Jan Pieterse' prefilled",
+    "Admin regression (boekhouder): /admin/payments and /admin/tenants show their headers; Nieuwe betaling/Nieuwe huurder open as full fixed z-[9999] overlays with blur"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "(Low) Give the footer 'Sluiten' button in KioskAdminPopup a unique testid (e.g. kiosk-popup-{id}-footer-close) so it does not collide with the header X",
+    "(Low) Replace window.confirm in Tenants.del with an in-popup confirm, like payment-delete-modal, for consistency with the 'everything inside the popup' requirement",
+    "(Low) Make the dim layer of the email/confirm dialogs cover the whole host area so the 'Terug' button no longer peeks through",
+    "(Optional) Unhandled 'Request failed with status code 403' pageerrors on the admin dashboard for the boekhouder role: add a catch for them"
+  ],
+  "critical_code_review_comments": [
+    "The ModalHostContext + translateZ(0) host makes the fixed-positioned payment-delete-modal (z-50, not portaled) stay inside the popup. This works, but it is fragile: a future fixed overlay with a z-index lower than the footer's would end up behind the footer.",
+    "KioskModalShell decides isMobile from window.innerWidth only at render time and does not re-evaluate it on resize (this was already the case)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "~95% (all requested flows pass; 3 low-priority cosmetic/consistency issues)"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk admin login: get tokens with page.request.post (urllib gets a 403 from Cloudflare) from /api/auth/login (boekhouder) and /api/auth/personal-pin/login (kiosk.medewerker, pin 5566), set localStorage kiosk_token/kiosk_company/admin_token, then go to /kiosk. The hamburger is only visible at md+; on mobile use window.dispatchEvent(new CustomEvent('kiosk-nav',{detail:'admin:betalingen'})). The Facturen popup testid prefix is invoices-modal-*. Admin routes are /my-awesome-rentals-bv/admin/payments and /admin/tenants."
+}

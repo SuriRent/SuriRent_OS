@@ -48,3 +48,8 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - Kiosk medewerker: `kiosk.medewerker@surirent.sr` / `test1234`, PIN `5566` → na e-mail+wachtwoord volgt de PIN op /my-awesome-rentals-bv/login?target=kiosk, daarna naar /kiosk
 - Boekhouder: `boekhouder@surirent.sr` / `test1234`, PIN `6677` → /admin met alleen de financiële tabbladen
 - Volgende keer op hetzelfde apparaat: alleen PIN via `POST /api/auth/personal-pin/login` {email, pin}
+
+## Kiosk met beheerrechten testen (hamburger-menu Facturen/Betalingen/Huurders)
+- POST /api/auth/login boekhouder@surirent.sr/test1234 → token (admin_token)
+- POST /api/auth/personal-pin/login {email:kiosk.medewerker@surirent.sr,pin:5566} → token+company
+- localStorage: kiosk_token, kiosk_company (JSON), admin_token → ga naar /kiosk
