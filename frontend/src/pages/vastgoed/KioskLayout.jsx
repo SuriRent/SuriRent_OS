@@ -221,20 +221,19 @@ const ADMIN_MENU_ITEMS = [
 const HAMBURGER_HIDDEN = ['instellingen'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
 
-// Menu-paneel: telefoon = volledig scherm (zoals het + menu), desktop/iPad = zijpaneel dat inschuift.
-function KioskMenuPanel({ side, title, Icon, items, onClose, testId }) {
+// Menu: telefoon = volledig scherm (zoals het + menu), desktop/iPad = popup in het midden.
+function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
   const { theme } = useContext(KioskThemeCtx);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  const left = side === 'left';
   return createPortal((
-    <div className={`fixed inset-0 z-[120] flex ${left ? 'md:justify-start' : 'md:justify-end'} md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150`}
+    <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 animate-in fade-in duration-150"
       onClick={onClose} data-testid={`${testId}-overlay`}>
       <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
-        className={`w-full h-full md:w-[440px] bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in ${left ? 'md:slide-in-from-left' : 'md:slide-in-from-right'} duration-200 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-2xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
         <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2">
@@ -250,7 +249,7 @@ function KioskMenuPanel({ side, title, Icon, items, onClose, testId }) {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pt-1 md:pt-5 pb-4"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {items.map((t, i) => (
               <button key={t.id} type="button" role="menuitem" data-testid={t.testid} onClick={() => { onClose(); t.onClick(); }}
                 style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
@@ -295,7 +294,7 @@ function KioskSettingsMenu() {
         className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/15">
         <SettingsIcon className="w-6 h-6" />
       </button>
-      {open && <KioskMenuPanel side="right" title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
+      {open && <KioskMenuPanel title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
   );
 }
@@ -319,7 +318,7 @@ function KioskAdminMenu() {
         className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors bg-white/15 hover:bg-white/25">
         <MenuIcon className="w-5 h-5" strokeWidth={2.4} />
       </button>
-      {open && <KioskMenuPanel side="left" title="Beheer" Icon={MenuIcon} items={items} onClose={close} testId="kiosk-admin-menu" />}
+      {open && <KioskMenuPanel title="Beheer" Icon={MenuIcon} items={items} onClose={close} testId="kiosk-admin-menu" />}
     </div>
   );
 }

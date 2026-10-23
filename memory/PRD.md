@@ -998,3 +998,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Tandwiel rechtsboven = KioskSettingsMenu (alleen beheerder, niet boekhouder): elke INSTELLINGEN_SECTIONS apart als popup (id inst-<sectie>, InstellingenHub section-prop). Instellingen uit hamburgermenu; Kasgeld-tegel in hamburgermenu opent bestaand kiosk-Kasgeldscherm. Tandwiel opent niet meer de beheeromgeving.
 - 2026-10: Tandwiel-instellingenmenu ook op telefoon (max-h 75dvh scroll).
 - 2026-10: Beheer- en Instellingenmenu via KioskMenuPanel: telefoon volledig scherm (zoals + sheet), desktop/iPad zijpaneel (Beheer links, Instellingen rechts) met wazige achtergrond. KioskAdminPageTile niet meer gebruikt in KioskLayout.
+- 2026-10: KioskMenuPanel desktop = gecentreerde popup (max-w-2xl, 4 kolommen, gedimd zonder blur); telefoon blijft volledig scherm.
