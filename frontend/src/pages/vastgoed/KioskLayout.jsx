@@ -3985,6 +3985,17 @@ function useBodyScrollLock() {
   }, []);
 }
 
+function KioskHistBtn({ dir, disabled, onClick, white }) {
+  const Ico = dir === 'back' ? ChevronLeft : ChevronRight;
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={`kiosk-bar-${dir}`} aria-label={dir === 'back' ? 'Vorig scherm' : 'Volgend scherm'}
+      className={`shrink-0 w-14 flex flex-col items-center justify-center gap-1 rounded-2xl transition-[background-color,opacity] duration-150 disabled:opacity-35 disabled:cursor-default ${white ? 'text-[#FF5C00] bg-orange-50 enabled:hover:bg-orange-100' : 'text-[#F26A12] bg-white enabled:hover:bg-orange-50'}`}>
+      <Ico className="w-6 h-6" strokeWidth={2.6} />
+      <span className="text-[10px] font-bold">{dir === 'back' ? 'Terug' : 'Volgende'}</span>
+    </button>
+  );
+}
+
 function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false }) {
   const [host, setHost] = useState(null);
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
@@ -4982,6 +4993,30 @@ export default function KioskLayout() {
 
 
   const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
+  // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
+  const hist = useRef({ list: [], i: -1, nav: false });
+  const [, setHistTick] = useState(0);
+  useEffect(() => {
+    const h = hist.current;
+    const keep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
+    if (h.nav) { h.nav = false; return; }
+    if (!keep) return;
+    const cur = h.list[h.i];
+    if (cur && cur.step === step && cur.apartment?.id === apartment?.id) return;
+    h.list = [...h.list.slice(0, h.i + 1), { step, apartment }];
+    h.i = h.list.length - 1;
+    setHistTick((t) => t + 1);
+  }, [step, apartment]);
+  const goHist = (d) => {
+    const h = hist.current;
+    const e = h.list[h.i + d];
+    if (!e) return;
+    h.i += d; h.nav = true;
+    setApartment(e.apartment); setStep(e.step);
+    setHistTick((t) => t + 1);
+  };
+  const canBack = hist.current.i > 0;
+  const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
@@ -5233,9 +5268,10 @@ export default function KioskLayout() {
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
           ook bovenop een geopende modal (modals gebruiken z-[100]). */}
       {showDesktopBar && createPortal((
-        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#F26A12] border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]'}`}
-          data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className="flex items-stretch gap-1 px-2 py-2">
+        <nav ref={barRef} className="hidden md:block fixed bottom-0 left-0 right-0 z-[110] px-3 pt-1 pointer-events-none"
+          data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)' }}>
+          <div className={`pointer-events-auto mx-auto max-w-[1500px] flex items-stretch gap-1.5 p-1.5 rounded-[22px] backdrop-blur-xl ${isWhite ? 'bg-white/90 ring-1 ring-slate-200 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.35)]' : 'bg-[#E85F0C]/95 ring-1 ring-white/25 shadow-[0_18px_40px_-16px_rgba(0,0,0,0.45)]'}`}>
+            <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
             {[
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
@@ -5249,12 +5285,15 @@ export default function KioskLayout() {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
-                  <Icon className="w-7 h-7" strokeWidth={1.8} />
-                  <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
+                  className={`group flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-2xl py-2 px-1 transition-[background-color,color,transform] duration-150 active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white hover:bg-white/15')}`}>
+                  <span className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 group-hover:-translate-y-0.5 ${active ? '' : (isWhite ? 'bg-slate-100 group-hover:bg-orange-100' : 'bg-white/15')}`}>
+                    <Icon className="w-5 h-5" strokeWidth={2} />
+                  </span>
+                  <span className="text-[10px] lg:text-[11px] xl:text-xs font-bold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
               );
             })}
+            <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} />
           </div>
         </nav>
       ), document.body)}

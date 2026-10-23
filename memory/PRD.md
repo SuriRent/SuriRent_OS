@@ -985,3 +985,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Kiosk hamburger Betalingen/Huurders = popup (components/KioskAdminPopup.jsx, KioskModalShell wide+tall) met volledige admin-module (Payments/Tenants prop embedded). KeyboardSafeModal ModalHostContext: binnen popup opent formulier IN de popup. 'Betalingen' uit kiosk desktop-menubalk gehaald.
 - 2026-10: Kiosk hamburger-beheermenu (KioskAdminMenu) nu ook zichtbaar op telefoon, zelfde plek linksboven.
 - 2026-10: Kiosk onderste menubalk (desktop): Dashboard, Contracten (Nieuw contract) en Beheerder verwijderd.
+- 2026-10: Kiosk onderste menubalk (desktop/iPad) nieuwe zwevende stijl met ronde icoonknoppen + Terug/Volgende pijlen (schermgeschiedenis: select/overview/kasgeld, KioskHistBtn, goHist).
