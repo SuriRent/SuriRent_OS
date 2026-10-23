@@ -140,7 +140,7 @@ export function DepositReceiptScreen({ deposit, invoicesCreated = 0, onDone }) {
   }, [p.builtIn, p.others.length, p.bt]);
   return (
     <div className="flex flex-col items-center text-center gap-4" data-testid="deposit-receipt-screen">
-      <CheckCircle2 className="w-14 h-14 text-emerald-500" />
+      <CheckCircle2 className={`w-14 h-14 ${deposit.amount_due > 0 ? 'text-red-500' : 'text-emerald-500'}`} />
       {deposit.status && deposit.status !== 'held' ? (
         <div>
           <p className="text-lg font-black text-slate-900">Borgafrekening</p>

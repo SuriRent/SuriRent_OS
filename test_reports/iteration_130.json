@@ -1,0 +1,56 @@
+{
+  "summary": "Tested the deposit refund settlement (Borg restitueren with damage items, automatic arrears, amount due and a thermal receipt) in backend and kiosk UI. Backend: 10/10 pytest pass (tests/test_deposit_refund_settlement.py). Kiosk UI at 1600x900 (demo@surirent.sr went straight to /kiosk, then Beheer menu > Borg popup): the full flow works.",
+  "backend_test_details": [
+    "refund-preview lists open invoices as 'Huur <mnd> <jaar>' with the remaining amount and the correct arrears_total, and returns 404 for an unknown id.",
+    "Refund on a 6000 borg with damage 4000+3000 (a 0-amount row is filtered out) and 3x2500 arrears returns status partial, amount_due 8500, refund_amount 0 and deduction 14500.",
+    "The result persists in GET /deposits. A second refund returns 400.",
+    "Kiosk print-data has receipt_type deposit_refund and the lines BORGAFREKENING, SCHADE with item descriptions, HUURACHTERSTAND, 'TE BETALEN:', the note and a signature line. receipt.png is a valid PNG.",
+    "When the borg is larger than the deductions, refund_amount is correct and the receipt shows 'TERUG AAN HUURDER:' without 'TE BETALEN'.",
+    "Negative damage amounts are ignored."
+  ],
+  "frontend_test_details": [
+    "'Nieuwe borg' for the seeded TEST tenant (unpaid previous-month invoice) at 6000 creates the deposit.",
+    "The detail's dep-refund-{id} opens refund-modal. refund-arrears-list shows 'Huur sep 2026 SRD 2.500' and 'Huur okt 2026 SRD 2.500'. Initially the green refund-result-back shows 'Terug aan huurder SRD 1.000'.",
+    "Damage rows: add, fill and remove work, and refund-sum-damage updates live (7.999 to 7.000 after removing a row). The red refund-result-due shows 'Huurder moet nog betalen SRD 6.000,00'.",
+    "refund-submit opens deposit-receipt-screen with 'Borgafrekening' and 'Te betalen SRD 6.000,00'. The PNG preview loaded (naturalWidth 392) and shows BORGAFREKENING/SCHADE. 'Klaar' closes it.",
+    "Re-opening the detail shows 'DEELS VERREKEND', deposit-detail-amount-due 'nog te betalen: SRD 6.000,00', and the Restitueer button is gone. dep-print-refund-{id} reopens the receipt with the same amount and Klaar returns to the detail.",
+    "The refund-pdf endpoint returns 200 application/pdf."
+  ],
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_tenant_open_invoices / refund", "issue": "Every unpaid invoice counts as 'huurachterstand', including the current month's invoice that is not yet overdue (it is generated automatically when the borg is registered). A future-dated invoice would also be counted. Consider limiting arrears to due_date <= today, or let the user untick items."},
+      {"endpoint": "GET /api/deposits/{id}/refund-pdf (pdf_gen.deposit_refund_pdf)", "issue": "The PDF proof only shows the total 'Aftrek'. It does not list damage_items or arrears_items and does not show amount_due ('Te betalen'), so it is inconsistent with the new thermal receipt."},
+      {"endpoint": "POST /api/deposits/{id}/refund", "issue": "The open invoices used as arrears stay open (by design: 'no debt record'). The deposit money is effectively applied to them, yet the invoices remain unpaid and the tenant's balance double counts. Product decision; worth flagging to the user."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Deposits list row (dep-row-*)", "issue": "For a settled deposit with amount_due > 0 the subtitle shows 'terugbetaald: SRD 0,00' instead of 'nog te betalen: SRD 6.000,00'.", "selector": "[data-testid^=dep-row-]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Refund submit > Klaar", "issue": "After Klaar the UI returns to the deposits list (onSaved calls setDetail(null)), not to the updated detail. This works but differs from the requested flow.", "affected_selectors": ["[data-testid=deposit-receipt-done]"]}
+    ],
+    "design_issues": [
+      {"screen": "deposit-receipt-screen (refund with amount due)", "issues": ["A green CheckCircle icon is shown next to a red 'Te betalen' amount. Consider an amber or red icon when amount_due > 0."]},
+      {"screen": "refund-modal", "issues": ["At 900px height the summary and result box are below the fold, so the user must scroll to see 'Huurder moet nog betalen'. Consider a sticky result in the footer.", "The modal nested in the Borg popup shows two X close buttons."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_deposit_refund_settlement.py", "/app/test_reports/pytest/pytest_iter130.xml", "/app/test_reports/setup_iter130.py"],
+  "action_items": [
+    "Optional: restrict arrears to overdue invoices (due_date <= today) or make the arrears items selectable",
+    "Update deposit_refund_pdf to list damage/arrears items and amount_due",
+    "List row: show 'nog te betalen' when amount_due > 0 instead of 'terugbetaald: SRD 0,00'",
+    "Optional: return to the updated detail after Klaar; use a non-green icon when amount is due"
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~18.9k lines; the deposit routes and receipt logic should move to a separate module",
+    "The real seeded deposit 'Jan Pieterse' (HUIS 1A) was already DEELS VERREKEND before my UI run (not done by me, likely by the main agent's own testing). Demo data resets every 30 min."
+  ],
+  "updated_files": ["/app/backend/tests/test_deposit_refund_settlement.py", "/app/test_reports/setup_iter130.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST-REF-1/2/3 (pytest) and TEST-REF-UI (UI) apartments, tenants, invoices and deposits. All were cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "demo@surirent.sr/demo1234 currently lands directly in /kiosk (no PIN prompt). The Borg popup opens via kiosk-admin-menu-btn > kiosk-admin-menu-borg, and 'Nieuwe borg' is kiosk-popup-borg-new. POST /api/deposits auto-activates a pending tenant and generates the current-month invoice. The setup script setup_iter130.py (pass 'cleanup' as an argument) seeds a tenant with one past-month invoice."
+}

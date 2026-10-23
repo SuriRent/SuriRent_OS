@@ -135,6 +135,7 @@ function RefundForm({ deposit, onCancel, onSaved }) {
   const cur = deposit.currency;
   const [items, setItems] = useState([{ description: '', amount: '' }]);
   const [preview, setPreview] = useState(null);
+  const [excluded, setExcluded] = useState([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -143,14 +144,14 @@ function RefundForm({ deposit, onCancel, onSaved }) {
     api.get(`/deposits/${deposit.id}/refund-preview`).then(({ data }) => setPreview(data)).catch((e) => setError(formatError(e)));
   }, [deposit.id]);
   const damage = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const arrears = preview?.arrears_total || 0;
+  const arrears = (preview?.arrears_items || []).filter((i) => !excluded.includes(i.invoice_id)).reduce((s, i) => s + i.amount, 0);
   const net = deposit.amount - damage - arrears;
   const submit = async () => {
     setLoading(true); setError('');
     try {
       const { data } = await api.post(`/deposits/${deposit.id}/refund`, {
         damage_items: items.filter((i) => parseFloat(i.amount) > 0).map((i) => ({ description: i.description, amount: parseFloat(i.amount) })),
-        refund_note: note,
+        exclude_invoice_ids: excluded, refund_note: note,
       });
       setDone(data);
     } catch (e) { setError(formatError(e)); }
@@ -184,7 +185,15 @@ function RefundForm({ deposit, onCancel, onSaved }) {
             <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-sm" data-testid="refund-arrears-list">
               {!preview ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
                 : preview.arrears_items.length === 0 ? <p className="text-slate-500">Geen openstaande facturen</p>
-                  : preview.arrears_items.map((i) => <SumRow key={i.invoice_id} label={i.label} value={fmtMoney(i.amount, cur)} />)}
+                  : preview.arrears_items.map((i) => (
+                    <label key={i.invoice_id} className="flex items-center gap-2 cursor-pointer" data-testid={`refund-arrears-item-${i.invoice_id}`}>
+                      <input type="checkbox" checked={!excluded.includes(i.invoice_id)} className="w-4 h-4 accent-[#FF5C00]"
+                        data-testid={`refund-arrears-check-${i.invoice_id}`}
+                        onChange={(e) => setExcluded(e.target.checked ? excluded.filter((x) => x !== i.invoice_id) : [...excluded, i.invoice_id])} />
+                      <span className="flex-1 text-slate-600">{i.label}</span>
+                      <span className="font-semibold text-slate-900">{fmtMoney(i.amount, cur)}</span>
+                    </label>
+                  ))}
             </div>
           </div>
           <div>
@@ -197,26 +206,28 @@ function RefundForm({ deposit, onCancel, onSaved }) {
             <SumRow label="Schade" value={`− ${fmtMoney(damage, cur)}`} testId="refund-sum-damage" cls="text-red-600" />
             <SumRow label="Huurachterstand" value={`− ${fmtMoney(arrears, cur)}`} testId="refund-sum-arrears" cls="text-red-600" />
           </div>
-          {net < 0 ? (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 row-label-value" data-testid="refund-result-due">
-              <span className="text-xs font-bold uppercase tracking-widest text-red-700">Huurder moet nog betalen</span>
-              <span className="text-2xl font-black text-red-600" data-testid="refund-amount-due">{fmtMoney(-net, cur)}</span>
-            </div>
-          ) : (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value" data-testid="refund-result-back">
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terug aan huurder</span>
-              <span className="text-2xl font-black text-slate-900" data-testid="refund-amount-back">{fmtMoney(net, cur)}</span>
-            </div>
-          )}
         </div>
       </KeyboardSafeModal.Body>
-      <KeyboardSafeModal.Footer className="flex gap-3">
+      <KeyboardSafeModal.Footer className="space-y-3">
+        {net < 0 ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 row-label-value" data-testid="refund-result-due">
+            <span className="text-xs font-bold uppercase tracking-widest text-red-700">Huurder moet nog betalen</span>
+            <span className="text-2xl font-black text-red-600" data-testid="refund-amount-due">{fmtMoney(-net, cur)}</span>
+          </div>
+        ) : (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value" data-testid="refund-result-back">
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terug aan huurder</span>
+            <span className="text-2xl font-black text-slate-900" data-testid="refund-amount-back">{fmtMoney(net, cur)}</span>
+          </div>
+        )}
+        <div className="flex gap-3">
         <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
         <button onClick={submit} disabled={loading || !preview} data-testid="refund-submit"
           className="flex-1 h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Afrekenen &amp; bon printen
         </button>
+        </div>
       </KeyboardSafeModal.Footer>
     </KeyboardSafeModal>
   );
@@ -359,7 +370,7 @@ export default function Deposits({ embedded = false }) {
 
         {refunding && <RefundForm deposit={refunding}
           onCancel={() => setRefunding(null)}
-          onSaved={() => { setRefunding(null); setDetail(null); load(); }} />}
+          onSaved={(d) => { setRefunding(null); setDetail(d); load(); }} />}
         {reprint && <ReprintRefund deposit={reprint} onClose={() => setReprint(null)} />}
       </div>
     );
@@ -406,7 +417,10 @@ export default function Deposits({ embedded = false }) {
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 truncate">
                       {d.apartment_number ? `Appt. ${d.apartment_number}` : 'Geen appartement'}
-                      {!isHeld && d.refund_amount !== undefined && d.refund_amount !== null && (
+                      {!isHeld && d.amount_due > 0 && (
+                        <span className="text-red-600 font-semibold"> · nog te betalen: {fmtMoney(d.amount_due, d.currency)}</span>
+                      )}
+                      {!isHeld && !(d.amount_due > 0) && d.refund_amount !== undefined && d.refund_amount !== null && (
                         <span> · terugbetaald: {fmtMoney(d.refund_amount, d.currency)}</span>
                       )}
                     </p>

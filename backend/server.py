@@ -15185,6 +15185,7 @@ class DamageItemIn(BaseModel):
 
 class DepositRefundIn(BaseModel):
     damage_items: List[DamageItemIn] = []
+    exclude_invoice_ids: List[str] = []
     refund_note: Optional[str] = ""
 
 
@@ -15234,7 +15235,8 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
     damage_items = [{"description": (i.description or "").strip() or "Schade", "amount": round(i.amount, 2)}
                     for i in body.damage_items if i.amount > 0]
     damage = round(sum(i["amount"] for i in damage_items), 2)
-    arrears_items = await _tenant_open_invoices(d["company_id"], d["tenant_id"], d.get("currency") or "SRD")
+    arrears_items = [i for i in await _tenant_open_invoices(d["company_id"], d["tenant_id"], d.get("currency") or "SRD")
+                     if i["invoice_id"] not in set(body.exclude_invoice_ids)]
     arrears = round(sum(i["amount"] for i in arrears_items), 2)
     calc = _settle_deposit(float(d["amount"]), damage, arrears)
     from pymongo import ReturnDocument
