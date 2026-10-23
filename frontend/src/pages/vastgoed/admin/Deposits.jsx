@@ -4,6 +4,7 @@ import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight } 
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
+import { DepositReceiptScreen } from '../../../components/KasgeldReceipt';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -95,24 +96,73 @@ export const DEPOSIT_STATUS = {
   partial: { label: 'Deels verrekend', cls: 'bg-sky-100 text-sky-700' },
 };
 
+function SumRow({ label, value, testId, strong, cls = 'text-slate-900' }) {
+  return (
+    <div className="row-label-value">
+      <span className={strong ? 'font-black text-slate-900' : 'text-slate-600'}>{label}</span>
+      <span className={`${strong ? 'font-black' : 'font-semibold'} ${cls}`} data-testid={testId}>{value}</span>
+    </div>
+  );
+}
+
+function DamageRows({ items, setItems }) {
+  const upd = (i, k, v) => setItems(items.map((it, j) => (j === i ? { ...it, [k]: v } : it)));
+  return (
+    <div className="space-y-2">
+      {items.map((it, i) => (
+        <div key={i} className="flex gap-2" data-testid={`refund-damage-row-${i}`}>
+          <input value={it.description} onChange={(e) => upd(i, 'description', e.target.value)} placeholder="Omschrijving (bijv. deur kapot)"
+            data-testid={`refund-damage-desc-${i}`}
+            className="flex-1 min-w-0 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
+          <input type="number" step="0.01" inputMode="decimal" value={it.amount} onChange={(e) => upd(i, 'amount', e.target.value)} placeholder="Bedrag"
+            data-testid={`refund-damage-amount-${i}`}
+            className="w-28 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm" />
+          <button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} data-testid={`refund-damage-remove-${i}`}
+            className="w-11 h-11 shrink-0 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 flex items-center justify-center">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => setItems([...items, { description: '', amount: '' }])} data-testid="refund-damage-add"
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#FF5C00] hover:text-[#E05200]">
+        <Plus className="w-4 h-4" /> Schadepost toevoegen
+      </button>
+    </div>
+  );
+}
+
 function RefundForm({ deposit, onCancel, onSaved }) {
-  const [damage, setDamage] = useState(0);
-  const [arrears, setArrears] = useState(0);
-  const deduction = (parseFloat(damage) || 0) + (parseFloat(arrears) || 0);
+  const cur = deposit.currency;
+  const [items, setItems] = useState([{ description: '', amount: '' }]);
+  const [preview, setPreview] = useState(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const refund = Math.max(deposit.amount - deduction, 0);
+  const [done, setDone] = useState(null);
+  useEffect(() => {
+    api.get(`/deposits/${deposit.id}/refund-preview`).then(({ data }) => setPreview(data)).catch((e) => setError(formatError(e)));
+  }, [deposit.id]);
+  const damage = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const arrears = preview?.arrears_total || 0;
+  const net = deposit.amount - damage - arrears;
   const submit = async () => {
     setLoading(true); setError('');
     try {
       const { data } = await api.post(`/deposits/${deposit.id}/refund`, {
-        deduction_damage: parseFloat(damage) || 0, deduction_arrears: parseFloat(arrears) || 0, refund_note: note,
+        damage_items: items.filter((i) => parseFloat(i.amount) > 0).map((i) => ({ description: i.description, amount: parseFloat(i.amount) })),
+        refund_note: note,
       });
-      onSaved(data);
+      setDone(data);
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }
   };
+  if (done) {
+    return (
+      <KeyboardSafeModal onClose={() => onSaved(done)} testId="refund-receipt-modal">
+        <KeyboardSafeModal.Body><DepositReceiptScreen deposit={done} onDone={() => onSaved(done)} /></KeyboardSafeModal.Body>
+      </KeyboardSafeModal>
+    );
+  }
   return (
     <KeyboardSafeModal onClose={onCancel} testId="refund-modal">
       <KeyboardSafeModal.Header>
@@ -120,40 +170,62 @@ function RefundForm({ deposit, onCancel, onSaved }) {
           <h3 className="text-xl font-black text-slate-900">Borg restitueren</h3>
           <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
-        <p className="text-sm text-slate-500 mt-1">{deposit.tenant_name} — borg {fmtMoney(deposit.amount, deposit.currency)}</p>
+        <p className="text-sm text-slate-500 mt-1">{deposit.tenant_name} — borg {fmtMoney(deposit.amount, cur)}</p>
       </KeyboardSafeModal.Header>
       <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Schadekosten</label>
-            <input type="number" step="0.01" value={damage} onChange={(e) => setDamage(e.target.value)} data-testid="refund-deduction-damage" inputMode="decimal"
-              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Schadeposten</label>
+            <div className="mt-1"><DamageRows items={items} setItems={setItems} /></div>
           </div>
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Achterstallige huur</label>
-            <input type="number" step="0.01" value={arrears} onChange={(e) => setArrears(e.target.value)} data-testid="refund-deduction-arrears" inputMode="decimal"
-              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Huurachterstand (openstaande facturen)</label>
+            <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-sm" data-testid="refund-arrears-list">
+              {!preview ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                : preview.arrears_items.length === 0 ? <p className="text-slate-500">Geen openstaande facturen</p>
+                  : preview.arrears_items.map((i) => <SumRow key={i.invoice_id} label={i.label} value={fmtMoney(i.amount, cur)} />)}
+            </div>
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Toelichting</label>
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="refund-note"
               className="w-full mt-1 px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none resize-none" />
           </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value">
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terugbetaling</span>
-            <span className="text-2xl font-black text-slate-900">{fmtMoney(refund, deposit.currency)}</span>
+          <div className="rounded-xl border border-slate-200 p-3 space-y-1 text-sm" data-testid="refund-summary">
+            <SumRow label="Borg" value={fmtMoney(deposit.amount, cur)} testId="refund-sum-deposit" />
+            <SumRow label="Schade" value={`− ${fmtMoney(damage, cur)}`} testId="refund-sum-damage" cls="text-red-600" />
+            <SumRow label="Huurachterstand" value={`− ${fmtMoney(arrears, cur)}`} testId="refund-sum-arrears" cls="text-red-600" />
           </div>
+          {net < 0 ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 row-label-value" data-testid="refund-result-due">
+              <span className="text-xs font-bold uppercase tracking-widest text-red-700">Huurder moet nog betalen</span>
+              <span className="text-2xl font-black text-red-600" data-testid="refund-amount-due">{fmtMoney(-net, cur)}</span>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value" data-testid="refund-result-back">
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terug aan huurder</span>
+              <span className="text-2xl font-black text-slate-900" data-testid="refund-amount-back">{fmtMoney(net, cur)}</span>
+            </div>
+          )}
         </div>
       </KeyboardSafeModal.Body>
       <KeyboardSafeModal.Footer className="flex gap-3">
         <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-        <button onClick={submit} disabled={loading} data-testid="refund-submit"
+        <button onClick={submit} disabled={loading || !preview} data-testid="refund-submit"
           className="flex-1 h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Restitueer
+          Afrekenen &amp; bon printen
         </button>
       </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
+  );
+}
+
+function ReprintRefund({ deposit, onClose }) {
+  return (
+    <KeyboardSafeModal onClose={onClose} testId="refund-reprint-modal">
+      <KeyboardSafeModal.Body><DepositReceiptScreen deposit={deposit} onDone={onClose} /></KeyboardSafeModal.Body>
     </KeyboardSafeModal>
   );
 }
@@ -169,6 +241,7 @@ export default function Deposits({ embedded = false }) {
   const tenants = tenantsRaw || [];
   const [creating, setCreating] = useState(false);
   const [refunding, setRefunding] = useState(null);
+  const [reprint, setReprint] = useState(null);
   const [detail, setDetail] = useState(null);
   const load = useCallback(async () => {
     await Promise.all([refetchDeposits(), refetchTenants()]);
@@ -220,6 +293,7 @@ export default function Deposits({ embedded = false }) {
               )}
               {detail.deduction_damage > 0 && <p className="text-[11px] text-slate-500">schade: {fmtMoney(detail.deduction_damage, detail.currency)}</p>}
               {detail.deduction_arrears > 0 && <p className="text-[11px] text-slate-500">achterstand: {fmtMoney(detail.deduction_arrears, detail.currency)}</p>}
+              {detail.amount_due > 0 && <p className="text-[11px] font-bold text-red-600" data-testid="deposit-detail-amount-due">nog te betalen: {fmtMoney(detail.amount_due, detail.currency)}</p>}
             </div>
           </div>
         </div>
@@ -269,6 +343,12 @@ export default function Deposits({ embedded = false }) {
                 <FileText className="w-4 h-4" /> PDF bewijs
               </a>
             )}
+            {!isHeld && (
+              <button onClick={() => setReprint(detail)} data-testid={`dep-print-refund-${detail.id}`}
+                className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs sm:text-sm">
+                <FileText className="w-4 h-4" /> Print afrekeningsbon
+              </button>
+            )}
             <button onClick={async () => { if (await del(detail.id)) setDetail(null); }}
               data-testid={`dep-delete-${detail.id}`}
               className="inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-white border-2 border-red-300 hover:bg-red-500 hover:text-white text-red-600 font-bold rounded-xl text-xs sm:text-sm transition">
@@ -280,6 +360,7 @@ export default function Deposits({ embedded = false }) {
         {refunding && <RefundForm deposit={refunding}
           onCancel={() => setRefunding(null)}
           onSaved={() => { setRefunding(null); setDetail(null); load(); }} />}
+        {reprint && <ReprintRefund deposit={reprint} onClose={() => setReprint(null)} />}
       </div>
     );
   }

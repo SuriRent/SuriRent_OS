@@ -141,11 +141,22 @@ export function DepositReceiptScreen({ deposit, invoicesCreated = 0, onDone }) {
   return (
     <div className="flex flex-col items-center text-center gap-4" data-testid="deposit-receipt-screen">
       <CheckCircle2 className="w-14 h-14 text-emerald-500" />
-      <div>
-        <p className="text-lg font-black text-slate-900">Borg ontvangen</p>
-        <p className="text-2xl font-black text-emerald-600" data-testid="deposit-receipt-amount">{fmtMoney(deposit.amount, deposit.currency)}</p>
-        <p className="text-xs text-slate-500">Contract is actief{invoicesCreated ? ` · ${invoicesCreated} factuur aangemaakt` : ' · facturen starten nu'}</p>
-      </div>
+      {deposit.status && deposit.status !== 'held' ? (
+        <div>
+          <p className="text-lg font-black text-slate-900">Borgafrekening</p>
+          {deposit.amount_due > 0 ? (
+            <p className="text-2xl font-black text-red-600" data-testid="deposit-receipt-amount">Te betalen {fmtMoney(deposit.amount_due, deposit.currency)}</p>
+          ) : (
+            <p className="text-2xl font-black text-emerald-600" data-testid="deposit-receipt-amount">Terug {fmtMoney(deposit.refund_amount, deposit.currency)}</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          <p className="text-lg font-black text-slate-900">Borg ontvangen</p>
+          <p className="text-2xl font-black text-emerald-600" data-testid="deposit-receipt-amount">{fmtMoney(deposit.amount, deposit.currency)}</p>
+          <p className="text-xs text-slate-500">Contract is actief{invoicesCreated ? ` · ${invoicesCreated} factuur aangemaakt` : ' · facturen starten nu'}</p>
+        </div>
+      )}
       <div className="w-full max-h-[38vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
         {img ? <img src={img} alt="Borgbon" className="mx-auto w-full max-w-[240px]" /> : <Loader2 className="w-5 h-5 animate-spin mx-auto my-6 text-slate-400" />}
       </div>

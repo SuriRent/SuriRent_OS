@@ -15118,6 +15118,9 @@ class DepositOut(BaseModel):
     deduction_arrears: float = 0
     deduction: float = 0
     refund_amount: float = 0
+    amount_due: float = 0
+    damage_items: List[dict] = []
+    arrears_items: List[dict] = []
     refund_note: Optional[str] = ""
     note: Optional[str] = ""
     created_at: str
@@ -15175,11 +15178,50 @@ async def create_deposit(body: DepositIn, user=Depends(get_current_user)):
     return await _enrich_deposit(doc)
 
 
+class DamageItemIn(BaseModel):
+    description: str
+    amount: float
+
+
 class DepositRefundIn(BaseModel):
-    deduction: float = 0
-    deduction_damage: float = 0
-    deduction_arrears: float = 0
+    damage_items: List[DamageItemIn] = []
     refund_note: Optional[str] = ""
+
+
+_MONTHS_NL = ["", "jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+
+
+async def _tenant_open_invoices(cid: str, tenant_id: str, currency: str) -> list:
+    out = []
+    async for inv in db.invoices.find(
+        {"company_id": cid, "tenant_id": tenant_id, "status": {"$in": list(_UNPAID_STATUSES)}},
+        {"_id": 0, "id": 1, "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1,
+         "period_month": 1, "period_year": 1},
+    ).sort([("period_year", 1), ("period_month", 1)]):
+        if (inv.get("currency") or "SRD") != currency:
+            continue
+        rest = round(max(float(inv.get("amount_due") or inv.get("amount") or 0) - float(inv.get("paid_amount") or 0), 0), 2)
+        if rest <= 0:
+            continue
+        m, y = inv.get("period_month"), inv.get("period_year")
+        label = f"Huur {_MONTHS_NL[int(m)]} {y}" if m and y else "Openstaande factuur"
+        out.append({"invoice_id": inv.get("id"), "label": label, "amount": rest})
+    return out
+
+
+def _settle_deposit(amount: float, damage: float, arrears: float) -> dict:
+    total = round(damage + arrears, 2)
+    return {"deduction": total, "refund_amount": round(max(amount - total, 0), 2),
+            "amount_due": round(max(total - amount, 0), 2)}
+
+
+@api.get("/deposits/{did}/refund-preview")
+async def deposit_refund_preview(did: str, user=Depends(get_current_user)):
+    d = await db.deposits.find_one({"id": did, **scope(user)}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Borg niet gevonden")
+    items = await _tenant_open_invoices(d["company_id"], d["tenant_id"], d.get("currency") or "SRD")
+    return {"arrears_items": items, "arrears_total": round(sum(i["amount"] for i in items), 2)}
 
 
 @api.post("/deposits/{did}/refund", response_model=DepositOut)
@@ -15189,23 +15231,26 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
         raise HTTPException(status_code=404, detail="Borg niet gevonden")
     if d["status"] != "held":
         raise HTTPException(status_code=400, detail="Borg is al gerestitueerd")
-    damage = max(float(body.deduction_damage or 0), 0)
-    arrears = max(float(body.deduction_arrears or 0), 0)
-    deduction = (damage + arrears) if (damage or arrears) else max(float(body.deduction or 0), 0)
-    deduction = min(deduction, float(d["amount"]))
-    refund_amount = max(d["amount"] - deduction, 0)
+    damage_items = [{"description": (i.description or "").strip() or "Schade", "amount": round(i.amount, 2)}
+                    for i in body.damage_items if i.amount > 0]
+    damage = round(sum(i["amount"] for i in damage_items), 2)
+    arrears_items = await _tenant_open_invoices(d["company_id"], d["tenant_id"], d.get("currency") or "SRD")
+    arrears = round(sum(i["amount"] for i in arrears_items), 2)
+    calc = _settle_deposit(float(d["amount"]), damage, arrears)
     from pymongo import ReturnDocument
     updated = await db.deposits.find_one_and_update(
-        {"id": did, **scope(user)},
+        {"id": did, "status": "held", **scope(user)},
         {"$set": {
-            "status": "partial" if deduction > 0 else "refunded", "deduction": deduction,
+            "status": "partial" if calc["deduction"] > 0 else "refunded", **calc,
             "deduction_damage": damage, "deduction_arrears": arrears,
-            "refund_amount": refund_amount,
+            "damage_items": damage_items, "arrears_items": arrears_items,
             "refund_note": body.refund_note or "",
             "refunded_at": iso(now_utc()),
         }},
         projection={"_id": 0}, return_document=ReturnDocument.AFTER,
     )
+    if not updated:
+        raise HTTPException(status_code=400, detail="Borg is al gerestitueerd")
     return await _enrich_deposit(updated)
 
 
@@ -15799,7 +15844,7 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
         return [L(txt, bold=bold)] if len(txt) <= W else [L(label, bold=bold), L(value, bold=bold)]
 
     try:
-        dt = datetime.fromisoformat(str(d.get("created_at")).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(d.get("refunded_at") or d.get("created_at")).replace("Z", "+00:00"))
     except Exception:
         dt = now_utc()
     datum = dt.astimezone(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
@@ -15810,14 +15855,38 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     lines += pair("Huurder:", d.get("tenant_name") or "-")
     if d.get("apartment_number"):
         lines += pair("Appt.:", d["apartment_number"])
-    lines += pair("Methode:", methods.get(d.get("method") or "", d.get("method") or "-"))
-    lines.append(L(dash))
-    lines += pair("Borg:", money(d.get("amount")), bold=True)
-    lines += [L(dash), L("Borg ontvangen.", "center"), L(""), L("")]
+    settled = d.get("status") in ("refunded", "partial")
+    if settled:
+        lines[1] = L("BORGAFREKENING", "center", True)
+        lines += [L(dash)] + pair("Borg:", money(d.get("amount")), bold=True)
+        if d.get("damage_items"):
+            lines += [L(dash), L("SCHADE", bold=True)]
+            for i in d["damage_items"]:
+                lines += pair(f"{i.get('description')}:", "-" + money(i.get("amount")))
+        if d.get("arrears_items"):
+            lines += [L(dash), L("HUURACHTERSTAND", bold=True)]
+            for i in d["arrears_items"]:
+                lines += pair(f"{i.get('label')}:", "-" + money(i.get("amount")))
+        lines += [L(dash)] + pair("Totaal aftrek:", "-" + money(d.get("deduction")), bold=True)
+        lines.append(L(dash))
+        if float(d.get("amount_due") or 0) > 0:
+            lines += pair("TE BETALEN:", money(d.get("amount_due")), bold=True)
+            lines.append(L("Huurder moet dit bedrag nog betalen.", "center"))
+        else:
+            lines += pair("TERUG AAN HUURDER:", money(d.get("refund_amount")), bold=True)
+        if d.get("refund_note"):
+            lines += [L(dash), L(d["refund_note"])]
+        lines += [L(""), L("Handtekening huurder:"), L(""), L("_" * W), L(""), L("")]
+    else:
+        lines += pair("Methode:", methods.get(d.get("method") or "", d.get("method") or "-"))
+        lines.append(L(dash))
+        lines += pair("Borg:", money(d.get("amount")), bold=True)
+        lines += [L(dash), L("Borg ontvangen.", "center"), L(""), L("")]
+    shown = d.get("amount_due") if settled and float(d.get("amount_due") or 0) > 0 else (d.get("refund_amount") if settled else d.get("amount"))
     return {
-        "template": "lines", "receipt_type": "deposit",
+        "template": "lines", "receipt_type": "deposit_refund" if settled else "deposit",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": d.get("created_by_name") or "",
-        "datum": datum, "bedrag": money(d.get("amount")),
+        "datum": datum, "bedrag": money(shown),
         "lettergrootte": font_size, "textZoom": text_zoom,
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
         "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
