@@ -388,3 +388,4 @@ html { scroll-behavior: smooth; }
   body > *:not(#bon) { display: none !important; }
   #bon { display: block !important; width: 54mm; max-width: 54mm; margin: 0 auto; }
 }
+[data-kiosk-host] .fixed.inset-0 { margin: 0 !important; }

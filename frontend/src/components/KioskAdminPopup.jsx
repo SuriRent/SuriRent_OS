@@ -3,6 +3,8 @@ import { Loader2, Plus } from 'lucide-react';
 import { KIOSK_ADMIN_PAGES } from './KioskAdminInvoices';
 
 const NEW = {
+  locaties: { label: 'Nieuwe locatie', event: 'kiosk-loc-new' },
+  appartementen: { label: 'Nieuw appartement', event: 'kiosk-apt-new' },
   betalingen: { label: 'Nieuwe betaling', event: 'quick-pay-open' },
   huurders: { label: 'Nieuwe huurder', event: 'kiosk-tenant-new' },
 };

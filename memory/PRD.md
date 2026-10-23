@@ -989,3 +989,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Menubalk-stijl teruggezet naar de vorige (volle breedte); Terug/Volgende pijlen behouden.
 - 2026-10: Kiosk Financieel overzicht: Terug-knop + naamregel weg op desktop/iPad (telefoon houdt Terug), bovenpadding weg, huurdernaam/appt + foto (OverviewTenantPhoto, initialen als terugval) in de kaart.
 - 2026-10: Kiosk Kasgeld: Terug/Kiosk/Kasgeldbeheer-regel weg op desktop/iPad (telefoon houdt Terug), bovenpadding weg.
+- 2026-10: Kiosk hamburgermenu volgorde Locaties, Appartementen, Huurders, Betalingen, Facturen. Locaties (admin/Locations.jsx) en Appartementen (AdminDashboard Apartments, nu export) als popup (embedded prop, events kiosk-loc-new/kiosk-apt-new). components/EmbedConfirm.jsx: bevestiging binnen popup. CSS [data-kiosk-host] .fixed.inset-0 margin 0 (space-y fix).

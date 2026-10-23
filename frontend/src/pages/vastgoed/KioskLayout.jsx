@@ -4058,7 +4058,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
             <X className="w-6 h-6 sm:w-5 sm:h-5 text-white sm:text-slate-500" strokeWidth={2.5} />
           </button>
         </div>
-        <div ref={tall ? setHost : undefined} style={tall ? { transform: 'translateZ(0)' } : undefined} className="relative flex-1 min-h-0 flex flex-col">
+        <div ref={tall ? setHost : undefined} data-kiosk-host={tall ? '' : undefined} style={tall ? { transform: 'translateZ(0)' } : undefined} className="relative flex-1 min-h-0 flex flex-col">
         {/* Body — witte scrollbare content. `overscroll-contain` voorkomt
             dat de scroll doorlekt naar de underlying page op iOS. */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4 bg-white"
@@ -5038,7 +5038,7 @@ export default function KioskLayout() {
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
-      else if (e.detail === 'admin:betalingen' || e.detail === 'admin:huurders') setAdminPopup(e.detail.slice(6));
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail);
     };
     window.addEventListener('kiosk-nav', onNav);

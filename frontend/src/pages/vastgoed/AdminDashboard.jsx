@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { useEmbedConfirm } from '../../components/EmbedConfirm';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './admin/instellingenSections';
@@ -2141,7 +2142,8 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
 // =====================================================================
 
 
-function Apartments() {
+export function Apartments({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   // SWR cache — bij tabwissel data instant uit cache, revalidate in bg.
   const { data: itemsRaw, mutate: refetchApts, isLoading: loadingA } = useApiSWR('/apartments');
   const { data: tenantsRaw, mutate: refetchTenants, isLoading: loadingT } = useApiSWR('/tenants');
@@ -2170,12 +2172,14 @@ function Apartments() {
       const d = e.detail || {};
       if (d.type === 'apartment' && d.id) setDetailId(d.id);
     };
+    const onNew = () => { setDetailId(null); setCreating(true); };
     window.addEventListener('focus-entity', handler);
-    return () => window.removeEventListener('focus-entity', handler);
+    window.addEventListener('kiosk-apt-new', onNew);
+    return () => { window.removeEventListener('focus-entity', handler); window.removeEventListener('kiosk-apt-new', onNew); };
   }, []);
 
   const del = async (id) => {
-    if (!window.confirm('Appartement verwijderen?')) return;
+    if (!(await askConfirm('Appartement verwijderen?'))) return;
     await api.delete(`/apartments/${id}`);
     setDetailId(null); load();
   };
@@ -2184,7 +2188,7 @@ function Apartments() {
     setAssignFor(null); load();
   };
   const removeT = async (id) => {
-    if (!window.confirm('Huurder loskoppelen?')) return;
+    if (!(await askConfirm('Huurder loskoppelen?'))) return;
     await api.post(`/apartments/${id}/remove-tenant`);
     load();
   };
@@ -2225,6 +2229,7 @@ function Apartments() {
       {plateFor && (
         <PlateSizeModal apt={plateFor} onClose={() => setPlateFor(null)} />
       )}
+      {confirmNode}
     </>
   );
 
@@ -2268,12 +2273,12 @@ function Apartments() {
   };
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="apartments-page">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="apartments-page">
       {/* Header — inline titel + subtitel + oranje "Nieuw" knop. Zelfde
           patroon als Huurders/Betalingsregelingen. Op verzoek gebruiker
           (2026-02): NAAST elkaar blijven ook op mobiel — dus flex-nowrap
           en compacte "Nieuw" label op smalle schermen. */}
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Appartementen</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">

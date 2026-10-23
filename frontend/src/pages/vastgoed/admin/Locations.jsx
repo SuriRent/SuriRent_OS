@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { MapPin, Plus, Pencil, Trash2, X, Check, Loader2, Building2, Image as ImageIcon, Search, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
@@ -78,7 +79,8 @@ function LocationForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Locations() {
+export default function Locations({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   // SWR cache — tabwissel toont instant vanuit cache
   const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
   const items = itemsRaw || [];
@@ -94,7 +96,7 @@ export default function Locations() {
   // useAutoRefresh(load, { interval: 45000, ... }) uitgeschakeld.
 
   const del = async (loc) => {
-    if (!window.confirm(`Locatie "${loc.name}" verwijderen? Appartementen worden ontkoppeld.`)) return;
+    if (!(await askConfirm(`Locatie "${loc.name}" verwijderen? Appartementen worden ontkoppeld.`))) return;
     await api.delete(`/locations/${loc.id}`);
     setDetailId(null);
     load();
@@ -102,10 +104,20 @@ export default function Locations() {
 
   // Shared modals — ook in detail-view zichtbaar zodat Bewerk-actie meteen
   // opent (i.p.v. pas na Terug).
-  const sharedModals = (creating || editing) ? (
-    <LocationForm initial={editing} onCancel={() => { setCreating(false); setEditing(null); }}
-      onSaved={() => { setCreating(false); setEditing(null); load(); }} />
-  ) : null;
+  useEffect(() => {
+    const onNew = () => { setDetailId(null); setCreating(true); };
+    window.addEventListener('kiosk-loc-new', onNew);
+    return () => window.removeEventListener('kiosk-loc-new', onNew);
+  }, []);
+  const sharedModals = (
+    <>
+      {(creating || editing) && (
+        <LocationForm initial={editing} onCancel={() => { setCreating(false); setEditing(null); }}
+          onSaved={() => { setCreating(false); setEditing(null); load(); }} />
+      )}
+      {confirmNode}
+    </>
+  );
 
   // Detail-view — dezelfde patroon als Appartementen/Huurders.
   if (detailId) {
@@ -137,8 +149,8 @@ export default function Locations() {
   };
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="locations-page">
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="locations-page">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Locaties</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">
@@ -193,7 +205,7 @@ export default function Locations() {
         </div>
       )}
 
-      {(creating || editing) && sharedModals}
+      {sharedModals}
     </div>
   );
 }

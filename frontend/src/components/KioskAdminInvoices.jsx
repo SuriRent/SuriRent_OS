@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { FileSignature, Loader2, ArrowLeft, CreditCard, Users } from 'lucide-react';
+import { FileSignature, Loader2, ArrowLeft, CreditCard, Users, MapPin, Home } from 'lucide-react';
 
 // Volledige beheer-pagina's die in de kiosk (hamburgermenu) geopend kunnen worden.
 export const KIOSK_ADMIN_PAGES = {
-  facturen: { label: 'Facturen', Icon: FileSignature, custom: true, Page: lazy(() => import('./KioskInvoicesPage')) },
-  betalingen: { label: 'Betalingen', Icon: CreditCard, Page: lazy(() => import('../pages/vastgoed/admin/Payments')) },
+  locaties: { label: 'Locaties', Icon: MapPin, Page: lazy(() => import('../pages/vastgoed/admin/Locations')) },
+  appartementen: { label: 'Appartementen', Icon: Home, Page: lazy(() => import('../pages/vastgoed/AdminDashboard').then((m) => ({ default: m.Apartments }))) },
   huurders: { label: 'Huurders', Icon: Users, Page: lazy(() => import('../pages/vastgoed/AdminDashboard').then((m) => ({ default: m.Tenants }))) },
+  betalingen: { label: 'Betalingen', Icon: CreditCard, Page: lazy(() => import('../pages/vastgoed/admin/Payments')) },
+  facturen: { label: 'Facturen', Icon: FileSignature, custom: true, Page: lazy(() => import('./KioskInvoicesPage')) },
 };
 
 export function KioskAdminPageTile({ id, onOpen }) {
