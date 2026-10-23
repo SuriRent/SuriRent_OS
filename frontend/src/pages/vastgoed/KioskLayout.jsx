@@ -26,6 +26,7 @@ import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
@@ -212,10 +213,56 @@ function MobileAddFab({ onOpen }) {
 const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
 
 // Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
-const ADMIN_MENU_ITEMS = [];
+const ADMIN_MENU_ITEMS = [
+  { id: 'kasgeld', label: 'Kasgeld', Icon: Wallet, onClick: () => window.dispatchEvent(new CustomEvent('go-tab', { detail: 'kasgeld' })) },
+];
 
 // Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
+const HAMBURGER_HIDDEN = ['instellingen'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
+
+// Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
+function KioskSettingsMenu() {
+  const { isAdmin } = useContext(KioskThemeCtx);
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get('/auth/me').then((r) => setRole(r?.data?.role || null)).catch(() => {});
+  }, [isAdmin]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+  if (!isAdmin || !role || role === 'boekhouder') return null;
+  return (
+    <div ref={ref} className="relative hidden md:block">
+      <button type="button" onClick={() => setOpen((v) => !v)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
+        className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${open ? 'bg-white/30' : 'hover:bg-white/15'}`}>
+        {open ? <X className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
+      </button>
+      {open && (
+        <div data-testid="kiosk-settings-menu" role="menu"
+          className="absolute right-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-5 animate-in fade-in slide-in-from-top-2 duration-150">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Instellingen</p>
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+            {INSTELLINGEN_SECTIONS.map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" role="menuitem" data-testid={`kiosk-settings-menu-${id}`}
+                onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${id}` })); }}
+                className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 ring-1 ring-slate-100 p-5 text-sm font-bold text-slate-800 text-center transition-colors">
+                <span className="w-12 h-12 rounded-xl bg-orange-100 text-[#FF5C00] flex items-center justify-center"><Icon className="w-6 h-6" /></span>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
@@ -247,14 +294,15 @@ function KioskAdminMenu() {
           className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-4 md:p-5 animate-in fade-in slide-in-from-top-2 duration-150">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
           <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-            {Object.keys(KIOSK_ADMIN_PAGES).filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)).map((id) => (
+            {Object.keys(KIOSK_ADMIN_PAGES).filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))).map((id) => (
               <KioskAdminPageTile key={id} id={id} onOpen={(pid) => { setOpen(false); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${pid}` })); }} />
             ))}
               {ADMIN_MENU_ITEMS.map(({ id, label, Icon, onClick }) => (
                 <button key={id} type="button" role="menuitem" data-testid={`kiosk-admin-menu-${id}`}
                   onClick={() => { setOpen(false); onClick(); }}
-                  className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 p-4 text-sm font-bold text-slate-800 transition-colors">
-                  <Icon className="w-6 h-6 text-[#FF5C00]" /> {label}
+                  className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 hover:bg-orange-50 ring-1 ring-slate-100 p-5 text-sm font-bold text-slate-800 transition-colors">
+                  <span className="w-12 h-12 rounded-xl bg-orange-100 text-[#FF5C00] flex items-center justify-center"><Icon className="w-6 h-6" /></span>
+                  {label}
                 </button>
               ))}
           </div>
@@ -319,10 +367,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
           <Users className="w-5 h-5" />
         </button>
         <span className="hidden md:block w-px h-8 bg-white/40" />
-        <button type="button" onClick={onAdmin} data-testid="kiosk-header-settings" aria-label="Beheerder"
-          className="hidden md:flex w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-white transition-colors">
-          <SettingsIcon className="w-6 h-6" />
-        </button>
+        <KioskSettingsMenu />
       </div>
     </div>
   );

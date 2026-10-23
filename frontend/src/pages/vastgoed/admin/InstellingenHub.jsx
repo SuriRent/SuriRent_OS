@@ -26,10 +26,10 @@ const RENDER = {
   backup: () => <BackupRestore />,
 };
 
-export default function InstellingenHub({ embedded = false }) {
+export default function InstellingenHub({ embedded = false, section = null }) {
   const location = useLocation();
   const navigate = useBrandedNavigate();
-  const [sec, setSec] = useState('bedrijf');
+  const [sec, setSec] = useState(section || 'bedrijf');
   const active = embedded ? sec : activeInstellingenSection(location.hash);
   const current = INSTELLINGEN_SECTIONS.find((s) => s.id === active);
   const Icon = current.icon;
@@ -42,7 +42,7 @@ export default function InstellingenHub({ embedded = false }) {
       const sub = ev?.detail?.integrationsSection;
       if (s === 'integraties') s = sub || 'smtp';
       if (!s) return;
-      if (embedded) setSec(s);
+      if (embedded) window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${s}` }));
       else navigate(`/admin/instellingen#${s}`, { replace: true });
     };
     window.addEventListener('go-instellingen-section', onDeepLink);
@@ -51,7 +51,7 @@ export default function InstellingenHub({ embedded = false }) {
 
   return (
     <div data-testid="instellingen-hub" className="w-full max-w-none">
-      {embedded && (
+      {embedded && !section && (
         <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto pb-1" data-testid="instellingen-tabs">
           {INSTELLINGEN_SECTIONS.map((s) => {
             const I = s.icon;
@@ -64,7 +64,7 @@ export default function InstellingenHub({ embedded = false }) {
           })}
         </div>
       )}
-      <div className={`${embedded ? 'mb-4' : 'mb-6'} flex items-start gap-3`}>
+      <div className={`${section ? 'hidden' : embedded ? 'mb-4 flex' : 'mb-6 flex'} items-start gap-3`}>
         <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] flex items-center justify-center shadow-[0_8px_18px_-6px_rgba(255,92,0,0.45)] shrink-0">
           <Icon className="w-5 h-5 text-white" strokeWidth={2.4} />
         </div>

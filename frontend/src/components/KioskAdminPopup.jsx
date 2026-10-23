@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { KIOSK_ADMIN_PAGES } from './KioskAdminInvoices';
+import { INSTELLINGEN_SECTIONS } from '../pages/vastgoed/admin/instellingenSections';
 
 const NEW = {
   onderhoud: { label: 'Nieuw ticket', event: 'kiosk-maint-new' },
@@ -15,7 +16,10 @@ const NEW = {
 
 // Betalingen / Huurders als popup in de stijl van Facturen — volledige beheer-module erin.
 export function KioskAdminPopup({ id, Shell, onClose }) {
-  const { Page, label, Icon } = KIOSK_ADMIN_PAGES[id];
+  const inst = id.startsWith('inst-') ? INSTELLINGEN_SECTIONS.find((x) => x.id === id.slice(5)) : null;
+  const { Page, label, Icon } = inst
+    ? { Page: KIOSK_ADMIN_PAGES.instellingen.Page, label: inst.label, Icon: inst.icon }
+    : KIOSK_ADMIN_PAGES[id];
   const nw = NEW[id];
   useEffect(() => {
     document.body.classList.add('kiosk-admin-active');
@@ -36,7 +40,7 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
   return (
     <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide tall>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
-        <Page embedded />
+        <Page embedded section={inst?.id} />
       </Suspense>
     </Shell>
   );
