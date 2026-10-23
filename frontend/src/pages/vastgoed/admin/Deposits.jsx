@@ -96,7 +96,7 @@ export const DEPOSIT_STATUS = {
   partial: { label: 'Deels verrekend', cls: 'bg-sky-100 text-sky-700' },
 };
 
-function SumRow({ label, value, testId, strong, cls = 'text-slate-900' }) {
+export function SumRow({ label, value, testId, strong, cls = 'text-slate-900' }) {
   return (
     <div className="row-label-value">
       <span className={strong ? 'font-black text-slate-900' : 'text-slate-600'}>{label}</span>
@@ -105,7 +105,7 @@ function SumRow({ label, value, testId, strong, cls = 'text-slate-900' }) {
   );
 }
 
-function DamageRows({ items, setItems }) {
+export function DamageRows({ items, setItems }) {
   const upd = (i, k, v) => setItems(items.map((it, j) => (j === i ? { ...it, [k]: v } : it)));
   return (
     <div className="space-y-2">

@@ -5932,6 +5932,7 @@ async def tenant_portal_login(body: TenantLoginIn, request: Request, response: R
     ]}
     if digits:
         query["$or"].append({"phone_digits": digits})
+    query["status"] = {"$ne": "archived"}
     tenant = await db.tenants.find_one(query)
     if not tenant or not tenant.get("pin_hash"):
         _pin_throttle_fail(throttle_key)
@@ -6036,7 +6037,7 @@ async def tenant_portal_nfc_login(body: TenantNfcLoginIn, request: Request, resp
     throttle_key = f"tenant-nfc:{_client_ip(request)}:{cid}"
     _pin_throttle_check(throttle_key)
     tenant = await db.tenants.find_one(
-        {"company_id": cid, "nfc_card_id": uid},
+        {"company_id": cid, "nfc_card_id": uid, "status": {"$ne": "archived"}},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "apartment_id": 1},
     )
     if not tenant:
@@ -6240,7 +6241,7 @@ async def tenant_portal_pin_login(body: TenantPinLoginIn, request: Request, resp
     throttle_key = f"tenant-pin:{_client_ip(request)}:{cid}"
     _pin_throttle_check(throttle_key)
     cursor = db.tenants.find(
-        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}},
+        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "pin_hash": 1, "company_id": 1, "apartment_id": 1},
     )
     match = None
@@ -7498,7 +7499,7 @@ async def _enrich_tenant(t: dict) -> dict:
 
 
 async def _tenants_enriched(user: dict) -> list:
-    docs = await db.tenants.find(scope(user), {"_id": 0}).sort("name", 1).to_list(1000)
+    docs = await db.tenants.find({**scope(user), "status": {"$ne": "archived"}}, {"_id": 0}).sort("name", 1).to_list(1000)
     aids = list({d["apartment_id"] for d in docs if d.get("apartment_id")})
     apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1, "rent_amount": 1, "currency": 1}).to_list(None)
     a_by = {a["id"]: a for a in apts}
@@ -15254,6 +15255,135 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
     if not updated:
         raise HTTPException(status_code=400, detail="Borg is al gerestitueerd")
     return await _enrich_deposit(updated)
+
+
+class MoveOutIn(BaseModel):
+    move_out_date: str
+    damage_items: List[DamageItemIn] = []
+    exclude_invoice_ids: List[str] = []
+    refund_note: Optional[str] = ""
+
+
+def _after_month(inv: dict, d) -> bool:
+    return (int(inv.get("period_year") or 0), int(inv.get("period_month") or 0)) > (d.year, d.month)
+
+
+async def _move_out_context(cid: str, t: dict, move_out_date: str) -> dict:
+    try:
+        d = datetime.strptime(move_out_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ongeldige vertrekdatum")
+    dep = await db.deposits.find_one({"company_id": cid, "tenant_id": t["id"], "status": "held"},
+                                     {"_id": 0}, sort=[("created_at", -1)])
+    apt = await db.apartments.find_one({"id": t.get("apartment_id")}, {"_id": 0, "currency": 1, "rent_amount": 1}) if t.get("apartment_id") else None
+    cur = (dep or {}).get("currency") or (apt or {}).get("currency") or "SRD"
+    future = []
+    async for inv in db.invoices.find({"company_id": cid, "tenant_id": t["id"], "status": {"$in": list(_UNPAID_STATUSES)}},
+                                      {"_id": 0, "id": 1, "period_month": 1, "period_year": 1, "paid_amount": 1}):
+        if _after_month(inv, d) and not float(inv.get("paid_amount") or 0):
+            future.append(inv["id"])
+    open_items = [i for i in await _tenant_open_invoices(cid, t["id"], cur) if i["invoice_id"] not in future]
+    return {"date": d, "deposit": dep, "currency": cur, "future_ids": future, "open_items": open_items}
+
+
+@api.get("/tenants/{tenant_id}/move-out-preview")
+async def tenant_move_out_preview(tenant_id: str, move_out_date: str, user=Depends(get_current_user)):
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    ctx = await _move_out_context(t["company_id"], t, move_out_date)
+    dep = ctx["deposit"]
+    return {"deposit_amount": float((dep or {}).get("amount") or 0), "deposit_id": (dep or {}).get("id"),
+            "currency": ctx["currency"], "arrears_items": ctx["open_items"],
+            "future_invoices_removed": len(ctx["future_ids"])}
+
+
+@api.post("/tenants/{tenant_id}/move-out")
+async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_role("admin", "superadmin", "boekhouder"))):
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    if t.get("status") == "archived":
+        raise HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
+    cid = t["company_id"]
+    ctx = await _move_out_context(cid, t, body.move_out_date)
+    cur, dep = ctx["currency"], ctx["deposit"]
+    if ctx["future_ids"]:
+        await db.invoices.delete_many({"id": {"$in": ctx["future_ids"]}, "company_id": cid})
+    arrears_items = [i for i in ctx["open_items"] if i["invoice_id"] not in set(body.exclude_invoice_ids)]
+    arrears = round(sum(i["amount"] for i in arrears_items), 2)
+    damage_items = [{"description": (i.description or "").strip() or "Schade", "amount": round(i.amount, 2)}
+                    for i in body.damage_items if i.amount > 0]
+    damage = round(sum(i["amount"] for i in damage_items), 2)
+    amount = float((dep or {}).get("amount") or 0)
+    settle = round(min(amount, arrears), 2)
+    if settle > 0:
+        pid, rno, paid_at = new_id(), await _next_receipt_number(), iso(now_utc())
+        await db.payments.insert_one({
+            "id": pid, "company_id": cid, "tenant_id": tenant_id, "apartment_id": t.get("apartment_id"),
+            "amount": settle, "currency": cur, "method": "borgverrekening", "category": "huur",
+            "note": "Verrekend met borg bij vertrek", "received_by": user.get("name") or "",
+            "receipt_number": rno, "paid_at": paid_at, "status": "approved", "created_at": paid_at,
+        })
+        await _allocate_payment_to_invoices([i["invoice_id"] for i in arrears_items], settle, pid,
+                                            paid_at=paid_at, method="borgverrekening", receipt_number=rno)
+    calc = _settle_deposit(amount, damage, arrears)
+    fields = {"status": "partial" if calc["deduction"] > 0 else "refunded", **calc,
+              "deduction_damage": damage, "deduction_arrears": arrears,
+              "damage_items": damage_items, "arrears_items": arrears_items,
+              "refund_note": body.refund_note or "", "refunded_at": iso(now_utc()), "move_out": True}
+    if dep:
+        await db.deposits.update_one({"id": dep["id"]}, {"$set": fields})
+        did = dep["id"]
+    else:
+        did = new_id()
+        await db.deposits.insert_one({"id": did, "company_id": cid, "tenant_id": tenant_id, "amount": 0,
+                                      "currency": cur, "note": "Vertrek zonder borg", "created_at": iso(now_utc()), **fields})
+    date_s = ctx["date"].isoformat()
+    await db.contracts.update_many({"company_id": cid, "tenant_id": tenant_id},
+                                   {"$set": {"active": False, "status": "ended", "end_date": date_s}})
+    apt_number = None
+    if t.get("apartment_id"):
+        a = await db.apartments.find_one({"id": t["apartment_id"]}, {"_id": 0, "number": 1})
+        apt_number = (a or {}).get("number")
+        await db.apartments.update_one({"id": t["apartment_id"], "tenant_id": tenant_id},
+                                       {"$set": {"tenant_id": None, "status": "vacant"}})
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+        "status": "archived", "archived_at": iso(now_utc()), "move_out_date": date_s,
+        "archived_apartment_id": t.get("apartment_id"), "archived_apartment_number": apt_number,
+        "apartment_id": None, "outstanding_after_move_out": calc["amount_due"], "currency_at_move_out": cur,
+        "move_out_deposit_id": did}})
+    d_doc = await db.deposits.find_one({"id": did}, {"_id": 0})
+    return {"deposit": await _enrich_deposit(d_doc), "settled_invoices": settle}
+
+
+@api.get("/tenants/archived")
+async def list_archived_tenants(user=Depends(get_current_user)):
+    return await db.tenants.find({**scope(user), "status": "archived"},
+                                 {"_id": 0, "pin_hash": 0}).sort("archived_at", -1).to_list(1000)
+
+
+class ReactivateIn(BaseModel):
+    apartment_id: Optional[str] = None
+
+
+@api.post("/tenants/{tenant_id}/reactivate")
+async def tenant_reactivate(tenant_id: str, body: ReactivateIn, user=Depends(require_role("admin", "superadmin", "boekhouder"))):
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
+    aid = body.apartment_id or t.get("archived_apartment_id")
+    if aid:
+        res = await db.apartments.update_one(
+            {"id": aid, "company_id": t["company_id"], "status": {"$in": ["vacant", "available"]},
+             "$or": [{"tenant_id": None}, {"tenant_id": {"$exists": False}}]},
+            {"$set": {"tenant_id": tenant_id, "status": "occupied"}})
+        if not res.modified_count:
+            raise HTTPException(status_code=409, detail="Appartement is niet meer beschikbaar")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+        "status": "active", "apartment_id": aid, "deposit_required": True, "deposit_status": "pending",
+        "reactivated_at": iso(now_utc())}, "$unset": {"deposit_id": ""}})
+    return await _enrich_tenant(await db.tenants.find_one({"id": tenant_id}, {"_id": 0}))
 
 
 @api.delete("/deposits/{did}")

@@ -1,0 +1,220 @@
+import { useEffect, useState } from 'react';
+import { Archive, Check, Loader2, LogOut, RotateCcw, X } from 'lucide-react';
+import { api, formatError, fmtMoney } from '../lib/api';
+import { useApiSWR } from '../lib/swr';
+import KeyboardSafeModal from './KeyboardSafeModal';
+import { DepositReceiptScreen } from './KasgeldReceipt';
+import { DamageRows, SumRow } from '../pages/vastgoed/admin/Deposits';
+
+const today = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('nl-NL') : '—');
+
+function ArrearsList({ preview, excluded, setExcluded, cur }) {
+  if (!preview) return <Loader2 className="w-4 h-4 animate-spin text-slate-400" />;
+  if (!preview.arrears_items.length) return <p className="text-slate-500">Geen openstaande facturen</p>;
+  const toggle = (id, on) => setExcluded(on ? excluded.filter((x) => x !== id) : [...excluded, id]);
+  return preview.arrears_items.map((i) => (
+    <label key={i.invoice_id} className="flex items-center gap-2 cursor-pointer" data-testid={`moveout-arrears-item-${i.invoice_id}`}>
+      <input type="checkbox" checked={!excluded.includes(i.invoice_id)} onChange={(e) => toggle(i.invoice_id, e.target.checked)}
+        className="w-4 h-4 accent-[#FF5C00]" data-testid={`moveout-arrears-check-${i.invoice_id}`} />
+      <span className="flex-1 text-slate-600">{i.label}</span>
+      <span className="font-semibold text-slate-900">{fmtMoney(i.amount, cur)}</span>
+    </label>
+  ));
+}
+
+function ResultBox({ net, cur }) {
+  return net < 0 ? (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-3 row-label-value" data-testid="moveout-result-due">
+      <span className="text-xs font-bold uppercase tracking-widest text-red-700">Huurder moet nog betalen</span>
+      <span className="text-2xl font-black text-red-600" data-testid="moveout-amount-due">{fmtMoney(-net, cur)}</span>
+    </div>
+  ) : (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value" data-testid="moveout-result-back">
+      <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Borg terug aan huurder</span>
+      <span className="text-2xl font-black text-slate-900" data-testid="moveout-amount-back">{fmtMoney(net, cur)}</span>
+    </div>
+  );
+}
+
+export function TenantMoveOutModal({ tenant, onClose, onDone }) {
+  const [date, setDate] = useState(today());
+  const [preview, setPreview] = useState(null);
+  const [items, setItems] = useState([{ description: '', amount: '' }]);
+  const [excluded, setExcluded] = useState([]);
+  const [note, setNote] = useState('');
+  const [step, setStep] = useState('form');
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(null);
+  useEffect(() => {
+    if (!date) return;
+    setPreview(null);
+    api.get(`/tenants/${tenant.id}/move-out-preview`, { params: { move_out_date: date } })
+      .then(({ data }) => setPreview(data)).catch((e) => setError(formatError(e)));
+  }, [tenant.id, date]);
+  const cur = preview?.currency || tenant.currency || 'SRD';
+  const damage = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const arrears = (preview?.arrears_items || []).filter((i) => !excluded.includes(i.invoice_id)).reduce((s, i) => s + i.amount, 0);
+  const borg = preview?.deposit_amount || 0;
+  const net = borg - arrears - damage;
+  const submit = async () => {
+    setStep('saving'); setError('');
+    try {
+      const { data } = await api.post(`/tenants/${tenant.id}/move-out`, {
+        move_out_date: date, exclude_invoice_ids: excluded, refund_note: note,
+        damage_items: items.filter((i) => parseFloat(i.amount) > 0).map((i) => ({ description: i.description, amount: parseFloat(i.amount) })),
+      });
+      setDone(data.deposit);
+    } catch (e) { setError(formatError(e)); setStep('confirm'); }
+  };
+  if (done) {
+    return (
+      <KeyboardSafeModal onClose={onDone} testId="moveout-receipt-modal">
+        <KeyboardSafeModal.Body>
+          <DepositReceiptScreen deposit={done} onDone={onDone} />
+          <p className="text-xs text-center text-slate-500 mt-3" data-testid="moveout-archived-note">Appartement staat weer op beschikbaar · huurder is gearchiveerd</p>
+        </KeyboardSafeModal.Body>
+      </KeyboardSafeModal>
+    );
+  }
+  return (
+    <KeyboardSafeModal onClose={onClose} testId="moveout-modal">
+      <KeyboardSafeModal.Header>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-black text-slate-900">Uitgang huurder</h3>
+          <button onClick={onClose} data-testid="moveout-close" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
+        </div>
+        <p className="text-sm text-slate-500 mt-1">{tenant.name}{tenant.apartment_number ? ` — Appt. ${tenant.apartment_number}` : ''}</p>
+      </KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
+        {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="moveout-error">{error}</div>}
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Vertrekdatum</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="moveout-date"
+              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+            {preview?.future_invoices_removed > 0 && (
+              <p className="text-xs text-amber-700 mt-1" data-testid="moveout-future-note">{preview.future_invoices_removed} factuur/facturen na de vertrekmaand worden verwijderd.</p>
+            )}
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">1. Openstaande facturen (verrekend met borg)</label>
+            <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-sm" data-testid="moveout-arrears-list">
+              <ArrearsList preview={preview} excluded={excluded} setExcluded={setExcluded} cur={cur} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">2. Schadekosten</label>
+            <div className="mt-1"><DamageRows items={items} setItems={setItems} /></div>
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Toelichting</label>
+            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="moveout-note"
+              className="w-full mt-1 px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none resize-none" />
+          </div>
+          <div className="rounded-xl border border-slate-200 p-3 space-y-1 text-sm" data-testid="moveout-summary">
+            <SumRow label="Borg" value={fmtMoney(borg, cur)} testId="moveout-sum-deposit" />
+            <SumRow label="Openstaande facturen" value={`− ${fmtMoney(arrears, cur)}`} testId="moveout-sum-arrears" cls="text-red-600" />
+            <SumRow label="Schade" value={`− ${fmtMoney(damage, cur)}`} testId="moveout-sum-damage" cls="text-red-600" />
+          </div>
+        </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="space-y-3">
+        <ResultBox net={net} cur={cur} />
+        {step === 'form' ? (
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+            <button onClick={() => setStep('confirm')} disabled={!preview || !date} data-testid="moveout-next"
+              className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+              <LogOut className="w-4 h-4" /> Afrekenen
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2" data-testid="moveout-confirm">
+            <p className="text-xs text-slate-600 text-center">Facturen worden verrekend, de bon wordt geprint, het appartement komt vrij en de huurder wordt gearchiveerd.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setStep('form')} disabled={step === 'saving'} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Terug</button>
+              <button onClick={submit} disabled={step === 'saving'} data-testid="moveout-submit"
+                className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                {step === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Bevestig uitgang
+              </button>
+            </div>
+          </div>
+        )}
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
+  );
+}
+
+function ReactivateModal({ tenant, onClose, onDone }) {
+  const { data: apts } = useApiSWR('/apartments');
+  const free = (apts || []).filter((a) => ['vacant', 'available'].includes(a.status) && !a.tenant_id);
+  const origFree = free.some((a) => a.id === tenant.archived_apartment_id);
+  const [aid, setAid] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { if (origFree) setAid(tenant.archived_apartment_id); }, [origFree, tenant.archived_apartment_id]);
+  const go = async () => {
+    setBusy(true); setError('');
+    try { await api.post(`/tenants/${tenant.id}/reactivate`, { apartment_id: aid || null }); onDone(); }
+    catch (e) { setError(formatError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <KeyboardSafeModal onClose={onClose} testId="reactivate-modal">
+      <KeyboardSafeModal.Header><h3 className="text-xl font-black text-slate-900">Huurder heractiveren</h3></KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
+        {error && <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="reactivate-error">{error}</div>}
+        <p className="text-sm text-slate-600 mb-3">{tenant.name} wordt weer actief. Een nieuwe borg is nodig voordat facturen starten.</p>
+        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Appartement (alleen vrije)</label>
+        <select value={aid} onChange={(e) => setAid(e.target.value)} data-testid="reactivate-apartment"
+          className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none bg-white">
+          <option value="">— Zonder appartement —</option>
+          {free.map((a) => <option key={a.id} value={a.id}>{a.number}{a.id === tenant.archived_apartment_id ? ' (vorig appartement)' : ''}</option>)}
+        </select>
+        {!origFree && tenant.archived_apartment_number && <p className="text-xs text-amber-700 mt-1" data-testid="reactivate-orig-taken">Vorig appartement {tenant.archived_apartment_number} is niet meer vrij.</p>}
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onClose} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={go} disabled={busy} data-testid="reactivate-confirm"
+          className="flex-1 h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />} Heractiveren
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
+  );
+}
+
+function ArchivedRow({ t, onReactivate }) {
+  const due = t.outstanding_after_move_out || 0;
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3" data-testid={`archived-tenant-${t.id}`}>
+      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0"><Archive className="w-4 h-4" /></div>
+      <div className="flex-1 min-w-0">
+        <p className="font-black text-slate-900 truncate">{t.name}</p>
+        <p className="text-xs text-slate-500">
+          {t.archived_apartment_number ? `Appt. ${t.archived_apartment_number} · ` : ''}vertrokken {fmtDate(t.move_out_date)}
+        </p>
+        {due > 0 && <p className="text-xs font-bold text-red-600" data-testid={`archived-due-${t.id}`}>Nog te betalen: {fmtMoney(due, t.currency_at_move_out || 'SRD')}</p>}
+      </div>
+      <button onClick={onReactivate} data-testid={`archived-reactivate-${t.id}`}
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs">
+        <RotateCcw className="w-3.5 h-3.5" /> Heractiveren
+      </button>
+    </div>
+  );
+}
+
+export function ArchivedTenants({ onChanged }) {
+  const { data, mutate } = useApiSWR('/tenants/archived');
+  const [react, setReact] = useState(null);
+  if (!data) return <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto my-6" />;
+  return (
+    <div className="space-y-2" data-testid="archived-tenants-list">
+      {data.length === 0 ? (
+        <div className="bg-white rounded-2xl p-10 text-center shadow-sm text-slate-500 font-semibold" data-testid="archived-empty">Archief is leeg.</div>
+      ) : data.map((t) => <ArchivedRow key={t.id} t={t} onReactivate={() => setReact(t)} />)}
+      {react && <ReactivateModal tenant={react} onClose={() => setReact(null)}
+        onDone={() => { setReact(null); mutate(); onChanged?.(); }} />}
+    </div>
+  );
+}

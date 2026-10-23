@@ -17,6 +17,7 @@ import {
   ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
   UserCircle, Sparkles, StickyNote, Scissors,
 } from 'lucide-react';
+import { TenantMoveOutModal, ArchivedTenants } from '../../components/TenantMoveOut';
 import Cropper from 'react-easy-crop';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -2312,9 +2313,9 @@ export function Apartments({ embedded = false }) {
               filter === f.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}>
             {f.l}
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+            {f.c !== undefined && <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
               filter === f.v ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
-            }`}>{f.c}</span>
+            }`}>{f.c}</span>}
           </button>
         ))}
       </div>
@@ -3208,6 +3209,7 @@ export function Tenants({ embedded = false }) {
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [pinFor, setPinFor] = useState(null);
+  const [moveOut, setMoveOut] = useState(null);
   const [detailId, setDetailId] = useState(null);  // huurder in detail-view
   const [backfilling, setBackfilling] = useState(false);
   // POLLING VERWIJDERD (per user verzoek 2026-02-28): SWR cache + SSE
@@ -3254,6 +3256,9 @@ export function Tenants({ embedded = false }) {
           onCancel={() => { setEditing(null); setCreating(false); }}
           onSaved={() => { setEditing(null); setCreating(false); load(); }} />
       )}
+      {moveOut && <TenantMoveOutModal tenant={moveOut}
+        onClose={() => setMoveOut(null)}
+        onDone={() => { setMoveOut(null); setDetailId(null); load(); }} />}
       {pinFor && <TenantPinModal tenant={pinFor}
         onCancel={() => setPinFor(null)}
         onSaved={() => setPinFor(null)} />}
@@ -3284,6 +3289,7 @@ export function Tenants({ embedded = false }) {
           onBack={() => setDetailId(null)}
           onEdit={() => setEditing(t)}
           onPin={() => setPinFor(t)}
+          onMoveOut={() => setMoveOut(t)}
           onDelete={() => del(t.id)}
           onReload={load} />
         {sharedModals}
@@ -3354,6 +3360,7 @@ export function Tenants({ embedded = false }) {
           { v: 'all', l: 'Alles', c: counts.all },
           { v: 'with_apt', l: 'Met appartement', c: counts.with_apt },
           { v: 'without_apt', l: 'Zonder appartement', c: counts.without_apt },
+          { v: 'archived', l: 'Archief' },
         ].map((f) => (
           <button key={f.v} onClick={() => setFilter(f.v)}
             data-testid={`tenant-filter-${f.v}`}
@@ -3370,7 +3377,9 @@ export function Tenants({ embedded = false }) {
         ))}
       </div>
 
-      {!loaded ? (
+      {filter === 'archived' ? (
+        <ArchivedTenants onChanged={load} />
+      ) : !loaded ? (
         <ListSkeleton rows={5} testid="tenants-skeleton" />
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="tenants-empty">
@@ -3575,7 +3584,7 @@ function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
 // - Persoonsgegevens (geboortedatum, ID-nummer) inzichtelijk
 // - Actie-grid: Bewerk / Portal PIN / Portal Poster / Verwijder
 // =====================================================================
-function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) {
+function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload }) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
@@ -3777,8 +3786,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
             className="h-11 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center gap-1.5">
             <PenTool className="w-3.5 h-3.5" /> {t.signature_url ? 'Bekijk handtekening' : 'Handtekening'}
           </button>
+          <button onClick={onMoveOut} data-testid="tenant-detail-move-out"
+            className="h-11 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm flex items-center justify-center gap-1.5 col-span-2 sm:col-span-2">
+            <LogOut className="w-3.5 h-3.5" /> Uitgang starten
+          </button>
           <button onClick={onDelete} data-testid="tenant-detail-delete"
-            className="h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm flex items-center justify-center gap-1.5 col-span-2 sm:col-span-4">
+            className="h-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm flex items-center justify-center gap-1.5 col-span-2 sm:col-span-2">
             <Trash2 className="w-3.5 h-3.5" /> Verwijder
           </button>
         </div>
