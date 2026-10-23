@@ -904,6 +904,19 @@ function takeOverview(tid) {
   return hit && Date.now() - hit.at < 15000 ? hit.p : fetchOverview(tid);
 }
 
+function OverviewTenantPhoto({ src, name }) {
+  const [bad, setBad] = useState(false);
+  const url = src && !/^https?:/.test(src) ? `${process.env.REACT_APP_BACKEND_URL}${src}` : src;
+  const ini = (name || '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-orange-100 ring-4 ring-orange-50 flex items-center justify-center" data-testid="overview-tenant-photo">
+      {url && !bad
+        ? <img src={url} alt={name || ''} className="w-full h-full object-cover" onError={() => setBad(true)} />
+        : <span className="text-base sm:text-lg font-black text-[#FF5C00]">{ini}</span>}
+    </div>
+  );
+}
+
 function TenantOverview({ apartment, onBack, onPay }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1050,22 +1063,25 @@ function TenantOverview({ apartment, onBack, onPay }) {
   ];
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+    <div className="h-full bg-orange-500 flex flex-col pt-[1.5vh] md:pt-0" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
+      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="overview-back"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
-        <div className="text-right text-white">
-          <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
-          <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
-        </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3">
         <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col p-4 sm:p-5 min-w-0">
           <div className="flex items-center justify-between mb-3 gap-2">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">Financieel overzicht</h3>
+            <div className="flex items-center gap-3 min-w-0">
+              <OverviewTenantPhoto src={apartment?.tenant_avatar_url || tenant.avatar_url || apartment?.tenant_id_photo_url} name={tenant.name} />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">Financieel overzicht</p>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 truncate" data-testid="overview-tenant-name">{tenant.name}</h3>
+                <p className="text-xs text-slate-500">Appt. {apt.number}</p>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5">
               <ShareVoiceButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
