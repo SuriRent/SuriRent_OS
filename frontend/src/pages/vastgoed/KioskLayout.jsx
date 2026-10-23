@@ -5237,16 +5237,12 @@ export default function KioskLayout() {
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             {[
-              { id: 'dashboard', label: 'Dashboard', icon: Home, testid: 'kiosk-nav-dashboard',
-                onClick: () => { setStep('select'); window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'dashboard' })); } },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => setShowAddLocation(true) },
-              { id: 'contracts', label: 'Contracten', icon: FileText, testid: 'kiosk-add-contract-btn-desktop', onClick: () => setShowAddContract(true) },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
               { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
-              { id: 'admin', label: 'Beheerder', icon: ShieldCheck, testid: 'kiosk-admin-btn-desktop', onClick: adminMode },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => setStep('kasgeld') },
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ].map(({ id, label, icon: Icon, testid, onClick }) => {
