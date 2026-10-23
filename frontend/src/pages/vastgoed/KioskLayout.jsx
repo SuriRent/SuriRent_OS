@@ -305,7 +305,7 @@ function KioskSettingsMenu() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-        className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/15">
+        className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
         <SettingsIcon className="w-6 h-6" />
       </button>
       {open && <KioskMenuPanel title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
@@ -4739,7 +4739,7 @@ export default function KioskLayout() {
       else if (key === 'kasgeld') setStep('kasgeld');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
-      else if (key === 'admin') adminRef.current?.();
+      else if (key === 'admin') { if (localStorage.getItem('admin_token')) window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
   }, []);
