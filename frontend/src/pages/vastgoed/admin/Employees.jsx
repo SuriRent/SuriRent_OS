@@ -373,7 +373,7 @@ export default function Employees({ embedded = false }) {
               <p className="text-slate-500 font-semibold">Geen werknemers.</p></div>
           ) : (
             <>
-            <div className="md:hidden divide-y divide-slate-100" data-testid="emp-cards">
+            <div className={`${embedded ? '' : 'md:hidden'} divide-y divide-slate-100`} data-testid="emp-cards">
               {employees.map((e) => (
                 <div key={e.id} data-testid={`emp-card-${e.id}`} className="p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -397,7 +397,7 @@ export default function Employees({ embedded = false }) {
                 </div>
               ))}
             </div>
-            <table className="hidden md:table w-full text-sm">
+            <table className={`${embedded ? 'hidden' : 'hidden md:table'} w-full text-sm`}>
               <thead className="bg-slate-50/70 text-left">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="px-5 py-3">Naam</th>

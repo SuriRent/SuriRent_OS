@@ -120,7 +120,7 @@ export default function KioskDevices() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3" data-testid="kiosk-devices-printer-hint">
-        Het printertype (KT-V520 of Bluetooth) kies je nu onder <a href="#bon-printer" className="font-bold text-[#FF5C00] underline">Instellingen → Bon printer</a>.
+        Het printertype (KT-V520 of Bluetooth) kies je nu onder <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('go-instellingen-section', { detail: { section: 'bon-printer' } }))} className="font-bold text-[#FF5C00] underline">Instellingen → Bon printer</button>.
       </p>
       <PrinterList />
       <DevicesSeen />

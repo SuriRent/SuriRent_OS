@@ -215,7 +215,7 @@ const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin
 const ADMIN_MENU_ITEMS = [];
 
 // Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
-const BOEKHOUDER_KIOSK_PAGES = ['huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
+const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
 
 function KioskAdminMenu() {
   const { isAdmin } = useContext(KioskThemeCtx);
@@ -4614,6 +4614,21 @@ export default function KioskLayout() {
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
   const closeInvoices = useCallback(() => setShowInvoicesModal(false), []);
   const [adminPopup, setAdminPopup] = useState(null);
+  // Links in embedded beheer-pagina's (go-tab) openen de juiste kiosk-popup.
+  useEffect(() => {
+    const MAP = { tenants: 'huurders', payments: 'betalingen', apartments: 'appartementen', locations: 'locaties',
+      contracts: 'contracten', payment_plans: 'regelingen', deposits: 'borg', maintenance: 'onderhoud',
+      employees: 'werknemers', notifications: 'notificaties', instellingen: 'instellingen', settings: 'instellingen', overview: 'overzicht' };
+    const onTab = (e) => {
+      const t = typeof e.detail === 'string' ? e.detail : e.detail?.tab;
+      setAdminPopup(null);
+      if (t === 'invoices') setShowInvoicesModal(true);
+      else if (t === 'kasgeld') setStep('kasgeld');
+      else if (MAP[t]) setAdminPopup(MAP[t]);
+    };
+    window.addEventListener('go-tab', onTab);
+    return () => window.removeEventListener('go-tab', onTab);
+  }, []);
   const [tenantPrefill, setTenantPrefill] = useState(null);
   const [scanToast, setScanToast] = useState(null);
   // Desktop: ID-scan van de telefoon van dezelfde gebruiker → Nieuwe huurder opent ingevuld.

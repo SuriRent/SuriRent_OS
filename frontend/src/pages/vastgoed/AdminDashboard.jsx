@@ -1435,7 +1435,7 @@ function PaymentPlansList() {
   );
 }
 
-function Overview() {
+export function Overview({ embedded = false }) {
   // SWR — instant zichtbaar bij terug-navigeren; live-sync via SSE
   // (AdminDashboard globalMutate) refresht /admin/stats automatisch
   // zodra een mutatie ergens in de app plaatsvindt. Geen polling meer.
@@ -1500,10 +1500,10 @@ function Overview() {
 
   return (
     <div>
-      <PageHeader title="Overzicht" subtitle="Snelle blik op uw vastgoedportefeuille" />
+      {!embedded && <PageHeader title="Overzicht" subtitle="Snelle blik op uw vastgoedportefeuille" />}
 
       {/* Mobile/tablet: combined "Portfolio in één oogopslag" card with 4 mini-stats */}
-      <div className="lg:hidden bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 mb-4" data-testid="portfolio-card-mobile">
+      <div className={`${embedded ? '' : 'lg:hidden'} bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 mb-4`} data-testid="portfolio-card-mobile">
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Portfolio in één oogopslag</p>
         <div className="grid grid-cols-4 divide-x divide-slate-100">
           {cards.map((c) => {
@@ -1529,7 +1529,7 @@ function Overview() {
                   → Snelle acties (4 knoppen)
                   → Status overzicht + Activiteiten (bestaand)
       */}
-      <div className="hidden lg:block">
+      <div className={embedded ? 'hidden' : 'hidden lg:block'}>
         {/* ============ HERO · Kas Saldo Banking-stijl ============ */}
         <div
           className="relative overflow-hidden rounded-3xl mb-5 p-7 text-white shadow-[0_24px_60px_-24px_rgba(15,23,42,0.55)]"
@@ -1794,7 +1794,7 @@ function Overview() {
       </div>
 
       {/* MOBIEL/TABLET — bestaande hero behouden + verborgen op lg */}
-      <div className="lg:hidden">
+      <div className={embedded ? '' : 'lg:hidden'}>
         {/* Inkomsten + Openstaand — strakke witte card */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 mb-4 grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-2 min-w-0">
@@ -1832,7 +1832,7 @@ function Overview() {
       {/* Betalingsregelingen + Laatste activiteiten — 2 koloms op desktop.
           Status Overzicht (donut + huurstatus) is vervangen door een
           scrollable lijst van actieve betalingsregelingen. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 mb-4 lg:mb-5">
+      <div className={`grid grid-cols-1 ${embedded ? "" : "lg:grid-cols-3"} gap-4 lg:gap-5 mb-4 lg:mb-5`}>
         <PaymentPlansList />
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 lg:p-5" data-testid="recent-activity-card">
@@ -1856,7 +1856,7 @@ function Overview() {
       </div>
 
       {/* CTA's onderaan — alleen op mobiel/tablet (desktop heeft Quick Actions bar) */}
-      <div className="grid sm:grid-cols-2 gap-3 lg:hidden">
+      <div className={embedded ? 'hidden' : 'grid sm:grid-cols-2 gap-3 lg:hidden'}>
         <button onClick={async () => {
             try { localStorage.setItem('pwa_preferred_role', 'kiosk'); } catch { /* noop */ }
             try {

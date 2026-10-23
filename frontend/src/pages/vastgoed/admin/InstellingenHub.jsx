@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../../lib/branded-nav';
 import MijnAbonnement from './MijnAbonnement';
@@ -26,10 +26,11 @@ const RENDER = {
   backup: () => <BackupRestore />,
 };
 
-export default function InstellingenHub() {
+export default function InstellingenHub({ embedded = false }) {
   const location = useLocation();
   const navigate = useBrandedNavigate();
-  const active = activeInstellingenSection(location.hash);
+  const [sec, setSec] = useState('bedrijf');
+  const active = embedded ? sec : activeInstellingenSection(location.hash);
   const current = INSTELLINGEN_SECTIONS.find((s) => s.id === active);
   const Icon = current.icon;
 
@@ -40,15 +41,30 @@ export default function InstellingenHub() {
       let s = ev?.detail?.section;
       const sub = ev?.detail?.integrationsSection;
       if (s === 'integraties') s = sub || 'smtp';
-      if (s) navigate(`/admin/instellingen#${s}`, { replace: true });
+      if (!s) return;
+      if (embedded) setSec(s);
+      else navigate(`/admin/instellingen#${s}`, { replace: true });
     };
     window.addEventListener('go-instellingen-section', onDeepLink);
     return () => window.removeEventListener('go-instellingen-section', onDeepLink);
-  }, [navigate]);
+  }, [navigate, embedded]);
 
   return (
     <div data-testid="instellingen-hub" className="w-full max-w-none">
-      <div className="mb-6 flex items-start gap-3">
+      {embedded && (
+        <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto pb-1" data-testid="instellingen-tabs">
+          {INSTELLINGEN_SECTIONS.map((s) => {
+            const I = s.icon;
+            return (
+              <button key={s.id} type="button" onClick={() => setSec(s.id)} data-testid={`instellingen-tab-${s.id}`}
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${active === s.id ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-orange-50'}`}>
+                <I className="w-4 h-4" /> {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className={`${embedded ? 'mb-4' : 'mb-6'} flex items-start gap-3`}>
         <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] flex items-center justify-center shadow-[0_8px_18px_-6px_rgba(255,92,0,0.45)] shrink-0">
           <Icon className="w-5 h-5 text-white" strokeWidth={2.4} />
         </div>
