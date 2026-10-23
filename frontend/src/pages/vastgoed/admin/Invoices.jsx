@@ -26,7 +26,7 @@ import CreditSourcesPopover from './invoices/CreditSourcesPopover';
 const PAGE_SIZE = 25;
 const pageFetcher = async (url) => (await api.get(url)).data;
 
-export default function Invoices() {
+export default function Invoices({ kiosk = false }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tab, setTab] = useState('all');            // 'all' | 'open' | 'paid'
@@ -100,6 +100,16 @@ export default function Invoices() {
     } catch (e) { setToast({ type: 'err', text: formatError(e) }); }
     finally { setGenerating(false); }
   };
+
+  // Kiosk: knoppen staan in een aparte kaart en sturen events.
+  useEffect(() => {
+    if (!kiosk) return undefined;
+    const onGen = () => generateMonth();
+    const onNew = () => setCreating(true);
+    window.addEventListener('invoices-generate', onGen);
+    window.addEventListener('invoices-new', onNew);
+    return () => { window.removeEventListener('invoices-generate', onGen); window.removeEventListener('invoices-new', onNew); };
+  });
 
   // Groepeer per pagina en behoud de server-volgorde (severity → bedrag → naam).
   const groups = useMemo(() => (pages || []).flatMap((pg) => {
@@ -185,6 +195,8 @@ export default function Invoices() {
             tenantName={creditSourcesFor.tenant_name}
             onClose={() => setCreditSourcesFor(null)} />
         )}
+        {creating && <InvoiceForm tenants={tenants}
+          onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
         {toast && <Toast toast={toast} onDone={() => setToast(null)} />}
       </>
     );
@@ -258,6 +270,7 @@ export default function Invoices() {
 
       {/* ============= DESKTOP (>= md) ============= */}
       <div className="hidden md:block space-y-4 sm:space-y-5">
+        {!kiosk && <>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Facturen</h1>
@@ -292,6 +305,7 @@ export default function Invoices() {
             hint={`${MONTHS_NL[today.getMonth()].toLowerCase()} ${today.getFullYear()}`}
             tone="green" testid="kpi-this-month" />
         </div>
+        </>}
 
         <div className="bg-white rounded-2xl border border-orange-100 px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2" data-testid="invoice-tabs">
           <Tab v="all" tab={tab} setTab={setTab} label={`Alle (${allCount})`} testid="tab-all" />
