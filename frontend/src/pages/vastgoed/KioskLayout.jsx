@@ -26,6 +26,7 @@ import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
@@ -4261,89 +4262,13 @@ function AddContractModal({ onClose, onSaved }) {
 // =====================================================================
 // Nieuwe factuur modal — kiest tenant + period, backend berekent bedrag.
 // =====================================================================
-function AddInvoiceModal({ onClose, onSaved }) {
+// Nieuwe factuur vanuit de menubalk — zelfde formulier als beheer (incl. Historische achterstand).
+function KioskInvoiceFormModal({ onClose, onSaved }) {
   const [tenants, setTenants] = useState([]);
-  const [tenantId, setTenantId] = useState('');
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-
-  useEffect(() => {
-    let alive = true;
-    api.get('/tenants').then((r) => {
-      if (!alive) return;
-      setTenants((Array.isArray(r?.data) ? r.data : []).filter((t) => t.apartment_id));
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
-  const save = async () => {
-    if (!tenantId) { setErr('Kies een huurder'); return; }
-    setSaving(true); setErr('');
-    try {
-      const r = await api.post('/invoices', {
-        tenant_id: tenantId,
-        period_month: Number(month),
-        period_year: Number(year),
-      });
-      onSaved && onSaved(r?.data);
-    } catch (e) { setErr(formatError(e)); }
-    finally { setSaving(false); }
-  };
-
+  useEffect(() => { api.get('/tenants').then((r) => setTenants(Array.isArray(r?.data) ? r.data : [])).catch(() => {}); }, []);
   return (
-    <KioskModalShell title="Nieuwe factuur" Icon={Receipt}
-      testId="add-invoice" onClose={onClose}
-      footer={(
-        <button onClick={save} disabled={saving || !tenantId}
-          data-testid="add-invoice-save"
-          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          {saving ? 'Opslaan…' : 'Factuur opslaan'}
-        </button>
-      )}>
-      {({ accent }) => (
-        <>
-          <label className="block">
-            <span className={modalLabelCls}>Huurder *</span>
-            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}
-              data-testid="add-invoice-tenant"
-              className={`${modalInputCls(accent)} bg-white`}>
-              <option value="">— Kies huurder —</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}{t.apartment_number ? ` · Appt. ${t.apartment_number}` : ''}</option>
-              ))}
-            </select>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className={modalLabelCls}>Maand *</span>
-              <select value={month} onChange={(e) => setMonth(e.target.value)}
-                data-testid="add-invoice-month"
-                className={`${modalInputCls(accent)} bg-white`}>
-                {MONTHS_NL.map((m, idx) => (
-                  <option key={idx + 1} value={idx + 1}>{m}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={modalLabelCls}>Jaar *</span>
-              <input type="number" min="2020" max="2100" value={year}
-                onChange={(e) => setYear(e.target.value)}
-                data-testid="add-invoice-year" className={modalInputCls(accent)} />
-            </label>
-          </div>
-          <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3">
-            Het bedrag wordt automatisch berekend op basis van de huurprijs van het appartement.
-          </div>
-          {err && (
-            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
-              data-testid="add-invoice-error">{err}</div>
-          )}
-        </>
-      )}
+    <KioskModalShell title="Facturen" Icon={Receipt} testId="add-invoice" onClose={onClose}>
+      <InvoiceForm inline tenants={tenants} onCancel={onClose} onSaved={onSaved} />
     </KioskModalShell>
   );
 }
@@ -5228,7 +5153,7 @@ export default function KioskLayout() {
           onSaved={() => setShowAddContract(false)} />
       )}
       {showAddInvoice && (
-        <AddInvoiceModal
+        <KioskInvoiceFormModal
           onClose={() => setShowAddInvoice(false)}
           onSaved={() => setShowAddInvoice(false)} />
       )}
@@ -5289,13 +5214,13 @@ export default function KioskLayout() {
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
             {[
-              { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
-              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => setShowAddLocation(true) },
+              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
+              { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
-              { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => setStep('kasgeld') },
+              { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ].map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
