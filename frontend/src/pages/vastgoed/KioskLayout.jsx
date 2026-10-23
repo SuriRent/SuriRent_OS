@@ -1252,6 +1252,15 @@ function TenantOverview({ apartment, onBack, onPay }) {
                   const nextM = (np && Number(np.month)) || (now.getMonth() + 1);
                   const nextY = (np && Number(np.year)) || now.getFullYear();
                   const nextLabel = `${MONTHS_NL[nextM - 1]} ${nextY}`;
+                  if (tenant.deposit_pending) return (
+                    <div className="flex flex-col items-center" data-testid="overview-deposit-first">
+                      <ShieldCheck className="w-12 h-12 text-sky-600 mb-2" />
+                      <p className="text-lg font-extrabold text-slate-900">Eerst de borg</p>
+                      <p className="text-xs text-slate-500 mb-3 max-w-xs">Huur betalen kan pas nadat de borg is geregistreerd.</p>
+                      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: { ...tenant, apartment_number: apt.number, rent_amount: apt.rent_amount, currency: apt.currency } }))}
+                        className="h-12 px-6 rounded-xl bg-[#FF5C00] text-white font-black">Borg betalen</button>
+                    </div>
+                  );
                   return (
                 <>
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-3">

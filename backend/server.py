@@ -15170,6 +15170,8 @@ async def create_deposit(body: DepositIn, user=Depends(get_current_user)):
     }
     await db.deposits.insert_one(doc)
     doc.pop("_id", None)
+    if t.get("deposit_required") and t.get("deposit_status") != "paid":
+        await _activate_after_deposit(cid, body.tenant_id, doc["id"])
     return await _enrich_deposit(doc)
 
 
@@ -15210,6 +15212,9 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
 @api.delete("/deposits/{did}")
 async def delete_deposit(did: str, user=Depends(get_current_user)):
     await db.deposits.delete_one({"id": did, **scope(user)})
+    # Borg verwijderd → huurder weer "wacht op borg" (alleen nieuwe-huurder-flow).
+    await db.tenants.update_one({"deposit_id": did, "deposit_required": True, **scope(user)},
+                                {"$set": {"deposit_status": "pending"}, "$unset": {"deposit_id": ""}})
     return {"ok": True}
 
 
@@ -15723,9 +15728,19 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
 
 class KioskDepositPayIn(BaseModel):
     amount: float
-    currency: str = "SRD"
-    method: str = "cash"
+    currency: Literal["SRD", "USD", "EUR"] = "SRD"
+    method: Literal["cash", "pin", "bank"] = "cash"
     note: Optional[str] = ""
+
+
+async def _activate_after_deposit(cid: str, tenant_id: str, deposit_id: str) -> int:
+    """Borg ontvangen → contract actief + facturen huidige maand starten."""
+    await db.tenants.update_one({"id": tenant_id, "company_id": cid},
+                                {"$set": {"deposit_status": "paid", "deposit_id": deposit_id}})
+    await db.contracts.update_many({"tenant_id": tenant_id, "company_id": cid}, {"$set": {"active": True}})
+    n = now_utc()
+    gen = await _generate_month_invoices_for_company(cid, n.month, n.year, only_tenant_id=tenant_id)
+    return gen.get("created", 0)
 
 
 @api.post("/kiosk/tenants/{tenant_id}/deposit-payment")
@@ -15735,10 +15750,13 @@ async def kiosk_deposit_payment(tenant_id: str, body: KioskDepositPayIn, _sessio
     t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    if t.get("deposit_status") == "paid":
-        raise HTTPException(status_code=400, detail="Borg is al betaald")
     if body.amount <= 0:
         raise HTTPException(status_code=400, detail="Bedrag moet groter dan 0 zijn")
+    # Atomair: voorkomt dubbele borg bij dubbel tikken.
+    lock = await db.tenants.update_one({"id": tenant_id, "company_id": cid, "deposit_status": {"$ne": "paid"}},
+                                       {"$set": {"deposit_status": "paid"}})
+    if not lock.modified_count:
+        raise HTTPException(status_code=400, detail="Borg is al betaald")
     seq = await _next_seq(f"deposit_{now_utc().year}")
     doc = {
         "id": new_id(), "company_id": cid, "tenant_id": tenant_id,
@@ -15751,12 +15769,8 @@ async def kiosk_deposit_payment(tenant_id: str, body: KioskDepositPayIn, _sessio
     }
     await db.deposits.insert_one(doc)
     doc.pop("_id", None)
-    await db.tenants.update_one({"id": tenant_id, "company_id": cid},
-                                {"$set": {"deposit_status": "paid", "deposit_id": doc["id"]}})
-    await db.contracts.update_many({"tenant_id": tenant_id, "company_id": cid}, {"$set": {"active": True}})
-    n = now_utc()
-    gen = await _generate_month_invoices_for_company(cid, n.month, n.year, only_tenant_id=tenant_id)
-    return {"deposit": await _enrich_deposit(doc), "invoices_created": gen.get("created", 0)}
+    created = await _activate_after_deposit(cid, tenant_id, doc["id"])
+    return {"deposit": await _enrich_deposit(doc), "invoices_created": created}
 
 
 async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False) -> dict:

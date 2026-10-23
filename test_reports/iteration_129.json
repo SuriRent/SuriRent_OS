@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the mandatory deposit (borg) step for new tenants, both backend and frontend. Backend: 9/9 pytest pass (tests/test_deposit_flow.py). New tenant with apartment gets deposit_required=true and deposit_status=pending, and its auto contract has active=false. generate-month skips the pending tenant. Kiosk deposit-payment returns status held, receipt_no BB2026-NNNN and invoices_created=1; after it the tenant is paid, the contract is active and exactly one invoice exists. A second call and amount=0 both return 400. print-data contains BORGBON and receipt.png returns 200 image/png. Refund 100+200 on 1000 gives partial with refund 700; refund with no deductions gives refunded with refund 1000; refunding again returns 400. Frontend at 1600x900 (kiosk admin mode, logged in as demo@surirent.sr with PIN 2468): the kiosk add-tenant flow linked to TEST-BORG opens kiosk-deposit-form with amount 1000 and the cash/pin/bank methods. 'Later' shows the apt-TEST-BORG-deposit-pending badge 'Wacht op borg'. The overview shows the overview-deposit-pending banner; paying via overview-deposit-pay with Pinpas shows deposit-receipt-screen ('Borg ontvangen', BORGBON preview image loaded, 'Contract is actief · 1 factuur aangemaakt'). 'Klaar' closes it, the banner is gone and the 'Huidige maandhuur · oktober 2026 SRD 1.000,00' invoice appears. In Beheer > Huurders the TEST Borg dossier shows tenant-deposit-card 'SRD 1.000,00 · BB2026-0006 · ONTVANGEN'. In Beheer > Borg the refund modal (refund-deduction-damage/arrears) previews a refund of SRD 700, and after submit the list shows 'DEELS VERREKEND · terugbetaald: SRD 700,00'. All TEST data was cleaned up (deposits, invoices, contracts, tenants, apartments); no orphan records remain.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/deposits (Beheer 'Nieuwe borg')", "issue": "Registering a deposit through the admin endpoint does NOT set tenant.deposit_status=paid, does not activate the contract and does not generate invoices. A pending tenant whose borg is recorded in Beheer stays 'Wacht op borg' forever. Only the kiosk endpoint completes the flow."},
+      {"endpoint": "POST /api/kiosk/tenants/{id}/deposit-payment", "issue": "Not atomic: find_one(deposit_status) then insert. A double-tap or concurrent request can create two deposits and two receipt numbers. Use find_one_and_update with {deposit_status: {$ne: 'paid'}} as a guard before inserting."},
+      {"endpoint": "POST /api/kiosk/tenants/{id}/deposit-payment", "issue": "'method' is a free str, not Literal['cash','pin','bank'], and 'currency' is not validated either."},
+      {"endpoint": "POST /api/kiosk/tenants/{id}/deposit-payment", "issue": "created_by_name is always empty: get_kiosk_session only returns {company_id, type}, so employee_name/name is never present."},
+      {"endpoint": "kiosk_deposit_payment -> contracts", "issue": "The contract gets active=true but status stays 'draft' (verified in DB). This may confuse the Contracten UI or filters that rely on status."},
+      {"endpoint": "DELETE /api/deposits/{id}", "issue": "Deleting a deposit does not reset tenant.deposit_status/deposit_id. The tenant stays 'paid' even though no deposit record exists."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Kiosk overview while deposit pending", "issue": "The right panel still offers 'Vooruit betalen voor oktober 2026' (rent prepayment) and the left side shows 'Maandhuur SRD 0,00' while the tenant is waiting for the deposit. This conflicts with the 'deposit first' rule; consider hiding or disabling the prepay CTA until the deposit is paid.", "affected_selectors": ["[data-testid=overview-deposit-pending]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_deposit_flow.py", "/app/test_reports/pytest/pytest_iter129.xml"],
+  "action_items": [
+    "Make POST /api/deposits (admin) complete the pending-deposit flow for deposit_required tenants (set deposit_status paid, activate contracts, generate the current-month invoice), or block it for pending tenants",
+    "Make kiosk deposit-payment idempotent/atomic against double submit",
+    "Validate method/currency with Literal types",
+    "Optionally set contract status to 'active' (not just active=true) after deposit payment",
+    "Hide the 'Vooruit betalen' CTA in the kiosk overview while the deposit is pending",
+    "Reset tenant deposit_status when its deposit is deleted (or prevent the delete)"
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~18.8k lines; the deposit logic should be split into its own router module",
+    "kiosk_deposit_payment: check-then-insert race; created_by_name never filled"
+  ],
+  "updated_files": ["/app/backend/tests/test_deposit_flow.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST-BORG / TEST-BORG-API / TEST-BORG-API2 apartments and TEST Borg tenants; all deleted afterwards along with their deposits, invoices and contracts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login demo@surirent.sr/demo1234 then set or enter personal PIN 2468 on the 'Persoonlijke PIN' screen to land in /kiosk (the demo company shows as 'SuriRent N.V.', slug my-awesome-rentals-bv). A TEST apartment without a location appears under 'Overige'. Beheer: go to /admin and use sidebar tab-tenants / tab-deposits. The generate-month body keys are period_month/period_year. There is no GET /api/tenants/{id}; use the list endpoint. The contract 'active' field is not exposed in the contracts API output; verify it in Mongo."
+}
