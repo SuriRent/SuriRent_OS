@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, Banknote, MessageCircle, Share2, Trash2,
-  CheckCircle2, ChevronRight, FileSignature, X, Mail, History,
+  CheckCircle2, ChevronRight, FileSignature, X, Mail, History, RefreshCw,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../lib/api';
 import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpers';
@@ -84,8 +84,27 @@ function InvoiceRow({ inv, open, onPayInvoice, onRemind, onDelete }) {
   );
 }
 
-function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete }) {
+function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete, onRebalanced }) {
   const [history, setHistory] = useState(false);
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceMsg, setRebalanceMsg] = useState('');
+  const rebalance = async () => {
+    if (rebalancing) return;
+    setRebalancing(true); setRebalanceMsg('');
+    try {
+      const { data } = await api.post(`/tenants/${g.tenant_id}/rebalance-credits`);
+      const applied = Number(data.applied || 0);
+      const before = Number(data.credit_before || 0);
+      const after = Number(data.credit_after || 0);
+      if (applied > 0) {
+        const n = (data.invoices_updated || []).length;
+        setRebalanceMsg(`${money(applied, g.currency)} verrekend over ${n} factu${n === 1 ? 'ur' : 'ren'}`);
+        onRebalanced();
+      } else if (before === 0 && after === 0) setRebalanceMsg('Geen openstaand tegoed gevonden — alles klopt al.');
+      else setRebalanceMsg(`${money(after, g.currency)} tegoed staat nog open (geen passende factuur).`);
+    } catch (e) { setRebalanceMsg(formatError(e) || 'Herverdeling mislukt'); }
+    finally { setRebalancing(false); }
+  };
   const paid = (g.all || []).filter((i) => (i.status || '') === 'paid');
   if (history) {
     return (
@@ -105,7 +124,14 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete }) {
         className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> Alle huurders</button>
       <div className="rounded-xl bg-slate-50 px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-base font-black text-slate-900 truncate" data-testid="invoices-modal-tenant">{g.tenant_name}</div>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-base font-black text-slate-900 truncate" data-testid="invoices-modal-tenant">{g.tenant_name}</div>
+            <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="invoices-modal-rebalance"
+              title="Herverdeel alle openstaande tegoeden over de openstaande facturen." aria-label="Herverdeel tegoeden"
+              className="shrink-0 w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-[#FF5C00] hover:border-orange-300 inline-flex items-center justify-center transition-colors disabled:opacity-60">
+              {rebalancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            </button>
+          </div>
           <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</div>
         </div>
         <div className="text-right shrink-0">
@@ -113,6 +139,9 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete }) {
           <div className={`text-lg font-black ${statusOf(g).cls}`}>{money(g.totalDue, g.currency)}</div>
         </div>
       </div>
+      {rebalanceMsg && (
+        <p className="text-xs font-bold text-slate-700 text-center" data-testid="invoices-modal-rebalance-msg">{rebalanceMsg}</p>
+      )}
       <div className={`grid ${g.dueCount > 0 ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
         {g.dueCount > 0 && (
           <>
@@ -123,7 +152,7 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete }) {
           </>
         )}
         <button type="button" onClick={() => setHistory(true)} data-testid="invoices-modal-history"
-          className="h-11 rounded-xl bg-slate-900 text-white font-black text-sm inline-flex items-center justify-center gap-2"><History className="w-4 h-4" /> Betalingsgeschiedenis</button>
+          className={`h-11 rounded-xl bg-slate-900 text-white font-black ${g.dueCount > 0 ? 'text-xs px-2 gap-1.5' : 'text-sm gap-2'} leading-tight inline-flex items-center justify-center min-w-0`}><History className="w-4 h-4 shrink-0" /> <span className="text-center">Betalings&shy;geschiedenis</span></button>
       </div>
       {[...g.all].reverse().map((inv) => (
         <InvoiceRow key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete}
@@ -196,7 +225,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={footer} wide>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={footer}>
         {() => (
           <>
             {msg && (
@@ -207,7 +236,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
             )}
             {sel ? (
               <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onPay={onPay} onDelete={del}
-                onRemind={(g, ch) => setReminding({ g, ch })} onPayInvoice={(inv, g) => setQuickPay({ inv, g })} />
+                onRebalanced={load} onRemind={(g, ch) => setReminding({ g, ch })} onPayInvoice={(inv, g) => setQuickPay({ inv, g })} />
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2">
