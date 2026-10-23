@@ -92,7 +92,7 @@ export default function PersonalPinSetup({ mandatory = false, onDone } = {}) {
   const setter = step === 'confirm' ? setConfirm : setPin;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center"
+    <div className={`fixed inset-0 z-[200] flex items-end sm:items-center justify-center ${mandatory ? 'bg-[#FF5C00]' : 'bg-black/70 backdrop-blur-sm'}`}
       data-testid="personal-pin-setup-modal">
       <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 lg:p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-1">

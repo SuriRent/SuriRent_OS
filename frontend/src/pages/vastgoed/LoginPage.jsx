@@ -41,6 +41,8 @@ export default function LoginPage() {
     // Mobile keeps PIN-first flow (more tactile + branded). We detect via
     // viewport width on initial render — a no-op on SSR (window check).
     try {
+      // Onthouden gebruiker op dit apparaat → altijd het PIN-scherm (ook desktop).
+      if (localStorage.getItem('device_user_email')) return 'pin';
       if (typeof window !== 'undefined' && window.innerWidth >= 1024) return 'login';
     } catch { /* noop */ }
     return 'pin';

@@ -53,3 +53,8 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - POST /api/auth/login boekhouder@surirent.sr/test1234 → token (admin_token)
 - POST /api/auth/personal-pin/login {email:kiosk.medewerker@surirent.sr,pin:5566} → token+company
 - localStorage: kiosk_token, kiosk_company (JSON), admin_token → ga naar /kiosk
+
+## Persoonlijke PIN per apparaat (2026-10)
+- Eerste login e-mail+wachtwoord → verplichte PIN-popup (personal-pin-modal) → kiosk. Daarna op dit apparaat alleen PIN (Welkom terug, naam). 'Ander account' vergeet het apparaat.
+- demo@surirent.sr: persoonlijke PIN gewist voor test; na test is PIN 2468
+- boekhouder@surirent.sr persoonlijke PIN: 6677

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { enterKioskAfterLogin } from '../../../lib/kioskEntry';
+import { afterPasswordLogin } from '../../../lib/kioskEntry';
 import PersonalPinSetup from '../../../components/PersonalPinSetup';
 import {
   Loader2, KeyRound, ArrowLeft, ArrowRight, Eye, EyeOff, LogIn, Check,
@@ -142,7 +142,8 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
         // de gebruiker een PIN heeft ingesteld).
         try {
           localStorage.setItem('device_user_email', email.trim());
-          localStorage.setItem('device_user_name', name?.trim() || email.split('@')[0]);
+          if (name?.trim()) localStorage.setItem('device_user_name', name.trim());
+          else if (!localStorage.getItem('device_user_name')) localStorage.setItem('device_user_name', email.split('@')[0]);
         } catch { /* ignore */ }
         // Pending QR? Vorige sessie heeft ons hier naartoe gestuurd via /qr-link.
         // Claim de QR direct nu we ingelogd zijn.
@@ -166,12 +167,8 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
             else navigate('/admin');
           };
           // Beheerder/boekhouder → kiosk-beheer; superadmin → beheeromgeving.
-          const proceed = () => enterKioskAfterLogin(loginResult?.user, { fallback: goAdmin });
           // Eerste login op dit apparaat: verplicht een persoonlijke PIN kiezen.
-          let hasPin = true;
-          try { hasPin = !!(await api.get('/auth/personal-pin/status')).data?.has_pin; } catch { /* ignore */ }
-          if (!hasPin) { setPinSetupNext(() => proceed); return; }
-          await proceed();
+          await afterPasswordLogin(loginResult?.user, { fallback: goAdmin, onNeedPin: (next) => setPinSetupNext(() => next) });
         }
       } else {
         const result = await register({
@@ -227,6 +224,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
     return (
       <>
         <MobileEmailLogin
+          onLoginStart={onLoginStart}
           onBack={() => { try { onBack?.(); } catch { /* ignore */ } }}
           onForgot={() => setShowForgot(true)}
           branding={branding}

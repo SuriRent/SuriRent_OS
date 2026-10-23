@@ -1,4 +1,6 @@
 // =====================================================================
+import { afterPasswordLogin } from '../lib/kioskEntry';
+import PersonalPinSetup from './PersonalPinSetup';
 // MobileAuthShell — orange full-screen "native app" stijl voor mobiel.
 //
 // Bevat twee componenten:
@@ -73,8 +75,9 @@ function OrangeShell({ children, primary = '#FF5C00' }) {
 // Wordt getoond op mobiel (sm:hidden) in plaats van het witte
 // card-design dat op desktop wordt gebruikt.
 // =====================================================================
-export function MobileEmailLogin({ onBack, onForgot, branding }) {
+export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart }) {
   const { login } = useAuth();
+  const [pinNext, setPinNext] = useState(null);
   const navigate = useBrandedNavigate();
   const [email, setEmail] = useState(() => {
     try { return localStorage.getItem('saved_login_email') || ''; } catch { return ''; }
@@ -98,6 +101,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
     e?.preventDefault();
     setLoading(true); setError('');
     try {
+      onLoginStart?.();
       const res = await login(email.trim(), password, remember);
       if (res?.pin_required) return;
       try {
@@ -115,14 +119,18 @@ export function MobileEmailLogin({ onBack, onForgot, branding }) {
       let pendingQr = null;
       try { pendingQr = sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
       const userSlug = res?.company?.slug || res?.user?.company_slug;
+      const goAdmin = () => {
+        if (userSlug && /^\/login(\/|$)/i.test(window.location.pathname)) window.location.assign(`/${userSlug}/admin`);
+        else navigate('/admin', { replace: true });
+      };
       if (pendingQr) navigate(`/qr-link?token=${encodeURIComponent(pendingQr)}`);
-      else if (userSlug && /^\/login(\/|$)/i.test(window.location.pathname)) window.location.assign(`/${userSlug}/admin`);
-      else navigate('/admin', { replace: true });
+      else await afterPasswordLogin(res?.user, { fallback: goAdmin, onNeedPin: (next) => setPinNext(() => next) });
     } catch (err) {
       setError(formatError(err, 'Inloggen mislukt'));
     } finally { setLoading(false); }
   };
 
+  if (pinNext) return <PersonalPinSetup mandatory onDone={pinNext} />;
   return (
     <OrangeShell primary={primary}>
       {/* TOP: terug-knop */}

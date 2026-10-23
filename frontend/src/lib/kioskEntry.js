@@ -17,3 +17,14 @@ export async function enterKioskAfterLogin(user, { slug = '', fallback } = {}) {
     goAdmin();
   }
 }
+
+// Na e-mail+wachtwoord: eerst verplicht een persoonlijke PIN (behalve superadmin), dan door.
+export async function afterPasswordLogin(user, { fallback, onNeedPin }) {
+  const proceed = () => enterKioskAfterLogin(user, { fallback });
+  if (user?.role !== 'superadmin') {
+    let hasPin = true;
+    try { hasPin = !!(await api.get('/auth/personal-pin/status')).data?.has_pin; } catch { /* ignore */ }
+    if (!hasPin) { onNeedPin(proceed); return; }
+  }
+  await proceed();
+}

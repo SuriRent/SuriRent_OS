@@ -1,0 +1,48 @@
+{
+  "summary": "Frontend-only test of per-device login flow (email+password -> mandatory personal PIN -> PIN-only re-login). Desktop 1920: mandatory popup, mismatch error, save, /kiosk admin landing, wrong-PIN error, PIN 2468 re-login, Ander account -> boekhouder (no popup, /kiosk), reinstall, kiosk employee, superadmin all exercised. Mobile 390 tested for popup + PIN screen. Core PIN popup + PIN login work, but 2 significant gaps vs. spec: (1) on DESKTOP, logout lands on email+password form instead of the PIN screen; (2) on MOBILE (<1024, MobileEmailLogin) the mandatory PIN popup never appears and user lands on /<slug>/admin instead of /kiosk.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LoginPage initialView (desktop)", "issue": "After Uitloggen (kiosk-lock-btn-desktop) the browser goes to /login?pick=1&loggedout=1 -> redirected to /my-awesome-rentals-bv/login?pick=1&loggedout=1, but LoginPage.initialView returns 'login' for window.innerWidth>=1024, so the EMAIL+PASSWORD form is shown, not the PIN screen 'Welkom terug, <name>'. User must click 'Terug naar PIN' (auth-back) manually. Spec says following logins on device = only PIN.", "selector": "[data-testid=pin-welcome]", "priority": "HIGH"},
+      {"component": "MobileEmailLogin (components/MobileAuthShell.jsx)", "issue": "On mobile (390px) the email login uses MobileEmailLogin, which has NO personal-pin/status check, no PersonalPinSetup mandatory popup and no enterKioskAfterLogin. Tested demo (PIN cleared) at 390px: no popup, landed on /my-awesome-rentals-bv/admin (Facturen) instead of /kiosk. With PIN already set it landed on /kiosk only via LoginPage auto-redirect race. Mandatory PIN requirement broken on phones/PWA.", "selector": "[data-testid=mobile-login-submit]", "priority": "CRITICAL"},
+      {"component": "EmailLogin.jsx line ~145", "issue": "After desktop email login, device_user_name is overwritten with name?.trim() || email.split('@')[0] (name state is empty in login mode) -> stored 'demo' instead of 'Demo Beheerder' set by auth.jsx. Result: PIN screen shows 'Welkom terug, demo'. Remove that setItem (auth.jsx already stores the correct name).", "selector": "[data-testid=pin-welcome]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Superadmin email login", "issue": "Superadmin (no PIN) gets the mandatory PIN popup (no skip). Superadmin has no company slug, and PinLanding is only rendered when branding.slug exists, so a superadmin PIN can never actually be used for login on /login -> popup is pointless/blocking for superadmin. Not saved during test (superadmin left without PIN). Decide: skip popup for superadmin or support personal-PIN on generic /login.", "affected_selectors": ["[data-testid=personal-pin-setup-modal]"]}
+    ],
+    "design_issues": [
+      {"screen": "PersonalPinSetup modal on login page", "issues": ["Backdrop bg-black/70 over orange login page gives a muddy dark-brown full screen; consider white/orange background since it's now a mandatory step, not an overlay."]}
+    ]
+  },
+  "passed_tests": [
+    "Desktop: demo email login -> mandatory popup shown, personal-pin-skip absent, no 'Later instellen'",
+    "Mismatch confirm PIN -> 'PINs komen niet overeen. Probeer opnieuw.' and stays in popup",
+    "Save 2468 -> 'PIN opgeslagen!' -> /kiosk with kiosk-admin-menu-btn",
+    "PIN screen (via ?view=pin or Terug naar PIN) desktop shows 'Welkom terug, Demo Beheerder'; mobile 390 shows 'Welkom, Demo'",
+    "Wrong PIN -> pin-error 'Ongeldige PIN code' (desktop + mobile)",
+    "PIN 2468 -> /kiosk admin mode, no email/password (desktop + mobile)",
+    "Ander account clears device_user_email and shows email form; boekhouder login -> no popup, /kiosk with Beheer menu",
+    "Reinstall (localStorage cleared): /<slug>/login?view=pin shows 'PIN Login' + 'Inloggen met e-mail'; /login shows email form",
+    "Kiosk employee email login -> /my-awesome-rentals-bv/login?target=kiosk&view=pin -> PIN 5566 -> /my-awesome-rentals-bv/kiosk without Beheer menu, no popup"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Add mandatory PIN setup (personal-pin/status check + <PersonalPinSetup mandatory onDone=enterKioskAfterLogin>) to MobileEmailLogin, and route via enterKioskAfterLogin instead of /<slug>/admin",
+    "Desktop: when device_user_email exists (or ?loggedout=1 with remembered user), default LoginPage view to 'pin' instead of 'login' for innerWidth>=1024",
+    "Remove device_user_name overwrite in EmailLogin.jsx (~line 145) so the real name is shown",
+    "Decide superadmin behaviour for mandatory PIN popup (currently shown, but PIN unusable without slug)"
+  ],
+  "critical_code_review_comments": [
+    "Login post-processing logic duplicated between EmailLogin.jsx (PasswordView) and MobileEmailLogin; they diverged (mobile lacks PIN setup + kiosk routing). Extract a shared afterLogin() helper.",
+    "PinLogin.verify: when deviceUser personal PIN fails it falls back to shared kiosk-pin - fine, but personal-pin 429 throttling errors are thrown before fallback (acceptable).",
+    "EmailLogin calls onLoginStart before login(); if login fails skipRedirect stays true (harmless but stale)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "75% (9/12 checks; desktop logout->PIN screen, mobile mandatory popup, and welcome name failed)"},
+  "test_credentials": "From /app/memory/test_credentials.md: demo@surirent.sr/demo1234, boekhouder@surirent.sr/test1234, kiosk.medewerker@surirent.sr/test1234 PIN 5566, super@surirent.sr/super1234",
+  "seed_data_creation": "demo@surirent.sr personal_pin_hash was present at start (has_pin=true); tester unset it in Mongo to test the popup, then set it to 2468 (via UI then API). Final state: demo personal PIN = 2468. Superadmin left without PIN.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo user's login returns company slug my-awesome-rentals-bv; pwa_company_slug causes /login -> /my-awesome-rentals-bv/login redirect. Desktop (>=1024) LoginPage defaults to email view; use ?view=pin to see PinLanding. Mobile email form testids: mobile-login-email/password/submit. To re-test popup, unset users.personal_pin_hash for demo in Mongo.",
+  "rca of the issue": "Desktop logout: KioskLayout.exit -> /login?pick=1&loggedout=1; LoginPage.initialView forces 'login' when innerWidth>=1024 regardless of remembered device user. Mobile: PasswordView returns <MobileEmailLogin> early for mode=login && isMobile, and MobileEmailLogin has its own submit handler without pinSetupNext/enterKioskAfterLogin. Name: EmailLogin overwrites device_user_name with email prefix after auth.jsx stored the real name."
+}
