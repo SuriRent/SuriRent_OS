@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { ModalHostContext } from '../../../components/KeyboardSafeModal';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
@@ -15,7 +17,7 @@ const cachedGet = (cache, key) => {
   return hit ? Promise.resolve({ data: hit }) : api.get(key);
 };
 
-export default function PaymentPlans() {
+export default function PaymentPlans({ embedded = false }) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState(null); // plan in detail-view
@@ -65,19 +67,22 @@ export default function PaymentPlans() {
     // 2) Live event handler
     const handler = (e) => openPlan(e?.detail?.planId);
     window.addEventListener('open-plan-detail', handler);
+    const onNew = () => { setDetail(null); setCreating(true); };
+    window.addEventListener('kiosk-plan-new', onNew);
     return () => {
       cancelled = true;
       window.removeEventListener('open-plan-detail', handler);
+      window.removeEventListener('kiosk-plan-new', onNew);
     };
   }, []);
 
   if (detail) {
-    return <PlanDetail planId={detail.id} initial={detail} onBack={() => { setDetail(null); load(); }} />;
+    return <PlanDetail embedded={embedded} planId={detail.id} initial={detail} onBack={() => { setDetail(null); load(); }} />;
   }
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="payment-plans-page">
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="payment-plans-page">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Betalingsregelingen</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">Maandelijkse of aangepaste termijn-plannen voor huurders met achterstand.</p>
@@ -172,6 +177,7 @@ function PlanRow({ plan, onClick }) {
 // Create plan — bottom sheet: kies huurder, totaal, # termijnen, freq
 // =====================================================================
 function CreatePlanSheet({ onClose, onCreated }) {
+  const hosted = !!useContext(ModalHostContext);
   useEffect(() => { playSwoosh(); }, []);
   const [tenants, setTenants] = useState([]);
   const [tenantId, setTenantId] = useState('');
@@ -289,10 +295,10 @@ function CreatePlanSheet({ onClose, onCreated }) {
   }, [customMode]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className={hosted ? 'absolute inset-0 z-[60] bg-white !m-0' : 'fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4'}
       data-testid="create-plan-sheet" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
+        className={hosted ? 'w-full h-full bg-white overflow-y-auto' : 'w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto'}
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}>
         <div className="p-6">
           <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4 sm:hidden" />
@@ -466,7 +472,8 @@ function CreatePlanSheet({ onClose, onCreated }) {
 // =====================================================================
 // Plan detail — installments + pay-button per termijn + cancel
 // =====================================================================
-function PlanDetail({ planId, initial, onBack }) {
+function PlanDetail({ planId, initial, onBack, embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const [plan, setPlan] = useState(initial || null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -513,7 +520,7 @@ function PlanDetail({ planId, initial, onBack }) {
   }, [load, planId]);
 
   const payTermijn = async (seq) => {
-    if (!window.confirm(`Markeer termijn ${seq} als betaald (contant)?`)) return;
+    if (!(await askConfirm(`Markeer termijn ${seq} als betaald (contant)?`))) return;
     setBusy(true); setErr('');
     try {
       const { data } = await api.post(`/payment-plans/${planId}/installments/${seq}/pay`, { method: 'contant' });
@@ -524,7 +531,7 @@ function PlanDetail({ planId, initial, onBack }) {
   };
 
   const cancelPlan = async () => {
-    if (!window.confirm('Regeling annuleren? Openstaande termijnen worden gecanceld.')) return;
+    if (!(await askConfirm('Regeling annuleren? Openstaande termijnen worden gecanceld.'))) return;
     setBusy(true); setErr('');
     try {
       const { data } = await api.post(`/payment-plans/${planId}/cancel`);
@@ -538,7 +545,8 @@ function PlanDetail({ planId, initial, onBack }) {
   const pct = plan.total_amount > 0 ? Math.round((plan.paid_amount / plan.total_amount) * 100) : 0;
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="plan-detail-page">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="plan-detail-page">
+      {confirmNode}
       <div className="flex items-center gap-2">
         <button onClick={onBack} data-testid="plan-detail-back"
           className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">

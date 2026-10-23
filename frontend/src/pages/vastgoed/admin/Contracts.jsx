@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, Mail } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { EmailDialog, SendDialog } from '../../../components/EmailDialog';
@@ -162,7 +163,8 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
   );
 }
 
-export default function Contracts() {
+export default function Contracts({ embedded = false }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const { data: itemsRaw, mutate: refetchC, isLoading: loadingC } = useApiSWR('/contracts');
   const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
   const { data: apartmentsRaw, mutate: refetchA, isLoading: loadingA } = useApiSWR('/apartments');
@@ -181,9 +183,15 @@ export default function Contracts() {
   // useAutoRefresh(load, { interval: 45000, ... }) uitgeschakeld.
 
   const del = async (id) => {
-    if (!window.confirm('Contract verwijderen?')) return;
+    if (!(await askConfirm('Contract verwijderen?'))) return;
     await api.delete(`/contracts/${id}`); load();
   };
+
+  useEffect(() => {
+    const onNew = () => setCreating(true);
+    window.addEventListener('kiosk-contract-new', onNew);
+    return () => window.removeEventListener('kiosk-contract-new', onNew);
+  }, []);
 
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
   const signLink = (token) => `${window.location.origin}/onderteken/${token}`;
@@ -209,10 +217,11 @@ export default function Contracts() {
   };
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="contracts-page">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="contracts-page">
+      {confirmNode}
       {/* Header — inline titel + subtitel + oranje "Nieuw contract" knop.
           Zelfde patroon als Betalingsregelingen zodat de app consistent voelt. */}
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Contracten</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">{counts.all} contracten · {counts.signed} ondertekend.</p>
