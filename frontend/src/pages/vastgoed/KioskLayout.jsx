@@ -214,6 +214,7 @@ const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin
 
 // Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
 const ADMIN_MENU_ITEMS = [
+  { id: 'nfc', label: 'NFC-tag', Icon: Wifi, onClick: () => navAdmin('nfc', 'admin') },
   { id: 'kasgeld', label: 'Kasgeld', Icon: Wallet, onClick: () => window.dispatchEvent(new CustomEvent('go-tab', { detail: 'kasgeld' })) },
 ];
 
@@ -5071,6 +5072,7 @@ export default function KioskLayout() {
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
+      else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail);
     };
@@ -5134,9 +5136,9 @@ export default function KioskLayout() {
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
           error). De statische "tap hint" is weggehaald op verzoek. */}
       {nfcLink && (
-        <NfcLinkModal uid={nfcLink.uid} onClose={() => setNfcLink(null)}
+        <NfcLinkModal uid={nfcLink.uid} onClose={() => { setNfcLink(null); returnToMenu(); }}
           onLinked={(data) => {
-            setNfcLink(null);
+            setNfcLink(null); menuOrigin = null;
             if (data?.apartment) {
               const apt = data.apartment;
               if (data.tenant?.name && !apt.tenant_name) apt.tenant_name = data.tenant.name;
@@ -5328,7 +5330,6 @@ export default function KioskLayout() {
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => setStep('kasgeld') },
-              { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ].map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');

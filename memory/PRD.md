@@ -1006,3 +1006,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Oranje modus: bovenbalk (kiosk-head-wrap/kiosk-desktop-header) en onderste menubalk donker oranje #C94400, midden fel oranje (index.css .kiosk-fullscreen:not(.kiosk-white)).
 - 2026-10: Oranje modus omgedraaid: balken licht #FF7A2E, midden donker #D94A00.
 - 2026-10: Oranje modus verfijnd (spiegel van witte modus): balken #FF6B1A met zachte schaduw/rand, midden #EF5600.
+- 2026-10: NFC-tag uit onderste menubalk; nu tegel in Beheermenu (admin:nfc → NfcLinkModal, sluiten keert terug naar Beheer). + sheet op telefoon houdt NFC.
