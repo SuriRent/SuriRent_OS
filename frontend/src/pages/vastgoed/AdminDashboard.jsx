@@ -3141,7 +3141,7 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
   );
 }
 
-export function Tenants() {
+export function Tenants({ embedded = false }) {
   // SWR cache — bij tabwissel wordt de vorige data direct getoond en
   // achtergrond-revalidate hoeven we niet af te wachten.
   const [q, setQ] = useState('');
@@ -3177,7 +3177,9 @@ export function Tenants() {
       if (d.type === 'tenant' && d.id) setDetailId(d.id);
     };
     window.addEventListener('focus-entity', handler);
-    return () => window.removeEventListener('focus-entity', handler);
+    const onNew = () => { setDetailId(null); setCreating(true); };
+    window.addEventListener('kiosk-tenant-new', onNew);
+    return () => { window.removeEventListener('focus-entity', handler); window.removeEventListener('kiosk-tenant-new', onNew); };
   }, []);
   // Huurder niet in de geladen pagina's (bv. via zoekbalk) → los ophalen.
   const [detailTenant, setDetailTenant] = useState(null);
@@ -3243,12 +3245,12 @@ export function Tenants() {
     } finally { setBackfilling(false); }
   };
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid="tenants-page">
+    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="tenants-page">
       {/* Header — inline titel + subtitel + oranje "Nieuwe huurder" knop.
           Zelfde patroon als Betalingsregelingen zodat de app consistent voelt.
           Op verzoek gebruiker (2026-02): flex-nowrap zodat knop óók op mobiel
           naast de titel blijft; korte label op smal scherm. */}
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 truncate">Huurders</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">{summary.totalCount || 0} huurders geregistreerd.</p>

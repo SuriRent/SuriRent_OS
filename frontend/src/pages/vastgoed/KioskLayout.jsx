@@ -25,6 +25,8 @@ import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
+import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -3983,7 +3985,8 @@ function useBodyScrollLock() {
   }, []);
 }
 
-function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false }) {
+function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false }) {
+  const [host, setHost] = useState(null);
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
   // toetsenbord op iOS/Android. Zonder deze tracking scrollt iOS de
   // hele pagina omhoog om een focus-input onder het keyboard vandaan
@@ -4010,9 +4013,10 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
       style={mobileStyle}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div onClick={(e) => e.stopPropagation()}
-        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
+      <div onClick={(e) => e.stopPropagation()} 
+        className={`w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
+        <ModalHostContext.Provider value={tall ? host : null}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
         <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
@@ -4027,6 +4031,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
             <X className="w-6 h-6 sm:w-5 sm:h-5 text-white sm:text-slate-500" strokeWidth={2.5} />
           </button>
         </div>
+        <div ref={tall ? setHost : undefined} style={tall ? { transform: 'translateZ(0)' } : undefined} className="relative flex-1 min-h-0 flex flex-col">
         {/* Body — witte scrollbare content. `overscroll-contain` voorkomt
             dat de scroll doorlekt naar de underlying page op iOS. */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4 bg-white"
@@ -4040,6 +4045,8 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
             {footer}
           </div>
         )}
+        </div>
+        </ModalHostContext.Provider>
       </div>
     </div>
   ), document.body);
@@ -4646,6 +4653,7 @@ export default function KioskLayout() {
   const [phoneScanOpen, setPhoneScanOpen] = useState(false);
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
   const closeInvoices = useCallback(() => setShowInvoicesModal(false), []);
+  const [adminPopup, setAdminPopup] = useState(null);
   const [tenantPrefill, setTenantPrefill] = useState(null);
   const [scanToast, setScanToast] = useState(null);
   // Desktop: ID-scan van de telefoon van dezelfde gebruiker → Nieuwe huurder opent ingevuld.
@@ -4979,6 +4987,7 @@ export default function KioskLayout() {
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
+      else if (e.detail === 'admin:betalingen' || e.detail === 'admin:huurders') setAdminPopup(e.detail.slice(6));
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail);
     };
     window.addEventListener('kiosk-nav', onNav);
@@ -5176,6 +5185,9 @@ export default function KioskLayout() {
         <KioskInvoicesModal Shell={KioskModalShell} onClose={closeInvoices}
           onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
       )}
+      {adminPopup && hasAdminAccess && (
+        <KioskAdminPopup id={adminPopup} Shell={KioskModalShell} onClose={() => setAdminPopup(null)} />
+      )}
       {showPaymentsViewer && (
         <PaymentsViewerModal
           onClose={() => setShowPaymentsViewer(false)} />
@@ -5232,7 +5244,6 @@ export default function KioskLayout() {
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => setShowAddLocation(true) },
               { id: 'contracts', label: 'Contracten', icon: FileText, testid: 'kiosk-add-contract-btn-desktop', onClick: () => setShowAddContract(true) },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
-              { id: 'payments', label: 'Betalingen', icon: CreditCard, testid: 'kiosk-payments-viewer-btn-desktop', onClick: () => setShowPaymentsViewer(true) },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
               { id: 'nfc', label: 'NFC-tag', icon: Wifi, testid: 'kiosk-nfc-link-btn-desktop', onClick: () => setNfcLink({ uid: '' }) },
               { id: 'admin', label: 'Beheerder', icon: ShieldCheck, testid: 'kiosk-admin-btn-desktop', onClick: adminMode },

@@ -918,7 +918,7 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // =====================================================================
 // Main page
 // =====================================================================
-export default function Payments() {
+export default function Payments({ embedded = false }) {
   // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
   const today = useMemo(() => new Date(), []);
   // Maand-picker — default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
@@ -1001,6 +1001,7 @@ export default function Payments() {
   useEffect(() => {
     const onOpen = (e) => {
       setPrefillInvoice(e?.detail?.invoice || null);
+      setDetailPayment(null);
       setCreating(true);
     };
     window.addEventListener('quick-pay-open', onOpen);
@@ -1108,7 +1109,7 @@ export default function Payments() {
           MOBILE (phone) — POS-terminal stijl. Verborgen vanaf md (>=768px).
           ================================================================= */}
       <div className="md:hidden space-y-4" data-testid="payments-mobile">
-        <div className="flex items-center justify-between gap-2">
+        <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-2`}>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Betalingen</h1>
             <p className="text-sm text-slate-500 mt-0.5 truncate">
@@ -1222,7 +1223,7 @@ export default function Payments() {
           3xl-4xl titel + de knop op een aparte rij, wat "gedrongen"
           aanvoelde. Nu is het rustiger en consistent met de rest van de
           admin-app. */}
-      <div className="flex items-center justify-between gap-3 flex-nowrap">
+      <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight truncate">Betalingen</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
@@ -20,7 +20,11 @@ import { createPortal } from 'react-dom';
  *  - Op desktop (>= sm breakpoint): gecentreerde card met max-width en
  *    max-height 90vh boven een halfdoorzichtige donkere backdrop.
  */
+// Binnen een host (bv. kiosk-popup) opent het venster ín die popup i.p.v. over het hele scherm.
+export const ModalHostContext = createContext(null);
+
 export default function KeyboardSafeModal({ onClose, testId, children, className = '', maxWidthClass = 'sm:max-w-md' }) {
+  const host = useContext(ModalHostContext);
   const [vh, setVh] = useState(() =>
     typeof window !== 'undefined' && window.visualViewport
       ? window.visualViewport.height
@@ -87,6 +91,13 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
     };
   }, []);
 
+  if (host) {
+    return createPortal((
+      <div className={`ksm-root absolute inset-0 z-[60] bg-white flex flex-col overflow-hidden ${className}`} data-testid={testId || 'ksm-modal'}>
+        {children}
+      </div>
+    ), host);
+  }
   return createPortal((
     <div
       className={`ksm-root fixed inset-0 z-[9999] bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
