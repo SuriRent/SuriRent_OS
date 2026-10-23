@@ -24,7 +24,7 @@ import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinanc
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
-import { KioskInvoicesFullscreen } from '../../components/KioskInvoicesFullscreen';
+import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -3983,7 +3983,7 @@ function useBodyScrollLock() {
   }, []);
 }
 
-function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
+function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false }) {
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
   // toetsenbord op iOS/Android. Zonder deze tracking scrollt iOS de
   // hele pagina omhoog om een focus-input onder het keyboard vandaan
@@ -4011,7 +4011,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer }) {
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
-        className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden"
+        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-3xl' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
         <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
@@ -5173,7 +5173,8 @@ export default function KioskLayout() {
           onSaved={() => setShowAddInvoice(false)} />
       )}
       {showInvoicesModal && hasAdminAccess && (
-        <KioskInvoicesFullscreen onClose={closeInvoices} />
+        <KioskInvoicesModal Shell={KioskModalShell} onClose={closeInvoices}
+          onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
       )}
       {showPaymentsViewer && (
         <PaymentsViewerModal
