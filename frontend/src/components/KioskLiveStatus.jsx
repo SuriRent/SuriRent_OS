@@ -107,7 +107,7 @@ export function KioskHeaderLiveButtons({ isAdmin }) {
 // Mobiel: Bonnen van vandaag en KT-V520 koppelen in het "Snel toevoegen" menu.
 function BtPrinterDialog({ onClose }) {
   return createPortal((
-    <div className="fixed inset-0 z-[130] bg-black/50 flex items-end sm:items-center justify-center p-3" onClick={onClose} data-testid="kiosk-bt-dialog">
+    <div className="fixed inset-0 z-[130] bg-black/50 backdrop-blur-md flex items-end sm:items-center justify-center p-3" onClick={onClose} data-testid="kiosk-bt-dialog">
       <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <p className="font-black text-slate-900 flex items-center gap-2"><Bluetooth className="w-5 h-5 text-blue-600" /> Bluetooth printer</p>

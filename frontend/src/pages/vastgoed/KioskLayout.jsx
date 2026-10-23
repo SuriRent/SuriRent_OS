@@ -626,7 +626,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
         <Mic className="w-3.5 h-3.5" /> Spraak
       </button>
       {open && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => !busy && setOpen(false)}>
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
@@ -791,7 +791,7 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
   };
 
   return createPortal((
-    <div onClick={onClose} className="fixed inset-0 z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4">
+    <div onClick={onClose} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-lg sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[85vh] overflow-hidden"
         data-testid="notes-modal">
@@ -1233,7 +1233,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
 // =====================================================================
 function ReminderPopup({ note, onDismiss }) {
   return createPortal((
-    <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
       data-testid="reminder-popup">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-4 border-amber-400">
         <div className="flex items-start gap-3 mb-3">
@@ -2230,7 +2230,7 @@ function ArrangePlanModal({ tenantId, currency, totalAmount, invoiceIds, monthsL
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
       data-testid="arrange-plan-modal" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}>
@@ -2302,7 +2302,7 @@ function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
     ? `${process.env.REACT_APP_BACKEND_URL}${plan.pdf_url}`
     : `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/payment-plans/${plan.id}/pdf`;
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
       data-testid="plan-arranged-receipt">
       <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
         <div className="px-6 py-5 bg-emerald-500 text-white text-center">
@@ -3376,7 +3376,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
   return createPortal((
     <div ref={overlayRef}
       onClick={saved ? onSaved : onClose}
-      className="fixed z-[100] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4"
+      className="fixed z-[100] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
       style={{
         // Fallback vóór useEffect draait — daarna neemt JS het over
         top: 0, left: 0, width: '100vw', height: '100dvh',
@@ -4006,12 +4006,12 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
   } : {};
   return createPortal((
     <div
-      className={`fixed left-0 right-0 z-[115] bg-white sm:bg-black/60 sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
+      className={`fixed left-0 right-0 z-[115] bg-white sm:bg-black/50 sm:backdrop-blur-md sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
       style={mobileStyle}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
-        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-3xl' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
+        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-[35rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
         <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"

@@ -11,7 +11,13 @@ import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 //  2. "Historisch": vrije datum + vrij bedrag + vrije omschrijving voor
 //     onboarding van bestaande achterstanden (via POST /invoices/historical).
 // =====================================================================
-export default function InvoiceForm({ tenants, onCancel, onSaved }) {
+const Plain = ({ children, className = '' }) => <div className={className}>{children}</div>;
+const INLINE = { Root: ({ children }) => <div className="space-y-4" data-testid="invoice-inline">{children}</div>, Header: Plain, Body: Plain, Footer: Plain };
+const MODAL = { Root: KeyboardSafeModal, Header: KeyboardSafeModal.Header, Body: KeyboardSafeModal.Body, Footer: KeyboardSafeModal.Footer };
+
+// `inline` = zonder eigen popup, voor gebruik binnen een bestaande popup (kiosk).
+export default function InvoiceForm({ tenants, onCancel, onSaved, inline = false }) {
+  const W = inline ? INLINE : MODAL;
   const today = new Date();
   const [mode, setMode] = useState('normal'); // 'normal' | 'historical'
   const [data, setData] = useState({
@@ -66,13 +72,13 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
     && (!isHist || (Number(String(hist.amount).replace(',', '.')) > 0 && hist.description.trim() && hist.period_month && hist.period_year));
 
   return (
-    <KeyboardSafeModal onClose={onCancel} testId="invoice-modal">
-      <KeyboardSafeModal.Header>
+    <W.Root onClose={onCancel} testId="invoice-modal">
+      <W.Header>
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-black text-slate-900">
             {isHist ? 'Historische factuur' : 'Nieuwe factuur'}
           </h3>
-          <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
+          {!inline && <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>}
         </div>
         {/* Segmented toggle — Normaal vs Historisch */}
         <div className="mt-3 grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl" data-testid="invoice-mode-toggle">
@@ -85,9 +91,9 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
             <History className="w-3.5 h-3.5" /> Historische achterstand
           </button>
         </div>
-      </KeyboardSafeModal.Header>
+      </W.Header>
 
-      <KeyboardSafeModal.Body>
+      <W.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="invoice-error">{error}</div>}
         <div className="space-y-3">
           <div>
@@ -183,16 +189,16 @@ export default function InvoiceForm({ tenants, onCancel, onSaved }) {
             </>
           )}
         </div>
-      </KeyboardSafeModal.Body>
+      </W.Body>
 
-      <KeyboardSafeModal.Footer className="flex gap-3">
+      <W.Footer className="flex gap-3">
         <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
         <button onClick={save} disabled={loading || !canSave} data-testid="invoice-save"
           className="flex-1 h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Aanmaken
         </button>
-      </KeyboardSafeModal.Footer>
-    </KeyboardSafeModal>
+      </W.Footer>
+    </W.Root>
   );
 }

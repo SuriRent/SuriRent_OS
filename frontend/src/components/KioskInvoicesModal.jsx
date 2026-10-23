@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, Banknote, MessageCircle, Share2, Trash2,
-  CheckCircle2, ChevronRight, FileSignature, X, Mail, History, RefreshCw,
+  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, Banknote, Trash2,
+  CheckCircle2, ChevronRight, FileSignature, X, History, RefreshCw,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../lib/api';
 import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpers';
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
-import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import QuickPayModal from '../pages/vastgoed/admin/invoices/QuickPayModal';
 import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySection';
 
@@ -23,16 +22,6 @@ function statusOf(g) {
   if (g.overdueCount === 1) return { txt: '1 mnd achter', cls: 'text-amber-600' };
   if (g.currentCount > 0) return { txt: 'Deze maand open', cls: 'text-orange-600' };
   return { txt: 'Betaald', cls: 'text-emerald-600' };
-}
-
-async function shareInvoice(inv) {
-  const url = `${process.env.REACT_APP_BACKEND_URL}/api/invoices/${inv.id}/image`;
-  try {
-    const blob = await (await fetch(url)).blob();
-    const file = new File([blob], `factuur-${inv.invoice_number}.jpg`, { type: 'image/jpeg' });
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: `Factuur ${inv.invoice_number}` }); return; }
-  } catch { /* openen als terugval */ }
-  window.open(url, '_blank');
 }
 
 function TenantRow({ g, onOpen }) {
@@ -56,7 +45,7 @@ function TenantRow({ g, onOpen }) {
   );
 }
 
-function InvoiceRow({ inv, open, onPayInvoice, onRemind, onDelete }) {
+function InvoiceRow({ inv, open, onPayInvoice, onDelete }) {
   const rest = Number(inv.remaining_amount != null ? inv.remaining_amount : inv.amount || 0);
   return (
     <div className="rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3" data-testid={`invoice-row-${inv.id}`}>
@@ -68,23 +57,15 @@ function InvoiceRow({ inv, open, onPayInvoice, onRemind, onDelete }) {
         <div className="text-sm font-black text-slate-900">{open ? money(rest, inv.currency) : money(inv.amount, inv.currency)}</div>
         <div className={`text-[11px] font-bold uppercase tracking-wide ${open ? 'text-red-600' : 'text-emerald-600'}`}>{open ? 'Open' : 'Betaald'}</div>
       </div>
-      <button type="button" onClick={() => shareInvoice(inv)} aria-label="Delen" data-testid={`invoice-share-${inv.id}`}
-        className={`${ICON_BTN} text-slate-500 hover:bg-orange-50 hover:text-[#FF5C00]`}><Share2 className="w-4 h-4" /></button>
       {open && (
-        <>
-          <button type="button" onClick={() => onRemind('email')} aria-label="E-mail" data-testid={`invoice-email-${inv.id}`}
-            className={`${ICON_BTN} text-sky-600 hover:bg-sky-50`}><Mail className="w-4 h-4" /></button>
-          <button type="button" onClick={() => onRemind('whatsapp')} aria-label="WhatsApp" data-testid={`invoice-wa-${inv.id}`}
-            className={`${ICON_BTN} text-emerald-600 hover:bg-emerald-50`}><MessageCircle className="w-4 h-4" /></button>
           <button type="button" onClick={() => onDelete(inv)} aria-label="Verwijderen" data-testid={`invoice-delete-${inv.id}`}
             className={`${ICON_BTN} text-slate-400 hover:bg-red-50 hover:text-red-600`}><Trash2 className="w-4 h-4" /></button>
-        </>
       )}
     </div>
   );
 }
 
-function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete, onRebalanced }) {
+function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced }) {
   const [history, setHistory] = useState(false);
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState('');
@@ -142,21 +123,19 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onRemind, onDelete, onRe
       {rebalanceMsg && (
         <p className="text-xs font-bold text-slate-700 text-center" data-testid="invoices-modal-rebalance-msg">{rebalanceMsg}</p>
       )}
-      <div className={`grid ${g.dueCount > 0 ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
+      <div className={`grid ${g.dueCount > 0 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
         {g.dueCount > 0 && (
           <>
             <button type="button" onClick={() => onPay(g.tenant_id)} data-testid="invoices-modal-pay"
               className="h-11 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2"><Banknote className="w-4 h-4" /> Betalen</button>
-            <button type="button" onClick={() => onRemind(g, 'whatsapp')} data-testid="invoices-modal-remind"
-              className="h-11 rounded-xl bg-emerald-600 text-white font-black text-sm inline-flex items-center justify-center gap-2"><MessageCircle className="w-4 h-4" /> Herinnering</button>
           </>
         )}
         <button type="button" onClick={() => setHistory(true)} data-testid="invoices-modal-history"
-          className={`h-11 rounded-xl bg-slate-900 text-white font-black ${g.dueCount > 0 ? 'text-xs px-2 gap-1.5' : 'text-sm gap-2'} leading-tight inline-flex items-center justify-center min-w-0`}><History className="w-4 h-4 shrink-0" /> <span className="text-center">Betalings&shy;geschiedenis</span></button>
+          className={`h-11 rounded-xl bg-slate-900 text-white font-black ${g.dueCount > 0 ? 'text-sm px-2 gap-2' : 'text-sm gap-2'} leading-tight inline-flex items-center justify-center min-w-0`}><History className="w-4 h-4 shrink-0" /> <span className="text-center">Betalingsgeschiedenis</span></button>
       </div>
       {[...g.all].reverse().map((inv) => (
         <InvoiceRow key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete}
-          onPayInvoice={(i) => onPayInvoice(i, g)} onRemind={(ch) => onRemind(g, ch)} />
+          onPayInvoice={(i) => onPayInvoice(i, g)} />
       ))}
     </>
   );
@@ -172,7 +151,6 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
   const [msg, setMsg] = useState(null);
   const [creating, setCreating] = useState(false);
   const [tenants, setTenants] = useState([]);
-  const [reminding, setReminding] = useState(null);
   const [quickPay, setQuickPay] = useState(null);
 
   const load = useCallback(() => {
@@ -225,7 +203,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={footer}>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating ? null : footer} wide>
         {() => (
           <>
             {msg && (
@@ -234,9 +212,12 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
                 <button type="button" onClick={() => setMsg(null)} aria-label="Sluiten"><X className="w-4 h-4" /></button>
               </div>
             )}
-            {sel ? (
+            {creating ? (
+              <InvoiceForm inline tenants={tenants} onCancel={() => setCreating(false)}
+                onSaved={(r) => { setCreating(false); setMsg({ ok: true, text: `Factuur ${r?.invoice_number || ''} aangemaakt` }); load(); }} />
+            ) : sel ? (
               <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onPay={onPay} onDelete={del}
-                onRebalanced={load} onRemind={(g, ch) => setReminding({ g, ch })} onPayInvoice={(inv, g) => setQuickPay({ inv, g })} />
+                onRebalanced={load} onPayInvoice={(inv, g) => setQuickPay({ inv, g })} />
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2">
@@ -270,9 +251,6 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
           </>
         )}
       </Shell>
-      {creating && <InvoiceForm tenants={tenants} onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
-      {reminding && <ReminderModal group={reminding.g} initialChannel={reminding.ch} onClose={() => setReminding(null)}
-        onSent={() => { setReminding(null); setMsg({ ok: true, text: 'Herinnering verzonden' }); }} />}
       {quickPay && <QuickPayModal invoice={quickPay.inv} tenantName={quickPay.g.tenant_name} tenantPhone={quickPay.g.tenant_phone || ''}
         otherOpenInvoices={quickPay.g.open.filter((i) => i.id !== quickPay.inv.id)}
         onClose={() => setQuickPay(null)} onSuccess={() => { setQuickPay(null); load(); }} />}
