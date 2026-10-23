@@ -26,6 +26,7 @@ import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
 import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
@@ -606,7 +607,11 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
                    • unpaid  → Niet bet.  (rood)
                   Wanneer er geen facturen zijn, valt de backend terug op
                   "paid" (geen achterstand). */}
-              {a.pay_status === 'paid' ? (
+              {a.tenant_deposit_pending ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-sky-600 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-deposit-pending`}>
+                  <ClockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Wacht op borg
+                </span>
+              ) : a.pay_status === 'paid' ? (
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-paid`}>
                   <Check className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Betaald
                 </span>
@@ -1182,6 +1187,18 @@ function TenantOverview({ apartment, onBack, onPay }) {
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
             </div>
           </div>
+          {tenant.deposit_pending && (
+            <div className="mb-3 rounded-2xl bg-sky-50 border border-sky-200 p-3 flex items-center gap-3" data-testid="overview-deposit-pending">
+              <ShieldCheck className="w-7 h-7 text-sky-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-slate-900">Borg nog niet betaald</p>
+                <p className="text-xs text-slate-600">Contract en maandfacturen starten na de borgbetaling.</p>
+              </div>
+              <button type="button" data-testid="overview-deposit-pay"
+                onClick={() => window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: { ...tenant, apartment_number: apt.number, rent_amount: apt.rent_amount, currency: apt.currency } }))}
+                className="shrink-0 h-11 px-4 rounded-xl bg-[#FF5C00] text-white font-black text-sm">Borg betalen</button>
+            </div>
+          )}
           <div className="flex-1 divide-y divide-slate-100">
             {items.map((it) => {
               const Icon = it.icon;
@@ -4708,6 +4725,12 @@ export default function KioskLayout() {
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
   const closeInvoices = useCallback(() => { setShowInvoicesModal(false); returnToMenu(); }, []);
   const [adminPopup, setAdminPopup] = useState(null);
+  const [depositFor, setDepositFor] = useState(null);
+  useEffect(() => {
+    const h = (e) => setDepositFor(e.detail);
+    window.addEventListener('kiosk-deposit-open', h);
+    return () => window.removeEventListener('kiosk-deposit-open', h);
+  }, []);
   // Links in embedded beheer-pagina's (go-tab) openen de juiste kiosk-popup.
   useEffect(() => {
     const MAP = { tenants: 'huurders', payments: 'betalingen', apartments: 'appartementen', locations: 'locaties',
@@ -5252,10 +5275,11 @@ export default function KioskLayout() {
           key={tenantPrefill?.asset_id || 'manual'}
           prefill={tenantPrefill}
           onClose={() => { setShowAddTenant(false); setTenantPrefill(null); }}
-          onSaved={() => {
+          onSaved={(created) => {
             setShowAddTenant(false);
             setTenantPrefill(null);
             invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
+            if (created?.apartment_id && created?.deposit_status === 'pending') setDepositFor(created);
           }} />
       )}
       {showAddApartment && (
@@ -5287,6 +5311,11 @@ export default function KioskLayout() {
       {showInvoicesModal && hasAdminAccess && (
         <KioskInvoicesModal Shell={KioskModalShell} onClose={closeInvoices}
           onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
+      )}
+      {depositFor && (
+        <KioskDepositModal Shell={KioskModalShell} tenant={depositFor}
+          onClose={() => { setDepositFor(null); invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1); }}
+          onPaid={() => { if (apartment) setApartment({ ...apartment, _r: Date.now() }); }} />
       )}
       {adminPopup && hasAdminAccess && (
         <KioskAdminPopup id={adminPopup} Shell={KioskModalShell} onClose={() => { setAdminPopup(null); returnToMenu(); }} />

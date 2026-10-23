@@ -106,6 +106,9 @@ class TenantOut(TenantIn):
     rent_amount: Optional[float] = None
     currency: Optional[str] = None
     nfc_card_id: Optional[str] = None
+    deposit_required: bool = False
+    deposit_status: Optional[str] = None
+    deposit_id: Optional[str] = None
     created_at: str
 
 

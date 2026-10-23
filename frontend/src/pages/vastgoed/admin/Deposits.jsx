@@ -89,17 +89,25 @@ function DepositForm({ tenants, onCancel, onSaved }) {
   );
 }
 
+export const DEPOSIT_STATUS = {
+  held: { label: 'Ontvangen', cls: 'bg-amber-100 text-amber-700' },
+  refunded: { label: 'Gerestitueerd', cls: 'bg-emerald-100 text-emerald-700' },
+  partial: { label: 'Deels verrekend', cls: 'bg-sky-100 text-sky-700' },
+};
+
 function RefundForm({ deposit, onCancel, onSaved }) {
-  const [deduction, setDeduction] = useState(0);
+  const [damage, setDamage] = useState(0);
+  const [arrears, setArrears] = useState(0);
+  const deduction = (parseFloat(damage) || 0) + (parseFloat(arrears) || 0);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const refund = Math.max(deposit.amount - (parseFloat(deduction) || 0), 0);
+  const refund = Math.max(deposit.amount - deduction, 0);
   const submit = async () => {
     setLoading(true); setError('');
     try {
       const { data } = await api.post(`/deposits/${deposit.id}/refund`, {
-        deduction: parseFloat(deduction) || 0, refund_note: note,
+        deduction_damage: parseFloat(damage) || 0, deduction_arrears: parseFloat(arrears) || 0, refund_note: note,
       });
       onSaved(data);
     } catch (e) { setError(formatError(e)); }
@@ -118,8 +126,13 @@ function RefundForm({ deposit, onCancel, onSaved }) {
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Aftrek (schade etc.)</label>
-            <input type="number" step="0.01" value={deduction} onChange={(e) => setDeduction(e.target.value)} data-testid="refund-deduction" inputMode="decimal"
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Schadekosten</label>
+            <input type="number" step="0.01" value={damage} onChange={(e) => setDamage(e.target.value)} data-testid="refund-deduction-damage" inputMode="decimal"
+              className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Achterstallige huur</label>
+            <input type="number" step="0.01" value={arrears} onChange={(e) => setArrears(e.target.value)} data-testid="refund-deduction-arrears" inputMode="decimal"
               className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
           </div>
           <div>
@@ -194,9 +207,9 @@ export default function Deposits({ embedded = false }) {
               {detail.apartment_number && <p className="text-xs text-slate-500">Appt. {detail.apartment_number}</p>}
               {detail.note && <p className="text-sm text-slate-600 mt-2">{detail.note}</p>}
               <div className="flex items-center gap-2 flex-wrap mt-3">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                  isHeld ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                }`}>{isHeld ? 'In bewaring' : 'Gerestitueerd'}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${(DEPOSIT_STATUS[detail.status] || DEPOSIT_STATUS.held).cls}`}
+                  data-testid="deposit-detail-status">{(DEPOSIT_STATUS[detail.status] || DEPOSIT_STATUS.held).label}</span>
+                {detail.receipt_no && <span className="text-[10px] font-bold text-slate-500">{detail.receipt_no}</span>}
               </div>
             </div>
             <div className="text-right shrink-0">
@@ -205,6 +218,8 @@ export default function Deposits({ embedded = false }) {
               {!isHeld && detail.refund_amount !== undefined && detail.refund_amount !== null && (
                 <p className="text-[11px] text-slate-500">terug: {fmtMoney(detail.refund_amount, detail.currency)}</p>
               )}
+              {detail.deduction_damage > 0 && <p className="text-[11px] text-slate-500">schade: {fmtMoney(detail.deduction_damage, detail.currency)}</p>}
+              {detail.deduction_arrears > 0 && <p className="text-[11px] text-slate-500">achterstand: {fmtMoney(detail.deduction_arrears, detail.currency)}</p>}
             </div>
           </div>
         </div>
@@ -272,7 +287,7 @@ export default function Deposits({ embedded = false }) {
   return (
     <div>
       {confirmNode}
-      {!embedded && <PageHeader title="Borg / Deposits" subtitle={`${items.filter((d) => d.status === 'held').length} actief, ${items.filter((d) => d.status === 'refunded').length} gerestitueerd`}
+      {!embedded && <PageHeader title="Borg / Deposits" subtitle={`${items.filter((d) => d.status === 'held').length} actief, ${items.filter((d) => d.status !== 'held').length} gerestitueerd/verrekend`}
         action={
           <button onClick={() => setCreating(true)} data-testid="dep-new-btn"
             className="inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
@@ -291,8 +306,8 @@ export default function Deposits({ embedded = false }) {
             {items.map((d) => {
               const isHeld = d.status === 'held';
               const iconTint = isHeld ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700';
-              const statusCls = isHeld ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
-              const statusLabel = isHeld ? 'In bewaring' : 'Gerestitueerd';
+              const statusCls = (DEPOSIT_STATUS[d.status] || DEPOSIT_STATUS.held).cls;
+              const statusLabel = (DEPOSIT_STATUS[d.status] || DEPOSIT_STATUS.held).label;
               return (
                 <button key={d.id} data-testid={`dep-row-${d.id}`}
                   onClick={() => setDetail(d)}

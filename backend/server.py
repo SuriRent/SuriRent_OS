@@ -7607,7 +7607,9 @@ async def create_tenant(body: TenantIn, user=Depends(get_current_user)):
     if payload.get("email"):
         payload["email"] = payload["email"].strip().lower()
     payload["phone_digits"] = "".join(ch for ch in (payload.get("phone") or "") if ch.isdigit())
-    doc = {"id": new_id(), "company_id": cid, **payload, "created_at": iso(now_utc())}
+    doc = {"id": new_id(), "company_id": cid, **payload, "created_at": iso(now_utc()),
+           # Nieuwe huurder: eerst borg betalen, pas dan contract actief + facturen.
+           "deposit_required": True, "deposit_status": "pending"}
     await db.tenants.insert_one(doc)
     doc.pop("_id", None)
     if doc.get("apartment_id"):
@@ -7644,6 +7646,7 @@ async def create_tenant(body: TenantIn, user=Depends(get_current_user)):
                     "landlord": (company or {}).get("name") or "",
                     "terms": "",
                     "status": "draft",
+                    "active": False,
                     "sign_token": secrets.token_urlsafe(24),
                     "signed_at": None,
                     "signed_by": None,
@@ -10141,7 +10144,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
     docs = await db.apartments.find(q, proj).sort("number", 1).to_list(1000)
     tids = list({a["tenant_id"] for a in docs if a.get("tenant_id")})
     tenants, invoices = await asyncio.gather(
-        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1}).to_list(len(tids) or 1),
+        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1, "deposit_required": 1, "deposit_status": 1}).to_list(len(tids) or 1),
         db.invoices.find(
             {"tenant_id": {"$in": tids}, "status": {"$nin": ["paid", "cancelled"]}, "kind": {"$in": [None, "huur"]}},
             {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1, "period_month": 1, "period_year": 1},
@@ -10178,6 +10181,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
             "tenant_id": a.get("tenant_id"),
             "tenant_name": t.get("name"),
             "tenant_avatar_url": t.get("avatar_url") or None,
+            "tenant_deposit_pending": bool(t.get("deposit_required") and t.get("deposit_status") != "paid"),
             "tenant_id_photo_url": t.get("id_photo_url") or None,
             "show_tenant_photo": bool(a.get("show_tenant_photo") or False),
             "location_id": a.get("location_id"),
@@ -10329,6 +10333,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             "phone": t.get("phone", ""),
             "email": t.get("email", ""),
             "avatar_url": t.get("avatar_url") or None,
+            "deposit_pending": bool(t.get("deposit_required") and t.get("deposit_status") != "paid"),
         },
         "apartment": apt and {
             "id": apt["id"],
@@ -14033,7 +14038,7 @@ async def _apply_tenant_credit_to_invoice(
 
 
 async def _generate_month_invoices_for_company(
-    company_id: str, period_month: int, period_year: int, *, scope_user=None
+    company_id: str, period_month: int, period_year: int, *, scope_user=None, only_tenant_id: str = None
 ) -> dict:
     """Gedeelde factuur-generatie. Maakt facturen voor elk bewoond appartement,
     skipt duplicates, en verrekent automatisch eventueel krediet.
@@ -14061,7 +14066,11 @@ async def _generate_month_invoices_for_company(
         t = await db.tenants.find_one(
             {"id": a["tenant_id"], "company_id": company_id}, {"_id": 0}
         )
-        if not t:
+        if not t or (only_tenant_id and t["id"] != only_tenant_id):
+            skipped += 1
+            continue
+        # Nieuwe huurder zonder betaalde borg: nog geen facturen.
+        if t.get("deposit_required") and t.get("deposit_status") != "paid":
             skipped += 1
             continue
         dup = await db.invoices.find_one({
@@ -15102,7 +15111,11 @@ class DepositOut(BaseModel):
     apartment_number: Optional[str] = None
     amount: float
     currency: str
-    status: str  # held | refunded
+    status: str  # held (ontvangen) | refunded (gerestitueerd) | partial (deels verrekend)
+    method: Optional[str] = None
+    receipt_no: Optional[str] = None
+    deduction_damage: float = 0
+    deduction_arrears: float = 0
     deduction: float = 0
     refund_amount: float = 0
     refund_note: Optional[str] = ""
@@ -15162,6 +15175,8 @@ async def create_deposit(body: DepositIn, user=Depends(get_current_user)):
 
 class DepositRefundIn(BaseModel):
     deduction: float = 0
+    deduction_damage: float = 0
+    deduction_arrears: float = 0
     refund_note: Optional[str] = ""
 
 
@@ -15172,12 +15187,17 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
         raise HTTPException(status_code=404, detail="Borg niet gevonden")
     if d["status"] != "held":
         raise HTTPException(status_code=400, detail="Borg is al gerestitueerd")
-    refund_amount = max(d["amount"] - body.deduction, 0)
+    damage = max(float(body.deduction_damage or 0), 0)
+    arrears = max(float(body.deduction_arrears or 0), 0)
+    deduction = (damage + arrears) if (damage or arrears) else max(float(body.deduction or 0), 0)
+    deduction = min(deduction, float(d["amount"]))
+    refund_amount = max(d["amount"] - deduction, 0)
     from pymongo import ReturnDocument
     updated = await db.deposits.find_one_and_update(
         {"id": did, **scope(user)},
         {"$set": {
-            "status": "refunded", "deduction": body.deduction,
+            "status": "partial" if deduction > 0 else "refunded", "deduction": deduction,
+            "deduction_damage": damage, "deduction_arrears": arrears,
             "refund_amount": refund_amount,
             "refund_note": body.refund_note or "",
             "refunded_at": iso(now_utc()),
@@ -15699,6 +15719,114 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
         "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
     }
+
+
+class KioskDepositPayIn(BaseModel):
+    amount: float
+    currency: str = "SRD"
+    method: str = "cash"
+    note: Optional[str] = ""
+
+
+@api.post("/kiosk/tenants/{tenant_id}/deposit-payment")
+async def kiosk_deposit_payment(tenant_id: str, body: KioskDepositPayIn, _session=Depends(get_kiosk_session)):
+    """Verplichte eerste stap nieuwe huurder: borg registreren → contract actief → facturen starten."""
+    cid = _session.get("company_id")
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    if t.get("deposit_status") == "paid":
+        raise HTTPException(status_code=400, detail="Borg is al betaald")
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Bedrag moet groter dan 0 zijn")
+    seq = await _next_seq(f"deposit_{now_utc().year}")
+    doc = {
+        "id": new_id(), "company_id": cid, "tenant_id": tenant_id,
+        "amount": float(body.amount), "currency": body.currency or "SRD",
+        "method": body.method or "cash", "receipt_no": f"BB{now_utc().year}-{seq:04d}",
+        "status": "held", "deduction": 0, "deduction_damage": 0, "deduction_arrears": 0,
+        "refund_amount": 0, "refund_note": "", "note": body.note or "",
+        "created_by_name": _session.get("employee_name") or _session.get("name") or "",
+        "created_at": iso(now_utc()), "refunded_at": None,
+    }
+    await db.deposits.insert_one(doc)
+    doc.pop("_id", None)
+    await db.tenants.update_one({"id": tenant_id, "company_id": cid},
+                                {"$set": {"deposit_status": "paid", "deposit_id": doc["id"]}})
+    await db.contracts.update_many({"tenant_id": tenant_id, "company_id": cid}, {"$set": {"active": True}})
+    n = now_utc()
+    gen = await _generate_month_invoices_for_company(cid, n.month, n.year, only_tenant_id=tenant_id)
+    return {"deposit": await _enrich_deposit(doc), "invoices_created": gen.get("created", 0)}
+
+
+async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False) -> dict:
+    cid = session.get("company_id")
+    d = await db.deposits.find_one({"id": did, "company_id": cid}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Borg niet gevonden")
+    d = await _enrich_deposit(d)
+    company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
+    cfg = await _kiosk_device_config(cid)
+    printer = "kt-v520" if force_ktp else cfg["printer"]
+    paper = 58 if printer == "kt-v520" else cfg["paper_width"]
+    W = 34 if paper == 80 else 22
+    cur = d.get("currency") or "SRD"
+
+    def money(v):
+        return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def L(text, align="left", bold=False, size="normal"):
+        return {"text": text, "align": align, "bold": bold, "size": size}
+
+    def pair(label, value, bold=False):
+        txt = f"{label} {value}"
+        return [L(txt, bold=bold)] if len(txt) <= W else [L(label, bold=bold), L(value, bold=bold)]
+
+    try:
+        dt = datetime.fromisoformat(str(d.get("created_at")).replace("Z", "+00:00"))
+    except Exception:
+        dt = now_utc()
+    datum = dt.astimezone(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
+    methods = {"cash": "Contant", "pin": "Pinpas", "card": "Pinpas", "bank": "Bankoverschrijving"}
+    dash = "-" * W
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("BORGBON", "center", True), L(dash),
+             L(f"NR. {d.get('receipt_no') or did[:6].upper()}"), L(f"DATUM {datum}"), L(dash)]
+    lines += pair("Huurder:", d.get("tenant_name") or "-")
+    if d.get("apartment_number"):
+        lines += pair("Appt.:", d["apartment_number"])
+    lines += pair("Methode:", methods.get(d.get("method") or "", d.get("method") or "-"))
+    lines.append(L(dash))
+    lines += pair("Borg:", money(d.get("amount")), bold=True)
+    lines += [L(dash), L("Borg ontvangen.", "center"), L(""), L("")]
+    return {
+        "template": "lines", "receipt_type": "deposit",
+        "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": d.get("created_by_name") or "",
+        "datum": datum, "bedrag": money(d.get("amount")),
+        "lettergrootte": font_size, "textZoom": text_zoom,
+        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
+        "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
+    }
+
+
+@api.get("/kiosk/deposits/{did}/print-data")
+async def kiosk_deposit_print_data(did: str, _session=Depends(get_kiosk_session)):
+    return await _deposit_receipt_data(did, _session)
+
+
+@api.get("/kiosk/deposits/{did}/receipt.png")
+async def kiosk_deposit_receipt_png(did: str, _session=Depends(get_kiosk_session)):
+    data = await _deposit_receipt_data(did, _session, force_ktp=True)
+    return Response(content=_render_receipt_png(data), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@api.post("/kiosk/deposits/{did}/remote-print")
+async def kiosk_deposit_remote_print(did: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    data = await _deposit_receipt_data(did, _session, force_ktp=True)
+    return {"job_id": await _publish_remote_print(cid, body.printer_id, {
+        "deposit_id": did, "url": f"/api/kiosk/deposits/{did}/receipt.png", "data": data})}
 
 
 @api.get("/kiosk/kasgeld/{entry_id}/print-data")

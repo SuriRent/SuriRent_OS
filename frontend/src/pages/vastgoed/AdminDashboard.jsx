@@ -2925,6 +2925,10 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
       } else {
         const { data: r } = await api.post('/tenants', payload);
         saved = r;
+        // Kiosk: nieuwe huurder met appartement → direct de verplichte borgstap.
+        if (r?.apartment_id && r?.deposit_status === 'pending') {
+          setTimeout(() => window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: r })), 300);
+        }
       }
       // NFC-kaart synchroniseren (aparte endpoint met uniciteit-check).
       const newNfc = (data.nfc_card_id || '').toUpperCase();
@@ -3144,6 +3148,40 @@ function TenantPinModal({ tenant, onCancel, onSaved }) {
         )}
       </KeyboardSafeModal.Footer>
     </KeyboardSafeModal>
+  );
+}
+
+// Borg in het huurdersdossier: ontvangen / gerestitueerd / deels verrekend.
+function TenantDepositCard({ tenant }) {
+  const { data } = useApiSWR('/deposits');
+  const deps = (Array.isArray(data) ? data : []).filter((d) => d.tenant_id === tenant.id);
+  const ST = { held: ['Ontvangen', 'bg-amber-100 text-amber-700'], refunded: ['Gerestitueerd', 'bg-emerald-100 text-emerald-700'], partial: ['Deels verrekend', 'bg-sky-100 text-sky-700'] };
+  const pending = tenant.deposit_required && tenant.deposit_status !== 'paid';
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4" data-testid="tenant-deposit-card">
+      <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Borg</h2>
+      {pending && <p className="text-sm font-bold text-sky-700" data-testid="tenant-deposit-pending">Wacht op borg — contract en facturen starten na betaling</p>}
+      {!pending && deps.length === 0 && <p className="text-sm text-slate-500">Geen borg geregistreerd</p>}
+      <div className="space-y-2">
+        {deps.map((d) => {
+          const [label, cls] = ST[d.status] || ST.held;
+          return (
+            <div key={d.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2" data-testid={`tenant-deposit-${d.id}`}>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-900">{fmtMoney(d.amount, d.currency)}{d.receipt_no ? <span className="text-xs font-bold text-slate-400"> · {d.receipt_no}</span> : null}</p>
+                <p className="text-xs text-slate-500">
+                  {new Date(d.created_at).toLocaleDateString('nl-NL')}
+                  {d.status !== 'held' && ` · terug ${fmtMoney(d.refund_amount, d.currency)}`}
+                  {d.deduction_damage > 0 && ` · schade ${fmtMoney(d.deduction_damage, d.currency)}`}
+                  {d.deduction_arrears > 0 && ` · achterstand ${fmtMoney(d.deduction_arrears, d.currency)}`}
+                </p>
+              </div>
+              <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${cls}`}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -3720,6 +3758,7 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onDelete, onReload }) 
           onSaved={async () => { setCropOpen(false); if (onReload) await onReload(); }} />
       )}
 
+      <TenantDepositCard tenant={t} />
       <TenantNfcCard tenant={t} onReload={onReload} />
 
       {/* Acties */}
