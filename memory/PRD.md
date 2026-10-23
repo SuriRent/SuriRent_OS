@@ -1005,3 +1005,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-10: Telefoon: tandwiel rechtsboven verborgen; + sheet tegel Beheerder opent het Instellingenmenu (kiosk-open-menu settings) als admin_token aanwezig, anders oude gedrag.
 - 2026-10: Oranje modus: bovenbalk (kiosk-head-wrap/kiosk-desktop-header) en onderste menubalk donker oranje #C94400, midden fel oranje (index.css .kiosk-fullscreen:not(.kiosk-white)).
 - 2026-10: Oranje modus omgedraaid: balken licht #FF7A2E, midden donker #D94A00.
+- 2026-10: Oranje modus verfijnd (spiegel van witte modus): balken #FF6B1A met zachte schaduw/rand, midden #EF5600.

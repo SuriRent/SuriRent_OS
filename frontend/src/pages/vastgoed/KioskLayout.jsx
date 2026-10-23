@@ -5317,7 +5317,7 @@ export default function KioskLayout() {
           fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
           ook bovenop een geopende modal (modals gebruiken z-[100]). */}
       {showDesktopBar && createPortal((
-        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF7A2E] border-white/25 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]'}`}
+        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
