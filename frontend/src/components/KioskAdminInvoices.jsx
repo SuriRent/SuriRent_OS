@@ -3,7 +3,7 @@ import { FileSignature, Loader2, ArrowLeft, CreditCard, Users } from 'lucide-rea
 
 // Volledige beheer-pagina's die in de kiosk (hamburgermenu) geopend kunnen worden.
 export const KIOSK_ADMIN_PAGES = {
-  facturen: { label: 'Facturen', Icon: FileSignature, Page: lazy(() => import('../pages/vastgoed/admin/Invoices')) },
+  facturen: { label: 'Facturen', Icon: FileSignature, custom: true, Page: lazy(() => import('./KioskInvoicesPage')) },
   betalingen: { label: 'Betalingen', Icon: CreditCard, Page: lazy(() => import('../pages/vastgoed/admin/Payments')) },
   huurders: { label: 'Huurders', Icon: Users, Page: lazy(() => import('../pages/vastgoed/AdminDashboard').then((m) => ({ default: m.Tenants }))) },
 };
@@ -20,12 +20,19 @@ export function KioskAdminPageTile({ id, onOpen }) {
 }
 
 export function KioskAdminPage({ id, onBack }) {
-  const { Page } = KIOSK_ADMIN_PAGES[id];
+  const { Page, custom } = KIOSK_ADMIN_PAGES[id];
   // Vensters (portals) die vanaf deze pagina openen krijgen ook de kiosk-stijl.
   useEffect(() => {
     document.body.classList.add('kiosk-admin-active');
     return () => document.body.classList.remove('kiosk-admin-active');
   }, []);
+  if (custom) {
+    return (
+      <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
+        <Page onBack={onBack} />
+      </Suspense>
+    );
+  }
   return (
     <div className="h-full bg-[#F4F5F7] flex flex-col" data-testid={`kiosk-admin-page-${id}`}>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6">
