@@ -233,7 +233,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
     <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose} data-testid={`${testId}-overlay`}>
       <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
-        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-3xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-4xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
         <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2">
@@ -267,7 +267,20 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
   ), document.body);
 }
 
-const navAdmin = (id) => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${id}` }));
+// Onthoud vanuit welk menu een popup is geopend, zodat sluiten terugkeert naar dat menu.
+let menuOrigin = null;
+const navAdmin = (id, origin) => { menuOrigin = origin; window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${id}` })); };
+const returnToMenu = () => {
+  const o = menuOrigin; menuOrigin = null;
+  if (o) window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: o }));
+};
+function useMenuReopen(name, setOpen) {
+  useEffect(() => {
+    const h = (e) => { if (e.detail === name) setOpen(true); };
+    window.addEventListener('kiosk-open-menu', h);
+    return () => window.removeEventListener('kiosk-open-menu', h);
+  }, [name, setOpen]);
+}
 
 function useAdminRole(isAdmin) {
   const [role, setRole] = useState(null);
@@ -284,9 +297,10 @@ function KioskSettingsMenu() {
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
+  useMenuReopen('settings', setOpen);
   if (!isAdmin || !role || role === 'boekhouder') return null;
   const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
-    id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`),
+    id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
   return (
     <>
@@ -304,11 +318,12 @@ function KioskAdminMenu() {
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
+  useMenuReopen('admin', setOpen);
   if (!isAdmin) return null;
   const items = [
     ...Object.keys(KIOSK_ADMIN_PAGES)
       .filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)))
-      .map((id) => ({ id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon, testid: `kiosk-admin-menu-${id}`, onClick: () => navAdmin(id) })),
+      .map((id) => ({ id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon, testid: `kiosk-admin-menu-${id}`, onClick: () => navAdmin(id, 'admin') })),
     ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
   ];
   return (
@@ -4668,7 +4683,7 @@ export default function KioskLayout() {
   // navigeer naar het kiosk-niveau scherm (kasgeld / admin / exit).
   const [phoneScanOpen, setPhoneScanOpen] = useState(false);
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
-  const closeInvoices = useCallback(() => setShowInvoicesModal(false), []);
+  const closeInvoices = useCallback(() => { setShowInvoicesModal(false); returnToMenu(); }, []);
   const [adminPopup, setAdminPopup] = useState(null);
   // Links in embedded beheer-pagina's (go-tab) openen de juiste kiosk-popup.
   useEffect(() => {
@@ -5241,7 +5256,7 @@ export default function KioskLayout() {
           onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
       )}
       {adminPopup && hasAdminAccess && (
-        <KioskAdminPopup id={adminPopup} Shell={KioskModalShell} onClose={() => setAdminPopup(null)} />
+        <KioskAdminPopup id={adminPopup} Shell={KioskModalShell} onClose={() => { setAdminPopup(null); returnToMenu(); }} />
       )}
       {showPaymentsViewer && (
         <PaymentsViewerModal
