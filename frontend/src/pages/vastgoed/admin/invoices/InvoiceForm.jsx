@@ -16,12 +16,12 @@ const INLINE = { Root: ({ children }) => <div className="space-y-4" data-testid=
 const MODAL = { Root: KeyboardSafeModal, Header: KeyboardSafeModal.Header, Body: KeyboardSafeModal.Body, Footer: KeyboardSafeModal.Footer };
 
 // `inline` = zonder eigen popup, voor gebruik binnen een bestaande popup (kiosk).
-export default function InvoiceForm({ tenants, onCancel, onSaved, inline = false }) {
+export default function InvoiceForm({ tenants, onCancel, onSaved, inline = false, initialTenantId = '' }) {
   const W = inline ? INLINE : MODAL;
   const today = new Date();
   const [mode, setMode] = useState('normal'); // 'normal' | 'historical'
   const [data, setData] = useState({
-    tenant_id: '',
+    tenant_id: initialTenantId,
     period_month: today.getMonth() + 1,
     period_year: today.getFullYear(),
   });

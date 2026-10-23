@@ -169,13 +169,14 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
   const s = data?.summary || {};
   const month = MONTHS_NL[new Date().getMonth()];
 
+  const [confirmGen, setConfirmGen] = useState(false);
   const generate = async () => {
     const t = new Date();
-    if (!window.confirm(`Maandfacturen voor ${month} ${t.getFullYear()} aanmaken voor alle bezette appartementen?`)) return;
     setBusy(true); setMsg(null);
     try {
       const { data: d } = await api.post('/invoices/generate-month', { period_month: t.getMonth() + 1, period_year: t.getFullYear() });
       setMsg({ ok: true, text: `${d.created} aangemaakt, ${d.skipped} overgeslagen` });
+      setConfirmGen(false);
       load();
     } catch (e) { setMsg({ ok: false, text: formatError(e) }); }
     finally { setBusy(false); }
@@ -188,11 +189,11 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   const footer = (
     <div className="grid grid-cols-2 gap-2">
-      <button type="button" onClick={generate} disabled={busy} data-testid="invoices-modal-generate"
+      <button type="button" onClick={() => { setMsg(null); setConfirmGen(true); }} data-testid="invoices-modal-generate"
         className="h-12 rounded-xl bg-orange-50 text-[#FF5C00] font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarPlus className="w-4 h-4" />} Genereer {month}
+        <CalendarPlus className="w-4 h-4" /> Genereer {month}
       </button>
-      <button type="button" onClick={() => setCreating(true)} data-testid="invoices-modal-new"
+      <button type="button" onClick={() => { setMsg(null); setCreating(sel?.tenant_id || true); }} data-testid="invoices-modal-new"
         className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
         <FilePlus2 className="w-4 h-4" /> Nieuwe factuur
       </button>
@@ -203,7 +204,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating ? null : footer} wide>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide>
         {() => (
           <>
             {msg && (
@@ -212,8 +213,22 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
                 <button type="button" onClick={() => setMsg(null)} aria-label="Sluiten"><X className="w-4 h-4" /></button>
               </div>
             )}
-            {creating ? (
-              <InvoiceForm inline tenants={tenants} onCancel={() => setCreating(false)}
+            {confirmGen ? (
+              <div className="py-4 space-y-4 text-center" data-testid="invoices-modal-generate-confirm">
+                <CalendarPlus className="w-10 h-10 text-[#FF5C00] mx-auto" />
+                <div className="text-lg font-black text-slate-900">Genereer {month} {new Date().getFullYear()}</div>
+                <p className="text-sm text-slate-600">Maandfacturen aanmaken voor alle bezette appartementen? Bestaande facturen worden overgeslagen.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setConfirmGen(false)} disabled={busy} data-testid="invoices-modal-generate-cancel"
+                    className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
+                  <button type="button" onClick={generate} disabled={busy} data-testid="invoices-modal-generate-confirm-btn"
+                    className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Ja, genereren
+                  </button>
+                </div>
+              </div>
+            ) : creating ? (
+              <InvoiceForm inline tenants={tenants} initialTenantId={typeof creating === 'string' ? creating : ''} onCancel={() => setCreating(false)}
                 onSaved={(r) => { setCreating(false); setMsg({ ok: true, text: `Factuur ${r?.invoice_number || ''} aangemaakt` }); load(); }} />
             ) : sel ? (
               <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onPay={onPay} onDelete={del}

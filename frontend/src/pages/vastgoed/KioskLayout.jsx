@@ -4011,7 +4011,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()}
-        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-[35rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
+        className={`w-full h-full sm:h-auto ${wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
         <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
