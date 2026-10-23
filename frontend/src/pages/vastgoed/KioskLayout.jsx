@@ -227,7 +227,7 @@ function KioskAdminMenu() {
   }, [open]);
   if (!isAdmin) return null;
   return (
-    <div ref={ref} className="relative hidden md:block shrink-0">
+    <div ref={ref} className="relative shrink-0">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Beheermenu"
         data-testid="kiosk-admin-menu-btn"
         className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${open ? 'bg-white/30' : 'bg-white/15 hover:bg-white/25'}`}>
@@ -235,7 +235,7 @@ function KioskAdminMenu() {
       </button>
       {open && (
         <div data-testid="kiosk-admin-menu" role="menu"
-          className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,80vw)] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-5 animate-in fade-in slide-in-from-top-2 duration-150">
+          className="absolute left-0 top-full mt-3 z-[60] w-[min(640px,calc(100vw-1rem))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.45)] ring-1 ring-slate-200 p-4 md:p-5 animate-in fade-in slide-in-from-top-2 duration-150">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Beheer</p>
           <div className="grid grid-cols-3 gap-3">
             {Object.keys(KIOSK_ADMIN_PAGES).map((id) => (
