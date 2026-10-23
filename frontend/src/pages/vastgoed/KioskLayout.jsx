@@ -24,7 +24,7 @@ import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinanc
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
-import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
+import { KioskInvoicesFullscreen } from '../../components/KioskInvoicesFullscreen';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -4645,6 +4645,7 @@ export default function KioskLayout() {
   // navigeer naar het kiosk-niveau scherm (kasgeld / admin / exit).
   const [phoneScanOpen, setPhoneScanOpen] = useState(false);
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+  const closeInvoices = useCallback(() => setShowInvoicesModal(false), []);
   const [tenantPrefill, setTenantPrefill] = useState(null);
   const [scanToast, setScanToast] = useState(null);
   // Desktop: ID-scan van de telefoon van dezelfde gebruiker → Nieuwe huurder opent ingevuld.
@@ -5172,8 +5173,7 @@ export default function KioskLayout() {
           onSaved={() => setShowAddInvoice(false)} />
       )}
       {showInvoicesModal && hasAdminAccess && (
-        <KioskInvoicesModal Shell={KioskModalShell} onClose={() => setShowInvoicesModal(false)}
-          onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
+        <KioskInvoicesFullscreen onClose={closeInvoices} />
       )}
       {showPaymentsViewer && (
         <PaymentsViewerModal
