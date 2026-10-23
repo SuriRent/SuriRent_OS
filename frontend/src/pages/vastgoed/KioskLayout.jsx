@@ -24,6 +24,7 @@ import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinanc
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
+import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
@@ -4643,6 +4644,7 @@ export default function KioskLayout() {
   // Bottom-sheet tegel selectie → open de bijbehorende modal of
   // navigeer naar het kiosk-niveau scherm (kasgeld / admin / exit).
   const [phoneScanOpen, setPhoneScanOpen] = useState(false);
+  const [showInvoicesModal, setShowInvoicesModal] = useState(false);
   const [tenantPrefill, setTenantPrefill] = useState(null);
   const [scanToast, setScanToast] = useState(null);
   // Desktop: ID-scan van de telefoon van dezelfde gebruiker → Nieuwe huurder opent ingevuld.
@@ -4974,7 +4976,10 @@ export default function KioskLayout() {
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
-    const onNav = (e) => { if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail); };
+    const onNav = (e) => {
+      if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail);
+    };
     window.addEventListener('kiosk-nav', onNav);
     return () => window.removeEventListener('kiosk-nav', onNav);
   }, []);
@@ -4986,6 +4991,18 @@ export default function KioskLayout() {
     setApartment(a);
     setStep('overview');
   };
+  // Kiosk-Facturen "Betalen" → open het financieel overzicht van die huurder.
+  useEffect(() => {
+    const onOpen = async (e) => {
+      const tid = e.detail?.tenant_id;
+      if (!tid) return;
+      const d = await fetchKioskSelect().catch(() => null);
+      const apt = (d?.apartments || []).find((x) => x.tenant_id === tid);
+      if (apt) pickSearched(apt);
+    };
+    window.addEventListener('kiosk-open-tenant', onOpen);
+    return () => window.removeEventListener('kiosk-open-tenant', onOpen);
+  });
   const barRef = useRef(null);
   const headRef = useRef(null);
   useEffect(() => {
@@ -5153,6 +5170,10 @@ export default function KioskLayout() {
         <AddInvoiceModal
           onClose={() => setShowAddInvoice(false)}
           onSaved={() => setShowAddInvoice(false)} />
+      )}
+      {showInvoicesModal && hasAdminAccess && (
+        <KioskInvoicesModal Shell={KioskModalShell} onClose={() => setShowInvoicesModal(false)}
+          onPay={(tid) => { setShowInvoicesModal(false); window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tid } })); }} />
       )}
       {showPaymentsViewer && (
         <PaymentsViewerModal
