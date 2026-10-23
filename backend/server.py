@@ -10324,6 +10324,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             "name": t["name"],
             "phone": t.get("phone", ""),
             "email": t.get("email", ""),
+            "avatar_url": t.get("avatar_url") or None,
         },
         "apartment": apt and {
             "id": apt["id"],

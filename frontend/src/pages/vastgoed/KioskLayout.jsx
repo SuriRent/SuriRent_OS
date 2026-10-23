@@ -1883,8 +1883,8 @@ function PaySelect({ overview, onBack, onConfirm }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2">
-      <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 py-2">
+    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 md:pt-3">
+      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -1899,6 +1899,14 @@ function PaySelect({ overview, onBack, onConfirm }) {
       <div className="flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2">
         {/* LEFT — Payment items */}
         <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col min-w-0 p-2 sm:p-3">
+          <div className="hidden md:flex items-center gap-3 px-1 pb-3 mb-2 border-b border-slate-100" data-testid="payselect-tenant">
+            <OverviewTenantPhoto src={tenant.avatar_url} name={tenant.name} />
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">{isAdvance ? 'Vooruitbetaling registreren' : 'Wat wilt u betalen?'}</p>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">{tenant.name}</h3>
+              <p className="text-xs text-slate-500">Appt. {apt.number}</p>
+            </div>
+          </div>
           {(enabled.length > 1 || planInstallments.length > 0) && (
             <button onClick={selectAll} data-testid="pay-select-all"
               className={`w-full flex items-center justify-between rounded-lg border-2 transition px-2.5 py-2 sm:px-3 sm:py-2.5 mb-1.5 ${
@@ -2472,7 +2480,7 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
       <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="method-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
+          className="md:hidden flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
         <span className="text-sm sm:text-base font-semibold text-white">
@@ -2655,7 +2663,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
       <div className="kiosk-chrome flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="confirm-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
+          className="md:hidden flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
         <span className="text-sm sm:text-base font-semibold text-white">Bevestig betaling</span>
@@ -5042,15 +5050,21 @@ export default function KioskLayout() {
     h.i = h.list.length - 1;
     setHistTick((t) => t + 1);
   }, [step, apartment]);
+  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
   const goHist = (d) => {
     const h = hist.current;
+    if (d < 0 && !stableStep && h.list[h.i]) {
+      const cur = h.list[h.i]; h.nav = true;
+      setApartment(cur.apartment); setStep(cur.step); setHistTick((t) => t + 1);
+      return;
+    }
     const e = h.list[h.i + d];
     if (!e) return;
     h.i += d; h.nav = true;
     setApartment(e.apartment); setStep(e.step);
     setHistTick((t) => t + 1);
   };
-  const canBack = hist.current.i > 0;
+  const canBack = hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
   const showTopHead = step !== 'check' && step !== 'select';
