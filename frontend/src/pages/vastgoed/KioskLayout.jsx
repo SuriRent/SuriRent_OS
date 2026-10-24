@@ -225,7 +225,7 @@ const HAMBURGER_HIDDEN = ['instellingen', 'overzicht'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
 
 // Menu: telefoon = volledig scherm (zoals het + menu), desktop/iPad = popup in het midden.
-function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
+function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
   const { theme } = useContext(KioskThemeCtx);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -236,7 +236,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId }) {
     <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose} data-testid={`${testId}-overlay`}>
       <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
-        className={`w-full h-full md:h-auto md:max-h-[85dvh] md:max-w-4xl md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        className={`w-full h-full md:h-auto md:max-h-[85dvh] ${wide ? 'md:max-w-5xl' : 'md:max-w-4xl'} md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
         <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2">
@@ -348,7 +348,7 @@ function KioskAdminMenu() {
         className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors bg-white/15 hover:bg-white/25">
         <MenuIcon className="w-5 h-5" strokeWidth={2.4} />
       </button>
-      {open && <KioskMenuPanel title="Beheer" Icon={MenuIcon} items={items} onClose={close} testId="kiosk-admin-menu" />}
+      {open && <KioskMenuPanel wide title="Beheer" Icon={MenuIcon} items={items} onClose={close} testId="kiosk-admin-menu" />}
     </div>
   );
 }
