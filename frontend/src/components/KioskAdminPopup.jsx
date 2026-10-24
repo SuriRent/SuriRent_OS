@@ -38,7 +38,7 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
     </div>
   );
   return (
-    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide tall>
+    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide xwide tall>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
         <Page embedded section={inst?.id} />
       </Suspense>

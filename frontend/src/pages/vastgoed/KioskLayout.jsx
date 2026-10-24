@@ -252,7 +252,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pt-1 md:pt-5 pb-4"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 md:grid-cols-4 ${wide ? 'lg:grid-cols-5' : ''} gap-3`}>
             {items.map((t, i) => (
               <button key={t.id} type="button" role="menuitem" data-testid={t.testid} onClick={() => { onClose(); t.onClick(); }}
                 style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
@@ -4136,7 +4136,7 @@ function KioskHistBtn({ dir, disabled, onClick, white }) {
   );
 }
 
-function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false }) {
+function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
   const [host, setHost] = useState(null);
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
   // toetsenbord op iOS/Android. Zonder deze tracking scrollt iOS de
@@ -4165,7 +4165,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div onClick={(e) => e.stopPropagation()} 
-        className={`w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
+        className={`w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
         <ModalHostContext.Provider value={tall ? host : null}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
