@@ -402,11 +402,6 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
         )}
         <HeaderLive />
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'tenants' }))}
-          data-testid="kiosk-header-tenants" aria-label="Huurders"
-          className="hidden md:flex w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors">
-          <Users className="w-5 h-5" />
-        </button>
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskSettingsMenu />
