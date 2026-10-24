@@ -5487,8 +5487,13 @@ export default function KioskLayout() {
           </button>
           {/* Grote telefoons (≥390px): onderste menubalk met + in het midden. */}
           <nav data-testid="kiosk-mobile-bottom-bar"
-            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-4 border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
+            <button type="button" onClick={() => goHist(-1)} disabled={!canBack} data-testid="kiosk-mobile-bar-back"
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              <ChevronLeft className="w-6 h-6" strokeWidth={2.4} />
+              <span className="text-xs font-bold leading-none">Terug</span>
+            </button>
             <button type="button" onClick={() => setPhoneScanOpen(true)} data-testid="kiosk-mobile-bar-scanid"
               className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
               <ScanLine className="w-6 h-6" strokeWidth={2.4} />
@@ -5502,6 +5507,11 @@ export default function KioskLayout() {
               className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
               <Database className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Kasgeld</span>
+            </button>
+            <button type="button" onClick={() => goHist(1)} disabled={!canFwd} data-testid="kiosk-mobile-bar-next"
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              <ChevronRight className="w-6 h-6" strokeWidth={2.4} />
+              <span className="text-xs font-bold leading-none">Volgende</span>
             </button>
           </nav>
         </>
