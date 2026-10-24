@@ -6,7 +6,7 @@ import KeyboardSafeModal from './KeyboardSafeModal';
 import { DepositReceiptScreen } from './KasgeldReceipt';
 import { DamageRows, SumRow } from '../pages/vastgoed/admin/Deposits';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toLocaleDateString('en-CA');
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('nl-NL') : '—');
 
 function ArrearsList({ preview, excluded, setExcluded, cur }) {

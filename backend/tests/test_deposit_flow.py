@@ -132,8 +132,10 @@ class TestDepositFlow:
         assert m and m[0]["apartment_number"] == "TEST-BORG-API" and m[0]["method"] == "cash"
 
     def test_refund_partial(self, admin):
+        ex = [i["invoice_id"] for i in admin.get(f"{BASE_URL}/api/deposits/{STATE['did']}/refund-preview").json()["arrears_items"]]
         r = admin.post(f"{BASE_URL}/api/deposits/{STATE['did']}/refund",
-                       json={"deduction_damage": 100, "deduction_arrears": 200, "refund_note": "TEST"})
+                       json={"damage_items": [{"description": "a", "amount": 100}, {"description": "b", "amount": 200}],
+                             "exclude_invoice_ids": ex, "refund_note": "TEST"})
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["status"] == "partial" and d["refund_amount"] == 700 and d["deduction"] == 300
@@ -146,6 +148,7 @@ class TestDepositFlow:
         assert r.status_code == 200, r.text
         did = r.json()["deposit"]["id"]
         STATE["deposits"].append(did)
-        r = admin.post(f"{BASE_URL}/api/deposits/{did}/refund", json={})
+        ex = [i["invoice_id"] for i in admin.get(f"{BASE_URL}/api/deposits/{did}/refund-preview").json()["arrears_items"]]
+        r = admin.post(f"{BASE_URL}/api/deposits/{did}/refund", json={"exclude_invoice_ids": ex})
         assert r.status_code == 200
         assert r.json()["status"] == "refunded" and r.json()["refund_amount"] == 1000

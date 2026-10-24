@@ -1,0 +1,45 @@
+{
+  "summary": "Tested the full tenant exit (uitgang) flow in the backend (28 pytest tests: 17 new for exit, 11 regression for borg restitueren from iter130) and in the kiosk UI (Beheer > Huurders). 26/28 tests pass. Working: move-out preview, settling open invoices with the borg (oldest first, partial payment on the next invoice, one 'borgverrekening' payment), damage deduction, invoices after the move-out month deleted, apartment set to vacant, contract ended, tenant archived (hidden from /tenants and /tenants/paged, shown in /tenants/archived with outstanding debt), second move-out returns 400, archived tenant blocked from PIN and email login, reactivate when the old apartment is free (200 → occupied), 409 when it is taken, 404 when the tenant is not archived. The kiosk UI flow works end to end: modal, receipt PNG, archived note, archive list with debt, reactivate with the old apartment preselected, and the orig-taken note. 2 bugs found.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/tenants/{id}/reactivate", "issue": "If the user picks '— Zonder appartement —' the frontend sends apartment_id null, but the backend falls back to archived_apartment_id (`aid = body.apartment_id or t.get('archived_apartment_id')`). When the previous apartment is taken the call always returns 409 'Appartement is niet meer beschikbaar'. When it is free the tenant is silently put back in the old apartment. So a tenant whose old apartment is taken cannot be reactivated without an apartment. Reproduced in the API and the kiosk UI.", "priority": "HIGH"},
+      {"endpoint": "POST /api/tenant-portal/setup-pin", "issue": "An archived tenant who has no PIN can set one up and gets a valid tenant_token (200). The query has no status != 'archived' filter, so archived tenants can still reach the portal. Also get_tenant_session (line ~5906) does not reject archived tenants, so existing tenant sessions stay valid after move-out.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/tenants/{id}/move-out", "issue": "Not atomic. The archived check is a find, then many writes. A double submit or two admins at once could create two borgverrekening payments. Fix: claim the tenant with find_one_and_update({status != archived}) → status 'archiving' first."},
+      {"endpoint": "POST /api/tenants/{id}/move-out", "issue": "The deposit status is 'partial' even when the deduction is larger than the deposit (nothing refunded). This is the same semantics as in iter130, so it is a cosmetic point."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TenantMoveOutModal", "issue": "The default date uses new Date().toISOString().slice(0,10), which is the UTC date. In Suriname (UTC-3), after 21:00 local time it defaults to tomorrow. This can change which invoices count as 'after the move-out month' at the end of a month.", "selector": "[data-testid='moveout-date']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Heractiveren without an apartment", "issue": "The reactivate modal shows the error 'Appartement is niet meer beschikbaar' when 'Zonder appartement' is selected (caused by the backend fallback above).", "affected_selectors": ["[data-testid='reactivate-confirm']", "[data-testid='reactivate-error']"]}
+    ],
+    "design_issues": [
+      {"screen": "TenantMoveOutModal", "issues": ["Vertrekdatum uses the browser's native <input type=date> (shows as mm/dd/yyyy) instead of a shadcn calendar or Dutch date format"]},
+      {"screen": "Huurders filter bar", "issues": ["The 'Archief' pill shows an empty count badge (c is undefined). Show the count or hide the badge."]},
+      {"screen": "Archive list", "issues": ["The 'Heractiveren' button is always shown. The spec says only when the apartment is free. The modal handles this with a note, but the button could be labelled or disabled differently."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_tenant_move_out.py", "/app/backend/tests/test_deposit_refund_settlement.py", "/app/backend/tests/setup_iter131_ui.py", "/app/test_reports/pytest/pytest_iter131.xml"],
+  "action_items": [
+    "In tenant_reactivate, tell 'field omitted' apart from 'explicit null' (e.g. `aid = body.apartment_id if 'apartment_id' in body.model_fields_set else t.get('archived_apartment_id')`), or have the frontend send a flag such as no_apartment: true, so reactivation without an apartment works",
+    "Add status != 'archived' to the tenant query in /tenant-portal/setup-pin, and reject archived tenants in get_tenant_session",
+    "Use the local date (not the UTC ISO date) for the moveout-date default",
+    "Optional: make move-out atomic so a double submit cannot double-settle; fix the empty 'Archief' count badge"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 19k lines and AdminDashboard.jsx is 4.5k lines; split the move-out/deposit routes into a separate module",
+    "Move-out does many separate writes (invoice delete, payment insert, allocate, deposit update, contracts, apartment, tenant) with no transaction or claim lock, so a partial failure leaves the data inconsistent",
+    "The apartment update requires apartment.tenant_id == tenant_id; if the data is inconsistent (tenant.apartment_id set but apartment.tenant_id different), the apartment is not freed and there is no warning"
+  ],
+  "updated_files": ["/app/backend/tests/test_tenant_move_out.py", "/app/backend/tests/setup_iter131_ui.py"],
+  "success_rate": {"backend": "93% (26/28)", "frontend": "95% (every step of the exit and reactivate flow works; reactivating without an apartment fails)"},
+  "seed_data_creation": "Created TEST-MO-*/TEST-UI-MO* apartments and tenants with deposits and invoices; all cleaned up (verified none left)",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk UI access: POST /api/auth/login (demo) → POST /api/auth/admin-to-kiosk → set localStorage admin_token/token/kiosk_token/kiosk_company/pwa_preferred_role=kiosk → /kiosk → kiosk-admin-menu-btn → kiosk-admin-menu-huurders. Setup: `python tests/setup_iter131_ui.py` (and `cleanup`). Retest: tests test_archived_setup_pin_blocked and test_reactivate_without_apartment in test_tenant_move_out.py should pass after the fixes.",
+  "rca of the issue": "Reactivate: `body.apartment_id or t.get('archived_apartment_id')` treats an explicit null the same as an omitted field. Setup-pin: the tenant lookup by id has no archived filter, and it issues a token directly."
+}

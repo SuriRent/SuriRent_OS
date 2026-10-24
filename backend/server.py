@@ -5904,7 +5904,7 @@ async def get_tenant_session(request: Request) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Ongeldig token")
     tenant = await db.tenants.find_one({"id": payload["sub"]}, {"_id": 0, "pin_hash": 0})
-    if not tenant:
+    if not tenant or tenant.get("status") == "archived":
         raise HTTPException(status_code=401, detail="Huurder niet gevonden")
     return tenant
 
@@ -6180,7 +6180,7 @@ async def tenant_portal_setup_pin(body: TenantSetupPinIn, request: Request, resp
     throttle_key = f"tenant-setup-pin:{_client_ip(request)}"
     _pin_throttle_check(throttle_key)
     t = await db.tenants.find_one(
-        {"id": body.tenant_id},
+        {"id": body.tenant_id, "status": {"$ne": "archived"}},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1,
          "pin_hash": 1, "company_id": 1, "apartment_id": 1},
     )
@@ -15303,10 +15303,14 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    if t.get("status") == "archived":
+    if t.get("status") in ("archived", "archiving"):
         raise HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
     cid = t["company_id"]
     ctx = await _move_out_context(cid, t, body.move_out_date)
+    claim = await db.tenants.update_one({"id": tenant_id, "status": {"$nin": ["archived", "archiving"]}},
+                                        {"$set": {"status": "archiving"}})
+    if not claim.modified_count:
+        raise HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
     cur, dep = ctx["currency"], ctx["deposit"]
     if ctx["future_ids"]:
         await db.invoices.delete_many({"id": {"$in": ctx["future_ids"]}, "company_id": cid})
@@ -15372,7 +15376,7 @@ async def tenant_reactivate(tenant_id: str, body: ReactivateIn, user=Depends(req
     t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
-    aid = body.apartment_id or t.get("archived_apartment_id")
+    aid = body.apartment_id if "apartment_id" in body.model_fields_set else t.get("archived_apartment_id")
     if aid:
         res = await db.apartments.update_one(
             {"id": aid, "company_id": t["company_id"], "status": {"$in": ["vacant", "available"]},

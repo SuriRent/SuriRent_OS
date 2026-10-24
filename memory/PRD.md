@@ -1017,3 +1017,10 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Restschuld alleen getoond + op bon (geen schuldpost). Kassabon "BORGAFREKENING" via kiosk-printers (ingebouwd/KT-V520/Bluetooth), herprint via "Print afrekeningsbon".
 - Backend: GET /api/deposits/{id}/refund-preview, POST /api/deposits/{id}/refund {damage_items, exclude_invoice_ids, refund_note} → amount_due/refund_amount; kiosk print-data toont afrekening.
 - Backlog: PDF-bewijs uitbreiden met posten + te betalen.
+
+## 2026-06 — Uitgang-flow huurders
+- Huurdersdossier (Kiosk > Beheer > Huurders > detail) knop "Uitgang starten": vertrekdatum kiezen, facturen na vertrekmaand (onbetaald) verwijderd, openstaande facturen verrekend met borg (betaling method "borgverrekening", oudst eerst), schadeposten, borgbon (thermisch), appartement → vacant, contract ended, huurder status "archived".
+- Archief-filter "Archief" in Huurders, schuld zichtbaar, "Heractiveren" (vorig appt indien vrij, of ander vrij appt / zonder; nieuwe borg verplicht).
+- Gearchiveerde huurders geblokkeerd voor portal login (email/PIN/NFC/setup-pin/sessie).
+- API: GET /api/tenants/{id}/move-out-preview, POST /api/tenants/{id}/move-out, GET /api/tenants/archived, POST /api/tenants/{id}/reactivate.
+- Bekend: move-out zet tijdelijk status "archiving" (claim); faalt een tussenstap, dan blijft huurder in "archiving".
