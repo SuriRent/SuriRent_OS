@@ -8,7 +8,7 @@ import {
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
-  MessageCircle, StickyNote, Trash2, Plus, Mic, ChevronLeft, ChevronRight,
+  MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi,
 } from 'lucide-react';
@@ -3060,6 +3060,17 @@ function KasgeldPanel({ onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const operator = getKioskEmployee();
+  const { isAdmin } = useContext(KioskThemeCtx);
+  const role = useAdminRole(isAdmin);
+  const canManage = role === 'admin' || role === 'superadmin';
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [editing, setEditing] = useState(null);
+  const removeEntry = async (it) => {
+    if (!window.confirm(`Mutatie "${it.description || it.category}" verwijderen?`)) return;
+    try { await api.delete(`/kasgeld/${it.id}`); load(); } catch (e) { setErr(formatError(e)); }
+  };
+  const visibleItems = useMemo(() => (sourceFilter === 'all' ? items
+    : items.filter((it) => (it.source || 'kasgeld') === sourceFilter)), [items, sourceFilter]);
 
   // Huidige maand als default-focus voor de accordion én het
   // "Oktober 2026 ▼" selector-pil in de overzicht-card.
@@ -3086,7 +3097,7 @@ function KasgeldPanel({ onBack }) {
   // Groepeer alle mutations per YYYY-MM, nieuwste maand eerst.
   const monthGroups = useMemo(() => {
     const map = new Map();
-    for (const it of items) {
+    for (const it of visibleItems) {
       const d = new Date(it.entry_date || it.created_at);
       if (isNaN(d)) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -3102,7 +3113,7 @@ function KasgeldPanel({ onBack }) {
       map.get(key).items.push(it);
     }
     return Array.from(map.values()).sort((a, b) => b.key.localeCompare(a.key));
-  }, [items]);
+  }, [visibleItems]);
 
   const selectedLabel = (() => {
     const g = monthGroups.find((x) => x.key === selectedMonth);
@@ -3129,7 +3140,7 @@ function KasgeldPanel({ onBack }) {
     setShowMonthPicker(false);
   };
 
-  const totalMutations = items.length;
+  const totalMutations = visibleItems.length;
   const srdBalance = balances.SRD || 0;
 
   return (
@@ -3211,6 +3222,15 @@ function KasgeldPanel({ onBack }) {
             </span>
           </div>
 
+          <div className="flex gap-1.5 mb-3 overflow-x-auto" data-testid="kasgeld-source-filter">
+            {[['all', 'Alles'], ['kasgeld', 'Alleen handmatig'], ['payment', 'Alleen betalingen']].map(([v, l]) => (
+              <button key={v} type="button" onClick={() => setSourceFilter(v)} data-testid={`kasgeld-filter-${v}`}
+                className={`shrink-0 h-8 px-3 rounded-full text-xs font-bold transition-colors ${sourceFilter === v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+
           {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
 
           {!err && loading && (
@@ -3246,7 +3266,8 @@ function KasgeldPanel({ onBack }) {
                   {isOpen && (
                     <div className="divide-y divide-slate-100 border-t border-slate-100 bg-white rounded-b-2xl" data-testid={`kasgeld-month-items-${g.key}`}>
                       {g.items.map((it) => (
-                        <KasgeldMutationRow key={it.id} item={it} />
+                        <KasgeldMutationRow key={it.id} item={it} canManage={canManage}
+                          onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
                       ))}
                     </div>
                   )}
@@ -3264,8 +3285,12 @@ function KasgeldPanel({ onBack }) {
       )}
 
       {showForm && (
-        <KasgeldMutationModal onClose={() => setShowForm(false)}
+        <KasgeldMutationModal canBackdate={canManage} onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); load(); }} />
+      )}
+      {editing && (
+        <KasgeldEditModal entry={editing} onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load(); }} />
       )}
     </div>
   );
@@ -3273,7 +3298,7 @@ function KasgeldPanel({ onBack }) {
 
 // Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
-function KasgeldMutationRow({ item }) {
+function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
   const isIn = item.type === 'in';
   const d = item.entry_date || item.created_at;
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -3307,7 +3332,79 @@ function KasgeldMutationRow({ item }) {
       }`} data-testid={`kasgeld-row-amount-${item.id}`}>
         {isIn ? '+' : '−'}{item.currency} {Number(item.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </p>
+      {canManage && (item.source === 'payment' ? (
+        <span className="w-[72px] shrink-0 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400" data-testid={`kasgeld-row-auto-${item.id}`}>auto</span>
+      ) : (
+        <div className="flex gap-1 shrink-0">
+          <button type="button" onClick={onEdit} data-testid={`kasgeld-row-edit-${item.id}`} aria-label="Bewerken"
+            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={onDelete} data-testid={`kasgeld-row-delete-${item.id}`} aria-label="Verwijderen"
+            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 flex items-center justify-center transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
     </div>
+  );
+}
+
+const KASGELD_CATEGORIES = [['overig', 'Overig'], ['huur', 'Huur'], ['onderhoud', 'Onderhoud'], ['schoonmaak', 'Schoonmaak'],
+  ['salaris', 'Salaris'], ['kantoor', 'Kantoor'], ['brandstof', 'Brandstof'], ['storting', 'Storting'], ['opname', 'Opname']];
+const kasInput = 'w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white';
+
+function KasgeldEditModal({ entry, onClose, onSaved }) {
+  const [f, setF] = useState({
+    type: entry.type, amount: String(entry.amount ?? ''), currency: entry.currency || 'SRD',
+    description: entry.description || '', category: entry.category || 'overig',
+    entry_date: (entry.entry_date || entry.created_at || '').slice(0, 10),
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const save = async () => {
+    const n = parseFloat(String(f.amount).replace(',', '.'));
+    if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
+    if (!f.description.trim()) { setErr('Omschrijving is verplicht'); return; }
+    setSaving(true); setErr('');
+    try { await api.put(`/kasgeld/${entry.id}`, { ...f, amount: n }); onSaved(); }
+    catch (e) { setErr(formatError(e)); } finally { setSaving(false); }
+  };
+  const footer = (
+    <div className="grid grid-cols-2 gap-2">
+      <button onClick={onClose} className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
+      <button onClick={save} disabled={saving} data-testid="kasgeld-edit-save"
+        className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Opslaan
+      </button>
+    </div>
+  );
+  return (
+    <KioskModalShell title="Mutatie bewerken" Icon={Pencil} testId="kasgeld-edit" onClose={onClose} footer={footer}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          {[['in', 'Inkomend'], ['out', 'Uitgaand']].map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setF({ ...f, type: v })} data-testid={`kasgeld-edit-type-${v}`}
+              className={`h-11 rounded-xl font-black text-sm border-2 ${f.type === v ? (v === 'in' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-red-500 bg-red-50 text-red-700') : 'border-slate-200 text-slate-500'}`}>{l}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-[1fr_7rem] gap-2">
+          <input inputMode="decimal" value={f.amount} onChange={set('amount')} data-testid="kasgeld-edit-amount" placeholder="Bedrag" className={kasInput} />
+          <select value={f.currency} onChange={set('currency')} data-testid="kasgeld-edit-currency" className={kasInput}>
+            {['SRD', 'USD', 'EUR'].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <input value={f.description} onChange={set('description')} data-testid="kasgeld-edit-desc" placeholder="Omschrijving" className={kasInput} />
+        <div className="grid grid-cols-2 gap-2">
+          <select value={f.category} onChange={set('category')} data-testid="kasgeld-edit-cat" className={kasInput}>
+            {KASGELD_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input type="date" value={f.entry_date} onChange={set('entry_date')} data-testid="kasgeld-edit-date" className={kasInput} />
+        </div>
+        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-edit-err">{err}</p>}
+      </div>
+    </KioskModalShell>
   );
 }
 
@@ -3361,13 +3458,14 @@ function KasgeldMonthPicker({ groups, selected, onPick, onClose }) {
     </div>, document.body);
 }
 
-function KasgeldMutationModal({ onClose, onSaved }) {
+function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   const [step, setStep] = useState('amount');  // 'amount' | 'details'
   const [type, setType] = useState('in');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('SRD');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('overig');
+  const [entryDate, setEntryDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -3505,6 +3603,7 @@ function KasgeldMutationModal({ onClose, onSaved }) {
       const { data } = await api.post(withKioskEmployee('/kiosk/kasgeld'), {
         type, amount: n, currency,
         description: description.trim(), category,
+        ...(canBackdate && entryDate ? { entry_date: entryDate } : {}),
       });
       setSaved(data);
     } catch (e) { setErr(formatError(e)); }
@@ -3632,6 +3731,14 @@ function KasgeldMutationModal({ onClose, onSaved }) {
                 <option value="brandstof">Brandstof</option>
               </select>
             </label>
+
+            {canBackdate && (
+              <label className="block">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Boekdatum</span>
+                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
+                  className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white" />
+              </label>
+            )}
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
 

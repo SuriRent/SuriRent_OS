@@ -15714,8 +15714,32 @@ async def create_cash(body: CashEntryIn, user=Depends(get_current_user)):
     return doc
 
 
+@api.put("/kasgeld/{eid}", response_model=CashEntryOut)
+async def update_cash(eid: str, body: CashEntryIn, user=Depends(require_role("admin", "superadmin"))):
+    if eid.startswith("pay-"):
+        raise HTTPException(status_code=400, detail="Deze regel komt uit een betaling en kan niet bewerkt worden.")
+    if body.amount <= 0 or not body.description.strip():
+        raise HTTPException(status_code=400, detail="Bedrag en omschrijving zijn verplicht")
+    upd = body.model_dump()
+    raw = (upd.pop("entry_date", None) or "").strip()
+    if raw:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00")) if "T" in raw else datetime.fromisoformat(f"{raw}T12:00:00+00:00")
+            upd["entry_date"] = iso(dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ongeldige datum")
+    upd["description"] = upd["description"].strip()
+    upd["updated_at"] = iso(now_utc())
+    upd["updated_by_name"] = user.get("name") or user.get("email") or "Beheerder"
+    doc = await db.kasgeld.find_one_and_update({"id": eid, **scope(user)}, {"$set": upd},
+                                               projection={"_id": 0}, return_document=True)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Mutatie niet gevonden")
+    return doc
+
+
 @api.delete("/kasgeld/{cid}")
-async def delete_cash(cid: str, user=Depends(get_current_user)):
+async def delete_cash(cid: str, user=Depends(require_role("admin", "superadmin"))):
     # Payment-sourced entries hebben id-prefix 'pay-' en zijn read-only.
     # Verwijderen moet via de originele betaling (Betalingen-pagina).
     if cid.startswith("pay-"):
