@@ -323,7 +323,7 @@ function KioskSettingsMenu() {
         className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
         <SettingsIcon className="w-6 h-6" />
       </button>
-      {open && <KioskMenuPanel title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
+      {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
   );
 }
