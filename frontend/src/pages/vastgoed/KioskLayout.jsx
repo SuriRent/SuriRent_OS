@@ -301,7 +301,7 @@ function KioskBell() {
   if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin') return null;
   return (
     <div className="kiosk-bell shrink-0" data-testid="kiosk-subscription-bell">
-      <SubscriptionBell backPath="/kiosk" onOpenSub={() => navAdmin('inst-abonnement')} />
+      <SubscriptionBell compact backPath="/kiosk" onOpenSub={() => navAdmin('inst-abonnement')} />
     </div>
   );
 }

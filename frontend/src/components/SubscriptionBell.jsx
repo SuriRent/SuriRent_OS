@@ -43,7 +43,7 @@ const TONES = {
   orange: 'bg-orange-50 text-[#FF5C00]',
 };
 
-export default function SubscriptionBell({ onOpenSub, backPath } = {}) {
+export default function SubscriptionBell({ onOpenSub, backPath, compact = false } = {}) {
   const navigate = useNavigate();
   const slug = useBrandedSlug();
   const [me, setMe] = useState(null);
@@ -104,16 +104,16 @@ export default function SubscriptionBell({ onOpenSub, backPath } = {}) {
     <div className="relative" ref={panelRef} data-testid="subscription-bell-wrapper">
       <button type="button" onClick={() => setOpen((v) => !v)} data-testid="subscription-bell-btn"
         aria-label={count > 0 ? `${count} abonnementsmeldingen` : 'Geen abonnementsmeldingen'}
-        className={`relative w-12 h-12 md:w-14 md:h-14 landscape:w-10 landscape:h-10 rounded-2xl landscape:rounded-xl flex items-center justify-center transition-colors active:scale-95 ${
+        className={`relative ${compact ? 'w-8 h-8 rounded-full' : 'w-12 h-12 md:w-14 md:h-14 landscape:w-10 landscape:h-10 rounded-2xl landscape:rounded-xl'} flex items-center justify-center transition-colors active:scale-95 ${
           count > 0
             ? (urgent ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-orange-50 text-[#FF5C00] hover:bg-orange-100')
             : 'bg-white text-slate-500 hover:bg-orange-50 hover:text-[#FF5C00] border border-slate-200/70'}`}>
-        <Bell className="w-6 h-6 md:w-7 md:h-7 landscape:w-5 landscape:h-5" strokeWidth={count > 0 ? 2.4 : 2} />
+        <Bell className={compact ? 'w-5 h-5' : 'w-6 h-6 md:w-7 md:h-7 landscape:w-5 landscape:h-5'} strokeWidth={count > 0 ? 2.4 : 2} />
         {count > 0 && (
           <>
-            <span className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1.5 rounded-full text-white text-[10px] font-black flex items-center justify-center ring-2 ring-[#F7F8FA] ${urgent ? 'bg-red-500' : 'bg-[#FF5C00]'}`}
+            <span className={`absolute -top-1 -right-1 ${compact ? 'min-w-[16px] h-[16px] px-1 text-[9px]' : 'min-w-[20px] h-[20px] px-1.5 text-[10px]'} rounded-full text-white font-black flex items-center justify-center ring-2 ring-[#F7F8FA] ${urgent ? 'bg-red-500' : 'bg-[#FF5C00]'}`}
               data-testid="subscription-bell-count">{count > 9 ? '9+' : count}</span>
-            {urgent && <span className="absolute -top-1 -right-1 w-[20px] h-[20px] rounded-full bg-red-400 opacity-60 animate-ping" />}
+            {urgent && <span className={`absolute -top-1 -right-1 ${compact ? 'w-[16px] h-[16px]' : 'w-[20px] h-[20px]'} rounded-full bg-red-400 opacity-60 animate-ping`} />}
           </>
         )}
       </button>

@@ -96,10 +96,10 @@ export function KioskHeaderLiveButtons({ isAdmin }) {
     <div className="flex items-center gap-0.5 h-10 px-1 rounded-full bg-white/15" data-testid="kiosk-toolbar">
       {isAdmin && <KtpPairPill />}
       <PrinterLamp />
-      {isAdmin
+      <span className="hidden md:contents">{isAdmin
         ? <StatusDot on={s.active} onClick={open} testid="kiosk-presence-dot" count={count ?? undefined}
             label={`${count ?? 0} bonnen vandaag · ${s.active ? `${s.count} kiosk-medewerker${s.count === 1 ? '' : 's'} actief` : 'Geen kiosk-medewerker actief'}`} />
-        : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" count={count ?? undefined} label={s.connected ? `${count ?? 0} bonnen van vandaag` : 'Geen verbinding'} />}
+        : <StatusDot on={s.connected} onClick={open} testid="kiosk-employee-receipts-dot" count={count ?? undefined} label={s.connected ? `${count ?? 0} bonnen van vandaag` : 'Geen verbinding'} />}</span>
     </div>
   );
 }
