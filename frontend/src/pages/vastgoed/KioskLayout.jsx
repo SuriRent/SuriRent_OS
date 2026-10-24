@@ -5192,32 +5192,42 @@ export default function KioskLayout() {
 
   const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
-  const hist = useRef({ list: [], i: -1, nav: false });
+  const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
+  const popupSetters = {
+    'add-location': [showAddLocation, setShowAddLocation], 'add-apartment': [showAddApartment, setShowAddApartment],
+    'add-tenant': [showAddTenant, setShowAddTenant], 'add-invoice': [showAddInvoice, setShowAddInvoice],
+    'add-maintenance': [showAddMaintenance, setShowAddMaintenance], facturen: [showInvoicesModal, setShowInvoicesModal],
+  };
+  const popupKey = Object.keys(popupSetters).find((k) => popupSetters[k][0]) || adminPopup || null;
+  const openOnly = (key) => {
+    Object.entries(popupSetters).forEach(([k, [, set]]) => set(k === key));
+    setAdminPopup(null);
+  };
+  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
+  const sameEntry = (e) => e && e.step === step && e.apartment?.id === apartment?.id && e.popup === popupKey;
   useEffect(() => {
     const h = hist.current;
-    const keep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
-    if (h.nav) { h.nav = false; return; }
-    if (!keep) return;
-    const cur = h.list[h.i];
-    if (cur && cur.step === step && cur.apartment?.id === apartment?.id) return;
-    h.list = [...h.list.slice(0, h.i + 1), { step, apartment }];
+    if (!stableStep || sameEntry(h.list[h.i])) return;
+    // Venster gesloten → zelfde als één stap terug (geen dubbele entry).
+    if (sameEntry(h.list[h.i - 1])) { h.i -= 1; setHistTick((t) => t + 1); return; }
+    h.list = [...h.list.slice(0, h.i + 1), { step, apartment, popup: popupKey }];
     h.i = h.list.length - 1;
     setHistTick((t) => t + 1);
-  }, [step, apartment]);
-  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
+  }, [step, apartment, popupKey]);
+  const applyEntry = (e) => {
+    setApartment(e.apartment); setStep(e.step);
+    Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k));
+    setAdminPopup(e.popup && !popupSetters[e.popup] ? e.popup : null);
+    setHistTick((t) => t + 1);
+  };
   const goHist = (d) => {
     const h = hist.current;
-    if (d < 0 && !stableStep && h.list[h.i]) {
-      const cur = h.list[h.i]; h.nav = true;
-      setApartment(cur.apartment); setStep(cur.step); setHistTick((t) => t + 1);
-      return;
-    }
+    if (d < 0 && !stableStep && h.list[h.i]) { applyEntry(h.list[h.i]); return; }
     const e = h.list[h.i + d];
     if (!e) return;
-    h.i += d; h.nav = true;
-    setApartment(e.apartment); setStep(e.step);
-    setHistTick((t) => t + 1);
+    h.i += d;
+    applyEntry(e);
   };
   const canBack = hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
@@ -5506,12 +5516,12 @@ export default function KioskLayout() {
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
             {[
-              { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => setShowAddLocation(true) },
-              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => setShowAddApartment(true) },
-              { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => setShowAddTenant(true) },
-              { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => setShowAddInvoice(true) },
-              { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => setShowAddMaintenance(true) },
-              { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => setStep('kasgeld') },
+              { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
+              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
+              { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
+              { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
+              { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
+              { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ].map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
