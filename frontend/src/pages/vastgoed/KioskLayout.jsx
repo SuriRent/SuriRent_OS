@@ -5357,17 +5357,29 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
+      {step === 'select' && <div className="hidden min-[390px]:block md:hidden h-20" aria-hidden="true" />}
       {step === 'select' && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
-        <button
-          type="button"
-          onClick={() => setShowAddSheet(true)}
-          data-testid="kiosk-mobile-fab"
-          aria-label="Snelle acties"
-          className={`md:hidden fixed right-4 z-[109] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition ${isWhite ? 'bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}
-          style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
-        >
-          <Plus className="w-7 h-7" strokeWidth={2.8} />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setShowAddSheet(true)}
+            data-testid="kiosk-mobile-fab"
+            aria-label="Snelle acties"
+            className={`md:hidden min-[390px]:hidden fixed right-4 z-[109] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition ${isWhite ? 'bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}
+            style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+          >
+            <Plus className="w-7 h-7" strokeWidth={2.8} />
+          </button>
+          {/* Grote telefoons (≥390px): onderste menubalk met + in het midden. */}
+          <nav data-testid="kiosk-mobile-bottom-bar"
+            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-16 items-center justify-center border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
+            <button type="button" onClick={() => setShowAddSheet(true)} data-testid="kiosk-mobile-bar-plus" aria-label="Snelle acties"
+              className={`-mt-8 w-16 h-16 rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ${isWhite ? 'ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'ring-[#FF6B1A] bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}>
+              <Plus className="w-8 h-8" strokeWidth={2.8} />
+            </button>
+          </nav>
+        </>
       ), document.body)}
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst met
