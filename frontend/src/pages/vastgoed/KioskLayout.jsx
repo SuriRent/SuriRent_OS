@@ -3602,7 +3602,8 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
     if (!description.trim()) { setErr('Omschrijving is verplicht'); return; }
     setSaving(true); setErr('');
     try {
-      const { data } = await api.post(withKioskEmployee('/kiosk/kasgeld'), {
+      const useAdmin = canBackdate && !getKioskEmployee()?.id;
+      const { data } = await api.post(useAdmin ? '/kasgeld' : withKioskEmployee('/kiosk/kasgeld'), {
         type, amount: n, currency,
         description: description.trim(), category,
         ...(canBackdate && entryDate ? { entry_date: entryDate } : {}),

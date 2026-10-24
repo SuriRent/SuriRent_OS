@@ -15711,6 +15711,9 @@ async def create_cash(body: CashEntryIn, user=Depends(get_current_user)):
     }
     await db.kasgeld.insert_one(doc)
     doc.pop("_id", None)
+    bal_after = round(float((await kiosk_cash_balance({"company_id": cid})).get(doc["currency"], 0)), 2)
+    await db.kasgeld.update_one({"id": doc["id"]}, {"$set": {"balance_after": bal_after}})
+    doc["balance_after"] = bal_after
     return doc
 
 
