@@ -587,12 +587,12 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
             if (!a.tenant_id) {
               return (
                 <button key={a.id} onClick={() => setLinkApt(a)} data-testid={`apt-${a.number}-vacant`}
-                  className="group bg-white/75 flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white transition border-2 border-dashed border-slate-300 hover:border-orange-500">
+                  className="group bg-white/90 flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white transition border-2 border-dashed border-slate-300 hover:border-orange-500">
                   <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-slate-100 group-hover:bg-orange-50">
                     <Home className="w-7 h-7 md:w-9 md:h-9 text-slate-400 group-hover:text-orange-500" />
                   </div>
                   <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-500 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
-                  <span className="text-xs sm:text-sm md:text-base text-slate-400 font-semibold mb-2 md:mb-3">Vrij</span>
+                  <span className="text-xs sm:text-sm md:text-base text-slate-600 font-bold mb-2 md:mb-3">Vrij</span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-slate-700 group-hover:bg-[#FF5C00] text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1 transition-colors" data-testid={`apt-${a.number}-link`}>
                     <UserPlus className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Koppelen
                   </span>
@@ -687,7 +687,7 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
   const input = 'w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white';
   const footer = (
     <div className="grid grid-cols-2 gap-2">
-      <button onClick={onClose} className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
+      <button onClick={onClose} data-testid="link-tenant-cancel" className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
       <button onClick={save} disabled={!canSave || busy} data-testid="link-tenant-save"
         className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Koppelen
@@ -706,7 +706,7 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
         <div className="space-y-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek op naam, telefoon of ID" data-testid="link-tenant-search" className={input} />
           {!list ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto my-4" />
-            : shown.length === 0 ? <p className="text-sm text-slate-500 text-center py-4" data-testid="link-tenant-empty">Geen huurders zonder appartement.</p>
+            : shown.length === 0 ? <p className="text-sm text-slate-500 text-center py-4" data-testid="link-tenant-empty">{q ? 'Geen resultaten.' : 'Geen huurders zonder appartement.'}</p>
               : (
                 <div className="max-h-[45vh] overflow-y-auto space-y-1.5">
                   {shown.map((t) => (

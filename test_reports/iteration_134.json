@@ -1,0 +1,39 @@
+{
+  "summary": "Tested the kiosk feature for vacant apartments and linking tenants, on backend and frontend. Backend: 11/11 pytest tests pass. They cover GET /api/kiosk/tenants/unassigned (archived tenants and tenants with an apartment are excluded; returns 401 without a session) and POST /api/kiosk/apartments/{id}/link-tenant with both a new tenant and an existing tenant. Linking works with a kiosk employee session (kiosk.medewerker PIN 5566) and with an admin session via /auth/admin-to-kiosk. Error codes are correct: occupied apartment 409 (no orphan tenant is created), tenant who already has an apartment 409, empty body or blank name 400, archived tenant 404, unknown apartment 404, no auth 401. Linking also sets deposit_status=pending, creates a draft contract (deposit = rent), marks the apartment occupied and sets tenant_deposit_pending=true in the kiosk listing. Regression check passed: admin POST /api/tenants with apartment_id still makes the apartment occupied and creates the draft contract. Frontend at 1920px and 390px: the location picker counts include vacant apartments (4 apartments). The grid is sorted Studio 1, 2 (vacant), 3 (vacant), 4. Vacant cards show the dashed border, 'Vrij' and the 'Koppelen' badge. The modal works: search by ID number, the empty state, Save disabled until a tenant is picked, the new-tenant form, and automatic switch to the new-tenant tab when the unassigned list is empty. After saving, the grid refreshes and the card shows the tenant name with 'Wacht op borg'. Clicking the card opens the overview with 'Borg nog niet betaald' / 'Borg betalen'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/kiosk/apartments/{id}/link-tenant", "issue": "The existing-tenant path checks t.apartment_id and then updates without an atomic condition. Two concurrent links of the same tenant to two different apartments can both succeed. Fix: make the tenant update conditional on apartment_id being empty, and roll back the apartment claim if it fails."},
+      {"endpoint": "POST /api/kiosk/apartments/{id}/link-tenant", "issue": "A 1-character name is accepted by the backend, while the frontend requires more than 1 character. The new tenant also has no duplicate check on phone or ID number."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KioskModalShell", "issue": "The testId prop (e.g. 'link-tenant') is accepted but never rendered as data-testid on the modal root, so the modal container cannot be targeted.", "selector": "[data-testid='link-tenant']", "priority": "LOW"},
+      {"component": "LinkTenantModal", "issue": "The Annuleren button has no data-testid.", "selector": "link-tenant footer cancel", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "LinkTenantModal existing tab", "issues": ["When a search has no matches, the text still says 'Geen huurders zonder appartement.' It should say something like 'Geen resultaten' when q is set."]},
+      {"screen": "Kiosk grid vacant card", "issues": ["The slate-400 'Vrij' text on the semi-transparent white card over the orange background has fairly low contrast, especially on mobile."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_link_tenant_iter134.py", "/app/test_reports/pytest/pytest_iter134.xml"],
+  "action_items": [
+    "(Low) Render data-testid={testId} on the KioskModalShell root",
+    "(Low) Make the existing-tenant link atomic (conditional tenant update)",
+    "(Low) Distinguish the 'no search results' text from the 'no unassigned tenants' text in LinkTenantModal",
+    "(Low) Add data-testid to the Annuleren button in LinkTenantModal"
+  ],
+  "critical_code_review_comments": [
+    "The new-tenant path claims the apartment before inserting the tenant. If the insert fails, the apartment is left occupied with a non-existent tenant_id. Wrap it in try/except and roll back the claim.",
+    "_link_tenant_apartment swallows contract-creation errors with print only. Use a logger.",
+    "server.py is now about 19k lines; the kiosk endpoints should move to a router module."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_link_tenant_iter134.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created temporary apartments Studio 2-5 in 'Filiaal — Nieuw Nickerie' plus TEST_ tenants. All removed afterwards (apartments, tenants, contracts). The pytest module cleans up after itself.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk token: POST /api/auth/personal-pin/login {email:kiosk.medewerker@surirent.sr,pin:5566} returns a token; or admin demo@surirent.sr/demo1234 then POST /api/auth/admin-to-kiosk. UI: set localStorage kiosk_token and kiosk_company, then open /kiosk. Company id: demo-company-fixed-uuid-00000000000. The pytest file uses pymongo directly to seed unassigned and archived tenants."
+}

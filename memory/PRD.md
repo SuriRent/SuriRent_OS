@@ -1034,3 +1034,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - KioskAdminOnboarding (components/KioskAdminOnboarding.jsx): OnboardingModal (needs_onboarding) + SetupWizardSheet (auto als setup-status completed<2) voor role admin in Kiosk; kiosk-lijst ververst na sluiten.
 - Fix: eigen huidige slug telt als beschikbaar in OnboardingModal; "Klaar" op laatste wizardstap sluit de wizard.
 - Vergelijking admin vs kiosk: /app/memory/ADMIN_VS_KIOSK.md (punten 1-2 nu klaar).
+
+## 2026-06 — Vrije appartementen koppelen in Kiosk
+- Kiosk-grid toont ook vrije appartementen (gestreepte kaart "Vrij" + "Koppelen"), gesorteerd op nummer; locatie-tellers tellen alle appartementen.
+- LinkTenantModal: bestaande huurder zonder appartement (GET /api/kiosk/tenants/unassigned) of nieuwe huurder → POST /api/kiosk/apartments/{id}/link-tenant (kiosk-sessie: beheerder én medewerker). Borg pending + concept-contract via _link_tenant_apartment (ook gebruikt door POST /tenants).

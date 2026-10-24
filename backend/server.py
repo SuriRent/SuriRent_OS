@@ -10166,7 +10166,12 @@ async def kiosk_link_tenant(apartment_id: str, body: KioskLinkTenantIn, _session
         upd = {"apartment_id": apartment_id}
         if t.get("deposit_status") != "paid":
             upd.update({"deposit_required": True, "deposit_status": "pending"})
-        await db.tenants.update_one({"id": tid}, {"$set": upd})
+        res = await db.tenants.update_one(
+            {"id": tid, "$or": [{"apartment_id": None}, {"apartment_id": ""}, {"apartment_id": {"$exists": False}}]},
+            {"$set": upd})
+        if not res.modified_count:
+            await db.apartments.update_one({"id": apartment_id, "tenant_id": tid}, {"$set": {"tenant_id": None, "status": "vacant"}})
+            raise HTTPException(status_code=409, detail="Huurder heeft al een appartement")
     await _link_tenant_apartment(cid, tid, apartment_id)
     return {"ok": True, "tenant_id": tid}
 
