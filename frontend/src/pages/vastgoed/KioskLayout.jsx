@@ -424,6 +424,14 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   }, []);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
+  const [linkApt, setLinkApt] = useState(null);
+  const reloadSelect = () => {
+    invalidateKioskSelect();
+    fetchKioskSelect().then((d) => {
+      setApartments(d.apartments);
+      setLocations(d.locations.filter((l) => l.id !== '_none'));
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     fetchKioskSelect().then((d) => {
@@ -448,7 +456,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   }, [navigate]);
 
   const unassignedCount = useMemo(
-    () => apartments.filter((a) => !a.location_id && a.status === 'occupied').length,
+    () => apartments.filter((a) => !a.location_id).length,
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
@@ -480,7 +488,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
     selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
-  ).filter((a) => a.status === 'occupied' && a.tenant_id).sort(sortApartments);
+  ).sort(sortApartments);
 
   // ----- Location picker view -----
   if (showLocationPicker) {
@@ -496,7 +504,7 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
             {locations.map((loc) => {
-              const count = apartments.filter((a) => a.location_id === loc.id && a.status === 'occupied').length;
+              const count = apartments.filter((a) => a.location_id === loc.id).length;
               return (
                 <button key={loc.id} onClick={() => setSelectedLocationId(loc.id)}
                   data-testid={`location-${loc.id}`}
@@ -576,6 +584,21 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
             const photoSrc = photo && !/^https?:/.test(photo)
               ? `${process.env.REACT_APP_BACKEND_URL}${photo}`
               : photo;
+            if (!a.tenant_id) {
+              return (
+                <button key={a.id} onClick={() => setLinkApt(a)} data-testid={`apt-${a.number}-vacant`}
+                  className="group bg-white/75 flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white transition border-2 border-dashed border-slate-300 hover:border-orange-500">
+                  <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-slate-100 group-hover:bg-orange-50">
+                    <Home className="w-7 h-7 md:w-9 md:h-9 text-slate-400 group-hover:text-orange-500" />
+                  </div>
+                  <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-500 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
+                  <span className="text-xs sm:text-sm md:text-base text-slate-400 font-semibold mb-2 md:mb-3">Vrij</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-slate-700 group-hover:bg-[#FF5C00] text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1 transition-colors" data-testid={`apt-${a.number}-link`}>
+                    <UserPlus className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Koppelen
+                  </span>
+                </button>
+              );
+            }
             return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
               className="group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
@@ -626,12 +649,87 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
           {visible.length === 0 && (
             <div className="col-span-full bg-white/90 rounded-2xl p-10 text-center">
               <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 font-semibold">Geen bezette appartementen op deze locatie.</p>
+              <p className="text-slate-500 font-semibold">Geen appartementen op deze locatie.</p>
             </div>
           )}
         </div>
       </div>
+      {linkApt && <LinkTenantModal apartment={linkApt} onClose={() => setLinkApt(null)}
+        onLinked={() => { setLinkApt(null); reloadSelect(); }} />}
     </div>
+  );
+}
+
+function LinkTenantModal({ apartment, onClose, onLinked }) {
+  const [tab, setTab] = useState('existing');
+  const [list, setList] = useState(null);
+  const [q, setQ] = useState('');
+  const [pick, setPick] = useState(null);
+  const [f, setF] = useState({ name: '', phone: '', email: '', id_number: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    api.get('/kiosk/tenants/unassigned').then((r) => {
+      setList(r.data || []);
+      if (!(r.data || []).length) setTab('new');
+    }).catch((e) => { setList([]); setErr(formatError(e)); });
+  }, []);
+  const shown = (list || []).filter((t) => !q || `${t.name} ${t.phone || ''} ${t.id_number || ''}`.toLowerCase().includes(q.toLowerCase()));
+  const canSave = tab === 'existing' ? !!pick : f.name.trim().length > 1;
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.post(`/kiosk/apartments/${apartment.id}/link-tenant`,
+        tab === 'existing' ? { tenant_id: pick } : { new_tenant: f });
+      onLinked();
+    } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
+  };
+  const input = 'w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white';
+  const footer = (
+    <div className="grid grid-cols-2 gap-2">
+      <button onClick={onClose} className="h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Annuleren</button>
+      <button onClick={save} disabled={!canSave || busy} data-testid="link-tenant-save"
+        className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Koppelen
+      </button>
+    </div>
+  );
+  return (
+    <KioskModalShell title={`Huurder koppelen — ${apartment.number}`} Icon={UserPlus} testId="link-tenant" onClose={onClose} footer={footer}>
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 mb-3">
+        {[['existing', 'Bestaande huurder'], ['new', 'Nieuwe huurder']].map(([v, l]) => (
+          <button key={v} type="button" onClick={() => setTab(v)} data-testid={`link-tenant-tab-${v}`}
+            className={`h-10 rounded-lg text-sm font-black transition-colors ${tab === v ? 'bg-white text-[#FF5C00] shadow-sm' : 'text-slate-500'}`}>{l}</button>
+        ))}
+      </div>
+      {tab === 'existing' ? (
+        <div className="space-y-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek op naam, telefoon of ID" data-testid="link-tenant-search" className={input} />
+          {!list ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto my-4" />
+            : shown.length === 0 ? <p className="text-sm text-slate-500 text-center py-4" data-testid="link-tenant-empty">Geen huurders zonder appartement.</p>
+              : (
+                <div className="max-h-[45vh] overflow-y-auto space-y-1.5">
+                  {shown.map((t) => (
+                    <button key={t.id} type="button" onClick={() => setPick(t.id)} data-testid={`link-tenant-option-${t.id}`}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl border-2 transition-colors ${pick === t.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-orange-300'}`}>
+                      <p className="font-bold text-slate-900">{t.name}</p>
+                      <p className="text-xs text-slate-500">{[t.phone, t.id_number].filter(Boolean).join(' · ') || '—'}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Naam *" data-testid="link-tenant-name" className={input} />
+          <input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="Telefoon" inputMode="tel" data-testid="link-tenant-phone" className={input} />
+          <input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="E-mail" inputMode="email" data-testid="link-tenant-email" className={input} />
+          <input value={f.id_number} onChange={(e) => setF({ ...f, id_number: e.target.value })} placeholder="ID-nummer" data-testid="link-tenant-idnr" className={input} />
+        </div>
+      )}
+      <p className="text-xs text-slate-500 mt-3">Na het koppelen moet eerst de borg betaald worden voordat de huurfacturen starten.</p>
+      {err && <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="link-tenant-err">{err}</p>}
+    </KioskModalShell>
   );
 }
 

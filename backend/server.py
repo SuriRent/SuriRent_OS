@@ -7597,6 +7597,31 @@ async def get_tenant_credit_sources(tenant_id: str, user=Depends(get_current_use
     return {"sources": docs}
 
 
+async def _link_tenant_apartment(cid: str, tenant_id: str, apartment_id: str) -> None:
+    await db.apartments.update_one({"id": apartment_id, "company_id": cid},
+                                   {"$set": {"tenant_id": tenant_id, "status": "occupied"}})
+    # Concept-contract automatisch aanmaken (idempotent per huurder+appartement).
+    try:
+        apt = await db.apartments.find_one({"id": apartment_id, "company_id": cid}, {"_id": 0})
+        existing = await db.contracts.find_one({"tenant_id": tenant_id, "apartment_id": apartment_id, "company_id": cid}, {"_id": 0, "id": 1})
+        if not existing and apt:
+            year = now_utc().year
+            seq = await _next_seq(f"contract_{year}")
+            company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1})
+            await db.contracts.insert_one({
+                "id": new_id(), "company_id": cid, "contract_number": f"HC{year}-{seq:04d}",
+                "tenant_id": tenant_id, "apartment_id": apartment_id,
+                "start_date": iso(now_utc())[:10], "end_date": "", "payment_day": 1,
+                "deposit_amount": float(apt.get("rent_amount") or 0),
+                "landlord": (company or {}).get("name") or "", "terms": "",
+                "status": "draft", "active": False, "sign_token": secrets.token_urlsafe(24),
+                "signed_at": None, "signed_by": None, "signed_ip": None,
+                "created_at": iso(now_utc()), "auto_created_from_tenant": True,
+            })
+    except Exception as _e:  # noqa: BLE001
+        print(f"[auto-contract on tenant] create failed: {_e}")
+
+
 @api.post("/tenants", response_model=TenantOut)
 async def create_tenant(body: TenantIn, user=Depends(get_current_user)):
     cid = company_id_of(user)
@@ -7614,50 +7639,7 @@ async def create_tenant(body: TenantIn, user=Depends(get_current_user)):
     await db.tenants.insert_one(doc)
     doc.pop("_id", None)
     if doc.get("apartment_id"):
-        await db.apartments.update_one(
-            {"id": doc["apartment_id"], **scope(user)},
-            {"$set": {"tenant_id": doc["id"], "status": "occupied"}},
-        )
-        # Auto-create concept contract zodra er een appartement gekoppeld is.
-        # Zo hoeft de beheerder niet apart naar Contracten om er één te maken.
-        # Idempotent: alleen aanmaken als er nog geen contract bestaat voor
-        # deze (tenant, apartment) combinatie.
-        try:
-            apt = await db.apartments.find_one(
-                {"id": doc["apartment_id"], **scope(user)}, {"_id": 0}
-            )
-            existing = await db.contracts.find_one(
-                {"tenant_id": doc["id"], "apartment_id": doc["apartment_id"], **scope(user)},
-                {"_id": 0, "id": 1},
-            )
-            if not existing and apt:
-                year = now_utc().year
-                seq = await _next_seq(f"contract_{year}")
-                company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1})
-                await db.contracts.insert_one({
-                    "id": new_id(),
-                    "company_id": cid,
-                    "contract_number": f"HC{year}-{seq:04d}",
-                    "tenant_id": doc["id"],
-                    "apartment_id": doc["apartment_id"],
-                    "start_date": iso(now_utc())[:10],
-                    "end_date": "",
-                    "payment_day": 1,
-                    "deposit_amount": float(apt.get("rent_amount") or 0),
-                    "landlord": (company or {}).get("name") or "",
-                    "terms": "",
-                    "status": "draft",
-                    "active": False,
-                    "sign_token": secrets.token_urlsafe(24),
-                    "signed_at": None,
-                    "signed_by": None,
-                    "signed_ip": None,
-                    "created_at": iso(now_utc()),
-                    "auto_created_from_tenant": True,
-                })
-        except Exception as _e:  # noqa: BLE001
-            # Best-effort — huurder is al aangemaakt. Log alleen.
-            print(f"[auto-contract on tenant] create failed: {_e}")
+        await _link_tenant_apartment(cid, doc["id"], doc["apartment_id"])
     return await _enrich_tenant(doc)
 
 
@@ -10124,6 +10106,69 @@ async def kiosk_list_locations(_session=Depends(get_kiosk_session)):
             })
         return out
     return await _kiosk_cached("loc", sc, compute)
+
+
+@api.get("/kiosk/tenants/unassigned")
+async def kiosk_unassigned_tenants(_session=Depends(get_kiosk_session)):
+    q = {**kiosk_scope(_session), "status": {"$ne": "archived"},
+         "$or": [{"apartment_id": None}, {"apartment_id": ""}, {"apartment_id": {"$exists": False}}]}
+    return await db.tenants.find(q, {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1, "id_number": 1}).sort("name", 1).to_list(500)
+
+
+class KioskNewTenantIn(BaseModel):
+    name: str
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    id_number: Optional[str] = ""
+
+
+class KioskLinkTenantIn(BaseModel):
+    tenant_id: Optional[str] = None
+    new_tenant: Optional[KioskNewTenantIn] = None
+
+
+@api.post("/kiosk/apartments/{apartment_id}/link-tenant")
+async def kiosk_link_tenant(apartment_id: str, body: KioskLinkTenantIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    apt = await db.apartments.find_one({"id": apartment_id, "company_id": cid}, {"_id": 0})
+    if not apt:
+        raise HTTPException(status_code=404, detail="Appartement niet gevonden")
+    t = None
+    if body.new_tenant:
+        if not body.new_tenant.name.strip():
+            raise HTTPException(status_code=400, detail="Naam is verplicht")
+        await _enforce_count_limit(cid, "tenants", "max_tenants", "huurders")
+        tid = new_id()
+    elif body.tenant_id:
+        t = await db.tenants.find_one({"id": body.tenant_id, "company_id": cid, "status": {"$ne": "archived"}}, {"_id": 0})
+        if not t:
+            raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+        if t.get("apartment_id"):
+            raise HTTPException(status_code=409, detail="Huurder heeft al een appartement")
+        tid = t["id"]
+    else:
+        raise HTTPException(status_code=400, detail="Kies een huurder of maak een nieuwe aan")
+    claim = await db.apartments.update_one(
+        {"id": apartment_id, "company_id": cid, "$or": [{"tenant_id": None}, {"tenant_id": {"$exists": False}}, {"tenant_id": ""}]},
+        {"$set": {"tenant_id": tid, "status": "occupied"}})
+    if not claim.modified_count:
+        raise HTTPException(status_code=409, detail="Appartement is al bezet")
+    if t is None:
+        nt = body.new_tenant
+        await db.tenants.insert_one({
+            "id": tid, "company_id": cid, "name": nt.name.strip(), "phone": (nt.phone or "").strip(),
+            "phone_digits": "".join(ch for ch in (nt.phone or "") if ch.isdigit()),
+            "email": (nt.email or "").strip().lower(), "id_number": (nt.id_number or "").strip(),
+            "apartment_id": apartment_id, "created_at": iso(now_utc()),
+            "deposit_required": True, "deposit_status": "pending",
+        })
+    else:
+        upd = {"apartment_id": apartment_id}
+        if t.get("deposit_status") != "paid":
+            upd.update({"deposit_required": True, "deposit_status": "pending"})
+        await db.tenants.update_one({"id": tid}, {"$set": upd})
+    await _link_tenant_apartment(cid, tid, apartment_id)
+    return {"ok": True, "tenant_id": tid}
 
 
 @api.get("/kiosk/apartments")
