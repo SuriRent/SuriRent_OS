@@ -14,7 +14,7 @@ import { Loader2, Building2, Globe, Check, Sparkles } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 import { RESERVED_SLUGS } from '../lib/branded-nav';
 
-export default function OnboardingModal({ initialName = '', initialSlug = '', onDone }) {
+export default function OnboardingModal({ initialName = '', initialSlug = '', onDone, zClass = 'z-[100]' }) {
   const [name, setName] = useState(initialName);
   const [slug, setSlug] = useState(initialSlug);
   const [slugTouched, setSlugTouched] = useState(false);
@@ -73,7 +73,7 @@ export default function OnboardingModal({ initialName = '', initialSlug = '', on
   }, [canSave, loading, name, effectiveSlug, onDone]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4"
+    <div className={`fixed inset-0 ${zClass} bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4`}
       data-testid="onboarding-modal">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
         <div className="bg-gradient-to-br from-[#FF8A3D] to-[#FF5C00] px-6 pt-6 pb-8 text-white relative">

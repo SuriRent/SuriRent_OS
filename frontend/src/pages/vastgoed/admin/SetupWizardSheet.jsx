@@ -6,7 +6,7 @@ import SetupWizard from './SetupWizard';
  *  Op desktop: gecentreerde overlay met max-width.
  *  De wizard zelf blijft volledig functioneel; deze wrapper voegt alleen
  *  een sluit-knop + dismiss-handling toe. */
-export default function SetupWizardSheet({ open, onClose, companyId }) {
+export default function SetupWizardSheet({ open, onClose, companyId, zClass = 'z-50' }) {
   if (!open) return null;
 
   const handleClose = () => {
@@ -30,7 +30,7 @@ export default function SetupWizardSheet({ open, onClose, companyId }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm md:bg-white/30 md:backdrop-blur-md flex items-end md:items-center justify-center md:p-4 modal-open"
+      className={`fixed inset-0 ${zClass} bg-slate-900/50 backdrop-blur-sm md:bg-white/30 md:backdrop-blur-md flex items-end md:items-center justify-center md:p-4 modal-open`}
       data-testid="setup-wizard-sheet"
       onClick={handleOverlayClick}
     >

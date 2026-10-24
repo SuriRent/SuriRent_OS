@@ -1,3 +1,4 @@
+import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
@@ -5414,6 +5415,8 @@ export default function KioskLayout() {
             invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
+      <KioskAdminOnboarding enabled={hasAdminAccess}
+        onWizardClosed={() => { invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1); }} />
       {showAddLocation && (
         <AddLocationModal
           onClose={() => setShowAddLocation(false)}
