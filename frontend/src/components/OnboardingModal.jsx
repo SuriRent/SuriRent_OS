@@ -38,6 +38,7 @@ export default function OnboardingModal({ initialName = '', initialSlug = '', on
     if (!s || s.length < 2) { setSlugStatus('idle'); return undefined; }
     if (RESERVED_SLUGS.has(s)) { setSlugStatus('reserved'); return undefined; }
     if (!/^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(s)) { setSlugStatus('format'); return undefined; }
+    if (s === (initialSlug || '').toLowerCase()) { setSlugStatus('available'); return undefined; }
     setSlugStatus('checking');
     const h = setTimeout(async () => {
       try {

@@ -27,7 +27,7 @@ const STEPS = [
   { id: 'employees', label: 'Werknemers', icon: UsersRound },
 ];
 
-export default function SetupWizard() {
+export default function SetupWizard({ onFinish } = {}) {
   const [status, setStatus] = useState(null);
   const [settings, setSettings] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -68,7 +68,7 @@ export default function SetupWizard() {
   }
 
   const currentStep = STEPS[idx];
-  const nextStep = () => setIdx((i) => Math.min(i + 1, STEPS.length - 1));
+  const nextStep = () => { if (idx === STEPS.length - 1) { onFinish?.(); return; } setIdx((i) => Math.min(i + 1, STEPS.length - 1)); };
   const prevStep = () => setIdx((i) => Math.max(i - 1, 0));
   const showOk = (txt) => { setMsg(txt); setTimeout(() => setMsg(''), 2500); };
 

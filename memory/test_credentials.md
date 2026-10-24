@@ -58,3 +58,7 @@ Alle geregistreerde bedrijven + hun admins zijn verwijderd. Alleen deze twee acc
 - Eerste login e-mail+wachtwoord → verplichte PIN-popup (personal-pin-modal) → kiosk. Daarna op dit apparaat alleen PIN (Welkom terug, naam). 'Ander account' vergeet het apparaat.
 - demo@surirent.sr: persoonlijke PIN gewist voor test; na test is PIN 2468
 - boekhouder@surirent.sr persoonlijke PIN: 6677
+
+## Wizard/onboarding test-account (nieuw leeg bedrijf "Wizard Test BV")
+- wizardtest@surirent.sr / Wizard1234! (role admin) — personal PIN 1357
+- Reset onboarding: db.companies.update_one({id: <company_id>}, {$set:{needs_onboarding:true}}) + localStorage setup_wizard_dismissed_{cid} wissen

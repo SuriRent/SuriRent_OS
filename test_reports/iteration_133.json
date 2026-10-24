@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend E2E test of the Kiosk admin onboarding: the portal name modal (OnboardingModal) and the setup wizard (SetupWizardSheet), both mounted through KioskAdminOnboarding. wizardtest@surirent.sr (desktop 1920): login, then the mandatory personal PIN 1357, lands on /kiosk. The 'Kies een naam voor uw portal' modal shows at z-index 140 as the topmost element; Escape and a backdrop click do not close it. Filling slug wizard-test-kiosk and submitting sends POST /companies/me/onboarding and the modal closes. GET setup-status then runs and setup-wizard-sheet opens automatically (z 130). Wizard walk-through: profile saved (1/3), apartment TEST_7B created (2/3, jumps to the Huurders step), tenant TEST_Jan Jansen created and linked to the apartment by default (3/3, 'Basis-setup klaar' plus the wizard-complete banner). Closing with setup-wizard-sheet-close sets localStorage setup_wizard_dismissed_{cid}=1. The kiosk then refreshes and shows the TEST_7B card with the tenant right away. After a reload neither the wizard nor the onboarding modal comes back. Mobile 390 (after resetting needs_onboarding=true and deleting the apt/tenant): the onboarding modal is the top element at the bottom of the screen. The wizard sheet covers the bottom menubar and its 'Later voltooien' footer button is the top element at y=800, so it is clickable. 'Later voltooien' closes the sheet and it does not come back after a reload. Regression: demo@surirent.sr kiosk shows no modals (setup-status is called, completed >= 2). Kiosk employee kiosk.medewerker (PIN 5566 via keypad) shows no modals and makes no setup-status or onboarding calls. Superadmin lands on /saas/overzicht and is redirected from /kiosk to /admin; no modals.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "OnboardingModal (shared with /admin)", "issue": "The slug field is pre-filled with the company's own current slug (wizard-test-bv). The availability check /public/companies/{slug}/available reports it as taken ('✗ BEZET'), so the submit button stays disabled until the user picks a different slug. Keeping the auto-generated slug is impossible. This exists in the shared component, so it is not new.", "selector": "[data-testid='onboarding-slug-status']", "priority": "LOW"},
+      {"component": "SetupWizard last step", "issue": "The 'Klaar' button on step 8 (Werknemers) calls nextStep(), which is clamped to the last index, so clicking it does nothing. Users would expect Klaar to close the sheet (e.g. call onClose / the dismiss handler). This was not introduced by this change.", "selector": "[data-testid='wizard-next'] on step 8", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: in OnboardingModal, treat the company's own current slug as available, or have the backend's available endpoint accept the caller's company.",
+    "Optional: make 'Klaar' on the last wizard step close SetupWizardSheet (pass an onFinish/onClose prop to SetupWizard)."
+  ],
+  "critical_code_review_comments": [
+    "KioskAdminOnboarding is clean. The setup-status effect is skipped while needs_onboarding is true and re-runs after refresh() flips it, so the wizard opens right after onboarding as intended.",
+    "Onboarding refresh relies on useAuth().refresh() updating activeCompany.needs_onboarding. This works: the modal unmounted and the wizard mounted in the same session."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100% (all requested flows pass; 2 low-priority, not-new UX notes)"},
+  "seed_data_creation": "wizardtest@surirent.sr: personal PIN set to 1357. Company f283f689-... now has slug wizard-test-kiosk2, needs_onboarding=false, profile filled in (contact_email info@wizardtest.sr), setup completed=1 (test apartment and tenant deleted). Its localStorage dismissal exists only in the test browser contexts. demo@surirent.sr PIN 2468 kept.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To re-test onboarding: in Mongo set companies.update_one({id:'f283f689-bf13-4c3b-a928-026e25d51499'},{$set:{needs_onboarding:true}}). The wizard auto-opens only if setup completed < 2; currently completed=1, so it will open in a fresh browser. Desktop /login uses data-testid auth-email/auth-password/auth-submit. The mobile (390) login shell has no testids, so use input[type=email]/[type=password] and the 'Inloggen' button. The kiosk employee PIN pad uses keypad-{n}."
+}

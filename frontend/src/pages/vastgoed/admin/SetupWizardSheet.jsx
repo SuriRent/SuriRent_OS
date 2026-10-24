@@ -70,7 +70,7 @@ export default function SetupWizardSheet({ open, onClose, companyId, zClass = 'z
 
         {/* Scrollable wizard inhoud */}
         <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 md:py-5">
-          <SetupWizard />
+          <SetupWizard onFinish={handleClose} />
         </div>
 
         {/* Footer-knop "Later voltooien" (alleen mobiel — desktop heeft X) */}

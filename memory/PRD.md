@@ -1029,3 +1029,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Filter Alles/Alleen handmatig/Alleen betalingen; beheerder: bewerken (PUT /api/kasgeld/{id}) + verwijderen (DELETE, nu alleen admin/superadmin), Boekdatum bij nieuwe mutatie. Betalingsregels "AUTO" (read-only).
 - Kiosk UI header: bonnen-icoon weg op mobiel, abonnementsbel compact, huurders-icoon weg desktop; Beheer/Instellingen-menu 1024px + 5 kolommen; admin-popups lg:max-w-5xl; mobiele bottom bar (≥390px) Scan ID | + | Kasgeld.
 - Backlog: kiosk endpoint accepteert entry_date ook van medewerker-token (alleen UI blokkeert); balance_after niet herberekend na bewerken; admin-boeking in kiosk toont "Door Kiosk medewerker".
+
+## 2026-06 — Kiosk onboarding
+- KioskAdminOnboarding (components/KioskAdminOnboarding.jsx): OnboardingModal (needs_onboarding) + SetupWizardSheet (auto als setup-status completed<2) voor role admin in Kiosk; kiosk-lijst ververst na sluiten.
+- Fix: eigen huidige slug telt als beschikbaar in OnboardingModal; "Klaar" op laatste wizardstap sluit de wizard.
+- Vergelijking admin vs kiosk: /app/memory/ADMIN_VS_KIOSK.md (punten 1-2 nu klaar).
