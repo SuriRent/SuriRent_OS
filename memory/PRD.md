@@ -1024,3 +1024,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Gearchiveerde huurders geblokkeerd voor portal login (email/PIN/NFC/setup-pin/sessie).
 - API: GET /api/tenants/{id}/move-out-preview, POST /api/tenants/{id}/move-out, GET /api/tenants/archived, POST /api/tenants/{id}/reactivate.
 - Bekend: move-out zet tijdelijk status "archiving" (claim); faalt een tussenstap, dan blijft huurder in "archiving".
+
+## 2026-06 — Kiosk Kasgeld beheerfuncties
+- Filter Alles/Alleen handmatig/Alleen betalingen; beheerder: bewerken (PUT /api/kasgeld/{id}) + verwijderen (DELETE, nu alleen admin/superadmin), Boekdatum bij nieuwe mutatie. Betalingsregels "AUTO" (read-only).
+- Kiosk UI header: bonnen-icoon weg op mobiel, abonnementsbel compact, huurders-icoon weg desktop; Beheer/Instellingen-menu 1024px + 5 kolommen; admin-popups lg:max-w-5xl; mobiele bottom bar (≥390px) Scan ID | + | Kasgeld.
+- Backlog: kiosk endpoint accepteert entry_date ook van medewerker-token (alleen UI blokkeert); balance_after niet herberekend na bewerken; admin-boeking in kiosk toont "Door Kiosk medewerker".

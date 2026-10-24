@@ -1,0 +1,41 @@
+{
+  "summary": "Tested the new Kiosk Kasgeld admin functions. Backend: 9/9 pytest tests pass. They cover PUT /api/kasgeld/{id} (updates type, amount, currency, category and date, strips the description, balances update), the validation errors (amount 0 → 400, empty description → 400, invalid date → 400, unknown id → 404, pay-* → 400), DELETE (manual entry removed and balance updated, pay-* → 400), boekhouder gets 403 on PUT and DELETE, a kiosk token gets 401/403, and a backdated POST /kiosk/kasgeld (entry_date kept). UI as demo admin on desktop 1920 and mobile 390: the filter pills Alles / Alleen handmatig / Alleen betalingen work and the badge updates (8 / 2 / 6). Nieuwe mutatie shows Boekdatum with today as default; an entry saved with 2026-09-15 appears in the September 2026 group. Manual rows show edit and delete buttons, payment rows show AUTO and have no buttons. The edit modal fills in the current values, saves the changes (type out, 12,5 USD, category, date moved to October), the row moves to the October group and the balances update. Its validation message works and clicking the backdrop closes it. Delete shows a confirm dialog, then the row is removed, the balances return to their old values and the badge drops back to 8. Kiosk employee (kiosk.medewerker, mobile): no edit, delete or AUTO elements and no date field. All test kasgeld entries were cleaned up (0 TEST_ entries left).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/kiosk/kasgeld", "issue": "Backdating is only blocked in the UI. A kiosk employee token can send entry_date and the server accepts it. Verified: the kiosk.medewerker token posted entry_date 2025-01-05 and got 200 with that date stored. If only a beheerder may backdate, ignore entry_date unless an admin/superadmin access token is also present."},
+      {"endpoint": "PUT /api/kasgeld/{id}", "issue": "balance_after (printed on the kasbon) is not recalculated after an edit, so a reprinted receipt shows the old balance and the old amount context."},
+      {"endpoint": "POST /api/auth/personal-pin/login", "issue": "For kiosk.medewerker the response has employee.id null, so the user has no employee_id link. Kiosk mutations by this user are attributed to 'Kiosk medewerker'. This is a test-data or linking issue."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin books a mutation in the kiosk", "issue": "When the admin books an entry from the kiosk without a selected operator, the row shows 'Door Kiosk medewerker' instead of the admin's name, because POST /kiosk/kasgeld only uses the employee_id/PIN for attribution.", "affected_selectors": ["[data-testid^='kasgeld-row-creator-']"]}
+    ],
+    "design_issues": [
+      {"screen": "Kasgeld mobile (390px), admin", "issues": ["The edit and delete buttons take about 72px, so row titles shrink to 'D-KW-00...' and 'Onderhouds...'. Consider moving the actions into a row tap or swipe menu, or letting the title wrap onto two lines."]},
+      {"screen": "Kasgeld edit modal and new-entry Boekdatum", "issues": ["They use the browser's native <input type=date>, which shows mm/dd/yyyy in an en-US browser and does not fit the Dutch UI. Consider the shadcn calendar or a nl-NL format."]},
+      {"screen": "Filter count", "issues": ["The badge counts all filtered items (e.g. 6 payments), but only the expanded month shows rows (4), which can look inconsistent. This is acceptable."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kasgeld_admin_edit_delete.py", "/app/test_reports/pytest/pytest_iter132.xml"],
+  "action_items": [
+    "Optional: enforce backdating on the server side for POST /kiosk/kasgeld (only allow entry_date for an admin/superadmin)",
+    "Optional: recalculate balance_after on PUT /kasgeld/{id}, or leave it out of reprints",
+    "Optional: attribute kiosk mutations made by an admin to the admin's name when no operator is selected",
+    "Optional: improve the mobile row layout so titles are not over-truncated when the action buttons show"
+  ],
+  "critical_code_review_comments": [
+    "Deleting uses window.confirm(); the rest of the kiosk uses custom modals. Consider a KioskModalShell confirm for consistency on the PWA and iOS.",
+    "The canManage role comes from an async /auth/me call. While it loads, the buttons are hidden and then appear. This is fine for security because the backend enforces the role.",
+    "KioskLayout.jsx is 5.5k lines and server.py is 19k lines; split the Kasgeld panel and modals into their own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_kasgeld_admin_edit_delete.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all requested flows verified)"},
+  "seed_data_creation": "Created TEST_kas_* and TEST_UI_* kasgeld entries during testing; all deleted (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk admin session injection: POST /api/auth/login demo → POST /api/auth/admin-to-kiosk → localStorage admin_token, kiosk_token, kiosk_company → /kiosk. The edit modal testid is kasgeld-edit-overlay (KioskModalShell adds the -overlay suffix). The NumPad keys are kasgeld-npad-key-{n}. Server date is Oct 2026.",
+  "test_credentials": "demo@surirent.sr/demo1234 (admin); kiosk.medewerker@surirent.sr PIN 5566; boekhouder@surirent.sr/test1234"
+}

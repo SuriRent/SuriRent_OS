@@ -3327,13 +3327,14 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
           )}
         </p>
       </div>
+      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
       <p className={`text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
         isIn ? 'text-emerald-600' : 'text-red-500'
       }`} data-testid={`kasgeld-row-amount-${item.id}`}>
         {isIn ? '+' : '−'}{item.currency} {Number(item.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </p>
       {canManage && (item.source === 'payment' ? (
-        <span className="w-[72px] shrink-0 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400" data-testid={`kasgeld-row-auto-${item.id}`}>auto</span>
+        <span className="sm:w-[68px] shrink-0 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400" data-testid={`kasgeld-row-auto-${item.id}`}>auto</span>
       ) : (
         <div className="flex gap-1 shrink-0">
           <button type="button" onClick={onEdit} data-testid={`kasgeld-row-edit-${item.id}`} aria-label="Bewerken"
@@ -3346,6 +3347,7 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
           </button>
         </div>
       ))}
+      </div>
     </div>
   );
 }
