@@ -5376,8 +5376,8 @@ export default function KioskLayout() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
             <button type="button" onClick={() => setPhoneScanOpen(true)} data-testid="kiosk-mobile-bar-scanid"
               className={`flex-1 h-full flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
-              <ScanLine className="w-5 h-5" strokeWidth={2.4} />
-              <span className="text-[10px] font-bold leading-none">Scan ID</span>
+              <ScanLine className="w-7 h-7" strokeWidth={2.4} />
+              <span className="text-[13px] font-bold leading-none">Scan ID</span>
             </button>
             <button type="button" onClick={() => setShowAddSheet(true)} data-testid="kiosk-mobile-bar-plus" aria-label="Snelle acties"
               className={`-mt-6 w-16 h-16 rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ${isWhite ? 'ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'ring-[#FF6B1A] bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}>
@@ -5385,8 +5385,8 @@ export default function KioskLayout() {
             </button>
             <button type="button" onClick={() => setStep('kasgeld')} data-testid="kiosk-mobile-bar-kasgeld"
               className={`flex-1 h-full flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
-              <Database className="w-5 h-5" strokeWidth={2.4} />
-              <span className="text-[10px] font-bold leading-none">Kasgeld</span>
+              <Database className="w-7 h-7" strokeWidth={2.4} />
+              <span className="text-[13px] font-bold leading-none">Kasgeld</span>
             </button>
           </nav>
         </>
