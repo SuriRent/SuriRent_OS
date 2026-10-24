@@ -10005,7 +10005,14 @@ async def kiosk_id_scan(file: UploadFile = File(...), user_key: str = Form(""),
                         _session=Depends(get_kiosk_session)):
     # Telefoon scant ID → OCR + foto bewaren → desktop van dezelfde gebruiker krijgt de gegevens via WS.
     cid = _session["company_id"]
-    scan = await ocr_id_card(file=file, user={})
+    if not (file.content_type or "").lower().startswith("image/"):
+        raise HTTPException(status_code=400, detail="Upload een foto van de ID-kaart")
+    try:
+        scan = await ocr_id_card(file=file, user={})
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID-kaart kon niet gelezen worden — probeer een scherpere foto")
     await file.seek(0)
     raw = await file.read()
     raw, ctype = _to_webp_bytes(raw, (file.content_type or "image/jpeg").lower())

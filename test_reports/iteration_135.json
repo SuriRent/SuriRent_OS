@@ -1,0 +1,36 @@
+{
+  "summary": "Tested ID scan while linking a tenant and immediate deposit (borg) payment in the kiosk, on backend and frontend. Backend: 6/6 pytest tests pass. POST /api/kiosk/id-scan with a synthetic PIL ID card (Gemini OCR) returned name 'Jan Testpersoon', id_number FZ123456, birth_date 1990-02-01, confidence 1.0. The asset URL serves the image, and the endpoint returns 401 without auth. link-tenant returns tenant_name, apartment_number, rent_amount 2500 and currency SRD, for both a new tenant (kiosk employee PIN 5566) and an existing tenant (admin-to-kiosk). attach-id-photo sets id_photo_url, which shows up in admin GET /api/tenants together with birth_date. It returns 404 for an invalid asset and 401 without auth. Deposit payment sets deposit_status=paid, tenant_deposit_pending becomes false and a double payment returns 400. Frontend at 1920 and 390: the scan button opens the file chooser (accept=image/*). The text changes Scan ID-kaart -> 'ID-kaart lezen…' -> 'Opnieuw scannen', and the preview image loads (naturalWidth 900). Name and ID number are filled automatically. Save closes the link modal and the deposit modal opens at once with the tenant name, 'Appt. ZUI1' and 2500. Paying (Pinpas) shows the receipt and the DB has deposit paid, id_photo_url and birth_date. With an existing tenant the deposit modal also opens; 'Later' keeps the card on 'Wacht op borg'. A blank image shows the error hint, fields stay editable and Save stays disabled. One UX bug: closing the deposit modal ('Klaar' or 'Later') resets the kiosk to the location picker instead of keeping the apartment grid of the current location.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/kiosk/id-scan", "issue": "Uploading a non-image file (text/plain) returns an unhandled 500: Gemini 'Unable to process input image' ChatError. ocr_id_card should catch ChatError and return 400/422 with a Dutch message. The mime mapping also sends anything that is not png or webp as image/jpeg, so HEIC uploads from iPhones may fail the same way."},
+      {"endpoint": "POST /api/kiosk/id-scan", "issue": "Every scan stores a landing_assets doc (kind id_scan), even when OCR is empty or the user cancels or re-scans. Orphan ID photos (sensitive personal data) pile up with no cleanup. Consider a TTL or cleanup for unattached scans."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KioskLayout depositFor onClose", "issue": "After linking, closing the deposit modal (Klaar on the receipt, or 'Later — huurder wacht op borg') sends the kiosk back to the 'Kies een locatie' screen. The employee loses the apartment grid they were working in. RCA: onClose calls setApartmentsReloadKey(k+1), and that key remounts <ApartmentSelect key={apartmentsReloadKey}>. The remount resets the local selectedLocationId state to null. Fix: keep selectedLocationId (lift it up or store it in sessionStorage), or reload data without remounting, e.g. a 'kiosk-select-reload' event that calls reloadSelect.", "selector": "[data-testid='kiosk-deposit-later'], Klaar button", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Kiosk console", "issues": ["React warning 'A component is changing a controlled input to be uncontrolled' appears on the kiosk page. Low priority; an input value becomes undefined somewhere."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_idscan_deposit_iter135.py", "/app/test_reports/pytest/pytest_iter135.xml"],
+  "action_items": [
+    "(Medium) Keep the selected location after the deposit modal closes. Do not remount ApartmentSelect via key bump, or persist selectedLocationId.",
+    "(Low) Catch the OCR ChatError in ocr_id_card / kiosk_id_scan and return 400 'Kon afbeelding niet lezen' instead of 500.",
+    "(Low) Clean up unattached id_scan assets (privacy)."
+  ],
+  "critical_code_review_comments": [
+    "kiosk_id_scan publishes the full scan (name, ID number, photo URL) on the company kiosk admin WS channel, even when user_key='link-tenant' is a local flow. Other kiosk desktops may pop the 'kiosk-id-scan' toast for a scan meant for this modal. Check whether this is intended.",
+    "LinkTenantModal sends birth_date from OCR, but there is no visible birth_date field, so the user cannot see or correct it. Consider showing it.",
+    "attach-id-photo failure is swallowed silently (.catch(() => {})), so the user gets no feedback if the ID photo was not saved."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_idscan_deposit_iter135.py"],
+  "success_rate": {"backend": "100% (6/6) + 1 minor edge-case 500", "frontend": "95% (all requested flows work; 1 UX bug on modal close)"},
+  "seed_data_creation": "Temporary apartments ZUI1-4 (2500 SRD) in 'Filiaal — Nieuw Nickerie' and TEST_ tenants were created. All of them, plus their contracts, invoices, deposits and id_scan assets, were removed afterwards. The pytest module cleans up after itself.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk UI session: POST /api/auth/personal-pin/login {email:kiosk.medewerker@surirent.sr,pin:5566} returns {token, company}. Set localStorage kiosk_token and kiosk_company=JSON(company), open /kiosk, then click location-{id}. The company is demo-company-fixed-uuid-00000000000 (slug my-awesome-rentals-bv). There is no GET /api/tenants/{id}; use GET /api/tenants and filter. Gemini OCR reads the PIL ID card reliably, in about 5-10s."
+}

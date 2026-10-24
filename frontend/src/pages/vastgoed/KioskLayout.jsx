@@ -416,7 +416,11 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
   const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
-  const [selectedLocationId, setSelectedLocationId] = useState(null);
+  const [selectedLocationId, setSelectedLocationIdState] = useState(() => sessionStorage.getItem('kiosk_sel_loc') || null);
+  const setSelectedLocationId = (v) => {
+    setSelectedLocationIdState(v);
+    try { if (v) sessionStorage.setItem('kiosk_sel_loc', v); else sessionStorage.removeItem('kiosk_sel_loc'); } catch { /* noop */ }
+  };
   useEffect(() => {
     const onNav = (e) => { if (e.detail === 'dashboard') setSelectedLocationId(null); };
     window.addEventListener('kiosk-nav', onNav);
@@ -464,7 +468,10 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
 
   // Auto-skip when there's only one (or zero) groups.
   useEffect(() => {
-    if (loading || selectedLocationId !== null) return;
+    if (loading) return;
+    if (selectedLocationId && !['__none__', '__any__'].includes(selectedLocationId)
+      && !locations.some((l) => l.id === selectedLocationId)) { setSelectedLocationId(null); return; }
+    if (selectedLocationId !== null) return;
     if (totalGroups <= 1) {
       setSelectedLocationId(locations[0]?.id || '__any__');
     }
