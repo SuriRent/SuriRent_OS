@@ -10120,6 +10120,7 @@ class KioskNewTenantIn(BaseModel):
     phone: Optional[str] = ""
     email: Optional[str] = ""
     id_number: Optional[str] = ""
+    birth_date: Optional[str] = ""
 
 
 class KioskLinkTenantIn(BaseModel):
@@ -10159,6 +10160,7 @@ async def kiosk_link_tenant(apartment_id: str, body: KioskLinkTenantIn, _session
             "id": tid, "company_id": cid, "name": nt.name.strip(), "phone": (nt.phone or "").strip(),
             "phone_digits": "".join(ch for ch in (nt.phone or "") if ch.isdigit()),
             "email": (nt.email or "").strip().lower(), "id_number": (nt.id_number or "").strip(),
+            "birth_date": (nt.birth_date or "").strip(),
             "apartment_id": apartment_id, "created_at": iso(now_utc()),
             "deposit_required": True, "deposit_status": "pending",
         })
@@ -10173,7 +10175,9 @@ async def kiosk_link_tenant(apartment_id: str, body: KioskLinkTenantIn, _session
             await db.apartments.update_one({"id": apartment_id, "tenant_id": tid}, {"$set": {"tenant_id": None, "status": "vacant"}})
             raise HTTPException(status_code=409, detail="Huurder heeft al een appartement")
     await _link_tenant_apartment(cid, tid, apartment_id)
-    return {"ok": True, "tenant_id": tid}
+    return {"ok": True, "tenant_id": tid, "tenant_name": nt.name.strip() if t is None else t.get("name"),
+            "apartment_id": apartment_id, "apartment_number": apt.get("number"),
+            "rent_amount": float(apt.get("rent_amount") or 0), "currency": apt.get("currency") or "SRD"}
 
 
 @api.get("/kiosk/apartments")

@@ -655,7 +655,12 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         </div>
       </div>
       {linkApt && <LinkTenantModal apartment={linkApt} onClose={() => setLinkApt(null)}
-        onLinked={() => { setLinkApt(null); reloadSelect(); }} />}
+        onLinked={(d) => {
+          setLinkApt(null); reloadSelect();
+          window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: {
+            id: d.tenant_id, name: d.tenant_name, apartment_id: d.apartment_id,
+            apartment_number: d.apartment_number, rent_amount: d.rent_amount, currency: d.currency } }));
+        }} />}
     </div>
   );
 }
@@ -665,9 +670,26 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
   const [list, setList] = useState(null);
   const [q, setQ] = useState('');
   const [pick, setPick] = useState(null);
-  const [f, setF] = useState({ name: '', phone: '', email: '', id_number: '' });
+  const [f, setF] = useState({ name: '', phone: '', email: '', id_number: '', birth_date: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [scan, setScan] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const scanRef = useRef(null);
+  const onScanFile = async (file) => {
+    if (!file) return;
+    setScanning(true); setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('user_key', 'link-tenant');
+      const { data } = await api.post('/kiosk/id-scan', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const sc = data?.scan || {};
+      setF((p) => ({ ...p, name: sc.name || p.name, id_number: sc.id_number || p.id_number, birth_date: sc.birth_date || p.birth_date }));
+      setScan(data);
+      if (!sc.name && !sc.id_number) setErr('ID-kaart niet goed gelezen — vul de gegevens zelf in of scan opnieuw.');
+    } catch (e) { setErr(formatError(e)); } finally { setScanning(false); if (scanRef.current) scanRef.current.value = ''; }
+  };
   useEffect(() => {
     api.get('/kiosk/tenants/unassigned').then((r) => {
       setList(r.data || []);
@@ -679,9 +701,12 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      await api.post(`/kiosk/apartments/${apartment.id}/link-tenant`,
+      const { data } = await api.post(`/kiosk/apartments/${apartment.id}/link-tenant`,
         tab === 'existing' ? { tenant_id: pick } : { new_tenant: f });
-      onLinked();
+      if (tab === 'new' && scan?.asset_id) {
+        await api.post(`/kiosk/tenants/${data.tenant_id}/attach-id-photo`, { asset_id: scan.asset_id }).catch(() => {});
+      }
+      onLinked(data);
     } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
   };
   const input = 'w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white';
@@ -721,13 +746,24 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
         </div>
       ) : (
         <div className="space-y-2">
+          <input ref={scanRef} type="file" accept="image/*" capture="environment" className="hidden" data-testid="link-tenant-scan-input"
+            onChange={(e) => onScanFile(e.target.files?.[0])} />
+          <button type="button" onClick={() => scanRef.current?.click()} disabled={scanning} data-testid="link-tenant-scan"
+            className="w-full h-12 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
+            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-5 h-5" />}
+            {scanning ? 'ID-kaart lezen…' : scan ? 'Opnieuw scannen' : 'Scan ID-kaart'}
+          </button>
+          {scan?.id_photo_url && (
+            <img src={`${process.env.REACT_APP_BACKEND_URL}${scan.id_photo_url}`} alt="Gescande ID-kaart" data-testid="link-tenant-scan-preview"
+              className="w-full max-h-32 object-contain rounded-xl bg-slate-50 border border-slate-200" />
+          )}
           <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Naam *" data-testid="link-tenant-name" className={input} />
           <input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="Telefoon" inputMode="tel" data-testid="link-tenant-phone" className={input} />
           <input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="E-mail" inputMode="email" data-testid="link-tenant-email" className={input} />
           <input value={f.id_number} onChange={(e) => setF({ ...f, id_number: e.target.value })} placeholder="ID-nummer" data-testid="link-tenant-idnr" className={input} />
         </div>
       )}
-      <p className="text-xs text-slate-500 mt-3">Na het koppelen moet eerst de borg betaald worden voordat de huurfacturen starten.</p>
+      <p className="text-xs text-slate-500 mt-3">Na het koppelen opent direct het borgscherm. De huurfacturen starten pas na betaling van de borg.</p>
       {err && <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="link-tenant-err">{err}</p>}
     </KioskModalShell>
   );
