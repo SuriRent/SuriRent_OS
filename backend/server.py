@@ -541,6 +541,17 @@ async def lifespan(app: FastAPI):
         _aio4.create_task(_installment_reminder_loop())
         _aio4.create_task(_upcoming_invoice_reminder_loop())
 
+    # Eenmalig/idempotent: facturen van reeds gearchiveerde huurders archiveren.
+    try:
+        _arch_ids = [t["id"] async for t in db.tenants.find({"status": "archived"}, {"_id": 0, "id": 1})]
+        if _arch_ids:
+            _base = {"tenant_id": {"$in": _arch_ids}, "archived": {"$ne": True}}
+            async for _inv in db.invoices.find({**_base, "status": {"$in": ["open", "sent", "pending", "overdue", "partial"]}}, {"_id": 0, "id": 1, "status": 1}):
+                await db.invoices.update_one({"id": _inv["id"]}, {"$set": {"status": "archived", "status_before_archive": _inv["status"]}})
+            await db.invoices.update_many(_base, {"$set": {"archived": True, "archived_at": iso(now_utc())}})
+    except Exception as _e:  # noqa: BLE001
+        print(f"[startup] archive invoices migration failed: {_e}")
+
     yield
     if _reminder_task_handle:
         _reminder_task_handle.cancel()
@@ -13398,7 +13409,7 @@ async def _all_invoices_enriched(user: dict) -> list:
 
 
 async def _build_invoice_list(user: dict) -> list:
-    docs = await db.invoices.find(scope(user), {"_id": 0}).sort("created_at", -1).to_list(5000)
+    docs = await db.invoices.find({**scope(user), "archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(5000)
     # Bucket berekening — gebruik company-instelling voor grace_workdays
     cid = company_id_of(user)
     grace_wd = 10
@@ -15444,6 +15455,14 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
         apt_number = (a or {}).get("number")
         await db.apartments.update_one({"id": t["apartment_id"], "tenant_id": tenant_id},
                                        {"$set": {"tenant_id": None, "status": "vacant"}})
+    # Alle facturen archiveren: restant-open facturen krijgen status 'archived' (niet meer openstaand).
+    arch_at = iso(now_utc())
+    async for inv in db.invoices.find({"company_id": cid, "tenant_id": tenant_id, "archived": {"$ne": True}},
+                                      {"_id": 0, "id": 1, "status": 1}):
+        upd = {"archived": True, "archived_at": arch_at}
+        if inv.get("status") in _UNPAID_STATUSES:
+            upd.update({"status": "archived", "status_before_archive": inv.get("status")})
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": upd})
     await db.tenants.update_one({"id": tenant_id}, {"$set": {
         "status": "archived", "archived_at": iso(now_utc()), "move_out_date": date_s,
         "archived_apartment_id": t.get("apartment_id"), "archived_apartment_number": apt_number,
@@ -15457,6 +15476,37 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
 async def list_archived_tenants(user=Depends(get_current_user)):
     return await db.tenants.find({**scope(user), "status": "archived"},
                                  {"_id": 0, "pin_hash": 0}).sort("archived_at", -1).to_list(1000)
+
+
+@api.get("/tenants/{tenant_id}/archived-invoices")
+async def archived_tenant_invoices(tenant_id: str, user=Depends(get_current_user)):
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0, "id": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
+    return await db.invoices.find({"tenant_id": tenant_id, **scope(user), "archived": True},
+                                  {"_id": 0, "id": 1, "invoice_number": 1, "period_month": 1, "period_year": 1, "amount": 1,
+                                   "amount_due": 1, "paid_amount": 1, "currency": 1, "status": 1, "status_before_archive": 1}
+                                  ).sort([("period_year", -1), ("period_month", -1)]).to_list(500)
+
+
+@api.delete("/tenants/{tenant_id}/permanent")
+async def delete_archived_tenant(tenant_id: str, user=Depends(require_role("admin", "superadmin"))):
+    t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Alleen gearchiveerde huurders kunnen permanent verwijderd worden")
+    cid = t["company_id"]
+    q = {"company_id": cid, "tenant_id": tenant_id}
+    asset_ids = [u.rsplit("/", 1)[-1] for u in (t.get("id_photo_url"), t.get("avatar_url"))
+                 if isinstance(u, str) and "/landing/asset/" in u]
+    if asset_ids:
+        await db.landing_assets.delete_many({"id": {"$in": asset_ids}, "company_id": cid})
+    for coll in (db.invoices, db.contracts, db.deposits, db.payment_plans):
+        await coll.delete_many(q)
+    # Ontvangen betalingen blijven (kasgeld/rapporten), maar zonder koppeling naar de huurder.
+    await db.payments.update_many(q, {"$set": {"tenant_id": "", "tenant_deleted": True,
+                                               "invoice_id": None, "invoice_ids": []}})
+    await db.tenants.delete_one({"id": tenant_id, "company_id": cid})
+    return {"ok": True}
 
 
 class ReactivateIn(BaseModel):
