@@ -3360,7 +3360,7 @@ export function Tenants({ embedded = false }) {
           { v: 'all', l: 'Alles', c: counts.all },
           { v: 'with_apt', l: 'Met appartement', c: counts.with_apt },
           { v: 'without_apt', l: 'Zonder appartement', c: counts.without_apt },
-          { v: 'archived', l: 'Archief' },
+          { v: 'archived', l: 'Archief', c: counts.archived ?? 0 },
         ].map((f) => (
           <button key={f.v} onClick={() => setFilter(f.v)}
             data-testid={`tenant-filter-${f.v}`}

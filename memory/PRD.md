@@ -1044,3 +1044,4 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Telefoon "Scan ID" vult open koppelscherm op desktop (linkScanHandler in KioskLayout).
 - Na borgbetaling opent KioskContractSignModal: hier tekenen (SignaturePad) of via QR (/onderteken/{token}, polling). Handtekening verplicht (server: signature_png data:image/png), signed_via kiosk|link. GET /api/kiosk/tenants/{id}/contract-to-sign.
 - Facturen-venster Kiosk: ernst-filter, tegoed-badge (/tenants/credits), tegoed toepassen, PDF, mailen (SendDialog zClass). KioskInvoicesPage (Beheer-tegel) ook bijgewerkt maar wordt in praktijk door het venster vervangen.
+- 2026-06: Borg "Restitueer" (Borg-pagina) opent nu TenantMoveOutModal → verrekening facturen, borgbon, appartement vrij, huurder gearchiveerd (tekort zichtbaar in archief). Archief-pill toont teller (counts.archived in /tenants/paged).

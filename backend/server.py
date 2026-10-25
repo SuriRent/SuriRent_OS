@@ -7532,7 +7532,8 @@ async def list_tenants_paged(filter: str = "all", q: str = "", id: Optional[str]
     by_search = [t for t in allt if not ql or ql in (t.get("name") or "").lower()]
     counts = {"all": len(by_search),
               "with_apt": sum(1 for t in by_search if t.get("apartment_number")),
-              "without_apt": sum(1 for t in by_search if not t.get("apartment_number"))}
+              "without_apt": sum(1 for t in by_search if not t.get("apartment_number")),
+              "archived": await db.tenants.count_documents({**scope(user), "status": "archived"})}
     if id:
         rows = [t for t in allt if t["id"] == id]
     else:

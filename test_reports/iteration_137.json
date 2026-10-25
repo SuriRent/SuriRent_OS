@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend E2E test (desktop 1920, kiosk via admin-to-kiosk) of the borg refund -> automatic move-out on Kiosk > Beheer > Borg. All requested flows PASS. (1) Borg covers everything: TEST-BORG-A (rent 3000), borg 3000, 1 open invoice. Restitueer opens moveout-modal with the date defaulting to today. The date can be changed (2026-10-28). The arrears list has a checkbox per invoice: unticking shows terug 3000, ticking it again shows 0. A damage row of 150 switches to moveout-result-due, and removing the row works. moveout-next -> confirm text -> moveout-submit -> 'Borgafrekening' receipt + moveout-archived-note -> Klaar returns to the Borg list with the status DEELS VERREKEND. DB: tenant archived (move_out_date 2026-10-28), apartment vacant with tenant_id null, invoice paid by one 'borgverrekening' payment of 3000. (2) Shortfall: borg 1000, invoices aug/sep/okt. Picking 2026-09-15 drops okt (moveout-future-note '1 factuur... verwijderd'), and the amount due is 5000. The receipt shows 'Te betalen SRD 5.000,00'. The list and detail show 'nog te betalen: SRD 5.000,00', and the print-afrekeningsbon reprint modal and PDF link are present. The tenant is gone from the active Huurders list and shows in Archief with archived-due '5.000,00'. DB: aug partial (1000 paid), sep open, okt deleted. Kiosk grid (Overige group) shows TEST-BORG-A/B as 'Vrij' (apt-X-vacant). (3) Regression: Huurders > detail > Uitgang starten (with one invoice unticked) works end to end: the excluded invoice stays open, the other is paid, the tenant is archived, the apartment is vacant. Nieuwe borg on the Borg page registers a 750 deposit that shows as ONTVANGEN. All test data was cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/deposits (and _enrich_deposit)", "issue": "After move-out, tenant.apartment_id is set to None, so deposits of archived tenants show 'Geen appartement' in the Borg list. The move-out response/receipt also has apartment_number null. It should fall back to tenant.archived_apartment_number (or store apartment_number on the deposit at move-out)."},
+      {"endpoint": "POST /api/tenants/{id}/move-out", "issue": "Invoices unticked in the arrears list (exclude_invoice_ids) stay open, but outstanding_after_move_out only counts amount_due from the borg calculation. The archive row therefore shows no debt (no archived-due) although an open invoice remains. Product decision: either include excluded open invoices in the archive debt or show them separately."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Kiosk > Beheer > Borg > Restitueer (moveout-modal)", "issues": ["Nested modal: the inner 'Uitgang huurder' modal sits inside the 'Borg' kiosk sheet, so two X close buttons are stacked (outer header + inner).", "Vertrekdatum uses the native browser date picker (input type=date) instead of the shadcn calendar.", "Huurders filter: the Archief pill shows '—' instead of a count."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/setup_iter137_borg_moveout.py", "/app/backend/tests/verify_iter137.py"],
+  "action_items": [
+    "Show the apartment number for archived tenants' deposits (Borg list/detail/receipt): fall back to archived_apartment_number in list_deposits/_enrich_deposit, or persist apartment_number on the deposit during move-out.",
+    "(Optional) Decide how excluded (unticked) open invoices are reflected in the archive debt (outstanding_after_move_out).",
+    "(Optional) Replace the native date input with the shadcn calendar and avoid the double close button in the nested modal."
+  ],
+  "critical_code_review_comments": [
+    "Deposits.jsx: the list-level `refunding` TenantMoveOutModal (lines 340-342) is dead code, because Restitueer only exists on the detail page. Remove it.",
+    "Circular import: TenantMoveOut.jsx imports DamageRows/SumRow from pages/admin/Deposits.jsx, and Deposits.jsx imports TenantMoveOutModal. It works now, but it is fragile. Move DamageRows/SumRow to a shared component file.",
+    "server.py is more than 19k lines and should be split into routers."
+  ],
+  "updated_files": ["/app/backend/tests/setup_iter137_borg_moveout.py", "/app/backend/tests/verify_iter137.py"],
+  "success_rate": {"backend": "N/A (frontend-only request; DB state verified via API)", "frontend": "100% of requested flows (1 minor display issue)"},
+  "seed_data_creation": "Created TEST-BORG-A/B/C apartments, TEST Borg full/short/reg/nieuw tenants, deposits and invoices. All removed via `python setup_iter137_borg_moveout.py cleanup`.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk access: POST /api/auth/login (demo) -> POST /api/auth/admin-to-kiosk returns {token, company}. Set localStorage admin_token/token=admin token, kiosk_token, kiosk_company=JSON(company), pwa_preferred_role=kiosk, then go to /kiosk -> kiosk-admin-menu-btn -> kiosk-admin-menu-borg | kiosk-admin-menu-huurders. The server clock is 2026-10-25 and creating a deposit auto-creates the current-month invoice. Apartments without a location appear under location-unassigned ('Overige') in the grid. Setup: `python tests/setup_iter137_borg_moveout.py` (ids in /tmp/iter137.json), verify with `python tests/verify_iter137.py full|short|reg`, then cleanup."
+}
