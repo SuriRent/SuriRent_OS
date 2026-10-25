@@ -1,0 +1,44 @@
+{
+  "summary": "Tested three kiosk features on backend and frontend (desktop 1920). BACKEND: 17/17 pytest tests pass. contract-to-sign returns the latest unsigned contract, then {contract:null} once it is signed, plus 401 and 404 cases. POST /contracts/sign with an invalid signature (jpeg prefix, plain text, >400KB) returns 400, accept=false returns 400 and a second sign returns 400. A valid sign sets status active, signed_via 'kiosk' and stores signature_png. /tenants/credits shows the credit, apply-credit applies 500 and the second call applies 0. /invoices/grouped with severity all/critical/late/ok returns 6/1/1/4 tenants. Invoice PDF returns 200 application/pdf. /email/invoice returns 400 with 'SMTP is niet ingeschakeld — configureer eerst onder Instellingen → E-mail.'. FRONTEND: (1) Phone scan: with the link modal open, a POST to /kiosk/id-scan with user_key=demo@surirent.sr switches the modal to the 'Nieuwe huurder' tab and fills name 'Jan Testpersoon' and ID-nr FZ123456. link-tenant-phone-scanned and the scan preview are shown, and the Nieuwe huurder modal does NOT open. With the link modal closed, the old behaviour works: Nieuwe huurder opens with name, ID and birth date 1990-02-01 filled in, plus the toast. (2) Contract signing: vacant card -> new tenant -> Koppelen -> deposit modal -> Betalen -> receipt -> Klaar opens contract-sign with the correct summary (HC number, apartment, rent, deposit, start date, payment day). The name is pre-filled and submit stays disabled until a signature is drawn and accept is ticked. Submitting shows contract-sign-done and the DB has status active, signed_via kiosk and the signature png. QR mode shows the QR. Signing on the public /onderteken/{token} page (390px) requires a drawn signature, shows a disabled submit until then, ends on 'Bedankt' with the PDF download, and the kiosk modal switches to done within the 3s poll. 'Later tekenen' closes the modal and the contract stays unsigned. The apartment grid stays visible after closing (the location-picker reset bug from iteration 135 did not reproduce). (3) KioskInvoicesModal (opened via Beheer menu -> Facturen): severity pills filter the list (6/1/1/4) and the credit badge 'SRD 400,00 tegoed' shows on both the row and the detail. Apply credit shows the success message 'SRD 400,00 tegoed toegepast op F2026-00142', the remaining amount drops from 1.500 to 1.100, and the badge and button disappear. The PDF link returns 200 application/pdf. Mail opens the SendDialog above the kiosk modal, pre-filled with the tenant email, and Versturen shows the SMTP error inline without crashing. Main finding: KioskInvoicesPage is unreachable in the kiosk, so its new severity, credit, PDF and mail UI could not be tested.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/contracts/sign/{token}", "issue": "signature_png is optional on the server. The public page requires a drawn signature only in the client, so a direct API call can still sign without one. If a signature is now mandatory, enforce it on the server (at least when signed_via is 'link' or 'kiosk')."},
+      {"endpoint": "GET /api/invoices/{id}/pdf, GET /api/contracts/{id}/pdf", "issue": "Pre-existing: no authentication. Anyone who has the id can download the PDF (the ids are UUIDs, so the risk is limited)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KioskInvoicesPage (Beheer > Facturen page)", "issue": "Unreachable. KioskLayout onNav (around line 5399) catches 'admin:facturen' and opens KioskInvoicesModal instead. The last else-if (line 5402) repeats the condition of line 5401 (startsWith('admin:')), so setStep('admin:...') never runs. Nothing else sets step 'admin:facturen'. As a result, the new kiosk-inv-severity-* pills, kiosk-inv-credit-* badges and the per-line extras on that page are never shown to users and could not be UI-tested.", "selector": "[data-testid=kiosk-admin-page-facturen]", "priority": "MEDIUM"},
+      {"component": "KioskContractSignModal", "issue": "Duplicate data-testid 'contract-sign-close': the Shell X button (auto `${testId}-close`) and the footer 'Later tekenen'/'Klaar' button share it. Rename the footer one, e.g. 'contract-sign-later'.", "selector": "[data-testid=contract-sign-close]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Bottom bar 'Facturen' (desktop)", "issue": "The bottom bar button 'kiosk-add-invoice-btn-desktop' opens KioskInvoiceFormModal (testId add-invoice, 'Nieuwe factuur' form), not KioskInvoicesModal as the review request describes. KioskInvoicesModal can only be reached via kiosk-admin-menu-btn -> kiosk-admin-menu-facturen. Decide which one is intended.", "affected_selectors": ["[data-testid=kiosk-add-invoice-btn-desktop]", "[data-testid=kiosk-admin-menu-facturen]"]}
+    ],
+    "design_issues": [
+      {"screen": "LinkTenantModal (Nieuwe huurder tab)", "issues": ["The birth date from the phone or local scan is kept in state and sent on save, but there is no field for it, so the admin cannot see or correct it. The Nieuwe huurder modal does show it."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kiosk_contract_invoices_iter136.py", "/app/backend/tests/setup_iter136.py", "/app/test_reports/pytest/pytest_iter136.xml"],
+  "action_items": [
+    "Make KioskInvoicesPage reachable, or remove it: fix the dead duplicate else-if in the kiosk-nav onNav handler (KioskLayout around line 5401-5402) and decide whether 'Facturen' opens the page or the modal.",
+    "Clarify whether the bottom bar 'Facturen' should open KioskInvoicesModal (overview) instead of the new-invoice form.",
+    "Rename the footer data-testid in KioskContractSign to avoid the clash with the Shell close button (contract-sign-close).",
+    "Optional: enforce signature_png on the server in contract_do_sign if a drawn signature is now required.",
+    "Optional: add a birth date input to the LinkTenantModal new-tenant form."
+  ],
+  "critical_code_review_comments": [
+    "KioskLayout.jsx onNav: `else if (startsWith('admin:')) setAdminPopup(...)` is followed by an identical `else if (startsWith('admin:')) setStep(...)`, which can never run.",
+    "Kiosk tokens are rejected by /tenants/credits, /invoices/grouped, apply-credit and email ('Ongeldig token type'). These calls work only because the api interceptor sends admin_token for non-/kiosk paths, or the access_token cookie. A kiosk session without an admin token (kiosk employee) would get 401 here, which is acceptable only if hasAdminAccess always implies an admin token or cookie.",
+    "contract_do_sign checks the signature after the already-signed check; that is fine. find_one_and_update guards against concurrent double signing; good.",
+    "Signing sets status 'active' but leaves the auto-created contract's `active: False` field unchanged. Check that no consumer reads the `active` field.",
+    "KioskLayout.jsx is 5722 lines and server.py is 19k lines; both are far beyond the maintainability limit."
+  ],
+  "updated_files": ["/app/backend/tests/test_kiosk_contract_invoices_iter136.py", "/app/backend/tests/setup_iter136.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "95% (all requested flows work in KioskInvoicesModal, contract signing and phone scan; KioskInvoicesPage unreachable)"},
+  "test_credentials": "demo@surirent.sr / demo1234. The kiosk UI session was set up via localStorage: admin_token, kiosk_token (POST /api/auth/admin-to-kiosk), kiosk_company, device_user_email=demo@surirent.sr (this is getKioskUserKey).",
+  "seed_data_creation": "Temporary TEST_ tenants, Z* apartments, invoices, payments, contracts, deposits and id_scan assets were created and then cleaned up (setup_iter136.py cleanup; it also deletes all tenants named ^TEST_).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Credit test data is a mongo-inserted payment {status approved, credit_remaining>0, category vooruitbetaling}. KioskInvoicesModal opens via kiosk-admin-menu-btn -> kiosk-admin-menu-facturen, or window.dispatchEvent(new CustomEvent('kiosk-nav',{detail:'admin:facturen'})) on desktop. On mobile (390) that event did not open the modal; mobile was not tested further. Phone-scan simulation: page.request.post /api/kiosk/id-scan with the kiosk Bearer header and multipart file plus user_key=demo@surirent.sr; Gemini OCR takes about 5s. Signature pad: draw with page.mouse on the canvas inside contract-sign-pad / sign-pad. The browser automation environment has no pymongo; use the API instead. Server clock is around 2026-10-25."
+}

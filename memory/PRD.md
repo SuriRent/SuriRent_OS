@@ -1039,3 +1039,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Kiosk-grid toont ook vrije appartementen (gestreepte kaart "Vrij" + "Koppelen"), gesorteerd op nummer; locatie-tellers tellen alle appartementen.
 - LinkTenantModal: bestaande huurder zonder appartement (GET /api/kiosk/tenants/unassigned) of nieuwe huurder → POST /api/kiosk/apartments/{id}/link-tenant (kiosk-sessie: beheerder én medewerker). Borg pending + concept-contract via _link_tenant_apartment (ook gebruikt door POST /tenants).
 - 2026-06: LinkTenantModal "Scan ID-kaart" (POST /api/kiosk/id-scan, vult naam/ID-nr/geboortedatum, foto via attach-id-photo) + na koppelen opent direct KioskDepositModal. Gekozen locatie blijft bewaard (sessionStorage kiosk_sel_loc). id-scan: niet-afbeelding/OCR-fout → 400.
+
+## 2026-06 — Telefoon-scan, contract tekenen, facturen compleet
+- Telefoon "Scan ID" vult open koppelscherm op desktop (linkScanHandler in KioskLayout).
+- Na borgbetaling opent KioskContractSignModal: hier tekenen (SignaturePad) of via QR (/onderteken/{token}, polling). Handtekening verplicht (server: signature_png data:image/png), signed_via kiosk|link. GET /api/kiosk/tenants/{id}/contract-to-sign.
+- Facturen-venster Kiosk: ernst-filter, tegoed-badge (/tenants/credits), tegoed toepassen, PDF, mailen (SendDialog zClass). KioskInvoicesPage (Beheer-tegel) ook bijgewerkt maar wordt in praktijk door het venster vervangen.

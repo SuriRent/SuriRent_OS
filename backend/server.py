@@ -13231,7 +13231,7 @@ async def contract_do_sign(token: str, body: SignIn, request: Request):
         raise HTTPException(status_code=400, detail="Contract is al ondertekend")
     ip = request.client.host if request.client else "—"
     sig = body.signature_png or None
-    if sig and (not sig.startswith("data:image/png;base64,") or len(sig) > 400_000):
+    if not sig or not sig.startswith("data:image/png;base64,") or len(sig) > 400_000:
         raise HTTPException(status_code=400, detail="Ongeldige handtekening")
     from pymongo import ReturnDocument
     updated = await db.contracts.find_one_and_update(

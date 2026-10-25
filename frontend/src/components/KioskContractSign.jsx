@@ -88,7 +88,7 @@ export function KioskContractSignModal({ Shell, tenantId, onClose }) {
   }, [tenantId]);
   const markDone = useCallback(() => setDone(true), []);
   const footer = (
-    <button type="button" onClick={onClose} data-testid="contract-sign-close"
+    <button type="button" onClick={onClose} data-testid="contract-sign-later"
       className="w-full h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">{done ? 'Klaar' : 'Later tekenen'}</button>
   );
   return (
