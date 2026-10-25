@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Building2, Check, Loader2, Home, ShieldCheck, FileText } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../lib/api';
+import SignaturePad from '../../components/SignaturePad';
 
 export default function ContractSignPage() {
   const { token } = useParams();
@@ -12,6 +13,7 @@ export default function ContractSignPage() {
   const [accept, setAccept] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [sig, setSig] = useState('');
 
   useEffect(() => {
     document.title = 'Contract ondertekenen';
@@ -28,9 +30,10 @@ export default function ContractSignPage() {
   const submit = async () => {
     if (!accept) return setError('Vink eerst aan dat u akkoord gaat');
     if (!name || name.length < 2) return setError('Vul uw volledige naam in');
+    if (!sig) return setError('Zet eerst uw handtekening');
     setSubmitting(true); setError('');
     try {
-      await api.post(`/contracts/sign/${token}`, { signed_by: name, accept: true });
+      await api.post(`/contracts/sign/${token}`, { signed_by: name, accept: true, signature_png: sig, signed_via: 'link' });
       setDone(true);
     } catch (e) { setError(formatError(e)); }
     finally { setSubmitting(false); }
@@ -136,6 +139,10 @@ export default function ContractSignPage() {
               <input value={name} onChange={(e) => setName(e.target.value)} data-testid="sign-name"
                 className="w-full mt-1 h-12 px-4 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </div>
+            <div data-testid="sign-pad">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Handtekening</label>
+              <div className="mt-1"><SignaturePad height={150} onChange={(url, has) => setSig(has ? url : '')} /></div>
+            </div>
             <label className="flex items-start gap-3 p-3 bg-orange-50/50 rounded-xl cursor-pointer">
               <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)}
                 data-testid="sign-accept"
@@ -146,7 +153,7 @@ export default function ContractSignPage() {
             </label>
           </div>
 
-          <button onClick={submit} disabled={submitting || !accept || !name} data-testid="sign-submit"
+          <button onClick={submit} disabled={submitting || !accept || !name || !sig} data-testid="sign-submit"
             className="w-full h-14 bg-[#FF5C00] hover:bg-[#E05200] text-white font-black rounded-xl text-lg flex items-center justify-center gap-2 shadow-[0_15px_30px_-10px_rgba(255,92,0,0.5)] disabled:opacity-50">
             {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
             Ondertekenen

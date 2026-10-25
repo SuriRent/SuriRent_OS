@@ -23,7 +23,7 @@ export function SendDialog({
   documentType, documentId, documentLabel, title,
   tenantEmail = '', tenantPhone = '', tenantName = '',
   // availableChannels genegeerd — enkel e-mail + WhatsApp-deeplink onderaan
-  onClose, onSent,
+  onClose, onSent, zClass = 'z-50',
 }) {
   const [to, setTo] = useState(tenantEmail);
   const [msg, setMsg] = useState('');
@@ -105,7 +105,7 @@ export function SendDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" data-testid="send-dialog">
+    <div className={`fixed inset-0 ${zClass} bg-black/50 backdrop-blur-sm flex items-center justify-center p-4`} data-testid="send-dialog">
       <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">

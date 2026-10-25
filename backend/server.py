@@ -13216,6 +13216,8 @@ async def contract_sign_info(token: str):
 class SignIn(BaseModel):
     signed_by: str = Field(min_length=2)
     accept: bool = True
+    signature_png: Optional[str] = None
+    signed_via: Optional[str] = None
 
 
 @api.post("/contracts/sign/{token}")
@@ -13228,18 +13230,46 @@ async def contract_do_sign(token: str, body: SignIn, request: Request):
     if c.get("signed_at"):
         raise HTTPException(status_code=400, detail="Contract is al ondertekend")
     ip = request.client.host if request.client else "—"
+    sig = body.signature_png or None
+    if sig and (not sig.startswith("data:image/png;base64,") or len(sig) > 400_000):
+        raise HTTPException(status_code=400, detail="Ongeldige handtekening")
     from pymongo import ReturnDocument
     updated = await db.contracts.find_one_and_update(
-        {"sign_token": token},
+        {"sign_token": token, "$or": [{"signed_at": None}, {"signed_at": {"$exists": False}}]},
         {"$set": {
             "signed_at": iso(now_utc()),
             "signed_by": body.signed_by,
             "signed_ip": ip,
             "status": "active",
+            "signature_png": sig,
+            "signed_via": (body.signed_via or "link")[:20],
         }},
         projection={"_id": 0}, return_document=ReturnDocument.AFTER,
     )
+    if not updated:
+        raise HTTPException(status_code=400, detail="Contract is al ondertekend")
     return await _enrich_contract(updated)
+
+
+@api.get("/kiosk/tenants/{tenant_id}/contract-to-sign")
+async def kiosk_contract_to_sign(tenant_id: str, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "id": 1, "name": 1, "apartment_id": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    q = {"company_id": cid, "tenant_id": tenant_id, "$or": [{"signed_at": None}, {"signed_at": {"$exists": False}}]}
+    if t.get("apartment_id"):
+        q["apartment_id"] = t["apartment_id"]
+    c = await db.contracts.find_one(q, {"_id": 0, "id": 1, "contract_number": 1, "sign_token": 1, "start_date": 1,
+                                        "end_date": 1, "payment_day": 1, "deposit_amount": 1, "terms": 1, "landlord": 1,
+                                        "apartment_id": 1}, sort=[("created_at", -1)])
+    if not c:
+        return {"contract": None}
+    if not c.get("sign_token"):
+        c["sign_token"] = secrets.token_urlsafe(24)
+        await db.contracts.update_one({"id": c["id"]}, {"$set": {"sign_token": c["sign_token"]}})
+    a = await db.apartments.find_one({"id": c.get("apartment_id")}, {"_id": 0, "number": 1, "address": 1, "rent_amount": 1, "currency": 1}) or {}
+    return {"contract": c, "tenant": {"name": t.get("name")}, "apartment": a}
 
 
 # =====================================================================

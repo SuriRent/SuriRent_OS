@@ -7,6 +7,7 @@ import { api, formatError, MONTHS_NL } from '../lib/api';
 import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpers';
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
+import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
 
 const CARD = 'bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(120,40,0,0.45)] flex flex-col min-h-0 overflow-hidden';
 const TABS = [
@@ -37,7 +38,7 @@ function Stat({ Icon, label, value, tone, testId }) {
   );
 }
 
-function TenantTile({ g, onOpen, onRemind }) {
+function TenantTile({ g, onOpen, onRemind, credit }) {
   const t = toneOf(g);
   const per = g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden';
   return (
@@ -51,6 +52,7 @@ function TenantTile({ g, onOpen, onRemind }) {
             <p className="text-lg font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
             <p className="text-sm font-bold text-slate-700 truncate">{g.tenant_name}</p>
             <p className="text-xs text-slate-400 truncate">{g.location_name}</p>
+            <CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />
           </div>
           <ChevronRight className="w-5 h-5 text-slate-300 shrink-0 mt-1" />
         </div>
@@ -88,7 +90,7 @@ async function shareInvoice(inv) {
   window.open(url, '_blank');
 }
 
-function InvoiceLine({ inv, open, onDelete }) {
+function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) {
   const rest = Number(inv.remaining_amount != null ? inv.remaining_amount : inv.amount || 0);
   const late = open && inv.bucket !== 'current' && inv.bucket !== 'future';
   return (
@@ -101,6 +103,7 @@ function InvoiceLine({ inv, open, onDelete }) {
       {open
         ? <span className={`text-lg font-black ${late ? 'text-red-600' : 'text-orange-600'}`}>{money(rest, inv.currency)}</span>
         : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1"><CheckCircle2 className="w-4 h-4" /> Betaald</span>}
+      <InvoiceExtraActions inv={inv} open={open} credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />
       <button type="button" onClick={() => shareInvoice(inv)} aria-label="Delen" data-testid={`kiosk-inv-share-${inv.id}`}
         className="w-11 h-11 rounded-xl bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors"><Share2 className="w-5 h-5" /></button>
       {open && (
@@ -111,7 +114,7 @@ function InvoiceLine({ inv, open, onDelete }) {
   );
 }
 
-function TenantDetail({ g, onBack, onRemind, onDelete }) {
+function TenantDetail({ g, onBack, onRemind, onDelete, credit, tenant, onChanged, onMsg }) {
   const t = toneOf(g);
   const rows = [...g.all].reverse();
   return (
@@ -126,6 +129,7 @@ function TenantDetail({ g, onBack, onRemind, onDelete }) {
           <p className="text-2xl font-black text-slate-900 truncate" data-testid="kiosk-inv-detail-name">{g.tenant_name}</p>
           <p className="text-sm text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</p>
           <span className={`inline-block mt-2 rounded-full px-3 py-1 text-xs font-bold ${t.chip}`}>{t.text}</span>
+          <span className="ml-2"><CreditBadge amount={credit} currency={g.currency} testId="kiosk-inv-detail-credit" /></span>
         </div>
         <div className="text-right">
           <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Openstaand</p>
@@ -142,7 +146,8 @@ function TenantDetail({ g, onBack, onRemind, onDelete }) {
       )}
       <p className="px-5 pt-4 pb-1 text-xs font-black uppercase tracking-widest text-slate-400">Facturen ({rows.length})</p>
       <div className="flex-1 min-h-0 overflow-y-auto px-5 divide-y divide-slate-100">
-        {rows.map((inv) => <InvoiceLine key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete} />)}
+        {rows.map((inv) => <InvoiceLine key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete}
+          credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />)}
       </div>
     </div>
   );
@@ -158,11 +163,14 @@ export default function KioskInvoicesPage({ onBack }) {
   const [creating, setCreating] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [reminding, setReminding] = useState(null);
+  const [severity, setSeverity] = useState('all');
+  const [credits, reloadCredits] = useTenantCredits();
 
   const load = useCallback(() => {
-    api.get('/invoices/grouped', { params: { tab, severity: 'all', q: q.trim(), offset: 0, limit: 500 } })
+    api.get('/invoices/grouped', { params: { tab, severity, q: q.trim(), offset: 0, limit: 500 } })
       .then(({ data: d }) => setData(d)).catch(() => setData({ invoices: [], tenant_ids: [] }));
-  }, [tab, q]);
+    reloadCredits();
+  }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
   useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
 
@@ -194,7 +202,9 @@ export default function KioskInvoicesPage({ onBack }) {
   return (
     <div className="h-full bg-orange-500 flex flex-col md:flex-row gap-3 sm:gap-4" style={{ padding: '1.5vh 1.5vw 0' }} data-testid="kiosk-admin-page-facturen">
       <div className={`${CARD} flex-1`} data-testid="kiosk-inv-list">
-        {sel ? <TenantDetail g={sel} onBack={() => setSelId(null)} onRemind={setReminding} onDelete={del} /> : (
+        {sel ? <TenantDetail g={sel} onBack={() => setSelId(null)} onRemind={setReminding} onDelete={del}
+          credit={creditOf(credits, sel.tenant_id, sel.currency)} tenant={tenants.find((t) => t.id === sel.tenant_id)}
+          onChanged={load} onMsg={setMsg} /> : (
           <>
             <div className="flex gap-3 px-5 pt-5">
               <Stat Icon={Wallet} label="Openstaand" value={money(s.totalOpenAmount || 0, s.currency)} tone="bg-red-50 text-red-600" testId="kiosk-inv-stat-open" />
@@ -215,10 +225,11 @@ export default function KioskInvoicesPage({ onBack }) {
                 {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="w-4 h-4 text-slate-400" /></button>}
               </label>
             </div>
+            <div className="px-5 pb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
             <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5">
               {!data && <Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}
               <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
-                {groups.map((g) => <TenantTile key={g.tenant_id} g={g} onOpen={(x) => setSelId(x.tenant_id)} onRemind={setReminding} />)}
+                {groups.map((g) => <TenantTile key={g.tenant_id} g={g} credit={creditOf(credits, g.tenant_id, g.currency)} onOpen={(x) => setSelId(x.tenant_id)} onRemind={setReminding} />)}
               </div>
               {data && groups.length === 0 && <p className="text-center text-slate-500 font-semibold py-16" data-testid="kiosk-inv-empty">Geen facturen gevonden</p>}
             </div>

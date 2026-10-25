@@ -9,6 +9,7 @@ import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpe
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import QuickPayModal from '../pages/vastgoed/admin/invoices/QuickPayModal';
 import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySection';
+import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
 
 const TABS = [
   { v: 'all', label: 'Alle', key: 'allCount' },
@@ -25,7 +26,7 @@ function statusOf(g) {
   return { txt: 'Betaald', cls: 'text-emerald-600' };
 }
 
-function TenantRow({ g, onOpen }) {
+function TenantRow({ g, onOpen, credit }) {
   const st = statusOf(g);
   return (
     <button type="button" onClick={() => onOpen(g)} data-testid={`invoice-tenant-row-${g.tenant_id}`}
@@ -33,6 +34,7 @@ function TenantRow({ g, onOpen }) {
       <div className="min-w-0">
         <div className="text-sm font-black text-slate-900 truncate">{g.tenant_name}</div>
         <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number || '—'}{g.location_name ? ` · ${g.location_name}` : ''}</div>
+        <CreditBadge amount={credit} currency={g.currency} testId={`invoice-tenant-credit-${g.tenant_id}`} />
         <div className="text-[11px] text-slate-400 mt-0.5">{g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden'}</div>
       </div>
       <div className="text-right shrink-0 flex items-center gap-2">
@@ -46,7 +48,7 @@ function TenantRow({ g, onOpen }) {
   );
 }
 
-function InvoiceRow({ inv, open, onPayInvoice, onDelete }) {
+function InvoiceRow({ inv, open, onPayInvoice, onDelete, credit, tenant, onChanged, onMsg }) {
   const rest = Number(inv.remaining_amount != null ? inv.remaining_amount : inv.amount || 0);
   return (
     <div className="rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3" data-testid={`invoice-row-${inv.id}`}>
@@ -58,6 +60,7 @@ function InvoiceRow({ inv, open, onPayInvoice, onDelete }) {
         <div className="text-sm font-black text-slate-900">{open ? money(rest, inv.currency) : money(inv.amount, inv.currency)}</div>
         <div className={`text-[11px] font-bold uppercase tracking-wide ${open ? 'text-red-600' : 'text-emerald-600'}`}>{open ? 'Open' : 'Betaald'}</div>
       </div>
+      <InvoiceExtraActions inv={inv} open={open} credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />
       {open && (
           <button type="button" onClick={() => onDelete(inv)} aria-label="Verwijderen" data-testid={`invoice-delete-${inv.id}`}
             className={`${ICON_BTN} text-slate-400 hover:bg-red-50 hover:text-red-600`}><Trash2 className="w-4 h-4" /></button>
@@ -66,7 +69,7 @@ function InvoiceRow({ inv, open, onPayInvoice, onDelete }) {
   );
 }
 
-function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced }) {
+function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced, credit, tenant, onMsg }) {
   const [history, setHistory] = useState(false);
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState('');
@@ -115,6 +118,7 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced }
             </button>
           </div>
           <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</div>
+          <CreditBadge amount={credit} currency={g.currency} testId="invoices-modal-credit" />
         </div>
         <div className="text-right shrink-0">
           <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Openstaand</div>
@@ -136,7 +140,7 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced }
       </div>
       {[...g.all].reverse().map((inv) => (
         <InvoiceRow key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete}
-          onPayInvoice={(i) => onPayInvoice(i, g)} />
+          onPayInvoice={(i) => onPayInvoice(i, g)} credit={credit} tenant={tenant} onChanged={onRebalanced} onMsg={onMsg} />
       ))}
     </>
   );
@@ -153,11 +157,14 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
   const [creating, setCreating] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [quickPay, setQuickPay] = useState(null);
+  const [severity, setSeverity] = useState('all');
+  const [credits, reloadCredits] = useTenantCredits();
 
   const load = useCallback(() => {
-    api.get('/invoices/grouped', { params: { tab, severity: 'all', q: q.trim(), offset: 0, limit: 500 } })
+    api.get('/invoices/grouped', { params: { tab, severity, q: q.trim(), offset: 0, limit: 500 } })
       .then(({ data: d }) => setData(d)).catch((e) => { setMsg({ ok: false, text: formatError(e) }); setData({ invoices: [], tenant_ids: [] }); });
-  }, [tab, q]);
+    reloadCredits();
+  }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
   useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
 
@@ -233,7 +240,8 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
                 onSaved={(r) => { setCreating(false); setMsg({ ok: true, text: `Factuur ${r?.invoice_number || ''} aangemaakt` }); load(); }} />
             ) : sel ? (
               <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onPay={onPay} onDelete={del}
-                onRebalanced={load} onPayInvoice={(inv, g) => setQuickPay({ inv, g })} />
+                onRebalanced={load} onPayInvoice={(inv, g) => setQuickPay({ inv, g })}
+                credit={creditOf(credits, sel.tenant_id, sel.currency)} tenant={tenants.find((t) => t.id === sel.tenant_id)} onMsg={setMsg} />
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2">
@@ -254,6 +262,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
                     </button>
                   ))}
                 </div>
+                <SeverityPills value={severity} onChange={setSeverity} testPrefix="invoices-modal" />
                 <label className="flex items-center gap-2 h-11 rounded-xl border border-slate-200 px-3">
                   <Search className="w-4 h-4 text-slate-400" />
                   <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek huurder of appartement…" data-testid="invoices-modal-search"
@@ -261,7 +270,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
                 </label>
                 {!data && <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div>}
                 {data && groups.length === 0 && <div className="text-center text-slate-500 py-10 text-sm">Geen facturen gevonden.</div>}
-                {groups.map((g) => <TenantRow key={g.tenant_id} g={g} onOpen={(x) => setSelId(x.tenant_id)} />)}
+                {groups.map((g) => <TenantRow key={g.tenant_id} g={g} credit={creditOf(credits, g.tenant_id, g.currency)} onOpen={(x) => setSelId(x.tenant_id)} />)}
               </>
             )}
           </>

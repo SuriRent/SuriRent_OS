@@ -1,4 +1,5 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
+import { KioskContractSignModal } from '../../components/KioskContractSign';
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
@@ -672,6 +673,9 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   );
 }
 
+// Open koppelscherm vangt telefoon-ID-scans op (i.p.v. Nieuwe huurder-modal).
+const linkScanHandler = { current: null };
+
 function LinkTenantModal({ apartment, onClose, onLinked }) {
   const [tab, setTab] = useState('existing');
   const [list, setList] = useState(null);
@@ -683,6 +687,17 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
   const [scan, setScan] = useState(null);
   const [scanning, setScanning] = useState(false);
   const scanRef = useRef(null);
+  const [phoneScanned, setPhoneScanned] = useState(false);
+  useEffect(() => {
+    linkScanHandler.current = (msg) => {
+      const sc = msg.scan || {};
+      setTab('new');
+      setF((p) => ({ ...p, name: sc.name || p.name, id_number: sc.id_number || p.id_number, birth_date: sc.birth_date || p.birth_date }));
+      setScan({ scan: sc, asset_id: msg.asset_id, id_photo_url: msg.id_photo_url });
+      setPhoneScanned(true);
+    };
+    return () => { linkScanHandler.current = null; };
+  }, []);
   const onScanFile = async (file) => {
     if (!file) return;
     setScanning(true); setErr('');
@@ -760,6 +775,8 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
             {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-5 h-5" />}
             {scanning ? 'ID-kaart lezen…' : scan ? 'Opnieuw scannen' : 'Scan ID-kaart'}
           </button>
+          {phoneScanned && <p className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2" data-testid="link-tenant-phone-scanned">Gegevens ontvangen van uw telefoon</p>}
+          <p className="hidden md:block text-[11px] text-slate-400 text-center" data-testid="link-tenant-phone-hint">Of scan met uw telefoon via de knop "Scan ID" — de gegevens verschijnen hier vanzelf.</p>
           {scan?.id_photo_url && (
             <img src={`${process.env.REACT_APP_BACKEND_URL}${scan.id_photo_url}`} alt="Gescande ID-kaart" data-testid="link-tenant-scan-preview"
               className="w-full max-h-32 object-contain rounded-xl bg-slate-50 border border-slate-200" />
@@ -4982,6 +4999,7 @@ export default function KioskLayout() {
   const closeInvoices = useCallback(() => { setShowInvoicesModal(false); returnToMenu(); }, []);
   const [adminPopup, setAdminPopup] = useState(null);
   const [depositFor, setDepositFor] = useState(null);
+  const [contractFor, setContractFor] = useState(null);
   useEffect(() => {
     const h = (e) => setDepositFor(e.detail);
     window.addEventListener('kiosk-deposit-open', h);
@@ -5010,6 +5028,7 @@ export default function KioskLayout() {
       const msg = e.detail || {};
       if (window.innerWidth < 768) return;
       const mine = getKioskUserKey();
+      if ((msg.user_key || '') === mine && linkScanHandler.current) { linkScanHandler.current(msg); return; }
       if ((msg.user_key || '') !== mine) return;
       setTenantPrefill(msg);
       setShowAddTenant(true);
@@ -5582,8 +5601,14 @@ export default function KioskLayout() {
       )}
       {depositFor && (
         <KioskDepositModal Shell={KioskModalShell} tenant={depositFor}
-          onClose={() => { setDepositFor(null); invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1); }}
-          onPaid={() => { if (apartment) setApartment({ ...apartment, _r: Date.now() }); }} />
+          onClose={() => {
+            if (depositFor._paid) setContractFor(depositFor.id);
+            setDepositFor(null); invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
+          }}
+          onPaid={() => { depositFor._paid = true; if (apartment) setApartment({ ...apartment, _r: Date.now() }); }} />
+      )}
+      {contractFor && (
+        <KioskContractSignModal Shell={KioskModalShell} tenantId={contractFor} onClose={() => setContractFor(null)} />
       )}
       {adminPopup && hasAdminAccess && (
         <KioskAdminPopup id={adminPopup} Shell={KioskModalShell} onClose={() => { setAdminPopup(null); returnToMenu(); }} />
