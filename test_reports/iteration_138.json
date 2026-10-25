@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 138: tested invoice archiving on move-out, the per-tenant archive, permanent delete and reactivation (backend pytest + kiosk UI at 1920px). Most requested flows PASS. (1) Move-out with rent 2000, borg 1000 and 3 open invoices (aug/sep plus the auto-created okt) leaves every invoice with status 'archived' and archived=true. The first invoice keeps paid_amount 1000 and status_before_archive 'partial'. None of them appear in GET /api/invoices, /api/invoices/grouped (open/paid/all) or the kiosk Facturen modal (Alle/Achterstand/Betaald). (2) Archive UI: the Archief pill shows a count (2), archived-toggle shows archived-invoices with rows 'Open SRD 2.000,00 / 2.000,00 / 1.000,00', and archived-due shows 'Nog te betalen: SRD 5.000,00'. (3) Delete: archived-delete opens a native confirm with the correct text. After accepting, the row disappears. DB: tenant, invoices, contracts, deposits and payment_plans are all 0. The borgverrekening payment is kept with tenant_id '' and tenant_deleted true. GET /api/payments returns 200 and /api/kasgeld returns 200 and includes the payment. (4) DELETE permanent on an active tenant returns 404, as boekhouder returns 403, and a second delete returns 404. (5) Reactivation keeps the invoices out of /api/invoices and /grouped. (6) Regression: Huurders > detail > Uitgang starten in the kiosk works end to end (receipt 'Te betalen SRD 5.000,00', archived note, invoices archived). Three bugs FOUND, see the issues list.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/payments (and the other payment flows that pick the 'oldest open invoice' with status != 'paid': approve payment ~L6744/L9482, create payment ~L8991, recompute-invoices ~L9896)", "issue": "After a tenant is reactivated, a new rent payment (FIFO, no invoice_ids) is booked on an ARCHIVED invoice (status 'archived' is not 'paid', so it matches). Reproduced: payment.invoice_id was the archived aug invoice. Archived invoices must be excluded (add archived: {$ne: true}) in every invoice lookup that uses status {$ne: 'paid'}.", "priority": "HIGH"},
+      {"endpoint": "GET /api/payments (_enrich_payments_bulk)", "issue": "Payments that are kept after a permanent delete (tenant_id '') are silently dropped: '[payments] SKIPPED corrupt doc (no tenant_id)' in the backend log. They vanish from the Betalingen list and from the /payments/paged month list and monthSum, but count_documents totalCount still counts them. Kasgeld still shows them. Allow tenant_id '' when tenant_deleted is true (for example tenant_name 'Verwijderde huurder').", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/kiosk/tenants/{id}/overview (~L10287), tenant-portal overview fines (~L6478), _enrich_payments_bulk outstanding ($nin paid/cancelled)", "issue": "For a reactivated tenant these queries filter only on status != 'paid', so the archived invoices are returned again. Reproduced: all 3 archived invoice ids appear in the kiosk overview response. As a result old debt and fines show up again in the kiosk and portal after reactivation, which goes against the requirement."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Huurders > Archief delete", "issues": ["Uses the native window.confirm instead of the app's styled confirm dialog (acceptable per the spec 'simple confirm', but it looks inconsistent with the rest of the app)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_archive_invoices_iter138.py", "/app/backend/tests/setup_iter138_ui.py", "/app/backend/tests/cleanup_iter138.py", "/app/test_reports/pytest/iter138.xml"],
+  "action_items": [
+    "Exclude archived invoices (archived != true or status != 'archived') from every invoice query that uses status {$ne:'paid'}: payment create/approve FIFO matching, recompute-invoices, the kiosk tenant overview, tenant-portal fines, and outstanding in _enrich_payments_bulk. Otherwise payments of reactivated tenants are allocated to archived invoices and old debt reappears.",
+    "_enrich_payments_bulk: do not skip payments that have tenant_deleted=true and tenant_id '' (the Betalingen list currently loses them). Keep the list totals consistent with totalCount."
+  ],
+  "critical_code_review_comments": [
+    "delete_archived_tenant also sets invoice_id None / invoice_ids [] on payments. The 'allocations' array still references deleted invoice ids (harmless, but it leaves stale references).",
+    "The startup migration runs every boot over all archived tenants. It is idempotent, but it does not use a company scope or batching. That is OK for now.",
+    "server.py is more than 19k lines and should be split into routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_archive_invoices_iter138.py", "/app/backend/tests/setup_iter138_ui.py", "/app/backend/tests/cleanup_iter138.py"],
+  "success_rate": {"backend": "75% (9/12 tests pass; 3 failing = the bugs above)", "frontend": "100% of requested UI flows"},
+  "seed_data_creation": "TEST Archief 1/2/UI A/UI B tenants, TEST-ARC-* apartments and a TEST BK boekhouder employee. Everything was removed with cleanup_iter138.py, and the orphan test payments (tenant_deleted) were deleted directly in the DB. The seeded archived tenant 'Jan Pieterse' was left untouched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest tests/test_archive_invoices_iter138.py` (it self-cleans; tests 06, 07 and 13 should pass after the fixes), then `python tests/cleanup_iter138.py`. Payments left with tenant_deleted=true have to be removed from the DB directly. Kiosk access: admin-to-kiosk token in localStorage, then kiosk-admin-menu-btn -> kiosk-admin-menu-huurders -> tenant-filter-archived. Server date is 2026-10-25, and a deposit auto-creates the current-month invoice.",
+  "rca of the issue": "Archiving changes status to 'archived' but does not set it to 'paid'. Many legacy queries treat anything with status != 'paid' as open, so archived invoices come back once the tenant is active again. The permanent delete sets tenant_id to '', and _enrich_payments_bulk has a legacy guard that skips docs without a tenant_id."
+}

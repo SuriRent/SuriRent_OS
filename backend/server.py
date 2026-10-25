@@ -2797,7 +2797,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     Invoice is denominated in the company's display currency (SRD for SR, EUR for NL)."""
     cid = c["id"]
     inv = await db.subscription_invoices.find_one(
-        {"company_id": cid, "status": {"$ne": "paid"}},
+        {"company_id": cid, "status": {"$nin": ["paid", "archived"]}},
         {"_id": 0}, sort=[("created_at", -1)],
     )
     if inv:
@@ -6475,7 +6475,7 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
                 overdue_count = 0
                 total_days = 0
                 async for inv in db.invoices.find(
-                    {"tenant_id": tenant["id"], "status": {"$ne": "paid"}},
+                    {"tenant_id": tenant["id"], "status": {"$nin": ["paid", "archived"]}},
                     {"_id": 0, "due_date": 1, "amount_due": 1, "amount": 1, "paid_amount": 1},
                 ):
                     total = float(inv.get("amount_due") or inv.get("amount") or 0)
@@ -6741,7 +6741,7 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
             matched_invoice = await db.invoices.find_one(period_q, {"_id": 0})
         # Fallback ALLEEN wanneer geen periode is opgegeven.
         if not matched_invoice and not (p.get("period_month") and p.get("period_year")):
-            inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
+            inv_q = {"tenant_id": p["tenant_id"], "status": {"$nin": ["paid", "archived"]}}
             if company_id:
                 inv_q["company_id"] = company_id
             matched_invoice = await db.invoices.find_one(
@@ -6780,7 +6780,7 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
                 async for inv in db.invoices.find(
                     {"tenant_id": p["tenant_id"],
                      "currency": p.get("currency") or "SRD",
-                     "status": {"$nin": ["paid", "cancelled"]},
+                     "status": {"$nin": ["paid", "cancelled", "archived"]},
                      "id": {"$ne": matched_invoice["id"]},
                      **({"company_id": company_id} if company_id else {})},
                     {"_id": 0, "id": 1},
@@ -8466,7 +8466,7 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
             cur = p.get("currency") or "SRD"
             async for inv in db.invoices.find(
                 {"tenant_id": p["tenant_id"], "currency": cur,
-                 "status": {"$nin": ["paid", "cancelled"]}},
+                 "status": {"$nin": ["paid", "cancelled", "archived"]}},
                 {"_id": 0, "amount": 1, "paid_amount": 1, "id": 1, "period_month": 1, "period_year": 1},
             ):
                 inv_amt = float(inv.get("amount") or 0)
@@ -8562,7 +8562,7 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
         if tenant_ids:
             async for inv in db.invoices.find(
                 {"tenant_id": {"$in": list(tenant_ids)},
-                 "status": {"$nin": ["paid", "cancelled"]}},
+                 "status": {"$nin": ["paid", "cancelled", "archived"]}},
                 {"_id": 0, "id": 1, "tenant_id": 1, "currency": 1,
                  "amount": 1, "paid_amount": 1},
             ):
@@ -8625,7 +8625,7 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
             if not p.get("category"):
                 p["category"] = "rent"
                 _fixed.append("category")
-            if not tid:
+            if not tid and not p.get("tenant_deleted"):
                 # Geen tenant_id → skippen. Deze legacy-doc kan niet
                 # meaningful weergegeven worden aan een huurder.
                 print(f"[payments] SKIPPED corrupt doc (no tenant_id) id={p.get('id')}")
@@ -8634,7 +8634,8 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
                 print(f"[payments] backfilled missing fields {_fixed} for payment id={p.get('id')} company={cid}")
             out.append({
                 **p,
-                "tenant_name": t.get("name") if t else None,
+                "tenant_id": tid or "",
+                "tenant_name": t.get("name") if t else ("Verwijderde huurder" if p.get("tenant_deleted") else None),
                 "apartment_number": a.get("number") if a else None,
                 "location_name": loc.get("name") if loc else None,
                 "outstanding_after": round(outstanding_by_tenant_cur.get((tid, cur), 0.0), 2),
@@ -8988,7 +8989,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
     matched_invoice = None
     explicit_invoice_ids = list(body.invoice_ids or [])
     if body.category in ("huur", "vooruitbetaling") and status == "approved":
-        inv_q = {"tenant_id": body.tenant_id, "status": {"$ne": "paid"}}
+        inv_q = {"tenant_id": body.tenant_id, "status": {"$nin": ["paid", "archived"]}}
         if company_id:
             inv_q["company_id"] = company_id
         # Wanneer expliciete invoice_ids zijn meegegeven (kiosk per-maand
@@ -9143,7 +9144,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                     other_q = {
                         "tenant_id": body.tenant_id,
                         "currency": body.currency,
-                        "status": {"$nin": ["paid", "cancelled"]},
+                        "status": {"$nin": ["paid", "cancelled", "archived"]},
                         "id": {"$in": candidates},
                         **({"company_id": company_id} if company_id else {}),
                     }
@@ -9151,7 +9152,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                     other_q = {
                         "tenant_id": body.tenant_id,
                         "currency": body.currency,
-                        "status": {"$nin": ["paid", "cancelled"]},
+                        "status": {"$nin": ["paid", "cancelled", "archived"]},
                         "id": {"$ne": matched_invoice["id"]},
                         **({"company_id": company_id} if company_id else {}),
                     }
@@ -9479,7 +9480,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
         # Fallback ALLEEN wanneer géén periode is opgegeven — dan pak
         # de oudste openstaande.
         if not matched_invoice and not (p.get("period_month") and p.get("period_year")):
-            inv_q = {"tenant_id": p["tenant_id"], "status": {"$ne": "paid"}}
+            inv_q = {"tenant_id": p["tenant_id"], "status": {"$nin": ["paid", "archived"]}}
             if cid:
                 inv_q["company_id"] = cid
             matched_invoice = await db.invoices.find_one(
@@ -9520,7 +9521,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
                 async for inv in db.invoices.find(
                     {"tenant_id": p["tenant_id"],
                      "currency": p.get("currency") or "SRD",
-                     "status": {"$nin": ["paid", "cancelled"]},
+                     "status": {"$nin": ["paid", "cancelled", "archived"]},
                      "id": {"$ne": matched_invoice["id"]},
                      **({"company_id": p.get("company_id")} if p.get("company_id") else {})},
                     {"_id": 0, "id": 1},
@@ -9893,7 +9894,7 @@ async def _calc_balance(tenant: dict) -> dict:
     # zodra cumulatief ≥ 100% van het factuurbedrag betaald is.
     next_period = None
     oldest_open_inv = await db.invoices.find_one(
-        {"tenant_id": tenant["id"], "status": {"$ne": "paid"}},
+        {"tenant_id": tenant["id"], "status": {"$nin": ["paid", "archived"]}},
         {"_id": 0, "period_month": 1, "period_year": 1},
         sort=[("period_year", 1), ("period_month", 1), ("created_at", 1)],
     )
@@ -10220,7 +10221,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
     tenants, invoices = await asyncio.gather(
         db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1, "deposit_required": 1, "deposit_status": 1}).to_list(len(tids) or 1),
         db.invoices.find(
-            {"tenant_id": {"$in": tids}, "status": {"$nin": ["paid", "cancelled"]}, "kind": {"$in": [None, "huur"]}},
+            {"tenant_id": {"$in": tids}, "status": {"$nin": ["paid", "cancelled", "archived"]}, "kind": {"$in": [None, "huur"]}},
             {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1, "period_month": 1, "period_year": 1},
         ).to_list(None),
     )
@@ -10284,7 +10285,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
         ).to_list(None),
         db.company_settings.find_one({"company_id": _session.get("company_id")}, {"_id": 0, "invoicing": 1}),
         db.invoices.find(
-            {"tenant_id": tenant_id, "status": {"$ne": "paid"}},
+            {"tenant_id": tenant_id, "status": {"$nin": ["paid", "archived"]}},
             {"_id": 0, "id": 1, "period_month": 1, "period_year": 1,
              "amount_due": 1, "amount": 1, "paid_amount": 1, "currency": 1,
              "due_date": 1, "status": 1, "kind": 1, "label": 1,
@@ -11913,7 +11914,7 @@ async def _agg_by_currency(coll, pipeline) -> dict:
 async def _compute_admin_stats(user: dict, sc: dict) -> dict:
     today = now_utc()
     start = datetime(today.year, today.month, 1, tzinfo=timezone.utc).isoformat()
-    unpaid = {**sc, "status": {"$nin": ["paid", "cancelled"]}}
+    unpaid = {**sc, "status": {"$nin": ["paid", "cancelled", "archived"]}}
     # Alle onafhankelijke tellingen/aggregaties parallel i.p.v. na elkaar.
     (total_apts, occupied, total_tenants, inv_paid, inv_open, inv_overdue,
      by_currency, outstanding, recent_pays, recent_invs) = await asyncio.gather(
@@ -11991,7 +11992,7 @@ async def _compute_admin_stats(user: dict, sc: dict) -> dict:
     open_current_month_count = 0
     open_current_month_amount: dict[str, float] = {}
     async for inv in db.invoices.find(
-        {**sc, "status": {"$nin": ["paid", "cancelled"]}},
+        {**sc, "status": {"$nin": ["paid", "cancelled", "archived"]}},
         {"_id": 0, "tenant_id": 1, "period_month": 1, "period_year": 1,
          "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1, "due_date": 1},
     ):
@@ -12952,7 +12953,7 @@ async def tenant_reminder_image(tenant_id: str):
     # Open facturen sorteren op period_year, period_month desc → recent eerst
     open_invoices = []
     async for inv in db.invoices.find(
-        {"tenant_id": tenant_id, "status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0}
+        {"tenant_id": tenant_id, "status": {"$nin": ["paid", "cancelled", "archived"]}}, {"_id": 0}
     ):
         paid = inv.get("paid_amount") or await _invoice_currently_paid(inv["id"])
         rem = max(0.0, float(inv.get("amount") or 0) - float(paid or 0))
@@ -13805,7 +13806,7 @@ async def rebalance_tenant_credits(tenant_id: str, user=Depends(get_current_user
     invoices_updated: list = []
     async for inv in db.invoices.find(
         {"tenant_id": tenant_id, "company_id": cid,
-         "status": {"$nin": ["paid", "cancelled"]}},
+         "status": {"$nin": ["paid", "cancelled", "archived"]}},
         {"_id": 0, "id": 1, "invoice_number": 1},
     ).sort([("period_year", 1), ("period_month", 1)]):
         applied = await _apply_tenant_credit_to_invoice(tenant_id, inv["id"], cid)
@@ -13883,7 +13884,7 @@ async def repair_overpaid_invoices(
         async for o in db.invoices.find(
             {"company_id": cid, "tenant_id": tenant_id, "currency": cur,
              "id": {"$ne": inv["id"]},
-             "status": {"$nin": ["paid", "cancelled"]}},
+             "status": {"$nin": ["paid", "cancelled", "archived"]}},
             {"_id": 0, "id": 1, "amount": 1, "paid_amount": 1,
              "period_month": 1, "period_year": 1, "invoice_number": 1},
         ).sort([("period_year", 1), ("period_month", 1)]):
@@ -18948,7 +18949,7 @@ async def _send_upcoming_invoice_reminders():
         # Huur-facturen (F/H prefix) die nog niet volledig betaald zijn.
         async for inv in db.invoices.find({
             "company_id": cid,
-            "status": {"$nin": ["paid", "cancelled"]},
+            "status": {"$nin": ["paid", "cancelled", "archived"]},
             "due_date": {"$gte": min_due, "$lte": max_due},
         }, {"_id": 0}):
             try:
