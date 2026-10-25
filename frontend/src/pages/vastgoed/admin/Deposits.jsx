@@ -5,6 +5,7 @@ import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 import { DepositReceiptScreen } from '../../../components/KasgeldReceipt';
+import { TenantMoveOutModal } from '../../../components/TenantMoveOut';
 
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -128,108 +129,6 @@ export function DamageRows({ items, setItems }) {
         <Plus className="w-4 h-4" /> Schadepost toevoegen
       </button>
     </div>
-  );
-}
-
-function RefundForm({ deposit, onCancel, onSaved }) {
-  const cur = deposit.currency;
-  const [items, setItems] = useState([{ description: '', amount: '' }]);
-  const [preview, setPreview] = useState(null);
-  const [excluded, setExcluded] = useState([]);
-  const [note, setNote] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [done, setDone] = useState(null);
-  useEffect(() => {
-    api.get(`/deposits/${deposit.id}/refund-preview`).then(({ data }) => setPreview(data)).catch((e) => setError(formatError(e)));
-  }, [deposit.id]);
-  const damage = items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const arrears = (preview?.arrears_items || []).filter((i) => !excluded.includes(i.invoice_id)).reduce((s, i) => s + i.amount, 0);
-  const net = deposit.amount - damage - arrears;
-  const submit = async () => {
-    setLoading(true); setError('');
-    try {
-      const { data } = await api.post(`/deposits/${deposit.id}/refund`, {
-        damage_items: items.filter((i) => parseFloat(i.amount) > 0).map((i) => ({ description: i.description, amount: parseFloat(i.amount) })),
-        exclude_invoice_ids: excluded, refund_note: note,
-      });
-      setDone(data);
-    } catch (e) { setError(formatError(e)); }
-    finally { setLoading(false); }
-  };
-  if (done) {
-    return (
-      <KeyboardSafeModal onClose={() => onSaved(done)} testId="refund-receipt-modal">
-        <KeyboardSafeModal.Body><DepositReceiptScreen deposit={done} onDone={() => onSaved(done)} /></KeyboardSafeModal.Body>
-      </KeyboardSafeModal>
-    );
-  }
-  return (
-    <KeyboardSafeModal onClose={onCancel} testId="refund-modal">
-      <KeyboardSafeModal.Header>
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-black text-slate-900">Borg restitueren</h3>
-          <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
-        </div>
-        <p className="text-sm text-slate-500 mt-1">{deposit.tenant_name} — borg {fmtMoney(deposit.amount, cur)}</p>
-      </KeyboardSafeModal.Header>
-      <KeyboardSafeModal.Body>
-        {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Schadeposten</label>
-            <div className="mt-1"><DamageRows items={items} setItems={setItems} /></div>
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Huurachterstand (openstaande facturen)</label>
-            <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-sm" data-testid="refund-arrears-list">
-              {!preview ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                : preview.arrears_items.length === 0 ? <p className="text-slate-500">Geen openstaande facturen</p>
-                  : preview.arrears_items.map((i) => (
-                    <label key={i.invoice_id} className="flex items-center gap-2 cursor-pointer" data-testid={`refund-arrears-item-${i.invoice_id}`}>
-                      <input type="checkbox" checked={!excluded.includes(i.invoice_id)} className="w-4 h-4 accent-[#FF5C00]"
-                        data-testid={`refund-arrears-check-${i.invoice_id}`}
-                        onChange={(e) => setExcluded(e.target.checked ? excluded.filter((x) => x !== i.invoice_id) : [...excluded, i.invoice_id])} />
-                      <span className="flex-1 text-slate-600">{i.label}</span>
-                      <span className="font-semibold text-slate-900">{fmtMoney(i.amount, cur)}</span>
-                    </label>
-                  ))}
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Toelichting</label>
-            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="refund-note"
-              className="w-full mt-1 px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none resize-none" />
-          </div>
-          <div className="rounded-xl border border-slate-200 p-3 space-y-1 text-sm" data-testid="refund-summary">
-            <SumRow label="Borg" value={fmtMoney(deposit.amount, cur)} testId="refund-sum-deposit" />
-            <SumRow label="Schade" value={`− ${fmtMoney(damage, cur)}`} testId="refund-sum-damage" cls="text-red-600" />
-            <SumRow label="Huurachterstand" value={`− ${fmtMoney(arrears, cur)}`} testId="refund-sum-arrears" cls="text-red-600" />
-          </div>
-        </div>
-      </KeyboardSafeModal.Body>
-      <KeyboardSafeModal.Footer className="space-y-3">
-        {net < 0 ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 row-label-value" data-testid="refund-result-due">
-            <span className="text-xs font-bold uppercase tracking-widest text-red-700">Huurder moet nog betalen</span>
-            <span className="text-2xl font-black text-red-600" data-testid="refund-amount-due">{fmtMoney(-net, cur)}</span>
-          </div>
-        ) : (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 row-label-value" data-testid="refund-result-back">
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Terug aan huurder</span>
-            <span className="text-2xl font-black text-slate-900" data-testid="refund-amount-back">{fmtMoney(net, cur)}</span>
-          </div>
-        )}
-        <div className="flex gap-3">
-        <button onClick={onCancel} className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleren</button>
-        <button onClick={submit} disabled={loading || !preview} data-testid="refund-submit"
-          className="flex-1 h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Afrekenen &amp; bon printen
-        </button>
-        </div>
-      </KeyboardSafeModal.Footer>
-    </KeyboardSafeModal>
   );
 }
 
@@ -368,9 +267,9 @@ export default function Deposits({ embedded = false }) {
           </div>
         </div>
 
-        {refunding && <RefundForm deposit={refunding}
-          onCancel={() => setRefunding(null)}
-          onSaved={(d) => { setRefunding(null); setDetail(d); load(); }} />}
+        {refunding && <TenantMoveOutModal tenant={{ id: refunding.tenant_id, name: refunding.tenant_name, apartment_number: refunding.apartment_number, currency: refunding.currency }}
+          onClose={() => setRefunding(null)}
+          onDone={() => { setRefunding(null); setDetail(null); load(); }} />}
         {reprint && <ReprintRefund deposit={reprint} onClose={() => setReprint(null)} />}
       </div>
     );
@@ -438,8 +337,9 @@ export default function Deposits({ embedded = false }) {
       </div>
       {creating && <DepositForm tenants={tenants}
         onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
-      {refunding && <RefundForm deposit={refunding}
-        onCancel={() => setRefunding(null)} onSaved={() => { setRefunding(null); load(); }} />}
+      {refunding && <TenantMoveOutModal tenant={{ id: refunding.tenant_id, name: refunding.tenant_name, apartment_number: refunding.apartment_number, currency: refunding.currency }}
+          onClose={() => setRefunding(null)}
+          onDone={() => { setRefunding(null);  load(); }} />}
     </div>
   );
 }
