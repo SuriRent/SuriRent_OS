@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 139: backend-only retest of the 3 bugs from iteration 138 (invoice archiving on move-out). All 3 are FIXED, and 18 of 18 pytest cases pass on three consecutive runs. (1) A reactivated tenant's FIFO payment (POST /api/payments with no invoice_ids, SRD 500) is booked on a NEW October invoice. It is never booked on an archived invoice: invoice_id, invoice_ids and allocations all avoid the archived ids, and the archived invoices stay archived and do not reappear in /api/invoices. (2) The kiosk overview for the reactivated tenant has no archived invoice ids in the response, open_invoices is empty, fines_total is 0 and total_due is 1500 (the new invoice of 2000 minus the 500 payment). The tenant-portal overview (token via setup-pin) has fines_total 0, and due_periods holds only the current month from the new invoice. The old Aug/Sep periods are gone. (3) After a permanent delete, the kept payments show up in GET /api/payments with tenant_id '' and tenant_name 'Verwijderde huurder'. They also show up in /api/payments/paged for the month, with the same name. monthCount equals total, equals the number of items, and equals the approved payments from /api/payments in that month range. monthSum equals the sum of the items. No new 'SKIPPED corrupt doc' log lines appeared (the old ones in the log are for iteration 138 ids that no longer exist). Regression: an active tenant with 3 open invoices has a FIFO payment booked on the oldest (Aug) invoice, and paid_amount went up by 500. /invoices/grouped?tab=open still lists the tenant, /admin/stats returns 200, and the kiosk overview shows 2 overdue and 1 current invoice with total_due 5500.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup backfill (~server.py L414)", "issue": "The legacy payment->invoice backfill matches on tenant, period_month and period_year only. It does not filter on status, so if both exist it could link a payment to an archived invoice of the same period instead of the new one. This is only a theoretical risk (it only applies to legacy payments without an invoice_id)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_archive_invoices_iter138.py", "/app/test_reports/pytest/iter139.xml"],
+  "action_items": [
+    "Optional: add status {$ne:'archived'} to the period-based invoice lookup in the startup payment backfill (~L414)."
+  ],
+  "critical_code_review_comments": [
+    "There are no remaining invoice queries with status {$ne:'paid'} or {$nin:['paid','cancelled']} that leave out 'archived'. The only {$ne:'paid'} left is on tenants.deposit_status, which is correct.",
+    "PaymentOut does not expose tenant_deleted. Clients can only spot orphaned payments by tenant_id '' and tenant_name 'Verwijderde huurder'. Consider exposing the flag.",
+    "server.py is more than 19k lines and should be split into routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_archive_invoices_iter138.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "not tested (backend only requested)"},
+  "seed_data_creation": "TEST Archief 1/2/3 tenants, TEST-ARC-1/2/3 apartments and a TEST BK boekhouder. All of them are cleaned up by the test itself, including the orphan payments it creates (they are found through tenant_name 'Verwijderde huurder'). One orphan payment, 8bf222a8-78bb-410d-a428-4ec411f19d3b (SRD 1000, created 12:21, before this run started, probably by the main agent's self-test), was left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest backend/tests/test_archive_invoices_iter138.py. It is self-cleaning and covers move-out archive, reactivation FIFO, kiosk/tenant-portal overview, permanent delete and kept payments (list and paged), plus a FIFO regression for active tenants. The server date is 2026-10-25, and the reactivated payment creates a new invoice for the current month."
+}

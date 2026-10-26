@@ -1045,3 +1045,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Na borgbetaling opent KioskContractSignModal: hier tekenen (SignaturePad) of via QR (/onderteken/{token}, polling). Handtekening verplicht (server: signature_png data:image/png), signed_via kiosk|link. GET /api/kiosk/tenants/{id}/contract-to-sign.
 - Facturen-venster Kiosk: ernst-filter, tegoed-badge (/tenants/credits), tegoed toepassen, PDF, mailen (SendDialog zClass). KioskInvoicesPage (Beheer-tegel) ook bijgewerkt maar wordt in praktijk door het venster vervangen.
 - 2026-06: Borg "Restitueer" (Borg-pagina) opent nu TenantMoveOutModal → verrekening facturen, borgbon, appartement vrij, huurder gearchiveerd (tekort zichtbaar in archief). Archief-pill toont teller (counts.archived in /tenants/paged).
+
+## 2026-06 — Facturen archiveren bij vertrek + permanent verwijderen
+- Move-out archiveert alle facturen van de huurder (archived=true; open → status "archived", status_before_archive bewaard). Uitgesloten uit factuurlijsten, overdue, FIFO, kiosk/portal overzicht ($nin paid/archived[/cancelled]). Startup-migratie voor eerder gearchiveerde huurders.
+- Archief: facturen per huurder tonen (GET /api/tenants/{id}/archived-invoices) + verwijderknop (DELETE /api/tenants/{id}/permanent, admin/superadmin): wist huurder, facturen, contracten, borg, betalingsregelingen, ID-foto/avatar; betalingen blijven (tenant_id "", tenant_deleted → "Verwijderde huurder").
+- Heractiveren brengt gearchiveerde facturen NIET terug.
