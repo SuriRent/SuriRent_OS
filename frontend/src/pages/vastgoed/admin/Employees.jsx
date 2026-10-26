@@ -322,6 +322,11 @@ export default function Employees({ embedded = false }) {
   const [creatingEmp, setCreatingEmp] = useState(false);
   const [creatingSal, setCreatingSal] = useState(false);
   const [pinFor, setPinFor] = useState(null);
+  useEffect(() => {
+    const onNew = () => (view === 'employees' ? setCreatingEmp(true) : setCreatingSal(true));
+    window.addEventListener('kiosk-emp-new', onNew);
+    return () => window.removeEventListener('kiosk-emp-new', onNew);
+  }, [view]);
 
   const load = useCallback(async () => {
     await Promise.all([refetchEmp(), refetchSal()]);
@@ -341,7 +346,7 @@ export default function Employees({ embedded = false }) {
     <div>
       {confirmNode}
       <PageHeader hideTitle={embedded} title="Werknemers" subtitle={`${employees.filter((e) => e.active).length} actief, ${salaries.length} loonstroken`}
-        action={
+        action={embedded ? null : (
           view === 'employees' ? (
             <button onClick={() => setCreatingEmp(true)} data-testid="emp-new-btn"
               className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-5 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-xl shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
@@ -353,9 +358,9 @@ export default function Employees({ embedded = false }) {
               <Plus className="w-4 h-4" /> Nieuwe loonstrook
             </button>
           )
-        }
+        )}
       />
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4" data-testid="emp-filter-bar">
         <button onClick={() => setView('employees')} data-testid="view-employees"
           className={`px-4 py-2 rounded-xl font-bold text-sm ${view === 'employees' ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
           <UsersIcon className="w-4 h-4 inline mr-1.5" /> Personeel

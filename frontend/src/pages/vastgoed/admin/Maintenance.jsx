@@ -158,7 +158,7 @@ export default function Maintenance({ embedded = false }) {
           </button>
         }
       />}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4" data-testid="maint-filter-bar">
         {[
           { id: 'all', label: 'Alle' },
           { id: 'open', label: 'Open' },

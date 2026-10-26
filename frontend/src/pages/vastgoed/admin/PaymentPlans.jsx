@@ -95,7 +95,7 @@ export default function PaymentPlans({ embedded = false }) {
         </button>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap" data-testid="plan-filter-bar">
         {[
           { v: 'active', l: 'Actief' },
           { v: 'completed', l: 'Voltooid' },

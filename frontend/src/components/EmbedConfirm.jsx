@@ -32,7 +32,7 @@ export function useEmbedConfirm(embedded) {
 // Imperatief: in een kiosk-popup (data-kiosk-host) of de kiosk zelf een eigen bevestiging, anders window.confirm.
 export function hostConfirm(text) {
   const host = document.querySelector('[data-kiosk-host]');
-  const inKiosk = host || document.body.classList.contains('kiosk-admin-active') || /\/kiosk/.test(window.location.pathname);
+  const inKiosk = host || document.body.classList.contains('kiosk-admin-active') || document.body.classList.contains('kiosk-popup-active') || /\/kiosk/.test(window.location.pathname);
   if (!inKiosk) return Promise.resolve(window.confirm(text));
   return new Promise((resolve) => {
     const el = document.createElement('div');

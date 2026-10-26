@@ -404,3 +404,70 @@ html { scroll-behavior: smooth; }
   #bon { display: block !important; width: 54mm; max-width: 54mm; margin: 0 auto; }
 }
 [data-kiosk-host] .fixed.inset-0 { margin: 0 !important; }
+/* Kiosk Beheer-popups: exact dezelfde opmaak als de Facturen-popup. */
+.kiosk-fx { font-size: 14px; }
+.kiosk-fx :is(.space-y-4, .space-y-5, .space-y-6) > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+.kiosk-fx .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
+.kiosk-fx .mb-6, .kiosk-fx .mb-4 { margin-bottom: 0.75rem; }
+.kiosk-fx h1 { font-size: 1rem; line-height: 1.5rem; font-weight: 900; color: #0F172A; letter-spacing: 0; margin-top: 0; }
+.kiosk-fx :is(h2, h3) { font-size: 0.9375rem; line-height: 1.375rem; font-weight: 900; }
+.kiosk-fx :is(.text-2xl, .text-3xl) { font-size: 1.125rem; line-height: 1.75rem; }
+.kiosk-fx .text-xl { font-size: 1rem; line-height: 1.5rem; }
+/* Kaarten + lijst-rijen */
+.kiosk-fx .bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 0.75rem; border: 1px solid #E2E8F0; box-shadow: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]) { padding: 0.75rem 1rem; background-color: #FFFFFF; }
+.kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]):hover { border-color: #FDBA74; background-color: #FFFFFF; }
+.kiosk-fx [data-testid*="-row-"] > :first-child.shrink-0:is(.w-10, .w-11, .w-12, .w-14),
+.kiosk-fx [data-testid*="-row-"] > img:first-child { display: none; }
+.kiosk-fx [data-testid*="-row-"] :is(.text-base, .text-lg, .text-xl, .text-2xl) { font-size: 0.875rem; line-height: 1.25rem; }
+.kiosk-fx [data-testid*="-row-"] p.font-black, .kiosk-fx [data-testid*="-card-"] p.font-black { font-size: 0.875rem; }
+.kiosk-fx [data-testid*="-row-"] .text-xs { color: #64748B; }
+.kiosk-fx :is([data-testid*="-row-"], [data-testid*="-card-"]) span.uppercase:is(.text-\[10px\], .text-\[11px\]) {
+  background: transparent; padding: 0; border-radius: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.025em;
+}
+.kiosk-fx :is([data-testid*="-row-"], [data-testid*="-card-"]) :is(button, a):is(.w-8, .w-9) {
+  width: 2.5rem; height: 2.5rem; border-radius: 0.5rem; background-color: #F1F5F9;
+}
+.kiosk-fx :is([data-testid*="-row-"], [data-testid*="-card-"]) :is(button, a):is(.w-8, .w-9):hover { background-color: #FFF1E8; }
+.kiosk-fx [class*="grid-cols-"]:has(> [data-testid^="maint-card-"]) { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+/* Statistiek-tegels */
+.kiosk-fx .bg-slate-50:is(.rounded-xl, .rounded-2xl) { border-radius: 0.75rem; }
+/* Tabs: volle breedte, gelijke knoppen zoals Facturen */
+.kiosk-fx [data-testid$="-filter-bar"] { display: flex; flex-wrap: nowrap; gap: 0.375rem; overflow-x: auto; }
+.kiosk-fx [data-testid$="-filter-bar"] > button {
+  flex: 1 0 auto; min-width: 0; height: 2.5rem; padding: 0 0.75rem; border-radius: 0.75rem;
+  font-size: 0.75rem; font-weight: 900; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+}
+.kiosk-fx [data-testid$="-filter-bar"] > button:not([class*="bg-[#FF5C00]"]) { background-color: #F1F5F9; color: #475569; }
+/* Zoekveld: volle breedte, onder de tabs */
+.kiosk-fx :is(div, label).relative:has(> input[placeholder^="Zoek"]) { max-width: none; width: 100%; }
+.kiosk-fx input[placeholder^="Zoek"] {
+  height: 2.75rem; border-radius: 0.75rem; border: 1px solid #E2E8F0; background-color: #FFFFFF; font-size: 0.875rem; font-weight: 600;
+}
+.kiosk-fx input[placeholder^="Zoek"]:focus { border-color: #FF5C00; outline: none; }
+.kiosk-fx > div:has(> [data-testid$="-filter-bar"]):has(> .relative > input[placeholder^="Zoek"]) { display: flex; flex-direction: column; gap: 0.75rem; }
+.kiosk-fx > div:has(> [data-testid$="-filter-bar"]):has(> .relative > input[placeholder^="Zoek"]) > * { margin-top: 0 !important; }
+.kiosk-fx > div:has(> [data-testid$="-filter-bar"]) > [data-testid$="-filter-bar"] { order: -2; }
+.kiosk-fx > div:has(> [data-testid$="-filter-bar"]) > .relative:has(> input[placeholder^="Zoek"]) { order: -1; }
+/* Knoppen */
+.kiosk-fx button.rounded-2xl { border-radius: 0.75rem; }
+.kiosk-fx button[class*="bg-[#FF5C00]"]:not([data-testid$="-filter-bar"] > button) {
+  border-radius: 0.75rem; box-shadow: none; font-weight: 900; font-size: 0.875rem; min-height: 2.75rem;
+}
+/* Detailpagina: terug-link + kopkaart zoals Facturen */
+.kiosk-fx [data-testid$="-detail-back"] {
+  background: transparent !important; border: 0 !important; padding: 0; min-height: 0; box-shadow: none;
+  color: #FF5C00; font-weight: 900; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.375rem;
+}
+.kiosk-fx [data-testid$="-detail-back"]:hover { background: transparent; text-decoration: underline; }
+.kiosk-fx div:has(> [data-testid$="-detail-back"]) + .bg-white { background-color: #F8FAFC; border-color: transparent; }
+.kiosk-fx div:has(> [data-testid$="-detail-back"]) + .bg-white > .p-5,
+.kiosk-fx div:has(> [data-testid$="-detail-back"]) + .bg-white.p-5 { padding: 0.75rem 1rem; }
+.kiosk-fx .bg-white:has(> [data-testid="emp-cards"]) { border: 0; background: transparent; overflow: visible; }
+.kiosk-fx [data-testid="emp-cards"] { display: flex; flex-direction: column; gap: 0.5rem; }
+.kiosk-fx [data-testid="emp-cards"] > [data-testid^="emp-card-"] { border: 1px solid #E2E8F0; border-radius: 0.75rem; padding: 0.75rem 1rem; transition: border-color 0.15s ease; }
+.kiosk-fx [data-testid="emp-cards"] > [data-testid^="emp-card-"]:hover { border-color: #FDBA74; }
+.kiosk-fx [data-testid*="-row-"] .font-mono { font-family: inherit; }
