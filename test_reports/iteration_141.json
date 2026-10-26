@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend-only test of the Kiosk Beheer popup restyle (Facturen look) at 1920x800 and 390x844, logged in as demo@surirent.sr on /kiosk. All 10 Beheer popups (locaties, appartementen, huurders, contracten, betalingen, regelingen, onderhoud, werknemers, notificaties, borg) open 672px wide, the same as Facturen. Each footer has a full-width orange 'Nieuw …' button above a full-width grey 'Sluiten' button (notificaties has only Sluiten, as intended). Every 'Nieuw' button opens the right create form, including werknemers: 'Nieuwe werknemer' on the Personeel tab and 'Nieuwe loonstrook' on the Loonstroken tab. Sluiten closes each popup. Filter bars span the full width and every tab filters correctly (counts match). Search fields are full width, sit under the tabs and filter the list (tenant, apt, payment, locaties). Rows are white with a 12px radius, a 1px slate-200 border, no shadow and no left avatar (hidden by CSS), and get an orange border on hover. Detail pages (tenant, apt, loc, deposit, plan, payment) show an orange 'Terug' link and a light-grey header card (#F8FAFC). Back returns to the list and all detail actions are still there (Borg: Restitueer and Verwijder). The contract delete confirm uses the kiosk style (embed-confirm-cancel) and cancelling keeps the row. The contract PDF button opens a new tab. NFC popup (via the Beheer menu and the admin:nfc event): 672px, search works, choosing a tenant shows 'Gekozen', save stays disabled without a tag uid, and both footer close and X close it. Facturen is unchanged and works. inst-bedrijf is still wide (1024px, no kiosk-fx). On mobile, popups are full-screen, the tenant tabs scroll sideways and the page has no horizontal overflow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All Beheer popups filter bars", "issues": ["Tabs are not equal width like in Facturen (Facturen tabs 207/207/207px; huurders 108/180/201/125, contracten 184/234/203, regelingen 143/154/182/135). Cause: index.css .kiosk-fx [data-testid$='-filter-bar'] > button uses flex: 1 0 auto, which grows from content width. Use flex: 1 1 0 (keep horizontal scroll on mobile with min-width:auto / overflow-x) to get equal pills like Facturen."]},
+      {"screen": "Borg / Betalingen detail", "issues": ["Section headers (BORGGEGEVENS, ACTIES, BETAALGEGEVENS) still use large uppercase wide-tracked headings, which is heavier than the Facturen detail. Cosmetic only."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: change .kiosk-fx [data-testid$='-filter-bar'] > button flex to '1 1 0' so filter tabs are equal width like Facturen"
+  ],
+  "critical_code_review_comments": [
+    "Styling relies heavily on broad global selectors in .kiosk-fx (e.g. [data-testid*='-row-'], :has()). This is fragile: any embedded element whose testid contains '-row-' or '-card-' inherits the row styles. Acceptable, but keep it in mind for future pages."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "98%"},
+  "seed_data_creation": "None. Create forms were only opened, never submitted. The delete confirm was cancelled.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login: fetch POST /api/auth/login demo@surirent.sr/demo1234 in page, then goto /kiosk (no PIN needed for demo admin). Open popups with window.dispatchEvent(new CustomEvent('kiosk-nav',{detail:'admin:<id>'})). The kiosk-popup-{id} root testid is not 'visible' to Playwright, so wait on kiosk-popup-{id}-footer-close instead. Facturen closes via invoices-modal-close; if left open, its invoice-tenant-row-* elements stay in the DOM behind other popups. Playwright innerText returns 'GEKOZEN' (uppercase CSS)."
+}

@@ -1051,3 +1051,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Archief: facturen per huurder tonen (GET /api/tenants/{id}/archived-invoices) + verwijderknop (DELETE /api/tenants/{id}/permanent, admin/superadmin): wist huurder, facturen, contracten, borg, betalingsregelingen, ID-foto/avatar; betalingen blijven (tenant_id "", tenant_deleted → "Verwijderde huurder").
 - Heractiveren brengt gearchiveerde facturen NIET terug.
 - 2026-06: Restschuld innen in Archief (POST /api/kiosk/tenants/{id}/settle-debt, alleen volledig bedrag, contant/pin/bank, bon). Borgverrekening in Kasgeld: "−", maanden in omschrijving, "niet in saldo" (excluded_from_balance), niet in kassaldo's; contante borg-terugbetaling bij vertrek = kasgeld uitgave. Backfill oude borgverrekeningen (maanden, approved_by).
+
+## 2026-06 — Kiosk Beheer-popups in Facturen-stijl
+- Locaties, Appartementen, Huurders, Contracten, Betalingen, Betalingsregelingen, Onderhoud, Werknemers, Notificaties, Borg: zelfde breedte (42rem), kaarten, tabs, zoekveld, knoppen, footer (Nieuw + Sluiten) en detail-opmaak als Facturen (.kiosk-fx in index.css, KioskAdminPopup.jsx).
+- Werknemers: Nieuw-knop in footer (event kiosk-emp-new).
+- NFC-tag koppelen popup herontworpen in Facturen-stijl (NfcLinkModal.jsx).
+- Getest: iteration_141 (98%, design-punten opgelost).
