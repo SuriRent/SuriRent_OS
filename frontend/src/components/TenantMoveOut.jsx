@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Archive, Check, Loader2, LogOut, RotateCcw, Trash2, X } from 'lucide-react';
+import { Archive, Check, Loader2, LogOut, RotateCcw, Trash2, Wallet, X } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../lib/api';
 import { useApiSWR } from '../lib/swr';
 import { useAuth } from '../lib/auth';
+import { PrintChoiceMenu } from './PrintChoiceMenu';
+import { getKioskEmployee } from './KioskEmployee';
 import KeyboardSafeModal from './KeyboardSafeModal';
 import { DepositReceiptScreen } from './KasgeldReceipt';
 import { DamageRows, SumRow } from '../pages/vastgoed/admin/Deposits';
@@ -187,6 +189,66 @@ function ReactivateModal({ tenant, onClose, onDone }) {
 
 const MONTHS = ['', 'jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
+const PAY_METHODS = [['contant', 'Contant'], ['pin', 'Pinnen'], ['bank', 'Overschrijving']];
+
+function SettleDebtModal({ tenant, onClose, onDone }) {
+  const due = tenant.outstanding_after_move_out || 0;
+  const cur = tenant.currency_at_move_out || 'SRD';
+  const [method, setMethod] = useState('contant');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [paid, setPaid] = useState(null);
+  const pay = async () => {
+    setBusy(true); setErr('');
+    try {
+      const { data } = await api.post(`/kiosk/tenants/${tenant.id}/settle-debt`, { method, operator_name: getKioskEmployee()?.name || null });
+      setPaid(data);
+    } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
+  };
+  if (paid) {
+    return (
+      <KeyboardSafeModal onClose={onDone} testId="settle-debt-receipt">
+        <KeyboardSafeModal.Body>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <p className="text-lg font-black text-slate-900">Restschuld betaald</p>
+            <p className="text-2xl font-black text-emerald-600" data-testid="settle-debt-paid-amount">{fmtMoney(paid.amount, paid.currency)}</p>
+            <iframe title="Bon" src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${paid.payment_id}/print.html?preview=1&format=thermal`}
+              sandbox="allow-same-origin" className="w-[260px] h-[380px] bg-white border border-dashed border-slate-200 rounded" data-testid="settle-debt-receipt-preview" />
+            <PrintChoiceMenu paymentId={paid.payment_id} showLabel />
+            <button onClick={onDone} data-testid="settle-debt-done" className="w-full h-12 rounded-xl bg-slate-900 text-white font-black">Klaar</button>
+          </div>
+        </KeyboardSafeModal.Body>
+      </KeyboardSafeModal>
+    );
+  }
+  return (
+    <KeyboardSafeModal onClose={onClose} testId="settle-debt-modal">
+      <KeyboardSafeModal.Header><h3 className="text-xl font-black text-slate-900">Restschuld innen</h3><p className="text-sm text-slate-500">{tenant.name}</p></KeyboardSafeModal.Header>
+      <KeyboardSafeModal.Body>
+        {err && <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="settle-debt-error">{err}</div>}
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center mb-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-red-700">Te betalen (volledig)</p>
+          <p className="text-3xl font-black text-red-600" data-testid="settle-debt-amount">{fmtMoney(due, cur)}</p>
+        </div>
+        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Betaalmethode</label>
+        <div className="grid grid-cols-3 gap-2 mt-1">
+          {PAY_METHODS.map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setMethod(v)} data-testid={`settle-debt-method-${v}`}
+              className={`h-12 rounded-xl font-black text-sm border-2 transition-colors ${method === v ? 'border-[#FF5C00] bg-orange-50 text-[#FF5C00]' : 'border-slate-200 text-slate-600'}`}>{l}</button>
+          ))}
+        </div>
+      </KeyboardSafeModal.Body>
+      <KeyboardSafeModal.Footer className="flex gap-3">
+        <button onClick={onClose} className="flex-1 h-12 rounded-xl bg-slate-100 text-slate-700 font-bold">Annuleren</button>
+        <button onClick={pay} disabled={busy} data-testid="settle-debt-confirm"
+          className="flex-1 h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Betaling ontvangen
+        </button>
+      </KeyboardSafeModal.Footer>
+    </KeyboardSafeModal>
+  );
+}
+
 function ArchivedInvoices({ tenantId }) {
   const { data } = useApiSWR(`/tenants/${tenantId}/archived-invoices`);
   if (!data) return <Loader2 className="w-4 h-4 animate-spin text-slate-400 my-2" />;
@@ -209,7 +271,7 @@ function ArchivedInvoices({ tenantId }) {
   );
 }
 
-function ArchivedRow({ t, onReactivate, onDelete }) {
+function ArchivedRow({ t, onReactivate, onDelete, onSettle }) {
   const due = t.outstanding_after_move_out || 0;
   const [open, setOpen] = useState(false);
   return (
@@ -223,6 +285,12 @@ function ArchivedRow({ t, onReactivate, onDelete }) {
           </p>
           {due > 0 && <p className="text-xs font-bold text-red-600" data-testid={`archived-due-${t.id}`}>Nog te betalen: {fmtMoney(due, t.currency_at_move_out || 'SRD')}</p>}
         </button>
+        {due > 0 && (
+          <button onClick={onSettle} data-testid={`archived-settle-${t.id}`}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs">
+            <Wallet className="w-3.5 h-3.5" /> Innen
+          </button>
+        )}
         <button onClick={onReactivate} data-testid={`archived-reactivate-${t.id}`}
           className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs">
           <RotateCcw className="w-3.5 h-3.5" /> Heractiveren
@@ -242,6 +310,7 @@ function ArchivedRow({ t, onReactivate, onDelete }) {
 export function ArchivedTenants({ onChanged }) {
   const { data, mutate } = useApiSWR('/tenants/archived');
   const [react, setReact] = useState(null);
+  const [settle, setSettle] = useState(null);
   const [err, setErr] = useState('');
   const { user } = useAuth();
   const canDelete = ['admin', 'superadmin'].includes(user?.role);
@@ -256,7 +325,8 @@ export function ArchivedTenants({ onChanged }) {
       {err && <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="archived-error">{err}</div>}
       {data.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm text-slate-500 font-semibold" data-testid="archived-empty">Archief is leeg.</div>
-      ) : data.map((t) => <ArchivedRow key={t.id} t={t} onReactivate={() => setReact(t)} onDelete={canDelete ? () => remove(t) : null} />)}
+      ) : data.map((t) => <ArchivedRow key={t.id} t={t} onReactivate={() => setReact(t)} onSettle={() => setSettle(t)} onDelete={canDelete ? () => remove(t) : null} />)}
+      {settle && <SettleDebtModal tenant={settle} onClose={() => setSettle(null)} onDone={() => { setSettle(null); mutate(); }} />}
       {react && <ReactivateModal tenant={react} onClose={() => setReact(null)}
         onDone={() => { setReact(null); mutate(); onChanged?.(); }} />}
     </div>

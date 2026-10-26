@@ -3488,9 +3488,10 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
       </div>
       <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
       <p className={`text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
-        isIn ? 'text-emerald-600' : 'text-red-500'
-      }`} data-testid={`kasgeld-row-amount-${item.id}`}>
+        item.excluded_from_balance ? 'text-slate-400' : isIn ? 'text-emerald-600' : 'text-red-500'
+      }`} data-testid={`kasgeld-row-amount-${item.id}`} title={item.excluded_from_balance ? 'Verrekend met borg — telt niet mee in kassaldo' : undefined}>
         {isIn ? '+' : '−'}{item.currency} {Number(item.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {item.excluded_from_balance && <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 text-right" data-testid={`kasgeld-row-excluded-${item.id}`}>niet in saldo</span>}
       </p>
       {canManage && (item.source === 'payment' ? (
         <span className="sm:w-[68px] shrink-0 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400" data-testid={`kasgeld-row-auto-${item.id}`}>auto</span>

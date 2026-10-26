@@ -552,6 +552,21 @@ async def lifespan(app: FastAPI):
     except Exception as _e:  # noqa: BLE001
         print(f"[startup] archive invoices migration failed: {_e}")
 
+    # Oudere borgverrekeningen: maanden + 'door' aanvullen.
+    try:
+        _mn = ["", "jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+        async for _p in db.payments.find({"method": "borgverrekening", "settled_labels": {"$exists": False}}, {"_id": 0, "id": 1, "allocations": 1}):
+            _ids = [a.get("invoice_id") for a in (_p.get("allocations") or []) if a.get("invoice_id")]
+            _labels = []
+            async for _i in db.invoices.find({"id": {"$in": _ids}}, {"_id": 0, "period_month": 1, "period_year": 1}).sort([("period_year", 1), ("period_month", 1)]):
+                if _i.get("period_month"):
+                    _labels.append(f"Huur {_mn[int(_i['period_month'])]} {_i.get('period_year')}")
+            await db.payments.update_one({"id": _p["id"]}, {"$set": {"settled_labels": _labels}})
+            await db.payments.update_one({"id": _p["id"], "approved_by": {"$in": [None, ""]}}, {"$set": {"approved_by": "Beheerder"}})
+            await db.payments.update_one({"id": _p["id"], "approved_by": {"$exists": False}}, {"$set": {"approved_by": "Beheerder"}})
+    except Exception as _e:  # noqa: BLE001
+        print(f"[startup] borgverrekening backfill failed: {_e}")
+
     yield
     if _reminder_task_handle:
         _reminder_task_handle.cancel()
@@ -12029,7 +12044,7 @@ async def _compute_admin_stats(user: dict, sc: dict) -> dict:
         cur = r["_id"] or "SRD"
         cash_balance[cur] = cash_balance.get(cur, 0.0) + round(r["total"], 2)
     async for r in db.payments.aggregate([
-        {"$match": {**sc, "status": "approved"}},
+        {"$match": {**sc, "status": "approved", "method": {"$ne": "borgverrekening"}}},
         {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}}},
     ]):
         cur = r["_id"] or "SRD"
@@ -15431,11 +15446,21 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
             "id": pid, "company_id": cid, "tenant_id": tenant_id, "apartment_id": t.get("apartment_id"),
             "amount": settle, "currency": cur, "method": "borgverrekening", "category": "huur",
             "note": "Verrekend met borg bij vertrek", "received_by": user.get("name") or "",
+            "approved_by": user.get("name") or user.get("email") or "Beheerder",
+            "settled_labels": [i["label"] for i in arrears_items],
             "receipt_number": rno, "paid_at": paid_at, "status": "approved", "created_at": paid_at,
         })
         await _allocate_payment_to_invoices([i["invoice_id"] for i in arrears_items], settle, pid,
                                             paid_at=paid_at, method="borgverrekening", receipt_number=rno)
     calc = _settle_deposit(amount, damage, arrears)
+    if calc["refund_amount"] > 0:
+        await db.kasgeld.insert_one({
+            "id": new_id(), "company_id": cid, "type": "out", "amount": calc["refund_amount"], "currency": cur,
+            "description": f"Borg terugbetaald aan {t.get('name') or 'huurder'}", "category": "borg",
+            "created_at": iso(now_utc()), "entry_date": iso(now_utc()),
+            "created_by": user.get("id"), "created_by_name": user.get("name") or user.get("email") or "Beheerder",
+            "created_via": "move_out", "tenant_id": tenant_id,
+        })
     fields = {"status": "partial" if calc["deduction"] > 0 else "refunded", **calc,
               "deduction_damage": damage, "deduction_arrears": arrears,
               "damage_items": damage_items, "arrears_items": arrears_items,
@@ -15477,6 +15502,51 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
 async def list_archived_tenants(user=Depends(get_current_user)):
     return await db.tenants.find({**scope(user), "status": "archived"},
                                  {"_id": 0, "pin_hash": 0}).sort("archived_at", -1).to_list(1000)
+
+
+class SettleDebtIn(BaseModel):
+    method: Literal["contant", "pin", "bank"]
+    operator_name: Optional[str] = None
+
+
+@api.post("/kiosk/tenants/{tenant_id}/settle-debt")
+async def kiosk_settle_archived_debt(tenant_id: str, body: SettleDebtIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid, "status": "archived"}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
+    due = round(float(t.get("outstanding_after_move_out") or 0), 2)
+    if due <= 0:
+        raise HTTPException(status_code=400, detail="Geen restschuld openstaand")
+    claim = await db.tenants.update_one({"id": tenant_id, "outstanding_after_move_out": t.get("outstanding_after_move_out")},
+                                        {"$set": {"outstanding_after_move_out": 0, "debt_settled_at": iso(now_utc())}})
+    if not claim.modified_count:
+        raise HTTPException(status_code=409, detail="Restschuld is al betaald")
+    cur = t.get("currency_at_move_out") or "SRD"
+    pid, rno, paid_at = new_id(), await _next_receipt_number(), iso(now_utc())
+    await db.payments.insert_one({
+        "id": pid, "company_id": cid, "tenant_id": tenant_id, "apartment_id": t.get("archived_apartment_id"),
+        "amount": due, "currency": cur, "method": body.method, "category": "huur",
+        "note": "Restschuld na vertrek", "receipt_number": rno, "paid_at": paid_at, "created_at": paid_at,
+        "status": "approved", "kind": "restschuld",
+        "kiosk_employee_name": (body.operator_name or "").strip()[:80] or None, "approved_by": "Kiosk",
+    })
+    # Restanten van gearchiveerde facturen afboeken (oudste eerst).
+    left = due
+    async for inv in db.invoices.find({"company_id": cid, "tenant_id": tenant_id, "archived": True, "status": "archived"},
+                                      {"_id": 0}).sort([("period_year", 1), ("period_month", 1)]):
+        if left <= 0:
+            break
+        rest = round(max(float(inv.get("amount_due") or inv.get("amount") or 0) - float(inv.get("paid_amount") or 0), 0), 2)
+        chunk = round(min(rest, left), 2)
+        if chunk <= 0:
+            continue
+        new_paid = round(float(inv.get("paid_amount") or 0) + chunk, 2)
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {
+            "paid_amount": new_paid, "status": "paid" if chunk >= rest - 0.005 else "archived",
+            "paid_at": paid_at, "payment_id": pid}})
+        left = round(left - chunk, 2)
+    return {"ok": True, "payment_id": pid, "receipt_number": rno, "amount": due, "currency": cur}
 
 
 @api.get("/tenants/{tenant_id}/archived-invoices")
@@ -15667,6 +15737,7 @@ class CashEntryOut(CashEntryIn):
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     balance_after: Optional[float] = None
+    excluded_from_balance: bool = False
 
 
 # =====================================================================
@@ -15736,6 +15807,8 @@ async def _kasgeld_payment_description(p: dict, t_by: Optional[dict] = None, a_b
     parts = [p.get("receipt_number") or ""]
     if who:
         parts.append(f"— {who}")
+    if p.get("method") == "borgverrekening" and p.get("settled_labels"):
+        period = " · Borgverrekening " + ", ".join(lbl.replace("Huur ", "") for lbl in p["settled_labels"])
     return f"{' '.join(parts)}{period}".strip()
 
 
@@ -15771,7 +15844,7 @@ async def _list_cash_compute(user: dict):
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
          "tenant_id": 1, "apartment_id": 1, "period_month": 1,
-         "period_year": 1, "note": 1,
+         "period_year": 1, "note": 1, "settled_labels": 1,
          "kiosk_employee_id": 1, "kiosk_employee_name": 1, "approved_by": 1},
     ).to_list(None)
     t_by = await _by_id("tenants", [p.get("tenant_id") for p in pay_docs], {"name": 1, "apartment_id": 1})
@@ -15792,7 +15865,8 @@ async def _list_cash_compute(user: dict):
         creator_id = p.get("kiosk_employee_id")
         payments.append({
             "id": f"pay-{p['id']}",   # namespace zodat we conflicts vermijden
-            "type": "in",
+            "type": "out" if p.get("method") == "borgverrekening" else "in",
+            "excluded_from_balance": p.get("method") == "borgverrekening",
             "amount": float(p.get("amount") or 0),
             "currency": p.get("currency") or "SRD",
             "description": desc,
@@ -15918,7 +15992,7 @@ async def cash_balance(user=Depends(get_current_user)):
         balances[cur] = balances.get(cur, 0) + sign * r["total"]
     # Goedgekeurde betalingen (Betalingen / Facturen / Kiosk) — allemaal 'in'
     pay_pipeline = [
-        {"$match": {**scope(user), "status": "approved"}},
+        {"$match": {**scope(user), "status": "approved", "method": {"$ne": "borgverrekening"}}},
         {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}}},
     ]
     async for r in db.payments.aggregate(pay_pipeline):
@@ -15975,7 +16049,7 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
         {"_id": 0, "id": 1, "amount": 1, "currency": 1, "method": 1,
          "category": 1, "receipt_number": 1, "paid_at": 1, "created_at": 1,
          "tenant_id": 1, "apartment_id": 1, "period_month": 1,
-         "period_year": 1,
+         "period_year": 1, "settled_labels": 1,
          "kiosk_employee_id": 1, "kiosk_employee_name": 1, "approved_by": 1},
     ).sort("paid_at", -1).limit(100):
         desc = await _kasgeld_payment_description(p)
@@ -15987,7 +16061,8 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
         )
         payments.append({
             "id": f"pay-{p['id']}",
-            "type": "in",
+            "type": "out" if p.get("method") == "borgverrekening" else "in",
+            "excluded_from_balance": p.get("method") == "borgverrekening",
             "amount": float(p.get("amount") or 0),
             "currency": p.get("currency") or "SRD",
             "description": desc,
