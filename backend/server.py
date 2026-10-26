@@ -16023,7 +16023,7 @@ async def kiosk_cash_balance(_session=Depends(get_kiosk_session)):
         sign = 1 if r["_id"]["type"] == "in" else -1
         balances[cur] = balances.get(cur, 0) + sign * r["total"]
     async for r in db.payments.aggregate([
-        {"$match": {**sc, "status": "approved"}},
+        {"$match": {**sc, "status": "approved", "method": {"$ne": "borgverrekening"}}},
         {"$group": {"_id": "$currency", "total": {"$sum": "$amount"}}},
     ]):
         cur = r["_id"] or "SRD"

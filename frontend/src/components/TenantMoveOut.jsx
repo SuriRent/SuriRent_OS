@@ -198,6 +198,8 @@ function SettleDebtModal({ tenant, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [paid, setPaid] = useState(null);
+  const [printMsg, setPrintMsg] = useState('');
+  const printUrl = (pid) => `${process.env.REACT_APP_BACKEND_URL}/api/payments/${pid}/print.html?format=thermal`;
   const pay = async () => {
     setBusy(true); setErr('');
     try {
@@ -214,7 +216,11 @@ function SettleDebtModal({ tenant, onClose, onDone }) {
             <p className="text-2xl font-black text-emerald-600" data-testid="settle-debt-paid-amount">{fmtMoney(paid.amount, paid.currency)}</p>
             <iframe title="Bon" src={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${paid.payment_id}/print.html?preview=1&format=thermal`}
               sandbox="allow-same-origin" className="w-[260px] h-[380px] bg-white border border-dashed border-slate-200 rounded" data-testid="settle-debt-receipt-preview" />
-            <PrintChoiceMenu paymentId={paid.payment_id} showLabel />
+            <PrintChoiceMenu paymentId={paid.payment_id} showLabel onLocal={() => window.open(printUrl(paid.payment_id), '_blank')}
+              onStatus={(st) => setPrintMsg(typeof st === 'string' ? st : (st?.message || st?.status || ''))} />
+            {printMsg && <p className="text-xs text-slate-500" data-testid="settle-debt-print-status">{printMsg}</p>}
+            <a href={printUrl(paid.payment_id)} target="_blank" rel="noreferrer" data-testid="settle-debt-print"
+              className="w-full h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold inline-flex items-center justify-center">Bon printen</a>
             <button onClick={onDone} data-testid="settle-debt-done" className="w-full h-12 rounded-xl bg-slate-900 text-white font-black">Klaar</button>
           </div>
         </KeyboardSafeModal.Body>
@@ -249,8 +255,8 @@ function SettleDebtModal({ tenant, onClose, onDone }) {
   );
 }
 
-function ArchivedInvoices({ tenantId }) {
-  const { data } = useApiSWR(`/tenants/${tenantId}/archived-invoices`);
+function ArchivedInvoices({ tenantId, rk }) {
+  const { data } = useApiSWR(`/tenants/${tenantId}/archived-invoices?r=${rk}`);
   if (!data) return <Loader2 className="w-4 h-4 animate-spin text-slate-400 my-2" />;
   if (!data.length) return <p className="text-xs text-slate-500 py-2" data-testid={`archived-invoices-empty-${tenantId}`}>Geen facturen.</p>;
   return (
@@ -302,7 +308,7 @@ function ArchivedRow({ t, onReactivate, onDelete, onSettle }) {
           </button>
         )}
       </div>
-      {open && <ArchivedInvoices tenantId={t.id} />}
+      {open && <ArchivedInvoices tenantId={t.id} rk={t.outstanding_after_move_out || 0} />}
     </div>
   );
 }

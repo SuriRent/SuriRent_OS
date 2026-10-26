@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 140 tested both backend (pytest, 10 cases) and frontend (Playwright, kiosk admin) for: archived-debt settlement (Innen), borgverrekening rows in the kasgeld feed, cash borg refund, and a kiosk payment regression. 8 of 10 backend tests pass. Both failures have the same cause: GET /api/kiosk/kasgeld/balance still counts borgverrekening payments. The admin /api/kasgeld/balance excludes them correctly. Working: settle-debt (fixed full amount, approved payment counted as income in both balances, outstanding set to 0, archived invoices booked to paid oldest first and still hidden from /api/invoices, second call 400, bad method 422, unknown tenant 404, no kiosk token 401); borgverrekening feed rows (type out, excluded_from_balance true, months in the description, creator 'Demo Beheerder'); refund kasgeld 'Borg terugbetaald aan …' (out, 600, lowers the admin balance); kiosk payment regression. UI: Innen → modal (fixed amount, no input, 3 methods) → receipt with iframe preview → Klaar removes 'Nog te betalen' and the Innen button. The kasgeld row shows a grey −SRD 1.000,00 with the 'niet in saldo' label. Found 2 frontend bugs: archived invoice list goes stale after settling, and the PrintChoiceMenu on the receipt is missing its handlers.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/kiosk/kasgeld/balance (server.py kiosk_cash_balance ~line 16025)", "issue": "The payments aggregate $match is {**sc, 'status': 'approved'} with no method filter, so borgverrekening payments are counted as cash income. Reproduced: after a move-out with borg 1000 the kiosk balance went from 42400 to 43400 while the admin balance stayed at 42400. Live UI showed Totaal kasgeld SRD 44.900 against an admin balance of 43.900. Fix: add \"method\": {\"$ne\": \"borgverrekening\"} to the $match, like /kasgeld/balance and admin stats already do. create_cash() also uses kiosk_cash_balance for balance_after, so new manual entries store a wrong balance_after too.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/kiosk/tenants/{id}/settle-debt", "issue": "Without a kiosk employee in the session the creator is 'Kiosk' (approved_by hardcoded). The kasgeld description is just 'KW… — HUIS X' with no 'Restschuld' marker, so it is hard to tell apart from a normal rent payment. Suggestion: add ' · Restschuld na vertrek' via kind=='restschuld' in _kasgeld_payment_description."},
+      {"endpoint": "POST /api/kiosk/tenants/{id}/settle-debt", "issue": "Steps are not atomic: outstanding is set to 0 before the payment insert and invoice updates. If either fails, the debt is gone with no payment. Low risk."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TenantMoveOut.jsx SettleDebtModal → PrintChoiceMenu", "issue": "<PrintChoiceMenu paymentId showLabel /> is rendered without onStatus or onLocal. When a printer is configured, choosing KT-V520 or Bluetooth calls onStatus(...) and the built-in option calls onLocal(), both undefined, so it throws a TypeError and nothing prints. With no printers configured (this preview) the menu returns null, so the receipt screen has no print button at all. Pass onStatus (show a status line) and onLocal (e.g. window.open print.html, or print the iframe).", "selector": "[data-testid^='history-print-']", "priority": "HIGH"},
+      {"component": "TenantMoveOut.jsx ArchivedInvoices", "issue": "After settling, the expanded archived-invoice list still shows 'Open SRD 1.000,00'. The backend already returns status 'paid'. onDone only calls mutate() for /tenants/archived and does not revalidate the useApiSWR(`/tenants/${id}/archived-invoices`) key.", "selector": "[data-testid='archived-invoices-{id}']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Kiosk Kasgeld balance", "issue": "The 'Totaal kasgeld' card and the SRD balance include borgverrekening amounts (caused by the backend bug), so the kiosk saldo does not match the admin /kasgeld saldo.", "affected_selectors": ["Kasgeld panel balance card"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin Kasgeld page (pages/vastgoed/admin/Kasgeld.jsx)", "issues": ["Does not use excluded_from_balance. Borgverrekening rows show as a red '−' amount with no 'niet in saldo' label, which is inconsistent with the kiosk view."]},
+      {"screen": "Settle receipt", "issues": ["The receipt OMSCHRIJVING reads 'Huur'. 'Restschuld na vertrek' appears only under OPMERKING."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_settle_debt_kasgeld_iter140.py", "/app/backend/tests/ui_iter140_setup.py", "/app/test_reports/pytest/pytest_iter140.xml"],
+  "action_items": [
+    "Exclude method 'borgverrekening' in kiosk_cash_balance payments $match (server.py ~16026)",
+    "Pass onStatus and onLocal to PrintChoiceMenu in SettleDebtModal, and add a fallback print button when no printers are configured",
+    "Revalidate the archived-invoices SWR key for the tenant after settle-debt succeeds",
+    "Optional: show excluded_from_balance styling and label on the admin Kasgeld page; add a 'Restschuld' marker to the settle-payment kasgeld description"
+  ],
+  "critical_code_review_comments": [
+    "kiosk_cash_balance and cash_balance duplicate their aggregation logic and drifted apart (one excludes borgverrekening, one does not). Extract one shared helper.",
+    "kiosk_list_cash and _list_cash_compute duplicate the payment-to-row mapping (more than 30 lines). Extract it.",
+    "server.py is 19.3k lines and should be split into modules"
+  ],
+  "updated_files": ["/app/backend/tests/test_settle_debt_kasgeld_iter140.py", "/app/backend/tests/ui_iter140_setup.py"],
+  "success_rate": {"backend": "80% (8/10)", "frontend": "80% (main flow works; print menu and stale invoice list bugs)"},
+  "seed_data_creation": "None left behind. All TEST- apartments, TEST tenants, payments and kasgeld entries were cleaned up (verified with DB counts = 0).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest backend/tests/test_settle_debt_kasgeld_iter140.py (self-cleaning). Note: creating a tenant auto-creates the current-month invoice, so arrears = prior invoices + current month (the test uses move-out-preview to compute the expected due). For UI: python backend/tests/ui_iter140_setup.py setup|cleanup creates an archived tenant 'TEST UI Schuld' with debt 1500. Kiosk path: /login demo → /kiosk → kiosk-admin-menu-btn → kiosk-admin-menu-huurders → tenant-filter-archived. Kasgeld path: kiosk-admin-menu-kasgeld. The bottom-nav 'Huurders' button (kiosk-add-tenant-btn-desktop) opens the new-tenant form, not the list.",
+  "rca of the issue": "Kiosk balance: the borgverrekening filter was added to /kasgeld/balance and admin stats, but the parallel /kiosk/kasgeld/balance aggregation was missed (duplicated code). Print menu: PrintChoiceMenu assumes its onStatus and onLocal callbacks are provided, and SettleDebtModal omits them."
+}
