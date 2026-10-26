@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
 import { ModalHostContext } from '../../../components/KeyboardSafeModal';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
@@ -21,6 +22,7 @@ export default function PaymentPlans({ embedded = false }) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState(null); // plan in detail-view
+  const [fxQ, setFxQ] = useState('');
   useDeepLink('plan', (id) => {
     api.get(`/payment-plans/${id}`).then(({ data }) => setDetail(data)).catch(() => {});
   });
@@ -78,6 +80,34 @@ export default function PaymentPlans({ embedded = false }) {
 
   if (detail) {
     return <PlanDetail embedded={embedded} planId={detail.id} initial={detail} onBack={() => { setDetail(null); load(); }} />;
+  }
+
+  if (embedded) {
+    const n = fxQ.trim().toLowerCase();
+    const rows = plans.filter((p) => !n || `${p.tenant_name || ''} ${p.apartment_number || ''}`.toLowerCase().includes(n));
+    const cur = plans[0]?.currency;
+    const ST = { active: ['Actief', 'orange'], completed: ['Voltooid', 'green'], cancelled: ['Geannuleerd', 'slate'] };
+    return (
+      <div className="space-y-4" data-testid="payment-plans-page">
+        <FxStats testId="plan-fx-stats" items={[
+          ['Regelingen', plans.length, 'orange'],
+          ['Resterend', fmtMoney(plans.reduce((s, p) => s + Number(p.remaining_amount || 0), 0), cur), 'red'],
+          ['Achterstallig', plans.reduce((s, p) => s + (p.overdue_count || 0), 0), 'amber']]} />
+        <FxTabs testPrefix="plan" value={statusFilter} onChange={setStatusFilter} tabs={[
+          { v: 'active', label: 'Actief' }, { v: 'completed', label: 'Voltooid' }, { v: 'cancelled', label: 'Geannuleerd' }, { v: 'all', label: 'Alles' }]} />
+        <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder of appartement…" testId="plan-search" />
+        {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen betalingsregelingen gevonden." testId="plans-empty" /> : rows.map((p) => {
+          const [l, tone] = ST[p.status] || [p.status, 'slate'];
+          return <FxRow key={p.id} testId={`plan-row-${p.id}`} onClick={() => setDetail(p)} title={p.tenant_name || 'Onbekende huurder'}
+            sub={`${p.apartment_number ? `Appt. ${p.apartment_number} · ` : ''}${p.installments.length} termijnen`}
+            meta={`${fmtMoney(p.paid_amount, p.currency)} van ${fmtMoney(p.total_amount, p.currency)} betaald${p.overdue_count > 0 ? ` · ${p.overdue_count} achterstallig` : ''}`}
+            amount={fmtMoney(p.remaining_amount, p.currency)} status={p.overdue_count > 0 && p.status === 'active' ? `${p.overdue_count} achter` : l}
+            tone={p.overdue_count > 0 && p.status === 'active' ? 'red' : tone} />;
+        })}
+        {creating && <CreatePlanSheet onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); setDetail(p); load(); }} />}
+      </div>
+    );
   }
 
   return (

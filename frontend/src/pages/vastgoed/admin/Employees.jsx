@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, useKioskFx } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, X, Check, Loader2, FileText, Users as UsersIcon, Trash2, Pencil, Receipt, KeyRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
@@ -6,7 +7,23 @@ import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 
 function EmpActions({ e, load, onPin, onEdit, onDelete }) {
+  const fx = useKioskFx();
   const btn = 'inline-flex items-center justify-center w-10 h-10 md:w-8 md:h-8 rounded-lg';
+  const toggleAiFx = async () => {
+    try { await api.put(`/assistant/employees/${e.id}/access`, { enabled: !e.ai_assistant_enabled }); await load(); } catch (ex) { alert(formatError(ex)); }
+  };
+  if (fx) {
+    return (
+      <>
+        <FxIconBtn onClick={toggleAiFx} title={e.ai_assistant_enabled ? 'AI-assistent uit' : 'AI-assistent aan'} testId={`emp-ai-toggle-${e.id}`}>
+          <Sparkles className={`w-4 h-4 ${e.ai_assistant_enabled ? 'text-[#FF5C00]' : ''}`} /></FxIconBtn>
+        <FxIconBtn onClick={() => onPin(e)} title={e.has_kiosk_pin ? 'PIN wijzigen' : 'PIN instellen'} testId={`emp-pin-${e.id}`}>
+          <KeyRound className={`w-4 h-4 ${e.has_kiosk_pin ? 'text-emerald-600' : 'text-amber-600'}`} /></FxIconBtn>
+        <FxIconBtn onClick={() => onEdit(e)} title="Bewerken" testId={`emp-edit-${e.id}`}><Pencil className="w-4 h-4" /></FxIconBtn>
+        <FxIconBtn onClick={() => onDelete(e.id)} danger title="Verwijderen" testId={`emp-delete-${e.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+      </>
+    );
+  }
   const toggleAi = async () => {
     try {
       await api.put(`/assistant/employees/${e.id}/access`, { enabled: !e.ai_assistant_enabled });
@@ -341,6 +358,47 @@ export default function Employees({ embedded = false }) {
     await api.delete(`/salaries/${id}`); load();
   };
   const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+  if (embedded) {
+    const active = employees.filter((e) => e.active);
+    const cur = employees[0]?.currency;
+    return (
+      <div className="space-y-4" data-testid="employees-page">
+        {confirmNode}
+        <FxStats testId="emp-fx-stats" items={[
+          ['Actief personeel', `${active.length} van ${employees.length}`, 'orange'],
+          ['Salaris per maand', fmtMoney(active.reduce((s, e) => s + Number(e.monthly_salary || 0), 0), cur), 'slate'],
+          ['Loonstroken', salaries.length, 'green']]} />
+        <FxTabs testPrefix="emp" value={view} onChange={setView} tabs={[
+          { v: 'employees', label: 'Personeel', count: employees.length }, { v: 'salaries', label: 'Loonstroken', count: salaries.length }]} />
+        {view === 'employees' ? (employees.length === 0 ? <FxEmpty text="Geen werknemers." testId="emp-empty" /> : employees.map((e) => (
+          <FxRow key={e.id} testId={`emp-card-${e.id}`} title={e.name}
+            sub={[e.role, ({ kiosk: 'Kiosk', admin: 'Beheerder', boekhouder: 'Boekhouder' })[e.app_role] || e.app_role].filter(Boolean).join(' · ') || '—'}
+            meta={[e.phone, e.email].filter(Boolean).join(' · ') || undefined}
+            amount={fmtMoney(e.monthly_salary, e.currency)} status={e.active ? 'Actief' : 'Inactief'} tone={e.active ? 'green' : 'slate'}
+            actions={<EmpActions e={e} load={load} onPin={setPinFor} onEdit={setEditing} onDelete={delEmp} />} />
+        ))) : (salaries.length === 0 ? <FxEmpty text="Geen loonstroken." testId="sal-empty" /> : salaries.map((s) => (
+          <FxRow key={s.id} testId={`sal-row-${s.id}`} title={s.employee_name}
+            sub={<span className="capitalize">{MONTHS_NL[s.period_month - 1]} {s.period_year}</span>}
+            meta={`Bruto ${fmtMoney(s.gross, s.currency)} · Aftrek ${fmtMoney(s.advance + s.deductions, s.currency)}`}
+            amount={fmtMoney(s.net, s.currency)} status="Netto" tone="green"
+            actions={<>
+              <FxIconBtn href={`${apiBase}/salaries/${s.id}/pdf`} title="PDF" testId={`sal-pdf-${s.id}`}><FileText className="w-4 h-4" /></FxIconBtn>
+              <FxIconBtn onClick={() => delSal(s.id)} danger title="Verwijderen" testId={`sal-delete-${s.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+            </>} />
+        )))}
+        {(editing || creatingEmp) && <EmployeeForm initial={editing}
+          onCancel={() => { setEditing(null); setCreatingEmp(false); }}
+          onSaved={() => { setEditing(null); setCreatingEmp(false); load(); }} />}
+        {creatingSal && <SalaryForm employees={employees}
+          onCancel={() => setCreatingSal(false)}
+          onSaved={() => { setCreatingSal(false); load(); }} />}
+        {pinFor && <KioskPinModal employee={pinFor}
+          onCancel={() => setPinFor(null)}
+          onSaved={() => { setPinFor(null); load(); }} />}
+      </div>
+    );
+  }
 
   return (
     <div>

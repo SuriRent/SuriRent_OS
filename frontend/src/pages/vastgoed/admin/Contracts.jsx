@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty, FxIconBtn } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, Mail } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
@@ -175,6 +176,7 @@ export default function Contracts({ embedded = false }) {
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [filter, setFilter] = useState('all'); // all | signed | draft
+  const [fxQ, setFxQ] = useState('');
 
   const load = useCallback(async () => {
     await Promise.all([refetchC(), refetchT(), refetchA()]);
@@ -215,6 +217,42 @@ export default function Contracts({ embedded = false }) {
     signed: items.filter((c) => !!c.signed_at).length,
     draft: items.filter((c) => !c.signed_at).length,
   };
+
+  if (embedded) {
+    const n = fxQ.trim().toLowerCase();
+    const rows = filtered.filter((c) => !n || `${c.tenant_name || ''} ${c.contract_number || ''} ${c.apartment_number || ''}`.toLowerCase().includes(n));
+    return (
+      <div className="space-y-4" data-testid="contracts-page">
+        {confirmNode}
+        <FxStats testId="contract-fx-stats" items={[['Contracten', counts.all, 'orange'], ['Ondertekend', counts.signed, 'green'], ['Concept', counts.draft, 'amber']]} />
+        <FxTabs testPrefix="contract" value={filter} onChange={setFilter} tabs={[
+          { v: 'all', label: 'Alles', count: counts.all }, { v: 'signed', label: 'Ondertekend', count: counts.signed }, { v: 'draft', label: 'Concept', count: counts.draft }]} />
+        <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder, contract of appartement…" testId="contract-search" />
+        {!loaded ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen contracten gevonden." testId="contracts-empty" /> : rows.map((c) => {
+          const signed = !!c.signed_at;
+          return <FxRow key={c.id} testId={`contract-row-${c.id}`} title={c.tenant_name || 'Onbekende huurder'}
+            sub={[c.contract_number, `Appt. ${c.apartment_number || '—'}`].filter(Boolean).join(' · ')}
+            meta={c.start_date ? `${c.start_date}${c.end_date ? ` → ${c.end_date}` : ''}` : undefined}
+            status={signed ? 'Ondertekend' : 'Concept'} tone={signed ? 'green' : 'amber'}
+            actions={<>
+              <FxIconBtn href={`${apiBase}/contracts/${c.id}/pdf`} title="PDF openen" testId={`contract-pdf-${c.id}`}><FileText className="w-4 h-4" /></FxIconBtn>
+              <FxIconBtn onClick={() => setEmailing(c)} title="Verstuur via e-mail" testId={`contract-email-${c.id}`}><Mail className="w-4 h-4" /></FxIconBtn>
+              {!signed && <FxIconBtn onClick={() => copyLink(c.sign_token)} title="Ondertekenlink kopiëren" testId={`contract-link-${c.id}`}><Copy className="w-4 h-4" /></FxIconBtn>}
+              <FxIconBtn onClick={() => del(c.id)} danger title="Verwijderen" testId={`contract-delete-${c.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+            </>} />;
+        })}
+        {creating && <ContractForm tenants={tenants} apartments={apartments}
+          onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
+        {emailing && (
+          <SendDialog documentType="contract" documentId={emailing.id} documentLabel="contract"
+            title={`Contract ${emailing.contract_number} verzenden`}
+            tenantEmail={tenants.find((t) => t.id === emailing.tenant_id)?.email || ''}
+            tenantPhone={tenants.find((t) => t.id === emailing.tenant_id)?.phone || ''}
+            tenantName={emailing.tenant_name} onClose={() => setEmailing(null)} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="contracts-page">

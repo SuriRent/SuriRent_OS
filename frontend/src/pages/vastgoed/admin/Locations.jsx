@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { MapPin, Plus, Pencil, Trash2, X, Check, Loader2, Building2, Image as ImageIcon, Search, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -147,6 +148,26 @@ export default function Locations({ embedded = false }) {
     active: bySearch.filter((l) => (l.apartments_total || 0) > 0).length,
     empty: bySearch.filter((l) => (l.apartments_total || 0) === 0).length,
   };
+
+  if (embedded) {
+    const totalApts = items.reduce((s, l) => s + (l.apartments_total || 0), 0);
+    const occ = items.reduce((s, l) => s + (l.apartments_occupied || 0), 0);
+    return (
+      <div className="space-y-4" data-testid="locations-page">
+        <FxStats testId="loc-fx-stats" items={[['Locaties', items.length, 'orange'], ['Appartementen', totalApts, 'slate'], ['Bezet', `${occ} van ${totalApts}`, 'green']]} />
+        <FxTabs testPrefix="loc" value={filter} onChange={setFilter} tabs={[
+          { v: 'all', label: 'Alles', count: counts.all }, { v: 'active', label: 'Actief', count: counts.active }, { v: 'empty', label: 'Leeg', count: counts.empty }]} />
+        <FxSearch value={q} onChange={setQ} placeholder="Zoek locatie of adres…" testId="loc-search" />
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : filtered.length === 0 ? <FxEmpty text="Geen locaties gevonden." testId="loc-empty" /> : filtered.map((l) => {
+          const act = (l.apartments_total || 0) > 0;
+          return <FxRow key={l.id} testId={`loc-row-${l.id}`} onClick={() => setDetailId(l.id)} title={l.name} sub={l.address || '—'}
+            meta={`${l.apartments_total || 0} appartementen`} amount={`${l.apartments_occupied || 0} / ${l.apartments_total || 0} bezet`}
+            status={act ? 'Actief' : 'Leeg'} tone={act ? 'green' : 'slate'} />;
+        })}
+        {sharedModals}
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="locations-page">

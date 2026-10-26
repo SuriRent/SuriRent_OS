@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
@@ -153,6 +154,8 @@ export default function Deposits({ embedded = false }) {
   const [refunding, setRefunding] = useState(null);
   const [reprint, setReprint] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [fxTab, setFxTab] = useState('all');
+  const [fxQ, setFxQ] = useState('');
   const load = useCallback(async () => {
     await Promise.all([refetchDeposits(), refetchTenants()]);
   }, [refetchDeposits, refetchTenants]);
@@ -276,8 +279,34 @@ export default function Deposits({ embedded = false }) {
   }
 
   return (
-    <div>
+    <div className={embedded ? 'space-y-4' : ''}>
       {confirmNode}
+      {embedded && (() => {
+        const held = items.filter((d) => d.status === 'held');
+        const n = fxQ.trim().toLowerCase();
+        const rows = items.filter((d) => (fxTab === 'all' || (fxTab === 'held' ? d.status === 'held' : d.status !== 'held'))
+          && (!n || `${d.tenant_name || ''} ${d.apartment_number || ''}`.toLowerCase().includes(n)));
+        const TONE = { held: 'orange', refunded: 'green', partial: 'blue' };
+        return (
+          <>
+            <FxStats testId="dep-fx-stats" items={[
+              ['Ontvangen', held.length, 'orange'],
+              ['Borg in beheer', fmtMoney(held.reduce((s, d) => s + Number(d.amount || 0), 0), items[0]?.currency), 'green'],
+              ['Afgehandeld', items.length - held.length, 'slate']]} />
+            <FxTabs testPrefix="dep" value={fxTab} onChange={setFxTab} tabs={[
+              { v: 'all', label: 'Alle', count: items.length }, { v: 'held', label: 'Ontvangen', count: held.length }, { v: 'closed', label: 'Afgehandeld', count: items.length - held.length }]} />
+            <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder of appartement…" testId="dep-search" />
+            {rows.length === 0 ? <FxEmpty text="Geen borgen gevonden." testId="deposits-empty" /> : rows.map((d) => {
+              const st = DEPOSIT_STATUS[d.status] || DEPOSIT_STATUS.held;
+              const meta = d.status !== 'held' && d.amount_due > 0 ? `Nog te betalen: ${fmtMoney(d.amount_due, d.currency)}`
+                : d.status !== 'held' && d.refund_amount != null ? `Terugbetaald: ${fmtMoney(d.refund_amount, d.currency)}` : d.receipt_no || undefined;
+              return <FxRow key={d.id} testId={`dep-row-${d.id}`} onClick={() => setDetail(d)} title={d.tenant_name}
+                sub={d.apartment_number ? `Appt. ${d.apartment_number}` : 'Geen appartement'} meta={meta}
+                amount={fmtMoney(d.amount, d.currency)} status={st.label} tone={TONE[d.status] || 'orange'} />;
+            })}
+          </>
+        );
+      })()}
       {!embedded && <PageHeader title="Borg / Deposits" subtitle={`${items.filter((d) => d.status === 'held').length} actief, ${items.filter((d) => d.status !== 'held').length} gerestitueerd/verrekend`}
         action={
           <button onClick={() => setCreating(true)} data-testid="dep-new-btn"
@@ -286,7 +315,7 @@ export default function Deposits({ embedded = false }) {
           </button>
         }
       />}
-      <div>
+      {!embedded && <div>
         {items.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center" data-testid="deposits-empty">
             <ShieldCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -334,7 +363,7 @@ export default function Deposits({ embedded = false }) {
             })}
           </div>
         )}
-      </div>
+      </div>}
       {creating && <DepositForm tenants={tenants}
         onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
       {refunding && <TenantMoveOutModal tenant={{ id: refunding.tenant_id, name: refunding.tenant_name, apartment_number: refunding.apartment_number, currency: refunding.currency }}

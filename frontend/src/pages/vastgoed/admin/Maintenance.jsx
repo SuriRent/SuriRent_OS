@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
+import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty, FxIconBtn } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink, flashElement } from '../../../lib/deep-link';
-import { Plus, X, Check, Loader2, Wrench, Trash2 } from 'lucide-react';
+import { Plus, X, Check, Loader2, Wrench, Trash2, Play, RotateCcw } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
@@ -124,6 +125,7 @@ export default function Maintenance({ embedded = false }) {
   const apartments = aptsRaw || [];
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [fxQ, setFxQ] = useState('');
   useDeepLink('maintenance', (id) => { setFilter('all'); flashElement(`[data-testid="maint-card-${id}"]`); });
 
   const load = useCallback(async () => {
@@ -146,6 +148,38 @@ export default function Maintenance({ embedded = false }) {
   }, []);
 
   const filtered = filter === 'all' ? items : items.filter((i) => i.status === filter);
+
+  if (embedded) {
+    const n = fxQ.trim().toLowerCase();
+    const rows = filtered.filter((m) => !n || `${m.title || ''} ${m.apartment_number || ''} ${m.description || ''}`.toLowerCase().includes(n));
+    const cnt = (s) => items.filter((i) => i.status === s).length;
+    const TONE = { open: 'orange', in_progress: 'amber', done: 'green' };
+    const PRIO = { low: 'Laag', medium: 'Normaal', high: 'Hoog', urgent: 'Urgent' };
+    return (
+      <div className="space-y-4" data-testid="maintenance-page">
+        {confirmNode}
+        <FxStats testId="maint-fx-stats" items={[['Open', cnt('open'), 'orange'], ['In behandeling', cnt('in_progress'), 'amber'], ['Afgerond', cnt('done'), 'green']]} />
+        <FxTabs testPrefix="maint" value={filter} onChange={setFilter} tabs={[
+          { v: 'all', label: 'Alle', count: items.length }, { v: 'open', label: 'Open', count: cnt('open') },
+          { v: 'in_progress', label: 'Bezig', count: cnt('in_progress') }, { v: 'done', label: 'Afgerond', count: cnt('done') }]} />
+        <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek ticket of appartement…" testId="maint-search" />
+        {rows.length === 0 ? <FxEmpty text="Geen tickets gevonden." testId="maint-empty" /> : rows.map((m) => (
+          <FxRow key={m.id} testId={`maint-card-${m.id}`} title={m.title}
+            sub={`Appt. ${m.apartment_number || '—'} · Prioriteit ${(PRIO[m.priority] || m.priority || '').toLowerCase()}`}
+            meta={`${new Date(m.created_at).toLocaleDateString('nl-NL')}${m.description ? ` · ${m.description}` : ''}`}
+            amount={m.cost > 0 ? fmtMoney(m.cost, m.currency) : undefined} status={STATUS_LABELS[m.status]} tone={TONE[m.status]}
+            actions={<>
+              {m.status === 'open' && <FxIconBtn onClick={() => updateStatus(m.id, 'in_progress')} title="Start" testId={`maint-start-${m.id}`}><Play className="w-4 h-4" /></FxIconBtn>}
+              {m.status !== 'done' && <FxIconBtn onClick={() => updateStatus(m.id, 'done')} title="Afronden" testId={`maint-done-${m.id}`}><Check className="w-4 h-4" /></FxIconBtn>}
+              {m.status === 'done' && <FxIconBtn onClick={() => updateStatus(m.id, 'open')} title="Heropen" testId={`maint-reopen-${m.id}`}><RotateCcw className="w-4 h-4" /></FxIconBtn>}
+              <FxIconBtn onClick={() => del(m.id)} danger title="Verwijderen" testId={`maint-delete-${m.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+            </>} />
+        ))}
+        {creating && <MaintenanceForm apartments={apartments}
+          onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
+      </div>
+    );
+  }
 
   return (
     <div>

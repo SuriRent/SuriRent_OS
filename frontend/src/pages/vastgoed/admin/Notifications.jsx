@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FxStats } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Bell, BellOff, Loader2, Check, AlertTriangle, Send, Shield, RotateCw, Smartphone, Trash2, Volume2, VolumeX } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -229,14 +230,18 @@ export default function Notifications({ embedded = false }) {
   const [showUnblockGuide, setShowUnblockGuide] = useState(false);
 
   return (
-    <div data-testid="notifications-page">
+    <div data-testid="notifications-page" className={embedded ? 'space-y-4' : ''}>
       {confirmNode}
+      {embedded && <FxStats testId="notify-fx-stats" items={[
+        ['Dit apparaat', subscribed ? 'Ingeschakeld' : 'Uitgeschakeld', subscribed ? 'green' : 'slate'],
+        ['Apparaten', <span data-testid="device-count">{deviceCount}</span>, 'orange'],
+        ['Tik-geluiden', tapOn ? 'Aan' : 'Uit', tapOn ? 'green' : 'slate']]} />}
       <div className={embedded ? 'hidden' : 'mb-6'}>
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Notificaties & Beveiliging</h1>
         <p className="text-sm text-slate-500 mt-1">Push notificaties, geluiden en gekoppelde apparaten</p>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4 mb-6">
+      <div className={embedded ? 'hidden' : 'grid sm:grid-cols-2 gap-4 mb-6'}>
         <div className="bg-white border border-orange-100 rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${subscribed ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -257,7 +262,7 @@ export default function Notifications({ embedded = false }) {
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Apparaten</p>
-              <p className="font-black text-slate-900" data-testid="device-count">{deviceCount}</p>
+              <p className="font-black text-slate-900" data-testid={embedded ? undefined : 'device-count'}>{deviceCount}</p>
             </div>
           </div>
           <p className="text-xs text-slate-500">Totaal aantal apparaten geregistreerd op dit account.</p>

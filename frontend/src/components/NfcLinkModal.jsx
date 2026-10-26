@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronRight, Loader2, Nfc, Search, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { subscribeNfc } from '../lib/nfc-bus';
+import { FxStats } from './KioskFx';
 
 // Koppelscherm: onbekende NFC-tag → huurder kiezen → opslaan.
 export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
@@ -57,7 +58,11 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
           <button onClick={onClose} data-testid="nfc-link-close" aria-label="Sluiten"
             className="w-10 h-10 rounded-xl text-white sm:text-slate-500 hover:bg-white/20 sm:hover:bg-slate-100 flex items-center justify-center"><X className="w-5 h-5" /></button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+          <FxStats testId="nfc-fx-stats" items={[
+            ['Huurders', apts ? apts.length : '…', 'orange'],
+            ['Tag', uid ? 'Gescand' : 'Wachten…', uid ? 'green' : 'amber'],
+            ['Gekozen', pick?.tenant_name || '—', 'slate']]} />
           {uid ? (
             <div className="rounded-xl bg-slate-50 px-4 py-3">
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Gescande tag</div>
@@ -77,7 +82,7 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
               className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
           </label>
           {apts === null ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : (
-            <div className="space-y-2" data-testid="nfc-link-tenants">
+            <div className="space-y-4" data-testid="nfc-link-tenants">
               {list.map((a) => {
                 const on = pick?.id === a.id;
                 return (

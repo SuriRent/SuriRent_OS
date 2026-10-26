@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useContext, lazy, Suspense } from 'react';
+import { KioskFxCtx, FxStats, FxTabs, FxSearch, FxRow, FxIconBtn, FxEmpty } from '../../components/KioskFx';
 import { hostConfirm } from '../../components/EmbedConfirm';
 import { useEmbedConfirm } from '../../components/EmbedConfirm';
 import { useLocation } from 'react-router-dom';
@@ -2295,6 +2296,20 @@ export function Apartments({ embedded = false }) {
         </button>
       </div>
 
+      {embedded && (
+        <>
+          <FxStats testId="apt-fx-stats" items={[
+            ['Appartementen', items.length, 'orange'],
+            ['Bezet', `${items.filter((a) => a.status === 'occupied').length} van ${items.length}`, 'green'],
+            ['Huur per maand', fmtMoney(items.filter((a) => a.status === 'occupied').reduce((s, a) => s + Number(a.rent_amount || 0), 0), items[0]?.currency), 'slate']]} />
+          <FxTabs testPrefix="apt" value={filter} onChange={setFilter} tabs={[
+            { v: 'all', label: 'Alles', count: counts.all },
+            { v: 'occupied', label: 'Bezet', count: counts.occupied },
+            { v: 'vacant', label: 'Beschikbaar', count: counts.vacant }]} />
+          <FxSearch value={q} onChange={setQ} placeholder="Zoek op nummer, adres of huurder…" testId="apt-search" />
+        </>
+      )}
+      {!embedded && <>
       {/* Zoek + filter pillen */}
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -2319,10 +2334,11 @@ export function Apartments({ embedded = false }) {
           </button>
         ))}
       </div>
+      </>}
 
       {!loaded ? (
         <ListSkeleton rows={5} testid="apts-skeleton" />
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 ? (embedded ? <FxEmpty text="Geen appartementen gevonden." testId="apts-empty" /> :
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="apts-empty">
           <Building2 className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen appartementen gevonden.</p>
@@ -2346,6 +2362,14 @@ export function Apartments({ embedded = false }) {
 // =====================================================================
 function ApartmentRow({ a, onOpen }) {
   const occupied = a.status === 'occupied';
+  const fx = useContext(KioskFxCtx);
+  if (fx) {
+    return (
+      <FxRow testId={`apt-row-${a.id}`} onClick={onOpen} title={a.number}
+        sub={a.tenant_name || 'Geen huurder'} meta={a.address || undefined}
+        amount={fmtMoney(a.rent_amount, a.currency)} status={occupied ? 'Bezet' : 'Beschikbaar'} tone={occupied ? 'green' : 'slate'} />
+    );
+  }
   return (
     <div onClick={onOpen} data-testid={`apt-row-${a.id}`}
       role="button" tabIndex={0}
@@ -3349,6 +3373,21 @@ export function Tenants({ embedded = false }) {
         </div>
       )}
 
+      {embedded && (
+        <>
+          <FxStats testId="tenant-fx-stats" items={[
+            ['Actieve huurders', counts.all, 'orange'],
+            ['Zonder appartement', counts.without_apt, 'amber'],
+            ['Archief', counts.archived ?? 0, 'slate']]} />
+          <FxTabs testPrefix="tenant" value={filter} onChange={setFilter} tabs={[
+            { v: 'all', label: 'Alles', count: counts.all },
+            { v: 'with_apt', label: 'Met appt.', count: counts.with_apt },
+            { v: 'without_apt', label: 'Zonder appt.', count: counts.without_apt },
+            { v: 'archived', label: 'Archief', count: counts.archived ?? 0 }]} />
+          <FxSearch value={q} onChange={setQ} placeholder="Zoek huurder of appartement…" testId="tenant-search" />
+        </>
+      )}
+      {!embedded && <>
       {/* Zoek + bron-filter pillen */}
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -3376,12 +3415,13 @@ export function Tenants({ embedded = false }) {
           </button>
         ))}
       </div>
+      </>}
 
       {filter === 'archived' ? (
         <ArchivedTenants onChanged={load} />
       ) : !loaded ? (
         <ListSkeleton rows={5} testid="tenants-skeleton" />
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 ? (embedded ? <FxEmpty text="Geen huurders gevonden." testId="tenants-empty" /> :
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="tenants-empty">
           <Users className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen huurders gevonden.</p>
@@ -3410,6 +3450,20 @@ export function Tenants({ embedded = false }) {
 // roept de bijbehorende handler aan zonder detail te openen.
 // =====================================================================
 function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
+  const fx = useContext(KioskFxCtx);
+  if (fx) {
+    return (
+      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} title={t.name || 'Onbekende huurder'}
+        sub={`Appt. ${t.apartment_number || '—'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
+        amount={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
+        status={t.apartment_number ? 'Huurt' : 'Geen appt.'} tone={t.apartment_number ? 'green' : 'amber'}
+        actions={<>
+          <FxIconBtn onClick={onPin} title="Portal PIN instellen" testId={`tenant-pin-${t.id}`}><KeySquare className="w-4 h-4" /></FxIconBtn>
+          <FxIconBtn onClick={onPoster} title="Print A6 huurportaal-poster" testId={`tenant-poster-${t.id}`}><Printer className="w-4 h-4" /></FxIconBtn>
+          <FxIconBtn onClick={onDelete} danger title="Verwijderen" testId={`tenant-delete-${t.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+        </>} />
+    );
+  }
   const initials = (t.apartment_number || t.name || '?').split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
   const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
   return (

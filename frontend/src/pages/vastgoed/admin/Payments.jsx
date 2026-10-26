@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { FxStats, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
 import { hostConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
@@ -1105,7 +1106,40 @@ export default function Payments({ embedded = false }) {
   }
 
   return (
-    <div data-testid="payments-page">
+    <div data-testid="payments-page" className={embedded ? 'space-y-4' : ''}>
+      {embedded ? (
+        <>
+          <FxStats testId="payment-fx-stats" items={[
+            [`Totaal ${MONTHS_NL[selectedMonth]}`, `${currency} ${fmtAmountWhole(summary.monthSum || 0)}`, 'green'],
+            ['Betalingen', summary.monthCount || 0, 'orange'],
+            ['Te keuren', pending.length, 'amber']]} />
+          <div className="flex gap-1.5" data-testid="payment-month-bar">
+            <button type="button" onClick={() => stepMonth(-1)} data-testid="payment-month-prev" aria-label="Vorige maand"
+              className="w-12 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
+            <div className="flex-1 h-10 rounded-xl bg-[#FF5C00] text-white text-xs font-black flex items-center justify-center capitalize" data-testid="payment-month-label">
+              {MONTHS_NL[selectedMonth]} {selectedYear}
+            </div>
+            <button type="button" onClick={() => stepMonth(1)} disabled={isCurrentMonth} data-testid="payment-month-next" aria-label="Volgende maand"
+              className="w-12 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+          </div>
+          <FxSearch value={search} onChange={setSearch} placeholder="Zoek huurder, kwitantie of appartement…" testId="payment-search" />
+          {pending.map((p) => (
+            <FxRow key={p.id} testId={`pending-card-${p.id}`} onClick={() => setApproveFor(p)} title={p.tenant_name || 'Onbekende huurder'}
+              sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+              meta={p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : undefined}
+              amount={fmtMoney(p.amount, p.currency)} status="Te keuren" tone="amber" />
+          ))}
+          {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div>
+            : filteredItems.length === 0 ? <FxEmpty text={totalCount === 0 ? 'Nog geen betalingen.' : 'Geen betalingen gevonden.'} testId="payments-empty" />
+            : filteredItems.map((p) => (
+              <FxRow key={p.id} testId={`payment-row-${p.id}`} onClick={() => setDetailPayment(p)} title={p.tenant_name || 'Onbekende huurder'}
+                sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+                meta={`${p.paid_at ? new Date(p.paid_at).toLocaleDateString('nl-NL') : ''}${p.method ? ` · ${METHOD_LABELS[p.method] || p.method}` : ''}`}
+                amount={fmtMoney(p.amount, p.currency)} status={CATEGORY_LABELS[p.category] || 'Betaald'} tone="green" />
+            ))}
+          <LoadMoreSentinel active={paged.hasMore || paged.loadingMore} onVisible={paged.loadMore} testid="payments-load-more" />
+        </>
+      ) : (<>
       {/* =================================================================
           MOBILE (phone) — POS-terminal stijl. Verborgen vanaf md (>=768px).
           ================================================================= */}
@@ -1302,6 +1336,7 @@ export default function Payments({ embedded = false }) {
         </div>
       )}
       </div>
+      </>)}
 
       {/* MODALS */}
       {creating && <PaymentForm tenants={tenants} initialInvoice={prefillInvoice}
