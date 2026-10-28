@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only test of the redesigned SuriRent landing (?landing=1) at 1632x964 and 390x844. All requested elements render correctly: header (logo Suri navy/Rent orange, nav Home orange+underlined, Functies w/ chevron, Kiosk PWA, Prijzen, Service & FAQ, status pill, Inloggen/Registreren), hero (eyebrow, 3-line H1, subtitle, demo CTA, APK card, 3 trust items, laptop+phone mockups not cropped), 8 feature cards in 4x2 grid, all 8 cards + 8 dropdown items + secnav kiosk/pricing/faq/home scroll to correct targets. Demo CTA -> /admin logged in as Demo Beheerder. Inloggen -> /login. Registreren (desktop + mobile drawer) opens register modal. Mobile: no horizontal overflow (scrollWidth 390), devices scale under text, drawer shows all mobile-nav-* + mobile-login + mobile-register and closes after pick. Rest of page (feature rows, kiosk, pricing, FAQ, download, footer) renders in navy. No page errors; only console error is expected 401 on /api/auth/me for anonymous visitor. Two moderate issues found (sticky header overlaps scroll targets, APK card shown with broken link when no release).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "goToSection (LandingTop.jsx)", "issue": "scrollIntoView({block:'start'}) puts the target section at top:0, under the 76px sticky header. For feature-0..4 rows (no top padding) the eyebrow and half of the H3 title are hidden behind the header (e.g. product-card-huurdersbeheer -> 'Eenheidbeheer in detail.' is cut off). Fix: add scroll-margin-top (~90px, e.g. 'scroll-mt-24' on feature rows/sections) or scroll with window.scrollTo(top - headerHeight).", "selector": "[data-testid^='product-card-'], [data-testid^='nav-feature-']", "priority": "MEDIUM"},
+      {"component": "ApkCard (hero-apk-download)", "issue": "Hero APK card is always shown with placeholder 'v1.0' even when /api/public/apk/latest returns {available:false, release:null}; its href /api/public/apk/download returns 404, so clicking it downloads an error. Footer ApkDownloadButton correctly hides when rel is null. Either hide/disable the hero card when no release, or fall back to PWA install (#download).", "selector": "[data-testid='hero-apk-download']", "priority": "MEDIUM"},
+      {"component": "Mobile drawer nav", "issue": "After mobile-nav-pricing the section ends ~50px above viewport top (top:-50) plus covered by header, because scroll is computed while the drawer is still expanded (state closes after scroll). Minor; fix by scrolling after drawer closes (setTimeout/requestAnimationFrame) plus scroll-margin.", "selector": "[data-testid^='mobile-nav-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header nav", "issues": ["Active state is set only on click and never updates on scroll; 'Home' stays orange/underlined after clicking a feature card or scrolling to pricing (no scroll-spy). Clicking Functies items sets active to e.g. 'feature-2' which matches no nav entry so nothing is highlighted."]},
+      {"screen": "Hero desktop 1632", "issues": ["Trust row (hero-trust-2 right=909px) extends past the 600px left column into the device column (hero-devices left=864). No visible collision with the mockups at this width, but at ~1280-1440 widths it could touch the laptop."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add scroll offset for the 76px sticky header in goToSection or scroll-margin-top on #feature-0..4, #kiosk, #pricing, #faq, #download",
+    "Hide or replace hero-apk-download when no APK release is available (currently 404 link with fake 'v1.0')",
+    "Optional: delay mobile drawer scroll until drawer is closed; add scroll-spy for nav active state"
+  ],
+  "critical_code_review_comments": [
+    "MarketingLandingV2.jsx is >1200 lines - split sections (Pricing, EnterpriseLeadModal, InstallPwa, Footer) into landing/ modules",
+    "APK_URL and apk-version logic duplicated between LandingTop.ApkCard and MarketingLandingV2.ApkDownloadButton with inconsistent null handling",
+    "FeatureRows section also has id='features' while header Functies only opens a dropdown; mobile-nav-features scrolls to the rows, not the 8 cards (landing-features has no id) - consider giving cards section the id"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "92%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Landing v3 at /?landing=1. Testids: topheader-*, secnav-*, nav-feature-*, hero-*, product-card-*, mobile-nav-*, mobile-login/register. /api/public/apk/latest currently returns release:null and /api/public/apk/download 404. Demo CTA works (-> /admin)."
+}

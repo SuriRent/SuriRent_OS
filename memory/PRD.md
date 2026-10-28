@@ -1063,3 +1063,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Elke Beheer-pagina heeft een eigen embedded-weergave: 3 cijfertegels, tabs met aantallen, zoekveld, Facturen-rijen (acties op mobiel op tweede regel).
 - Betalingen: maandbalk; NFC: cijfertegels; detail-terugknoppen gelijkgetrokken.
 - Getest: iteration_142 (alles geslaagd, ontwerp-punten opgelost).
+
+## 2026-06 — Landingspagina nieuw ontwerp (volgens foto gebruiker)
+- Nieuw: pages/vastgoed/landing/LandingTop.jsx (header met scroll-spy + Functies-dropdown, hero met nagebouwde laptop/telefoon, 8 functiekaarten).
+- Overige secties behouden, zwart vervangen door navy #0B1B3F.
+- APK-kaart scrollt naar Download-sectie als er geen release is.
+- Getest: iteration_143 + fixes (scroll-offset, header breakpoints, mobiel).

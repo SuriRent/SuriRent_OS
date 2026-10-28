@@ -15,8 +15,10 @@ const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
 export const goToSection = (id) => {
   if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const el = document.getElementById(id);
+  if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 84, behavior: 'smooth' });
 };
+const SPY = ['home', 'features', 'kiosk', 'pricing', 'faq'];
 
 const NAV = [
   { id: 'home', label: 'Home' },
@@ -71,12 +73,23 @@ export function LandingHeader({ onLogin, onRegister }) {
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [active, setActive] = useState('home');
-  const pick = (id) => { setOpen(false); setMenu(false); setActive(id); goToSection(id); };
+  const pick = (id) => { setOpen(false); setMenu(false); setTimeout(() => goToSection(id), 30); };
+  useEffect(() => {
+    const onScroll = () => {
+      let cur = 'home';
+      SPY.forEach((id) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 120) cur = id; });
+      if (cur === 'home' && document.getElementById('feature-0')?.getBoundingClientRect().top <= 120) cur = 'features';
+      setActive(cur);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100" data-testid="landing-header">
-      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
+      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
         <Logo />
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-9 ml-4 xl:ml-8 mr-auto">
+        <nav className="hidden xl:flex items-center gap-6 xl:gap-9 ml-4 xl:ml-8 mr-auto">
           {NAV.map((n) => (
             <div key={n.id} className="relative" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
               <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
@@ -90,7 +103,7 @@ export function LandingHeader({ onLogin, onRegister }) {
           ))}
         </nav>
         <div className="flex items-center gap-3 lg:gap-4">
-          <div className="hidden xl:block"><StatusPill /></div>
+          <div className="hidden 2xl:block"><StatusPill /></div>
           <button onClick={onLogin} data-testid="topheader-login"
             className="hidden sm:inline-flex h-[44px] px-7 rounded-xl border border-slate-300 bg-white hover:border-[#FF5C00] text-[15px] font-bold items-center gap-2.5 transition-colors" style={{ color: NAVY }}>
             <Lock className="w-4 h-4" /><EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" />
@@ -100,13 +113,13 @@ export function LandingHeader({ onLogin, onRegister }) {
             <User className="w-5 h-5" /><EditableText path="v2.brand.cta_register" fallback="Registreren" as="span" />
           </button>
           <button onClick={() => setOpen(!open)} data-testid="topheader-mobile-menu" aria-label={open ? 'Sluit menu' : 'Open menu'}
-            className="lg:hidden w-11 h-11 rounded-xl border border-slate-200 flex items-center justify-center">
+            className="xl:hidden w-11 h-11 rounded-xl border border-slate-200 flex items-center justify-center">
             {open ? <X className="w-5 h-5" style={{ color: NAVY }} /> : <Menu className="w-5 h-5" style={{ color: NAVY }} />}
           </button>
         </div>
       </div>
       {open && (
-        <div className="lg:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
+        <div className="xl:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
           {NAV.map((n) => (
             <button key={n.id} onClick={() => pick(n.id)} data-testid={`mobile-nav-${n.id}`}
               className={`w-full text-left px-3 py-3 text-base font-bold rounded-xl hover:bg-orange-50 ${active === n.id ? 'text-[#FF5C00]' : ''}`}
@@ -250,12 +263,13 @@ function DeviceStage() {
 }
 
 function ApkCard({ rel }) {
-  const v = rel ? `v${rel.version}` : 'v1.0';
-  const mb = rel ? `${(rel.size / 1024 / 1024).toFixed(0)} MB` : '';
+  const v = rel ? `v${rel.version}` : 'Gratis';
+  const mb = rel ? `${(rel.size / 1024 / 1024).toFixed(0)} MB` : 'App';
+  const link = rel ? { href: APK_URL, download: true } : { href: '#download', onClick: (e) => { e.preventDefault(); goToSection('download'); } };
   return (
-    <a href={APK_URL} download data-testid="hero-apk-download"
-      className="inline-flex items-center h-[56px] whitespace-nowrap rounded-xl bg-white border border-slate-200 hover:border-[#FF5C00] shadow-[0_6px_16px_-10px_rgba(11,27,63,0.3)] transition-colors">
-      <span className="flex items-center gap-3 px-5 text-[15px] font-bold" style={{ color: NAVY }}>
+    <a {...link} data-testid="hero-apk-download"
+      className="inline-flex items-center h-[56px] sm:whitespace-nowrap rounded-xl bg-white border border-slate-200 hover:border-[#FF5C00] shadow-[0_6px_16px_-10px_rgba(11,27,63,0.3)] transition-colors">
+      <span className="flex-1 flex items-center gap-2.5 px-4 sm:px-5 text-[14px] sm:text-[15px] font-bold" style={{ color: NAVY }}>
         <svg viewBox="0 0 24 24" className="w-5 h-5" fill={NAVY} aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 10-.66-.38l-1.86 3.22a11.4 11.4 0 00-9.84 0L5.22 5.92a.38.38 0 10-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" /></svg>
         Download de Android-app <Download className="w-4 h-4" />
       </span>
@@ -275,7 +289,7 @@ export function LandingHero({ onDemo, apk }) {
     <section id="home" className="relative overflow-hidden bg-[#FBF8F5]" data-testid="hero-canvas">
       <img src={HERO_BG} alt="" className="absolute inset-y-0 right-0 h-full w-full lg:w-[72%] object-cover object-right opacity-40 lg:opacity-100" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#FBF8F5] via-[#FBF8F5]/90 lg:via-[#FBF8F5]/60 to-transparent" />
-      <div className="relative max-w-[1440px] mx-auto px-5 lg:px-10 xl:px-[120px] pt-10 lg:pt-12 pb-12 lg:pb-14 grid lg:grid-cols-[minmax(0,600px),minmax(0,1fr)] gap-8 xl:gap-12 items-center">
+      <div className="relative max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] pt-10 lg:pt-12 pb-12 lg:pb-14 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,640px),minmax(0,1fr)] gap-8 xl:gap-12 items-center">
         <div>
           <EditableText path="v3.hero.eyebrow" fallback="Vastgoed Suite · Suriname 2026" as="p"
             className="inline-block px-3.5 py-1.5 rounded-md bg-[#FCE9DC] text-[12px] font-black tracking-[0.14em] uppercase text-[#E65300]" />
@@ -294,11 +308,11 @@ export function LandingHero({ onDemo, apk }) {
             </button>
             <ApkCard rel={apk} />
           </div>
-          <div className="mt-9 flex flex-wrap sm:flex-nowrap gap-y-4">
+          <div className="mt-9 grid sm:grid-cols-3 gap-y-4">
             {TRUST.map(([I, t, s], i) => (
-              <div key={t} className={`flex items-center gap-3 pr-4 xl:pr-6 ${i ? 'sm:pl-4 xl:pl-6 sm:border-l border-slate-200' : ''}`} data-testid={`hero-trust-${i}`}>
-                <I className="w-9 h-9 text-[#FF5C00]" strokeWidth={1.8} />
-                <div className="whitespace-nowrap"><div className="text-[13px] font-bold" style={{ color: NAVY }}>{t}</div><div className="text-[11px] text-slate-400">{s}</div></div>
+              <div key={t} className={`flex items-center gap-3 pr-3 ${i ? 'sm:pl-4 sm:border-l border-slate-200' : ''}`} data-testid={`hero-trust-${i}`}>
+                <I className="w-9 h-9 shrink-0 text-[#FF5C00]" strokeWidth={1.8} />
+                <div className="min-w-0"><div className="text-[13px] font-bold" style={{ color: NAVY }}>{t}</div><div className="text-[11px] text-slate-400">{s}</div></div>
               </div>
             ))}
           </div>
@@ -312,7 +326,7 @@ export function LandingHero({ onDemo, apk }) {
 export function LandingFeatures() {
   return (
     <section className="bg-[#F8FAFC] py-8 lg:py-10" data-testid="landing-features">
-      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 xl:px-[120px]">
+      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px]">
         <div className="text-center max-w-3xl mx-auto">
           <EditableText path="v3.features.eyebrow" fallback="Onze functies" as="p" className="text-[12px] font-black tracking-[0.08em] uppercase text-[#FF5C00]" />
           <EditableText path="v3.features.title" fallback="Alles wat je nodig hebt voor slim huurbeheer" as="h2"
