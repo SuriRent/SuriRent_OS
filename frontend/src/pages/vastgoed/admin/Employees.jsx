@@ -366,8 +366,8 @@ export default function Employees({ embedded = false }) {
       <div className="space-y-4" data-testid="employees-page">
         {confirmNode}
         <FxStats testId="emp-fx-stats" items={[
-          ['Actief personeel', `${active.length} van ${employees.length}`, 'orange'],
-          ['Salaris per maand', fmtMoney(active.reduce((s, e) => s + Number(e.monthly_salary || 0), 0), cur), 'slate'],
+          ['Actief', `${active.length} van ${employees.length}`, 'orange'],
+          ['Salaris p/m', fmtMoney(active.reduce((s, e) => s + Number(e.monthly_salary || 0), 0), cur), 'slate'],
           ['Loonstroken', salaries.length, 'green']]} />
         <FxTabs testPrefix="emp" value={view} onChange={setView} tabs={[
           { v: 'employees', label: 'Personeel', count: employees.length }, { v: 'salaries', label: 'Loonstroken', count: salaries.length }]} />

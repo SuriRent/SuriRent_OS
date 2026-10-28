@@ -6,8 +6,7 @@ import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
   Plus, X, Check, Loader2, Search, FileText, Mail, ShieldCheck, ChevronRight, ChevronLeft,
   ChevronDown, CalendarDays, Banknote, CheckCircle2, Clock,
-  TrendingUp, Receipt, Wallet, Home as HomeIcon, Trash2, AlertTriangle,
-} from 'lucide-react';
+  TrendingUp, Receipt, Wallet, Home as HomeIcon, Trash2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useAdminEvents } from '../../../lib/admin-events';
@@ -509,7 +508,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
       <div className="flex items-center gap-2">
         <button onClick={onBack} data-testid="payment-detail-back"
           className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-          <ChevronRight className="w-4 h-4 rotate-180" /> Terug
+          <ArrowLeft className="w-4 h-4" /> Terug
         </button>
       </div>
 
@@ -1110,7 +1109,7 @@ export default function Payments({ embedded = false }) {
       {embedded ? (
         <>
           <FxStats testId="payment-fx-stats" items={[
-            [`Totaal ${MONTHS_NL[selectedMonth]}`, `${currency} ${fmtAmountWhole(summary.monthSum || 0)}`, 'green'],
+            ['Totaal maand', fmtMoney(summary.monthSum || 0, currency), 'green'],
             ['Betalingen', summary.monthCount || 0, 'orange'],
             ['Te keuren', pending.length, 'amber']]} />
           <div className="flex gap-1.5" data-testid="payment-month-bar">

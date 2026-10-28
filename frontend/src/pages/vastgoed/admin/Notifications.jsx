@@ -233,7 +233,7 @@ export default function Notifications({ embedded = false }) {
     <div data-testid="notifications-page" className={embedded ? 'space-y-4' : ''}>
       {confirmNode}
       {embedded && <FxStats testId="notify-fx-stats" items={[
-        ['Dit apparaat', subscribed ? 'Ingeschakeld' : 'Uitgeschakeld', subscribed ? 'green' : 'slate'],
+        ['Dit apparaat', subscribed ? 'Aan' : 'Uit', subscribed ? 'green' : 'slate'],
         ['Apparaten', <span data-testid="device-count">{deviceCount}</span>, 'orange'],
         ['Tik-geluiden', tapOn ? 'Aan' : 'Uit', tapOn ? 'green' : 'slate']]} />}
       <div className={embedded ? 'hidden' : 'mb-6'}>

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
-import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight } from 'lucide-react';
+import { Plus, X, Check, Loader2, ShieldCheck, FileText, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 import { useApiSWR } from '../../../lib/swr';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
@@ -181,7 +181,7 @@ export default function Deposits({ embedded = false }) {
         <div className="flex items-center gap-2">
           <button onClick={() => { setDetail(null); load(); }} data-testid="deposit-detail-back"
             className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-            <ChevronRight className="w-4 h-4 rotate-180" /> Terug
+            <ArrowLeft className="w-4 h-4" /> Terug
           </button>
         </div>
 
@@ -291,7 +291,7 @@ export default function Deposits({ embedded = false }) {
           <>
             <FxStats testId="dep-fx-stats" items={[
               ['Ontvangen', held.length, 'orange'],
-              ['Borg in beheer', fmtMoney(held.reduce((s, d) => s + Number(d.amount || 0), 0), items[0]?.currency), 'green'],
+              ['In beheer', fmtMoney(held.reduce((s, d) => s + Number(d.amount || 0), 0), items[0]?.currency), 'green'],
               ['Afgehandeld', items.length - held.length, 'slate']]} />
             <FxTabs testPrefix="dep" value={fxTab} onChange={setFxTab} tabs={[
               { v: 'all', label: 'Alle', count: items.length }, { v: 'held', label: 'Ontvangen', count: held.length }, { v: 'closed', label: 'Afgehandeld', count: items.length - held.length }]} />

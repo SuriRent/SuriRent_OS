@@ -52,7 +52,7 @@ export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, 
     : { type: 'button' };
   return (
     <Tag onClick={onClick} data-testid={testId} {...extra}
-      className={`w-full text-left rounded-xl border border-slate-200 ${onClick ? 'hover:border-orange-300 cursor-pointer' : ''} px-4 py-3 flex items-center justify-between gap-3 transition-colors bg-white`}>
+      className={`w-full text-left rounded-xl border border-slate-200 ${onClick ? 'hover:border-orange-300 cursor-pointer' : ''} px-4 py-3 flex ${actions ? 'flex-wrap sm:flex-nowrap' : ''} items-center justify-between gap-x-3 gap-y-2 transition-colors bg-white`}>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-black text-slate-900 truncate">{title}</div>
         {sub && <div className="text-xs text-slate-500 truncate">{sub}</div>}
@@ -66,9 +66,14 @@ export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, 
             {status && <div className={`text-[11px] font-bold uppercase tracking-wide ${FX_TONE[tone] || 'text-slate-500'}`}>{status}</div>}
           </div>
         )}
-        {actions && <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>{actions}</div>}
-        {onClick && <ChevronRight className="w-4 h-4 text-slate-300" />}
+        {onClick && !actions && <ChevronRight className="w-4 h-4 text-slate-300" />}
       </div>
+      {actions && (
+        <div className="basis-full sm:basis-auto flex items-center justify-end gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {actions}
+          {onClick && <ChevronRight className="w-4 h-4 text-slate-300" />}
+        </div>
+      )}
     </Tag>
   );
 }

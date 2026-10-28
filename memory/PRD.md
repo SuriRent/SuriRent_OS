@@ -1057,3 +1057,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Werknemers: Nieuw-knop in footer (event kiosk-emp-new).
 - NFC-tag koppelen popup herontworpen in Facturen-stijl (NfcLinkModal.jsx).
 - Getest: iteration_141 (98%, design-punten opgelost).
+
+## 2026-06 — Beheer-popups echt herbouwd in Facturen-opmaak
+- Nieuw: components/KioskFx.jsx (FxStats, FxTabs, FxSearch, FxRow, FxIconBtn, FxBack, FxHeader, KioskFxCtx).
+- Elke Beheer-pagina heeft een eigen embedded-weergave: 3 cijfertegels, tabs met aantallen, zoekveld, Facturen-rijen (acties op mobiel op tweede regel).
+- Betalingen: maandbalk; NFC: cijfertegels; detail-terugknoppen gelijkgetrokken.
+- Getest: iteration_142 (alles geslaagd, ontwerp-punten opgelost).

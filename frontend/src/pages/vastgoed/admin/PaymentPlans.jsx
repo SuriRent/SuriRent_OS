@@ -94,7 +94,8 @@ export default function PaymentPlans({ embedded = false }) {
           ['Resterend', fmtMoney(plans.reduce((s, p) => s + Number(p.remaining_amount || 0), 0), cur), 'red'],
           ['Achterstallig', plans.reduce((s, p) => s + (p.overdue_count || 0), 0), 'amber']]} />
         <FxTabs testPrefix="plan" value={statusFilter} onChange={setStatusFilter} tabs={[
-          { v: 'active', label: 'Actief' }, { v: 'completed', label: 'Voltooid' }, { v: 'cancelled', label: 'Geannuleerd' }, { v: 'all', label: 'Alles' }]} />
+          { v: 'active', label: 'Actief' }, { v: 'completed', label: 'Voltooid' }, { v: 'cancelled', label: 'Geannuleerd' }, { v: 'all', label: 'Alles' }]
+          .map((t) => ({ ...t, count: t.v === statusFilter && !loading ? plans.length : undefined }))} />
         <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder of appartement…" testId="plan-search" />
         {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
         {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen betalingsregelingen gevonden." testId="plans-empty" /> : rows.map((p) => {

@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only test of the Kiosk Beheer popups, now rebuilt in Facturen style (embedded JSX branches + KioskFx components). Tested at 1920x800 and 390x844, logged in as demo@surirent.sr on /kiosk. All 11 popups (locaties, appartementen, huurders, contracten, betalingen, regelingen, onderhoud, werknemers, notificaties, borg, nfc) show the three <prefix>-fx-stats tiles: rounded-xl, bg-slate-50, tiny uppercase label, bold coloured value. The values make sense: Onderhoud Open 3 / In behandeling 2 / Afgerond 0 matches its tabs, Contracten 5/0/5, Borg 5 / SRD 30.000 / 0, Betalingen follows the selected month. The tab bars are full width, h-10, active tab orange, and show counts on every page except regelingen. Every tab filters correctly, with row counts matching the labels. All 9 search fields are 44px high with a 12px radius and a single border (the inner input has no border, background or shadow); 'zzz' gives 0 rows and clearing restores the list. Rows are rounded-xl, 1px slate-200 border, white, title/sub/meta on the left, amount and uppercase status on the right, chevron when clickable. Detail pages with an orange Terug link and a grey header card open and return correctly for loc, apt, tenant, plan, payment and deposit. The 'Markeer betaald' button (plan-pay-*) is white text on #FF5C00, now visible. Row actions: tenant-pin opens the PIN modal; tenant-poster opens a new tab; tenant-delete shows its own modal and cancel keeps all 5 rows; contract-pdf opens a new tab; contract-email opens the send dialog (send-cancel closes it); contract-delete cancel keeps 5 rows; contract-link copy shows an alert 'Kopieren mislukt', expected because headless has no clipboard; maint start→done→reopen works with live stat updates and was restored to its original state; maint/emp delete cancel works; emp-ai-toggle on/off works and was restored; emp-pin and emp-edit open their forms. Betalingen month prev/next works (Okt→Sep→Okt, rows and stats update; next is disabled on the current month). Every 'Nieuw …' footer button opens the right create form; all were cancelled, no data created. Sluiten closes each popup. Facturen (reference) works and the new pages match it visually. NFC popup: stats update to the chosen tenant, search works, save stays disabled without a uid, footer close works. Mobile: popups are full-screen, 3 tiles in one row, the huurders tabs scroll sideways, no page overflow (scrollWidth 390). Regression: /admin/tenants and /admin/payments still use the old non-kiosk layout (no .kiosk-fx, no fx-stats).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile 390px - Contracten, Huurders, Werknemers, Onderhoud lists", "issues": ["Rows with 3-4 inline FxIconBtn actions (w-10 each) leave only ~60-130px for the text, so titles get truncated badly: 'Jan Pie…', 'Anita …', 'Marli…', 'Lekkende kraan …'. Facturen's list rows have no inline actions, so it does not have this problem. Suggestion: on small screens put the actions on a second line inside the row (flex-wrap / sm:flex-row), or hide the amount/status column when actions are present."]},
+      {"screen": "Betalingsregelingen tabs", "issues": ["The plan-filter tabs (Actief / Voltooid / Geannuleerd / Alles) have no '(count)' labels, unlike all other pages and Facturen (PaymentPlans.jsx line 96-97 passes no count)."]},
+      {"screen": "Stat tiles on mobile", "issues": ["Some tile labels/values are cut off with an ellipsis at 390px: 'ACTIEVE HUUR…', 'ZONDER APPAR…', 'TOTAAL OKTOB…', 'SALARIS PER M…', 'HUUR PER MAAND', 'SRD 35.000,00', 'Uitgeschakeld'. Consider shorter labels or a smaller value font on mobile."]},
+      {"screen": "Detail back links", "issues": ["Borg (deposit-detail-back) and Betalingen (payment-detail-back) use a ChevronLeft icon, while the other pages and Facturen use ArrowLeft (FxBack). Small visual inconsistency."]},
+      {"screen": "Betalingen stat tile", "issues": ["'Totaal oktober' shows 'SRD 26.000' with no decimals, while other pages show 'SRD 30.000,00'. Inconsistent money format."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Mobile: stop the inline row actions from squeezing the titles (contracten, huurders, werknemers, onderhoud): wrap the actions below the text on narrow screens",
+    "Add counts to the Betalingsregelingen tabs (plan-filter-*) for consistency",
+    "Optional: shorter stat labels on mobile; use FxBack/ArrowLeft in Deposits and Payments detail; use the same money format in the Betalingen total tile"
+  ],
+  "critical_code_review_comments": [
+    "AdminDashboard.jsx is a very large file (>4000 lines); adding more embedded branches makes it worse, so consider extracting TenantsPage/ApartmentsPage",
+    "The embedded and non-embedded branches duplicate the filter/search logic in each admin page; shared hooks would reduce drift",
+    "FxRow with actions renders a div with role=button and also a nested <button> in the actions; fine functionally, but nested interactive elements inside role=button are an a11y smell"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "97% - all functional checks passed; only design/consistency findings"},
+  "seed_data_creation": "None. The maintenance status and the employee AI toggle were changed and then restored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login: in-page fetch POST /api/auth/login demo@surirent.sr/demo1234, then goto /kiosk. Open with window.dispatchEvent(new CustomEvent('kiosk-nav',{detail:'admin:<id>'})); wait on kiosk-popup-<id>-footer-close (NFC: nfc-link-footer-close; Facturen: invoices-modal-close). Tenant delete uses its own tenant-delete-modal/tenant-delete-cancel (not embed-confirm). Contract email dialog closes with send-cancel. The deposit detail back testid is deposit-detail-back (not dep-detail-back). Escape does NOT close the inner PIN/email sheets, so reload /kiosk if stuck. emp-ai-toggle state is shown by the title attribute (the class is on the svg)."
+}

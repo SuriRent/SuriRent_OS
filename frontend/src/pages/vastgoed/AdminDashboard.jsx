@@ -2301,7 +2301,7 @@ export function Apartments({ embedded = false }) {
           <FxStats testId="apt-fx-stats" items={[
             ['Appartementen', items.length, 'orange'],
             ['Bezet', `${items.filter((a) => a.status === 'occupied').length} van ${items.length}`, 'green'],
-            ['Huur per maand', fmtMoney(items.filter((a) => a.status === 'occupied').reduce((s, a) => s + Number(a.rent_amount || 0), 0), items[0]?.currency), 'slate']]} />
+            ['Huur p/m', fmtMoney(items.filter((a) => a.status === 'occupied').reduce((s, a) => s + Number(a.rent_amount || 0), 0), items[0]?.currency), 'slate']]} />
           <FxTabs testPrefix="apt" value={filter} onChange={setFilter} tabs={[
             { v: 'all', label: 'Alles', count: counts.all },
             { v: 'occupied', label: 'Bezet', count: counts.occupied },
@@ -3376,8 +3376,8 @@ export function Tenants({ embedded = false }) {
       {embedded && (
         <>
           <FxStats testId="tenant-fx-stats" items={[
-            ['Actieve huurders', counts.all, 'orange'],
-            ['Zonder appartement', counts.without_apt, 'amber'],
+            ['Actief', counts.all, 'orange'],
+            ['Zonder appt.', counts.without_apt, 'amber'],
             ['Archief', counts.archived ?? 0, 'slate']]} />
           <FxTabs testPrefix="tenant" value={filter} onChange={setFilter} tabs={[
             { v: 'all', label: 'Alles', count: counts.all },
