@@ -17,6 +17,7 @@ import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
+import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
 
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
@@ -186,48 +187,7 @@ function KioskSection() {
     { num: '03', src: SHOTS.kioskOverview, label: 'Bedrag bekijken',    desc: 'Overzicht van openstaand.' },
     { num: '04', src: SHOTS.kioskNumpad,   label: 'Betalen',            desc: 'Touchscreen numpad.' },
   ];
-  return (
-    <section id="kiosk" className="bg-[#0B1B3F] text-white py-16 lg:py-24">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
-        <div className="grid lg:grid-cols-2 gap-8 mb-12 items-end">
-          <div>
-            <EditableText path="v2.kiosk.eyebrow" fallback="Kiosk PWA" as="p"
-              className="text-xs font-black tracking-[0.3em] uppercase text-[#FF8A3D] mb-3" />
-            <h2 className="text-3xl lg:text-5xl font-black tracking-tight leading-tight">
-              <EditableText path="v2.kiosk.title_line1" fallback="Selfservice in" as="span" />
-              <span className="block text-[#FF5C00]">
-                <EditableText path="v2.kiosk.title_highlight" fallback="vier tikken." as="span" />
-              </span>
-            </h2>
-          </div>
-          <EditableText path="v2.kiosk.subtitle"
-            fallback="Werkt op tablet, telefoon én desktop. Installeer in 1 tik — geen App Store nodig. Achterstand, lopende maand en boetes met groot lettertype voor elke huurder."
-            as="p" multiline
-            className="text-base lg:text-lg text-white/70 leading-relaxed max-w-lg" />
-        </div>
-        <div className="grid sm:grid-cols-2 gap-6 lg:gap-8">
-          {tablets.map((t, i) => (
-            <div key={t.num} data-testid={`kiosk-step-${i}`} className="bg-[#13254D] rounded-2xl p-5 lg:p-6">
-              <div className="flex items-baseline gap-3 mb-4">
-                <span className="text-2xl font-black tracking-tighter text-[#FF5C00]">{t.num}</span>
-                <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/40">/ STEP</span>
-              </div>
-              <div className="rounded-xl overflow-hidden bg-black aspect-[1920/950]">
-                <EditableImage path={`v2.kiosk.steps.${i}.img`} fallback={t.src}
-                  alt={t.label} className="w-full h-full object-cover object-top" />
-              </div>
-              <div className="mt-4">
-                <EditableText path={`v2.kiosk.steps.${i}.label`} fallback={t.label}
-                  as="p" className="text-lg font-black text-white" />
-                <EditableText path={`v2.kiosk.steps.${i}.desc`} fallback={t.desc}
-                  as="p" className="text-sm text-white/60 mt-1" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+  return <KioskShowcase steps={tablets} />;
 }
 
 // =============================================================================
@@ -296,6 +256,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
           return {
             id: p.id,
             name: p.name,
+            amount: p.amount,
             price: formatAmount(p.amount),
             sub: `${p.currency} / maand`,
             desc: p.description || '',
@@ -362,6 +323,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
             as="h2"
             className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
         </div>
+        <PriceAdvisor plans={plans} onChoose={(id) => (onRegister ? onRegister(id) : onDemo())} onEnterprise={() => setShowEnterprise(true)} />
         <div className="grid md:grid-cols-3 gap-4">
           {plans.map((p) => (
             <div key={p.name}
