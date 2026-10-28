@@ -1069,3 +1069,8 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - Overige secties behouden, zwart vervangen door navy #0B1B3F.
 - APK-kaart scrollt naar Download-sectie als er geen release is.
 - Getest: iteration_143 + fixes (scroll-offset, header breakpoints, mobiel).
+
+## 2026-06 — Landing: licht Kiosk-onderdeel + prijsvergelijker
+- landing/KioskPricing.jsx: KioskShowcase (nagebouwde tablet + 4 stapkaarten), PriceAdvisor (goedkoopste betaalde pakket op basis van aantal appartementen; Lifetime nooit; anders Enterprise/offerte).
+- Enterprise heet overal "Op maat". Functiekaarten 2 kolommen onder 1280px.
+- Getest: iteration_144 + invoerveld-fix.

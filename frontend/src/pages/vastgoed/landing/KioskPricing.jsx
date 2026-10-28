@@ -125,9 +125,10 @@ export function pickPlan(plans, n) {
 }
 
 export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
-  const [n, setN] = useState(25);
+  const [raw, setRaw] = useState('25');
+  const n = Math.max(1, Math.min(100000, parseInt(raw, 10) || 1));
   const plan = useMemo(() => pickPlan(plans, n), [plans, n]);
-  const set = (v) => setN(Math.max(1, Math.min(2000, Number.isFinite(v) ? Math.round(v) : 1)));
+  const set = (v) => setRaw(String(Math.max(1, Math.round(v) || 1)));
   const max = plan?.limits?.max_apartments;
   return (
     <div className="max-w-4xl mx-auto mb-12 rounded-2xl bg-white p-5 sm:p-7 shadow-[0_18px_40px_-20px_rgba(11,27,63,0.25)] grid md:grid-cols-[1.1fr,1fr] gap-6 items-center" data-testid="price-advisor">
@@ -139,7 +140,7 @@ export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
             className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-orange-50 flex items-center justify-center" style={{ color: NAVY }}><Minus className="w-5 h-5" /></button>
           <label className="flex-1 h-12 rounded-xl border border-slate-200 focus-within:border-[#FF5C00] flex items-center gap-2 px-3">
             <Building2 className="w-5 h-5 text-slate-400" />
-            <input type="number" inputMode="numeric" min={1} value={n} onChange={(e) => set(parseInt(e.target.value, 10))} data-testid="price-advisor-input"
+            <input type="number" inputMode="numeric" min={1} value={raw} onChange={(e) => setRaw(e.target.value.replace(/[^0-9]/g, ''))} onBlur={() => setRaw(String(n))} data-testid="price-advisor-input"
               className="w-full bg-transparent outline-none text-lg font-black tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" style={{ color: NAVY }} />
             <span className="text-sm font-semibold text-slate-400">appt.</span>
           </label>

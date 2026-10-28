@@ -335,7 +335,7 @@ export function LandingFeatures() {
             fallback="SuriRent is de complete oplossing voor verhuurders in Suriname. Of je nu 5 of 50+ appartementen beheert, wij maken het eenvoudig, efficiënt en overzichtelijk."
             className="mt-3 text-[15px] text-slate-500 leading-relaxed" />
         </div>
-        <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
           {FEATURES.map((f) => (
             <button key={f.title} onClick={() => goToSection(f.target)} data-testid={`product-card-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
               className="group bg-white rounded-xl px-5 py-6 flex items-start gap-4 text-left shadow-[0_8px_24px_-14px_rgba(11,27,63,0.18)] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-16px_rgba(11,27,63,0.28)] transition-[transform,box-shadow]">

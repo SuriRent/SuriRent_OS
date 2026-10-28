@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only test of the restyled Kiosk section and new PriceAdvisor on /?landing=1 at 1440, 1024, 768 and 390 widths. Kiosk: cream bg rgb(251,248,245), eyebrow 'KIOSK PWA', heading 'Selfservice in / vier tikken.', subtitle, HTML tablet with amounts and numpad, and 4 white step cards (01-04, label, desc, images load). The tablet is centered with no horizontal overflow at 1440 (616px wide, scale 1.1), 1024, 768 and 390 (350px, inside 20-370). Nav secnav-kiosk works: h2 at 318px, header bottom at 77px. PriceAdvisor: default 25 shows Starter 3.000; 1/100 -> Starter; 101/500 -> Professional 5.000; 501/600/2500 -> Enterprise 'Op maat'; 0 and empty -> 1. Plus/minus and slider work. Lifetime is never advised. The CTA opens RegisterModal with the badge 'U KOOS: PROFESSIONAL' or 'U KOOS: STARTER', and the Enterprise CTA opens enterprise-modal. All were closed without submitting. Rest of the landing is fine: sections home/features/kiosk/pricing/faq/download, footer, 4 plan cards, no broken images. The only console error is the expected 401 from /api/auth/me for anonymous visitors. One UX bug: the number input is clamped on every change, so you cannot clear it and type a new number.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PriceAdvisor input", "issue": "onChange clamps empty/NaN to 1 right away, so the user cannot clear the field. Select all + Backspace + typing '150' gives '1150', which advises Enterprise instead of Professional. Fix: keep a raw string state (allow ''), and clamp only on blur or when computing the plan (treat '' as 1).", "selector": "[data-testid='price-advisor-input']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Kiosk tablet on mobile 390", "issues": ["The tablet is scaled to about 0.625, so its inner text (6.5-9px base) is about 4-6px and unreadable. It is decorative, but consider a slightly larger base font or a taller layout on mobile."]},
+      {"screen": "Pricing", "issues": ["Enterprise is called 'Op maat' in the advisor but 'Custom' on the plan card. Use the same word."]},
+      {"screen": "Features grid at 1024px", "issues": ["Feature card titles (e.g. 'Huurdersbeheer', 'Boekhouding') overlap the chevron icon at 1024 width. Seen in passing; may already have existed."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix the PriceAdvisor input so users can clear it and type (string state, clamp on blur)",
+    "Optional: use 'Op maat' or 'Custom' everywhere for Enterprise",
+    "Optional: fix the feature-card title/chevron overlap at 1024px"
+  ],
+  "critical_code_review_comments": [
+    "KioskPricing.jsx set(): parseInt('') -> NaN -> 1 on every keystroke, which causes the typing bug above.",
+    "pickPlan correctly excludes lifetime/enterprise/amount 0 and sorts by amount. It treats max_apartments null/-1 as unlimited, which is fine.",
+    "The input clamps to max 2000 silently. That is OK, but 2500 shows as 2000 in the text 'Voor 2.000 appartementen'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "95%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Kiosk and PriceAdvisor verified on /?landing=1. Register modal close: data-testid register-close, plan badge: chosen-plan-badge. Enterprise modal: enterprise-modal / enterprise-close. The 401 on /api/auth/me is expected for anonymous users."
+}

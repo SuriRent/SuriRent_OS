@@ -343,7 +343,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
               </p>
               <div className="flex items-baseline gap-1.5">
                 <span className={`text-5xl lg:text-6xl font-black tracking-tighter ${p.highlight ? 'text-white' : 'text-[#0B1B3F]'}`}>
-                  {p.price === 'Custom' ? 'Custom' : p.price}
+                  {p.price === 'Custom' ? 'Op maat' : p.price}
                 </span>
                 {p.price !== 'Custom' && (
                   <span className={`text-sm font-bold ${p.highlight ? 'text-white/50' : 'text-slate-500'}`}>
