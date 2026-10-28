@@ -1,16 +1,20 @@
-// =====================================================================
-// RegisterModal — thin wrapper rond MobileRegisterWizard.
-//
-// Historisch was er een split-panel modal voor desktop (2 kolommen) en
-// een aparte wizard voor mobiel. Op verzoek van gebruiker (2026-02-28)
-// gebruikt zowel desktop als mobiel nu dezelfde oranje step-wizard —
-// consistent, moderner, mobiel-first. De wizard is fullscreen op
-// mobiel en wordt op desktop nog altijd fullscreen weergegeven met
-// max-w-lg centered content.
-// =====================================================================
+// RegisterModal — desktop (>=1024px) split-layout, mobiel de oranje stap-wizard.
+import { useEffect, useState } from 'react';
 import { MobileRegisterWizard } from './MobileAuthShell';
+import DesktopRegisterWizard from './DesktopRegisterWizard';
+
+const MQ = '(min-width: 1024px)';
 
 export default function RegisterModal({ open, onClose, initialPlan }) {
+  const [desktop, setDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia(MQ).matches);
+  useEffect(() => {
+    const m = window.matchMedia(MQ);
+    const on = () => setDesktop(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
   if (!open) return null;
-  return <MobileRegisterWizard onClose={onClose} initialPlan={initialPlan} />;
+  return desktop
+    ? <DesktopRegisterWizard onClose={onClose} initialPlan={initialPlan} />
+    : <MobileRegisterWizard onClose={onClose} initialPlan={initialPlan} />;
 }

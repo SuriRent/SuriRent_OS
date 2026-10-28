@@ -256,7 +256,8 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart }) {
 // =====================================================================
 const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket'];
 
-export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan = 'starter' }) {
+// Gedeelde registratie-logica voor mobiele en desktop wizard.
+export function useRegisterWizard({ onClose, initialPlan = 'starter' }) {
   const { register } = useAuth();
 
   const [step, setStep] = useState(0);
@@ -366,6 +367,13 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan
     if (registeredSlug) window.location.assign(`/${registeredSlug}/admin`);
     else window.location.assign('/admin');
   };
+  return { step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal };
+}
+
+export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan = 'starter' }) {
+  const {
+    step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal,
+  } = useRegisterWizard({ onClose, initialPlan });
 
   // ───────────── SUCCESS VIEW ─────────────
   if (success) {
