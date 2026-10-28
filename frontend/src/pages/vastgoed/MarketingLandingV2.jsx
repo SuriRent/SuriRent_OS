@@ -1,6 +1,6 @@
 // ABN AMRO-stijl landing — v11 redesign (2026-05-31).
 // Dubbele top nav, hero met grote visual + dark greeting card, 8 product cards
-// in 4x2 grid. Kleurschema: zwart (#0F0F0F / #1F1F1F) + oranje (#FF5C00).
+// in 4x2 grid. Kleurschema: zwart (#0B1B3F / #13254D) + oranje (#FF5C00).
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { appLink } from '../../lib/env';
@@ -16,6 +16,7 @@ import { EditableProvider, EditableText, EditableImage, useLandingContent } from
 import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
 
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
@@ -34,7 +35,7 @@ function ApkDownloadButton({ rel, variant, testid }) {
   const mb = `${(rel.size / 1024 / 1024).toFixed(0)} MB`;
   const cls = variant === 'footer'
     ? 'inline-flex items-center gap-2 text-[#FF8A3D] hover:text-orange-300 font-bold'
-    : 'inline-flex items-center justify-center gap-2 h-12 lg:h-13 px-6 rounded-md bg-white hover:bg-orange-50 text-[#0F0F0F] text-sm lg:text-base font-black transition-colors';
+    : 'inline-flex items-center justify-center gap-2 h-12 lg:h-13 px-6 rounded-md bg-white hover:bg-orange-50 text-[#0B1B3F] text-sm lg:text-base font-black transition-colors';
   return (
     <a href={APK_URL} download data-testid={testid} className={cls}>
       <Download className="w-5 h-5" />
@@ -88,348 +89,6 @@ function searchIndex(q) {
 }
 
 // =============================================================================
-// Top header — tier 1 (thin): logo + status indicator + Inloggen button
-// =============================================================================
-function TopHeader({ onLogin, onRegister }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navItems = [
-    { id: 'home',     label: 'Home' },
-    { id: 'features', label: 'Functies' },
-    { id: 'kiosk',    label: 'Kiosk PWA' },
-    { id: 'pricing',  label: 'Prijzen' },
-    { id: 'faq',      label: 'Service & FAQ' },
-  ];
-  const goTo = (id) => {
-    setMobileMenuOpen(false);
-    if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  return (
-    <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_0_0_rgba(15,15,15,0.04)]">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 h-20 flex items-center justify-between">
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="flex items-center gap-2.5 md:gap-3" data-testid="topheader-logo">
-          <span className="w-11 h-11 md:w-14 md:h-14 rounded-lg bg-[#FF5C00] p-1.5 md:p-2 shrink-0">
-            <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png"
-              alt="" className="w-full h-full object-contain" />
-          </span>
-          <span className="text-2xl md:text-3xl font-black tracking-tight text-[#0F0F0F]">
-            <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" />
-            <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" className="text-[#FF5C00]" />
-          </span>
-        </button>
-
-        <div className="flex items-center gap-3 md:gap-4">
-          {/* Status indicator — toont real-time of alle systemen draaien */}
-          <div className="hidden sm:block">
-            <StatusPill />
-          </div>
-
-          <button onClick={() => onRegister()} data-testid="topheader-register"
-            className="hidden sm:inline-flex h-11 px-4 md:px-5 rounded-md bg-white hover:bg-orange-50 border-2 border-[#FF5C00] text-[#FF5C00] text-sm font-bold items-center gap-2 transition-colors">
-            <EditableText path="v2.brand.cta_register" fallback="Registreren" as="span" />
-          </button>
-
-          <button onClick={onLogin} data-testid="topheader-login"
-            className="h-11 px-4 md:px-5 rounded-md bg-[#FF5C00] hover:bg-[#C74600] text-white text-sm font-bold flex items-center gap-2 transition-colors shadow-[0_2px_0_0_rgba(0,0,0,0.05)]">
-            <Lock className="w-4 h-4" />
-            <EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" />
-          </button>
-
-          {/* Mobile hamburger — NAAST de Inloggen knop. Op desktop verborgen
-              omdat de SecondaryNav daar de navigatie biedt. */}
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            data-testid="topheader-mobile-menu"
-            aria-label={mobileMenuOpen ? 'Sluit menu' : 'Open menu'}
-            className="md:hidden w-11 h-11 rounded-md border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors">
-            {mobileMenuOpen ? <X className="w-5 h-5 text-[#0F0F0F]" /> : <Menu className="w-5 h-5 text-[#0F0F0F]" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu drawer — uitvouwbaar onder de top bar.
-          Toont nav links + segment selector. Geen zoekbalk (gebruiker
-          kan via greeting card zoeken). */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-slate-200" data-testid="topheader-mobile-drawer">
-          <div className="px-5 py-4 space-y-1">
-            {navItems.map((n) => (
-              <button key={n.id} onClick={() => goTo(n.id)}
-                data-testid={`mobile-nav-${n.id}`}
-                className="w-full text-left px-3 py-3 text-base font-bold text-[#0F0F0F] hover:bg-slate-50 rounded-md transition-colors">
-                {n.label}
-              </button>
-            ))}
-            <div className="pt-3 mt-2 border-t border-slate-100">
-              <StatusPill />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// Secondary nav — Home / Producten / Je situatie / etc.
-// =============================================================================
-function SecondaryNav() {
-  const items = [
-    { id: 'home',     label: 'Home',                hasMenu: false },
-    { id: 'features', label: 'Functies',            hasMenu: true },
-    { id: 'kiosk',    label: 'Kiosk PWA',           hasMenu: false },
-    { id: 'pricing',  label: 'Prijzen',             hasMenu: false },
-    { id: 'faq',      label: 'Service & FAQ',       hasMenu: false },
-  ];
-  const goTo = (id) => {
-    if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  return (
-    // Desktop only — op mobile zit de nav in TopHeader's hamburger menu.
-    <div className="hidden md:block bg-white border-b border-slate-200/80 sticky top-0 z-30">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 h-14 flex items-center justify-between">
-        <nav className="flex items-center gap-8">
-          {items.map((n) => (
-            <button key={n.id} onClick={() => goTo(n.id)}
-              data-testid={`secnav-${n.id}`}
-              className="text-sm font-bold text-[#0F0F0F] hover:text-[#FF5C00] transition-colors flex items-center gap-1">
-              {n.label}
-              {n.hasMenu && <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-          ))}
-        </nav>
-        <button data-testid="secnav-search"
-          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-50">
-          <Search className="w-5 h-5 text-[#0F0F0F]" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// Hero — grote ABN-stijl foto banner (vol bleed, lange hoogte) + greeting card
-// =============================================================================
-function Hero({ onDemo, onWhatsApp, apk }) {
-  const [greeting, setGreeting] = useState('Goedenavond');
-  const [query, setQuery] = useState('');
-  const [showResults, setShowResults] = useState(false);
-  useEffect(() => {
-    const h = new Date().getHours();
-    if (h < 6) setGreeting('Goedenacht');
-    else if (h < 12) setGreeting('Goedemorgen');
-    else if (h < 18) setGreeting('Goedemiddag');
-    else setGreeting('Goedenavond');
-  }, []);
-
-  const results = searchIndex(query);
-  const goToSection = (id) => {
-    setQuery('');
-    setShowResults(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  const onKey = (e) => {
-    if (e.key === 'Enter' && results.length > 0) goToSection(results[0].section);
-    if (e.key === 'Escape') { setQuery(''); setShowResults(false); }
-  };
-
-  return (
-    <section className="relative" id="home">
-      {/* Compactere hero — kortere full-bleed visual zoals Centraal Beheer.
-          De greeting card hangt over de onderrand en steekt uit in de content
-          eronder via een negatieve bottom margin (zie LandingPage wrapper). */}
-      <div className="relative w-full bg-[#0F0F0F] overflow-hidden"
-        style={{ minHeight: 'clamp(440px, 56vh, 620px)' }}
-        data-testid="hero-canvas">
-        {/* Background screenshot — wide bleed met dark overlay */}
-        <div className="absolute inset-0">
-          <img src={SHOTS.overzicht} alt="" loading="eager"
-            className="w-full h-full object-cover object-left-top opacity-55" />
-          {/* Dark cinematic gradient (links donker → rechts deels zichtbaar) */}
-          <div className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(95deg, rgba(15,15,15,0.95) 0%, rgba(15,15,15,0.82) 30%, rgba(15,15,15,0.55) 55%, rgba(15,15,15,0.65) 100%)',
-            }} />
-          {/* Warm orange glow accent */}
-          <div className="absolute -top-40 -right-20 w-[720px] h-[720px] rounded-full opacity-35 blur-3xl pointer-events-none"
-            style={{ background: 'radial-gradient(circle, #FF5C00, transparent 65%)' }} />
-          <div className="absolute -bottom-60 -left-40 w-[600px] h-[600px] rounded-full opacity-20 blur-3xl pointer-events-none"
-            style={{ background: 'radial-gradient(circle, #FF8A3D, transparent 70%)' }} />
-        </div>
-
-        {/* Centered max-width content — kortere padding voor compact gevoel */}
-        <div className="relative max-w-[1280px] mx-auto px-5 lg:px-10 py-10 lg:py-14 grid lg:grid-cols-[1.15fr,1fr] gap-8 lg:gap-12 items-center"
-          style={{ minHeight: 'clamp(440px, 56vh, 620px)' }}>
-          {/* LEFT — massive headline */}
-          <div className="text-white relative z-10">
-            <EditableText path="v2.hero.eyebrow" fallback="Vastgoed Suite · Suriname 2026"
-              as="p"
-              className="text-xs lg:text-sm font-black tracking-[0.32em] uppercase text-[#FF8A3D] mb-4 lg:mb-5" />
-            <h1 className="font-black tracking-[-0.035em] leading-[0.95] text-white"
-              style={{ fontSize: 'clamp(2.25rem, 5.2vw, 4.5rem)' }}
-              data-testid="hero-title">
-              <EditableText path="v2.hero.title_line1" fallback="Voor als" as="span" />
-              <br /><EditableText path="v2.hero.title_line2" fallback="Excel uw vastgoed" as="span" />
-              <br /><EditableText path="v2.hero.title_highlight" fallback="niet meer trekt."
-                as="span" className="text-[#FF8A3D]" />
-            </h1>
-            <EditableText path="v2.hero.subtitle"
-              fallback="Nu 30% sneller dan handmatig boekhouden — met Kiosk, automatische facturatie en AI-OCR voor betalingen."
-              as="p"
-              multiline
-              className="mt-5 lg:mt-6 text-base lg:text-xl text-white/85 font-medium max-w-xl leading-relaxed" />
-            <div className="mt-6 lg:mt-7 flex flex-col sm:flex-row gap-3">
-              <button onClick={onDemo} data-testid="hero-cta-action"
-                className="inline-flex items-center justify-center gap-2 h-12 lg:h-13 px-6 rounded-md bg-[#FF5C00] hover:bg-[#FF8A3D] text-white text-sm lg:text-base font-black transition-colors shadow-[0_4px_0_0_rgba(0,0,0,0.15)]">
-                <EditableText path="v2.hero.cta_primary" fallback="Bekijk de demo" as="span" />
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button onClick={onWhatsApp}
-                className="inline-flex items-center justify-center gap-2 h-12 lg:h-13 px-6 rounded-md bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm lg:text-base font-bold backdrop-blur-sm transition-colors">
-                <MessageCircle className="w-5 h-5" />
-                <EditableText path="v2.hero.cta_secondary" fallback="WhatsApp ons" as="span" />
-              </button>
-              <ApkDownloadButton rel={apk} testid="hero-apk-download" />
-            </div>
-          </div>
-
-          {/* RIGHT — floating dark greeting card die UIT de hero steekt
-              (negatieve bottom margin op desktop zodat hij over de content
-              hangt zoals op de Centraal Beheer referentie). */}
-          <div className="flex items-center justify-center lg:justify-end relative z-20 lg:mb-[-110px] xl:mb-[-130px]">
-            <div className="relative w-full max-w-[420px]">
-              <div className="rounded-2xl bg-[#0F0F0F]/95 border border-white/10 backdrop-blur-sm p-7 lg:p-8 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.6)]"
-                data-testid="greeting-card">
-                <h2 className="text-2xl lg:text-[28px] font-black tracking-tight text-white leading-tight">
-                  {greeting},
-                </h2>
-                <EditableText path="v2.greeting.subtitle" fallback="Waarmee kunnen we u vooruit helpen?"
-                  as="p" className="mt-2 text-base lg:text-lg text-white/70 font-medium" />
-                <div className="mt-6 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
-                    onFocus={() => setShowResults(true)}
-                    onBlur={() => setTimeout(() => setShowResults(false), 180)}
-                    onKeyDown={onKey}
-                    placeholder="Zoek functies, prijzen, FAQ…"
-                    data-testid="greeting-search"
-                    className="w-full h-12 pl-11 pr-4 rounded-lg bg-white text-[#0F0F0F] text-sm font-medium placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#FF5C00]"
-                  />
-                  {showResults && results.length > 0 && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white rounded-lg shadow-[0_20px_40px_-12px_rgba(0,0,0,0.4)] border border-slate-200 overflow-hidden max-h-72 overflow-y-auto"
-                      data-testid="greeting-search-results">
-                      {results.map((r) => (
-                        <button key={r.section}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => goToSection(r.section)}
-                          data-testid={`search-result-${r.section}`}
-                          className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-orange-50 border-b border-slate-100 last:border-b-0 transition-colors">
-                          <span className="text-sm font-bold text-[#0F0F0F]">{r.label}</span>
-                          <ChevronRight className="w-4 h-4 text-[#FF5C00] shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {showResults && query.length >= 2 && results.length === 0 && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white rounded-lg shadow-lg border border-slate-200 px-4 py-3">
-                      <p className="text-sm text-slate-500">
-                        Geen resultaten voor "<span className="font-bold text-[#0F0F0F]">{query}</span>"
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <button onClick={onWhatsApp} data-testid="greeting-whatsapp"
-                  className="mt-5 w-full text-left text-sm font-bold text-[#FF8A3D] hover:text-orange-300 flex items-center gap-2 transition-colors">
-                  <MessageCircle className="w-4 h-4" />
-                  <EditableText path="v2.greeting.whatsapp_label" fallback="Liever direct chatten? WhatsApp ons" as="span" />
-                </button>
-                {/* Quick-pill suggestions */}
-                <div className="mt-5 pt-5 border-t border-white/10">
-                  <EditableText path="v2.greeting.popular_label" fallback="Veelgezocht"
-                    as="p" className="text-[10px] font-bold tracking-[0.18em] uppercase text-white/40 mb-3" />
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: 'Prijzen', section: 'pricing' },
-                      { label: 'Kiosk PWA', section: 'kiosk' },
-                      { label: 'OCR / AI', section: 'feature-3' },
-                      { label: 'FAQ', section: 'faq' },
-                    ].map((p) => (
-                      <button key={p.label} onClick={() => goToSection(p.section)}
-                        data-testid={`quicksearch-${p.section}`}
-                        className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-[#FF5C00] hover:text-white border border-white/20 text-xs font-bold text-white/80 transition-colors">
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =============================================================================
-// Product cards — 4x2 grid van quick-access modules
-// =============================================================================
-function ProductGrid({ onDemo, onLogin }) {
-  const items = [
-    { Icon: Lock,             labelPath: 'v2.product.cards.0.label', descPath: 'v2.product.cards.0.desc',
-      labelFallback: 'Inloggen',          descFallback: 'Beheer toegang',        action: onLogin },
-    { Icon: Building2,        labelPath: 'v2.product.cards.1.label', descPath: 'v2.product.cards.1.desc',
-      labelFallback: 'Demo proberen',     descFallback: 'Direct testen',         action: onDemo },
-    { Icon: LayoutDashboard,  labelPath: 'v2.product.cards.2.label', descPath: 'v2.product.cards.2.desc',
-      labelFallback: 'Beheer Suite',      descFallback: 'Volledig dashboard',    target: 'feature-0' },
-    { Icon: ScanLine,         labelPath: 'v2.product.cards.3.label', descPath: 'v2.product.cards.3.desc',
-      labelFallback: 'Kiosk PWA',         descFallback: 'Selfservice terminal',  target: 'kiosk' },
-    { Icon: MapPin,           labelPath: 'v2.product.cards.4.label', descPath: 'v2.product.cards.4.desc',
-      labelFallback: 'Locaties',          descFallback: 'Multi-vestiging',       target: 'feature-1' },
-    { Icon: HomeIcon,         labelPath: 'v2.product.cards.5.label', descPath: 'v2.product.cards.5.desc',
-      labelFallback: 'Appartementen',     descFallback: 'Eenheidbeheer',         target: 'feature-2' },
-    { Icon: Receipt,          labelPath: 'v2.product.cards.6.label', descPath: 'v2.product.cards.6.desc',
-      labelFallback: 'Betalingen',        descFallback: 'Kwitanties + OCR',      target: 'feature-3' },
-    { Icon: FileText,         labelPath: 'v2.product.cards.7.label', descPath: 'v2.product.cards.7.desc',
-      labelFallback: 'Facturen',          descFallback: '3-bucket logica',       target: 'feature-4' },
-  ];
-  const handle = (item) => {
-    if (item.action) item.action();
-    else if (item.target) document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  return (
-    <section className="bg-slate-50 py-10 lg:py-14 lg:pt-[50px] xl:pt-[50px]">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
-          {items.map((it) => (
-            <button key={it.labelPath} onClick={() => handle(it)}
-              data-testid={`product-card-${it.labelFallback.toLowerCase().replace(/\s+/g, '-')}`}
-              className="group relative bg-white rounded-xl p-5 lg:p-6 flex items-center gap-3 lg:gap-4 hover:shadow-[0_18px_36px_-15px_rgba(15,15,15,0.18)] hover:-translate-y-0.5 transition-all text-left">
-              <span className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 group-hover:bg-[#FF5C00] transition-colors">
-                <it.Icon className="w-6 h-6 text-[#FF5C00] group-hover:text-white transition-colors" strokeWidth={2} />
-              </span>
-              <div className="flex-1 min-w-0">
-                <EditableText path={it.labelPath} fallback={it.labelFallback} as="p"
-                  className="text-base lg:text-lg font-black text-[#0F0F0F] leading-tight" />
-                <EditableText path={it.descPath} fallback={it.descFallback} as="p"
-                  className="text-xs text-slate-500 mt-0.5" />
-              </div>
-              <ChevronRight className="w-5 h-5 text-[#0F0F0F] group-hover:text-[#FF5C00] group-hover:translate-x-0.5 transition-all shrink-0" />
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =============================================================================
 // Features rows — alternerende editorial layout
 // =============================================================================
 const FEATURE_ROWS = [
@@ -469,7 +128,7 @@ function FeatureRows() {
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.features.title" fallback="Alles wat uw vastgoed nodig heeft."
             as="h2"
-            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0F0F0F] leading-tight" />
+            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
         </div>
         <div className="space-y-16 lg:space-y-24">
           {FEATURE_ROWS.map((f, i) => {
@@ -482,13 +141,13 @@ function FeatureRows() {
                   <EditableText path={`v2.features.rows.${i}.eyebrow`} fallback={f.eyebrow}
                     as="p" className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
                   <EditableText path={`v2.features.rows.${i}.title`} fallback={f.title}
-                    as="h3" className="text-2xl lg:text-4xl font-black tracking-tight text-[#0F0F0F] leading-tight" />
+                    as="h3" className="text-2xl lg:text-4xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
                   <EditableText path={`v2.features.rows.${i}.desc`} fallback={f.desc}
                     as="p" multiline
                     className="mt-4 text-base lg:text-lg text-slate-600 leading-relaxed max-w-lg" />
                   <ul className="mt-6 space-y-2.5">
                     {f.bullets.map((b, bi) => (
-                      <li key={bi} className="flex items-start gap-3 text-sm text-[#0F0F0F] font-semibold">
+                      <li key={bi} className="flex items-start gap-3 text-sm text-[#0B1B3F] font-semibold">
                         <span className="w-6 h-6 rounded-md bg-[#FF5C00] flex items-center justify-center shrink-0 mt-0.5">
                           <ChevronRight className="w-3.5 h-3.5 text-white" strokeWidth={3} />
                         </span>
@@ -528,7 +187,7 @@ function KioskSection() {
     { num: '04', src: SHOTS.kioskNumpad,   label: 'Betalen',            desc: 'Touchscreen numpad.' },
   ];
   return (
-    <section id="kiosk" className="bg-[#0F0F0F] text-white py-16 lg:py-24">
+    <section id="kiosk" className="bg-[#0B1B3F] text-white py-16 lg:py-24">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
         <div className="grid lg:grid-cols-2 gap-8 mb-12 items-end">
           <div>
@@ -548,7 +207,7 @@ function KioskSection() {
         </div>
         <div className="grid sm:grid-cols-2 gap-6 lg:gap-8">
           {tablets.map((t, i) => (
-            <div key={t.num} data-testid={`kiosk-step-${i}`} className="bg-[#1F1F1F] rounded-2xl p-5 lg:p-6">
+            <div key={t.num} data-testid={`kiosk-step-${i}`} className="bg-[#13254D] rounded-2xl p-5 lg:p-6">
               <div className="flex items-baseline gap-3 mb-4">
                 <span className="text-2xl font-black tracking-tighter text-[#FF5C00]">{t.num}</span>
                 <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/40">/ STEP</span>
@@ -675,7 +334,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
         <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3">Prijzen</p>
-            <h2 className="text-3xl lg:text-5xl font-black tracking-tight text-[#0F0F0F] leading-tight">
+            <h2 className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight">
               Eerlijk geprijsd voor elk vastgoedbedrijf.
             </h2>
           </div>
@@ -701,7 +360,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.pricing.title" fallback="Eerlijk geprijsd voor elk vastgoedbedrijf."
             as="h2"
-            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0F0F0F] leading-tight" />
+            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
         </div>
         <div className="grid md:grid-cols-3 gap-4">
           {plans.map((p) => (
@@ -709,7 +368,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
               data-testid={`plan-${p.name.toLowerCase()}`}
               className={`relative rounded-2xl p-7 transition-all ${
                 p.highlight
-                  ? 'bg-[#0F0F0F] text-white shadow-[0_30px_60px_-20px_rgba(15,15,15,0.4)] md:-translate-y-3'
+                  ? 'bg-[#0B1B3F] text-white shadow-[0_30px_60px_-20px_rgba(15,15,15,0.4)] md:-translate-y-3'
                   : 'bg-white border border-slate-200 hover:border-[#FF5C00] hover:shadow-[0_18px_36px_-15px_rgba(255,92,0,0.2)]'
               }`}>
               {p.highlight && (
@@ -721,7 +380,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
                 {p.name}
               </p>
               <div className="flex items-baseline gap-1.5">
-                <span className={`text-5xl lg:text-6xl font-black tracking-tighter ${p.highlight ? 'text-white' : 'text-[#0F0F0F]'}`}>
+                <span className={`text-5xl lg:text-6xl font-black tracking-tighter ${p.highlight ? 'text-white' : 'text-[#0B1B3F]'}`}>
                   {p.price === 'Custom' ? 'Custom' : p.price}
                 </span>
                 {p.price !== 'Custom' && (
@@ -745,13 +404,13 @@ function PricingSection({ onDemo, onWhatsApp, onRegister }) {
                 className={`mt-6 w-full h-12 rounded-md text-sm font-black transition-colors flex items-center justify-center gap-2 ${
                   p.highlight
                     ? 'bg-[#FF5C00] hover:bg-[#FF8A3D] text-white'
-                    : 'bg-[#0F0F0F] hover:bg-[#FF5C00] text-white'
+                    : 'bg-[#0B1B3F] hover:bg-[#FF5C00] text-white'
                 }`}>
                 {p.cta} <ArrowRight className="w-4 h-4" />
               </button>
               <ul className={`mt-6 space-y-2.5 pt-6 border-t ${p.highlight ? 'border-white/10' : 'border-slate-100'}`}>
                 {p.features.map((f) => (
-                  <li key={f} className={`text-sm flex items-start gap-2.5 ${p.highlight ? 'text-white/85' : 'text-[#0F0F0F]'}`}>
+                  <li key={f} className={`text-sm flex items-start gap-2.5 ${p.highlight ? 'text-white/85' : 'text-[#0B1B3F]'}`}>
                     <ChevronRight className={`w-4 h-4 mt-0.5 shrink-0 ${p.highlight ? 'text-[#FF8A3D]' : 'text-[#FF5C00]'}`} strokeWidth={3} />
                     <span>{f}</span>
                   </li>
@@ -889,7 +548,7 @@ function EnterpriseLeadModal({ onClose }) {
               Bedankt! We nemen binnen 1 werkdag contact op met een pakket-op-maat voor uw portfolio.
             </p>
             <button onClick={onClose} data-testid="enterprise-success-close"
-              className="h-11 px-6 rounded-lg bg-[#0F0F0F] hover:bg-[#FF5C00] text-white font-black">
+              className="h-11 px-6 rounded-lg bg-[#0B1B3F] hover:bg-[#FF5C00] text-white font-black">
               Sluiten
             </button>
           </div>
@@ -920,7 +579,7 @@ function EnterpriseLeadModal({ onClose }) {
               {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="ent-error">{error}</p>}
               <div className="flex gap-2 pt-2">
                 <button onClick={onClose} data-testid="ent-cancel" className="flex-1 h-11 rounded-lg border-2 border-slate-200 text-slate-700 font-black hover:bg-slate-50">Annuleren</button>
-                <button onClick={submit} disabled={submitting} data-testid="ent-submit" className="flex-1 h-11 rounded-lg bg-[#0F0F0F] hover:bg-[#FF5C00] text-white font-black inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                <button onClick={submit} disabled={submitting} data-testid="ent-submit" className="flex-1 h-11 rounded-lg bg-[#0B1B3F] hover:bg-[#FF5C00] text-white font-black inline-flex items-center justify-center gap-2 disabled:opacity-50">
                   {submitting ? 'Versturen…' : (<>Verstuur aanvraag <ArrowRight className="w-4 h-4" /></>)}
                 </button>
               </div>
@@ -968,7 +627,7 @@ function FAQSection() {
           <EditableText path="v2.faq.eyebrow" fallback="Service & FAQ" as="p"
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.faq.title" fallback="Antwoorden op uw vragen." as="h2"
-            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0F0F0F] leading-tight" />
+            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
         </div>
         <div className="border-t border-slate-200">
           {FAQS.map((f, i) => {
@@ -979,9 +638,9 @@ function FAQSection() {
                   data-testid={`faq-${i}`}
                   className="w-full text-left py-5 flex items-start justify-between gap-4 hover:text-[#FF5C00] transition-colors">
                   <EditableText path={`v2.faq.items.${i}.q`} fallback={f.q}
-                    as="p" className="text-base lg:text-lg font-black text-[#0F0F0F]" />
+                    as="p" className="text-base lg:text-lg font-black text-[#0B1B3F]" />
                   {isOpen ? <ChevronUp className="w-5 h-5 text-[#FF5C00] shrink-0" />
-                          : <ChevronDown className="w-5 h-5 text-[#0F0F0F] shrink-0" />}
+                          : <ChevronDown className="w-5 h-5 text-[#0B1B3F] shrink-0" />}
                 </button>
                 {isOpen && (
                   <div className="pb-5">
@@ -1134,7 +793,7 @@ function InstallPwaSection({ install, installed, platform, showIosModal, setShow
   );
 
   return (
-    <section id="download" className="bg-[#0F0F0F] text-white py-16 lg:py-24">
+    <section id="download" className="bg-[#0B1B3F] text-white py-16 lg:py-24">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div>
@@ -1185,7 +844,7 @@ function InstallPwaSection({ install, installed, platform, showIosModal, setShow
           </div>
 
           {/* Rechts — mockup / benefits */}
-          <div className="rounded-3xl bg-gradient-to-br from-[#1F1F1F] to-[#0F0F0F] border border-white/10 p-6 lg:p-8 shadow-2xl">
+          <div className="rounded-3xl bg-gradient-to-br from-[#13254D] to-[#0B1B3F] border border-white/10 p-6 lg:p-8 shadow-2xl">
             <p className="text-xs font-black tracking-[0.22em] uppercase text-white/50 mb-4">Waarom installeren?</p>
             <ul className="space-y-4">
               {[
@@ -1282,7 +941,7 @@ function InstallPwaSection({ install, installed, platform, showIosModal, setShow
 // =============================================================================
 function Footer({ onLogin, apk }) {
   return (
-    <footer className="bg-[#0F0F0F] text-white/60">
+    <footer className="bg-[#0B1B3F] text-white/60">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10 py-12 lg:py-16">
         <div className="grid md:grid-cols-4 gap-8 lg:gap-10">
           <div className="md:col-span-2">
@@ -1557,7 +1216,7 @@ export default function MarketingLandingV2() {
 
   return (
     <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch}>
-      <div className="min-h-screen bg-white text-[#0F0F0F] antialiased selection:bg-[#FF5C00] selection:text-white">
+      <div className="min-h-screen bg-white text-[#0B1B3F] antialiased selection:bg-[#FF5C00] selection:text-white">
         {editMode && (
           <div className="bg-orange-500 text-white text-center py-1.5 text-xs font-extrabold tracking-wider uppercase z-50 sticky top-0"
             data-testid="edit-mode-banner">
@@ -1571,10 +1230,9 @@ export default function MarketingLandingV2() {
             installed={pwaInstall.installed}
             onInstall={pwaInstall.install} />
         )}
-        <TopHeader onLogin={onLogin} onRegister={onRegister} />
-        <SecondaryNav />
-        <Hero onDemo={onDemo} onWhatsApp={onWhatsApp} apk={apk} />
-        <ProductGrid onDemo={onDemo} onLogin={onLogin} />
+        <LandingHeader onLogin={onLogin} onRegister={onRegister} />
+        <LandingHero onDemo={onDemo} apk={apk} />
+        <LandingFeatures />
         <FeatureRows />
         <KioskSection />
         <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} onRegister={onRegister} />
