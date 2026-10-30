@@ -131,11 +131,11 @@ function Stepper({ step, labels }) {
 
 function SidePanel({ t }) {
   return (
-    <aside className="relative w-[420px] xl:w-[460px] shrink-0 overflow-hidden text-white flex flex-col px-14 pt-24 pb-10" data-testid="register-side">
+    <aside className="relative w-[420px] xl:w-[460px] shrink-0 overflow-hidden text-white flex flex-col px-14 pt-24 pb-10 [@media(max-height:820px)]:pt-14 [@media(max-height:820px)]:pb-6 overflow-y-auto" data-testid="register-side">
       <img src={SIDE_BG} alt="" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg, rgba(11,27,63,0.97) 0%, rgba(11,27,63,0.88) 45%, rgba(11,27,63,0.55) 100%)' }} />
       <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#FF5C00] rotate-45" />
-      <div className="absolute -bottom-24 -right-10 w-[380px] h-[200px] rounded-[50%] bg-gradient-to-r from-[#FF5C00] to-[#FF8A3D] opacity-90 blur-[2px]" />
+      <div className="absolute -bottom-32 -right-16 w-[380px] h-[170px] rounded-[50%] bg-gradient-to-r from-[#FF5C00] to-[#FF8A3D] opacity-90 blur-[2px]" />
       <div className="relative flex-1 flex flex-col">
         <div>
           <div className="flex items-center gap-3">
@@ -179,11 +179,12 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
     l.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap';
     document.head.appendChild(l);
   }, []);
+  const { next } = w;
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Enter' && e.target?.tagName === 'INPUT') w.next(); };
+    const onKey = (e) => { if (e.key === 'Enter' && e.target?.tagName === 'INPUT') next(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [next]);
   const StepIcon = STEP_ICONS[w.step];
   const google = () => {
     const redirectUrl = window.location.origin + '/auth/callback';
@@ -200,9 +201,9 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
         <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-gradient-to-tr from-[#FF5C00] to-[#FFB37A] rounded-full opacity-80 blur-sm pointer-events-none" />
         <div className="relative max-w-[1160px] mx-auto px-8 xl:px-12 py-7 min-h-full flex flex-col">
           <div className="flex items-center justify-between">
-            <button type="button" onClick={w.prev} data-testid="register-back"
+            <button type="button" onClick={w.success ? onClose : w.prev} data-testid="register-back"
               className="h-12 px-5 rounded-2xl bg-white shadow-[0_6px_18px_-10px_rgba(11,27,63,0.35)] flex items-center gap-2.5 text-sm font-bold" style={{ color: NAVY }}>
-              <ArrowLeft className="w-4 h-4" />{w.step === 0 ? t.close : t.prev}
+              <ArrowLeft className="w-4 h-4" />{w.step === 0 || w.success ? t.close : t.prev}
             </button>
             <div className="flex items-center gap-3 select-none">
               <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#FF5C00] p-2.5 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.9)]"><img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
@@ -244,7 +245,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                 )}
               </div>
 
-              {w.error && <div className="mt-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-bold" data-testid="register-error">{w.error}</div>}
+              {w.error && <div className="mt-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-bold" data-testid="register-error">{lang === 'en' && w.error === 'Registratie mislukt' ? 'Registration failed' : w.error}</div>}
 
               <div className="mt-7 space-y-6">
                 {w.step === 0 && (
@@ -293,7 +294,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                       <IconInput icon={Lock} type={w.showPw ? 'text' : 'password'} autoComplete="new-password" minLength={6} value={w.password}
                         onChange={(e) => w.setPassword(e.target.value)} placeholder={t.passwordPh} data-testid="register-password"
                         right={<button type="button" onClick={() => w.setShowPw((s) => !s)} data-testid="register-password-toggle" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{w.showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>} />
-                      <div className="mt-2.5"><PasswordStrength password={w.password} /></div>
+                      <div className="mt-2.5"><PasswordStrength password={w.password} lang={lang} /></div>
                     </Field>
                   </div>
                 )}

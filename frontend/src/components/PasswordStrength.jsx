@@ -27,6 +27,9 @@ export function scorePassword(pw) {
   return score;
 }
 
+const EN_LEVELS = ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'];
+const EN_CHECKS = ['Min. 8 characters', 'Upper + lower case', 'Number', 'Special character'];
+
 const LEVELS = [
   { label: 'Zeer zwak', color: 'bg-red-500', text: 'text-red-500' },
   { label: 'Zwak', color: 'bg-orange-500', text: 'text-orange-500' },
@@ -35,7 +38,7 @@ const LEVELS = [
   { label: 'Zeer sterk', color: 'bg-emerald-600', text: 'text-emerald-700' },
 ];
 
-export default function PasswordStrength({ password, variant = 'light' }) {
+export default function PasswordStrength({ password, variant = 'light', lang = 'nl' }) {
   const score = useMemo(() => scorePassword(password), [password]);
   const level = LEVELS[score];
 
@@ -44,7 +47,7 @@ export default function PasswordStrength({ password, variant = 'light' }) {
     { ok: /[A-Z]/.test(password) && /[a-z]/.test(password), label: 'Hoofd- + kleine letter' },
     { ok: /\d/.test(password), label: 'Cijfer' },
     { ok: /[^A-Za-z0-9]/.test(password), label: 'Speciaal teken' },
-  ];
+  ].map((c, i) => (lang === 'en' ? { ...c, label: EN_CHECKS[i] } : c));
 
   if (!password) return null;
 
@@ -68,7 +71,7 @@ export default function PasswordStrength({ password, variant = 'light' }) {
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[10px] font-black uppercase tracking-widest ${variant === 'dark' ? 'text-white/90' : level.text}`}
           data-testid="pw-strength-label">
-          {level.label}
+          {lang === 'en' ? EN_LEVELS[score] : level.label}
         </p>
       </div>
       <ul className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-0.5">

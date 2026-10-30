@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only test of the new DesktopRegisterWizard (1672x941 and 1366x768), the NL/EN language switch, plan-CTA preselection, a full real registration, the mobile wizard at 390x844 and the register link on /login. All requested flows work. 1 real registration completed: company 'QA Desktop 1793191693', email test_reg_1793191693@example.com, password Test1234!, register-success shown. Found 4 minor issues: password-strength texts are not translated in EN, the 'U koos: Starter' badge shows without a plan choice when opened from /login, the copyright line is clipped by about 2px at 1366x768, and the top 'Vorige' button is still active on the success screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PasswordStrength (in DesktopRegisterWizard EN mode)", "issue": "In English, the strength label and rules stay Dutch ('ZEER ZWAK', 'Min. 8 tekens', 'Hoofd- + kleine letter', 'Cijfer', 'Speciaal teken'). Error messages from useRegisterWizard (e.g. 'Registratie mislukt') are also Dutch-only. Requirement: ALL texts switch.", "selector": "[data-testid='register-password'] + strength bar", "priority": "MEDIUM"},
+      {"component": "LoginPage -> RegisterModal", "issue": "/login?view=register and the /login 'Registreer hier' link show chosen-plan-badge 'U KOOS: STARTER' without any plan choice. LoginPage.jsx line 302 renders <RegisterModal> without initialPlan, so the useRegisterWizard default initialPlan='starter' fills in a plan and chosenPlanName is not empty. Opening from the landing topheader-register shows no badge (correct).", "selector": "[data-testid='chosen-plan-badge']", "priority": "LOW"},
+      {"component": "DesktopRegisterWizard success screen", "issue": "The top register-back button still shows 'Vorige' and calls w.prev on the success screen. It should be hidden or act as close.", "selector": "[data-testid='register-back']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Register desktop 1366x768", "issues": [
+        "register-side uses overflow-hidden with content height 864px in a 768px viewport. The copyright line bottom is at 769.75px, so it is cut by about 2px. At 1366 the panel is 460px wide (xl breakpoint). Reduce pt-24, mt-10 and mt-8 spacing below about 800px height.",
+        "The handwritten 'Makkelijker verhuren.' / 'Easier renting.' text overlaps the orange bottom blob in the side panel, so orange-on-orange has low contrast.",
+        "register-card ends at 771px and the trust row (803-859px) is below the fold. You have to scroll the main area to see it (acceptable)."
+      ]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Translate PasswordStrength (add a lang prop) and the useRegisterWizard error messages for EN mode",
+    "Pass initialPlan={null} (or the real plan from the query) from LoginPage to RegisterModal, or remove the 'starter' default in useRegisterWizard so the badge only shows for real CTA choices",
+    "Hide the top register-back button, or make it close, when w.success is true",
+    "Tighten side-panel vertical spacing for short viewports (<=800px high) so the copyright is fully visible; move the script text off the orange blob",
+    "Add data-testid to the 'Registreer hier' link in EmailLogin.jsx"
+  ],
+  "critical_code_review_comments": [
+    "DesktopRegisterWizard: the keydown useEffect has no dependency array, so the listener is re-bound on every render. It works but is wasteful; use a ref for w.next.",
+    "The Enter key on any INPUT triggers w.next(), including on step 3 (submits registration). It works as intended because stepValid is checked.",
+    "MobileAuthShell.jsx is 651 lines and close to the 700-line limit."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "92%"},
+  "seed_data_creation": "Created company 'QA Desktop 1793191693' / test_reg_1793191693@example.com / Test1234! via public registration (SR, Starter).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified at 1672x941: all 4 steps, validation (company >=2 chars, name required, email regex plus pw >=6), password toggle, slug preview '✓ VRIJ', stepper checks and orange lines, prev/back/close (prev on step 0 closes), NL country switches to EUR prices (€71,16 / €118,60), plan selection, real registration success. EN toggle switches title, labels, side panel and trust row, persists in localStorage register_lang after close/reopen, NL switches back. Enter key advances the step. The plan-cta-starter, price-advisor-cta and plan-cta-professional CTAs show the matching badge and preselect the plan. Mobile 390 (hamburger topheader-mobile-menu -> mobile-register) opens the orange wizard with no register-desktop and steps work. /login 'Registreer hier' opens the desktop wizard, and close returns to the login page."
+}

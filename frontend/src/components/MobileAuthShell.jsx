@@ -257,7 +257,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart }) {
 const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket'];
 
 // Gedeelde registratie-logica voor mobiele en desktop wizard.
-export function useRegisterWizard({ onClose, initialPlan = 'starter' }) {
+export function useRegisterWizard({ onClose, initialPlan }) {
   const { register } = useAuth();
 
   const [step, setStep] = useState(0);
@@ -370,7 +370,7 @@ export function useRegisterWizard({ onClose, initialPlan = 'starter' }) {
   return { step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal };
 }
 
-export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan = 'starter' }) {
+export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan }) {
   const {
     step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal,
   } = useRegisterWizard({ onClose, initialPlan });
