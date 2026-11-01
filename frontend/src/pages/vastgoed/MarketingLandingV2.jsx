@@ -122,51 +122,51 @@ const FEATURE_ROWS = [
 
 function FeatureRows() {
   return (
-    <section id="features" className="bg-white py-16 lg:py-24">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
-        <div className="max-w-2xl mb-12 lg:mb-16">
+    <section id="features" className="bg-[#F8FAFC] py-16 lg:py-24">
+      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px]">
+        <div className="max-w-3xl mb-10 lg:mb-14">
           <EditableText path="v2.features.eyebrow" fallback="Functies" as="p"
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.features.title" fallback="Alles wat uw vastgoed nodig heeft."
             as="h2"
             className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
+          <p className="mt-4 text-base lg:text-lg text-slate-500 leading-relaxed">
+            Van het eerste overzicht tot de laatste betaling: beheer je verhuur vanuit één plek.
+          </p>
         </div>
-        <div className="space-y-16 lg:space-y-24">
+        <div className="grid lg:grid-cols-2 gap-5 lg:gap-6">
           {FEATURE_ROWS.map((f, i) => {
-            const reverse = i % 2 === 1;
             return (
               <div key={f.id} id={f.id}
                 data-testid={`feature-row-${i}`}
-                className={`grid lg:grid-cols-2 gap-10 lg:gap-14 items-center ${reverse ? 'lg:grid-flow-dense' : ''}`}>
-                <div className={reverse ? 'lg:col-start-2' : ''}>
+                className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_36px_-22px_rgba(11,27,63,0.3)] transition-[transform,box-shadow] hover:-translate-y-1 hover:shadow-[0_22px_48px_-24px_rgba(11,27,63,0.32)] ${i === 0 ? 'lg:col-span-2 lg:grid lg:grid-cols-[0.85fr,1.15fr] lg:items-center' : ''}`}>
+                <div className={`relative overflow-hidden bg-slate-100 ${i === 0 ? 'aspect-[16/9] lg:order-2 lg:aspect-auto lg:h-full lg:min-h-[340px]' : 'aspect-[16/9]'}`}>
+                  <div className="absolute inset-x-0 top-0 z-10 flex h-8 items-center gap-1.5 border-b border-slate-200 bg-white/95 px-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
+                  </div>
+                  <EditableImage path={`v2.features.rows.${i}.img`} fallback={f.img}
+                    alt={f.title} className="h-full w-full object-cover object-top pt-8" />
+                </div>
+                <div className={`p-6 lg:p-7 ${i === 0 ? 'lg:p-10' : ''}`}>
                   <EditableText path={`v2.features.rows.${i}.eyebrow`} fallback={f.eyebrow}
-                    as="p" className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
+                    as="p" className="text-[11px] font-black tracking-[0.2em] uppercase text-[#FF5C00]" />
                   <EditableText path={`v2.features.rows.${i}.title`} fallback={f.title}
-                    as="h3" className="text-2xl lg:text-4xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
+                    as="h3" className={`${i === 0 ? 'mt-3 text-2xl lg:text-4xl' : 'mt-2 text-xl lg:text-2xl'} font-black tracking-tight text-[#0B1B3F] leading-tight`} />
                   <EditableText path={`v2.features.rows.${i}.desc`} fallback={f.desc}
                     as="p" multiline
-                    className="mt-4 text-base lg:text-lg text-slate-600 leading-relaxed max-w-lg" />
-                  <ul className="mt-6 space-y-2.5">
+                    className="mt-3 text-sm lg:text-base text-slate-600 leading-relaxed" />
+                  <ul className={`mt-5 grid gap-2 ${i === 0 ? 'sm:grid-cols-2' : ''}`}>
                     {f.bullets.map((b, bi) => (
-                      <li key={bi} className="flex items-start gap-3 text-sm text-[#0B1B3F] font-semibold">
-                        <span className="w-6 h-6 rounded-md bg-[#FF5C00] flex items-center justify-center shrink-0 mt-0.5">
-                          <ChevronRight className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                      <li key={bi} className="flex items-start gap-2.5 text-[13px] text-[#0B1B3F] font-semibold leading-snug">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50">
+                          <Check className="h-3 w-3 text-[#FF5C00]" strokeWidth={3} />
                         </span>
                         <EditableText path={`v2.features.rows.${i}.bullets.${bi}`} fallback={b} as="span" />
                       </li>
                     ))}
                   </ul>
-                </div>
-                <div className={reverse ? 'lg:col-start-1 lg:row-start-1' : ''}>
-                  <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-[0_30px_60px_-20px_rgba(15,15,15,0.18)]">
-                    <div className="h-9 bg-slate-50 border-b border-slate-200 flex items-center px-4 gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-[#FF5F57]" />
-                      <span className="w-3 h-3 rounded-full bg-[#FEBC2E]" />
-                      <span className="w-3 h-3 rounded-full bg-[#28C840]" />
-                    </div>
-                    <EditableImage path={`v2.features.rows.${i}.img`} fallback={f.img}
-                      alt={f.title} className="w-full block" />
-                  </div>
                 </div>
               </div>
             );
