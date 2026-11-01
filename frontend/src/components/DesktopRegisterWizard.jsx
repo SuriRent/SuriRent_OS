@@ -101,7 +101,7 @@ function Field({ icon: Icon, label, required, optional, hint, children }) {
   );
 }
 
-const INPUT = 'w-full h-14 pl-12 pr-4 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#FF5C00] focus:ring-4 focus:ring-orange-100 transition-[border-color,box-shadow]';
+const INPUT = 'w-full h-14 [@media(max-height:820px)]:h-12 [@media(max-height:680px)]:h-10 pl-12 pr-4 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#FF5C00] focus:ring-4 focus:ring-orange-100 transition-[border-color,box-shadow]';
 
 function IconInput({ icon: Icon, right, ...props }) {
   return (
@@ -131,7 +131,7 @@ function Stepper({ step, labels }) {
 
 function SidePanel({ t }) {
   return (
-    <aside className="relative w-[420px] xl:w-[460px] shrink-0 overflow-hidden text-white flex flex-col px-14 pt-24 pb-10 [@media(max-height:820px)]:pt-14 [@media(max-height:820px)]:pb-6 overflow-y-auto" data-testid="register-side">
+    <aside className="relative w-[420px] xl:w-[460px] shrink-0 overflow-hidden text-white flex flex-col px-14 pt-24 pb-10 [@media(max-height:820px)]:pt-10 [@media(max-height:820px)]:pb-5 [@media(max-height:680px)]:px-10" data-testid="register-side">
       <img src={SIDE_BG} alt="" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg, rgba(11,27,63,0.97) 0%, rgba(11,27,63,0.88) 45%, rgba(11,27,63,0.55) 100%)' }} />
       <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#FF5C00] rotate-45" />
@@ -144,10 +144,10 @@ function SidePanel({ t }) {
           </div>
           <p className="mt-2 text-[13px] font-bold tracking-[0.12em] text-white/85">{t.brandSub.join('  ·  ')}</p>
         </div>
-        <p className="mt-10 text-2xl font-bold">{t.welcomeAt}</p>
-        <p className="text-5xl font-black tracking-tight">Suri<span className="text-[#FF8A3D]">Rent</span></p>
-        <p className="mt-4 text-[15px] text-white/85 leading-relaxed max-w-[300px]">{t.tagline}</p>
-        <div className="mt-8 space-y-4">
+        <p className="mt-10 [@media(max-height:820px)]:mt-5 text-2xl font-bold">{t.welcomeAt}</p>
+        <p className="text-5xl [@media(max-height:820px)]:text-4xl font-black tracking-tight">Suri<span className="text-[#FF8A3D]">Rent</span></p>
+        <p className="mt-4 [@media(max-height:820px)]:mt-2 text-[15px] text-white/85 leading-relaxed max-w-[300px]">{t.tagline}</p>
+        <div className="mt-8 [@media(max-height:820px)]:mt-4 space-y-4 [@media(max-height:820px)]:space-y-2.5">
           {t.feats.map((f, i) => {
             const I = FEAT_ICONS[i];
             return (
@@ -158,7 +158,7 @@ function SidePanel({ t }) {
             );
           })}
         </div>
-        <div className="mt-8 -rotate-[8deg] origin-left text-[#FF8A3D] text-[30px] leading-[1.15]" style={{ fontFamily: "'Caveat', cursive", fontWeight: 600 }}>
+        <div className="mt-8 [@media(max-height:820px)]:mt-4 [@media(max-height:680px)]:hidden -rotate-[8deg] origin-left text-[#FF8A3D] text-[30px] leading-[1.15]" style={{ fontFamily: "'Caveat', cursive", fontWeight: 600 }}>
           <div>{t.script[0]}</div><div className="pl-2">{t.script[1]}</div>
         </div>
         <p className="mt-auto pt-8 text-[11px] text-white/70"><b className="text-white">SuriRent</b> &nbsp;© {new Date().getFullYear()}. {t.rights}</p>
@@ -197,27 +197,27 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
   return (
     <div className="fixed inset-0 z-[200] flex bg-[#F4F6FA] overflow-hidden" data-testid="register-desktop">
       <SidePanel t={t} />
-      <main className="relative flex-1 min-w-0 overflow-y-auto">
+      <main className="relative flex-1 min-w-0 min-h-0 overflow-hidden">
         <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-gradient-to-tr from-[#FF5C00] to-[#FFB37A] rounded-full opacity-80 blur-sm pointer-events-none" />
-        <div className="relative max-w-[1160px] mx-auto px-8 xl:px-12 py-7 min-h-full flex flex-col">
+        <div className="relative max-w-[1160px] mx-auto px-8 xl:px-12 [@media(max-height:820px)]:px-6 [@media(max-height:680px)]:px-4 py-7 [@media(max-height:820px)]:py-3 min-h-full flex flex-col">
           <div className="flex items-center justify-between">
             <button type="button" onClick={w.success ? onClose : w.prev} data-testid="register-back"
-              className="h-12 px-5 rounded-2xl bg-white shadow-[0_6px_18px_-10px_rgba(11,27,63,0.35)] flex items-center gap-2.5 text-sm font-bold" style={{ color: NAVY }}>
+              className="h-12 [@media(max-height:820px)]:h-10 px-5 [@media(max-height:820px)]:px-4 rounded-2xl bg-white shadow-[0_6px_18px_-10px_rgba(11,27,63,0.35)] flex items-center gap-2.5 text-sm font-bold" style={{ color: NAVY }}>
               <ArrowLeft className="w-4 h-4" />{w.step === 0 || w.success ? t.close : t.prev}
             </button>
             <div className="flex items-center gap-3 select-none">
-              <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#FF5C00] p-2.5 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.9)]"><img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
-              <span className="text-[40px] font-black tracking-tight" style={{ color: NAVY }}>Suri<span className="text-[#FF5C00]">Rent</span></span>
+              <span className="w-14 h-14 [@media(max-height:820px)]:w-11 [@media(max-height:820px)]:h-11 rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#FF5C00] p-2.5 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.9)]"><img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
+              <span className="text-[40px] [@media(max-height:820px)]:text-3xl font-black tracking-tight" style={{ color: NAVY }}>Suri<span className="text-[#FF5C00]">Rent</span></span>
             </div>
             <div className="flex items-center gap-3">
-              <LangSwitch lang={lang} setLang={setLang} />
+              <div className="[@media(max-height:820px)]:scale-90 origin-right"><LangSwitch lang={lang} setLang={setLang} /></div>
               <button type="button" onClick={onClose} data-testid="register-close" aria-label={t.close}
-                className="w-12 h-12 rounded-full bg-white shadow-[0_6px_18px_-10px_rgba(11,27,63,0.35)] flex items-center justify-center" style={{ color: NAVY }}><X className="w-5 h-5" /></button>
+                className="w-12 h-12 [@media(max-height:820px)]:w-10 [@media(max-height:820px)]:h-10 rounded-full bg-white shadow-[0_6px_18px_-10px_rgba(11,27,63,0.35)] flex items-center justify-center" style={{ color: NAVY }}><X className="w-5 h-5" /></button>
             </div>
           </div>
 
           {w.success ? (
-            <div className="mt-6 rounded-3xl bg-white shadow-[0_30px_70px_-35px_rgba(11,27,63,0.35)] px-12 py-16 text-center" data-testid="register-success">
+            <div className="mt-6 [@media(max-height:820px)]:mt-3 rounded-3xl bg-white shadow-[0_30px_70px_-35px_rgba(11,27,63,0.35)] px-12 [@media(max-height:820px)]:px-8 py-16 [@media(max-height:820px)]:py-8 text-center" data-testid="register-success">
               <div className="w-20 h-20 rounded-full bg-emerald-50 mx-auto flex items-center justify-center"><Check className="w-11 h-11 text-emerald-500" strokeWidth={3} /></div>
               <h2 className="mt-5 text-4xl font-black" style={{ color: NAVY }}>{t.successT}</h2>
               <p className="mt-2 text-lg font-bold text-[#FF5C00]">{w.companyName}</p>
@@ -227,16 +227,16 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                 {t.toDash}<ArrowRight className="w-5 h-5" /></button>
             </div>
           ) : (
-            <div className="mt-6 rounded-3xl bg-white shadow-[0_30px_70px_-35px_rgba(11,27,63,0.35)] px-10 xl:px-14 pt-9 pb-10" data-testid="register-card">
-              <Stepper step={w.step} labels={t.steps} />
-              <div className="mt-10 flex items-start gap-5">
-                <span className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0 shadow-[0_10px_24px_-14px_rgba(255,92,0,0.7)]">
-                  <StepIcon className="w-8 h-8 text-[#FF5C00]" />
+            <div className="mt-6 [@media(max-height:820px)]:mt-3 rounded-3xl bg-white shadow-[0_30px_70px_-35px_rgba(11,27,63,0.35)] px-10 [@media(max-height:820px)]:px-7 [@media(max-height:680px)]:px-5 xl:px-14 pt-9 [@media(max-height:820px)]:pt-5 [@media(max-height:680px)]:pt-3 pb-10 [@media(max-height:820px)]:pb-5" data-testid="register-card">
+              <div className="[@media(max-height:680px)]:hidden"><Stepper step={w.step} labels={t.steps} /></div>
+              <div className="mt-10 [@media(max-height:820px)]:mt-5 [@media(max-height:680px)]:mt-2 flex items-start gap-5 [@media(max-height:820px)]:gap-3">
+                <span className="w-[72px] h-[72px] [@media(max-height:820px)]:w-14 [@media(max-height:820px)]:h-14 [@media(max-height:680px)]:w-11 [@media(max-height:680px)]:h-11 rounded-full bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0 shadow-[0_10px_24px_-14px_rgba(255,92,0,0.7)]">
+                  <StepIcon className="w-8 h-8 [@media(max-height:820px)]:w-6 [@media(max-height:820px)]:h-6 text-[#FF5C00]" />
                 </span>
                 <div className="min-w-0">
                   <span className="inline-block px-2.5 py-1 rounded-md bg-orange-50 text-[13px] font-bold text-[#FF5C00]" data-testid="register-step-label">{t.stepOf(w.step + 1, 4)}</span>
-                  <h1 className="mt-1.5 text-[34px] font-black tracking-tight leading-tight" style={{ color: NAVY }} data-testid="register-title">{t.titles[w.step]}</h1>
-                  <p className="mt-1 text-[16px] text-slate-500">{t.subs[w.step]}</p>
+                  <h1 className="mt-1.5 [@media(max-height:820px)]:mt-1 text-[34px] [@media(max-height:820px)]:text-[28px] [@media(max-height:680px)]:text-2xl font-black tracking-tight leading-tight" style={{ color: NAVY }} data-testid="register-title">{t.titles[w.step]}</h1>
+                  <p className="mt-1 [@media(max-height:820px)]:mt-0 text-[16px] [@media(max-height:820px)]:text-sm text-slate-500">{t.subs[w.step]}</p>
                 </div>
                 {w.chosenPlanName && w.step !== 3 && (
                   <span className="ml-auto shrink-0 px-3 py-1.5 rounded-full bg-orange-50 text-[11px] font-black tracking-[0.14em] uppercase text-[#FF5C00]" data-testid="chosen-plan-badge">
@@ -247,16 +247,16 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
 
               {w.error && <div className="mt-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-bold" data-testid="register-error">{lang === 'en' && w.error === 'Registratie mislukt' ? 'Registration failed' : w.error}</div>}
 
-              <div className="mt-7 space-y-6">
+              <div className="mt-7 [@media(max-height:820px)]:mt-4 space-y-6 [@media(max-height:820px)]:space-y-4">
                 {w.step === 0 && (
                   <>
                     <button type="button" onClick={google} data-testid="register-google-btn"
-                      className="w-full h-16 rounded-2xl border border-slate-200 bg-slate-50/60 hover:border-[#FF5C00] flex items-center justify-center gap-3.5 text-[16px] font-bold transition-colors" style={{ color: NAVY }}>
+                      className="w-full h-16 [@media(max-height:820px)]:h-12 [@media(max-height:680px)]:h-10 rounded-2xl border border-slate-200 bg-slate-50/60 hover:border-[#FF5C00] flex items-center justify-center gap-3.5 text-[16px] font-bold transition-colors" style={{ color: NAVY }}>
                       <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
                       {t.google}<ArrowRight className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-4"><span className="flex-1 h-px bg-slate-200" /><span className="text-[13px] font-semibold text-slate-500">{t.or}</span><span className="flex-1 h-px bg-slate-200" /></div>
-                    <div className="grid grid-cols-2 gap-8">
+                    <div className="grid grid-cols-2 gap-8 [@media(max-height:820px)]:gap-4">
                       <Field icon={Building2} label={t.company} required hint={t.companyHint}>
                         <IconInput icon={Building2} value={w.companyName} onChange={(e) => w.setCompanyName(e.target.value)} placeholder={t.companyPh} data-testid="register-company" autoFocus />
                         {w.portalPreview.slug && (
@@ -276,7 +276,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                   </>
                 )}
                 {w.step === 1 && (
-                  <div className="grid grid-cols-2 gap-8">
+                  <div className="grid grid-cols-2 gap-8 [@media(max-height:820px)]:gap-4">
                     <Field icon={User} label={t.name} required hint={t.nameHint}>
                       <IconInput icon={User} value={w.name} onChange={(e) => w.setName(e.target.value)} placeholder={t.namePh} data-testid="register-name" autoFocus />
                     </Field>
@@ -286,7 +286,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                   </div>
                 )}
                 {w.step === 2 && (
-                  <div className="grid grid-cols-2 gap-8">
+                  <div className="grid grid-cols-2 gap-8 [@media(max-height:820px)]:gap-4">
                     <Field icon={Mail} label={t.email} required hint={t.emailHint}>
                       <IconInput icon={Mail} type="email" autoComplete="email" value={w.email} onChange={(e) => w.setEmail(e.target.value)} placeholder={t.emailPh} data-testid="register-email" autoFocus />
                     </Field>
@@ -299,7 +299,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                   </div>
                 )}
                 {w.step === 3 && (
-                  <div className="grid grid-cols-[260px,1fr] gap-8">
+                  <div className="grid grid-cols-[260px,1fr] gap-8 [@media(max-height:820px)]:gap-4">
                     <Field icon={Globe} label={t.country} required>
                       <div className="space-y-2.5">
                         {[['SR', 'SRD'], ['NL', 'EUR']].map(([c, cur]) => (
@@ -312,12 +312,12 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                     </Field>
                     <Field icon={Package} label={t.plan} required>
                       {w.plans.length === 0 ? <div className="h-28 flex items-center justify-center"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : (
-                        <div className="grid grid-cols-2 gap-2.5">
+                        <div className="grid grid-cols-2 gap-2.5 [@media(max-height:820px)]:gap-1.5">
                           {w.plans.map((p) => {
                             const sel = w.plan === p.id;
                             return (
                               <button key={p.id} type="button" onClick={() => w.setPlan(p.id)} data-testid={`register-plan-${p.id}`}
-                                className={`text-left rounded-xl border-2 px-4 py-3 transition-colors ${sel ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-orange-300'}`}>
+                                className={`text-left rounded-xl border-2 px-4 py-3 [@media(max-height:820px)]:px-3 [@media(max-height:820px)]:py-2 transition-colors ${sel ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-orange-300'}`}>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-black" style={{ color: NAVY }}>{p.name}</span>
                                   {sel && <Check className="w-4 h-4 text-[#FF5C00]" strokeWidth={3} />}
@@ -334,20 +334,20 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                 )}
               </div>
 
-              <div className="mt-10 flex items-center justify-between gap-4">
+              <div className="mt-10 [@media(max-height:820px)]:mt-5 [@media(max-height:680px)]:mt-3 flex items-center justify-between gap-4">
                 <button type="button" onClick={w.prev} data-testid="register-prev"
-                  className="h-14 w-48 rounded-2xl border border-slate-200 bg-white hover:border-[#FF5C00] flex items-center justify-center gap-3 text-[16px] font-bold transition-colors" style={{ color: NAVY }}>
+                  className="h-14 [@media(max-height:820px)]:h-11 [@media(max-height:680px)]:h-10 w-48 [@media(max-height:680px)]:w-40 rounded-2xl border border-slate-200 bg-white hover:border-[#FF5C00] flex items-center justify-center gap-3 text-[16px] [@media(max-height:820px)]:text-sm font-bold transition-colors" style={{ color: NAVY }}>
                   <ArrowLeft className="w-5 h-5" />{w.step === 0 ? t.close : t.prev}
                 </button>
                 <button type="button" onClick={w.next} disabled={!w.stepValid || w.loading} data-testid="register-next"
-                  className="h-14 w-[440px] max-w-[55%] rounded-2xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white text-[16px] font-black flex items-center justify-center gap-3 shadow-[0_14px_28px_-12px_rgba(255,92,0,0.9)] disabled:opacity-50 transition-opacity">
+                  className="h-14 [@media(max-height:820px)]:h-11 [@media(max-height:680px)]:h-10 w-[440px] max-w-[55%] rounded-2xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white text-[16px] [@media(max-height:820px)]:text-sm font-black flex items-center justify-center gap-3 shadow-[0_14px_28px_-12px_rgba(255,92,0,0.9)] disabled:opacity-50 transition-opacity">
                   {w.loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{w.step < 3 ? t.next : t.create}<ArrowRight className="w-5 h-5" /></>}
                 </button>
               </div>
             </div>
           )}
 
-          <div className="mt-8 grid grid-cols-3 max-w-[920px] mx-auto w-full" data-testid="register-trust">
+          <div className="mt-8 [@media(max-height:820px)]:hidden grid grid-cols-3 max-w-[920px] mx-auto w-full" data-testid="register-trust">
             {t.trust.map(([a, b], i) => {
               const I = [ShieldCheck, Cloud, Headphones][i];
               return (
