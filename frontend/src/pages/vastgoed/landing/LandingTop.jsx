@@ -16,7 +16,7 @@ const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 export const goToSection = (id) => {
   if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   const el = document.getElementById(id);
-  if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 84, behavior: 'smooth' });
+  if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 136, behavior: 'smooth' });
 };
 const SPY = ['home', 'features', 'kiosk', 'pricing', 'faq'];
 
@@ -77,8 +77,8 @@ export function LandingHeader({ onLogin, onRegister }) {
   useEffect(() => {
     const onScroll = () => {
       let cur = 'home';
-      SPY.forEach((id) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 120) cur = id; });
-      if (cur === 'home' && document.getElementById('feature-0')?.getBoundingClientRect().top <= 120) cur = 'features';
+      SPY.forEach((id) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 136) cur = id; });
+      if (cur === 'home' && document.getElementById('feature-0')?.getBoundingClientRect().top <= 136) cur = 'features';
       setActive(cur);
     };
     onScroll();
@@ -89,19 +89,6 @@ export function LandingHeader({ onLogin, onRegister }) {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100" data-testid="landing-header">
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
         <Logo />
-        <nav className="hidden xl:flex items-center gap-6 xl:gap-9 ml-4 xl:ml-8 mr-auto">
-          {NAV.map((n) => (
-            <div key={n.id} className="relative" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
-              <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
-                className={`relative h-[76px] flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
-                style={active === n.id ? undefined : { color: NAVY }}>
-                {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
-                {active === n.id && <span className="absolute left-0 right-0 bottom-[18px] h-[2px] rounded-full bg-[#FF5C00]" />}
-              </button>
-              {n.menu && menu && <FeaturesMenu onPick={pick} />}
-            </div>
-          ))}
-        </nav>
         <div className="flex items-center gap-3 lg:gap-4">
           <div className="hidden 2xl:block"><StatusPill /></div>
           <button onClick={onLogin} data-testid="topheader-login"
@@ -118,6 +105,19 @@ export function LandingHeader({ onLogin, onRegister }) {
           </button>
         </div>
       </div>
+      <nav className="hidden xl:flex h-[52px] items-center justify-center gap-6 2xl:gap-9 border-t border-slate-50">
+        {NAV.map((n) => (
+          <div key={n.id} className="relative h-full" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
+            <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
+              className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
+              style={active === n.id ? undefined : { color: NAVY }}>
+              {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
+              {active === n.id && <span className="absolute left-0 right-0 bottom-[6px] h-[2px] rounded-full bg-[#FF5C00]" />}
+            </button>
+            {n.menu && menu && <FeaturesMenu onPick={pick} />}
+          </div>
+        ))}
+      </nav>
       {open && (
         <div className="xl:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
           {NAV.map((n) => (
