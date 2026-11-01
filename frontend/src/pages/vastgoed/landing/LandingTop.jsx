@@ -105,18 +105,20 @@ export function LandingHeader({ onLogin, onRegister }) {
           </button>
         </div>
       </div>
-      <nav className="hidden xl:flex h-[52px] items-center justify-center gap-6 2xl:gap-9 border-t border-slate-50">
-        {NAV.map((n) => (
-          <div key={n.id} className="relative h-full" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
-            <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
-              className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
-              style={active === n.id ? undefined : { color: NAVY }}>
-              {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
-              {active === n.id && <span className="absolute left-0 right-0 bottom-[6px] h-[2px] rounded-full bg-[#FF5C00]" />}
-            </button>
-            {n.menu && menu && <FeaturesMenu onPick={pick} />}
-          </div>
-        ))}
+      <nav className="hidden xl:block h-[52px] border-t border-slate-50">
+        <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-full flex items-center justify-start gap-6 2xl:gap-9">
+          {NAV.map((n) => (
+            <div key={n.id} className="relative h-full" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
+              <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
+                className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
+                style={active === n.id ? undefined : { color: NAVY }}>
+                {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
+                {active === n.id && <span className="absolute left-0 right-0 bottom-[6px] h-[2px] rounded-full bg-[#FF5C00]" />}
+              </button>
+              {n.menu && menu && <FeaturesMenu onPick={pick} />}
+            </div>
+          ))}
+        </div>
       </nav>
       {open && (
         <div className="xl:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
