@@ -15,6 +15,9 @@ const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
 export const goToSection = (id) => {
   if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (id.startsWith('feature-')) {
+    window.dispatchEvent(new CustomEvent('surirent:feature-select', { detail: { id } }));
+  }
   const el = document.getElementById(id);
   if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 136, behavior: 'smooth' });
 };

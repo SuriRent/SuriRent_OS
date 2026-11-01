@@ -90,30 +90,30 @@ function searchIndex(q) {
 }
 
 // =============================================================================
-// Features rows — alternerende editorial layout
+// Interactive feature showcase — tab navigation and product preview
 // =============================================================================
 const FEATURE_ROWS = [
-  { id: 'feature-0', eyebrow: 'Beheer Suite',
+  { id: 'feature-0', icon: LayoutDashboard, eyebrow: 'Beheer Suite',
     title: 'Eén dashboard. Alle vastgoed-data.',
     desc: 'Realtime kas saldo, openstaande facturen, achterstand en activiteit in één strak overzicht. Multi-currency voor SRD, EUR en USD.',
     bullets: ['Live kas saldo per valuta', 'Achterstand & openstaand overzicht', 'Quick actions binnen handbereik'],
     img: SHOTS.overzicht },
-  { id: 'feature-1', eyebrow: 'Locaties',
+  { id: 'feature-1', icon: MapPin, eyebrow: 'Locaties',
     title: 'Groepeer per vestiging of complex.',
     desc: 'Beheer meerdere locaties tegelijkertijd. Foto en adres per vestiging, drill-down naar individuele units.',
     bullets: ['Onbeperkt locaties per bedrijf', 'Foto + adres per locatie', 'Drill-down naar units'],
     img: SHOTS.locaties },
-  { id: 'feature-2', eyebrow: 'Appartementen',
+  { id: 'feature-2', icon: HomeIcon, eyebrow: 'Appartementen',
     title: 'Eenheidbeheer in detail.',
     desc: 'Per appartement: huurder, maandhuur, status, foto en QR code. Smart breaker integratie via Shelly.',
     bullets: ['Huurder · huur · status per unit', 'QR code per appartement', 'Smart breaker integratie'],
     img: SHOTS.appartementen },
-  { id: 'feature-3', eyebrow: 'Betalingen',
+  { id: 'feature-3', icon: Receipt, eyebrow: 'Betalingen',
     title: 'Kwitanties · OCR · WhatsApp.',
     desc: 'Elke betaling automatisch geboekt met PDF, e-mail-bevestiging en audit log. Gemini AI OCR voor bankafschriften.',
     bullets: ['PDF kwitantie per betaling', 'Gemini AI OCR upload', 'WhatsApp + e-mail verzending'],
     img: SHOTS.betalingen },
-  { id: 'feature-4', eyebrow: 'Facturen',
+  { id: 'feature-4', icon: FileText, eyebrow: 'Facturen',
     title: '3-bucket factuur logica.',
     desc: 'Automatische scheiding van achterstand, lopende maand en vooruit. Met betalingsregelingen en PDF kwitanties per termijn.',
     bullets: ['Achterstand · lopend · vooruit', 'Auto-generate maandelijks', 'Betalingsregelingen ondersteund'],
@@ -121,56 +121,94 @@ const FEATURE_ROWS = [
 ];
 
 function FeatureRows() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeFeature = FEATURE_ROWS[activeIndex];
+  const ActiveIcon = activeFeature.icon;
+
+  useEffect(() => {
+    const selectFeature = (event) => {
+      const index = FEATURE_ROWS.findIndex((feature) => feature.id === event.detail?.id);
+      if (index >= 0) setActiveIndex(index);
+    };
+    window.addEventListener('surirent:feature-select', selectFeature);
+    return () => window.removeEventListener('surirent:feature-select', selectFeature);
+  }, []);
+
   return (
-    <section id="features" className="bg-[#F8FAFC] py-16 lg:py-24">
+    <section id="features" className="bg-white py-16 lg:py-24">
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px]">
-        <div className="max-w-3xl mb-10 lg:mb-14">
+        <div className="max-w-3xl mb-9 lg:mb-12">
           <EditableText path="v2.features.eyebrow" fallback="Functies" as="p"
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.features.title" fallback="Alles wat uw vastgoed nodig heeft."
             as="h2"
             className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
           <p className="mt-4 text-base lg:text-lg text-slate-500 leading-relaxed">
-            Van het eerste overzicht tot de laatste betaling: beheer je verhuur vanuit één plek.
+            Van het eerste overzicht tot de laatste betaling: alles overzichtelijk op één plek.
           </p>
         </div>
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-6">
-          {FEATURE_ROWS.map((f, i) => {
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Productfuncties">
+          {FEATURE_ROWS.map((feature, index) => {
+            const Icon = feature.icon;
+            const selected = index === activeIndex;
             return (
-              <div key={f.id} id={f.id}
-                data-testid={`feature-row-${i}`}
-                className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_36px_-22px_rgba(11,27,63,0.3)] transition-[transform,box-shadow] hover:-translate-y-1 hover:shadow-[0_22px_48px_-24px_rgba(11,27,63,0.32)] ${i === 0 ? 'lg:col-span-2 lg:grid lg:grid-cols-[0.85fr,1.15fr] lg:items-center' : ''}`}>
-                <div className={`relative overflow-hidden bg-slate-100 ${i === 0 ? 'aspect-[16/9] lg:order-2 lg:aspect-auto lg:h-full lg:min-h-[340px]' : 'aspect-[16/9]'}`}>
-                  <div className="absolute inset-x-0 top-0 z-10 flex h-8 items-center gap-1.5 border-b border-slate-200 bg-white/95 px-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
-                  </div>
-                  <EditableImage path={`v2.features.rows.${i}.img`} fallback={f.img}
-                    alt={f.title} className="h-full w-full object-cover object-top pt-8" />
-                </div>
-                <div className={`p-6 lg:p-7 ${i === 0 ? 'lg:p-10' : ''}`}>
-                  <EditableText path={`v2.features.rows.${i}.eyebrow`} fallback={f.eyebrow}
-                    as="p" className="text-[11px] font-black tracking-[0.2em] uppercase text-[#FF5C00]" />
-                  <EditableText path={`v2.features.rows.${i}.title`} fallback={f.title}
-                    as="h3" className={`${i === 0 ? 'mt-3 text-2xl lg:text-4xl' : 'mt-2 text-xl lg:text-2xl'} font-black tracking-tight text-[#0B1B3F] leading-tight`} />
-                  <EditableText path={`v2.features.rows.${i}.desc`} fallback={f.desc}
-                    as="p" multiline
-                    className="mt-3 text-sm lg:text-base text-slate-600 leading-relaxed" />
-                  <ul className={`mt-5 grid gap-2 ${i === 0 ? 'sm:grid-cols-2' : ''}`}>
-                    {f.bullets.map((b, bi) => (
-                      <li key={bi} className="flex items-start gap-2.5 text-[13px] text-[#0B1B3F] font-semibold leading-snug">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-50">
-                          <Check className="h-3 w-3 text-[#FF5C00]" strokeWidth={3} />
-                        </span>
-                        <EditableText path={`v2.features.rows.${i}.bullets.${bi}`} fallback={b} as="span" />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+              <button key={feature.id} id={feature.id} type="button" role="tab"
+                aria-selected={selected} aria-controls="feature-detail"
+                onClick={() => setActiveIndex(index)}
+                data-testid={`feature-row-${index}`}
+                className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                  selected
+                    ? 'border-[#0B1B3F] bg-[#0B1B3F] text-white shadow-[0_8px_20px_-12px_rgba(11,27,63,0.65)]'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:bg-orange-50/60 hover:text-[#0B1B3F]'
+                }`}>
+                <Icon className={`h-4 w-4 ${selected ? 'text-[#FF8A3D]' : 'text-[#FF5C00]'}`} />
+                {feature.eyebrow}
+              </button>
             );
           })}
+        </div>
+        <div id="feature-detail" role="tabpanel" aria-labelledby={activeFeature.id}
+          className="grid overflow-hidden rounded-2xl border border-slate-200 bg-[#F8FAFC] shadow-[0_20px_56px_-36px_rgba(11,27,63,0.45)] lg:grid-cols-[0.8fr,1.2fr]">
+          <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+              <ActiveIcon className="h-6 w-6" strokeWidth={1.9} />
+            </div>
+            <EditableText path={`v2.features.rows.${activeIndex}.eyebrow`} fallback={activeFeature.eyebrow}
+              as="p" className="mt-6 text-[11px] font-black tracking-[0.2em] uppercase text-[#FF5C00]" />
+            <EditableText path={`v2.features.rows.${activeIndex}.title`} fallback={activeFeature.title}
+              as="h3" className="mt-2 text-2xl font-black leading-tight tracking-tight text-[#0B1B3F] sm:text-3xl lg:text-4xl" />
+            <EditableText path={`v2.features.rows.${activeIndex}.desc`} fallback={activeFeature.desc}
+              as="p" multiline className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base" />
+            <ul className="mt-6 space-y-3">
+              {activeFeature.bullets.map((bullet, bulletIndex) => (
+                <li key={bulletIndex} className="flex items-start gap-3 text-sm font-semibold leading-relaxed text-[#0B1B3F]">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                    <Check className="h-3 w-3 text-emerald-600" strokeWidth={3} />
+                  </span>
+                  <EditableText path={`v2.features.rows.${activeIndex}.bullets.${bulletIndex}`} fallback={bullet} as="span" />
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="min-w-0 p-4 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pl-0">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_18px_48px_-28px_rgba(11,27,63,0.5)]">
+              <div className="flex h-9 items-center gap-1.5 border-b border-slate-100 bg-white px-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
+                <span className="ml-3 h-4 flex-1 rounded bg-slate-50" />
+              </div>
+              <div className="aspect-[16/10] bg-slate-100">
+                <EditableImage key={activeFeature.id} path={`v2.features.rows.${activeIndex}.img`}
+                  fallback={activeFeature.img} alt={activeFeature.title}
+                  className="h-full w-full object-cover object-top" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
+              <span>{activeFeature.eyebrow}</span>
+              <span>{String(activeIndex + 1).padStart(2, '0')} / {String(FEATURE_ROWS.length).padStart(2, '0')}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
