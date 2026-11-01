@@ -19,19 +19,19 @@ De Coolify-deployment gebruikt de services uit `docker-compose.yml`:
 
 | Service | Functie |
 | --- | --- |
-| `web` | React Single-Page Application, gebouwd met Node.js en geserveerd door Nginx op containerpoort `80`. Nginx routeert `/api/`-verkeer en WebSockets door naar de backend en ondersteunt frontend-routes. |
+| `web` | React Single-Page Application, gebouwd met Node.js en geserveerd door Nginx op containerpoort `80`. Zowel het marketingdomein als het app-domein wijzen naar deze service. Nginx routeert `/api/`-verkeer en WebSockets door naar de backend en ondersteunt frontend-routes. |
 | `app` | FastAPI-backend op poort `8000`, gestart met één Uvicorn-worker. |
 | `database` | MongoDB 7. Data staat in de persistente Docker-volume `mongo_data`. |
 
-Alleen `web` hoeft publiek bereikbaar te zijn. Coolify verzorgt HTTPS en routeert het domein naar containerpoort `80`; de API en database blijven intern op het Compose-netwerk. De backend-healthcheck gebruikt `/api/health`; Nginx geeft die route publiek door als `/api/health`.
+Alleen `web` hoeft publiek bereikbaar te zijn. Coolify verzorgt HTTPS en routeert beide domeinen naar containerpoort `80`; de API (`app`) en database blijven intern op het Compose-netwerk. De React-app toont de marketingwebsite op `REACT_APP_MARKETING_HOST` en de inlog-/beheerapp op `REACT_APP_APP_URL`. Nginx geeft `/api/` intern door aan `app`. De backend-healthcheck gebruikt `/api/health`; Nginx geeft die route publiek door als `/api/health`.
 
 ## Deployen met Coolify
 
 1. Maak in Coolify een **Docker Compose**-resource aan voor deze repository en gebruik `docker-compose.yml`.
 2. Stel de vereiste variabelen uit `.env.example` in via de environment-instellingen van de resource. Gebruik unieke, sterke wachtwoorden en geheimen. Genereer bijvoorbeeld secrets met `openssl rand -hex 32`.
-3. Configureer het publieke HTTPS-domein op de `web`-service, met containerpoort `80`.
-4. Stel `APP_PUBLIC_URL` in op de volledige URL van dat domein, bijvoorbeeld `https://rent.example.com`. Stel `APP_PUBLIC_HOST` in op de hostname zonder schema, bijvoorbeeld `rent.example.com`, en `CORS_ORIGINS` op de origin, bijvoorbeeld `https://rent.example.com`.
-5. Laat `REACT_APP_BACKEND_URL` leeg voor API-verkeer via hetzelfde domein. Vul deze alleen in als de frontend tijdens de build naar een afzonderlijke API-origin moet verwijzen.
+3. Configureer **beide** publieke HTTPS-domeinen op de `web`-service, met containerpoort `80`: het marketingdomein en het app-domein. Verwijder het publieke domein van de `app`-service; die service is alleen de interne API.
+4. Stel `APP_PUBLIC_URL` en `APP_PUBLIC_HOST` in op het app-domein. Zet in `CORS_ORIGINS` beide origins, gescheiden door een komma. Stel `REACT_APP_MARKETING_HOST` in op de marketing-hostname zonder schema en `REACT_APP_APP_URL` op de volledige app-URL.
+5. Laat `REACT_APP_BACKEND_URL` leeg voor API-verkeer via dezelfde origin. De Nginx-proxy op `web` stuurt `/api/` door naar de interne API. De waarden met `REACT_APP_` worden tijdens de Docker-imagebuild ingebakken; voer na wijziging een nieuwe build/deploy uit.
 6. Deploy de resource.
 
 Gebruik voor `MONGO_ROOT_PASSWORD` een hexadecimaal wachtwoord, zodat het veilig in de MongoDB-connection-URI kan worden gebruikt. Houd MongoDB-inloggegevens en encryptiesecrets stabiel voor een bestaande database: veranderen van de MongoDB-wachtwoorden zonder de database mee te werken maakt de verbinding stuk; veranderen van de encryptiesleutel kan opgeslagen integratiegegevens onleesbaar maken.
@@ -65,6 +65,8 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `APP_PUBLIC_HOST` | Nee | Publieke hostname zonder schema, gebruikt voor host-/domeinfuncties. |
 | `CORS_ORIGINS` | Ja | Toegestane frontend-origin(s), zoals `https://rent.example.com`. |
 | `REACT_APP_BACKEND_URL` | Nee | Frontend API-origin tijdens de build; leeg gebruikt same-origin `/api`-verkeer. |
+| `REACT_APP_MARKETING_HOST` | Ja bij gescheiden domeinen | Marketing-hostname zonder `https://` of afsluitende slash; bepaalt waar de marketingwebsite wordt getoond. |
+| `REACT_APP_APP_URL` | Ja bij gescheiden domeinen | Volledige publieke app-URL; marketinglinks naar aanmelden/inloggen verwijzen hiernaartoe. |
 | `EMERGENT_LLM_KEY` | Nee | Optionele AI-, spraak- en gerelateerde Emergent-integraties. |
 | `INTEGRATION_PROXY_URL` | Nee | Optionele basis-URL voor de object-storage-integratie. |
 | `STRIPE_PUBLISHABLE_KEY` | Nee | Optionele Stripe publishable key. |
@@ -106,7 +108,7 @@ Optionele integraties zijn niet bruikbaar totdat ze correct zijn geconfigureerd.
 4. Open `http://localhost:8080`. De API-healthcheck is beschikbaar op `http://localhost:8080/api/health`.
 5. Stop de services met `docker compose -f docker-compose.yml -f docker-compose.local.yml down`. De databasevolume blijft behouden. Om ook de databasegegevens te verwijderen, voeg je bewust `--volumes` toe.
 
-De Compose-stack vereist dezelfde secrets en URL-variabelen als de Coolify-deployment. Gebruik voor lokale ontwikkeling `APP_PUBLIC_URL=http://localhost:8080`, `CORS_ORIGINS=http://localhost:8080` en laat `REACT_APP_BACKEND_URL` leeg voor same-origin verkeer. Publiceer in Coolify geen hostpoort; laat Coolify naar de interne webpoort `80` routeren.
+De Compose-stack vereist dezelfde secrets en URL-variabelen als de Coolify-deployment. Gebruik voor lokale ontwikkeling `APP_PUBLIC_URL=http://localhost:8080`, `CORS_ORIGINS=http://localhost:8080` en laat `REACT_APP_BACKEND_URL`, `REACT_APP_MARKETING_HOST` en `REACT_APP_APP_URL` leeg. Publiceer in Coolify geen hostpoort; laat Coolify naar de interne webpoort `80` routeren.
 
 ### Frontend en backend afzonderlijk
 

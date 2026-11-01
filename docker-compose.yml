@@ -59,6 +59,8 @@ services:
       target: web
       args:
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-}
+        REACT_APP_MARKETING_HOST: ${REACT_APP_MARKETING_HOST:-}
+        REACT_APP_APP_URL: ${REACT_APP_APP_URL:-}
     restart: unless-stopped
     expose:
       - "80"
