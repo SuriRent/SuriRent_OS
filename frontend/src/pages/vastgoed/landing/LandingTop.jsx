@@ -90,7 +90,7 @@ export function LandingHeader({ onLogin, onRegister }) {
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
         <Logo />
         <div className="flex items-center gap-3 lg:gap-4">
-          <div className="hidden 2xl:block"><StatusPill /></div>
+          <div className="hidden lg:block"><StatusPill /></div>
           <button onClick={onLogin} data-testid="topheader-login"
             className="hidden sm:inline-flex h-[44px] px-7 rounded-xl border border-slate-300 bg-white hover:border-[#FF5C00] text-[15px] font-bold items-center gap-2.5 transition-colors" style={{ color: NAVY }}>
             <Lock className="w-4 h-4" /><EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" />
