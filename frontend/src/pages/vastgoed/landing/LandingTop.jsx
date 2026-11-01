@@ -55,7 +55,7 @@ function Logo() {
 
 function FeaturesMenu({ onPick }) {
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 z-50" data-testid="nav-features-menu">
+    <div className="absolute left-0 top-full pt-3 z-50" data-testid="nav-features-menu">
       <div className="w-[520px] grid grid-cols-2 gap-1 p-3 rounded-2xl bg-white border border-slate-100 shadow-[0_24px_48px_-16px_rgba(11,27,63,0.25)]">
         {FEATURES.map((f) => (
           <button key={f.title} onClick={() => onPick(f.target)} data-testid={`nav-feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
