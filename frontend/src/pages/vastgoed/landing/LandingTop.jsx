@@ -345,7 +345,7 @@ export function LandingHero({ onDemo, apk }) {
 
 export function LandingFeatures() {
   return (
-    <section className="bg-[#F8FAFC] py-8 lg:py-10" data-testid="landing-features">
+    <section id="features" className="bg-[#F8FAFC] py-8 lg:py-10" data-testid="landing-features">
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px]">
         <div className="text-center max-w-3xl mx-auto">
           <EditableText path="v3.features.eyebrow" fallback="Onze functies" as="p" className="text-[12px] font-black tracking-[0.08em] uppercase text-[#FF5C00]" />

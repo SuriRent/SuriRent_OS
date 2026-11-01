@@ -16,7 +16,7 @@ import { EditableProvider, EditableText, EditableImage, useLandingContent } from
 import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { LandingHeader, LandingHero } from './landing/LandingTop';
+import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
 import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
 
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
@@ -1281,6 +1281,7 @@ export default function MarketingLandingV2() {
         ) : (
           <>
             <LandingHero onDemo={onDemo} apk={apk} />
+            <LandingFeatures />
             <KioskSection />
             <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} onRegister={onRegister} />
             <FAQSection />
