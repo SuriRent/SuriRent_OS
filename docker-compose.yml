@@ -1,0 +1,92 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}@database:27017/${DB_NAME:-vastgoed_kiosk}?authSource=admin
+      DB_NAME: ${DB_NAME:-vastgoed_kiosk}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      PDF_AES_PASSWORD: ${PDF_AES_PASSWORD:?Set PDF_AES_PASSWORD}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?Set SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?Set SUPERADMIN_PASSWORD}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:?Set APP_PUBLIC_URL}
+      APP_PUBLIC_HOST: ${APP_PUBLIC_HOST:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}
+      COOKIE_SECURE: "1"
+      RESEED_DEMO_TENANT_PIN: "0"
+      DISABLE_DEMO_RESET: "1"
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
+      INTEGRATION_PROXY_URL: ${INTEGRATION_PROXY_URL:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY_B64: ${VAPID_PRIVATE_KEY_B64:-}
+      VAPID_CONTACT: ${VAPID_CONTACT:-}
+      PLATFORM_SMTP_HOST: ${PLATFORM_SMTP_HOST:-}
+      PLATFORM_SMTP_PORT: ${PLATFORM_SMTP_PORT:-587}
+      PLATFORM_SMTP_USERNAME: ${PLATFORM_SMTP_USERNAME:-}
+      PLATFORM_SMTP_PASSWORD: ${PLATFORM_SMTP_PASSWORD:-}
+      PLATFORM_SMTP_TLS: ${PLATFORM_SMTP_TLS:-true}
+      PLATFORM_FROM_NAME: ${PLATFORM_FROM_NAME:-SuriRent}
+      PLATFORM_FROM_EMAIL: ${PLATFORM_FROM_EMAIL:-}
+    expose:
+      - "8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-}
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  database:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --username "$${MONGO_INITDB_ROOT_USERNAME}" --password "$${MONGO_INITDB_ROOT_PASSWORD}" --authenticationDatabase admin --eval "db.adminCommand('ping').ok"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mongo_data:

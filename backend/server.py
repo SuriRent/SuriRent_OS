@@ -446,8 +446,8 @@ async def lifespan(app: FastAPI):
         print(f"[startup] payment↔invoice backfill failed: {e}")
 
     # --- Seed superadmin ---
-    super_email = "super@surirent.sr"
-    super_pw = "super123"
+    super_email = os.environ.get("SUPERADMIN_EMAIL", "super@surirent.sr")
+    super_pw = os.environ.get("SUPERADMIN_PASSWORD", "super123")
     sa = await db.users.find_one({"email": super_email})
     if sa is None:
         await db.users.insert_one({

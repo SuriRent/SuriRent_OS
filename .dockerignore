@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules
+**/build
+**/dist
+**/__pycache__
+**/*.py[cod]
+backend/tests
+deployer-agent-docs
+docs
+memory
+test_reports
+tests
