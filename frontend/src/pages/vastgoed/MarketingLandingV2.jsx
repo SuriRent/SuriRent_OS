@@ -2,7 +2,7 @@
 // Dubbele top nav, hero met grote visual + dark greeting card, 8 product cards
 // in 4x2 grid. Kleurschema: zwart (#0B1B3F / #13254D) + oranje (#FF5C00).
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { appLink } from '../../lib/env';
 import { useAuth } from '../../lib/auth';
 import {
@@ -16,7 +16,7 @@ import { EditableProvider, EditableText, EditableImage, useLandingContent } from
 import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
+import { LandingHeader, LandingHero } from './landing/LandingTop';
 import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
 
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
@@ -90,7 +90,7 @@ function searchIndex(q) {
 }
 
 // =============================================================================
-// Interactive feature showcase — tab navigation and product preview
+// Feature details page
 // =============================================================================
 const FEATURE_ROWS = [
   { id: 'feature-0', icon: LayoutDashboard, eyebrow: 'Beheer Suite',
@@ -120,98 +120,138 @@ const FEATURE_ROWS = [
     img: SHOTS.facturen },
 ];
 
-function FeatureRows() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeFeature = FEATURE_ROWS[activeIndex];
-  const ActiveIcon = activeFeature.icon;
+function FeatureDetailsPage({ onDemo, onRegister }) {
+  const location = useLocation();
 
   useEffect(() => {
-    const selectFeature = (event) => {
-      const index = FEATURE_ROWS.findIndex((feature) => feature.id === event.detail?.id);
-      if (index >= 0) setActiveIndex(index);
-    };
-    window.addEventListener('surirent:feature-select', selectFeature);
-    return () => window.removeEventListener('surirent:feature-select', selectFeature);
-  }, []);
+    if (!location.hash) return undefined;
+    const timer = setTimeout(() => {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 136, behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [location.hash]);
 
   return (
-    <section id="features" className="bg-white py-16 lg:py-24">
-      <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px]">
-        <div className="max-w-3xl mb-9 lg:mb-12">
-          <EditableText path="v2.features.eyebrow" fallback="Functies" as="p"
-            className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
-          <EditableText path="v2.features.title" fallback="Alles wat uw vastgoed nodig heeft."
-            as="h2"
-            className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />
-          <p className="mt-4 text-base lg:text-lg text-slate-500 leading-relaxed">
-            Van het eerste overzicht tot de laatste betaling: alles overzichtelijk op één plek.
-          </p>
-        </div>
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Productfuncties">
-          {FEATURE_ROWS.map((feature, index) => {
-            const Icon = feature.icon;
-            const selected = index === activeIndex;
-            return (
-              <button key={feature.id} id={feature.id} type="button" role="tab"
-                aria-selected={selected} aria-controls="feature-detail"
-                onClick={() => setActiveIndex(index)}
-                data-testid={`feature-row-${index}`}
-                className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
-                  selected
-                    ? 'border-[#0B1B3F] bg-[#0B1B3F] text-white shadow-[0_8px_20px_-12px_rgba(11,27,63,0.65)]'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:bg-orange-50/60 hover:text-[#0B1B3F]'
-                }`}>
-                <Icon className={`h-4 w-4 ${selected ? 'text-[#FF8A3D]' : 'text-[#FF5C00]'}`} />
-                {feature.eyebrow}
-              </button>
-            );
-          })}
-        </div>
-        <div id="feature-detail" role="tabpanel" aria-labelledby={activeFeature.id}
-          className="grid overflow-hidden rounded-2xl border border-slate-200 bg-[#F8FAFC] shadow-[0_20px_56px_-36px_rgba(11,27,63,0.45)] lg:grid-cols-[0.8fr,1.2fr]">
-          <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
-              <ActiveIcon className="h-6 w-6" strokeWidth={1.9} />
+    <main data-testid="feature-details-page">
+      <section className="relative overflow-hidden bg-[#0B1B3F] text-white">
+        <div className="absolute -right-32 -top-40 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/20 blur-3xl" />
+        <div className="relative mx-auto grid max-w-[1440px] items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[0.8fr,1.2fr] lg:gap-14 lg:px-10 lg:py-20 2xl:px-[120px]">
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+              <span className="h-2 w-2 rounded-full bg-[#FF8A3D]" /> SuriRent functies
             </div>
-            <EditableText path={`v2.features.rows.${activeIndex}.eyebrow`} fallback={activeFeature.eyebrow}
-              as="p" className="mt-6 text-[11px] font-black tracking-[0.2em] uppercase text-[#FF5C00]" />
-            <EditableText path={`v2.features.rows.${activeIndex}.title`} fallback={activeFeature.title}
-              as="h3" className="mt-2 text-2xl font-black leading-tight tracking-tight text-[#0B1B3F] sm:text-3xl lg:text-4xl" />
-            <EditableText path={`v2.features.rows.${activeIndex}.desc`} fallback={activeFeature.desc}
-              as="p" multiline className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base" />
-            <ul className="mt-6 space-y-3">
-              {activeFeature.bullets.map((bullet, bulletIndex) => (
-                <li key={bulletIndex} className="flex items-start gap-3 text-sm font-semibold leading-relaxed text-[#0B1B3F]">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50">
-                    <Check className="h-3 w-3 text-emerald-600" strokeWidth={3} />
-                  </span>
-                  <EditableText path={`v2.features.rows.${activeIndex}.bullets.${bulletIndex}`} fallback={bullet} as="span" />
-                </li>
-              ))}
-            </ul>
+            <h1 className="mt-6 text-4xl font-black leading-[1.08] tracking-tight sm:text-5xl lg:text-[56px]">
+              Meer overzicht.<br /><span className="text-[#FF8A3D]">Minder handwerk.</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">
+              Van locaties en huurders tot betalingen en facturen: ontdek hoe SuriRent je verhuurbeheer samenbrengt.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button onClick={onRegister} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white transition-colors hover:bg-[#E65300]">
+                Start gratis <ArrowRight className="h-4 w-4" />
+              </button>
+              <button onClick={onDemo} className="inline-flex h-12 items-center rounded-xl border border-white/20 px-6 text-sm font-bold text-white transition-colors hover:bg-white/10">
+                Bekijk de demo
+              </button>
+            </div>
+            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-xs font-semibold text-white/55">
+              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-[#FF8A3D]" /> Vastgoed op één plek</span>
+              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-[#FF8A3D]" /> Web en mobiel</span>
+            </div>
           </div>
-          <div className="min-w-0 p-4 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pl-0">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_18px_48px_-28px_rgba(11,27,63,0.5)]">
-              <div className="flex h-9 items-center gap-1.5 border-b border-slate-100 bg-white px-3">
+          <div className="relative min-w-0 lg:pl-4">
+            <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-[#FF5C00]/25 to-transparent blur-xl" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-white shadow-[0_32px_80px_-32px_rgba(0,0,0,0.65)]">
+              <div className="flex h-10 items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
-                <span className="ml-3 h-4 flex-1 rounded bg-slate-50" />
+                <span className="ml-3 h-4 flex-1 rounded bg-white" />
               </div>
-              <div className="aspect-[16/10] bg-slate-100">
-                <EditableImage key={activeFeature.id} path={`v2.features.rows.${activeIndex}.img`}
-                  fallback={activeFeature.img} alt={activeFeature.title}
-                  className="h-full w-full object-cover object-top" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
-              <span>{activeFeature.eyebrow}</span>
-              <span>{String(activeIndex + 1).padStart(2, '0')} / {String(FEATURE_ROWS.length).padStart(2, '0')}</span>
+              <EditableImage path="v2.features.rows.0.img" fallback={FEATURE_ROWS[0].img}
+                alt="SuriRent dashboard met vastgoedoverzicht" className="block aspect-[16/10] w-full object-cover object-top" />
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section className="border-b border-slate-100 bg-white">
+        <div className="mx-auto grid max-w-[1440px] gap-3 px-5 py-8 sm:grid-cols-3 sm:px-8 lg:px-10 2xl:px-[120px]">
+          {[
+            ['01', 'Beheer je locaties en woningen'],
+            ['02', 'Volg huur en betalingen'],
+            ['03', 'Houd facturen en acties bij'],
+          ].map(([number, label]) => (
+            <a key={number} href={`#feature-${Number(number) - 1}`}
+              className="group flex items-center gap-4 rounded-xl p-3 transition-colors hover:bg-slate-50">
+              <span className="text-xs font-black tracking-widest text-[#FF5C00]">{number}</span>
+              <span className="text-sm font-bold text-[#0B1B3F] group-hover:text-[#FF5C00]">{label}</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {FEATURE_ROWS.map((feature, index) => {
+        const Icon = feature.icon;
+        const reverse = index % 2 === 1;
+        return (
+          <section key={feature.id} id={feature.id}
+            className={index % 2 === 0 ? 'scroll-mt-36 bg-[#F8FAFC]' : 'scroll-mt-36 bg-white'}
+            data-testid={`feature-detail-${index}`}>
+            <div className={`mx-auto grid max-w-[1440px] items-center gap-9 px-5 py-14 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:px-10 lg:py-20 2xl:px-[120px] ${reverse ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+                  <Icon className="h-6 w-6" strokeWidth={1.9} />
+                </div>
+                <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-[#FF5C00]">
+                  {String(index + 1).padStart(2, '0')} · {feature.eyebrow}
+                </p>
+                <EditableText path={`v2.features.rows.${index}.title`} fallback={feature.title}
+                  as="h2" className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-tight text-[#0B1B3F] lg:text-4xl" />
+                <EditableText path={`v2.features.rows.${index}.desc`} fallback={feature.desc}
+                  as="p" multiline className="mt-4 max-w-xl text-base leading-relaxed text-slate-600" />
+                <ul className="mt-6 space-y-3">
+                  {feature.bullets.map((bullet, bulletIndex) => (
+                    <li key={bulletIndex} className="flex items-start gap-3 text-sm font-semibold leading-relaxed text-[#0B1B3F]">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                        <Check className="h-3 w-3 text-emerald-600" strokeWidth={3} />
+                      </span>
+                      <EditableText path={`v2.features.rows.${index}.bullets.${bulletIndex}`} fallback={bullet} as="span" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="min-w-0">
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_64px_-32px_rgba(11,27,63,0.32)]">
+                  <div className="flex h-9 items-center gap-1.5 border-b border-slate-100 bg-white px-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
+                    <span className="ml-3 h-4 flex-1 rounded bg-slate-50" />
+                  </div>
+                  <EditableImage path={`v2.features.rows.${index}.img`} fallback={feature.img}
+                    alt={feature.title} className="block aspect-[16/10] w-full object-cover object-top" />
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })}
+
+      <section className="bg-[#0B1B3F] px-5 py-14 text-white sm:px-8 lg:px-10 lg:py-16 2xl:px-[120px]">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FF8A3D]">Klaar voor meer overzicht?</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">Breng je vastgoedbeheer samen in SuriRent.</h2>
+          </div>
+          <button onClick={onRegister} className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white transition-colors hover:bg-[#E65300]">
+            Maak je account aan <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -1043,6 +1083,7 @@ function Footer({ onLogin, apk }) {
 export default function MarketingLandingV2() {
   useHidePwaSplash();
   const navigate = useNavigate();
+  const location = useLocation();
   const { refresh: refreshAuth } = useAuth();
   const pwaInstall = usePwaInstall();
   const apk = useLatestApk();
@@ -1061,6 +1102,7 @@ export default function MarketingLandingV2() {
   // en de API nog laadt — voorkomt "oude/fallback tekst → juiste tekst"
   // flicker bij een cold visit.
   const showSkeleton = !editMode && !hasInstantContent && contentLoading;
+  const showFeatureDetails = location.pathname === '/functies';
 
   useEffect(() => {
     document.body.style.backgroundColor = '#FFFFFF';
@@ -1231,19 +1273,26 @@ export default function MarketingLandingV2() {
             onInstall={pwaInstall.install} />
         )}
         <LandingHeader onLogin={onLogin} onRegister={onRegister} />
-        <LandingHero onDemo={onDemo} apk={apk} />
-        <LandingFeatures />
-        <FeatureRows />
-        <KioskSection />
-        <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} onRegister={onRegister} />
-        <FAQSection />
-        <InstallPwaSection
-          install={pwaInstall.install}
-          installed={pwaInstall.installed}
-          platform={pwaInstall.platform}
-          showIosModal={pwaInstall.showIosModal}
-          setShowIosModal={pwaInstall.setShowIosModal} />
-        <Footer onLogin={onLogin} apk={apk} />
+        {showFeatureDetails ? (
+          <>
+            <FeatureDetailsPage onDemo={onDemo} onRegister={() => onRegister()} />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        ) : (
+          <>
+            <LandingHero onDemo={onDemo} apk={apk} />
+            <KioskSection />
+            <PricingSection onDemo={onDemo} onWhatsApp={onWhatsApp} onRegister={onRegister} />
+            <FAQSection />
+            <InstallPwaSection
+              install={pwaInstall.install}
+              installed={pwaInstall.installed}
+              platform={pwaInstall.platform}
+              showIosModal={pwaInstall.showIosModal}
+              setShowIosModal={pwaInstall.setShowIosModal} />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        )}
       </div>
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={registerPlan} />
     </EditableProvider>

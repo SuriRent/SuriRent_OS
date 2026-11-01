@@ -1,5 +1,6 @@
 // Landing (v3) — header, hero met laptop/telefoon-mockups en functiekaarten.
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ChevronDown, ChevronRight, Download, Lock, Menu, User, X, ShieldCheck, Cloud, Headphones,
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList, LayoutDashboard,
@@ -16,7 +17,8 @@ const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 export const goToSection = (id) => {
   if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (id.startsWith('feature-')) {
-    window.dispatchEvent(new CustomEvent('surirent:feature-select', { detail: { id } }));
+    window.location.assign(`/functies#${id}`);
+    return;
   }
   const el = document.getElementById(id);
   if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 136, behavior: 'smooth' });
@@ -43,8 +45,10 @@ export const FEATURES = [
 ];
 
 function Logo() {
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
-    <button onClick={() => goToSection('home')} className="flex items-center gap-2.5 shrink-0" data-testid="topheader-logo">
+    <button onClick={() => (location.pathname === '/' ? goToSection('home') : navigate('/'))} className="flex items-center gap-2.5 shrink-0" data-testid="topheader-logo">
       <span className="w-12 h-12 rounded-xl bg-[#FF5C00] p-2 shrink-0 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.7)]">
         <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full object-contain" />
       </span>
@@ -73,21 +77,32 @@ function FeaturesMenu({ onPick }) {
 }
 
 export function LandingHeader({ onLogin, onRegister }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [active, setActive] = useState('home');
-  const pick = (id) => { setOpen(false); setMenu(false); setTimeout(() => goToSection(id), 30); };
+  const pick = (id) => {
+    setOpen(false);
+    setMenu(false);
+    if (id === 'features') navigate('/functies');
+    else if (id === 'home') navigate('/');
+    else navigate(id.startsWith('feature-') ? `/functies#${id}` : `/#${id}`);
+  };
   useEffect(() => {
+    if (location.pathname === '/functies') {
+      setActive('features');
+      return undefined;
+    }
     const onScroll = () => {
       let cur = 'home';
       SPY.forEach((id) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 136) cur = id; });
-      if (cur === 'home' && document.getElementById('feature-0')?.getBoundingClientRect().top <= 136) cur = 'features';
       setActive(cur);
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [location.pathname, location.hash]);
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100" data-testid="landing-header">
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
@@ -112,7 +127,7 @@ export function LandingHeader({ onLogin, onRegister }) {
         <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-full flex items-center justify-start gap-6 2xl:gap-9">
           {NAV.map((n) => (
             <div key={n.id} className="relative h-full" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
-              <button onClick={() => (n.menu ? setMenu((v) => !v) : pick(n.id))} data-testid={`secnav-${n.id}`}
+              <button onClick={() => (n.menu ? navigate('/functies') : pick(n.id))} data-testid={`secnav-${n.id}`}
                 className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
                 style={active === n.id ? undefined : { color: NAVY }}>
                 {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
