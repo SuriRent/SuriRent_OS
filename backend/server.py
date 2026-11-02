@@ -2277,6 +2277,16 @@ def _plan_interval_label(plan: Optional[dict]) -> str:
     return {"quarter": "kwartaal", "year": "jaar", "lifetime": "eenmalig", "once": "eenmalig"}.get(interval, "maand")
 
 
+def _saas_invoice_due_date(issued_at: Optional[datetime] = None) -> str:
+    """Vaste SaaS-vervaldatum: de eerstvolgende 10e op of na factuurdatum."""
+    issued_on = (issued_at or now_utc()).date()
+    due = issued_on.replace(day=10)
+    if issued_on > due:
+        year, month = (issued_on.year + 1, 1) if issued_on.month == 12 else (issued_on.year, issued_on.month + 1)
+        due = due.replace(year=year, month=month)
+    return due.isoformat()
+
+
 def now_utc_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -2632,6 +2642,7 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
         "from_plan": old,
         "period_start": iso(now),
         "period_end": iso(_plan_period_end(target_doc, now)) if _plan_period_end(target_doc, now) else None,
+        "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user.get("email"),
     }
@@ -2891,6 +2902,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         "kind": "subscription",
         "period_start": iso(now),
         "period_end": iso(period_end) if period_end else None,
+        "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
     }
@@ -4963,6 +4975,7 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "kind": "subscription",
                 "period_start": iso(now),
                 "period_end": iso(period_end) if period_end else None,
+                "due_date": _saas_invoice_due_date(now),
                 "created_at": iso(now),
                 "created_by": user.get("email"),
                 "manual": True,
@@ -5427,6 +5440,7 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
             "status": "paid",
             "period_start": iso(now),
             "period_end": iso(period_end) if period_end else None,
+            "due_date": _saas_invoice_due_date(now),
             "paid_at": paid_at,
             "created_at": iso(now),
             "created_by": user.get("email"),
@@ -18581,6 +18595,7 @@ _route_deps.new_id = new_id
 _route_deps.billing_summary = _billing_summary
 _route_deps.get_plan = _fetch_plan_by_id
 _route_deps.plan_period_end = _plan_period_end
+_route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment
 _route_deps.send_saas_payment_email = _send_saas_payment_email

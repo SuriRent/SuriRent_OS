@@ -2075,6 +2075,7 @@ def saas_invoice_pdf(invoice: dict, company: dict, saas_provider: dict | None = 
     period_end = _fmt_date_nl(invoice.get("period_end"))
     _two_col_block(el, [
         ("Periode", f"{period_start} → {period_end}"),
+        ("Vervaldatum", _fmt_date_nl(invoice.get("due_date") or invoice.get("period_end"))),
         ("Type", kind_label),
         ("Termijn", (
             f"{invoice.get('installment_seq')}/{invoice.get('installment_total')}"

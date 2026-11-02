@@ -13,7 +13,7 @@ routes uit server.py verplaatsen naar deze module.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -316,6 +316,7 @@ async def create_subscription_invoice(body: NewInvoiceIn,
         "kind": "subscription",
         "period_start": period_start,
         "period_end": period_end,
+        "due_date": _deps.saas_due_date(now),
         "created_at": _deps.iso(now),
         "created_by": user.get("email", "superadmin"),
         "note": body.note or "",
@@ -379,6 +380,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "kind": "subscription",
             "period_start": _deps.iso(period_start),
             "period_end": _deps.iso(period_end) if period_end else None,
+            "due_date": _deps.saas_due_date(now),
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
@@ -558,6 +560,7 @@ async def create_saas_payment_plan(body: SaasPlanIn,
             "installment_total": body.installments,
             "period_start": _deps.iso(due),
             "period_end": _deps.iso(due + timedelta(days=body.interval_days)),
+            "due_date": due.date().isoformat(),
             "created_at": _deps.iso(now),
             "created_by": user.get("email", "superadmin"),
             "note": body.note or "",
@@ -753,13 +756,29 @@ async def check_invoice_reminders() -> list[dict]:
         "status": {"$in": ["open", "overdue"]},
     }, {"_id": 0})
     async for inv in cursor:
-        pe_raw = inv.get("period_end")
-        if not pe_raw:
-            continue
+        due_raw = inv.get("due_date")
+        due_display = None
         try:
-            pe = datetime.fromisoformat(str(pe_raw).replace("Z", "+00:00"))
-        except Exception:
+            if due_raw:
+                due_day = datetime.fromisoformat(str(due_raw)[:10]).date()
+                due_display = due_day
+                pe = datetime.combine(due_day + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+            else:
+                pe_raw = inv.get("period_end")
+                if not pe_raw:
+                    continue
+                pe = datetime.fromisoformat(str(pe_raw).replace("Z", "+00:00"))
+                if pe.tzinfo is None:
+                    pe = pe.replace(tzinfo=timezone.utc)
+                due_display = pe.date()
+        except (TypeError, ValueError):
             continue
+        if pe <= now and inv.get("status") == "open":
+            await db.subscription_invoices.update_one(
+                {"id": inv["id"], "status": "open"},
+                {"$set": {"status": "overdue"}},
+            )
+            inv["status"] = "overdue"
         if pe > threshold:
             continue  # nog niet vervallen genoeg
 
@@ -780,7 +799,7 @@ async def check_invoice_reminders() -> list[dict]:
             f"<strong>{days_overdue} dagen vervallen</strong>.</p>"
             f"<p>Bedrag: <strong>{inv.get('currency', 'SRD')} "
             f"{float(inv.get('amount') or 0):.2f}</strong><br/>"
-            f"Vervaldatum: {pe.strftime('%d-%m-%Y')}</p>"
+            f"Vervaldatum: {(due_display or pe.date()).strftime('%d-%m-%Y')}</p>"
             f"<p>Gelieve dit bedrag zo spoedig mogelijk te voldoen om onderbreking "
             f"te voorkomen.</p>"
             f"<p>Met vriendelijke groet,<br/>Het SuriRent team</p>"

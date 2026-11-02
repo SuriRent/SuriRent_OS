@@ -224,6 +224,7 @@ function InvoicesPanel({ invoices, stripeOn, onPay }) {
               className="px-5 py-3.5 grid grid-cols-[1fr_auto] md:grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-x-4 gap-y-1 items-center hover:bg-orange-50/40 transition-colors">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-slate-900">{fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}</p>
+                {inv.due_date && <p className="text-[11px] font-semibold text-orange-600">Uiterlijk betalen: {fmtDate(inv.due_date)}</p>}
                 <p className="text-[11px] text-slate-400 font-mono">#{(inv.invoice_number || inv.id.slice(0, 8)).toUpperCase()}</p>
               </div>
               <p className="hidden md:block text-sm text-slate-600 capitalize">{inv.plan}</p>
@@ -385,6 +386,7 @@ function BankPanel({ details, invoice, amount, currency, company, onSuccess, onE
         <KV label="Rekeningnummer" value={details.account_number} mono onCopy={() => copy('account_number', details.account_number)} copied={copied === 'account_number'} />
         {details.swift && <KV label="SWIFT" value={details.swift} mono onCopy={() => copy('swift', details.swift)} copied={copied === 'swift'} />}
         {paymentAmount && <KV label="Bedrag" value={paymentAmount} mono />}
+        {invoice?.due_date && <KV label="Uiterlijk betalen op" value={fmtDate(invoice.due_date)} />}
         <KV label="Omschrijving" value={refText} mono wrap onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
         {(details.whatsapp || details.support_email) && (
           <p className="text-[11px] text-slate-500 mt-3">

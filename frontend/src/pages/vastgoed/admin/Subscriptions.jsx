@@ -1378,7 +1378,7 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
                 }`}>{paid ? 'Betaald' : superseded ? 'Vervangen' : overdue ? 'Vervallen' : 'Open'}</span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">
-                {(inv.invoice_number || inv.id?.slice(-6) || '').toUpperCase()} · {inv.plan} · {fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}
+                {(inv.invoice_number || inv.id?.slice(-6) || '').toUpperCase()} · {inv.plan} · {fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}{inv.due_date ? ` · Uiterlijk ${fmtDate(inv.due_date)}` : ''}
               </p>
             </div>
             <div className="text-right shrink-0 flex flex-col items-end gap-1.5">

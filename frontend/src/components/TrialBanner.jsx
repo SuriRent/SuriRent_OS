@@ -66,7 +66,7 @@ export default function TrialBanner() {
             {headline}
           </p>
           <p className="text-[11px] sm:text-xs text-white/90 truncate">
-            {info.plan?.name} pakket · {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')} / {billingInterval} · betaal per bankoverschrijving
+            {info.plan?.name} pakket · {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')} / {billingInterval} · facturen uiterlijk de 10e betalen
           </p>
         </div>
         <button onClick={openDetails} data-testid="trial-upgrade-btn"

@@ -4459,55 +4459,80 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
   );
 }
 
-function SaasConsoleHeader({ user, tab, tabs, onChange }) {
+function SaasConsoleHeader({ user, tab, tabs, onChange, onLogout, badgeCount }) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
-  const shortcuts = [
-    { id: 'companies', label: 'Bedrijven', icon: Building2 },
-    { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
-    { id: 'saas_pending', label: 'OCR-queue', icon: ScanLine },
-  ];
+  const groups = groupTabs(tabs);
+  const activeGroup = groups.find((group) => group.items.some((item) => item.id === tab));
+  const [selectedGroup, setSelectedGroup] = useState(activeGroup?.key || groups[0]?.key);
+  useEffect(() => {
+    if (activeGroup) setSelectedGroup(activeGroup.key);
+  }, [activeGroup?.key]);
+  const visibleGroup = groups.find((group) => group.key === selectedGroup) || activeGroup || groups[0];
   return (
     <header
-      className="sticky top-0 z-30 px-3 sm:px-5 md:px-7 text-white bg-gradient-to-r from-[#FF7A24] via-[#F45B00] to-[#C74600] shadow-[0_8px_24px_-12px_rgba(124,45,18,0.65)]"
+      className="sticky top-0 z-30 text-white bg-[#111827] shadow-[0_12px_30px_-18px_rgba(15,23,42,0.85)] border-b border-slate-700"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       data-testid="saas-console-header"
     >
-      <div className="min-h-[68px] flex items-center gap-3 md:gap-5 max-w-[1800px] mx-auto">
-        <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-white/15 border border-white/20 p-1.5 shrink-0">
-          <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.2em] font-black text-white/75">SuriRent · SaaS Console</p>
-          <div className="flex items-center gap-2 min-w-0">
-            <CurrentIcon className="hidden sm:block w-4 h-4 shrink-0" />
-            <h1 className="text-lg md:text-xl font-black tracking-tight truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+      <div className="bg-gradient-to-r from-[#FF7A24] via-[#F45B00] to-[#C74600]">
+        <div className="min-h-[72px] flex items-center gap-3 px-3 sm:px-5 lg:px-8 max-w-[1920px] mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/25 p-1.5 shrink-0 shadow-inner">
+            <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
           </div>
-        </div>
-        <nav className="hidden md:flex items-center gap-2" aria-label="Snelle SaaS-acties">
-          {shortcuts.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => onChange(id)} data-testid={`saas-console-shortcut-${id}`}
-              className="h-10 px-3 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-extrabold inline-flex items-center gap-2 transition-colors">
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
-        </nav>
-        <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-black/10 border border-white/15 max-w-[180px]">
-          <span className="w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.85)]" />
-          <span className="text-[11px] font-bold truncate">{user?.name || user?.email || 'Superadmin'}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.2em] font-black text-white/75">SuriRent · SaaS Console</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <CurrentIcon className="w-5 h-5 shrink-0" />
+              <h1 className="text-lg sm:text-xl font-black tracking-tight truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-black/10 border border-white/15 max-w-[220px]">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.85)]" />
+            <span className="text-xs font-bold truncate">{user?.name || user?.email || 'Superadmin'}</span>
+          </div>
+          <button type="button" onClick={onLogout} data-testid="saas-console-logout"
+            className="min-w-12 h-12 px-3 rounded-xl bg-black/10 hover:bg-black/20 border border-white/20 inline-flex items-center justify-center gap-2 font-bold text-sm transition-colors"
+            aria-label="Uitloggen">
+            <LogOut className="w-5 h-5" /><span className="hidden lg:inline">Uitloggen</span>
+          </button>
         </div>
       </div>
-      <nav className="md:hidden flex items-center gap-2 overflow-x-auto pb-2.5 -mx-1 px-1" aria-label="Snelle SaaS-acties mobiel">
-        {shortcuts.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" onClick={() => onChange(id)} data-testid={`saas-console-shortcut-${id}`}
-            className="shrink-0 h-9 px-3 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-[11px] font-extrabold inline-flex items-center gap-1.5">
-            <Icon className="w-3.5 h-3.5" /> {label}
-          </button>
-        ))}
-        <span className="sm:hidden shrink-0 inline-flex items-center gap-1.5 px-2 text-[10px] font-bold text-white/90">
-          <span className="w-2 h-2 rounded-full bg-emerald-300" /> {user?.name || 'Superadmin'}
-        </span>
+      <nav className="flex items-center gap-2 overflow-x-auto px-3 sm:px-5 lg:px-8 py-2 border-b border-white/10 scrollbar-none" aria-label="SaaS-categorieën">
+        {groups.map((group) => {
+          const selected = group.key === visibleGroup?.key;
+          return (
+            <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
+              data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
+              className={`shrink-0 min-h-11 px-4 rounded-xl text-sm font-extrabold transition-colors ${
+                selected ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              }`}>
+              {group.label}
+            </button>
+          );
+        })}
       </nav>
+      {visibleGroup && (
+        <nav className="flex items-stretch gap-2 overflow-x-auto px-3 sm:px-5 lg:px-8 py-2.5 bg-[#0B1220]" aria-label={`${visibleGroup.label} modules`}>
+          {visibleGroup.items.map((item) => {
+            const Icon = item.icon;
+            const selected = item.id === tab;
+            const showBadge = item.id === 'notifications' && badgeCount > 0;
+            return (
+              <button key={item.id} type="button" onClick={() => onChange(item.id)}
+                data-testid={`tab-${item.id}`} aria-current={selected ? 'page' : undefined}
+                className={`relative shrink-0 min-h-12 px-4 rounded-xl border inline-flex items-center gap-2.5 text-sm font-bold transition-colors ${
+                  selected ? 'bg-[#FF6A1A] border-[#FF8A3D] text-white shadow-[0_8px_20px_-10px_rgba(255,106,26,0.8)]'
+                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                }`}>
+                <Icon className="w-5 h-5 shrink-0" strokeWidth={selected ? 2.5 : 2} />
+                <span>{item.label}</span>
+                {showBadge && <span data-testid="saas-console-notification-count" className="ml-0.5 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black inline-flex items-center justify-center">{badgeCount > 9 ? '9+' : badgeCount}</span>}
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </header>
   );
 }
@@ -4748,16 +4773,17 @@ export default function AdminDashboard() {
   // Superadmin + impersonators zien uiteraard nooit iets.
 
   return (
-    <div className={`min-h-screen flex ${isSaasConsole ? 'bg-[#0B1220]' : 'bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
-      <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
-        user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />
+    <div className={`min-h-screen ${isSaasConsole ? 'bg-[#0B1220]' : 'flex bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
+      {!isSaasConsole && <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
+        user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />}
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
-          ? <SaasConsoleHeader user={user} tab={tab} tabs={tabs} onChange={handleSetTab} />
+          ? <SaasConsoleHeader user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} />
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} /></>}
         <ImpersonationBanner />
         <TrialBanner />
-        <main className={`flex-1 p-4 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-5 pb-32 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F5F9] md:rounded-tl-3xl' : ''}`}>
+        <main className={`flex-1 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F5F9]' : ''}`}>
+          <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
@@ -4791,13 +4817,14 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'notifications'} tabId="notifications" currentTab={tab}><Notifications /></KeepAliveTab>
           <KeepAliveTab active={tab === 'instellingen'} tabId="instellingen" currentTab={tab}><InstellingenHub /></KeepAliveTab>
           </Suspense>
+          </div>
         </main>
       </div>
-      <MobileTabBar active={tab} onChange={handleSetTab} tabs={tabs} user={user}
-        onOpenMenu={() => setDrawerOpen(true)} badgeCount={badgeCount} />
-      <MobileSheet open={drawerOpen} onClose={() => setDrawerOpen(false)}
+      {!isSaasConsole && <MobileTabBar active={tab} onChange={handleSetTab} tabs={tabs} user={user}
+        onOpenMenu={() => setDrawerOpen(true)} badgeCount={badgeCount} />}
+      {!isSaasConsole && <MobileSheet open={drawerOpen} onClose={() => setDrawerOpen(false)}
         active={tab} onChange={handleSetTab} onLogout={doLogout}
-        user={user} tabs={sheetTabs} activeCompany={activeCompany} badgeCount={badgeCount} />
+        user={user} tabs={sheetTabs} activeCompany={activeCompany} badgeCount={badgeCount} />}
       <SetupWizardSheet
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
