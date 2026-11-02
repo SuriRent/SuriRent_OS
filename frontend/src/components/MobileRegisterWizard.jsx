@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, Building2, Check, Eye, EyeOff, Globe, Loader2,
+  ArrowLeft, ArrowRight, Building2, Check, Download, Eye, EyeOff, Globe, Loader2,
   KeyRound, Lock, Mail, MapPin, Phone, Sparkles, User, X,
 } from 'lucide-react';
 import { useRegisterWizard } from './MobileAuthShell';
 import PasswordStrength from './PasswordStrength';
+import { openRegistrationCredentialsPdf } from '../lib/registrationCredentialsPdf';
 
 const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket', 'Controleren'];
 const TITLES = ['Je bedrijf', 'Jouw gegevens', 'Inloggegevens', 'Kies je pakket', 'Controleer je gegevens'];
@@ -35,6 +36,7 @@ function LabeledInput({ id, label, icon: Icon, children, optional }) {
 }
 
 export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan }) {
+  const [pdfError, setPdfError] = useState('');
   const {
     step, setStep, companyName, setCompanyName, address, setAddress, name, setName,
     telefoon, setTelefoon, email, setEmail, password, setPassword, showPw,
@@ -42,6 +44,16 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
     country, setCountry, plan, setPlan, plans, loading, error, success,
     chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal,
   } = useRegisterWizard({ onClose, initialPlan });
+  const downloadCredentials = () => {
+    setPdfError('');
+    const opened = openRegistrationCredentialsPdf({
+      url: `${window.location.origin}/${portalPreview.slug}`,
+      email,
+      password,
+      pin: personalPin,
+    });
+    if (!opened) setPdfError('Sta pop-ups toe om de PDF te openen en op te slaan.');
+  };
 
   useEffect(() => {
     const previousHtmlColor = document.documentElement.style.backgroundColor;
@@ -375,6 +387,11 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
                 <p className="rounded-xl bg-orange-50 p-3 text-xs leading-relaxed text-slate-600">
                   Je wachtwoord en PIN zijn hier zichtbaar zodat je ze kunt controleren. Zorg dat niemand meekijkt.
                 </p>
+                <button type="button" onClick={downloadCredentials} data-testid="register-download-credentials"
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#FF5C00] bg-white px-4 py-3 text-sm font-bold text-[#E65300] transition hover:bg-orange-50">
+                  <Download className="h-4 w-4" /> PDF downloaden
+                </button>
+                {pdfError && <p className="text-xs font-semibold text-red-600" role="alert">{pdfError}</p>}
               </div>
             )}
           </div>

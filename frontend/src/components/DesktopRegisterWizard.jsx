@@ -1,11 +1,12 @@
 // Desktop-registratie (zelfde logica als mobiel) in split-layout met NL/EN.
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, Building2, MapPin, Info, Loader2, Eye, EyeOff, Check, Globe, X, ChevronDown,
+  ArrowLeft, ArrowRight, Building2, MapPin, Info, Loader2, Eye, EyeOff, Check, Globe, X, ChevronDown, Download,
   Home as HomeIcon, CreditCard, FileText, Tablet, ShieldCheck, Cloud, Headphones, User, Phone, Mail, Lock, Package, ClipboardCheck, KeyRound,
 } from 'lucide-react';
 import { useRegisterWizard } from './MobileAuthShell';
 import PasswordStrength from './PasswordStrength';
+import { openRegistrationCredentialsPdf } from '../lib/registrationCredentialsPdf';
 
 const NAVY = '#0B1B3F';
 const SIDE_BG = 'https://static.prod-images.emergentagent.com/jobs/112f335e-34a5-41f6-964a-ace72b419b81/images/8fd0820e710c9c08a218c561eeb2f6ed295804eb31b14dc848100e36f54ed61f.jpeg';
@@ -28,6 +29,7 @@ const T = {
     reviewAddress: 'Adres', reviewPhone: 'Telefoon', reviewPortal: 'Portal', reviewEmail: 'E-mailadres',
     reviewPassword: 'Wachtwoord', reviewPin: 'Persoonlijke PIN', reviewCountry: 'Land', reviewEdit: 'Wijzigen',
     reviewSensitive: 'Je wachtwoord en PIN zijn zichtbaar zodat je ze kunt controleren. Zorg dat niemand meekijkt.',
+    downloadPdf: 'PDF downloaden', pdfPopupBlocked: 'Sta pop-ups toe om de PDF te openen en op te slaan.',
     free: 'VRIJ', taken: 'BEZET', chosen: 'U koos', welcomeAt: 'Welkom bij', tagline: 'De complete huurbeheer oplossing voor vastgoed in Suriname.',
     feats: ['Beheer huurders en contracten', 'Automatiseer huurbetalingen & kwitanties', 'Genereer loonstroken en boekhouding', 'Selfservice kiosk terminal en PWA app'],
     script: ['Slimmer beheren.', 'Makkelijker verhuren.'], brandSub: ['Verhuur', 'Beheer', 'Financiën'], rights: 'Alle rechten voorbehouden.',
@@ -52,6 +54,7 @@ const T = {
     reviewAddress: 'Address', reviewPhone: 'Phone', reviewPortal: 'Portal', reviewEmail: 'Email address',
     reviewPassword: 'Password', reviewPin: 'Personal PIN', reviewCountry: 'Country', reviewEdit: 'Edit',
     reviewSensitive: 'Your password and PIN are visible so you can check them. Make sure nobody is looking.',
+    downloadPdf: 'Download PDF', pdfPopupBlocked: 'Allow pop-ups to open and save the PDF.',
     free: 'AVAILABLE', taken: 'TAKEN', chosen: 'You chose', welcomeAt: 'Welcome to', tagline: 'The complete rental management solution for real estate in Suriname.',
     feats: ['Manage tenants and contracts', 'Automate rent payments & receipts', 'Generate payslips and accounting', 'Self-service kiosk terminal and PWA app'],
     script: ['Smarter managing.', 'Easier renting.'], brandSub: ['Rental', 'Management', 'Finance'], rights: 'All rights reserved.',
@@ -180,6 +183,7 @@ function SidePanel({ t }) {
 export default function DesktopRegisterWizard({ onClose, initialPlan }) {
   const w = useRegisterWizard({ onClose, initialPlan });
   const [lang, setLangState] = useState(() => { try { return localStorage.getItem('register_lang') || 'nl'; } catch { return 'nl'; } });
+  const [pdfError, setPdfError] = useState('');
   const setLang = (l) => { setLangState(l); try { localStorage.setItem('register_lang', l); } catch { /* ignore */ } };
   const t = T[lang];
   useEffect(() => {
@@ -203,6 +207,16 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
   const money = (p) => ((p.currency || 'SRD').toUpperCase() === 'EUR'
     ? `€${Number(p.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : `${p.currency} ${Number(p.amount).toLocaleString('nl-NL')}`);
+  const downloadCredentials = () => {
+    setPdfError('');
+    const opened = openRegistrationCredentialsPdf({
+      url: `${window.location.origin}/${w.portalPreview.slug}`,
+      email: w.email,
+      password: w.password,
+      pin: w.personalPin,
+    });
+    if (!opened) setPdfError(t.pdfPopupBlocked);
+  };
 
   return (
     <div className="fixed inset-0 z-[200] flex bg-[#F4F6FA] overflow-hidden" data-testid="register-desktop">
@@ -403,6 +417,13 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                       </section>
                     ))}
                     <p className="col-span-2 rounded-lg bg-orange-50 px-3 py-2 text-xs text-slate-600">{t.reviewSensitive}</p>
+                    <div className="col-span-2">
+                      <button type="button" onClick={downloadCredentials} data-testid="register-download-credentials"
+                        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#FF5C00] bg-white px-4 py-3 text-sm font-bold text-[#E65300] transition hover:bg-orange-50">
+                        <Download className="h-4 w-4" />{t.downloadPdf}
+                      </button>
+                      {pdfError && <p className="mt-2 text-xs font-semibold text-red-600" role="alert">{pdfError}</p>}
+                    </div>
                   </div>
                 )}
               </div>
