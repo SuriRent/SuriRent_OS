@@ -628,26 +628,22 @@ const BASE_TABS = [
   { id: 'instellingen', label: 'Instellingen', icon: SettingsIcon },
 ];
 const SUPER_TABS = [
-  // Hoofd
   { id: 'saas_overview', label: 'Overzicht', icon: LayoutDashboard },
   { id: 'companies', label: 'Bedrijven', icon: Briefcase },
   { id: 'saas_clients', label: 'Klanten', icon: Users },
-  { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
   { id: 'plans', label: 'Pakketten', icon: Package },
-  // Financieel
-  { id: 'saas_payments', label: 'Betalingen', icon: Banknote },
-  { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
-  { id: 'saas_payment_plans', label: 'Betalingsregelingen', icon: Calendar },
-  { id: 'saas_kasgeld', label: 'Kasgeld', icon: Wallet },
+  { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
+  { id: 'saas_payments', label: 'SaaS Betalingen', icon: Banknote },
+  { id: 'saas_invoices', label: 'SaaS Facturen', icon: Receipt },
+  { id: 'saas_payment_plans', label: 'SaaS Betalingsregelingen', icon: Calendar },
+  { id: 'saas_kasgeld', label: 'SaaS Kasgeld', icon: Wallet },
   { id: 'saas_client_payments', label: 'Klant-betaalstatus', icon: CreditCard },
-  // Operaties
-  { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
   { id: 'saas_employees', label: 'Werknemers', icon: Users },
   { id: 'saas_notifications', label: 'Notificaties', icon: Bell },
-  { id: 'landing_editor', label: 'Landing Editor', icon: Paintbrush },
   { id: 'saas_pending', label: 'OCR-goedkeuring', icon: ScanLine },
-  // Account
-  { id: 'saas_settings', label: 'Instellingen', icon: SettingsIcon },
+  { id: 'landing_editor', label: 'Landing Editor', icon: Paintbrush },
+  { id: 'saas_settings', label: 'SaaS Instellingen', icon: SettingsIcon },
+  { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
 ];
 
 const BOEKHOUDER_TABS = ['overview', 'tenants', 'payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld', 'notifications'];
@@ -667,11 +663,11 @@ const SIDEBAR_GROUPS = {
   account: { label: 'Account', ids: ['instellingen'] },
 };
 const SAAS_SIDEBAR_GROUPS = {
-  saas_platform: { label: 'Platform', ids: ['saas_overview', 'companies', 'saas_clients', 'plans'] },
-  saas_billing: { label: 'Abonnementen & geld', ids: ['saas_contracts', 'saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
-  saas_operations: { label: 'Beheer', ids: ['saas_kiosk', 'saas_employees', 'saas_notifications', 'saas_pending'] },
+  saas_platform: { label: 'Platform & bedrijven', ids: ['saas_overview', 'companies', 'saas_clients', 'plans', 'saas_contracts'] },
+  saas_billing: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
+  saas_operations: { label: 'Beheer', ids: ['saas_employees', 'saas_notifications', 'saas_pending', 'saas_kiosk'] },
   saas_content: { label: 'Website', ids: ['landing_editor'] },
-  saas_account: { label: 'Account', ids: ['saas_settings'] },
+  saas_account: { label: 'Instellingen', ids: ['saas_settings'] },
 };
 function groupTabs(tabs) {
   const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
