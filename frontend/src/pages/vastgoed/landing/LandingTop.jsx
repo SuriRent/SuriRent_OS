@@ -38,8 +38,6 @@ const NAV = [
   { id: 'handleiding', label: 'Handleiding', href: '/handleiding' },
   { id: 'contact', label: 'Contact', href: '/contact' },
   { id: 'over-ons', label: 'Over ons', href: '/over-ons' },
-  { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden', href: '/algemene-voorwaarden' },
-  { id: 'privacy', label: 'Privacy', href: '/privacy' },
 ];
 
 export const FEATURES = [
@@ -92,8 +90,6 @@ export function LandingHeader({ onLogin, onRegister }) {
       '/handleiding': 'handleiding',
       '/contact': 'contact',
       '/over-ons': 'over-ons',
-      '/algemene-voorwaarden': 'algemene-voorwaarden',
-      '/privacy': 'privacy',
     };
     if (pageNavigation[location.pathname]) {
       setActive(pageNavigation[location.pathname]);

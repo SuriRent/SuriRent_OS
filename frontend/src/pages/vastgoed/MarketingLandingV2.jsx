@@ -1434,6 +1434,14 @@ function Footer({ onLogin, apk }) {
             <EditableText path="marketing.footer.copyright" fallback="SuriRent. Alle rechten voorbehouden." as="p" label="Footer · Copyright" className="text-xs text-white/40">
               {`© ${new Date().getFullYear()} SuriRent. Alle rechten voorbehouden.`}
             </EditableText>
+            <div className="flex items-center gap-4 text-xs" data-testid="footer-legal-links">
+              {[['Algemene voorwaarden', '/algemene-voorwaarden'], ['Privacy', '/privacy']].map(([label, href], index) => (
+                <EditableLink key={href} path={`marketing.footer.legal_links.${index}.href`} href={href} label={`Footer · Juridische link ${index + 1}`}
+                  className="text-white/60 hover:text-[#FF5C00] transition-colors">
+                  <EditableText path={`marketing.footer.legal_links.${index}.label`} fallback={label} as="span" label={`Footer · Juridische link ${index + 1}`} />
+                </EditableLink>
+              ))}
+            </div>
             <div className="flex items-center gap-2" data-testid="footer-payment-logos">
               <EditableText path="marketing.footer.payment_label" fallback="Betaal met" as="span" label="Footer · Betaalmethodenlabel" className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mr-1" />
               <span className="inline-flex items-center bg-white rounded-md px-2 py-1 shadow-sm">
