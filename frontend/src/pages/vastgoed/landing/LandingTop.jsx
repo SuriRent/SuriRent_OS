@@ -328,7 +328,7 @@ function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phon
         <div className="absolute left-[30px] top-[20px]">
           <LaptopMockup mediaUrl={laptopMediaUrl} mediaType={laptopMediaType} showMockups={showMockups} />
         </div>
-        <div className="absolute right-0 top-[100px]">
+        <div className="absolute right-0 top-[100px] z-[15]">
           <PhoneMockup mediaUrl={phoneMediaUrl} mediaType={phoneMediaType} showMockups={showMockups} />
         </div>
         {editMode && (showMockups || !laptopMediaUrl) && (
