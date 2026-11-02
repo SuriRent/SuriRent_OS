@@ -4303,7 +4303,7 @@ export default function AdminDashboard() {
   const sheetTabs = tabs.filter((t) => t.id !== 'overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Auto-open Setup Wizard als bottom-sheet / modal voor nieuwe bedrijven.
-  // Activatie: setup-status laat zien dat <2 van de 5 stappen klaar zijn EN
+  // Activatie: setup-status laat zien dat een verplichte basisstap nog openstaat EN
   // de admin heeft de wizard nog niet bewust gesloten voor dit bedrijf.
   const [wizardOpen, setWizardOpen] = useState(false);
   const navigate = useBrandedNavigate();
@@ -4448,11 +4448,8 @@ export default function AdminDashboard() {
         const dismissedKey = `setup_wizard_dismissed_${cid}`;
         if (localStorage.getItem(dismissedKey) === '1') return;
         const { data } = await api.get('/companies/me/setup-status');
-        // Open de wizard alleen als de basis-setup nog niet (vrijwel) klaar is.
-        // 2 of meer van de 5 stappen klaar → admin heeft al actief data toegevoegd.
-        const completed = data?.completed ?? 0;
         if (cancelled) return;
-        if (completed < 2) {
+        if (data?.required_complete === false) {
           setWizardOpen(true);
         }
       } catch { /* network hiccup — laat wizard met rust */ }

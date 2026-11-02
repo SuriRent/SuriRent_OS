@@ -11,57 +11,6 @@ const SECTIONS = [
   ['problemen', 'Problemen oplossen'],
 ];
 
-const ADMIN_SCREENSHOTS = [
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png',
-    alt: 'SuriRent beheerdashboard met overzichtskaarten',
-    caption: 'Beheerdashboard · begin bij het overzicht',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/nlo3hnqf_2.png',
-    alt: 'SuriRent beheerpagina voor locaties',
-    caption: 'Locaties · groepeer gebouwen en complexen',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/sy8hpkqs_3.png',
-    alt: 'SuriRent beheerpagina voor appartementen',
-    caption: 'Appartementen · controleer woningen en huurders',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/dwbjqd89_4.png',
-    alt: 'SuriRent beheerpagina voor betalingen',
-    caption: 'Betalingen · controleer transacties',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mfvavq0r_5.png',
-    alt: 'SuriRent beheerpagina voor facturen',
-    caption: 'Facturen · bekijk facturen en periodes',
-  },
-];
-
-const KIOSK_SCREENSHOTS = [
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7eebv0bd_11.png',
-    alt: 'Medewerkerskiosk met locaties om uit te kiezen',
-    caption: '1 · Kies de juiste locatie',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/n7efnoh0_12.png',
-    alt: 'Medewerkerskiosk met appartementen om uit te kiezen',
-    caption: '2 · Kies het appartement',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/t334vu2t_13.png',
-    alt: 'Financieel overzicht van een huurder in de kiosk',
-    caption: '3 · Controleer huurder en saldo',
-  },
-  {
-    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mjshklb8_14.png',
-    alt: 'Kioskbetaalscherm met bedraginvoer',
-    caption: '4 · Controleer en voer het bedrag in',
-  },
-];
-
 const ADMIN_MODULES = [
   ['Overzicht', 'Begin hier voor de belangrijkste aantallen en financiële stand. Gebruik het dashboard als dagelijkse controle en open vanuit een melding de bijbehorende beheerpagina.'],
   ['Locaties', 'Maak een locatie aan met een herkenbare naam en voeg optioneel adres en foto toe. Koppel appartementen eraan zodat medewerkers op de kiosk eerst het juiste gebouw kunnen kiezen.'],
@@ -78,28 +27,6 @@ const ADMIN_MODULES = [
   ['Notificaties', 'Controleer meldingen regelmatig op openstaande taken, betalingsstatus en andere aandachtspunten. Open de melding om de bijbehorende informatie te bekijken.'],
   ['Instellingen', 'Beheer bedrijfsgegevens en branding, e-mail, factuurautomatisering, Stripe, bonnen en printers, kiosk-apparaten en backup/herstel. Wijzig alleen de opties die je organisatie gebruikt.'],
 ];
-
-function ScreenshotGallery({ title, items, testId }) {
-  return (
-    <section className="mt-6" aria-label={title} data-testid={testId}>
-      <div className="mb-3">
-        <h3 className="text-lg font-black text-[#0B1B3F]">{title}</h3>
-        <p className="mt-1 text-xs leading-5 text-slate-500">Voorbeeldschermen uit SuriRent. De indeling kan per apparaat of accountrol iets verschillen.</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {items.map(({ src, alt, caption }) => (
-          <figure key={caption} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <a href={src} target="_blank" rel="noreferrer" aria-label={`${caption} — open screenshot op ware grootte`}>
-              <img src={src} alt={alt} loading="lazy"
-              className="aspect-[4/3] w-full bg-slate-100 object-contain transition-transform hover:scale-[1.02]" />
-            </a>
-            <figcaption className="px-3 py-2.5 text-xs font-bold leading-5 text-slate-700">{caption}</figcaption>
-          </figure>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 function StepCard({ number, title, children }) {
   return (
@@ -149,18 +76,30 @@ export default function Handleiding({ onDemo }) {
               Start met inrichten
             </a>
           </div>
-          <nav aria-label="Inhoud van de handleiding" className="mt-10 flex flex-wrap gap-2">
-            {SECTIONS.map(([id, label]) => (
-              <a key={id} href={`#${id}`} className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 transition hover:border-orange-300 hover:text-[#E65300]">
-                {label}
-              </a>
-            ))}
-          </nav>
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1200px] space-y-5 px-5 py-10 sm:px-8 sm:py-14 lg:px-10">
-        <section id="start" className="scroll-mt-36">
+      <div className="mx-auto grid max-w-[1280px] gap-8 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[230px_minmax(0,1fr)] lg:px-10">
+        <aside className="lg:sticky lg:top-24 lg:self-start" aria-label="Handleiding navigatie">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="mb-3 px-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">In deze handleiding</p>
+            <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Inhoud van de handleiding">
+              {SECTIONS.map(([id, label], index) => (
+                <a key={id} href={`#${id}`}
+                  className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-orange-50 hover:text-[#E65300]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-500">{String(index + 1).padStart(2, '0')}</span>
+                  {label}
+                </a>
+              ))}
+            </nav>
+          </div>
+          <a href={appLink('/login?view=admin')}
+            className="mt-3 hidden items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 py-3 text-sm font-black text-white transition hover:bg-[#E65300] lg:flex">
+            Naar beheerlogin <ArrowRight className="h-4 w-4" />
+          </a>
+        </aside>
+        <div className="min-w-0 space-y-6">
+        <section id="start" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-5">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Eerst het onderscheid</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Twee manieren om de kiosk te gebruiken.</h2>
@@ -187,53 +126,37 @@ export default function Handleiding({ onDemo }) {
           </div>
         </section>
 
-        <section id="inrichten" className="scroll-mt-36 pt-10">
+        <section id="inrichten" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">A tot Z · eerste keer</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Richt je beheer in deze volgorde in.</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Log in met je beheeraccount en gebruik de Setup Wizard als die verschijnt. Je kunt later onderdelen aanpassen via de zijbalk en Instellingen.
-            {' '}<a href={appLink('/login?view=admin')} className="font-bold text-[#E65300] underline decoration-orange-300 underline-offset-4">Naar beheerlogin</a>
+            Volg eerst deze vier verplichte stappen in Kiosk Beheer. De Setup Wizard opent automatisch voor nieuwe beheerders en helpt je met dezelfde volgorde.
           </p>
-          <div className="mt-6 grid gap-3">
-            <StepCard number="01" title="Vul je bedrijfsgegevens in">
-              Controleer de bedrijfsnaam, het adres en de contactgegevens. Voeg de juiste bankgegevens toe als die voor je betalingen nodig zijn.
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <StepCard number="01" title="Instellingen: vul bedrijfsgegevens in">
+              Open <strong>Instellingen</strong> in Kiosk Beheer. Vul de bedrijfsnaam en minimaal één contactgegeven (e-mail of telefoon) in. Controleer ook het adres; deze gegevens kunnen op communicatie en documenten verschijnen.
             </StepCard>
-            <StepCard number="02" title="Stel je uitstraling in">
-              Voeg via <strong>Branding</strong> je logo en kleuren toe zodat je bedrijfsomgeving en communicatie herkenbaar zijn.
+            <StepCard number="02" title="Maak een locatie aan">
+              Ga naar <strong>Locaties</strong> en maak het gebouw, complex of de vestiging aan. Geef de locatie een herkenbare naam en vul het adres in.
             </StepCard>
-            <StepCard number="03" title="Maak locaties aan">
-              Voeg eerst de gebouwen, complexen of vestigingen toe. Locaties helpen om appartementen te groeperen; je kunt adres en foto toevoegen.
+            <StepCard number="03" title="Voeg een appartement toe">
+              Maak het appartement aan, vul het nummer en de maandhuur in en koppel het aan de locatie uit stap 2. Controleer valuta en gegevens voordat je opslaat.
             </StepCard>
-            <StepCard number="04" title="Voeg appartementen toe">
-              Vul per verhuureenheid het nummer, de huurprijs en de juiste valuta in. Koppel het appartement aan de juiste locatie. Controleer deze gegevens zorgvuldig: ze bepalen wat de kiosk toont.
-            </StepCard>
-            <StepCard number="05" title="Voeg huurders toe en koppel ze">
-              Registreer de huurder met de beschikbare contactgegevens en wijs het juiste appartement toe. Controleer de koppeling voordat je de kiosk in gebruik neemt.
-            </StepCard>
-            <StepCard number="06" title="Leg afspraken vast">
-              Gebruik <strong>Contracten</strong> voor huurafspraken. Registreer borg waar van toepassing; een openstaande borg kan eerst voldaan moeten worden voordat huurbetaling kan doorgaan.
-            </StepCard>
-            <StepCard number="07" title="Maak medewerkers aan">
-              Ga naar <strong>Werknemers</strong>, maak een account aan, kies de passende rol en stel een persoonlijke kiosk-PIN van vier cijfers in. Als je ook e-mail en wachtwoord instelt, gebruikt de medewerker die bij de eerste login; daarna kan die persoon op dat apparaat de PIN gebruiken. Geef de PIN veilig aan de medewerker.
-            </StepCard>
-            <StepCard number="08" title="Kies je betaal- en ontvangstinstellingen">
-              Contante registratie en bankoverschrijving zijn beschikbaar in de medewerkerskiosk. Stel Stripe alleen in als je creditcard/iDEAL wilt aanbieden. Configureer e-mail, factuurautomatisering en printers alleen als je die functies nodig hebt.
-            </StepCard>
-            <StepCard number="09" title="Open en controleer de kiosk">
-              Open <strong>/kiosk</strong> op het toestel dat medewerkers gebruiken. Meld je aan met de juiste PIN en controleer of locaties, appartementen en huurders kloppen. Gebruik de afgesproken browser; als het apparaat dit ondersteunt kun je de app aan het startscherm toevoegen.
-            </StepCard>
-            <StepCard number="10" title="Test de toegang en eventuele QR/NFC">
-              Test de medewerker-PIN op het kiosktoestel. Als je NFC-tags gebruikt, koppel en test elke tag bij de juiste huurder of woning. Voor een printbare QR-plaat open je de QR-plaatoptie bij het appartement, kies je een formaat, download je de PDF en controleer je de afdruk.
+            <StepCard number="04" title="Maak een huurder en koppel die">
+              Voeg de huurder toe en selecteer het juiste appartement. Controleer de koppeling; zo verschijnt de huurder bij de juiste woning in Kiosk Beheer en de kiosk.
             </StepCard>
           </div>
-          <div className="mt-4">
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
             <InfoCard title="Niet alles is verplicht">
-              Voor de basis heb je correcte bedrijfsgegevens, minimaal één appartement en een huurder nodig. SMTP, automatische facturen, online kaartbetalingen en bonprinters zijn optionele aanvullingen.
+              De basis is compleet als je bedrijfsgegevens, een locatie, een appartement en een gekoppelde huurder hebt ingesteld.
+            </InfoCard>
+            <InfoCard title="Daarna: breid je beheer uit" tone="blue">
+              Voeg indien nodig contracten, borg en medewerkers toe. SMTP, factuurautomatisering, Stripe, printers en branding kun je later instellen.
             </InfoCard>
           </div>
         </section>
 
-        <section id="kiosk" className="scroll-mt-36 pt-10">
+        <section id="kiosk" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor medewerkers</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Een betaling registreren in de kiosk.</h2>
           <div className="mt-6 grid gap-3">
@@ -272,10 +195,9 @@ export default function Handleiding({ onDemo }) {
               Meld je aan met de PIN van jouw account. Het voorbeeld toont alleen het PIN-scherm; voer altijd je eigen PIN in en deel die niet.
             </div>
           </div>
-          <ScreenshotGallery title="Betaling registreren: scherm voor scherm" items={KIOSK_SCREENSHOTS} testId="manual-kiosk-screenshots" />
         </section>
 
-        <section id="huurdersportaal" className="scroll-mt-36 pt-10">
+        <section id="huurdersportaal" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor huurders</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Een betaling aanmelden via het huurdersportaal.</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Het huurdersportaal is een andere omgeving dan de medewerkerskiosk. De beschikbare betaal- en aanmeldopties kunnen afhangen van de bedrijfsinrichting.</p>
@@ -314,7 +236,7 @@ export default function Handleiding({ onDemo }) {
           </figure>
         </section>
 
-        <section id="beheer" className="scroll-mt-36 pt-10">
+        <section id="beheer" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor beheerders</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Kiosk Beheer: wat vind je waar?</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Open Beheer vanuit het dashboard of het beheermenu in de kiosk. De beschikbare pagina’s hangen af van je rol; een boekhouder heeft bijvoorbeeld minder menu’s dan een beheerder.</p>
@@ -345,10 +267,12 @@ export default function Handleiding({ onDemo }) {
               Voor werkzaamheden aan de balie en betalingen in de kiosk. Geef deze rol geen beheerdersgegevens.
             </InfoCard>
           </div>
-          <ScreenshotGallery title="Voorbeelden van beheerpagina’s" items={ADMIN_SCREENSHOTS} testId="manual-admin-screenshots" />
+          <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm leading-6 text-[#71310F]">
+            Deze uitleg volgt de huidige onderdelen van Kiosk Beheer. Er zijn geen oude beheerscreenshots opgenomen, zodat afbeeldingen geen verouderde interface tonen.
+          </div>
         </section>
 
-        <section id="instellingen" className="scroll-mt-36 pt-10">
+        <section id="instellingen" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Optioneel, maar handig</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Koppel functies die jouw organisatie nodig heeft.</h2>
           <div className="mt-6 grid gap-3 md:grid-cols-2">
@@ -373,7 +297,7 @@ export default function Handleiding({ onDemo }) {
           </div>
         </section>
 
-        <section id="problemen" className="scroll-mt-36 pt-10">
+        <section id="problemen" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Snelle hulp</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Veelvoorkomende controles.</h2>
           <div className="mt-6 grid gap-3">
@@ -400,7 +324,7 @@ export default function Handleiding({ onDemo }) {
           </div>
         </section>
 
-        <section className="scroll-mt-36 pt-10">
+        <section className="scroll-mt-28">
           <div className="flex flex-col gap-5 rounded-3xl bg-[#0B1B3F] p-7 text-white sm:p-9 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FF8A3D]"><CircleHelp className="h-4 w-4" /> Hulp nodig?</p>
@@ -412,6 +336,7 @@ export default function Handleiding({ onDemo }) {
             </a>
           </div>
         </section>
+        </div>
       </div>
       <div className="mx-auto max-w-[1200px] px-5 pb-10 sm:px-8 lg:px-10">
         <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">

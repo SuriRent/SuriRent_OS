@@ -19,7 +19,7 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
       try {
         if (localStorage.getItem(`setup_wizard_dismissed_${cid}`) === '1') return;
         const { data } = await api.get('/companies/me/setup-status');
-        if (!cancelled && (data?.completed ?? 0) < 2) setWizardOpen(true);
+        if (!cancelled && data?.required_complete === false) setWizardOpen(true);
       } catch { /* netwerkfout — wizard overslaan */ }
     })();
     return () => { cancelled = true; };

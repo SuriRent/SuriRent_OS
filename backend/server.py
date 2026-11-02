@@ -4314,24 +4314,28 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
     has_bank = bool((c.get("bank_account_sr") or "").strip()) or \
         bool((c.get("bank_account_nl") or "").strip())
 
+    location_count = await db.locations.count_documents({"company_id": cid})
     apt_count = await db.apartments.count_documents({"company_id": cid})
     tenant_count = await db.tenants.count_documents({"company_id": cid})
 
     steps = [
         {"id": "profile", "label": "Bedrijfsgegevens", "done": bool(has_name and has_contact)},
-        {"id": "bank", "label": "Bankrekening", "done": has_bank},
+        {"id": "locations", "label": "Eerste locatie", "done": location_count > 0},
         {"id": "apartment", "label": "Eerste appartement", "done": apt_count > 0},
         {"id": "tenant", "label": "Eerste huurder", "done": tenant_count > 0},
+        {"id": "bank", "label": "Bankrekening", "done": has_bank},
     ]
     completed = sum(1 for s in steps if s["done"])
+    required_ids = {"profile", "locations", "apartment", "tenant"}
     return {
         "complete": completed == len(steps),
+        "required_complete": all(s["done"] for s in steps if s["id"] in required_ids),
         "completed": completed,
         "total": len(steps),
         "percent": round(completed / len(steps) * 100),
         "steps": steps,
         "next_step": next((s["id"] for s in steps if not s["done"]), None),
-        "counts": {"apartments": apt_count, "tenants": tenant_count},
+        "counts": {"locations": location_count, "apartments": apt_count, "tenants": tenant_count},
     }
 
 
