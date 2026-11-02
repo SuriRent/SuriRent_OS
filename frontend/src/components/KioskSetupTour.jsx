@@ -359,18 +359,19 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
   const group = stage === 'complete' ? 4 : (STAGE_GROUPS[stage] || 1);
   const message = step?.text?.(mobile) || step?.text;
   const panelAtTop = rect ? rect.top + rect.height / 2 > window.innerHeight / 2 : true;
+  const profileSaveOnly = stage === 'businessSave' || stage === 'awaiting-profile';
 
   return createPortal((
     <div className="fixed inset-0 z-[180] pointer-events-none" data-testid="kiosk-setup-tour">
       {rect && (
         <>
-          <div className="fixed rounded-2xl border-2 border-orange-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.68)] animate-pulse pointer-events-none"
+          <div className={`fixed rounded-2xl border-2 border-orange-400 pointer-events-none ${profileSaveOnly ? 'animate-pulse' : 'shadow-[0_0_0_9999px_rgba(15,23,42,0.68)] animate-pulse'}`}
             style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }} />
           <div className="fixed text-3xl drop-shadow-md animate-bounce pointer-events-none"
             style={{ top: Math.max(4, rect.top - 34), left: Math.max(4, rect.left + rect.width / 2 - 12) }}>👇</div>
         </>
       )}
-      <section className={`fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 ${SAVE_STAGE[stage] ? 'hidden' : ''}`}
+      <section className={`fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 ${profileSaveOnly ? 'hidden' : ''}`}
         style={{
           width: 'calc(100vw - 24px)',
           left: '50%',
