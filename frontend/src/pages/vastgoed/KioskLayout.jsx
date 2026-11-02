@@ -3,6 +3,7 @@ import { KioskContractSignModal } from '../../components/KioskContractSign';
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
+import { publicMarketingUrl } from '../../lib/env';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Sun, Palette, Menu as MenuIcon, ScanLine,
@@ -5287,8 +5288,12 @@ export default function KioskLayout() {
     return undefined;
   }, [step]);
 
-  const exit = useCallback(() => {
+  const exit = useCallback(async () => {
     kioskLiveBye();
+    const wasDemo = (() => {
+      try { return localStorage.getItem('is_demo_session') === '1'; }
+      catch { return false; }
+    })();
     // VOLLEDIGE reset zodat een volgende gebruiker (vooral een andere
     // medewerker op een gedeeld kiosk-toestel) cleanly bij de PIN-keypad
     // landt zonder oude tokens of role-voorkeur. Anders krijgt de PWA
@@ -5301,6 +5306,10 @@ export default function KioskLayout() {
       localStorage.removeItem('kiosk_admin_cookie');
       localStorage.removeItem('pwa_preferred_role');
       localStorage.removeItem('active_company_id');
+      if (wasDemo) {
+        localStorage.removeItem('is_demo_session');
+        localStorage.removeItem('pwa_company_slug');
+      }
     } catch { /* ignore */ }
     try {
       // Ook oude sessionStorage keys opruimen (backwards-compat).
@@ -5311,9 +5320,10 @@ export default function KioskLayout() {
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
     } catch { /* ignore */ }
-    // Beheerder-sessie (cookie) ook afmelden, anders stuurt de login-pagina direct terug naar de kiosk.
-    // Hard reload zodat AuthProvider zijn cached state óók kwijt is.
-    api.post('/auth/logout').catch(() => {}).finally(() => window.location.assign('/login?pick=1&loggedout=1'));
+    // Wacht tot auth-cookies gewist zijn voordat we de kiosk verlaten.
+    api.post('/auth/logout').catch(() => {}).finally(() => {
+      window.location.assign(wasDemo ? publicMarketingUrl() || '/' : '/login?pick=1&loggedout=1');
+    });
   }, []);
 
 
