@@ -30,7 +30,7 @@ export default function InstellingenHub({ embedded = false, section = null }) {
   const location = useLocation();
   const navigate = useBrandedNavigate();
   const [sec, setSec] = useState(section || 'bedrijf');
-  const active = embedded ? sec : activeInstellingenSection(location.hash);
+  const active = embedded ? (section || sec) : activeInstellingenSection(location.hash);
   const current = INSTELLINGEN_SECTIONS.find((s) => s.id === active);
   const Icon = current.icon;
 
