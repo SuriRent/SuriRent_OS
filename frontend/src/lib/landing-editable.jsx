@@ -300,7 +300,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
 }
 
 /** Editable hero media that accepts either a photo or a video URL. */
-export function EditableMedia({ path, typePath, className = '', label = 'Foto of video', poster = '', value, mediaTypeValue }) {
+export function EditableMedia({ path, typePath, className = '', label = 'Foto of video', poster = '', value, mediaTypeValue, fit = 'contain' }) {
   const { editMode, content, page, patch } = useEditable();
   const src = value ?? getPath(content, path, '');
   const mediaType = mediaTypeValue ?? getPath(content, typePath, '');
@@ -335,14 +335,15 @@ export function EditableMedia({ path, typePath, className = '', label = 'Foto of
       }, window.location.origin);
     } catch { /* editor is optional outside the admin iframe */ }
   };
+  const mediaFitClass = fit === 'cover' ? 'object-cover' : 'object-contain';
 
   return (
     <div className={`relative overflow-hidden ${className}`} data-edit-path={editMode ? path : undefined}
       data-edit-kind={editMode ? 'media' : undefined}>
       {src && mediaType.startsWith('video/')
-        ? <video src={src} poster={poster} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+        ? <video src={src} poster={poster} autoPlay muted loop playsInline className={`h-full w-full ${mediaFitClass}`} />
         : src
-          ? <img loading="lazy" src={src} alt="" className="h-full w-full object-cover" />
+          ? <img loading="lazy" src={src} alt="" className={`h-full w-full ${mediaFitClass}`} />
           : <div className="h-full w-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-500">
             Upload een foto of video
           </div>}

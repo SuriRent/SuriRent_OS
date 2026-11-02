@@ -557,7 +557,7 @@ export default function LiveLandingEditor() {
             {imageReq.current && imageReq.allowVideo && imageReq.mediaType?.startsWith('video/') ? (
               <video src={assetPreviewUrl(imageReq.current)} controls playsInline className="w-full h-40 rounded-lg mb-3 bg-slate-100 object-contain" />
             ) : imageReq.current ? (
-              <img loading="lazy" src={assetPreviewUrl(imageReq.current)} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+              <img loading="lazy" src={assetPreviewUrl(imageReq.current)} alt="" className="w-full h-32 object-contain rounded-lg mb-3 bg-slate-100" />
             ) : null}
             {imageReq.allowVideo && (
               <p className="mb-3 text-xs text-slate-500">Afbeelding maximaal 5 MB; video MP4 of WebM maximaal 100 MB.</p>

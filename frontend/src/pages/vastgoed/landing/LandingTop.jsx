@@ -178,11 +178,16 @@ const SIDEBAR = [[LayoutDashboard, 'Dashboard'], [Users, 'Huurders'], [Wallet, '
 const KPIS = [['Totaal huurders', '12', '+1 deze maand', 'text-emerald-600'], ['Ontvangen betalingen', 'SRD 78.500', '+12% deze maand', 'text-emerald-600'], ['Openstaand saldo', 'SRD 25.750', '-8% deze maand', 'text-red-500'], ['Actieve contracten', '11', '100%', 'text-emerald-600']];
 const PAYS = [['J. Ramautar', 'Huis 7A', 'SRD 7.000', '25 apr 2026', true], ['S. Gonesh', 'Huis 7B', 'SRD 6.000', '24 apr 2026', true], ['L. Soekhlal', 'Huis 7C', 'SRD 7.000', '24 apr 2026', true], ['M. Kanhai', 'Huis 7D', 'SRD 6.000', '23 apr 2026', false]];
 
-function LaptopMockup() {
+function LaptopMockup({ mediaUrl = '', mediaType = '', showMockups = false }) {
   return (
     <div className="w-[600px]" data-testid="hero-laptop">
       <div className="rounded-t-[22px] bg-[#111827] p-[10px] pb-[12px] shadow-[0_40px_80px_-30px_rgba(11,27,63,0.55)]">
-        <div className="rounded-[6px] overflow-hidden bg-white flex h-[340px]">
+        <div className="relative rounded-[6px] overflow-hidden bg-white flex h-[340px]">
+          {mediaUrl && !showMockups ? (
+            <EditableMedia path="v3.hero.laptop_media_url" typePath="v3.hero.laptop_media_type"
+              label="Startpagina · Laptop scherm foto of video" value={mediaUrl} mediaTypeValue={mediaType}
+              fit="contain" className="absolute inset-0 z-10 h-full w-full bg-[#F8FAFC]" />
+          ) : <>
           <div className="w-[128px] bg-[#0E1A33] px-2.5 py-3 shrink-0">
             <div className="flex items-center gap-1.5 mb-4 px-1">
               <span className="w-5 h-5 rounded-md bg-[#FF5C00] p-[3px]"><EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
@@ -244,6 +249,7 @@ function LaptopMockup() {
               </div>
             </div>
           </div>
+          </>}
         </div>
       </div>
       <div className="h-[14px] mx-[-36px] rounded-b-[14px] bg-gradient-to-b from-[#E5E7EB] to-[#9CA3AF] relative">
@@ -255,10 +261,15 @@ function LaptopMockup() {
 
 const PHONE_CARDS = [['Mijn huurders', '12', Users, 'text-[#FF5C00]'], ['Betalingen', '8', Wallet, 'text-[#FF5C00]'], ['Achterstand', '2', AlertCircle, 'text-[#FF5C00]'], ['Rapporten', 'Bekijk', FileText, 'text-blue-600']];
 
-function PhoneMockup() {
+function PhoneMockup({ mediaUrl = '', mediaType = '', showMockups = false }) {
   return (
     <div className="w-[150px] rounded-[26px] bg-[#111827] p-[6px] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.6)]" data-testid="hero-phone">
       <div className="rounded-[21px] bg-white overflow-hidden h-[318px] flex flex-col relative">
+        {mediaUrl && !showMockups ? (
+          <EditableMedia path="v3.hero.phone_media_url" typePath="v3.hero.phone_media_type"
+            label="Startpagina · Telefoonscherm foto of video" value={mediaUrl} mediaTypeValue={mediaType}
+            fit="contain" className="absolute inset-0 z-10 h-full w-full bg-white" />
+        ) : <>
         <div className="h-[18px] flex items-center justify-between px-3 text-[6px] font-bold" style={{ color: NAVY }}>
           <span>9:41</span><span className="w-[46px] h-[11px] rounded-full bg-[#111827] absolute left-1/2 -translate-x-1/2 top-[4px]" /><span>●●</span>
         </div>
@@ -284,6 +295,7 @@ function PhoneMockup() {
             <div key={l} className={`flex flex-col items-center justify-center gap-[2px] ${i === 0 ? 'text-[#FF5C00]' : ''}`}><I className="w-2.5 h-2.5" /><EditableText path={`marketing.home.mockup.phone_nav.${i}`} fallback={l} as="span" label={`Startpagina · Mobiele navigatie ${i + 1}`} /></div>
           ))}
         </div>
+        </>}
       </div>
     </div>
   );
@@ -314,18 +326,10 @@ function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phon
     <div ref={ref} className="w-full relative" style={{ height: 440 * scale }} data-testid="hero-devices">
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: 700, height: 440, transform: `scale(${scale})` }}>
         <div className="absolute left-[30px] top-[20px]">
-          {!showMockups && laptopMediaUrl ? (
-            <EditableMedia path="v3.hero.laptop_media_url" typePath="v3.hero.laptop_media_type"
-              label="Startpagina · Laptop scherm foto of video" value={laptopMediaUrl} mediaTypeValue={laptopMediaType}
-              className="h-[410px] w-[600px] rounded-xl shadow-[0_30px_70px_-30px_rgba(11,27,63,0.5)]" />
-          ) : <LaptopMockup />}
+          <LaptopMockup mediaUrl={laptopMediaUrl} mediaType={laptopMediaType} showMockups={showMockups} />
         </div>
         <div className="absolute right-0 top-[100px]">
-          {!showMockups && phoneMediaUrl ? (
-            <EditableMedia path="v3.hero.phone_media_url" typePath="v3.hero.phone_media_type"
-              label="Startpagina · Telefoonscherm foto of video" value={phoneMediaUrl} mediaTypeValue={phoneMediaType}
-              className="h-[318px] w-[150px] rounded-[26px] border-[6px] border-[#111827] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.6)]" />
-          ) : <PhoneMockup />}
+          <PhoneMockup mediaUrl={phoneMediaUrl} mediaType={phoneMediaType} showMockups={showMockups} />
         </div>
         {editMode && (showMockups || !laptopMediaUrl) && (
           <button type="button" onClick={() => requestHeroMediaUpload(
