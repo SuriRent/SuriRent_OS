@@ -52,7 +52,7 @@ export function KioskAdminPage({ id, onBack }) {
           <ArrowLeft className="w-5 h-5" /> Terug
         </button>
         <Suspense fallback={<Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}>
-          <Page />
+          <Page embedded={id === 'instellingen'} />
         </Suspense>
       </div>
       </div>
