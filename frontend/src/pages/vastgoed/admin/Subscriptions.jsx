@@ -88,9 +88,21 @@ function ExtendModal({ company, onClose, onDone }) {
 function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, defaultInvoiceId, onClose, onSaved }) {
   const [companyId, setCompanyId] = useState(defaultCompanyId || (companies[0]?.id || ''));
   const selectedCompany = companies.find((c) => c.id === companyId);
-  const [invoiceId, setInvoiceId] = useState(defaultInvoiceId || '');
+  const [invoiceId, setInvoiceId] = useState(defaultInvoiceId || (
+    invoices.find((invoice) => invoice.company_id === (defaultCompanyId || companies[0]?.id)
+      && ['open', 'overdue'].includes(invoice.status))?.id || ''
+  ));
   const openInvoices = invoices.filter((invoice) => invoice.company_id === companyId && ['open', 'overdue'].includes(invoice.status));
   const selectedInvoice = openInvoices.find((invoice) => invoice.id === invoiceId);
+  const paymentPlanTerms = (selectedInvoice?.payment_plans || []).flatMap((plan) =>
+    (plan.schedule || [])
+      .filter((term) => term.status !== 'paid' && Number(term.amount || 0) > Number(term.paid_amount || 0))
+      .map((term) => ({ plan, term })),
+  );
+  const [selectedTermKey, setSelectedTermKey] = useState('');
+  const selectedTerm = paymentPlanTerms.find(
+    ({ plan, term }) => `${plan.id}:${term.seq}` === selectedTermKey,
+  );
   const [amount, setAmount] = useState(selectedCompany?.monthly_amount || 0);
   const [currency, setCurrency] = useState(selectedCompany?.currency || 'SRD');
   const [method, setMethod] = useState('bank');
@@ -103,17 +115,27 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
   useEffect(() => {
     if (!selectedCompany) return;
     if (selectedInvoice) {
-      setAmount(selectedInvoice.amount || 0);
+      const terms = (selectedInvoice.payment_plans || []).flatMap((plan) =>
+        (plan.schedule || [])
+          .filter((term) => term.status !== 'paid' && Number(term.amount || 0) > Number(term.paid_amount || 0))
+          .map((term) => ({ plan, term })),
+      );
+      setSelectedTermKey(terms.length ? `${terms[0].plan.id}:${terms[0].term.seq}` : '');
+      setAmount(terms.length
+        ? Number(terms[0].term.amount) - Number(terms[0].term.paid_amount || 0)
+        : selectedInvoice.balance_due ?? (selectedInvoice.amount - (selectedInvoice.paid_amount || 0)));
       setCurrency(selectedInvoice.currency || 'SRD');
       return;
     }
+    setSelectedTermKey('');
     setAmount(selectedCompany.monthly_amount || 0);
     setCurrency(selectedCompany.currency || 'SRD');
   }, [selectedCompany, selectedInvoice]);
 
   const changeCompany = (nextCompanyId) => {
     setCompanyId(nextCompanyId);
-    setInvoiceId('');
+    setInvoiceId(invoices.find((invoice) => invoice.company_id === nextCompanyId
+      && ['open', 'overdue'].includes(invoice.status))?.id || '');
   };
 
   const submit = async () => {
@@ -122,6 +144,8 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
       await api.post('/superadmin/subscription-payments', {
         company_id: companyId,
         invoice_id: invoiceId || null,
+        plan_id: selectedTerm?.plan.id || null,
+        installment_seq: selectedTerm?.term.seq || null,
         amount: Number(amount) || 0,
         currency, method, reference, note,
         paid_at: new Date(paidAt).toISOString(),
@@ -165,11 +189,34 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
               <option value="">Nieuwe betaalperiode (geen open factuur)</option>
               {openInvoices.map((invoice) => (
                 <option key={invoice.id} value={invoice.id}>
-                  {(invoice.invoice_number || invoice.id.slice(-6)).toUpperCase()} · {fmt(invoice.amount, invoice.currency)} · {fmtDate(invoice.period_start)}
+                  {(invoice.invoice_number || invoice.id.slice(-6)).toUpperCase()} · {fmt(invoice.balance_due ?? (invoice.amount - (invoice.paid_amount || 0)), invoice.currency)} open · {fmtDate(invoice.period_start)}
                 </option>
               ))}
             </select>
           </div>
+
+          {paymentPlanTerms.length > 0 && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Betaling toewijzen</label>
+              <select value={selectedTermKey} onChange={(e) => {
+                const nextKey = e.target.value;
+                const nextTerm = paymentPlanTerms.find(({ plan, term }) => `${plan.id}:${term.seq}` === nextKey);
+                setSelectedTermKey(nextKey);
+                setAmount(nextTerm
+                  ? Number(nextTerm.term.amount) - Number(nextTerm.term.paid_amount || 0)
+                  : selectedInvoice.balance_due ?? (selectedInvoice.amount - (selectedInvoice.paid_amount || 0)));
+              }}
+                data-testid="reg-pay-installment"
+                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none bg-white">
+                <option value="">Volledig openstaand saldo</option>
+                {paymentPlanTerms.map(({ plan, term }) => (
+                  <option key={`${plan.id}:${term.seq}`} value={`${plan.id}:${term.seq}`}>
+                    Termijn {term.seq}/{plan.installments} · {fmt(Number(term.amount) - Number(term.paid_amount || 0), plan.currency)} · {fmtDate(term.due_date)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
@@ -238,8 +285,8 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mt-4 text-xs text-slate-600">
           {selectedInvoice
-            ? 'Bij registreren wordt deze openstaande factuur als betaald geboekt en het abonnement volgens de pakketperiode verlengd.'
-            : 'Bij registreren wordt een nieuwe betaalde factuur aangemaakt en het abonnement volgens de pakketperiode verlengd.'}
+            ? `Bij registreren wordt het openstaande saldo van ${fmt(selectedInvoice.balance_due ?? (selectedInvoice.amount - (selectedInvoice.paid_amount || 0)), selectedInvoice.currency)} betaald en blijft hetzelfde factuurnummer behouden.`
+            : 'Bij registreren wordt een nieuwe periode toegevoegd aan de bestaande bedrijfsfactuur.'}
         </div>
 
         <div className="flex gap-2 mt-5">
@@ -377,7 +424,7 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
   const [invoiceId, setInvoiceId] = useState(prefillInvoiceId || (openInvoices[0]?.id || ''));
   const sourceInv = openInvoices.find((i) => i.id === invoiceId);
   const [companyId, setCompanyId] = useState(sourceInv?.company_id || companies[0]?.id || '');
-  const [totalAmount, setTotalAmount] = useState(sourceInv?.amount || 0);
+  const [totalAmount, setTotalAmount] = useState(sourceInv?.balance_due ?? sourceInv?.amount ?? 0);
   const [currency, setCurrency] = useState(sourceInv?.currency || 'SRD');
   const [installments, setInstallments] = useState(3);
   const [intervalDays, setIntervalDays] = useState(30);
@@ -388,7 +435,7 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
   useEffect(() => {
     if (sourceInv) {
       setCompanyId(sourceInv.company_id);
-      setTotalAmount(sourceInv.amount);
+      setTotalAmount(sourceInv.balance_due ?? sourceInv.amount);
       setCurrency(sourceInv.currency);
     }
   }, [sourceInv]);
@@ -1357,6 +1404,8 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
         const overdue = isOverdue(inv);
         const paid = inv.status === 'paid';
         const superseded = inv.status === 'superseded';
+        const partial = Number(inv.paid_amount || 0) > 0 && !paid;
+        const balanceDue = inv.balance_due ?? Math.max(Number(inv.amount || 0) - Number(inv.paid_amount || 0), 0);
         return (
           <div key={inv.id} data-testid={`sub-invoice-${inv.id}`}
             className="w-full bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 transition">
@@ -1374,8 +1423,9 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
                   paid ? 'bg-emerald-100 text-emerald-700'
                     : superseded ? 'bg-slate-100 text-slate-600'
                     : overdue ? 'bg-red-100 text-red-700'
+                    : partial ? 'bg-sky-100 text-sky-700'
                     : 'bg-amber-100 text-amber-700'
-                }`}>{paid ? 'Betaald' : superseded ? 'Vervangen' : overdue ? 'Vervallen' : 'Open'}</span>
+                }`}>{paid ? 'Betaald' : superseded ? 'Vervangen' : overdue ? 'Vervallen' : partial ? 'Gedeeltelijk betaald' : 'Open'}</span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">
                 {(inv.invoice_number || inv.id?.slice(-6) || '').toUpperCase()} · {inv.plan} · {fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}{inv.due_date ? ` · Uiterlijk ${fmtDate(inv.due_date)}` : ''}
@@ -1383,6 +1433,9 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
             </div>
             <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
               <p className="text-base font-black text-slate-900 whitespace-nowrap">{fmt(inv.amount, inv.currency)}</p>
+              {balanceDue > 0 && balanceDue < Number(inv.amount || 0) && (
+                <p className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Openstaand: {fmt(balanceDue, inv.currency)}</p>
+              )}
               <div className="flex gap-1.5">
                 <button onClick={() => downloadInvoicePdf(inv)} data-testid={`inv-pdf-${inv.id}`}
                   title="Download PDF"
@@ -1486,6 +1539,9 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
   // Bedrijven met minimaal 1 open factuur → mogelijk om te zetten naar regeling
   const openList = invoices
     .filter((inv) => !['paid', 'superseded'].includes(inv.status) && !inv.saas_plan_id)
+    .filter((inv) => !(inv.payment_plans || []).some((plan) =>
+      (plan.schedule || []).some((term) => term.status !== 'paid' && Number(term.paid_amount || 0) < Number(term.amount || 0)),
+    ))
     .map((inv) => ({
       invoice: inv,
       company_id: inv.company_id,
@@ -1589,7 +1645,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
                 <div className="flex-1 min-w-0">
                   <p className="font-black text-slate-900 truncate">{c.company_name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Factuur {(c.invoice.invoice_number || c.invoice.id?.slice(-6) || '').toUpperCase()} · <span className="font-mono">{fmt(c.invoice.amount, c.currency)}</span>
+                    Factuur {(c.invoice.invoice_number || c.invoice.id?.slice(-6) || '').toUpperCase()} · <span className="font-mono">{fmt(c.invoice.balance_due ?? c.invoice.amount, c.currency)}</span>
                   </p>
                 </div>
                 <button onClick={() => onNewPlan && onNewPlan(c.invoice.id)}

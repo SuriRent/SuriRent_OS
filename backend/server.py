@@ -68,6 +68,14 @@ from auth_utils import (  # noqa: E402
     _pin_throttle_check, _pin_throttle_fail, _pin_throttle_clear,
     _client_ip, extract_token,
 )
+from saas_invoicing import (
+    append_company_invoice_charge,
+    apply_saas_plan_payment,
+    consolidate_all_company_invoices,
+    consolidate_company_invoices,
+    remove_unpaid_invoice_charge,
+    update_invoice_paid_amount,
+)
 
 
 # =====================================================================
@@ -334,6 +342,13 @@ async def lifespan(app: FastAPI):
     await db.landing_assets.create_index("company_id")
     await db.landing_assets.create_index([("company_id", 1), ("scope", 1)])
     await db.subscription_invoices.create_index([("status", 1), ("period_end", 1)])
+    consolidated = await consolidate_all_company_invoices(db)
+    if consolidated:
+        print(f"[startup] consolidated SaaS invoices for {consolidated} companies")
+    await db.subscription_invoices.create_index(
+        "company_id", unique=True, partialFilterExpression={"master_invoice": True},
+        name="one_master_saas_invoice_per_company",
+    )
     await db.subscription_payments.create_index("company_id")
     await db.subscription_payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.landing_assets.create_index("id", unique=True)
@@ -2569,6 +2584,21 @@ class ChangePlanIn(BaseModel):
     plan: str
 
 
+async def _remove_pending_plan_charge(company: dict) -> None:
+    invoice_id = company.get("pending_invoice_id")
+    charge_key = company.get("pending_charge_key")
+    if invoice_id and charge_key:
+        try:
+            await remove_unpaid_invoice_charge(db, invoice_id, charge_key)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+    if invoice_id:
+        await db.companies.update_one(
+            {"id": company["id"]},
+            {"$unset": {"pending_invoice_id": "", "pending_charge_key": "", "pending_plan": ""}},
+        )
+
+
 @api.put("/billing/me/plan")
 async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
     """Customer-driven plan upgrade/downgrade.
@@ -2591,19 +2621,20 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Onbekend pakket '{new_plan}'")
     if target_doc.get("active") is False:
         raise HTTPException(status_code=400, detail="Dit pakket is niet meer beschikbaar")
+    if new_plan == c.get("pending_plan") and c.get("pending_invoice_id"):
+        existing_pending = await db.subscription_invoices.find_one(
+            {"id": c["pending_invoice_id"], "company_id": cid}, {"_id": 0},
+        )
+        if existing_pending:
+            return {
+                "ok": True, "plan": old, "pending_plan": new_plan,
+                "invoice": existing_pending, "effective": "after_payment",
+                "message": "Deze pakketwijziging wacht al op betaling.",
+            }
     if new_plan == old and not c.get("pending_plan"):
         return {"ok": True, "plan": new_plan, "effective": "already_active"}
     if new_plan == old and c.get("pending_plan"):
-        previous_invoice_id = c.get("pending_invoice_id")
-        if previous_invoice_id:
-            await db.subscription_invoices.update_one(
-                {"id": previous_invoice_id, "company_id": cid, "status": {"$in": ["open", "overdue"]}},
-                {"$set": {"status": "superseded", "superseded_at": iso(now_utc())}},
-            )
-        await db.companies.update_one(
-            {"id": cid},
-            {"$unset": {"pending_plan": "", "pending_invoice_id": ""}},
-        )
+        await _remove_pending_plan_charge(c)
         return {"ok": True, "plan": new_plan, "effective": "already_active",
                 "message": "De openstaande pakketwijziging is geannuleerd."}
 
@@ -2612,16 +2643,11 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
 
     # Gratis plan → direct activeren zonder factuur.
     if float(new_price.get("amount") or 0) <= 0:
-        previous_invoice_id = c.get("pending_invoice_id")
-        if previous_invoice_id:
-            await db.subscription_invoices.update_one(
-                {"id": previous_invoice_id, "company_id": cid, "status": {"$in": ["open", "overdue"]}},
-                {"$set": {"status": "superseded", "superseded_at": iso(now)}},
-            )
+        await _remove_pending_plan_charge(c)
         await db.companies.update_one({"id": cid}, {
             "$set": {"plan": new_plan, "billing_status": "active",
                      "plan_change_requested_at": iso(now)},
-            "$unset": {"pending_plan": "", "pending_invoice_id": "", "subscription_renews_at": ""},
+            "$unset": {"pending_plan": "", "pending_invoice_id": "", "pending_charge_key": "", "subscription_renews_at": ""},
         })
         await db.audit_log.insert_one({
             "id": new_id(), "type": "plan_change_free_immediate",
@@ -2632,6 +2658,7 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
                 "message": f"Uw abonnement is omgezet naar {new_price.get('name') or new_plan}."}
 
     # Create an open invoice for the new plan (customer must pay this to activate)
+    period_end = _plan_period_end(target_doc, now)
     inv = {
         "id": new_id(),
         "company_id": cid,
@@ -2643,23 +2670,35 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
         "kind": "plan_change",
         "from_plan": old,
         "period_start": iso(now),
-        "period_end": iso(_plan_period_end(target_doc, now)) if _plan_period_end(target_doc, now) else None,
+        "period_end": iso(period_end) if period_end else None,
         "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user.get("email"),
     }
-    await db.subscription_invoices.insert_one(inv)
-    inv.pop("_id", None)
+    charge_key = f"plan-change:{new_plan}:{now.date().isoformat()}"
+    if c.get("pending_plan") and c.get("pending_invoice_id"):
+        await _remove_pending_plan_charge(c)
+    try:
+        inv, created = await append_company_invoice_charge(db, inv, charge_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if not created:
+        await db.companies.update_one({"id": cid}, {"$set": {
+            "pending_plan": new_plan,
+            "pending_invoice_id": inv["id"],
+            "pending_charge_key": charge_key,
+            "plan_change_requested_at": iso(now),
+        }})
+        return {
+            "ok": True, "plan": old, "pending_plan": new_plan,
+            "invoice": inv, "effective": "after_payment",
+            "message": "Deze pakketwijziging staat al op de factuur.",
+        }
 
-    previous_invoice_id = c.get("pending_invoice_id")
-    if previous_invoice_id:
-        await db.subscription_invoices.update_one(
-            {"id": previous_invoice_id, "company_id": cid, "status": {"$in": ["open", "overdue"]}},
-            {"$set": {"status": "superseded", "superseded_by_invoice_id": inv["id"]}},
-        )
     await db.companies.update_one({"id": cid}, {"$set": {
         "pending_plan": new_plan,
         "pending_invoice_id": inv["id"],
+        "pending_charge_key": charge_key,
         "plan_change_requested_at": iso(now),
     }})
     await db.audit_log.insert_one({
@@ -2679,7 +2718,20 @@ async def my_invoices(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         return []
-    docs = await db.subscription_invoices.find({"company_id": cid}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    docs = await db.subscription_invoices.find(
+        {"company_id": cid, "merged_into_invoice_id": {"$exists": False},
+         "status": {"$nin": ["merged", "superseded"]}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    invoice_ids = [invoice["id"] for invoice in docs]
+    plans = await db.saas_payment_plans.find(
+        {"invoice_id": {"$in": invoice_ids}}, {"_id": 0},
+    ).to_list(100)
+    plans_by_invoice: dict[str, list[dict]] = {}
+    for plan in plans:
+        plans_by_invoice.setdefault(plan["invoice_id"], []).append(plan)
+    for invoice in docs:
+        invoice["payment_plans"] = plans_by_invoice.get(invoice["id"], [])
     return docs
 
 
@@ -2883,16 +2935,22 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     (so a customer in trial / expired state can pay even before any invoice was issued).
     Invoice is denominated in the company's display currency (SRD for SR, EUR for NL)."""
     cid = c["id"]
-    inv = await db.subscription_invoices.find_one(
-        {"company_id": cid, "status": {"$nin": ["paid", "archived"]}},
-        {"_id": 0}, sort=[("created_at", -1)],
-    )
-    if inv:
+    try:
+        inv = await consolidate_company_invoices(db, cid)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if inv and inv.get("status") in {"open", "overdue"}:
         return inv
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
     now = now_utc()
-    period_end = _plan_period_end(plan, now)
+    period_start = c.get("subscription_renews_at") or iso(now)
+    try:
+        period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
+    except ValueError:
+        period_start_dt = now
+        period_start = iso(now)
+    period_end = _plan_period_end(plan, period_start_dt)
     inv = {
         "id": new_id(),
         "company_id": cid,
@@ -2902,14 +2960,18 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         "currency": plan["currency"],
         "status": "open",
         "kind": "subscription",
-        "period_start": iso(now),
+        "period_start": period_start,
         "period_end": iso(period_end) if period_end else None,
         "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
     }
-    await db.subscription_invoices.insert_one(inv)
-    inv.pop("_id", None)
+    try:
+        inv, _ = await append_company_invoice_charge(
+            db, inv, f"subscription:{str(period_start)[:10]}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return inv
 
 
@@ -2929,6 +2991,7 @@ async def _record_saas_payment_manual(
     *, invoice: dict, company: dict, amount: float, currency: str,
     method: str, reference: str, statement_id: Optional[str],
     ocr_meta: Optional[dict], auto_approved: bool, approved_by: str,
+    plan_id: Optional[str] = None, installment_seq: Optional[int] = None,
 ) -> dict:
     """Helper voor handmatige (bankoverschrijving) SaaS-betalingen. Maakt
     `saas_payment_requests` + `subscription_payments` aan en activeert het
@@ -2947,6 +3010,8 @@ async def _record_saas_payment_manual(
         "provider_id": f"manual:{pr_id[:8]}",
         "amount": amount,
         "currency": currency,
+        "plan_id": plan_id,
+        "installment_seq": installment_seq,
         "status": "paid" if auto_approved else "pending_approval",
         "bank_statement_id": statement_id,
         "ocr": ocr_meta or {},
@@ -2959,11 +3024,15 @@ async def _record_saas_payment_manual(
     if not auto_approved:
         # OCR mismatch — superadmin moet handmatig goedkeuren.
         return {"status": "pending_approval", "invoice_id": invoice["id"], "request_id": pr_id, "ocr": ocr_meta or {}}
-    # Mark invoice paid
-    await db.subscription_invoices.update_one(
-        {"id": invoice["id"]},
-        {"$set": {"status": "paid", "paid_at": paid_at, "payment_method": method}},
-    )
+    updated_invoice = await update_invoice_paid_amount(db, invoice["id"], amount)
+    if not updated_invoice:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    await apply_saas_plan_payment(db, invoice["id"], amount, plan_id, installment_seq)
+    if updated_invoice.get("status") == "paid":
+        await db.subscription_invoices.update_one(
+            {"id": invoice["id"]},
+            {"$set": {"paid_at": paid_at, "payment_method": method}},
+        )
     # Subscription payment record
     pay = {
         "id": new_id(),
@@ -2972,6 +3041,8 @@ async def _record_saas_payment_manual(
         "company_name": company.get("name", ""),
         "amount": amount,
         "currency": currency,
+        "plan_id": plan_id,
+        "installment_seq": installment_seq,
         "method": method,
         "reference": reference,
         "note": "Auto-goedgekeurd na OCR-controle van bankafschrift" if auto_approved else "",
@@ -2982,9 +3053,16 @@ async def _record_saas_payment_manual(
         "bank_statement_id": statement_id,
     }
     await db.subscription_payments.insert_one(pay)
-    await _activate_company_after_saas_payment(company["id"], plan_in_payment=invoice.get("plan"))
-    await _send_saas_payment_email(company, amount, currency, method, invoice["id"])
-    return {"status": "paid", "invoice_id": invoice["id"], "request_id": pr_id, "ocr": ocr_meta or {}}
+    if updated_invoice.get("status") == "paid":
+        await _activate_company_after_saas_payment(company["id"], plan_in_payment=invoice.get("plan"))
+        await _send_saas_payment_email(company, amount, currency, method, invoice["id"])
+    return {
+        "status": "paid",
+        "invoice_id": invoice["id"],
+        "invoice_paid": updated_invoice.get("status") == "paid",
+        "request_id": pr_id,
+        "ocr": ocr_meta or {},
+    }
 
 
 @api.post("/billing/me/bank-confirm")
@@ -3023,10 +3101,47 @@ async def billing_me_bank_confirm(
         )
         if not inv:
             raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+        if inv.get("merged_into_invoice_id"):
+            inv = await db.subscription_invoices.find_one(
+                {"id": inv["merged_into_invoice_id"], "company_id": cid}, {"_id": 0},
+            )
+            if not inv:
+                raise HTTPException(status_code=404, detail="Hoofdfactuur niet gevonden")
         if inv.get("status") == "paid":
             raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
     else:
         inv = await _ensure_open_invoice_for_company(c, user.get("email", ""))
+
+    invoice_balance = float(
+        inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0))
+    )
+    installment_plans = await db.saas_payment_plans.find(
+        {"invoice_id": inv["id"], "schedule": {"$exists": True}}, {"_id": 0},
+    ).sort("created_at", 1).to_list(100)
+    installment_plan = None
+    next_installment = None
+    for candidate in installment_plans:
+        candidate_term = next(
+            (
+                term for term in sorted(
+                    candidate.get("schedule", []),
+                    key=lambda item: (item.get("due_date") or "", item.get("seq") or 0),
+                )
+                if term.get("status") != "paid"
+                and float(term.get("amount") or 0) > float(term.get("paid_amount") or 0)
+            ),
+            None,
+        )
+        if candidate_term:
+            installment_plan = candidate
+            next_installment = candidate_term
+            break
+    payment_amount = (
+        round(float(next_installment["amount"]) - float(next_installment.get("paid_amount") or 0), 2)
+        if next_installment else invoice_balance
+    )
+    installment_plan_id = installment_plan.get("id") if next_installment and installment_plan else None
+    installment_seq = next_installment.get("seq") if next_installment else None
 
     # Sla statement op
     asset_id = new_id()
@@ -3051,9 +3166,23 @@ async def billing_me_bank_confirm(
         ocr = await _ocr_bank_statement(asset_id)
         ok, reasons = _ocr_match_ok(
             ocr,
-            expected_amount=float(inv.get("amount") or 0),
+            expected_amount=payment_amount,
             expected_currency=inv.get("currency") or "SRD",
         )
+        if not ok and next_installment:
+            full_balance_ok, full_balance_reasons = _ocr_match_ok(
+                ocr,
+                expected_amount=invoice_balance,
+                expected_currency=inv.get("currency") or "SRD",
+            )
+            if full_balance_ok:
+                ok = True
+                reasons = []
+                payment_amount = invoice_balance
+                installment_plan_id = None
+                installment_seq = None
+            else:
+                reasons = full_balance_reasons
         ocr_meta = {
             "amount": ocr.get("amount"),
             "currency": ocr.get("currency"),
@@ -3074,7 +3203,7 @@ async def billing_me_bank_confirm(
     result = await _record_saas_payment_manual(
         invoice=inv,
         company=c,
-        amount=float(inv.get("amount") or 0),
+        amount=payment_amount,
         currency=inv.get("currency") or "SRD",
         method="bank",
         reference=f"ABONNEMENT — {c.get('name', '')} — {inv.get('id', '')[:8]}",
@@ -3082,6 +3211,8 @@ async def billing_me_bank_confirm(
         ocr_meta=ocr_meta,
         auto_approved=auto_approved,
         approved_by="auto-ocr" if auto_approved else (user.get("email") or "self"),
+        plan_id=installment_plan_id,
+        installment_seq=installment_seq,
     )
     if not auto_approved and mismatch_reasons:
         result["mismatch_reasons"] = mismatch_reasons
@@ -3115,6 +3246,7 @@ async def _activate_company_after_saas_payment(company_id: str, plan_in_payment:
         update["plan"] = pending
         update["pending_plan"] = None
         update["pending_invoice_id"] = None
+        update["pending_charge_key"] = None
         update["plan_changed_at"] = iso(now)
     elif plan_in_payment and plan_in_payment != c.get("plan"):
         update["plan"] = plan_in_payment
@@ -3174,11 +3306,12 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
         {"id": pr["id"]},
         {"$set": {"status": "paid", "paid_at": paid_at, "gateway_meta": gateway_meta}},
     )
-    # Mark invoice paid
-    if inv.get("status") != "paid":
+    updated_invoice = await update_invoice_paid_amount(db, inv["id"], float(pr.get("amount") or 0))
+    await apply_saas_plan_payment(db, inv["id"], float(pr.get("amount") or 0))
+    if updated_invoice and updated_invoice.get("status") == "paid":
         await db.subscription_invoices.update_one(
             {"id": inv["id"]},
-            {"$set": {"status": "paid", "paid_at": paid_at, "payment_method": pr["provider"]}},
+            {"$set": {"paid_at": paid_at, "payment_method": pr["provider"]}},
         )
     # Create subscription_payment record
     pay = {
@@ -3198,10 +3331,9 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
         "eur_per_srd": pr.get("eur_per_srd"),
     }
     await db.subscription_payments.insert_one(pay)
-    # Activate company
-    await _activate_company_after_saas_payment(pr["company_id"], plan_in_payment=inv.get("plan"))
-    # Confirmation email (best-effort)
-    await _send_saas_payment_email(company, pr["amount"], pr["currency"], pr["provider"], inv["id"])
+    if updated_invoice and updated_invoice.get("status") == "paid":
+        await _activate_company_after_saas_payment(pr["company_id"], plan_in_payment=inv.get("plan"))
+        await _send_saas_payment_email(company, pr["amount"], pr["currency"], pr["provider"], inv["id"])
     pr.update({"status": "paid", "paid_at": paid_at})
     return pr
 
@@ -5061,7 +5193,7 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
             inv = None
     if inv:
         plan_id = inv.get("plan") or plan_id
-        amount = float(inv.get("amount") or amount)
+        amount = float(inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)))
         currency = (inv.get("currency") or currency).upper()
     if amount > 0:
         if not inv:
@@ -5081,7 +5213,12 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "created_by": user.get("email"),
                 "manual": True,
             }
-            await db.subscription_invoices.insert_one(inv)
+            try:
+                inv, _ = await append_company_invoice_charge(
+                    db, inv, f"activation:{now.date().isoformat()}",
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
         await _record_saas_payment_manual(
             invoice=inv,
             company=c,
@@ -5372,6 +5509,8 @@ class SubscriptionPaymentIn(BaseModel):
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
     method: Literal["bank", "contant", "overig"] = "bank"
     invoice_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    installment_seq: Optional[int] = Field(None, ge=1)
     reference: Optional[str] = ""
     note: Optional[str] = ""
     paid_at: Optional[str] = None  # ISO date; defaults to now
@@ -5450,6 +5589,8 @@ async def superadmin_approve_saas_payment(pr_id: str, user=Depends(require_role(
         ocr_meta=pr.get("ocr") or {},
         auto_approved=True,  # we doen het effectief paid in dit endpoint
         approved_by=user.get("email") or "superadmin",
+        plan_id=pr.get("plan_id"),
+        installment_seq=pr.get("installment_seq"),
     )
     # Markeer het oorspronkelijke pending request ook als paid (er is een
     # nieuw paid-request via `_record_saas_payment_manual`). De originele
@@ -5491,38 +5632,70 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     now = now_utc()
     paid_at = body.paid_at or iso(now)
-    if body.invoice_id:
+    invoice_id = body.invoice_id
+    if not invoice_id:
+        try:
+            current_invoice = await consolidate_company_invoices(db, body.company_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if current_invoice and current_invoice.get("status") in {"open", "overdue"}:
+            invoice_id = current_invoice["id"]
+    if invoice_id:
         inv = await db.subscription_invoices.find_one(
-            {"id": body.invoice_id, "company_id": body.company_id}, {"_id": 0},
+            {"id": invoice_id, "company_id": body.company_id}, {"_id": 0},
         )
         if not inv:
             raise HTTPException(status_code=404, detail="Factuur niet gevonden voor dit bedrijf")
         if inv.get("status") not in {"open", "overdue"}:
             raise HTTPException(status_code=409, detail="Alleen een open factuur kan met deze betaling worden voldaan")
-        if c.get("pending_invoice_id") == body.invoice_id and c.get("pending_plan") != inv.get("plan"):
+        if c.get("pending_invoice_id") == invoice_id and c.get("pending_plan") != inv.get("plan"):
             raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
         pending_request = await db.saas_payment_requests.find_one(
-            {"invoice_id": body.invoice_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
+            {"invoice_id": invoice_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
         )
         if pending_request:
             raise HTTPException(status_code=409, detail="Voor deze factuur wacht al een betaling op OCR-goedkeuring")
-        amount = float(inv.get("amount") or 0)
+        if bool(body.plan_id) != (body.installment_seq is not None):
+            raise HTTPException(status_code=400, detail="Kies zowel de betalingsregeling als het termijnnummer")
+        if body.plan_id:
+            payment_plan = await db.saas_payment_plans.find_one(
+                {"id": body.plan_id, "invoice_id": invoice_id}, {"_id": 0},
+            )
+            term = next(
+                (item for item in (payment_plan or {}).get("schedule", [])
+                 if item.get("seq") == body.installment_seq),
+                None,
+            )
+            if not term or term.get("status") == "paid":
+                raise HTTPException(status_code=409, detail="Deze termijn is niet meer open")
+            amount = round(
+                float(term.get("amount") or 0) - float(term.get("paid_amount") or 0), 2,
+            )
+            if amount <= 0:
+                raise HTTPException(status_code=409, detail="Deze termijn is niet meer open")
+        else:
+            amount = float(inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)))
         currency = (inv.get("currency") or "SRD").upper()
         if abs(float(body.amount) - amount) > 0.005 or body.currency != currency:
             raise HTTPException(
                 status_code=400,
                 detail=f"Het te registreren bedrag moet overeenkomen met de factuur: {currency} {amount:.2f}",
             )
-        updated = await db.subscription_invoices.update_one(
-            {"id": body.invoice_id, "company_id": body.company_id, "status": inv.get("status")},
-            {"$set": {"status": "paid", "paid_at": paid_at, "payment_method": body.method}},
-        )
-        if updated.modified_count != 1:
+        updated = await update_invoice_paid_amount(db, invoice_id, amount)
+        if not updated:
             raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
-        inv.update({"status": "paid", "paid_at": paid_at, "payment_method": body.method})
+        await apply_saas_plan_payment(
+            db, invoice_id, amount, body.plan_id, body.installment_seq,
+        )
+        inv = updated
+        if inv.get("status") == "paid":
+            await db.subscription_invoices.update_one(
+                {"id": invoice_id},
+                {"$set": {"paid_at": paid_at, "payment_method": body.method}},
+            )
         plan_id = (
             c.get("pending_plan")
-            if c.get("pending_invoice_id") == body.invoice_id and c.get("pending_plan")
+            if c.get("pending_invoice_id") == invoice_id and c.get("pending_plan")
             else (inv.get("plan") or c.get("plan", "starter"))
         )
     else:
@@ -5531,31 +5704,47 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
         if not plan:
             raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
         period_end = _plan_period_end(plan, now)
-        inv = {
-            "id": new_id(),
-            "company_id": body.company_id,
-            "company_name": c.get("name", ""),
-            "plan": plan_id,
-            "amount": body.amount,
-            "currency": body.currency,
-            "status": "paid",
-            "period_start": iso(now),
-            "period_end": iso(period_end) if period_end else None,
-            "due_date": _saas_invoice_due_date(now),
-            "paid_at": paid_at,
-            "created_at": iso(now),
-            "created_by": user.get("email"),
-            "payment_method": body.method,
-        }
-        await db.subscription_invoices.insert_one(inv)
+        try:
+            inv, created = await append_company_invoice_charge(db, {
+                "id": new_id(),
+                "company_id": body.company_id,
+                "company_name": c.get("name", ""),
+                "plan": plan_id,
+                "amount": body.amount,
+                "currency": body.currency,
+                "status": "open",
+                "kind": "subscription",
+                "period_start": iso(now),
+                "period_end": iso(period_end) if period_end else None,
+                "due_date": _saas_invoice_due_date(now),
+                "created_at": iso(now),
+                "created_by": user.get("email"),
+            }, f"manual-payment:{now.date().isoformat()}")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if not created:
+            raise HTTPException(status_code=409, detail="Voor deze periode is de betaling al geregistreerd")
+        amount = float(body.amount)
+        updated = await update_invoice_paid_amount(db, inv["id"], amount)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+        await apply_saas_plan_payment(db, inv["id"], amount)
+        inv = updated
+        if inv.get("status") == "paid":
+            await db.subscription_invoices.update_one(
+                {"id": inv["id"]},
+                {"$set": {"paid_at": paid_at, "payment_method": body.method}},
+            )
 
     pay = {
         "id": new_id(),
         "invoice_id": inv["id"],
         "company_id": body.company_id,
         "company_name": c.get("name", ""),
-        "amount": float(inv.get("amount") or 0),
+        "amount": float(amount),
         "currency": (inv.get("currency") or "SRD").upper(),
+        "plan_id": body.plan_id,
+        "installment_seq": body.installment_seq,
         "method": body.method,
         "reference": (body.reference or "").strip(),
         "note": (body.note or "").strip(),
@@ -5565,14 +5754,15 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
     }
     await db.subscription_payments.insert_one(pay)
 
-    await _activate_company_after_saas_payment(body.company_id, plan_in_payment=plan_id)
-    await _send_saas_payment_email(
-        {**c, "plan": plan_id},
-        float(pay["amount"]),
-        pay["currency"],
-        body.method,
-        inv["id"],
-    )
+    if inv.get("status") == "paid":
+        await _activate_company_after_saas_payment(body.company_id, plan_in_payment=plan_id)
+        await _send_saas_payment_email(
+            {**c, "plan": plan_id},
+            float(pay["amount"]),
+            pay["currency"],
+            body.method,
+            inv["id"],
+        )
 
     inv.pop("_id", None)
     pay.pop("_id", None)

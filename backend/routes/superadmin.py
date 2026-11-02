@@ -22,6 +22,12 @@ from pydantic import BaseModel, Field
 import io
 
 from . import _deps
+from saas_invoicing import (
+    append_company_invoice_charge,
+    apply_saas_plan_payment,
+    consolidate_company_invoices,
+    update_invoice_paid_amount,
+)
 
 router = APIRouter()
 
@@ -71,7 +77,9 @@ async def superadmin_overview(user: dict = Depends(_superadmin)):
         if _deps.is_online(c.get("last_seen_at")):
             online_now += 1
 
-    paid_invoices = await db.subscription_invoices.count_documents({"status": "paid"})
+    paid_invoices = await db.subscription_invoices.count_documents({
+        "status": "paid", "merged_into_invoice_id": {"$exists": False},
+    })
     pending_ocr = await db.saas_payment_requests.count_documents({"status": "pending_approval"})
     open_invoices = await db.subscription_invoices.count_documents({"status": {"$in": ["open", "overdue"]}})
     overdue_invoices = await db.subscription_invoices.count_documents({"status": "overdue"})
@@ -186,16 +194,29 @@ async def superadmin_online_status(user: dict = Depends(_superadmin)):
 
 @router.get("/superadmin/subscription-invoices")
 async def list_subscription_invoices(user: dict = Depends(_superadmin)):
-    docs = await _deps.db.subscription_invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await _deps.db.subscription_invoices.find(
+        {"merged_into_invoice_id": {"$exists": False},
+         "status": {"$nin": ["merged", "superseded"]}}, {"_id": 0},
+    ).sort("created_at", -1).to_list(500)
+    invoice_ids = [invoice["id"] for invoice in docs]
+    plans = await _deps.db.saas_payment_plans.find(
+        {"invoice_id": {"$in": invoice_ids}}, {"_id": 0},
+    ).to_list(1000)
+    plans_by_invoice: dict[str, list[dict]] = {}
+    for plan in plans:
+        plans_by_invoice.setdefault(plan["invoice_id"], []).append(plan)
+    for invoice in docs:
+        invoice["payment_plans"] = plans_by_invoice.get(invoice["id"], [])
     return docs
 
 
 @router.post("/superadmin/subscription-invoices/{inv_id}/mark-paid")
 async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
-    from pymongo import ReturnDocument
     invoice = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    if invoice.get("merged_into_invoice_id"):
+        raise HTTPException(status_code=409, detail="Deze factuur is samengevoegd. Gebruik de hoofdfactuur.")
     if invoice.get("status") == "superseded":
         raise HTTPException(status_code=409, detail="Deze factuur is vervangen door een betalingsregeling")
     if invoice.get("status") == "paid":
@@ -232,22 +253,24 @@ async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
     if company.get("pending_invoice_id") == inv_id and company.get("pending_plan") != invoice.get("plan"):
         raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
     now = _deps.now_utc()
-    res = await _deps.db.subscription_invoices.find_one_and_update(
-        {"id": inv_id, "status": invoice.get("status")},
-        {"$set": {"status": "paid", "paid_at": _deps.iso(now), "payment_method": "manual"}},
-        projection={"_id": 0}, return_document=ReturnDocument.AFTER,
-    )
-    if not res:
-        latest = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
-        if latest and latest.get("status") == "paid":
-            return latest
+    amount = float(invoice.get("balance_due", float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0)))
+    if amount <= 0:
         raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
+    res = await update_invoice_paid_amount(_deps.db, inv_id, amount)
+    if not res:
+        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
+    await apply_saas_plan_payment(_deps.db, inv_id, amount)
+    if res.get("status") == "paid":
+        await _deps.db.subscription_invoices.update_one(
+            {"id": inv_id},
+            {"$set": {"paid_at": _deps.iso(now), "payment_method": "manual"}},
+        )
     payment = {
         "id": _deps.new_id(),
         "invoice_id": inv_id,
         "company_id": company["id"],
         "company_name": company.get("name", ""),
-        "amount": float(invoice.get("amount") or 0),
+        "amount": amount,
         "currency": (invoice.get("currency") or "SRD").upper(),
         "method": "manual",
         "reference": "Handmatig gemarkeerd als betaald",
@@ -322,8 +345,15 @@ async def create_subscription_invoice(body: NewInvoiceIn,
         "note": body.note or "",
         "manual": True,                             # zichtbaar in UI als 'Handmatig'
     }
-    await db.subscription_invoices.insert_one(inv)
-    inv.pop("_id", None)
+    try:
+        inv, created = await append_company_invoice_charge(
+            db, inv, f"manual:{str(period_start)[:10]}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if not created:
+        inv["autopay_result"] = "already_exists"
+        return inv
     from .saas_stripe import on_new_saas_invoice
     inv["autopay_result"] = await on_new_saas_invoice(inv)
     return inv
@@ -352,13 +382,6 @@ async def saas_auto_invoice_tick() -> list[dict]:
             continue
         if renews_at > now:
             continue  # nog niet verlopen — wachten
-        # Bestaat er al een factuur voor deze nieuwe periode?
-        existing = await db.subscription_invoices.find_one({
-            "company_id": c["id"],
-            "period_start": {"$gte": _deps.iso(renews_at - timedelta(hours=1))},
-        }, {"_id": 0, "id": 1})
-        if existing:
-            continue
         # Gebruik dezelfde plan-catalogus als pakkettenbeheer en registratie.
         plan_id = c.get("plan") or "starter"
         plan = await _deps.get_plan(plan_id)
@@ -385,8 +408,15 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
         }
-        await db.subscription_invoices.insert_one(inv)
-        inv.pop("_id", None)
+        try:
+            inv, created_charge = await append_company_invoice_charge(
+                db, inv, f"subscription:{_deps.iso(period_start)}",
+            )
+        except ValueError as exc:
+            print(f"[saas-invoice] could not add charge for {c['id']}: {exc}")
+            continue
+        if not created_charge:
+            continue
         try:
             from .saas_stripe import on_new_saas_invoice
             await on_new_saas_invoice(inv)
@@ -424,7 +454,9 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
     companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
     # Aggregeer facturen per company
     invoices_by_cid: dict[str, list[dict]] = {}
-    async for inv in db.subscription_invoices.find({}, {"_id": 0}).sort("created_at", -1):
+    async for inv in db.subscription_invoices.find(
+        {"merged_into_invoice_id": {"$exists": False}}, {"_id": 0},
+    ).sort("created_at", -1):
         invoices_by_cid.setdefault(inv["company_id"], []).append(inv)
     payments_by_cid: dict[str, list[dict]] = {}
     async for pmt in db.subscription_payments.find({}, {"_id": 0}).sort("paid_at", -1):
@@ -437,12 +469,13 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
         cid = c["id"]
         invs = invoices_by_cid.get(cid, [])
         pmts = payments_by_cid.get(cid, [])
-        open_invs = [i for i in invs if i.get("status") not in {"paid", "superseded"}]
+        open_invs = [i for i in invs if i.get("status") in {"open", "overdue"}]
         overdue = 0
         outstanding_by_cur: dict[str, float] = {}
         for i in open_invs:
             cur = (i.get("currency") or "SRD").upper()
-            outstanding_by_cur[cur] = outstanding_by_cur.get(cur, 0.0) + float(i.get("amount") or 0)
+            balance_due = float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0)))
+            outstanding_by_cur[cur] = outstanding_by_cur.get(cur, 0.0) + balance_due
             try:
                 pe = datetime.fromisoformat(str(i.get("period_end") or "").replace("Z", "+00:00"))
                 if pe < now:
@@ -517,22 +550,49 @@ class SaasPlanIn(BaseModel):
 @router.post("/superadmin/saas-payment-plans")
 async def create_saas_payment_plan(body: SaasPlanIn,
                                     user: dict = Depends(_superadmin)):
-    """Maakt een SaaS-betalingsregeling: splitst het totaalbedrag in N
-    termijnen (elk als aparte `subscription_invoices` rij) en tagt ze met
-    `plan_id` + `installment_seq`. Als bron-factuur is opgegeven wordt
-    die factuur op `superseded` gezet."""
+    """Adds a payment schedule to the company's persistent master invoice."""
     db = _deps.db
     c = await db.companies.find_one({"id": body.company_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    try:
+        master_invoice = await consolidate_company_invoices(db, body.company_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if master_invoice:
+        active_plans = await db.saas_payment_plans.find(
+            {"invoice_id": master_invoice["id"]}, {"_id": 0, "schedule": 1},
+        ).to_list(1000)
+        if any(
+            term.get("status") != "paid"
+            and float(term.get("paid_amount") or 0) < float(term.get("amount") or 0)
+            for plan in active_plans for term in (plan.get("schedule") or [])
+        ):
+            raise HTTPException(status_code=409, detail="Er staat al een open betalingsregeling op deze factuur")
+    source_invoice = None
     if body.invoice_id:
         source_invoice = await db.subscription_invoices.find_one(
             {"id": body.invoice_id, "company_id": body.company_id}, {"_id": 0},
         )
+        if source_invoice and source_invoice.get("merged_into_invoice_id"):
+            source_invoice = await db.subscription_invoices.find_one(
+                {"id": source_invoice["merged_into_invoice_id"], "company_id": body.company_id},
+                {"_id": 0},
+            )
+        if source_invoice and source_invoice.get("id") != (master_invoice or {}).get("id"):
+            source_invoice = None
         if not source_invoice:
             raise HTTPException(status_code=404, detail="Bronfactuur niet gevonden voor dit bedrijf")
         if source_invoice.get("status") not in {"open", "overdue"}:
             raise HTTPException(status_code=409, detail="Alleen een open factuur kan worden omgezet naar een betalingsregeling")
+        balance_due = float(source_invoice.get(
+            "balance_due",
+            float(source_invoice.get("amount") or 0) - float(source_invoice.get("paid_amount") or 0),
+        ))
+        if abs(balance_due - body.total_amount) > 0.005:
+            raise HTTPException(status_code=400, detail=f"Het regelingbedrag moet overeenkomen met het openstaande saldo: {balance_due:.2f}")
+        if (source_invoice.get("currency") or "SRD").upper() != body.currency:
+            raise HTTPException(status_code=400, detail="De valuta van de regeling moet overeenkomen met de factuur")
     now = _deps.now_utc()
     start = datetime.fromisoformat(body.start_date) if body.start_date else now
     plan_id = _deps.new_id()
@@ -543,37 +603,39 @@ async def create_saas_payment_plan(body: SaasPlanIn,
     amounts = [per_amount] * (body.installments - 1)
     amounts.append(round(body.total_amount - per_amount * (body.installments - 1), 2))
 
-    invoices = []
+    schedule = []
     for i, amt in enumerate(amounts):
         due = start + timedelta(days=body.interval_days * i)
-        inv = {
-            "id": _deps.new_id(),
-            "company_id": body.company_id,
-            "company_name": c.get("name", ""),
-            "plan": c.get("plan"),
+        schedule.append({
+            "seq": i + 1,
             "amount": amt,
-            "currency": body.currency,
             "status": "open",
-            "kind": "installment",
-            "saas_plan_id": plan_id,
-            "installment_seq": i + 1,
-            "installment_total": body.installments,
-            "period_start": _deps.iso(due),
-            "period_end": _deps.iso(due + timedelta(days=body.interval_days)),
+            "paid_amount": 0,
             "due_date": due.date().isoformat(),
-            "created_at": _deps.iso(now),
-            "created_by": user.get("email", "superadmin"),
-            "note": body.note or "",
-        }
-        await db.subscription_invoices.insert_one(inv)
-        inv.pop("_id", None)
-        invoices.append(inv)
-
-    if body.invoice_id:
-        await db.subscription_invoices.update_one(
-            {"id": body.invoice_id},
-            {"$set": {"status": "superseded", "superseded_by_plan": plan_id}},
-        )
+            "period_end": _deps.iso(due + timedelta(days=body.interval_days)),
+        })
+    if source_invoice:
+        invoice = source_invoice
+    else:
+        try:
+            invoice, _ = await append_company_invoice_charge(db, {
+                "id": _deps.new_id(),
+                "company_id": body.company_id,
+                "company_name": c.get("name", ""),
+                "plan": c.get("plan"),
+                "amount": body.total_amount,
+                "currency": body.currency,
+                "status": "open",
+                "kind": "subscription",
+                "period_start": _deps.iso(start),
+                "period_end": _deps.iso(start + timedelta(days=body.interval_days * body.installments)),
+                "due_date": schedule[0]["due_date"],
+                "created_at": _deps.iso(now),
+                "created_by": user.get("email", "superadmin"),
+                "note": body.note or "",
+            }, f"payment-plan:{plan_id}")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
 
     plan_doc = {
         "id": plan_id,
@@ -587,11 +649,13 @@ async def create_saas_payment_plan(body: SaasPlanIn,
         "created_at": _deps.iso(now),
         "created_by": user.get("email", "superadmin"),
         "note": body.note or "",
-        "source_invoice_id": body.invoice_id,
+        "source_invoice_id": invoice["id"] if source_invoice else None,
+        "invoice_id": invoice["id"],
+        "schedule": schedule,
     }
     await db.saas_payment_plans.insert_one(plan_doc)
     plan_doc.pop("_id", None)
-    return {"plan": plan_doc, "invoices": invoices}
+    return {"plan": plan_doc, "invoices": schedule}
 
 
 @router.get("/superadmin/saas-payment-plans")
@@ -600,13 +664,24 @@ async def list_saas_payment_plans(user: dict = Depends(_superadmin)):
     db = _deps.db
     plans = await db.saas_payment_plans.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     plan_ids = [p["id"] for p in plans]
-    # Load termijn-facturen per plan
+    # Legacy term invoices are migrated into the schedule during startup consolidation.
     plan_map: dict[str, dict] = {p["id"]: {**p, "invoices": [], "paid": 0} for p in plans}
-    async for inv in db.subscription_invoices.find({"saas_plan_id": {"$in": plan_ids}}, {"_id": 0}):
-        pid = inv["saas_plan_id"]
-        plan_map[pid]["invoices"].append(inv)
-        if inv.get("status") == "paid":
-            plan_map[pid]["paid"] += float(inv.get("amount") or 0)
+    for plan in plans:
+        schedule = plan.get("schedule") or []
+        plan_map[plan["id"]]["invoices"] = [
+            {
+                **term,
+                "id": f"{plan['id']}:{term.get('seq')}",
+                "installment_seq": term.get("seq"),
+                "installment_total": plan.get("installments"),
+                "currency": plan.get("currency"),
+                "invoice_id": plan.get("invoice_id"),
+            }
+            for term in schedule
+        ]
+        plan_map[plan["id"]]["paid"] = sum(
+            float(term.get("paid_amount") or 0) for term in schedule
+        )
     return list(plan_map.values())
 
 
@@ -628,10 +703,11 @@ async def kasregister_detail(company_id: str, user: dict = Depends(_superadmin))
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     invoices = await db.subscription_invoices.find(
-        {"company_id": company_id}, {"_id": 0},
+        {"company_id": company_id, "merged_into_invoice_id": {"$exists": False},
+         "status": {"$nin": ["merged", "superseded"]}}, {"_id": 0},
     ).sort("created_at", -1).to_list(500)
     payments = await db.subscription_payments.find(
-        {"company_id": company_id}, {"_id": 0},
+        {"company_id": company_id, "merged_into_invoice_id": {"$exists": False}}, {"_id": 0},
     ).sort("paid_at", -1).to_list(500)
     plans = await db.saas_payment_plans.find(
         {"company_id": company_id}, {"_id": 0},
@@ -640,10 +716,11 @@ async def kasregister_detail(company_id: str, user: dict = Depends(_superadmin))
 
     outstanding: dict[str, float] = {}
     for iv in invoices:
-        if iv.get("status") == "paid" or iv.get("status") == "superseded":
+        if iv.get("status") in {"paid", "superseded", "merged"}:
             continue
         cur = (iv.get("currency") or "SRD").upper()
-        outstanding[cur] = outstanding.get(cur, 0.0) + float(iv.get("amount") or 0)
+        balance_due = float(iv.get("balance_due", float(iv.get("amount") or 0) - float(iv.get("paid_amount") or 0)))
+        outstanding[cur] = outstanding.get(cur, 0.0) + balance_due
     return {
         "company": {
             "id": c["id"], "name": c.get("name"), "slug": c.get("slug"),

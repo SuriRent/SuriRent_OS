@@ -2087,10 +2087,21 @@ def saas_invoice_pdf(invoice: dict, company: dict, saas_provider: dict | None = 
     el.append(Paragraph("SPECIFICATIE", s["SectionHead"]))
     el.append(Spacer(1, 4))
     desc = f"{kind_label} · {plan_label} · {period_start} – {period_end}"
-    spec_data = [[
-        Paragraph(desc, s["Body"]),
-        Paragraph(_fmt_money(invoice.get("amount", 0), cur), s["AmountValue"]),
-    ]]
+    charges = invoice.get("charge_history") or []
+    spec_data = []
+    for charge in charges:
+        charge_start = _fmt_date_nl(charge.get("period_start"))
+        charge_end = _fmt_date_nl(charge.get("period_end"))
+        charge_desc = f"{str(charge.get('kind') or 'Abonnement').replace('_', ' ').capitalize()} · {charge_start} – {charge_end}"
+        spec_data.append([
+            Paragraph(charge_desc, s["Body"]),
+            Paragraph(_fmt_money(charge.get("amount", 0), cur), s["AmountValue"]),
+        ])
+    if not spec_data:
+        spec_data.append([
+            Paragraph(desc, s["Body"]),
+            Paragraph(_fmt_money(invoice.get("amount", 0), cur), s["AmountValue"]),
+        ])
     t = Table(spec_data, colWidths=[120 * mm, 50 * mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -2106,8 +2117,12 @@ def saas_invoice_pdf(invoice: dict, company: dict, saas_provider: dict | None = 
     total = float(invoice.get("amount", 0) or 0)
     _amount_block(el, "Totaal", total, cur, accent=accent)
     el.append(Spacer(1, 4))
-
-    if invoice.get("status") == "paid":
+    paid_amount = float(invoice.get("paid_amount") or 0)
+    balance_due = float(invoice.get("balance_due", max(total - paid_amount, 0)))
+    if paid_amount > 0 and balance_due > 0:
+        _status_row(el, "Reeds betaald", _fmt_money(paid_amount, cur), is_paid=True, accent=accent)
+        _status_row(el, "Nog te betalen", _fmt_money(balance_due, cur), is_paid=False, accent=accent)
+    elif invoice.get("status") == "paid" or balance_due <= 0:
         _status_row(el, "Status", "VOLDAAN", is_paid=True, accent=accent)
         if invoice.get("paid_at"):
             el.append(Spacer(1, 4))
@@ -2116,7 +2131,7 @@ def saas_invoice_pdf(invoice: dict, company: dict, saas_provider: dict | None = 
                 s["Small"]
             ))
     else:
-        _status_row(el, "Nog te betalen", _fmt_money(total, cur), is_paid=False, accent=accent)
+        _status_row(el, "Nog te betalen", _fmt_money(balance_due, cur), is_paid=False, accent=accent)
 
     el.append(Spacer(1, 16))
     el.append(Paragraph(
