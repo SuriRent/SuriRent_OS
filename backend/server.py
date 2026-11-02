@@ -28,6 +28,7 @@ import base64
 import secrets
 import hashlib
 import asyncio
+import math
 import json
 import time
 import logging as _logging
@@ -17036,7 +17037,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts", "kiosk_devices", "fcm_prefs"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "deposit", "receipts", "kiosk_devices", "fcm_prefs"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:
@@ -17142,6 +17143,19 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
         merged["printer_mode"] = _printer_mode(merged)
         merged["kt_v520_enabled"] = merged["printer_mode"] == "kt-v520"
         merged["paper_width"] = 80 if str(merged.get("paper_width")) == "80" else 58
+    elif section == "deposit":
+        multiplier = merged.get("rent_multiplier")
+        try:
+            multiplier_valid = (
+                not isinstance(multiplier, bool)
+                and isinstance(multiplier, (int, float))
+                and math.isfinite(float(multiplier))
+                and multiplier > 0
+            )
+        except (OverflowError, ValueError):
+            multiplier_valid = False
+        if not multiplier_valid:
+            raise HTTPException(status_code=422, detail="De borgfactor moet een getal groter dan 0 zijn")
 
     update = {
         f"{section}": merged,

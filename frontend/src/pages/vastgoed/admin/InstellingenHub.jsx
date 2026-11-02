@@ -19,6 +19,7 @@ const RENDER = {
   branding: () => <Branding />,
   smtp: () => <SettingsPage initialSection="smtp" hideSubNav />,
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
+  deposit: () => <SettingsPage initialSection="deposit" hideSubNav />,
   stripe: () => <StripeCompanySettings />,
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
   'bon-printer': () => <BonPrinter />,

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   Loader2, Check, Mail,
-  AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer,
+  AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer, ShieldCheck,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
@@ -10,6 +10,7 @@ import { useAutoRefresh } from '../../../lib/auto-refresh';
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, desc: 'Automatische maand-facturen na grace periode.' },
+  { id: 'deposit', label: 'Borg', icon: ShieldCheck, desc: 'Stel de standaardborg in als veelvoud van de maandhuur.' },
   { id: 'receipts', label: 'Kwitantie afdrukformaat', icon: Printer, desc: 'A4 kantoorprinter of 80mm thermische bonprinter.' },
 ];
 
@@ -17,12 +18,12 @@ function FieldLabel({ children }) {
   return <label className="text-xs font-bold uppercase tracking-widest text-slate-500">{children}</label>;
 }
 
-function TextField({ label, value, onChange, type = 'text', placeholder, disabled, testid, helper }) {
+function TextField({ label, value, onChange, type = 'text', placeholder, disabled, testid, helper, min, max, step }) {
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
       <input type={type} value={value ?? ''} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} disabled={disabled} data-testid={testid}
+        placeholder={placeholder} disabled={disabled} min={min} max={max} step={step} data-testid={testid}
         className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none disabled:bg-slate-50 disabled:text-slate-400" />
       {helper && <p className="text-[11px] text-slate-400 mt-1">{helper}</p>}
     </div>
@@ -141,6 +142,37 @@ export function SmtpForm({ initial, onSaved, onDirty }) {
         value={d.use_tls} onChange={(v) => s.onField('use_tls', v)}
         desc="Aan voor poort 587. Uit voor poort 465 (impliciete SSL)." />
       <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled} />
+    </SectionShell>
+  );
+}
+
+export function DepositForm({ initial }) {
+  const s = useSection('deposit', initial);
+  const multiplier = Number(s.data.rent_multiplier ?? 1);
+  return (
+    <SectionShell msg={s.msg} err={s.err}>
+      <div>
+        <FieldLabel>Snelle keuze</FieldLabel>
+        <div className="mt-1 flex gap-2">
+          {[1, 2].map((months) => (
+            <button key={months} type="button" onClick={() => s.onField('rent_multiplier', months)}
+              data-testid={`deposit-rent-preset-${months}`}
+              className={`h-10 rounded-xl px-4 text-sm font-bold ${multiplier === months ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-orange-50'}`}>
+              {months} {months === 1 ? 'maand huur' : 'maanden huur'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <TextField label="Of stel zelf het aantal maanden in" testid="deposit-rent-multiplier"
+          type="number" min="0.01" step="0.01" value={s.data.rent_multiplier ?? 1}
+          onChange={(v) => s.onField('rent_multiplier', v === '' ? '' : Number(v))}
+          placeholder="Bijvoorbeeld 1,5" helper="De standaardborg is de maandhuur × deze factor. Je kunt het borgbedrag bij het registreren nog aanpassen." />
+        {Number.isFinite(multiplier) && multiplier > 0 && (
+          <p className="text-xs text-slate-500 mt-2">Huidige instelling: {multiplier} × de maandhuur.</p>
+        )}
+      </div>
+      <ActionRow onSave={s.save} saving={s.saving} />
     </SectionShell>
   );
 }
@@ -887,6 +919,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
       {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
+      {section === 'deposit' && <DepositForm initial={settings.deposit} />}
       {section === 'receipts' && <ReceiptsForm initial={settings.receipts} />}
       {section === 'domain' && <DomainForm initial={settings.domain} />}
     </>
@@ -907,7 +940,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Instellingen</h1>
-        <p className="text-sm text-slate-500 mt-1">Configureer integraties per bedrijf. Wachtwoorden worden versleuteld opgeslagen.</p>
+        <p className="text-sm text-slate-500 mt-1">Beheer instellingen per bedrijf. Wachtwoorden worden versleuteld opgeslagen.</p>
       </div>
 
       {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">{err}</p>}

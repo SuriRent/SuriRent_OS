@@ -117,6 +117,7 @@ def empty_section(section: str) -> dict:
             "fines_mode": "per_overdue",
             "fines_grace_days": 0,
         },
+        "deposit": {"rent_multiplier": 1.0},
         # Kwitantie-afdruk: welk paginaformaat gebruikt de Kiosk voor het
         # renderen van betalingsbonnen. 'a4' = normale A4 kantoorprinter,
         # 'thermal' = 80mm-brede bonprinter (compacte 1-kolom layout).
