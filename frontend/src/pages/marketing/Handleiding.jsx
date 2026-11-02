@@ -11,6 +11,57 @@ const SECTIONS = [
   ['problemen', 'Problemen oplossen'],
 ];
 
+const ADMIN_SCREENSHOTS = [
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png',
+    alt: 'SuriRent beheerdashboard met overzichtskaarten',
+    caption: 'Beheerdashboard · begin bij het overzicht',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/nlo3hnqf_2.png',
+    alt: 'SuriRent beheerpagina voor locaties',
+    caption: 'Locaties · groepeer gebouwen en complexen',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/sy8hpkqs_3.png',
+    alt: 'SuriRent beheerpagina voor appartementen',
+    caption: 'Appartementen · controleer woningen en huurders',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/dwbjqd89_4.png',
+    alt: 'SuriRent beheerpagina voor betalingen',
+    caption: 'Betalingen · controleer transacties',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mfvavq0r_5.png',
+    alt: 'SuriRent beheerpagina voor facturen',
+    caption: 'Facturen · bekijk facturen en periodes',
+  },
+];
+
+const KIOSK_SCREENSHOTS = [
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7eebv0bd_11.png',
+    alt: 'Medewerkerskiosk met locaties om uit te kiezen',
+    caption: '1 · Kies de juiste locatie',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/n7efnoh0_12.png',
+    alt: 'Medewerkerskiosk met appartementen om uit te kiezen',
+    caption: '2 · Kies het appartement',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/t334vu2t_13.png',
+    alt: 'Financieel overzicht van een huurder in de kiosk',
+    caption: '3 · Controleer huurder en saldo',
+  },
+  {
+    src: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mjshklb8_14.png',
+    alt: 'Kioskbetaalscherm met bedraginvoer',
+    caption: '4 · Controleer en voer het bedrag in',
+  },
+];
+
 const ADMIN_MODULES = [
   ['Overzicht', 'Begin hier voor de belangrijkste aantallen en financiële stand. Gebruik het dashboard als dagelijkse controle en open vanuit een melding de bijbehorende beheerpagina.'],
   ['Locaties', 'Maak een locatie aan met een herkenbare naam en voeg optioneel adres en foto toe. Koppel appartementen eraan zodat medewerkers op de kiosk eerst het juiste gebouw kunnen kiezen.'],
@@ -27,6 +78,28 @@ const ADMIN_MODULES = [
   ['Notificaties', 'Controleer meldingen regelmatig op openstaande taken, betalingsstatus en andere aandachtspunten. Open de melding om de bijbehorende informatie te bekijken.'],
   ['Instellingen', 'Beheer bedrijfsgegevens en branding, e-mail, factuurautomatisering, Stripe, bonnen en printers, kiosk-apparaten en backup/herstel. Wijzig alleen de opties die je organisatie gebruikt.'],
 ];
+
+function ScreenshotGallery({ title, items, testId }) {
+  return (
+    <section className="mt-6" aria-label={title} data-testid={testId}>
+      <div className="mb-3">
+        <h3 className="text-lg font-black text-[#0B1B3F]">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-500">Voorbeeldschermen uit SuriRent. De indeling kan per apparaat of accountrol iets verschillen.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map(({ src, alt, caption }) => (
+          <figure key={caption} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <a href={src} target="_blank" rel="noreferrer" aria-label={`${caption} — open screenshot op ware grootte`}>
+              <img src={src} alt={alt} loading="lazy"
+              className="aspect-[4/3] w-full bg-slate-100 object-contain transition-transform hover:scale-[1.02]" />
+            </a>
+            <figcaption className="px-3 py-2.5 text-xs font-bold leading-5 text-slate-700">{caption}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function StepCard({ number, title, children }) {
   return (
@@ -186,6 +259,20 @@ export default function Handleiding({ onDemo }) {
               Kies <strong>Volgende huurder</strong> of wacht tot het scherm terugkeert. Op de kiosk kun je met de thema-knop wisselen tussen de witte en oranje weergave. Gebruik <strong>Uit</strong> om de kiosksessie op een gedeeld toestel veilig af te sluiten.
             </StepCard>
           </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <a href="/kiosk-icons/screenshots/02_kiosk_pin.jpg" target="_blank" rel="noreferrer"
+                aria-label="Kiosk PIN-login screenshot openen op ware grootte">
+                <img src="/kiosk-icons/screenshots/02_kiosk_pin.jpg" alt="Startscherm van de medewerkerskiosk met viercijferige PIN-toetsen"
+                  loading="lazy" className="max-h-[520px] w-full bg-orange-50 object-contain" />
+              </a>
+              <figcaption className="px-4 py-3 text-xs font-bold text-slate-700">Voorbeeld · medewerkerskiosk aanmelden met PIN</figcaption>
+            </figure>
+            <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600">
+              Meld je aan met de PIN van jouw account. Het voorbeeld toont alleen het PIN-scherm; voer altijd je eigen PIN in en deel die niet.
+            </div>
+          </div>
+          <ScreenshotGallery title="Betaling registreren: scherm voor scherm" items={KIOSK_SCREENSHOTS} testId="manual-kiosk-screenshots" />
         </section>
 
         <section id="huurdersportaal" className="scroll-mt-36 pt-10">
@@ -217,6 +304,14 @@ export default function Handleiding({ onDemo }) {
               Beheer kan portaltoegang voor een huurder instellen, maar het portaal kan ook om een NFC-tag vragen. Volg de aanmeldmethode die daadwerkelijk op het scherm staat en vraag de beheerder om hulp als die niet werkt.
             </InfoCard>
           </div>
+          <figure className="mt-6 max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <a href="/kiosk-icons/screenshots/03_tenant_login.jpg" target="_blank" rel="noreferrer"
+              aria-label="Huurdersportaal login screenshot openen op ware grootte">
+              <img src="/kiosk-icons/screenshots/03_tenant_login.jpg" alt="Aanmeldscherm van het SuriRent-huurdersportaal"
+                loading="lazy" className="max-h-[520px] w-full bg-orange-50 object-contain" />
+            </a>
+            <figcaption className="px-4 py-3 text-xs font-bold text-slate-700">Voorbeeld · aanmelden bij het huurdersportaal</figcaption>
+          </figure>
         </section>
 
         <section id="beheer" className="scroll-mt-36 pt-10">
@@ -250,6 +345,7 @@ export default function Handleiding({ onDemo }) {
               Voor werkzaamheden aan de balie en betalingen in de kiosk. Geef deze rol geen beheerdersgegevens.
             </InfoCard>
           </div>
+          <ScreenshotGallery title="Voorbeelden van beheerpagina’s" items={ADMIN_SCREENSHOTS} testId="manual-admin-screenshots" />
         </section>
 
         <section id="instellingen" className="scroll-mt-36 pt-10">
