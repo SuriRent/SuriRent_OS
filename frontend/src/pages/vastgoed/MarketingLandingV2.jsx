@@ -637,7 +637,7 @@ function FAQSection() {
     <section id="faq" className="bg-white py-16 lg:py-24">
       <div className="max-w-3xl mx-auto px-5 lg:px-10">
         <div className="text-center mb-10">
-          <EditableText path="v2.faq.eyebrow" fallback="Service & FAQ" as="p"
+          <EditableText path="v2.faq.eyebrow" fallback="FAQ" as="p"
             className="text-xs font-black tracking-[0.3em] uppercase text-[#FF5C00] mb-3" />
           <EditableText path="v2.faq.title" fallback="Antwoorden op uw vragen." as="h2"
             className="text-3xl lg:text-5xl font-black tracking-tight text-[#0B1B3F] leading-tight" />

@@ -30,7 +30,7 @@ const NAV = [
   { id: 'features', label: 'Functies' },
   { id: 'kiosk', label: 'Kiosk' },
   { id: 'pricing', label: 'Prijzen' },
-  { id: 'faq', label: 'Service & FAQ' },
+  { id: 'faq', label: 'FAQ' },
   { id: 'contact', label: 'Contact' },
   { id: 'over-ons', label: 'Over ons' },
   { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden' },
