@@ -1400,7 +1400,7 @@ export default function MarketingLandingV2() {
     }
   }, [editMode, navigate, refreshAuth]);
 
-  const onDemo = () => launchDemo('/admin');
+  const onDemo = () => launchDemo('/kiosk');
   const onWhatsApp = () => {
     if (editMode) return;
     window.open('https://wa.me/597XXXXXXX?text=Ik%20wil%20graag%20een%20demo%20van%20SuriRent', '_blank');
