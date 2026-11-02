@@ -2031,6 +2031,7 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
         onSaved(r);
       } else {
         const { data: r } = await api.post('/apartments', payload);
+        window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'apartment' }));
         onSaved(r);
       }
     } catch (e) { setError(formatError(e)); }
@@ -2984,6 +2985,7 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           return;
         }
       }
+      if (!initial?.id) window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'tenant' }));
       onSaved(saved);
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }

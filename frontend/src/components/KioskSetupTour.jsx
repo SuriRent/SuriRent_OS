@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2, RotateCw, X } from 'lucide-react';
+import { Check, RotateCw, X } from 'lucide-react';
 import { api } from '../lib/api';
 
 const selectors = {
@@ -14,17 +14,12 @@ const selectors = {
   adminMenu: '[data-testid="kiosk-admin-menu-btn"]',
   locationsMenu: '[data-testid="kiosk-admin-menu-locaties"]',
   locationNew: '[data-testid="kiosk-popup-locaties-new"]',
-  locationSave: '[data-testid="loc-form-save"]',
   locationPopupClose: '[data-testid="kiosk-popup-locaties-close"]',
   apartmentsMenu: '[data-testid="kiosk-admin-menu-appartementen"]',
   apartmentNew: '[data-testid="kiosk-popup-appartementen-new"]',
-  apartmentLocation: '[data-testid="apt-location"]',
-  apartmentSave: '[data-testid="apt-save"]',
   apartmentPopupClose: '[data-testid="kiosk-popup-appartementen-close"]',
   tenantsMenu: '[data-testid="kiosk-admin-menu-huurders"]',
   tenantNew: '[data-testid="kiosk-popup-huurders-new"]',
-  tenantApartment: '[data-testid="tenant-apartment"]',
-  tenantSave: '[data-testid="tenant-save"]',
 };
 
 const TOUR_STEPS = {
@@ -45,7 +40,7 @@ const TOUR_STEPS = {
   businessSave: {
     group: 1, title: 'Vul de bedrijfsgegevens in',
     text: () => 'Vul de bedrijfsnaam en contactgegevens in en tik op Opslaan. Je kunt ook de overige gegevens aanvullen.',
-    target: '[data-testid="business-info-save"]', verify: 'profile',
+    target: '[data-testid="business-info-save"]', next: 'awaiting-profile',
   },
   settingsClose: {
     group: 1, title: 'Sluit Instellingen',
@@ -69,13 +64,8 @@ const TOUR_STEPS = {
   },
   locationNew: {
     group: 2, title: 'Maak een locatie aan',
-    text: () => 'Tik op Nieuwe locatie en vul de naam in. Het adres is optioneel.',
-    target: selectors.locationNew, next: 'locationSave',
-  },
-  locationSave: {
-    group: 2, title: 'Sla de locatie op',
-    text: () => 'Tik op Opslaan. We gaan pas verder wanneer de locatie is aangemaakt.',
-    target: selectors.locationSave, verify: 'locations',
+    text: () => 'Tik op Nieuwe locatie. Vul in het formulier de naam in en tik op Opslaan.',
+    target: selectors.locationNew, next: 'awaiting-location',
   },
   locationPopupClose: {
     group: 2, title: 'Sluit Locaties',
@@ -94,18 +84,8 @@ const TOUR_STEPS = {
   },
   apartmentNew: {
     group: 3, title: 'Maak een appartement aan',
-    text: () => 'Tik op Nieuw appartement en vul de gegevens in.',
-    target: selectors.apartmentNew, next: 'apartmentLocation',
-  },
-  apartmentLocation: {
-    group: 3, title: 'Koppel het appartement aan een locatie',
-    text: () => 'Kies hier de locatie die je zojuist hebt aangemaakt.',
-    target: selectors.apartmentLocation, changeTo: 'apartmentSave',
-  },
-  apartmentSave: {
-    group: 3, title: 'Sla het appartement op',
-    text: () => 'Tik op Opslaan om het appartement aan te maken.',
-    target: selectors.apartmentSave, verify: 'apartment',
+    text: () => 'Tik op Nieuw appartement. Vul het nummer en de huur in, kies de locatie en tik op Opslaan.',
+    target: selectors.apartmentNew, next: 'awaiting-apartment',
   },
   apartmentPopupClose: {
     group: 3, title: 'Sluit Appartementen',
@@ -124,34 +104,23 @@ const TOUR_STEPS = {
   },
   tenantNew: {
     group: 4, title: 'Maak een huurder aan',
-    text: () => 'Tik op Nieuwe huurder en vul minimaal de naam in.',
-    target: selectors.tenantNew, next: 'tenantApartment',
-  },
-  tenantApartment: {
-    group: 4, title: 'Koppel de huurder',
-    text: () => 'Kies bij Appartement het appartement dat je net hebt aangemaakt.',
-    target: selectors.tenantApartment, changeTo: 'tenantSave',
-  },
-  tenantSave: {
-    group: 4, title: 'Sla de huurder op',
-    text: () => 'Tik op Opslaan om de huurder aan het appartement te koppelen.',
-    target: selectors.tenantSave, verify: 'tenant',
+    text: () => 'Tik op Nieuwe huurder. Vul de naam in, kies het appartement en tik op Opslaan.',
+    target: selectors.tenantNew, next: 'awaiting-tenant',
   },
 };
 
-const VERIFY_STAGE = {
-  'verify-profile': { key: 'profile', next: 'settingsClose' },
-  'verify-locations': { key: 'locations', next: 'locationPopupClose' },
-  'verify-apartment': { key: 'apartment', next: 'apartmentPopupClose' },
-  'verify-tenant': { key: 'tenant', next: 'complete' },
+const SAVE_STAGE = {
+  'awaiting-profile': { key: 'profile', next: 'settingsClose' },
+  'awaiting-location': { key: 'locations', next: 'locationPopupClose' },
+  'awaiting-apartment': { key: 'apartment', next: 'apartmentPopupClose' },
+  'awaiting-tenant': { key: 'tenant', next: 'complete' },
 };
 
 const STAGE_GROUPS = {
-  settingsOpen: 1, settingsSection: 1, businessSave: 1, 'verify-profile': 1, settingsClose: 1, settingsMenuClose: 1,
-  openLocationsMenu: 2, locationsMenu: 2, locationNew: 2, locationSave: 2, 'verify-locations': 2, locationPopupClose: 2,
-  openApartmentsMenu: 3, apartmentsMenu: 3, apartmentNew: 3, apartmentLocation: 3, apartmentSave: 3,
-  'verify-apartment': 3, apartmentPopupClose: 3,
-  openTenantsMenu: 4, tenantsMenu: 4, tenantNew: 4, tenantApartment: 4, tenantSave: 4, 'verify-tenant': 4,
+  settingsOpen: 1, settingsSection: 1, businessSave: 1, 'awaiting-profile': 1, settingsClose: 1, settingsMenuClose: 1,
+  openLocationsMenu: 2, locationsMenu: 2, locationNew: 2, 'awaiting-location': 2, locationPopupClose: 2,
+  openApartmentsMenu: 3, apartmentsMenu: 3, apartmentNew: 3, 'awaiting-apartment': 3, apartmentPopupClose: 3,
+  openTenantsMenu: 4, tenantsMenu: 4, tenantNew: 4, 'awaiting-tenant': 4,
 };
 
 function isDone(status, key) {
@@ -167,16 +136,21 @@ function nextSetupStage(status) {
 
 function initialStage(status, savedStage) {
   if (status?.required_complete) return 'complete';
+  if (savedStage === 'awaiting-profile') return isDone(status, 'profile') ? 'settingsClose' : 'businessSave';
+  if (savedStage === 'awaiting-location') return isDone(status, 'locations') ? 'locationPopupClose' : 'locationNew';
+  if (savedStage === 'awaiting-apartment') return isDone(status, 'apartment') ? 'apartmentPopupClose' : 'apartmentNew';
+  if (savedStage === 'awaiting-tenant') return isDone(status, 'tenant') ? 'complete' : 'tenantNew';
   if (savedStage && (Object.prototype.hasOwnProperty.call(TOUR_STEPS, savedStage)
-    || Object.prototype.hasOwnProperty.call(VERIFY_STAGE, savedStage))) {
-    if (isDone(status, 'profile') && ['settingsOpen', 'settingsSection', 'businessSave', 'verify-profile'].includes(savedStage)) {
+    || Object.prototype.hasOwnProperty.call(SAVE_STAGE, savedStage))) {
+    if (isDone(status, 'profile') && ['settingsOpen', 'settingsSection', 'businessSave', 'awaiting-profile'].includes(savedStage)) {
       return 'settingsClose';
     }
-    if (isDone(status, 'locations') && savedStage === 'verify-locations') return 'locationPopupClose';
+    if (isDone(status, 'locations') && savedStage === 'awaiting-location') return 'locationPopupClose';
     if (isDone(status, 'locations') && savedStage === 'locationPopupClose') return savedStage;
-    if (isDone(status, 'apartment') && savedStage === 'verify-apartment') return 'apartmentPopupClose';
+    if (isDone(status, 'apartment') && savedStage === 'awaiting-apartment') return 'apartmentPopupClose';
     if (isDone(status, 'apartment') && savedStage === 'apartmentPopupClose') return savedStage;
-    const savedGroup = STAGE_GROUPS[savedStage] || STAGE_GROUPS[savedStage.replace('verify-', '')];
+    if (isDone(status, 'tenant') && savedStage === 'awaiting-tenant') return 'complete';
+    const savedGroup = STAGE_GROUPS[savedStage];
     if (isDone(status, 'locations') && savedGroup === 2) return nextSetupStage(status);
     if (isDone(status, 'apartment') && savedGroup === 3) return nextSetupStage(status);
     if (isDone(status, 'tenant') && savedGroup === 4) return 'complete';
@@ -184,14 +158,6 @@ function initialStage(status, savedStage) {
   }
   if (!isDone(status, 'profile')) return 'settingsOpen';
   return nextSetupStage(status);
-}
-
-function matchesVerification(status, key) {
-  if (key === 'profile') return isDone(status, 'profile');
-  if (key === 'locations') return isDone(status, 'locations');
-  if (key === 'apartment') return isDone(status, 'apartment');
-  if (key === 'tenant') return isDone(status, 'tenant');
-  return false;
 }
 
 function isMobileViewport() {
@@ -205,9 +171,6 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
   const [stage, setStageState] = useState('');
   const [status, setStatus] = useState(null);
   const [loadError, setLoadError] = useState('');
-  const [verifyError, setVerifyError] = useState('');
-  const [verifyTimedOut, setVerifyTimedOut] = useState(false);
-  const [retryToken, setRetryToken] = useState(0);
   const [mobile, setMobile] = useState(isMobileViewport);
   const [rect, setRect] = useState(null);
   const targetRef = useRef(null);
@@ -330,65 +293,37 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
   }, [visible, selector, stage]);
 
   useEffect(() => {
-    if (!visible || !step) return undefined;
+    if (!visible) return undefined;
     const onClick = (event) => {
+      if (!selector) return;
       const element = event.target?.closest?.(selector);
       if (!element) return;
-      if (step.verify) {
-        setVerifyError('');
-        setVerifyTimedOut(false);
-        setStage(`verify-${step.verify}`);
-      } else if (step.nextMobile) {
+      if (step?.nextMobile) {
         setStage(mobile ? nextSetupStage(status) : step.next);
-      } else if (step.next === 'nextSetupStep') {
+      } else if (step?.next === 'nextSetupStep') {
         setStage(nextSetupStage(status));
-      } else if (step.next) {
+      } else if (step?.next) {
         setStage(step.next);
       }
     };
-    const onChange = (event) => {
-      const element = event.target?.closest?.(selector);
-      if (element && element.value && step.changeTo) setStage(step.changeTo);
+    const onSaved = (event) => {
+      const pending = SAVE_STAGE[stage];
+      if (!pending || event.detail !== pending.key) return;
+      setStage(pending.next);
+    };
+    const onProfileInput = (event) => {
+      if (stage !== 'businessSave' || !event.target?.closest?.('[data-testid="business-info-page"]')) return;
+      setStage('awaiting-profile');
     };
     document.addEventListener('click', onClick, true);
-    document.addEventListener('change', onChange, true);
+    document.addEventListener('input', onProfileInput, true);
+    window.addEventListener('kiosk-setup-saved', onSaved);
     return () => {
       document.removeEventListener('click', onClick, true);
-      document.removeEventListener('change', onChange, true);
+      document.removeEventListener('input', onProfileInput, true);
+      window.removeEventListener('kiosk-setup-saved', onSaved);
     };
-  }, [visible, step, selector, setStage, status]);
-
-  const verification = VERIFY_STAGE[stage];
-  useEffect(() => {
-    if (!visible || !verification) return undefined;
-    let active = true;
-    let attempts = 0;
-    setVerifyError('');
-    setVerifyTimedOut(false);
-    const check = async () => {
-      while (active && attempts < 20) {
-        try {
-          const { data } = await api.get('/companies/me/setup-status');
-          if (!active) return;
-          setStatus(data);
-          if (matchesVerification(data, verification.key)) {
-            const next = verification.next || nextSetupStage(data);
-            setStage(next);
-            return;
-          }
-        } catch (error) {
-          if (!active) return;
-          setVerifyError(error?.response?.data?.detail || error?.message || 'Voortgang kon niet worden gecontroleerd.');
-          return;
-        }
-        attempts += 1;
-        if (attempts < 20) await new Promise((resolve) => setTimeout(resolve, 1200));
-      }
-      if (active) setVerifyTimedOut(true);
-    };
-    check();
-    return () => { active = false; };
-  }, [visible, verification, retryToken, setStage]);
+  }, [visible, step, selector, setStage, status, stage, mobile]);
 
   const pause = () => {
     setVisible(false);
@@ -423,13 +358,7 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
 
   const group = stage === 'complete' ? 4 : (STAGE_GROUPS[stage] || 1);
   const message = step?.text?.(mobile) || step?.text;
-  const panelWidth = Math.min(360, window.innerWidth - 24);
-  const panelLeft = rect
-    ? Math.max(12, Math.min(window.innerWidth - panelWidth - 12, rect.left + rect.width / 2 - panelWidth / 2))
-    : Math.max(12, (window.innerWidth - panelWidth) / 2);
-  const panelTop = rect && rect.top + rect.height + 220 < window.innerHeight
-    ? rect.top + rect.height + 18
-    : rect ? Math.max(12, rect.top - 220) : Math.max(16, window.innerHeight / 2 - 100);
+  const panelAtTop = rect ? rect.top + rect.height / 2 > window.innerHeight / 2 : true;
 
   return createPortal((
     <div className="fixed inset-0 z-[180] pointer-events-none" data-testid="kiosk-setup-tour">
@@ -441,8 +370,16 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
             style={{ top: Math.max(4, rect.top - 34), left: Math.max(4, rect.left + rect.width / 2 - 12) }}>👇</div>
         </>
       )}
-      <section className="fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200"
-        style={{ left: panelLeft, top: panelTop }}>
+      <section className={`fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 ${SAVE_STAGE[stage] ? 'hidden' : ''}`}
+        style={{
+          width: 'calc(100vw - 24px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          top: panelAtTop ? 12 : undefined,
+          bottom: panelAtTop ? undefined : 12,
+          maxHeight: 'min(48dvh, 360px)',
+          overflowY: 'auto',
+        }}>
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-[11px] font-black uppercase tracking-widest text-[#FF5C00]">
             {stage === 'complete' ? 'Rondleiding afgerond' : `Stap ${group} van 4`}
@@ -475,33 +412,7 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
               Afronden
             </button>
           </>
-        ) : verification ? (
-          <>
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-orange-50 text-[#FF5C00]">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-            <h2 className="text-lg font-black text-slate-900">Voortgang controleren</h2>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">
-              {verifyError || (verifyTimedOut
-                ? 'Deze stap is nog niet bevestigd. Controleer of alles is opgeslagen.'
-                : 'We wachten tot de wijziging is opgeslagen. Dit kan even duren.')}
-            </p>
-            {(verifyError || verifyTimedOut) && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setStage(verification.key === 'profile' ? 'businessSave'
-                  : verification.key === 'locations' ? 'locationSave'
-                    : verification.key === 'apartment' ? 'apartmentSave' : 'tenantSave')}
-                  className="h-10 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700">
-                  Terug naar opslaan
-                </button>
-                <button type="button" onClick={() => setRetryToken((value) => value + 1)}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-[#FF5C00] px-3 text-xs font-bold text-white">
-                  <RotateCw className="h-3.5 w-3.5" /> Opnieuw controleren
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
+        ) : SAVE_STAGE[stage] ? null : (
           <>
             <h2 className="text-lg font-black text-slate-900">{step?.title}</h2>
             <p className="mt-1 text-sm leading-relaxed text-slate-600">{message}</p>
