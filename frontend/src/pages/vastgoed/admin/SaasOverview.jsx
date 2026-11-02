@@ -574,7 +574,7 @@ export default function SaasOverview() {
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
       {/* Danger Zone — volledige database reset (behoud alleen Demo + superadmins) */}
