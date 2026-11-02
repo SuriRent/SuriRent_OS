@@ -49,7 +49,7 @@ async def superadmin_overview(user: dict = Depends(_superadmin)):
     companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
     total = len(companies)
     trial = active = expired = cancelled = online_now = 0
-    mrr = 0.0
+    mrr_by_currency: dict[str, float] = {}
     for c in companies:
         s = await _deps.billing_summary(c)
         st = s["billing_status"]
@@ -57,7 +57,13 @@ async def superadmin_overview(user: dict = Depends(_superadmin)):
             trial += 1
         elif st == "active":
             active += 1
-            mrr += (s.get("monthly_amount") or 0)
+            interval = (s.get("plan_interval") or "month").lower()
+            if interval not in {"lifetime", "once"}:
+                period_count = {"quarter": 3, "year": 12}.get(interval, 1)
+                currency = (s.get("currency") or "SRD").upper()
+                mrr_by_currency[currency] = mrr_by_currency.get(currency, 0.0) + (
+                    float(s.get("monthly_amount") or 0) / period_count
+                )
         elif st == "expired":
             expired += 1
         elif st == "cancelled":
@@ -104,7 +110,8 @@ async def superadmin_overview(user: dict = Depends(_superadmin)):
         "companies_total": total,
         "trial": trial, "active": active, "expired": expired, "cancelled": cancelled,
         "online_now": online_now,
-        "mrr": mrr, "currency": "SRD",
+        "mrr": mrr_by_currency.get("SRD", 0), "currency": "SRD",
+        "mrr_by_currency": mrr_by_currency,
         "paid_invoices": paid_invoices,
         "open_invoices": open_invoices,
         "overdue_invoices": overdue_invoices,
@@ -186,13 +193,74 @@ async def list_subscription_invoices(user: dict = Depends(_superadmin)):
 @router.post("/superadmin/subscription-invoices/{inv_id}/mark-paid")
 async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
     from pymongo import ReturnDocument
+    invoice = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    if invoice.get("status") == "superseded":
+        raise HTTPException(status_code=409, detail="Deze factuur is vervangen door een betalingsregeling")
+    if invoice.get("status") == "paid":
+        existing_payment = await _deps.db.subscription_payments.find_one({"invoice_id": inv_id}, {"_id": 0, "id": 1})
+        if not existing_payment and not invoice.get("payment_method"):
+            company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
+            payment_at = invoice.get("paid_at") or _deps.iso(_deps.now_utc())
+            payment = {
+                "id": _deps.new_id(),
+                "invoice_id": inv_id,
+                "company_id": invoice.get("company_id"),
+                "company_name": (company or {}).get("name") or invoice.get("company_name", ""),
+                "amount": float(invoice.get("amount") or 0),
+                "currency": (invoice.get("currency") or "SRD").upper(),
+                "method": invoice.get("payment_method") or "manual",
+                "reference": "Historische betaalde factuur",
+                "paid_at": payment_at,
+                "created_at": payment_at,
+                "created_by": user.get("email", "superadmin"),
+                "source": "manual",
+            }
+            await _deps.db.subscription_payments.insert_one(payment)
+            if company and company.get("billing_status") != "active":
+                await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
+        return invoice
+    pending_request = await _deps.db.saas_payment_requests.find_one(
+        {"invoice_id": inv_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
+    )
+    if pending_request:
+        raise HTTPException(status_code=409, detail="Voor deze factuur wacht al een betaling op OCR-goedkeuring")
+    company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Bedrijf van deze factuur niet gevonden")
+    if company.get("pending_invoice_id") == inv_id and company.get("pending_plan") != invoice.get("plan"):
+        raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
+    now = _deps.now_utc()
     res = await _deps.db.subscription_invoices.find_one_and_update(
-        {"id": inv_id},
-        {"$set": {"status": "paid", "paid_at": _deps.iso(_deps.now_utc())}},
+        {"id": inv_id, "status": invoice.get("status")},
+        {"$set": {"status": "paid", "paid_at": _deps.iso(now), "payment_method": "manual"}},
         projection={"_id": 0}, return_document=ReturnDocument.AFTER,
     )
     if not res:
-        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+        latest = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
+        if latest and latest.get("status") == "paid":
+            return latest
+        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
+    payment = {
+        "id": _deps.new_id(),
+        "invoice_id": inv_id,
+        "company_id": company["id"],
+        "company_name": company.get("name", ""),
+        "amount": float(invoice.get("amount") or 0),
+        "currency": (invoice.get("currency") or "SRD").upper(),
+        "method": "manual",
+        "reference": "Handmatig gemarkeerd als betaald",
+        "paid_at": _deps.iso(now),
+        "created_at": _deps.iso(now),
+        "created_by": user.get("email", "superadmin"),
+        "source": "manual",
+    }
+    await _deps.db.subscription_payments.insert_one(payment)
+    await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
+    await _deps.send_saas_payment_email(
+        company, payment["amount"], payment["currency"], payment["method"], inv_id,
+    )
     return res
 
 
@@ -230,13 +298,18 @@ async def create_subscription_invoice(body: NewInvoiceIn,
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     now = _deps.now_utc()
+    plan_id = body.plan or c.get("plan", "starter")
+    plan = await _deps.get_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
     period_start = body.period_start or _deps.iso(now)
-    period_end = body.period_end or _deps.iso(now + timedelta(days=30))
+    default_period_end = _deps.plan_period_end(plan, now)
+    period_end = body.period_end or (_deps.iso(default_period_end) if default_period_end else None)
     inv = {
         "id": _deps.new_id(),
         "company_id": body.company_id,
         "company_name": c.get("name", ""),
-        "plan": body.plan or c.get("plan", "starter"),
+        "plan": plan_id,
         "amount": float(body.amount),
         "currency": body.currency,
         "status": "open",
@@ -285,18 +358,16 @@ async def saas_auto_invoice_tick() -> list[dict]:
         }, {"_id": 0, "id": 1})
         if existing:
             continue
-        # Bepaal bedrag/valuta via het huidige plan
+        # Gebruik dezelfde plan-catalogus als pakkettenbeheer en registratie.
         plan_id = c.get("plan") or "starter"
-        plan = await db.plans.find_one({"id": plan_id}, {"_id": 0})
-        amount = 0.0
-        currency = "SRD"
-        if plan:
-            currency = (c.get("country") == "NL" and plan.get("amount_eur")) and "EUR" or "SRD"
-            amount = float(plan.get("amount_eur") if currency == "EUR" else plan.get("amount_srd") or 0)
+        plan = await _deps.get_plan(plan_id)
+        summary = await _deps.billing_summary(c)
+        amount = float(summary.get("monthly_amount") or 0)
+        currency = str(summary.get("currency") or (plan or {}).get("currency") or "SRD").upper()
         if amount <= 0:
             continue
         period_start = renews_at
-        period_end = period_start + timedelta(days=30)
+        period_end = _deps.plan_period_end(plan, period_start)
         inv = {
             "id": _deps.new_id(),
             "company_id": c["id"],
@@ -307,17 +378,12 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "status": "open",
             "kind": "subscription",
             "period_start": _deps.iso(period_start),
-            "period_end": _deps.iso(period_end),
+            "period_end": _deps.iso(period_end) if period_end else None,
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
         }
         await db.subscription_invoices.insert_one(inv)
-        # Update bedrijf: volgende renewal 30 dagen na deze factuur
-        await db.companies.update_one(
-            {"id": c["id"]},
-            {"$set": {"subscription_renews_at": _deps.iso(period_end)}},
-        )
         inv.pop("_id", None)
         try:
             from .saas_stripe import on_new_saas_invoice
@@ -369,7 +435,7 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
         cid = c["id"]
         invs = invoices_by_cid.get(cid, [])
         pmts = payments_by_cid.get(cid, [])
-        open_invs = [i for i in invs if i.get("status") != "paid"]
+        open_invs = [i for i in invs if i.get("status") not in {"paid", "superseded"}]
         overdue = 0
         outstanding_by_cur: dict[str, float] = {}
         for i in open_invs:
@@ -388,6 +454,12 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
             status = "overdue"
         elif len(open_invs) > 0:
             status = "open"
+        elif summary["billing_status"] == "trial":
+            status = "trial"
+        elif summary["billing_status"] in {"expired", "past_due"}:
+            status = "overdue"
+        elif not invs:
+            status = "unbilled"
         else:
             status = "paid"
         rows.append({
@@ -398,6 +470,7 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
             "billing_status": summary["billing_status"],
             "monthly_amount": summary.get("monthly_amount"),
             "currency": summary.get("currency") or "SRD",
+            "plan_interval": summary.get("plan_interval") or "month",
             "open_count": len(open_invs),
             "overdue_count": overdue,
             "outstanding_by_currency": outstanding_by_cur,
@@ -417,6 +490,8 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
             "overdue": sum(1 for r in rows if r["status"] == "overdue"),
             "open": sum(1 for r in rows if r["status"] == "open"),
             "paid": sum(1 for r in rows if r["status"] == "paid"),
+            "trial": sum(1 for r in rows if r["status"] == "trial"),
+            "unbilled": sum(1 for r in rows if r["status"] == "unbilled"),
         },
     }
 
@@ -448,10 +523,20 @@ async def create_saas_payment_plan(body: SaasPlanIn,
     c = await db.companies.find_one({"id": body.company_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if body.invoice_id:
+        source_invoice = await db.subscription_invoices.find_one(
+            {"id": body.invoice_id, "company_id": body.company_id}, {"_id": 0},
+        )
+        if not source_invoice:
+            raise HTTPException(status_code=404, detail="Bronfactuur niet gevonden voor dit bedrijf")
+        if source_invoice.get("status") not in {"open", "overdue"}:
+            raise HTTPException(status_code=409, detail="Alleen een open factuur kan worden omgezet naar een betalingsregeling")
     now = _deps.now_utc()
     start = datetime.fromisoformat(body.start_date) if body.start_date else now
     plan_id = _deps.new_id()
     per_amount = round(body.total_amount / body.installments, 2)
+    if per_amount <= 0:
+        raise HTTPException(status_code=400, detail="Het totaalbedrag is te laag om over termijnen te verdelen")
     # Correctie op laatste termijn zodat som = totaal
     amounts = [per_amount] * (body.installments - 1)
     amounts.append(round(body.total_amount - per_amount * (body.installments - 1), 2))
@@ -564,6 +649,7 @@ async def kasregister_detail(company_id: str, user: dict = Depends(_superadmin))
             "billing_status": summary["billing_status"],
             "monthly_amount": summary.get("monthly_amount"),
             "currency": summary.get("currency") or "SRD",
+            "plan_interval": summary.get("plan_interval") or "month",
             "trial_ends_at": c.get("trial_ends_at"),
             "subscription_renews_at": c.get("subscription_renews_at"),
         },

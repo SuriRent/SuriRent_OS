@@ -113,15 +113,17 @@ export default function LiveLandingEditor() {
   };
 
   const saveDraft = useCallback(async () => {
-    if (!draft) return;
+    if (!draft) return false;
     setSaving(true); setErr('');
     try {
       const { data } = await api.put('/superadmin/landing/content', { content: draft });
       setHasUnpublished(!!data.has_unpublished_changes);
       setDirty(false);
       showToast('Concept opgeslagen ✓');
+      return true;
     } catch (e) {
       setErr(formatError(e, 'Opslaan mislukt'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -135,7 +137,7 @@ export default function LiveLandingEditor() {
   }, [dirty, saveDraft]);
 
   const publish = async () => {
-    if (dirty) await saveDraft();
+    if (dirty && !(await saveDraft())) return;
     if (!window.confirm('Concept publiceren naar de live landing page? Deze wijzigingen worden direct zichtbaar voor bezoekers.')) return;
     setPublishing(true); setErr('');
     try {

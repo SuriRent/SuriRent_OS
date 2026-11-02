@@ -590,6 +590,7 @@ async def client_payment_status(user: dict = Depends(_deps.require_role("superad
             "billing_status": summary.get("billing_status"),
             "monthly_amount": summary.get("monthly_amount"),
             "currency": summary.get("currency") or "SRD",
+            "plan_interval": summary.get("plan_interval") or "month",
             "last_invoice": last_inv and {
                 "id": last_inv.get("id"),
                 "number": last_inv.get("invoice_number"),

@@ -9,7 +9,7 @@
 // Refresht elke 15s zodat presence + KPI's actueel blijven.
 // -----------------------------------------------------------------------------
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Crown, TrendingUp, Building2, Clock, AlertCircle, Wifi, WifiOff,
   ScanLine, Receipt, RefreshCw, Loader2, ArrowRight, ArrowUpRight,
@@ -61,22 +61,29 @@ export default function SaasOverview() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const requestInFlight = useRef(false);
 
   const load = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
     setRefreshing(true);
-    setErr('');
     try {
-      const [o, p] = await Promise.all([
+      const [overviewResult, presenceResult] = await Promise.allSettled([
         api.get('/superadmin/overview'),
         api.get('/superadmin/online-status'),
       ]);
-      setOverview(o.data);
-      setPresence(p.data);
+      const failures = [];
+      if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value.data || {});
+      else failures.push(`Platformgegevens: ${formatError(overviewResult.reason)}`);
+      if (presenceResult.status === 'fulfilled') setPresence(presenceResult.value.data || {});
+      else failures.push(`Online status: ${formatError(presenceResult.reason)}`);
+      setErr(failures.join(' · '));
     } catch (e) {
       setErr(formatError(e));
     } finally {
       setLoading(false);
       setRefreshing(false);
+      requestInFlight.current = false;
     }
   }, []);
 
@@ -86,7 +93,7 @@ export default function SaasOverview() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (loading || !overview || !presence) {
+  if (loading && !overview && !presence) {
     return (
       <div className="py-20 flex items-center justify-center" data-testid="saas-overview-loading">
         <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
@@ -94,7 +101,10 @@ export default function SaasOverview() {
     );
   }
 
-  const companies = presence.companies || [];
+  const overviewData = overview || {};
+  const companies = presence?.companies || [];
+  const hasOverview = overview !== null;
+  const hasPresence = presence !== null;
   const onlineCompanies = companies.filter((c) => c.online);
   const offlineCompanies = companies.filter((c) => !c.online);
   const trialActive = companies.filter((c) => c.billing_status === 'trial');
@@ -106,17 +116,17 @@ export default function SaasOverview() {
   });
 
   // ===== Afgeleide metrics — spiegelen 1:1 de beheerder-Overzicht =====
-  const receivedByCur = overview.total_received_by_currency || {};
-  const openByCur = overview.current_month_open_by_currency || {};
+  const receivedByCur = overviewData.total_received_by_currency || {};
+  const openByCur = overviewData.current_month_open_by_currency || {};
   const primaryCur = Object.keys(openByCur)[0] || Object.keys(receivedByCur)[0] || 'SRD';
-  const currentMonthOpenCount = overview.current_month_open_count || 0;
+  const currentMonthOpenCount = overviewData.current_month_open_count || 0;
   const currentOpenTotal = openByCur[primaryCur] || 0;
 
-  const companiesTotal = overview.companies_total || 0;
-  const activeCount = overview.active || 0;
-  const trialCount = overview.trial || 0;
-  const overdueCount = overview.overdue_invoices || 0;
-  const clientsTotal = companies.length; // 1 admin ≈ 1 klant per bedrijf
+  const companiesTotal = overviewData.companies_total || 0;
+  const activeCount = overviewData.active || 0;
+  const trialCount = overviewData.trial || 0;
+  const overdueCount = overviewData.overdue_invoices || 0;
+  const clientsTotal = hasPresence ? companies.length : '—'; // 1 admin ≈ 1 klant per bedrijf
   const activePct = companiesTotal === 0 ? 0 : Math.round((activeCount / companiesTotal) * 100);
 
   return (
@@ -134,7 +144,13 @@ export default function SaasOverview() {
       />
 
       {err && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{err}</div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900" role="alert">
+          <span>{err}</span>
+          <button type="button" onClick={load} disabled={refreshing} data-testid="saas-overview-retry"
+            className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-amber-900 border border-amber-200 disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
       )}
 
       {/* ===================================================================
@@ -144,10 +160,10 @@ export default function SaasOverview() {
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Platform in één oogopslag</p>
         <div className="grid grid-cols-4 divide-x divide-slate-100">
           {[
-            { label: 'Bedrijven', value: companiesTotal, icon: Building2, accent: 'bg-orange-50 text-[#FF5C00]' },
-            { label: 'Actief', value: activeCount, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-600' },
-            { label: 'Proef', value: trialCount, icon: Clock, accent: 'bg-amber-50 text-amber-600' },
-            { label: 'Online', value: overview.online_now, icon: Wifi, accent: 'bg-sky-50 text-sky-600' },
+            { label: 'Bedrijven', value: hasOverview ? companiesTotal : '—', icon: Building2, accent: 'bg-orange-50 text-[#FF5C00]' },
+            { label: 'Actief', value: hasOverview ? activeCount : '—', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-600' },
+            { label: 'Proef', value: hasOverview ? trialCount : '—', icon: Clock, accent: 'bg-amber-50 text-amber-600' },
+            { label: 'Online', value: hasOverview ? overviewData.online_now || 0 : '—', icon: Wifi, accent: 'bg-sky-50 text-sky-600' },
           ].map((c) => {
             const Icon = c.icon;
             return (
@@ -259,7 +275,7 @@ export default function SaasOverview() {
                   <p className="text-3xl font-black tracking-tight leading-none text-white"
                     data-testid={`saas-kpi-cash-${cur.toLowerCase()}`}>
                     <span className="text-base font-bold opacity-60 mr-1">{symbol === 'SRD' ? '' : symbol}</span>
-                    {Math.round(v).toLocaleString('nl-NL')}
+                    {hasOverview ? Math.round(v).toLocaleString('nl-NL') : '—'}
                   </p>
                   <div className="mt-3 h-px w-full"
                     style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(248,194,96,0.4) 50%, transparent 100%)' }} />
@@ -282,18 +298,22 @@ export default function SaasOverview() {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bedrijven</p>
                 <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-1" data-testid="saas-kpi-companies">
-                  {companiesTotal}
+                  {hasOverview ? companiesTotal : '—'}
                 </p>
                 <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
-                  <span className="text-emerald-600">{activeCount} actief</span>
-                  {trialCount > 0 && <span className="text-slate-400"> · {trialCount} proef</span>}
+                  {hasOverview ? (
+                    <>
+                      <span className="text-emerald-600">{activeCount} actief</span>
+                      {trialCount > 0 && <span className="text-slate-400"> · {trialCount} proef</span>}
+                    </>
+                  ) : 'Abonnementsstatus niet beschikbaar'}
                 </p>
               </div>
             </div>
             <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
               <div className="h-full bg-gradient-to-r from-[#F8C260] to-[#FF5C00] transition-all" style={{ width: `${activePct}%` }} />
             </div>
-            <p className="text-[10px] text-slate-400 font-bold mt-1.5">{activePct}% actieve abonnementen</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-1.5">{hasOverview ? `${activePct}% actieve abonnementen` : 'Abonnementsstatus niet beschikbaar'}</p>
           </div>
 
           {/* Klanten */}
@@ -311,7 +331,7 @@ export default function SaasOverview() {
                   {clientsTotal}
                 </p>
                 <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
-                  {overview.online_now} nu online
+                  {hasOverview ? `${overviewData.online_now || 0} nu online` : 'Online status niet beschikbaar'}
                 </p>
               </div>
             </div>
@@ -330,10 +350,10 @@ export default function SaasOverview() {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Open · lopende maand</p>
                 <p className="text-3xl font-black text-[#FF5C00] tracking-tight leading-none mt-1">
-                  {currentMonthOpenCount}
+                  {hasOverview ? currentMonthOpenCount : '—'}
                 </p>
                 <p className="text-[11px] text-slate-500 font-semibold mt-1.5 truncate">
-                  {currentOpenTotal > 0 ? fmtMoney(currentOpenTotal, primaryCur) : 'Nog te innen'}
+                  {!hasOverview ? 'Niet beschikbaar' : currentOpenTotal > 0 ? fmtMoney(currentOpenTotal, primaryCur) : 'Nog te innen'}
                 </p>
               </div>
             </div>
@@ -360,17 +380,17 @@ export default function SaasOverview() {
                   Achterstand
                 </p>
                 <p className={`text-3xl font-black tracking-tight leading-none mt-1 ${overdueCount > 0 ? 'text-white' : 'text-slate-900'}`}>
-                  {overdueCount}
+                  {hasOverview ? overdueCount : '—'}
                 </p>
                 <p className={`text-[11px] font-semibold mt-1.5 ${overdueCount > 0 ? 'text-white/90' : 'text-emerald-600'}`}>
-                  {overdueCount > 0
+                  {!hasOverview ? 'Niet beschikbaar' : overdueCount > 0
                     ? `Facturen te laat`
                     : 'Alles op tijd ✓'}
                 </p>
               </div>
             </div>
             <p className={`mt-3 text-[11px] font-bold ${overdueCount > 0 ? 'text-white' : 'text-emerald-600'}`}>
-              {overdueCount > 0 ? 'Direct opvolgen →' : 'Geen actie nodig'}
+              {!hasOverview ? 'Niet beschikbaar' : overdueCount > 0 ? 'Direct opvolgen →' : 'Geen actie nodig'}
             </p>
           </button>
         </div>
@@ -418,22 +438,22 @@ export default function SaasOverview() {
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_pending' }))}
               data-testid="saas-quick-ocr"
               className={`group flex items-center gap-3 p-3 rounded-xl transition-shadow border ${
-                overview.pending_ocr > 0
+                overviewData.pending_ocr > 0
                   ? 'text-white hover:shadow-[0_10px_24px_-8px_rgba(255,92,0,0.5)] border-orange-600'
                   : 'bg-gradient-to-br from-slate-50 to-slate-100/40 hover:from-slate-100 hover:to-slate-200/60 border-slate-100 hover:border-slate-300'
               }`}
-              style={overview.pending_ocr > 0 ? { background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 55%, #C74600 100%)' } : {}}>
+              style={overviewData.pending_ocr > 0 ? { background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 55%, #C74600 100%)' } : {}}>
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
-                overview.pending_ocr > 0 ? 'bg-white/20' : 'bg-white/80'
+                overviewData.pending_ocr > 0 ? 'bg-white/20' : 'bg-white/80'
               }`}>
-                <ScanLine className={`w-5 h-5 ${overview.pending_ocr > 0 ? 'text-white' : 'text-slate-700'}`} />
+                <ScanLine className={`w-5 h-5 ${overviewData.pending_ocr > 0 ? 'text-white' : 'text-slate-700'}`} />
               </div>
               <div className="text-left">
-                <p className={`text-sm font-black ${overview.pending_ocr > 0 ? 'text-white' : 'text-slate-900'}`}>
-                  OCR ({overview.pending_ocr || 0})
+                <p className={`text-sm font-black ${overviewData.pending_ocr > 0 ? 'text-white' : 'text-slate-900'}`}>
+                  OCR ({hasOverview ? overviewData.pending_ocr || 0 : '—'})
                 </p>
-                <p className={`text-[10px] font-semibold ${overview.pending_ocr > 0 ? 'text-white/80' : 'text-slate-500'}`}>
-                  {overview.pending_ocr > 0 ? 'Wacht op keuring' : 'Alles goedgekeurd'}
+                <p className={`text-[10px] font-semibold ${overviewData.pending_ocr > 0 ? 'text-white/80' : 'text-slate-500'}`}>
+                  {overviewData.pending_ocr > 0 ? 'Wacht op keuring' : 'Alles goedgekeurd'}
                 </p>
               </div>
             </button>
@@ -453,11 +473,15 @@ export default function SaasOverview() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
             </span>
-            <h2 className="font-extrabold text-slate-900">Nu online · {onlineCompanies.length}</h2>
+            <h2 className="font-extrabold text-slate-900">Nu online · {hasPresence ? onlineCompanies.length : '—'}</h2>
           </div>
           <p className="text-[11px] text-slate-400 font-mono">Drempel: 5 min</p>
         </div>
-        {onlineCompanies.length === 0 ? (
+        {!hasPresence ? (
+          <div className="px-5 py-10 text-center text-amber-700 text-sm" role="status">
+        Online gegevens zijn niet beschikbaar. Vernieuw het overzicht om opnieuw te proberen.
+          </div>
+        ) : onlineCompanies.length === 0 ? (
           <div className="px-5 py-10 text-center text-slate-400 text-sm" data-testid="no-online">
             <WifiOff className="w-8 h-8 mx-auto mb-2 opacity-50" />
             Op dit moment is niemand online.
@@ -516,10 +540,14 @@ export default function SaasOverview() {
       {/* Recent gezien (offline) */}
       <section className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)]" data-testid="offline-section">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-extrabold text-slate-900">Recent gezien · {offlineCompanies.length}</h2>
+          <h2 className="font-extrabold text-slate-900">Recent gezien · {hasPresence ? offlineCompanies.length : '—'}</h2>
           <p className="text-[11px] text-slate-400">gesorteerd op laatst actief</p>
         </div>
-        <div className="divide-y divide-slate-100">
+        {!hasPresence ? (
+          <div className="px-5 py-8 text-center text-amber-700 text-sm" role="status">
+            Activiteitsgegevens zijn niet beschikbaar.
+          </div>
+        ) : <div className="divide-y divide-slate-100">
           {offlineCompanies.slice(0, 10).map((c) => (
             <div key={c.id} className="px-5 py-3 flex items-center gap-3" data-testid={`offline-row-${c.id}`}>
               <span className="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0" />

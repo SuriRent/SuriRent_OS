@@ -37,6 +37,7 @@ def test_register_with_slug_succeeds_and_persists():
     data = r.json()
     assert data.get("company", {}).get("slug") == slug, data
     assert data.get("user", {}).get("email") == email, data
+    assert data.get("user", {}).get("last_login_at"), data
 
     # Public endpoint should see slug as taken now
     avail = requests.get(f"{BASE_URL}/api/public/companies/{slug}/available", timeout=10)

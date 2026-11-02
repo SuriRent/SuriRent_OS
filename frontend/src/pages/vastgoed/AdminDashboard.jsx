@@ -157,13 +157,20 @@ function SaasClients() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | active | inactive
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    api.get('/superadmin/clients')
-      .then((r) => { if (alive) { setItems(r.data || []); setLoading(false); } })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/superadmin/clients');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { load(); }, [load]);
   const bySearch = items.filter((c) =>
     !q || (c.name || '').toLowerCase().includes(q.toLowerCase())
       || (c.email || '').toLowerCase().includes(q.toLowerCase())
@@ -206,9 +213,22 @@ function SaasClients() {
         ))}
       </div>
 
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Loader2 className="w-8 h-8 mx-auto text-slate-300 animate-spin" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Users className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Klanten konden niet worden geladen.</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
@@ -264,14 +284,30 @@ function SaasClients() {
 function SaasContracts() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
-  useEffect(() => { api.get('/superadmin/companies').then((r) => setItems(r.data || [])).catch(() => {}); }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/companies');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
   const bs = (c) => (c.billing_status || 'trial').toLowerCase();
-  const filtered = items.filter((c) => filter === 'all' ? true : bs(c) === filter);
+  const filtered = items.filter((c) => filter === 'all' || bs(c) === filter);
   const counts = {
     all: items.length,
     active: items.filter((c) => bs(c) === 'active').length,
     trial: items.filter((c) => bs(c) === 'trial').length,
-    expired: items.filter((c) => bs(c) === 'expired' || bs(c) === 'cancelled').length,
+    expired: items.filter((c) => bs(c) === 'expired').length,
+    past_due: items.filter((c) => bs(c) === 'past_due').length,
+    cancelled: items.filter((c) => bs(c) === 'cancelled').length,
   };
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-contracts-page">
@@ -280,7 +316,7 @@ function SaasContracts() {
         <p className="text-sm text-slate-500 mt-0.5">{items.length} abonnement-contracten op het platform.</p>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['expired', 'Verlopen']].map(([v, l]) => (
+        {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['past_due', 'Openstaand'], ['expired', 'Verlopen'], ['cancelled', 'Opgezegd']].map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
             data-testid={`saas-contract-filter-${v}`}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
@@ -290,7 +326,24 @@ function SaasContracts() {
           </button>
         ))}
       </div>
-      {filtered.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <FileSignature className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Contracten konden niet worden geladen.</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <FileSignature className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen contracten in deze filter.</p>
@@ -299,27 +352,39 @@ function SaasContracts() {
         <div className="space-y-2">
           {filtered.map((c) => {
             const s = bs(c);
-            const colorMap = { active: 'emerald', trial: 'amber', expired: 'red', cancelled: 'slate' };
-            const color = colorMap[s] || 'slate';
+            const statusClasses = {
+              active: { icon: 'bg-emerald-50 text-emerald-700', pill: 'bg-emerald-100 text-emerald-700' },
+              trial: { icon: 'bg-amber-50 text-amber-700', pill: 'bg-amber-100 text-amber-700' },
+              past_due: { icon: 'bg-orange-50 text-orange-700', pill: 'bg-orange-100 text-orange-700' },
+              expired: { icon: 'bg-red-50 text-red-700', pill: 'bg-red-100 text-red-700' },
+              cancelled: { icon: 'bg-slate-100 text-slate-600', pill: 'bg-slate-200 text-slate-700' },
+            };
+            const classes = statusClasses[s] || { icon: 'bg-slate-100 text-slate-600', pill: 'bg-slate-200 text-slate-700' };
+            const renewalDate = c.subscription_renews_at || c.next_billing_at;
+            const billingDate = renewalDate
+              ? `Volgende factuur ${new Date(renewalDate).toLocaleDateString('nl-NL')}`
+              : s === 'trial' && c.trial_ends_at
+                ? `Proefperiode tot ${new Date(c.trial_ends_at).toLocaleDateString('nl-NL')}`
+                : '';
             return (
               <div key={c.id} data-testid={`saas-contract-${c.id}`}
                 className="w-full bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100">
-                <div className={`w-11 h-11 rounded-xl bg-${color}-50 text-${color}-700 flex items-center justify-center shrink-0`}>
+                <div className={`w-11 h-11 rounded-xl ${classes.icon} flex items-center justify-center shrink-0`}>
                   <FileSignature className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-black text-slate-900 truncate">{c.name}</p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-${color}-100 text-${color}-700`}>{s}</span>
-                    {c.plan_name && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700">{c.plan_name}</span>}
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${classes.pill}`}>{s.replace('_', ' ')}</span>
+                    {c.plan && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700">{c.plan}</span>}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5 truncate">
-                    /{c.slug} · {c.contact_email || 'geen e-mail'}
-                    {c.next_billing_at ? ` · volgende factuur ${new Date(c.next_billing_at).toLocaleDateString('nl-NL')}` : ''}
+                    /{c.slug} · {c.contact_email || c.owner_email || 'geen e-mail'}
+                    {billingDate ? ` · ${billingDate}` : ''}
                   </p>
                 </div>
                 <p className="text-sm font-black text-slate-900 text-right shrink-0">
-                  {c.tenants_count ?? 0} huurders
+                  {c.stats?.tenants ?? '—'} huurders
                 </p>
               </div>
             );
@@ -335,20 +400,45 @@ function SaasContracts() {
 // =====================================================================
 function SaasEmployees() {
   const [items, setItems] = useState([]);
-  useEffect(() => {
-    // Zelfde endpoint als klanten maar filter op superadmin role
-    api.get('/superadmin/clients').then((r) => {
-      const staff = (r.data || []).filter((u) => u.role === 'superadmin' || !u.company_id);
-      setItems(staff);
-    }).catch(() => {});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/superadmin/employees');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { load(); }, [load]);
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-employees-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Werknemers</h1>
         <p className="text-sm text-slate-500 mt-0.5">Interne SuriRent staff met platform-toegang.</p>
       </div>
-      {items.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Users className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Werknemers konden niet worden geladen.</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Users className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Nog geen interne staff toegevoegd.</p>
@@ -385,25 +475,46 @@ function SaasEmployees() {
 // =====================================================================
 function SaasNotifications() {
   const [alerts, setAlerts] = useState([]);
-  useEffect(() => {
-    (async () => {
-      const list = [];
-      try {
-        const ov = await api.get('/superadmin/overview');
-        const o = ov.data || {};
-        if (o.pending_ocr > 0) {
-          list.push({ severity: 'amber', icon: 'ocr', title: `${o.pending_ocr} OCR-mismatches wachten op goedkeuring`, tab: 'saas_pending' });
-        }
-        if (o.overdue_invoices > 0) {
-          list.push({ severity: 'red', icon: 'invoice', title: `${o.overdue_invoices} vervallen facturen`, tab: 'saas_invoices' });
-        }
-        if (o.expiring_trials > 0) {
-          list.push({ severity: 'amber', icon: 'trial', title: `${o.expiring_trials} proefperiodes verlopen binnenkort`, tab: 'companies' });
-        }
-      } catch { /* stil */ }
-      setAlerts(list);
-    })();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const [overviewResult, presenceResult] = await Promise.allSettled([
+      api.get('/superadmin/overview'),
+      api.get('/superadmin/online-status'),
+    ]);
+    const list = [];
+    const failures = [];
+    if (overviewResult.status === 'fulfilled') {
+      const overview = overviewResult.value.data || {};
+      if (overview.pending_ocr > 0) {
+        list.push({ severity: 'amber', title: `${overview.pending_ocr} OCR-mismatches wachten op goedkeuring`, tab: 'saas_pending' });
+      }
+      if (overview.overdue_invoices > 0) {
+        list.push({ severity: 'red', title: `${overview.overdue_invoices} vervallen facturen`, tab: 'saas_invoices' });
+      }
+    } else {
+      failures.push(`Platformmeldingen: ${formatError(overviewResult.reason)}`);
+    }
+    if (presenceResult.status === 'fulfilled') {
+      const companies = presenceResult.value.data?.companies || [];
+      const expiringTrials = companies.filter((company) => {
+        if (company.billing_status !== 'trial' || !company.trial_ends_at) return false;
+        const days = (new Date(company.trial_ends_at).getTime() - Date.now()) / 86400000;
+        return days >= 0 && days <= 3;
+      });
+      if (expiringTrials.length > 0) {
+        list.push({ severity: 'amber', title: `${expiringTrials.length} proefperiodes verlopen binnen 3 dagen`, tab: 'companies' });
+      }
+    } else {
+      failures.push(`Proefperiodes: ${formatError(presenceResult.reason)}`);
+    }
+    setAlerts(list);
+    setError(failures.join(' · '));
+    setLoading(false);
   }, []);
+  useEffect(() => { load(); }, [load]);
   const nav = (t) => window.dispatchEvent(new CustomEvent('saas-nav', { detail: t }));
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-notifications-page">
@@ -411,7 +522,24 @@ function SaasNotifications() {
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Notificaties</h1>
         <p className="text-sm text-slate-500 mt-0.5">{alerts.length} openstaande platform-waarschuwingen.</p>
       </div>
-      {alerts.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && alerts.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm" role="status">
+          <AlertCircle className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Meldingen konden niet volledig worden geladen.</p>
+        </div>
+      ) : alerts.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Bell className="w-12 h-12 mx-auto text-emerald-300 mb-2" />
           <p className="text-slate-500 font-semibold">Alles onder controle — geen openstaande meldingen.</p>
@@ -419,12 +547,14 @@ function SaasNotifications() {
       ) : (
         <div className="space-y-2">
           {alerts.map((a, i) => {
-            const c = a.severity === 'red' ? 'red' : 'amber';
+            const classes = a.severity === 'red'
+              ? { border: 'border-red-500', icon: 'bg-red-50 text-red-700' }
+              : { border: 'border-amber-500', icon: 'bg-amber-50 text-amber-700' };
             return (
               <button key={i} onClick={() => nav(a.tab)}
                 data-testid={`saas-alert-${i}`}
-                className={`w-full text-left bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border-l-4 border-${c}-500 border-t border-r border-b border-slate-100`}>
-                <div className={`w-11 h-11 rounded-xl bg-${c}-50 text-${c}-700 flex items-center justify-center shrink-0`}>
+                className={`w-full text-left bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border-l-4 ${classes.border} border-t border-r border-b border-slate-100`}>
+                <div className={`w-11 h-11 rounded-xl ${classes.icon} flex items-center justify-center shrink-0`}>
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -535,16 +665,18 @@ const SIDEBAR_GROUPS = {
   geld: { label: 'Financieel', ids: ['payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld'] },
   ops: { label: 'Operaties', ids: ['maintenance', 'employees', 'notifications'] },
   account: { label: 'Account', ids: ['instellingen'] },
-  // SaaS Superadmin groep — nu ingedeeld in dezelfde categorieën als de
-  // Beheerder (Hoofd/Financieel/Operaties/Account) voor consistente UX.
-  saas_hoofd: { label: 'Hoofd', ids: ['saas_overview', 'companies', 'saas_clients', 'saas_contracts', 'plans'] },
-  saas_geld: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
-  saas_ops: { label: 'Operaties', ids: ['saas_kiosk', 'saas_employees', 'saas_notifications', 'landing_editor', 'saas_pending'] },
+};
+const SAAS_SIDEBAR_GROUPS = {
+  saas_platform: { label: 'Platform', ids: ['saas_overview', 'companies', 'saas_clients', 'plans'] },
+  saas_billing: { label: 'Abonnementen & geld', ids: ['saas_contracts', 'saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
+  saas_operations: { label: 'Beheer', ids: ['saas_kiosk', 'saas_employees', 'saas_notifications', 'saas_pending'] },
+  saas_content: { label: 'Website', ids: ['landing_editor'] },
   saas_account: { label: 'Account', ids: ['saas_settings'] },
 };
 function groupTabs(tabs) {
   const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
-  return Object.entries(SIDEBAR_GROUPS).map(([key, group]) => ({
+  const groups = byId.saas_overview ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
+  return Object.entries(groups).map(([key, group]) => ({
     key, label: group.label,
     items: group.ids.map((id) => byId[id]).filter(Boolean),
   })).filter((g) => g.items.length > 0);
@@ -592,6 +724,14 @@ function SidebarSettingsDropdown({ tab, isActive }) {
 
 function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCompany }) {
   const groups = groupTabs(tabs);
+  const canCollapseGroups = user?.role === 'superadmin';
+  const activeGroup = groups.find((group) => group.items.some((item) => item.id === active))?.key;
+  const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(
+    groups.map((group) => [group.key, !canCollapseGroups || group.key === activeGroup]),
+  ));
+  useEffect(() => {
+    if (canCollapseGroups && activeGroup) setOpenGroups((current) => ({ ...current, [activeGroup]: true }));
+  }, [activeGroup, canCollapseGroups]);
   const pulsingTabs = useLivePulse(active);
   // Splits de bedrijfsnaam in 2 delen voor de "zwart + oranje" branding stijl.
   // Multi-woord namen: eerste woord zwart, rest oranje (bv. "GOPI APPARTEMENT'S").
@@ -657,10 +797,20 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" data-testid="sidebar-nav">
         {groups.map((g) => (
           <div key={g.key}>
-            <p className="px-3 mb-1.5 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400">
-              {g.label}
-            </p>
-            <div className="space-y-0.5">
+            {canCollapseGroups ? (
+              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [g.key]: !current[g.key] }))}
+                aria-expanded={!!openGroups[g.key]} data-testid={`sidebar-group-${g.key}`}
+                className="w-full flex items-center justify-between px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400 hover:text-slate-600">
+                <span>{g.label}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${openGroups[g.key] ? '' : '-rotate-90'}`} />
+              </button>
+            ) : (
+              <div className="px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400">
+                {g.label}
+              </div>
+            )}
+            <div className={`grid transition-[grid-template-rows] duration-200 ${openGroups[g.key] ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+              <div className="overflow-hidden space-y-0.5">
               {g.items.map((t) => {
                 const Icon = t.icon;
                 const isActive = active === t.id;
@@ -705,6 +855,7 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                   </button>
                 );
               })}
+              </div>
             </div>
           </div>
         ))}
@@ -805,6 +956,9 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
   const navigate = useBrandedNavigate();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(active === 'instellingen');
+  const groups = user?.role === 'superadmin'
+    ? groupTabs(tabs)
+    : [{ key: 'main', label: '', items: tabs }];
   if (!open) return null;
   return (
     <div className="md:hidden fixed inset-0 z-50" data-testid="mobile-sheet">
@@ -868,10 +1022,14 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
           </div>
         )}
 
-        {/* TABS — alle modules in een grid */}
+        {/* TABS — gegroepeerd zodat de superadmin-modules vindbaar blijven */}
         <div className="flex-1 overflow-y-auto px-3 md:px-5 pb-2">
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
-            {tabs.map((t) => {
+          <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.key} data-testid={`sheet-group-${group.key}`}>
+              {group.label && <h3 className="px-1 mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group.label}</h3>}
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
+            {group.items.map((t) => {
               const Icon = t.icon;
               const isActive = active === t.id;
               const showBadge = t.id === 'notifications' && badgeCount > 0;
@@ -901,6 +1059,9 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
                 </button>
               );
             })}
+              </div>
+            </section>
+          ))}
           </div>
           {settingsOpen && (
             <div className="mt-3 rounded-2xl bg-orange-50/60 border border-orange-100 p-2 animate-fade-in" data-testid="sheet-instellingen-list">

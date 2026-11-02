@@ -20,6 +20,8 @@ const STATUS_META = {
   overdue: { label: 'Achterstand', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-600', icon: AlertCircle, tone: 'from-red-500 to-red-700' },
   open:    { label: 'Open',        bg: 'bg-amber-500', text: 'text-white', ring: 'ring-amber-600', icon: Clock,       tone: 'from-amber-500 to-orange-600' },
   paid:    { label: 'Betaald',     bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-600', icon: CheckCircle, tone: 'from-emerald-500 to-emerald-700' },
+  trial:   { label: 'Proefperiode', bg: 'bg-sky-500', text: 'text-white', ring: 'ring-sky-600', icon: Clock, tone: 'from-sky-500 to-blue-700' },
+  unbilled:{ label: 'Nog geen factuur', bg: 'bg-slate-500', text: 'text-white', ring: 'ring-slate-600', icon: Receipt, tone: 'from-slate-500 to-slate-700' },
 };
 
 export default function SaasKasregister() {
@@ -27,15 +29,19 @@ export default function SaasKasregister() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [detailCid, setDetailCid] = useState(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
+    setLoadError('');
     try {
       const { data: d } = await api.get('/superadmin/kasregister');
       setData(d);
-    } catch { /* toon leegte */ }
+    } catch (e) {
+      setLoadError(formatError(e, 'Kasregister kon niet worden geladen.'));
+    }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
@@ -45,10 +51,23 @@ export default function SaasKasregister() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (loading || !data) {
+  if (loading && !data) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center" data-testid="kasregister-loading">
         <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4" data-testid="kasregister-error">
+        <div className="max-w-md text-center">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="font-bold">{loadError || 'Kasregister kon niet worden geladen.'}</p>
+          <button onClick={load} disabled={refreshing} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 font-bold disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Opnieuw proberen
+          </button>
+        </div>
       </div>
     );
   }
@@ -93,14 +112,24 @@ export default function SaasKasregister() {
       </div>
 
       <div className="max-w-7xl mx-auto p-4 sm:p-6">
+        {loadError && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
+            <span>{loadError}</span>
+            <button onClick={load} disabled={refreshing} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
+          </div>
+        )}
         {/* Totalen dashboard */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-5">
           <StatusCard status="overdue" count={totals.overdue} active={statusFilter === 'overdue'}
             onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')} />
           <StatusCard status="open" count={totals.open} active={statusFilter === 'open'}
             onClick={() => setStatusFilter(statusFilter === 'open' ? 'all' : 'open')} />
           <StatusCard status="paid" count={totals.paid} active={statusFilter === 'paid'}
             onClick={() => setStatusFilter(statusFilter === 'paid' ? 'all' : 'paid')} />
+          <StatusCard status="trial" count={totals.trial} active={statusFilter === 'trial'}
+            onClick={() => setStatusFilter(statusFilter === 'trial' ? 'all' : 'trial')} />
+          <StatusCard status="unbilled" count={totals.unbilled} active={statusFilter === 'unbilled'}
+            onClick={() => setStatusFilter(statusFilter === 'unbilled' ? 'all' : 'unbilled')} />
         </div>
 
         {/* Totaal openstaand */}
@@ -235,6 +264,8 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
     <div className={`rounded-2xl overflow-hidden border transition cursor-pointer hover:scale-[1.01] ${
       c.status === 'overdue' ? 'border-red-400/30 bg-gradient-to-br from-red-500/10 to-transparent' :
       c.status === 'open' ? 'border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent' :
+      c.status === 'trial' ? 'border-sky-400/30 bg-gradient-to-br from-sky-500/10 to-transparent' :
+      c.status === 'unbilled' ? 'border-slate-400/30 bg-gradient-to-br from-slate-500/10 to-transparent' :
       'border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent'
     }`}
       onClick={onOpenDetail}
@@ -256,7 +287,11 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
         <div className="mb-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-white/50">Openstaand</p>
           {Object.keys(c.outstanding_by_currency || {}).length === 0 ? (
-            <p className="text-2xl font-black text-emerald-400 mt-1">✓ Voldaan</p>
+            <p className={`text-lg font-black mt-1 ${c.status === 'paid' ? 'text-emerald-400' : 'text-white/70'}`}>
+              {c.status === 'trial' ? 'Proefperiode actief' :
+                c.status === 'unbilled' ? 'Nog geen factuur' :
+                  c.status === 'overdue' ? 'Betaling vereist' : '✓ Voldaan'}
+            </p>
           ) : (
             <div className="flex items-baseline gap-3 flex-wrap mt-1">
               {Object.entries(c.outstanding_by_currency).map(([cur, v]) => (
@@ -513,4 +548,3 @@ function MetaTile({ label, value }) {
     </div>
   );
 }
-

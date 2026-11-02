@@ -32,6 +32,8 @@ iso = None                 # datetime → ISO-string helper
 now_utc = None             # aware datetime.now(timezone.utc) helper
 new_id = None              # nieuwe UUID string
 billing_summary = None     # (company_doc) -> {billing_status, monthly_amount, currency, ...}
+get_plan = None             # async (plan_id) -> plan_catalog entry
+plan_period_end = None       # (plan_doc, start_datetime) -> datetime | None
 is_online = None           # (last_seen_iso, threshold_seconds=300) -> bool
 activate_company_after_payment = None  # async (company_id, plan_in_payment=None)
 send_saas_payment_email = None         # async (company, amount, currency, method, invoice_id)

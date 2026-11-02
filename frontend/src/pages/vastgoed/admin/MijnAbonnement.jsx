@@ -57,7 +57,7 @@ function KpiStrip({ me, openInvoices, openTotal, lastPayment }) {
     : me.status === 'active' ? `Vernieuwt ${fmtDate(me.renews_at)}`
       : expired ? 'Betaling vereist' : fmtDate(me.cancelled_at);
   const items = [
-    { icon: Crown, label: 'Huidig pakket', value: me.plan?.name || '—', hint: `${fmt(me.monthly_amount, me.currency)} / maand`, tone: 'orange', testid: 'my-sub-kpi-plan' },
+    { icon: Crown, label: 'Huidig pakket', value: me.plan?.name || '—', hint: `${fmt(me.monthly_amount, me.currency)} / ${me.plan?.interval === 'quarter' ? 'kwartaal' : me.plan?.interval === 'year' ? 'jaar' : me.plan?.interval === 'lifetime' ? 'eenmalig' : 'maand'}`, tone: 'orange', testid: 'my-sub-kpi-plan' },
     { icon: expired ? AlertTriangle : me.status === 'trial' ? Clock : CheckCircle2, label: 'Status', value: STATUS_LABEL[me.status] || me.status,
       hint: statusHint, tone: expired ? 'red' : me.status === 'active' ? 'green' : 'orange', testid: 'my-sub-kpi-status' },
     { icon: Receipt, label: 'Openstaand', value: fmt(openTotal, me.currency),
