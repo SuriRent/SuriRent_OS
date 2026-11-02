@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty, FxIconBtn } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, Mail } from 'lucide-react';
@@ -16,6 +16,8 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentDayLoading, setPaymentDayLoading] = useState(true);
+  const paymentDayEdited = useRef(false);
 
   // When tenant changes, auto-suggest apartment if tenant has one
   useEffect(() => {
@@ -25,13 +27,32 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
     }
   }, [data.tenant_id, data.apartment_id, tenants]);
 
+  useEffect(() => {
+    let alive = true;
+    api.get('/settings')
+      .then(({ data: settings }) => {
+        const configuredDay = Number(settings?.invoicing?.contract_payment_day);
+        if (alive && !paymentDayEdited.current) {
+          setData((current) => ({ ...current, payment_day: Number.isInteger(configuredDay) && configuredDay >= 1 && configuredDay <= 31 ? configuredDay : 1 }));
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setData((current) => ({ ...current, payment_day: null }));
+          setError(formatError(e));
+        }
+      })
+      .finally(() => { if (alive) setPaymentDayLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
   const save = async () => {
     setLoading(true); setError('');
     try {
       const { data: r } = await api.post('/contracts', {
         ...data,
         deposit_amount: parseFloat(data.deposit_amount) || 0,
-        payment_day: parseInt(data.payment_day) || 1,
+        payment_day: data.payment_day ? parseInt(data.payment_day) : undefined,
       });
       onSaved(r);
     } catch (e) { setError(formatError(e)); }
@@ -51,7 +72,7 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
         apartment_id: data.apartment_id,
         start_date: data.start_date,
         end_date: data.end_date,
-        payment_day: parseInt(data.payment_day) || 1,
+        payment_day: data.payment_day ? parseInt(data.payment_day) : undefined,
         deposit_amount: parseFloat(data.deposit_amount) || 0,
         terms: data.terms || '',
       }, { responseType: 'blob' });
@@ -126,9 +147,13 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Betaaldag</label>
-              <input type="number" min={1} max={28} value={data.payment_day} onChange={(e) => setData({ ...data, payment_day: e.target.value })}
+              <input type="number" min={1} max={31} value={data.payment_day ?? ''} disabled={paymentDayLoading}
+                onChange={(e) => { paymentDayEdited.current = true; setData({ ...data, payment_day: e.target.value }); }}
                 data-testid="contract-payday"
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+              <p className="mt-1 text-[11px] text-slate-500">
+                {paymentDayLoading ? 'Standaard betaaldag laden…' : 'Standaard overgenomen van de vervaldag bij Facturen automatisering; per contract aanpasbaar.'}
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Borg</label>

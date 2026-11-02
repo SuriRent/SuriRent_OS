@@ -4567,6 +4567,8 @@ function AddContractModal({ onClose, onSaved }) {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState('');
   const [payDay, setPayDay] = useState(1);
+  const [paymentDayLoading, setPaymentDayLoading] = useState(true);
+  const paymentDayEdited = useRef(false);
   const [deposit, setDeposit] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -4581,6 +4583,25 @@ function AddContractModal({ onClose, onSaved }) {
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    api.get('/settings')
+      .then(({ data }) => {
+        const configuredDay = Number(data?.invoicing?.contract_payment_day);
+        if (alive && !paymentDayEdited.current) {
+          setPayDay(Number.isInteger(configuredDay) && configuredDay >= 1 && configuredDay <= 31 ? configuredDay : 1);
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setPayDay(null);
+          setErr(formatError(e));
+        }
+      })
+      .finally(() => { if (alive) setPaymentDayLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
   const save = async () => {
     if (!tenantId) { setErr('Kies een huurder'); return; }
     if (!aptId) { setErr('Kies een appartement'); return; }
@@ -4591,7 +4612,7 @@ function AddContractModal({ onClose, onSaved }) {
         tenant_id: tenantId,
         apartment_id: aptId,
         start_date: startDate,
-        payment_day: Number(payDay) || 1,
+        ...(payDay ? { payment_day: Number(payDay) } : {}),
         deposit_amount: parseFloat(String(deposit).replace(',', '.')) || 0,
       };
       if (endDate) body.end_date = endDate;
@@ -4605,7 +4626,7 @@ function AddContractModal({ onClose, onSaved }) {
     <KioskModalShell title="Nieuw contract" Icon={FileText}
       testId="add-contract" onClose={onClose}
       footer={(
-        <button onClick={save} disabled={saving || !tenantId || !aptId || !startDate}
+        <button onClick={save} disabled={saving || paymentDayLoading || !tenantId || !aptId || !startDate}
           data-testid="add-contract-save"
           className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -4651,8 +4672,8 @@ function AddContractModal({ onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className={modalLabelCls}>Betaaldag</span>
-              <input type="number" min="1" max="31" value={payDay}
-                onChange={(e) => setPayDay(e.target.value)}
+              <input type="number" min="1" max="31" value={payDay ?? ''} disabled={paymentDayLoading}
+                onChange={(e) => { paymentDayEdited.current = true; setPayDay(e.target.value); }}
                 data-testid="add-contract-payday" className={modalInputCls(accent)} />
             </label>
             <label className="block">
@@ -4663,6 +4684,9 @@ function AddContractModal({ onClose, onSaved }) {
                 data-testid="add-contract-deposit" className={modalInputCls(accent)} />
             </label>
           </div>
+          <p className="text-[11px] text-slate-500">
+            {paymentDayLoading ? 'Standaard betaaldag laden…' : 'Standaard overgenomen van de vervaldag bij Facturen automatisering; per contract aanpasbaar.'}
+          </p>
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-contract-error">{err}</div>

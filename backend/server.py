@@ -7711,10 +7711,12 @@ async def _link_tenant_apartment(cid: str, tenant_id: str, apartment_id: str) ->
             year = now_utc().year
             seq = await _next_seq(f"contract_{year}")
             company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1})
+            settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
             await db.contracts.insert_one({
                 "id": new_id(), "company_id": cid, "contract_number": f"HC{year}-{seq:04d}",
                 "tenant_id": tenant_id, "apartment_id": apartment_id,
-                "start_date": iso(now_utc())[:10], "end_date": "", "payment_day": 1,
+                "start_date": iso(now_utc())[:10], "end_date": "",
+                "payment_day": _contract_payment_day((settings or {}).get("invoicing")),
                 "deposit_amount": float(apt.get("rent_amount") or 0),
                 "landlord": (company or {}).get("name") or "", "terms": "",
                 "status": "draft", "active": False, "sign_token": secrets.token_urlsafe(24),
@@ -13091,7 +13093,7 @@ class ContractIn(BaseModel):
     apartment_id: str
     start_date: str
     end_date: Optional[str] = ""
-    payment_day: int = 1
+    payment_day: Optional[int] = Field(default=None, ge=1, le=31)
     deposit_amount: float = 0
     landlord: Optional[str] = "SuriRent N.V."
     terms: Optional[str] = ""
@@ -13120,6 +13122,17 @@ class ContractOut(BaseModel):
     signed_by: Optional[str] = None
     signed_ip: Optional[str] = None
     created_at: str
+
+
+def _contract_payment_day(invoicing: dict | None) -> int:
+    """Use the configured next-month due day as the default contract payment day."""
+    invoicing = invoicing or {}
+    if invoicing.get("mode") != "due_next_month":
+        return 1
+    try:
+        return max(1, min(31, int(invoicing.get("due_day") or 10)))
+    except (TypeError, ValueError):
+        return 10
 
 
 async def _next_seq(key: str) -> int:
@@ -13166,6 +13179,10 @@ async def create_contract(body: ContractIn, user=Depends(get_current_user)):
     apt = await db.apartments.find_one({"id": body.apartment_id, **scope(user)}, {"_id": 0})
     if not apt:
         raise HTTPException(status_code=404, detail="Appartement niet gevonden")
+    payment_day = body.payment_day
+    if payment_day is None:
+        settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
+        payment_day = _contract_payment_day((settings or {}).get("invoicing"))
     year = now_utc().year
     seq = await _next_seq(f"contract_{year}")
     doc = {
@@ -13176,7 +13193,7 @@ async def create_contract(body: ContractIn, user=Depends(get_current_user)):
         "apartment_id": body.apartment_id,
         "start_date": body.start_date,
         "end_date": body.end_date or "",
-        "payment_day": body.payment_day,
+        "payment_day": payment_day,
         "deposit_amount": body.deposit_amount,
         "landlord": body.landlord or "SuriRent N.V.",
         "terms": body.terms or "",
@@ -13259,7 +13276,7 @@ class ContractPreviewIn(BaseModel):
     apartment_id: str
     start_date: Optional[str] = ""
     end_date: Optional[str] = ""
-    payment_day: Optional[int] = 1
+    payment_day: Optional[int] = Field(default=None, ge=1, le=31)
     deposit_amount: Optional[float] = 0.0
     landlord: Optional[str] = ""
     terms: Optional[str] = ""
@@ -13279,6 +13296,10 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
     a = await db.apartments.find_one({"id": body.apartment_id, **scope(user)}, {"_id": 0})
     if not a:
         raise HTTPException(status_code=404, detail="Appartement niet gevonden")
+    payment_day = body.payment_day
+    if payment_day is None:
+        settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
+        payment_day = _contract_payment_day((settings or {}).get("invoicing"))
     c = {
         "id": "preview",
         "contract_number": "PREVIEW",
@@ -13286,7 +13307,7 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
         "apartment_id": body.apartment_id,
         "start_date": body.start_date or "",
         "end_date": body.end_date or "",
-        "payment_day": body.payment_day or 1,
+        "payment_day": payment_day,
         "deposit_amount": float(body.deposit_amount or 0),
         "landlord": body.landlord or "",
         "terms": body.terms or "",
@@ -17116,6 +17137,7 @@ async def get_settings(user=Depends(get_current_user)):
         else:
             next_run = deadline_this
         inv["mode"] = mode
+        inv["contract_payment_day"] = _contract_payment_day(inv)
         inv["next_auto_run"] = next_run.isoformat()
         inv["billing_day_of_month"] = next_run.day
         out["invoicing"] = inv
