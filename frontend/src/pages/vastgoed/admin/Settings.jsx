@@ -71,7 +71,7 @@ function ActionRow({ onSave, onTest, saving, testing, canTest }) {
   );
 }
 
-function useSection(section, initial) {
+function useSection(section, initial, onSaved, onDirty) {
   const [data, setData] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -94,6 +94,7 @@ function useSection(section, initial) {
   }, [initial]);
   const onField = (k, v) => {
     dirtyRef.current = true;
+    onDirty?.();
     setData((p) => ({ ...p, [k]: v }));
   };
   const save = async () => {
@@ -103,6 +104,7 @@ function useSection(section, initial) {
       setData(res.data);
       dirtyRef.current = false;
       setMsg('Instellingen opgeslagen.');
+      onSaved?.(res.data);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
@@ -119,8 +121,8 @@ function useSection(section, initial) {
 }
 
 // ============== Per-section forms ==============
-export function SmtpForm({ initial }) {
-  const s = useSection('smtp', initial);
+export function SmtpForm({ initial, onSaved, onDirty }) {
+  const s = useSection('smtp', initial, onSaved, onDirty);
   const d = s.data;
   return (
     <SectionShell msg={s.msg} err={s.err}>
@@ -357,8 +359,8 @@ function StatusStep({ label, ok }) {
   );
 }
 
-export function InvoicingForm({ initial }) {
-  const s = useSection('invoicing', initial);
+export function InvoicingForm({ initial, onSaved, onDirty }) {
+  const s = useSection('invoicing', initial, onSaved, onDirty);
   const d = s.data;
   const mode = d.mode || 'grace_workdays';
   return (

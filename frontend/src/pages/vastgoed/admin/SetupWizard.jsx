@@ -3,32 +3,28 @@ import {
   Building2, CheckCircle2, Home, User, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
   FileText,
-  Palette, UsersRound,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
   SmtpForm,
   InvoicingForm,
 } from './Settings';
-import Branding from './Branding';
-import Employees from './Employees';
 
 const CORE_STEP_IDS = ['profile', 'locations', 'apartment', 'tenant'];
 
 const STEPS = [
   { id: 'profile', label: 'Bedrijfsgegevens', icon: Building2 },
-  { id: 'locations', label: 'Locatie', icon: MapPin },
-  { id: 'apartment', label: 'Appartement', icon: Home },
-  { id: 'tenant', label: 'Huurder koppelen', icon: User },
-  { id: 'branding', label: 'Branding', icon: Palette },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
-  { id: 'employees', label: 'Werknemers', icon: UsersRound },
+  { id: 'locations', label: 'Locaties aanmaken', icon: MapPin },
+  { id: 'apartment', label: 'Appartementen aanmaken', icon: Home },
+  { id: 'tenant', label: 'Huurders aanmaken of koppelen', icon: User },
 ];
 
 export default function SetupWizard({ onFinish } = {}) {
   const [status, setStatus] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [savedSettings, setSavedSettings] = useState({});
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,24 +33,27 @@ export default function SetupWizard({ onFinish } = {}) {
 
   const [profile, setProfile] = useState({});
   const [apartment, setApartment] = useState({ number: '', address: '', rent_amount: '', currency: 'SRD', location_id: '' });
-  const [tenant, setTenant] = useState({ name: '', phone: '', email: '', apartment_id: '' });
+  const [tenant, setTenant] = useState({ mode: 'new', name: '', phone: '', email: '', apartment_id: '', existing_tenant_id: '' });
   const [apts, setApts] = useState([]);
+  const [tenants, setTenants] = useState([]);
   const [locations, setLocations] = useState([]);
   const [location, setLocation] = useState({ name: '', address: '' });
 
   const loadStatus = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const [{ data: st }, { data: prof }, { data: aptList }, { data: settingsData }, { data: locationList }] = await Promise.all([
+      const [{ data: st }, { data: prof }, { data: aptList }, { data: settingsData }, { data: locationList }, { data: tenantList }] = await Promise.all([
         api.get('/companies/me/setup-status'),
         api.get('/companies/me/branding'),
         api.get('/apartments'),
-        api.get('/settings').catch(() => ({ data: null })),
+        api.get('/settings'),
         api.get('/locations'),
+        api.get('/tenants'),
       ]);
       setStatus(st);
       setProfile(prof || {});
       setApts(aptList || []);
+      setTenants(tenantList || []);
       setLocations(locationList || []);
       setSettings(settingsData);
     } catch (e) { setErr(formatError(e)); }
@@ -71,7 +70,6 @@ export default function SetupWizard({ onFinish } = {}) {
   }
 
   const currentStep = STEPS[idx];
-  const currentCoreIndex = CORE_STEP_IDS.indexOf(currentStep.id);
   const nextStep = () => { if (idx === STEPS.length - 1) { onFinish?.(); return; } setIdx((i) => Math.min(i + 1, STEPS.length - 1)); };
   const prevStep = () => setIdx((i) => Math.max(i - 1, 0));
   const showOk = (txt) => { setMsg(txt); setTimeout(() => setMsg(''), 2500); };
@@ -85,10 +83,9 @@ export default function SetupWizard({ onFinish } = {}) {
   };
 
   const requiredIds = CORE_STEP_IDS;
-  const completed = requiredIds.filter((id) => formStepDone(id)).length;
+  const completed = requiredIds.filter((id) => stepDone(id)).length;
   const total = requiredIds.length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const allDone = completed === total;
+  const allDone = completed === total && stepDone('tenant');
 
   const saveProfile = async () => {
     setSaving(true); setErr('');
@@ -158,8 +155,21 @@ export default function SetupWizard({ onFinish } = {}) {
   const createTenant = async () => {
     setSaving(true); setErr('');
     try {
-      if (!tenant.name?.trim()) { setErr('Naam is verplicht'); return false; }
       if (!tenant.apartment_id) { setErr('Kies het appartement waaraan je de huurder wilt koppelen'); return false; }
+      const selectedApartment = apts.find((item) => item.id === tenant.apartment_id);
+      if (!selectedApartment || selectedApartment.tenant_id || selectedApartment.status === 'occupied') {
+        setErr('Kies een leeg appartement om een huurder te koppelen');
+        return false;
+      }
+      if (tenant.mode === 'existing') {
+        if (!tenant.existing_tenant_id) { setErr('Kies een bestaande huurder'); return false; }
+        await api.post(`/apartments/${tenant.apartment_id}/assign-tenant`, { tenant_id: tenant.existing_tenant_id });
+        await loadStatus();
+        const selected = tenants.find((item) => item.id === tenant.existing_tenant_id);
+        showOk(`Huurder ${selected?.name || ''} gekoppeld`);
+        return true;
+      }
+      if (!tenant.name?.trim()) { setErr('Naam is verplicht'); return false; }
       await api.post('/tenants', {
         name: tenant.name.trim(),
         phone: tenant.phone || '',
@@ -168,7 +178,7 @@ export default function SetupWizard({ onFinish } = {}) {
       });
       await loadStatus();
       showOk(`Huurder ${tenant.name} aangemaakt`);
-      setTenant({ name: '', phone: '', email: '', apartment_id: '' });
+      setTenant({ mode: 'new', name: '', phone: '', email: '', apartment_id: '', existing_tenant_id: '' });
       return true;
     } catch (e) { setErr(formatError(e)); return false; }
     finally { setSaving(false); }
@@ -186,19 +196,17 @@ export default function SetupWizard({ onFinish } = {}) {
             <p className="text-[11px] uppercase tracking-[0.2em] font-black opacity-90">Setup Wizard</p>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black mb-1">
-            {allDone ? 'Basis-setup klaar 🎉' : 'Stap voor stap je platform inrichten'}
+            {allDone ? 'Setup afgerond 🎉' : 'Stap voor stap je platform inrichten'}
           </h2>
           <p className="text-sm opacity-90 mb-3">
-            {currentCoreIndex >= 0
-              ? <>Basisstap <strong>{currentCoreIndex + 1} van {CORE_STEP_IDS.length}</strong></>
-              : <>Optionele instelling</>} · {currentStep.label}
+            Stap <strong>{idx + 1} van {STEPS.length}</strong> · {currentStep.label}
           </p>
           <div className="h-2 rounded-full bg-white/20 overflow-hidden">
             <div className="h-full bg-white rounded-full transition-all duration-500"
-              style={{ width: `${currentCoreIndex >= 0 ? Math.round(((currentCoreIndex + 1) / CORE_STEP_IDS.length) * 100) : 100}%` }} />
+              style={{ width: `${Math.round(((idx + 1) / STEPS.length) * 100)}%` }} />
           </div>
           <p className="text-[11px] opacity-80 mt-2">
-            Verplichte basis: <strong>{completed}/{total}</strong> ({percent}%) — overige stappen zijn optioneel.
+            Belangrijke basisstappen: <strong>{completed}/{total}</strong> afgerond.
           </p>
         </div>
       </div>
@@ -209,10 +217,7 @@ export default function SetupWizard({ onFinish } = {}) {
           const Icon = s.icon;
           const done = stepDone(s.id);
           const active = i === idx;
-          const coreIndex = CORE_STEP_IDS.indexOf(s.id);
-          const disabled = coreIndex >= 0
-            ? CORE_STEP_IDS.slice(0, coreIndex).some((id) => !formStepDone(id))
-            : !allDone;
+          const disabled = i > idx;
           return (
             <button key={s.id} onClick={() => setIdx(i)}
               disabled={disabled}
@@ -241,14 +246,20 @@ export default function SetupWizard({ onFinish } = {}) {
         )}
 
         {currentStep.id === 'profile' && <StepProfile profile={profile} setProfile={setProfile} />}
-        {currentStep.id === 'branding' && <Branding />}
         {currentStep.settings && settings && (
-          <SettingsSectionWrapper step={currentStep} settings={settings} />
+          <SettingsSectionWrapper
+            step={currentStep}
+            settings={settings}
+            onSaved={(values) => {
+              setSettings((current) => ({ ...current, [currentStep.id]: values }));
+              setSavedSettings((current) => ({ ...current, [currentStep.id]: true }));
+            }}
+            onDirty={() => setSavedSettings((current) => ({ ...current, [currentStep.id]: false }))}
+          />
         )}
         {currentStep.id === 'locations' && <StepLocation location={location} setLocation={setLocation} locations={locations} />}
         {currentStep.id === 'apartment' && <StepApartment apartment={apartment} setApartment={setApartment} apts={apts} locations={locations} />}
-        {currentStep.id === 'tenant' && <StepTenant tenant={tenant} setTenant={setTenant} apts={apts} status={status} />}
-        {currentStep.id === 'employees' && <Employees />}
+        {currentStep.id === 'tenant' && <StepTenant tenant={tenant} setTenant={setTenant} apts={apts} tenants={tenants} status={status} />}
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
@@ -303,26 +314,26 @@ export default function SetupWizard({ onFinish } = {}) {
           )}
           {currentStep.id === 'tenant' && (
             <div className="flex items-center gap-2">
-              {!formStepDone('tenant') && (
+              {!stepDone('tenant') && (
                 <button onClick={async () => { if (await createTenant()) nextStep(); }} disabled={saving}
                   data-testid="wizard-save-tenant"
                   className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white font-black shadow-md active:scale-95 transition disabled:opacity-50">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aanmaken & volgende'}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : tenant.mode === 'existing' ? 'Koppelen & volgende' : 'Aanmaken & volgende'}
                   {!saving && <ArrowRight className="w-4 h-4" />}
                 </button>
               )}
-              {formStepDone('tenant') && (
+              {stepDone('tenant') && (
                 <button onClick={nextStep} data-testid="wizard-next"
                   className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
-                  Volgende <ArrowRight className="w-4 h-4" />
+                  {idx === STEPS.length - 1 ? 'Afronden' : 'Volgende'} <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
           )}
-          {(currentStep.settings || ['branding', 'employees'].includes(currentStep.id)) && (
-            <button onClick={nextStep} data-testid="wizard-next"
-              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
-              {idx === STEPS.length - 1 ? 'Klaar' : 'Volgende'} <ArrowRight className="w-4 h-4" />
+          {currentStep.settings && (
+            <button onClick={nextStep} disabled={!savedSettings[currentStep.id]} data-testid="wizard-next"
+              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black disabled:opacity-50 disabled:cursor-not-allowed">
+              {savedSettings[currentStep.id] ? 'Volgende' : 'Bewaar eerst'} <ArrowRight className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -331,9 +342,9 @@ export default function SetupWizard({ onFinish } = {}) {
       {allDone && (
         <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 text-center" data-testid="wizard-complete">
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
-          <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Basis-setup compleet!</h3>
+          <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-            Bedrijfsgegevens, locatie, appartement en huurder zijn ingesteld. Optionele instellingen kun je later op elk moment aanvullen.
+          Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
           </p>
         </div>
       )}
@@ -344,7 +355,7 @@ export default function SetupWizard({ onFinish } = {}) {
 // ============================================================
 // SETTINGS WRAPPER — embed Settings.jsx sub-forms inline
 // ============================================================
-function SettingsSectionWrapper({ step, settings }) {
+function SettingsSectionWrapper({ step, settings, onSaved, onDirty }) {
   return (
     <div data-testid={`wizard-settings-${step.id}`}>
       <div className="mb-3">
@@ -352,8 +363,11 @@ function SettingsSectionWrapper({ step, settings }) {
           <step.icon className="w-5 h-5" /> {step.label}
         </h3>
       </div>
-      {step.id === 'smtp' && <SmtpForm initial={settings.smtp} />}
-      {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
+      {step.id === 'smtp' && <SmtpForm initial={settings.smtp} onSaved={onSaved} onDirty={onDirty} />}
+      {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} onSaved={onSaved} onDirty={onDirty} />}
+      <p className="mt-3 text-xs text-slate-500">
+        Sla je instellingen op met de knop in het formulier en kies daarna <strong>Volgende</strong>.
+      </p>
     </div>
   );
 }
@@ -467,27 +481,53 @@ function StepApartment({ apartment, setApartment, apts, locations }) {
   );
 }
 
-function StepTenant({ tenant, setTenant, apts, status }) {
+function StepTenant({ tenant, setTenant, apts, tenants, status }) {
   const upd = (k, v) => setTenant((t) => ({ ...t, [k]: v }));
+  const availableTenants = tenants.filter((item) => !item.apartment_id || item.apartment_id === tenant.apartment_id);
   return (
     <div className="space-y-3" data-testid="wizard-tenant">
       <div className="mb-2">
         <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><User className="w-5 h-5" /> Huurders</h3>
-        <p className="text-xs text-slate-500">Koppel je eerste huurder aan een appartement. Hij/zij stelt straks bij eerste QR-scan een eigen PIN in.</p>
+        <p className="text-xs text-slate-500">Maak een huurder aan of koppel een bestaande huurder aan een appartement.</p>
       </div>
       {(status?.counts?.tenants || 0) > 0 && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700">
           ✓ Je hebt al {status.counts.tenants} huurder{status.counts.tenants === 1 ? '' : 's'}.
         </div>
       )}
-      <FormField label="Naam *" value={tenant.name} onChange={(e) => upd('name', e.target.value)}
-        placeholder="bv. Jan Jansen" data-testid="wizard-tenant-name" />
-      <div className="grid grid-cols-2 gap-3">
-        <FormField icon={Phone} label="Telefoon" type="tel" value={tenant.phone}
-          onChange={(e) => upd('phone', e.target.value)} placeholder="+597 ..." data-testid="wizard-tenant-phone" />
-        <FormField icon={Mail} label="E-mail" type="email" value={tenant.email}
-          onChange={(e) => upd('email', e.target.value)} placeholder="huurder@..." data-testid="wizard-tenant-email" />
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Huurder toevoegen">
+        <button type="button" onClick={() => upd('mode', 'new')} data-testid="wizard-tenant-mode-new"
+          className={`h-10 rounded-xl border-2 text-sm font-bold ${tenant.mode === 'new' ? 'border-[#FF5C00] bg-orange-50 text-[#C74600]' : 'border-slate-200 text-slate-600'}`}>
+          Nieuwe huurder
+        </button>
+        <button type="button" onClick={() => upd('mode', 'existing')} data-testid="wizard-tenant-mode-existing"
+          disabled={availableTenants.length === 0}
+          className={`h-10 rounded-xl border-2 text-sm font-bold disabled:opacity-40 ${tenant.mode === 'existing' ? 'border-[#FF5C00] bg-orange-50 text-[#C74600]' : 'border-slate-200 text-slate-600'}`}>
+          Bestaande huurder koppelen
+        </button>
       </div>
+      {tenant.mode === 'existing' ? (
+        <label className="block">
+          <span className="block text-xs font-bold text-slate-700 mb-1">Bestaande huurder *</span>
+          <select value={tenant.existing_tenant_id} onChange={(e) => upd('existing_tenant_id', e.target.value)}
+            data-testid="wizard-existing-tenant"
+            className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none">
+            <option value="">Kies een huurder</option>
+            {availableTenants.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+      ) : (
+        <>
+          <FormField label="Naam *" value={tenant.name} onChange={(e) => upd('name', e.target.value)}
+            placeholder="bv. Jan Jansen" data-testid="wizard-tenant-name" />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField icon={Phone} label="Telefoon" type="tel" value={tenant.phone}
+              onChange={(e) => upd('phone', e.target.value)} placeholder="+597 ..." data-testid="wizard-tenant-phone" />
+            <FormField icon={Mail} label="E-mail" type="email" value={tenant.email}
+              onChange={(e) => upd('email', e.target.value)} placeholder="huurder@..." data-testid="wizard-tenant-email" />
+          </div>
+        </>
+      )}
       <label className="block">
         <span className="block text-xs font-bold text-slate-700 mb-1">Appartement *</span>
         <select value={tenant.apartment_id} onChange={(e) => upd('apartment_id', e.target.value)}
@@ -495,7 +535,7 @@ function StepTenant({ tenant, setTenant, apts, status }) {
           className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none">
           <option value="">Kies een appartement</option>
           {apts.map((a) => (
-            <option key={a.id} value={a.id}>
+            <option key={a.id} value={a.id} disabled={!!a.tenant_id || a.status === 'occupied'}>
               {a.number}{a.status === 'occupied' ? ' (bezet)' : ''}{a.rent_amount ? ` — ${a.currency} ${a.rent_amount}` : ''}
             </option>
           ))}

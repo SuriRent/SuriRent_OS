@@ -2031,7 +2031,6 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
         onSaved(r);
       } else {
         const { data: r } = await api.post('/apartments', payload);
-        window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'apartment' }));
         onSaved(r);
       }
     } catch (e) { setError(formatError(e)); }
@@ -2985,7 +2984,6 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           return;
         }
       }
-      if (!initial?.id) window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'tenant' }));
       onSaved(saved);
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }
@@ -4447,8 +4445,6 @@ export default function AdminDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const dismissedKey = `setup_wizard_dismissed_${cid}`;
-        if (localStorage.getItem(dismissedKey) === '1') return;
         const { data } = await api.get('/companies/me/setup-status');
         if (cancelled) return;
         if (data?.required_complete === false) {
@@ -4582,7 +4578,6 @@ export default function AdminDashboard() {
       <SetupWizardSheet
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        companyId={user?.company_id}
       />
       {/* Post-Google-registratie: als het bedrijf auto-gegenereerd is
           (needs_onboarding flag op company) → verplichte "Kies uw

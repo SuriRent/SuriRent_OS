@@ -6,17 +6,10 @@ import SetupWizard from './SetupWizard';
  *  Op desktop: gecentreerde overlay met max-width.
  *  De wizard zelf blijft volledig functioneel; deze wrapper voegt alleen
  *  een sluit-knop + dismiss-handling toe. */
-export default function SetupWizardSheet({ open, onClose, companyId, zClass = 'z-50' }) {
+export default function SetupWizardSheet({ open, onClose, zClass = 'z-50' }) {
   if (!open) return null;
 
   const handleClose = () => {
-    // Onthoud per bedrijf zodat de wizard niet bij elke login terugkomt
-    // voor klanten die hem bewust gesloten hebben.
-    try {
-      if (companyId) {
-        localStorage.setItem(`setup_wizard_dismissed_${companyId}`, '1');
-      }
-    } catch { /* ignore */ }
     onClose?.();
   };
 

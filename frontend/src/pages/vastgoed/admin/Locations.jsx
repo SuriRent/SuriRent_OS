@@ -27,7 +27,6 @@ function LocationForm({ initial, onCancel, onSaved }) {
         onSaved(r);
       } else {
         const { data: r } = await api.post('/locations', payload);
-        window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'locations' }));
         onSaved(r);
       }
     } catch (e) {

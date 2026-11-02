@@ -48,7 +48,6 @@ export default function BusinessInfo() {
       setB((prev) => ({ ...prev, ...data }));
       setMsg('Opgeslagen! Bedrijfsgegevens zijn direct actief.');
       setTimeout(() => setMsg(''), 4000);
-      window.dispatchEvent(new CustomEvent('kiosk-setup-saved', { detail: 'profile' }));
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
