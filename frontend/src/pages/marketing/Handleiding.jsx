@@ -1,6 +1,8 @@
 import { ArrowRight, BookOpen, CheckCircle2, CircleHelp, ShieldCheck } from 'lucide-react';
 import { appLink } from '../../lib/env';
+import { EditableText, EditableImage, EditableLink } from '../../lib/landing-editable';
 
+const fieldKey = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const SECTIONS = [
   ['start', 'Begin hier'],
   ['inrichten', 'Eerste inrichting'],
@@ -29,25 +31,27 @@ const ADMIN_MODULES = [
 ];
 
 function StepCard({ number, title, children }) {
+  const key = fieldKey(title);
   return (
     <article className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-sm font-black text-[#E65300]">{number}</span>
       <div className="min-w-0">
-        <h3 className="font-black text-[#0B1B3F]">{title}</h3>
-        <div className="mt-2 text-sm leading-6 text-slate-600">{children}</div>
+        <EditableText path={`marketing.manual.steps.${key}.title`} fallback={title} as="h3" label={`Handleiding · ${title}`} className="font-black text-[#0B1B3F}" />
+        <EditableText path={`marketing.manual.steps.${key}.body`} as="div" multiline label={`Handleiding · ${title} uitleg`} className="mt-2 text-sm leading-6 text-slate-600">{children}</EditableText>
       </div>
     </article>
   );
 }
 
 function InfoCard({ title, children, tone = 'orange' }) {
+  const key = fieldKey(title);
   const styles = tone === 'blue'
     ? 'border-blue-200 bg-blue-50 text-blue-950'
     : 'border-orange-200 bg-orange-50 text-[#71310F]';
   return (
     <aside className={`rounded-2xl border p-5 ${styles}`}>
-      <h3 className="font-black">{title}</h3>
-      <div className="mt-2 text-sm leading-6 opacity-90">{children}</div>
+      <EditableText path={`marketing.manual.info.${key}.title`} fallback={title} as="h3" label={`Handleiding · Tip ${title}`} className="font-black" />
+      <EditableText path={`marketing.manual.info.${key}.body`} as="div" multiline label={`Handleiding · Tip ${title} uitleg`} className="mt-2 text-sm leading-6 opacity-90">{children}</EditableText>
     </aside>
   );
 }
@@ -59,22 +63,23 @@ export default function Handleiding({ onDemo }) {
         <div className="absolute -right-32 -top-40 -z-10 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/10 blur-3xl" />
         <div className="mx-auto max-w-[1200px] px-5 py-14 sm:px-8 sm:py-20 lg:px-10 lg:py-24">
           <p className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3.5 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">
-            <BookOpen className="h-4 w-4" /> SuriRent handleiding
+            <BookOpen className="h-4 w-4" /> <EditableText path="marketing.manual.hero.eyebrow" fallback="SuriRent handleiding" as="span" label="Handleiding · Label" />
           </p>
           <h1 className="mt-5 max-w-4xl text-4xl font-black leading-[1.05] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
-            Van eerste inrichting tot <span className="text-[#FF5C00]">dagelijks kioskgebruik.</span>
+            <EditableText path="marketing.manual.hero.title" fallback="Van eerste inrichting tot" as="span" label="Handleiding · Titel" />{' '}
+            <EditableText path="marketing.manual.hero.title_accent" fallback="dagelijks kioskgebruik." as="span" label="Handleiding · Titelaccent" className="text-[#FF5C00]" />
           </h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
-            Deze gids legt stap voor stap uit hoe je SuriRent klaarzet, de medewerkerskiosk gebruikt en huurders zelfstandig laat betalen via het huurdersportaal.
-          </p>
+          <EditableText path="marketing.manual.hero.description" fallback="Deze gids legt stap voor stap uit hoe je SuriRent klaarzet, de medewerkerskiosk gebruikt en huurders zelfstandig laat betalen via het huurdersportaal."
+            as="p" multiline label="Handleiding · Introductie" className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8" />
           <div className="mt-8 flex flex-wrap gap-3">
             <button type="button" onClick={onDemo} data-testid="manual-demo"
               className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#FF5C00] px-5 text-sm font-black text-white transition hover:bg-[#E65300]">
-              Bekijk de demo <ArrowRight className="h-4 w-4" />
+              <EditableText path="marketing.manual.hero.demo_cta" fallback="Bekijk de demo" as="span" label="Handleiding · Demoknop" /> <ArrowRight className="h-4 w-4" />
             </button>
-            <a href="#inrichten" className="inline-flex h-12 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-[#0B1B3F] transition hover:border-orange-300">
-              Start met inrichten
-            </a>
+            <EditableLink path="marketing.manual.hero.start_href" href="#inrichten" label="Handleiding · Startlink"
+              className="inline-flex h-12 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-[#0B1B3F] transition hover:border-orange-300">
+              <EditableText path="marketing.manual.hero.start_cta" fallback="Start met inrichten" as="span" label="Handleiding · Startknop" />
+            </EditableLink>
           </div>
         </div>
       </section>
@@ -82,38 +87,40 @@ export default function Handleiding({ onDemo }) {
       <div className="mx-auto grid max-w-[1280px] gap-8 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[230px_minmax(0,1fr)] lg:px-10">
         <aside className="lg:sticky lg:top-24 lg:self-start" aria-label="Handleiding navigatie">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="mb-3 px-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">In deze handleiding</p>
+            <EditableText path="marketing.manual.navigation.heading" fallback="In deze handleiding" as="p" label="Handleiding · Navigatiekop" className="mb-3 px-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400" />
             <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Inhoud van de handleiding">
               {SECTIONS.map(([id, label], index) => (
-                <a key={id} href={`#${id}`}
+                <EditableLink key={id} path={`marketing.manual.navigation.${id}.href`} href={`#${id}`} label={`Handleiding · Link ${label}`}
                   className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-orange-50 hover:text-[#E65300]">
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-500">{String(index + 1).padStart(2, '0')}</span>
-                  {label}
-                </a>
+                  <EditableText path={`marketing.manual.navigation.${id}.label`} fallback={label} as="span" label={`Handleiding · Link ${label}`} />
+                </EditableLink>
               ))}
             </nav>
           </div>
-          <a href={appLink('/login?view=admin')}
+          <EditableLink path="marketing.manual.navigation.admin_href" href={appLink('/login?view=admin')} label="Handleiding · Beheerloginlink"
             className="mt-3 hidden items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 py-3 text-sm font-black text-white transition hover:bg-[#E65300] lg:flex">
-            Naar beheerlogin <ArrowRight className="h-4 w-4" />
-          </a>
+            <EditableText path="marketing.manual.navigation.admin_label" fallback="Naar beheerlogin" as="span" label="Handleiding · Beheerlogin" /> <ArrowRight className="h-4 w-4" />
+          </EditableLink>
         </aside>
         <div className="min-w-0 space-y-6">
         <section id="start" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-5">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Eerst het onderscheid</p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Twee manieren om de kiosk te gebruiken.</h2>
+            <EditableText path="marketing.manual.sections.start.eyebrow" fallback="Eerst het onderscheid" as="p" label="Handleiding · Intro label" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+            <EditableText path="marketing.manual.sections.start.title" fallback="Twee manieren om de kiosk te gebruiken." as="h2" label="Handleiding · Intro titel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <article className="rounded-3xl bg-[#0B1B3F] p-6 text-white sm:p-7">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FF8A3D]">Voor personeel</p>
-              <h3 className="mt-2 text-xl font-black">Medewerkerskiosk · /kiosk</h3>
-              <p className="mt-3 text-sm leading-6 text-white/75">Een medewerker of beheerder zoekt een locatie, appartement of huurder, bekijkt het financiële overzicht en registreert een ontvangen betaling.</p>
+              <EditableText path="marketing.manual.sections.start.employee_label" fallback="Voor personeel" as="p" label="Handleiding · Personeelslabel" className="text-xs font-black uppercase tracking-[0.16em] text-[#FF8A3D]" />
+              <EditableText path="marketing.manual.sections.start.employee_title" fallback="Medewerkerskiosk · /kiosk" as="h3" label="Handleiding · Medewerkerskiosk" className="mt-2 text-xl font-black" />
+              <EditableText path="marketing.manual.sections.start.employee_description" fallback="Een medewerker of beheerder zoekt een locatie, appartement of huurder, bekijkt het financiële overzicht en registreert een ontvangen betaling."
+                as="p" multiline label="Handleiding · Medewerkerskiosk uitleg" className="mt-3 text-sm leading-6 text-white/75" />
             </article>
             <article className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-7">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">Voor huurders</p>
-              <h3 className="mt-2 text-xl font-black">Huurdersportaal · /kiosk/huurder</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Een huurder meldt zich aan met de methode die op het portaal beschikbaar is, controleert het saldo en kan een betaling met bankbewijs ter controle indienen.</p>
+              <EditableText path="marketing.manual.sections.start.tenant_label" fallback="Voor huurders" as="p" label="Handleiding · Huurderslabel" className="text-xs font-black uppercase tracking-[0.16em] text-[#E65300]" />
+              <EditableText path="marketing.manual.sections.start.tenant_title" fallback="Huurdersportaal · /kiosk/huurder" as="h3" label="Handleiding · Huurdersportaal" className="mt-2 text-xl font-black" />
+              <EditableText path="marketing.manual.sections.start.tenant_description" fallback="Een huurder meldt zich aan met de methode die op het portaal beschikbaar is, controleert het saldo en kan een betaling met bankbewijs ter controle indienen."
+                as="p" multiline label="Handleiding · Huurdersportaal uitleg" className="mt-3 text-sm leading-6 text-slate-600" />
             </article>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -127,11 +134,10 @@ export default function Handleiding({ onDemo }) {
         </section>
 
         <section id="inrichten" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">A tot Z · eerste keer</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Richt je beheer in deze volgorde in.</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Volg eerst deze vier verplichte stappen in Kiosk Beheer. De Setup Wizard opent automatisch voor nieuwe beheerders en helpt je met dezelfde volgorde.
-          </p>
+          <EditableText path="marketing.manual.sections.setup.eyebrow" fallback="A tot Z · eerste keer" as="p" label="Handleiding · Inrichten label" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.setup.title" fallback="Richt je beheer in deze volgorde in." as="h2" label="Handleiding · Inrichten titel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
+          <EditableText path="marketing.manual.sections.setup.description" fallback="Volg eerst deze vier verplichte stappen in Kiosk Beheer. De Setup Wizard opent automatisch voor nieuwe beheerders en helpt je met dezelfde volgorde."
+            as="p" multiline label="Handleiding · Inrichten uitleg" className="mt-3 max-w-3xl text-sm leading-6 text-slate-600" />
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <StepCard number="01" title="Instellingen: vul bedrijfsgegevens in">
               Open <strong>Instellingen</strong> in Kiosk Beheer. Vul de bedrijfsnaam en minimaal één contactgegeven (e-mail of telefoon) in. Controleer ook het adres; deze gegevens kunnen op communicatie en documenten verschijnen.
@@ -157,8 +163,8 @@ export default function Handleiding({ onDemo }) {
         </section>
 
         <section id="kiosk" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor medewerkers</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Een betaling registreren in de kiosk.</h2>
+          <EditableText path="marketing.manual.sections.kiosk.eyebrow" fallback="Voor medewerkers" as="p" label="Handleiding · Kiosk label" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.kiosk.title" fallback="Een betaling registreren in de kiosk." as="h2" label="Handleiding · Kiosk titel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
           <div className="mt-6 grid gap-3">
             <StepCard number="01" title="Meld je aan">
               Open <strong>/kiosk</strong> en voer je viercijferige PIN in. De beheerder-PIN en medewerkers-PIN geven verschillende toegangsrechten.
@@ -184,23 +190,25 @@ export default function Handleiding({ onDemo }) {
           </div>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <a href="/kiosk-icons/screenshots/02_kiosk_pin.jpg" target="_blank" rel="noreferrer"
+              <EditableLink path="marketing.manual.images.staff.href" href="/kiosk-icons/screenshots/02_kiosk_pin.jpg" label="Handleiding · Medewerkerscreenshot link" target="_blank" rel="noreferrer"
                 aria-label="Kiosk PIN-login screenshot openen op ware grootte">
-                <img src="/kiosk-icons/screenshots/02_kiosk_pin.jpg" alt="Startscherm van de medewerkerskiosk met viercijferige PIN-toetsen"
-                  loading="lazy" className="max-h-[520px] w-full bg-orange-50 object-contain" />
-              </a>
-              <figcaption className="px-4 py-3 text-xs font-bold text-slate-700">Voorbeeld · medewerkerskiosk aanmelden met PIN</figcaption>
+                <EditableImage path="marketing.manual.images.staff.src" fallback="/kiosk-icons/screenshots/02_kiosk_pin.jpg" alt="Startscherm van de medewerkerskiosk met viercijferige PIN-toetsen"
+                  label="Handleiding · Medewerkerscreenshot" className="max-h-[520px] w-full bg-orange-50 object-contain" />
+              </EditableLink>
+              <EditableText path="marketing.manual.images.staff.caption" fallback="Voorbeeld · medewerkerskiosk aanmelden met PIN" as="figcaption" label="Handleiding · Medewerkerscreenshot bijschrift" className="px-4 py-3 text-xs font-bold text-slate-700" />
             </figure>
             <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600">
-              Meld je aan met de PIN van jouw account. Het voorbeeld toont alleen het PIN-scherm; voer altijd je eigen PIN in en deel die niet.
+              <EditableText path="marketing.manual.sections.kiosk.security_note" fallback="Meld je aan met de PIN van jouw account. Het voorbeeld toont alleen het PIN-scherm; voer altijd je eigen PIN in en deel die niet."
+                as="div" multiline label="Handleiding · PIN veiligheidsnotitie" />
             </div>
           </div>
         </section>
 
         <section id="huurdersportaal" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor huurders</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Een betaling aanmelden via het huurdersportaal.</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Het huurdersportaal is een andere omgeving dan de medewerkerskiosk. De beschikbare betaal- en aanmeldopties kunnen afhangen van de bedrijfsinrichting.</p>
+          <EditableText path="marketing.manual.sections.tenant.eyebrow" fallback="Voor huurders" as="p" label="Handleiding · Huurderslabel" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.tenant.title" fallback="Een betaling aanmelden via het huurdersportaal." as="h2" label="Handleiding · Huurderstitel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
+          <EditableText path="marketing.manual.sections.tenant.description" fallback="Het huurdersportaal is een andere omgeving dan de medewerkerskiosk. De beschikbare betaal- en aanmeldopties kunnen afhangen van de bedrijfsinrichting."
+            as="p" multiline label="Handleiding · Huurdersportaal uitleg" className="mt-3 max-w-3xl text-sm leading-6 text-slate-600" />
           <div className="mt-6 grid gap-3">
             <StepCard number="01" title="Open het huurdersportaal">
               Ga naar <strong>/kiosk/huurder</strong> of open de link die de verhuurder heeft verstrekt. Meld je aan met de methode die op het scherm wordt getoond. Als NFC wordt gevraagd, gebruik dan de aan jou gekoppelde kaart/tag of volg de instructie van je verhuurder.
@@ -227,26 +235,27 @@ export default function Handleiding({ onDemo }) {
             </InfoCard>
           </div>
           <figure className="mt-6 max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <a href="/kiosk-icons/screenshots/03_tenant_login.jpg" target="_blank" rel="noreferrer"
+            <EditableLink path="marketing.manual.images.tenant.href" href="/kiosk-icons/screenshots/03_tenant_login.jpg" label="Handleiding · Huurderscreenshot link" target="_blank" rel="noreferrer"
               aria-label="Huurdersportaal login screenshot openen op ware grootte">
-              <img src="/kiosk-icons/screenshots/03_tenant_login.jpg" alt="Aanmeldscherm van het SuriRent-huurdersportaal"
-                loading="lazy" className="max-h-[520px] w-full bg-orange-50 object-contain" />
-            </a>
-            <figcaption className="px-4 py-3 text-xs font-bold text-slate-700">Voorbeeld · aanmelden bij het huurdersportaal</figcaption>
+              <EditableImage path="marketing.manual.images.tenant.src" fallback="/kiosk-icons/screenshots/03_tenant_login.jpg" alt="Aanmeldscherm van het SuriRent-huurdersportaal"
+                label="Handleiding · Huurderscreenshot" className="max-h-[520px] w-full bg-orange-50 object-contain" />
+            </EditableLink>
+            <EditableText path="marketing.manual.images.tenant.caption" fallback="Voorbeeld · aanmelden bij het huurdersportaal" as="figcaption" label="Handleiding · Huurderscreenshot bijschrift" className="px-4 py-3 text-xs font-bold text-slate-700" />
           </figure>
         </section>
 
         <section id="beheer" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Voor beheerders</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Kiosk Beheer: wat vind je waar?</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Open Beheer vanuit het dashboard of het beheermenu in de kiosk. De beschikbare pagina’s hangen af van je rol; een boekhouder heeft bijvoorbeeld minder menu’s dan een beheerder.</p>
+          <EditableText path="marketing.manual.sections.admin.eyebrow" fallback="Voor beheerders" as="p" label="Handleiding · Beheerlabel" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.admin.title" fallback="Kiosk Beheer: wat vind je waar?" as="h2" label="Handleiding · Beheertitel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
+          <EditableText path="marketing.manual.sections.admin.description" fallback="Open Beheer vanuit het dashboard of het beheermenu in de kiosk. De beschikbare pagina’s hangen af van je rol; een boekhouder heeft bijvoorbeeld minder menu’s dan een beheerder."
+            as="p" multiline label="Handleiding · Beheerintro" className="mt-3 max-w-3xl text-sm leading-6 text-slate-600" />
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {ADMIN_MODULES.map(([title, description], index) => (
               <article key={title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-5" data-testid={`manual-admin-module-${index + 1}`}>
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#FF5C00]" />
                 <div>
-                  <h3 className="font-black text-[#0B1B3F]">{title}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-slate-600">{description}</p>
+                  <EditableText path={`marketing.manual.admin_modules.${index}.title`} fallback={title} as="h3" label={`Handleiding · Beheermodule ${index + 1}`} className="font-black text-[#0B1B3F]" />
+                  <EditableText path={`marketing.manual.admin_modules.${index}.description`} fallback={description} as="p" multiline label={`Handleiding · Beheermodule ${index + 1} uitleg`} className="mt-1.5 text-sm leading-6 text-slate-600" />
                 </div>
               </article>
             ))}
@@ -267,14 +276,13 @@ export default function Handleiding({ onDemo }) {
               Voor werkzaamheden aan de balie en betalingen in de kiosk. Geef deze rol geen beheerdersgegevens.
             </InfoCard>
           </div>
-          <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm leading-6 text-[#71310F]">
-            Deze uitleg volgt de huidige onderdelen van Kiosk Beheer. Er zijn geen oude beheerscreenshots opgenomen, zodat afbeeldingen geen verouderde interface tonen.
-          </div>
+          <EditableText path="marketing.manual.sections.admin.screenshot_note" fallback="Deze uitleg volgt de huidige onderdelen van Kiosk Beheer. Er zijn geen oude beheerscreenshots opgenomen, zodat afbeeldingen geen verouderde interface tonen."
+            as="div" multiline label="Handleiding · Beheer opmerking" className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm leading-6 text-[#71310F]" />
         </section>
 
         <section id="instellingen" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Optioneel, maar handig</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Koppel functies die jouw organisatie nodig heeft.</h2>
+          <EditableText path="marketing.manual.sections.settings.eyebrow" fallback="Optioneel, maar handig" as="p" label="Handleiding · Instellingenlabel" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.settings.title" fallback="Koppel functies die jouw organisatie nodig heeft." as="h2" label="Handleiding · Instellingentitel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
           <div className="mt-6 grid gap-3 md:grid-cols-2">
             <StepCard number="01" title="E-mail (SMTP)">
               Configureer SMTP als facturen of kwitanties via je eigen e-mailadres moeten worden verstuurd. Vul de servergegevens in en gebruik <strong>Test verbinding</strong>.
@@ -298,8 +306,8 @@ export default function Handleiding({ onDemo }) {
         </section>
 
         <section id="problemen" className="scroll-mt-28 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Snelle hulp</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Veelvoorkomende controles.</h2>
+          <EditableText path="marketing.manual.sections.problems.eyebrow" fallback="Snelle hulp" as="p" label="Handleiding · Probleemlabel" className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]" />
+          <EditableText path="marketing.manual.sections.problems.title" fallback="Veelvoorkomende controles." as="h2" label="Handleiding · Probleemtitel" className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" />
           <div className="mt-6 grid gap-3">
             <StepCard number="?" title="Ik zie geen locatie of appartement">
               Controleer of de locatie en verhuureenheid zijn aangemaakt en of het appartement aan de juiste locatie is gekoppeld. Appartementen zonder locatie kunnen onder <strong>Overige</strong> staan.
@@ -327,13 +335,15 @@ export default function Handleiding({ onDemo }) {
         <section className="scroll-mt-28">
           <div className="flex flex-col gap-5 rounded-3xl bg-[#0B1B3F] p-7 text-white sm:p-9 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FF8A3D]"><CircleHelp className="h-4 w-4" /> Hulp nodig?</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Kom je er niet uit?</h2>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-white/70">Neem contact op met je SuriRent-beheerder of stuur ons een bericht voor hulp met de inrichting.</p>
+              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FF8A3D]"><CircleHelp className="h-4 w-4" /> <EditableText path="marketing.manual.support.eyebrow" fallback="Hulp nodig?" as="span" label="Handleiding · Hulp label" /></p>
+              <EditableText path="marketing.manual.support.title" fallback="Kom je er niet uit?" as="h2" label="Handleiding · Hulptitel" className="mt-2 text-2xl font-black sm:text-3xl" />
+              <EditableText path="marketing.manual.support.description" fallback="Neem contact op met je SuriRent-beheerder of stuur ons een bericht voor hulp met de inrichting."
+                as="p" multiline label="Handleiding · Hulptoelichting" className="mt-2 max-w-xl text-sm leading-6 text-white/70" />
             </div>
-            <a href="/contact" className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-5 text-sm font-black text-white transition hover:bg-[#E65300]">
-              Contact opnemen <ArrowRight className="h-4 w-4" />
-            </a>
+            <EditableLink path="marketing.manual.support.href" href="/contact" label="Handleiding · Contactlink"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-5 text-sm font-black text-white transition hover:bg-[#E65300]">
+              <EditableText path="marketing.manual.support.button" fallback="Contact opnemen" as="span" label="Handleiding · Contactknop" /> <ArrowRight className="h-4 w-4" />
+            </EditableLink>
           </div>
         </section>
         </div>
@@ -341,7 +351,8 @@ export default function Handleiding({ onDemo }) {
       <div className="mx-auto max-w-[1200px] px-5 pb-10 sm:px-8 lg:px-10">
         <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-          De exacte opties kunnen verschillen per accountrol, abonnement, ingestelde betaalmethoden en aangesloten apparaten. Volg altijd de actuele instructies op het scherm.
+          <EditableText path="marketing.manual.disclaimer" fallback="De exacte opties kunnen verschillen per accountrol, abonnement, ingestelde betaalmethoden en aangesloten apparaten. Volg altijd de actuele instructies op het scherm."
+            as="span" multiline label="Handleiding · Disclaimer" />
         </p>
       </div>
     </main>

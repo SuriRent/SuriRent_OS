@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList, LayoutDashboard,
   FileText, BookOpen, Settings, Bell, Home as HomeIcon, Wallet, AlertCircle, MoreHorizontal,
 } from 'lucide-react';
-import { EditableText, EditableImage } from '../../../lib/landing-editable';
+import { EditableText, EditableImage, EditableLink, useEditable } from '../../../lib/landing-editable';
 import StatusPill from '../../../components/StatusPill';
 
 export const NAVY = '#0B1B3F';
@@ -17,7 +17,9 @@ const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 export const goToSection = (id) => {
   if (id === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (id.startsWith('feature-')) {
-    window.location.assign(`/functies#${id}`);
+    const params = new URLSearchParams(window.location.search);
+    const editing = params.get('edit') === '1';
+    window.location.assign(`/functies${editing ? '?edit=1&landing=1' : ''}#${id}`);
     return;
   }
   const el = document.getElementById(id);
@@ -26,16 +28,16 @@ export const goToSection = (id) => {
 const SPY = ['home', 'features', 'kiosk', 'pricing', 'faq'];
 
 const NAV = [
-  { id: 'home', label: 'Home' },
-  { id: 'features', label: 'Functies' },
-  { id: 'kiosk', label: 'Kiosk' },
-  { id: 'pricing', label: 'Prijzen' },
-  { id: 'faq', label: 'FAQ' },
-  { id: 'handleiding', label: 'Handleiding' },
-  { id: 'contact', label: 'Contact' },
-  { id: 'over-ons', label: 'Over ons' },
-  { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden' },
-  { id: 'privacy', label: 'Privacy' },
+  { id: 'home', label: 'Home', href: '/' },
+  { id: 'features', label: 'Functies', href: '/functies' },
+  { id: 'kiosk', label: 'Kiosk', href: '/#kiosk' },
+  { id: 'pricing', label: 'Prijzen', href: '/#pricing' },
+  { id: 'faq', label: 'FAQ', href: '/#faq' },
+  { id: 'handleiding', label: 'Handleiding', href: '/handleiding' },
+  { id: 'contact', label: 'Contact', href: '/contact' },
+  { id: 'over-ons', label: 'Over ons', href: '/over-ons' },
+  { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden', href: '/algemene-voorwaarden' },
+  { id: 'privacy', label: 'Privacy', href: '/privacy' },
 ];
 
 export const FEATURES = [
@@ -52,8 +54,9 @@ export const FEATURES = [
 function Logo() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { editMode } = useEditable();
   return (
-    <button onClick={() => (location.pathname === '/' ? goToSection('home') : navigate('/'))} className="flex items-center gap-2.5 shrink-0" data-testid="topheader-logo">
+    <button onClick={() => (location.pathname === '/' ? goToSection('home') : navigate(editMode ? '/?edit=1&landing=1' : '/'))} className="flex items-center gap-2.5 shrink-0" data-testid="topheader-logo">
       <span className="w-12 h-12 rounded-xl bg-[#FF5C00] p-2 shrink-0 shadow-[0_6px_14px_-6px_rgba(255,92,0,0.7)]">
         <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full object-contain" />
       </span>
@@ -68,20 +71,18 @@ function Logo() {
 export function LandingHeader({ onLogin, onRegister }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { editMode } = useEditable();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState('home');
-  const pick = (id) => {
+  const pick = (event) => {
+    event.preventDefault();
     setOpen(false);
-    if (id === 'features') navigate('/functies');
-    else if (id === 'handleiding') navigate('/handleiding');
-    else if (id === 'contact') navigate('/contact');
-    else if (id === 'over-ons') navigate('/over-ons');
-    else if (id === 'algemene-voorwaarden' || id === 'privacy') navigate(`/${id}`);
-    else if (id === 'home') {
-      if (location.pathname === '/') goToSection('home');
-      else navigate('/#home');
+    const target = new URL(event.currentTarget.href, window.location.origin);
+    if (editMode) {
+      target.searchParams.set('edit', '1');
+      target.searchParams.set('landing', '1');
     }
-    else navigate(id.startsWith('feature-') ? `/functies#${id}` : `/#${id}`);
+    navigate(`${target.pathname}${target.search}${target.hash}`);
   };
   useEffect(() => {
     const pageNavigation = {
@@ -135,28 +136,32 @@ export function LandingHeader({ onLogin, onRegister }) {
       </div>
       <nav className="hidden xl:block h-[52px] border-t border-slate-50">
         <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-full flex items-center justify-start gap-6 2xl:gap-9">
-          {NAV.map((n) => (
+          {NAV.map((n, i) => (
             <div key={n.id} className="relative h-full">
-              <button onClick={() => pick(n.id)} data-testid={`secnav-${n.id}`}
+              <EditableLink path={`v3.nav.items.${i}.href`} href={n.href} label={`Navigatie · ${n.label}`}
+                onClick={pick} data-testid={`secnav-${n.id}`}
                 className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
                 style={active === n.id ? undefined : { color: NAVY }}>
-                {n.label}
+                <EditableText path={`v3.nav.items.${i}.label`} fallback={n.label} as="span" label={`Navigatie · ${n.label}`} />
                 {active === n.id && <span className="absolute left-0 right-0 bottom-[6px] h-[2px] rounded-full bg-[#FF5C00]" />}
-              </button>
+              </EditableLink>
             </div>
           ))}
         </div>
       </nav>
       {open && (
         <div className="xl:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
-          {NAV.map((n) => (
-            <button key={n.id} onClick={() => pick(n.id)} data-testid={`mobile-nav-${n.id}`}
+          {NAV.map((n, i) => (
+            <EditableLink key={n.id} path={`v3.nav.items.${i}.href`} href={n.href} label={`Navigatie · ${n.label}`}
+              onClick={pick} data-testid={`mobile-nav-${n.id}`}
               className={`w-full text-left px-3 py-3 text-base font-bold rounded-xl hover:bg-orange-50 ${active === n.id ? 'text-[#FF5C00]' : ''}`}
-              style={active === n.id ? undefined : { color: NAVY }}>{n.label}</button>
+              style={active === n.id ? undefined : { color: NAVY }}>
+              <EditableText path={`v3.nav.items.${i}.label`} fallback={n.label} as="span" label={`Navigatie · ${n.label}`} />
+            </EditableLink>
           ))}
           <div className="grid grid-cols-2 gap-2 pt-3">
-            <button onClick={onLogin} data-testid="mobile-login" className="h-11 rounded-xl border border-slate-300 font-bold inline-flex items-center justify-center gap-2" style={{ color: NAVY }}><Lock className="w-4 h-4" /> Inloggen</button>
-            <button onClick={() => { setOpen(false); onRegister(); }} data-testid="mobile-register" className="h-11 rounded-xl bg-[#FF5C00] text-white font-bold inline-flex items-center justify-center gap-2"><User className="w-4 h-4" /> Registreren</button>
+            <button onClick={onLogin} data-testid="mobile-login" className="h-11 rounded-xl border border-slate-300 font-bold inline-flex items-center justify-center gap-2" style={{ color: NAVY }}><Lock className="w-4 h-4" /><EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" /></button>
+            <button onClick={() => { setOpen(false); onRegister(); }} data-testid="mobile-register" className="h-11 rounded-xl bg-[#FF5C00] text-white font-bold inline-flex items-center justify-center gap-2"><User className="w-4 h-4" /><EditableText path="v2.brand.cta_register" fallback="Registreren" as="span" /></button>
           </div>
           <div className="pt-3"><StatusPill /></div>
         </div>
@@ -177,54 +182,62 @@ function LaptopMockup() {
         <div className="rounded-[6px] overflow-hidden bg-white flex h-[340px]">
           <div className="w-[128px] bg-[#0E1A33] px-2.5 py-3 shrink-0">
             <div className="flex items-center gap-1.5 mb-4 px-1">
-              <span className="w-5 h-5 rounded-md bg-[#FF5C00] p-[3px]"><img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
-              <span className="text-[12px] font-black text-white">Suri<span className="text-[#FF5C00]">Rent</span></span>
+              <span className="w-5 h-5 rounded-md bg-[#FF5C00] p-[3px]"><EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
+              <span className="text-[12px] font-black text-white">
+                <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
+                <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF5C00]" />
+              </span>
             </div>
             {SIDEBAR.map(([I, l], i) => (
               <div key={l} className={`flex items-center gap-2 px-2 h-[24px] rounded-md mb-[3px] text-[8px] font-semibold ${i === 0 ? 'bg-[#FF5C00] text-white' : 'text-white/70'}`}>
-                <I className="w-3 h-3" />{l}
+                <I className="w-3 h-3" /><EditableText path={`marketing.home.mockup.sidebar.${i}`} fallback={l} as="span" label={`Startpagina · Dashboard menu ${i + 1}`} />
               </div>
             ))}
           </div>
           <div className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#F8FAFC]">
             <div className="flex items-center justify-between text-[7px] text-slate-400">
               <span>☰</span>
-              <div className="flex items-center gap-3"><span className="px-2 py-0.5 rounded bg-white border border-slate-100">Vandaag</span><Bell className="w-2.5 h-2.5" /><span className="w-3.5 h-3.5 rounded-full bg-slate-300" /></div>
+              <div className="flex items-center gap-3"><EditableText path="marketing.home.mockup.today" fallback="Vandaag" as="span" label="Startpagina · Dashboard mock-up datum" className="px-2 py-0.5 rounded bg-white border border-slate-100" /><Bell className="w-2.5 h-2.5" /><span className="w-3.5 h-3.5 rounded-full bg-slate-300" /></div>
             </div>
-            <div className="text-[13px] font-black mt-1.5" style={{ color: NAVY }}>Dashboard</div>
-            <div className="text-[6.5px] text-slate-400">Overzicht van je vastgoed en huurders.</div>
+            <EditableText path="marketing.home.mockup.dashboard_title" fallback="Dashboard" as="div" label="Startpagina · Dashboard mock-up titel" className="text-[13px] font-black mt-1.5" style={{ color: NAVY }} />
+            <EditableText path="marketing.home.mockup.dashboard_description" fallback="Overzicht van je vastgoed en huurders." as="div" label="Startpagina · Dashboard mock-up toelichting" className="text-[6.5px] text-slate-400" />
             <div className="grid grid-cols-4 gap-1.5 mt-2.5">
-              {KPIS.map(([l, v, d, c]) => (
+              {KPIS.map(([l, v, d, c], i) => (
                 <div key={l} className="rounded-md bg-white border border-slate-100 px-2 py-1.5">
-                  <div className="text-[5.5px] text-slate-400">{l}</div>
-                  <div className="text-[9px] font-black mt-1" style={{ color: NAVY }}>{v}</div>
-                  <div className={`text-[5.5px] mt-1 ${c}`}>{d}</div>
+                  <EditableText path={`marketing.home.mockup.kpis.${i}.label`} fallback={l} as="div" label={`Startpagina · Dashboard KPI ${i + 1}`} className="text-[5.5px] text-slate-400" />
+                  <EditableText path={`marketing.home.mockup.kpis.${i}.value`} fallback={v} as="div" label={`Startpagina · Dashboard KPI-waarde ${i + 1}`} className="text-[9px] font-black mt-1" style={{ color: NAVY }} />
+                  <EditableText path={`marketing.home.mockup.kpis.${i}.trend`} fallback={d} as="div" label={`Startpagina · Dashboard KPI-trend ${i + 1}`} className={`text-[5.5px] mt-1 ${c}`} />
                 </div>
               ))}
             </div>
             <div className="grid grid-cols-[1fr,108px] gap-1.5 mt-2">
               <div className="rounded-md bg-white border border-slate-100 p-2">
-                <div className="text-[7.5px] font-bold mb-1.5" style={{ color: NAVY }}>Recente betalingen</div>
+                <EditableText path="marketing.home.mockup.payments_title" fallback="Recente betalingen" as="div" label="Startpagina · Dashboard betalingenkop" className="text-[7.5px] font-bold mb-1.5" style={{ color: NAVY }} />
                 <div className="grid grid-cols-[1.2fr,1fr,1fr,1fr,0.9fr] text-[5.5px] text-slate-400 pb-1 border-b border-slate-100">
-                  <span>Huurder</span><span>Appartement</span><span>Bedrag</span><span>Datum</span><span>Status</span>
+                  {['Huurder', 'Appartement', 'Bedrag', 'Datum', 'Status'].map((header, i) => <EditableText key={header} path={`marketing.home.mockup.payment_headers.${i}`} fallback={header} as="span" label={`Startpagina · Betalingstabel kolom ${i + 1}`} />)}
                 </div>
-                {PAYS.map(([n, a, b, d, ok]) => (
+                {PAYS.map(([n, a, b, d, ok], i) => (
                   <div key={n} className="grid grid-cols-[1.2fr,1fr,1fr,1fr,0.9fr] items-center text-[6px] text-slate-600 h-[20px] border-b border-slate-50">
-                    <span>{n}</span><span>{a}</span><span>{b}</span><span>{d}</span>
-                    <span className={`px-1 py-[1px] rounded text-[5px] w-fit ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{ok ? 'Ontvangen' : 'Achterstand'}</span>
+                    <EditableText path={`marketing.home.mockup.payments.${i}.tenant`} fallback={n} as="span" label={`Startpagina · Mockupbetaling ${i + 1} huurder`} />
+                    <EditableText path={`marketing.home.mockup.payments.${i}.property`} fallback={a} as="span" label={`Startpagina · Mockupbetaling ${i + 1} woning`} />
+                    <EditableText path={`marketing.home.mockup.payments.${i}.amount`} fallback={b} as="span" label={`Startpagina · Mockupbetaling ${i + 1} bedrag`} />
+                    <EditableText path={`marketing.home.mockup.payments.${i}.date`} fallback={d} as="span" label={`Startpagina · Mockupbetaling ${i + 1} datum`} />
+                    <EditableText path={`marketing.home.mockup.payments.${i}.status`} fallback={ok ? 'Ontvangen' : 'Achterstand'} as="span" label={`Startpagina · Mockupbetaling ${i + 1} status`} className={`px-1 py-[1px] rounded text-[5px] w-fit ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`} />
                   </div>
                 ))}
               </div>
               <div className="rounded-md bg-white border border-slate-100 p-2 flex flex-col items-center">
-                <div className="text-[7.5px] font-bold self-start" style={{ color: NAVY }}>Huurachterstand</div>
+                <EditableText path="marketing.home.mockup.overdue_title" fallback="Huurachterstand" as="div" label="Startpagina · Dashboard achterstandkop" className="text-[7.5px] font-bold self-start" style={{ color: NAVY }} />
                 <svg viewBox="0 0 36 36" className="w-[62px] h-[62px] mt-2">
                   <circle cx="18" cy="18" r="15" fill="none" stroke="#F1F5F9" strokeWidth="3" />
                   <circle cx="18" cy="18" r="15" fill="none" stroke={ORANGE} strokeWidth="3" strokeDasharray="70 100" strokeLinecap="round" transform="rotate(-90 18 18)" />
                   <circle cx="18" cy="18" r="15" fill="none" stroke="#B91C1C" strokeWidth="3" strokeDasharray="14 100" strokeDashoffset="-72" strokeLinecap="round" transform="rotate(-90 18 18)" />
-                  <text x="18" y="18" textAnchor="middle" fontSize="7" fontWeight="900" fill={NAVY}>2</text>
-                  <text x="18" y="23" textAnchor="middle" fontSize="2.6" fontWeight="700" fill={NAVY}>Huurders</text>
+                  <EditableText path="marketing.home.mockup.overdue_value" fallback="2" as="text" label="Startpagina · Dashboard mock-up aantal"
+                    x="18" y="18" textAnchor="middle" fontSize="7" fontWeight="900" fill={NAVY} />
+                  <EditableText path="marketing.home.mockup.overdue_label" fallback="Huurders" as="text" label="Startpagina · Dashboard mock-up grafieklabel"
+                    x="18" y="23" textAnchor="middle" fontSize="2.6" fontWeight="700" fill={NAVY} />
                 </svg>
-                <div className="mt-auto text-[5.5px] font-bold" style={{ color: NAVY }}>Bekijk details →</div>
+                <EditableText path="marketing.home.mockup.overdue_link" fallback="Bekijk details →" as="div" label="Startpagina · Dashboard detailslink" className="mt-auto text-[5.5px] font-bold" style={{ color: NAVY }} />
               </div>
             </div>
           </div>
@@ -247,22 +260,25 @@ function PhoneMockup() {
           <span>9:41</span><span className="w-[46px] h-[11px] rounded-full bg-[#111827] absolute left-1/2 -translate-x-1/2 top-[4px]" /><span>●●</span>
         </div>
         <div className="flex items-center justify-between px-2.5 py-1.5">
-          <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded bg-[#FF5C00] p-[2px]"><img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
-            <span className="text-[8px] font-black" style={{ color: NAVY }}>Suri<span className="text-[#FF5C00]">Rent</span></span></span>
+          <span className="flex items-center gap-1">          <span className="w-3.5 h-3.5 rounded bg-[#FF5C00] p-[2px]"><EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
+            <span className="text-[8px] font-black" style={{ color: NAVY }}>
+              <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
+              <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF5C00]" />
+            </span></span>
           <Bell className="w-2.5 h-2.5 text-slate-500" />
         </div>
-        <div className="px-2.5 text-[7px] font-black" style={{ color: NAVY }}>Goedemorgen, beheerder</div>
+        <EditableText path="marketing.home.mockup.greeting" fallback="Goedemorgen, beheerder" as="div" label="Startpagina · Mobiel mock-up begroeting" className="px-2.5 text-[7px] font-black" style={{ color: NAVY }} />
         <div className="flex-1 px-2.5 pt-2 space-y-1.5">
-          {PHONE_CARDS.map(([l, v, I, c]) => (
+          {PHONE_CARDS.map(([l, v, I, c], i) => (
             <div key={l} className="rounded-lg border border-slate-100 bg-white px-2 py-2 flex items-center justify-between shadow-[0_2px_6px_-3px_rgba(11,27,63,0.15)]">
-              <div><div className="text-[5.5px] text-slate-400">{l}</div><div className={`text-[8px] font-black mt-1 ${v === 'Bekijk' ? 'text-[5.5px] font-semibold text-slate-400' : ''}`} style={{ color: v === 'Bekijk' ? undefined : NAVY }}>{v}</div></div>
+              <div><EditableText path={`marketing.home.mockup.phone_cards.${i}.label`} fallback={l} as="div" label={`Startpagina · Mobiel kaart ${i + 1}`} className="text-[5.5px] text-slate-400" /><EditableText path={`marketing.home.mockup.phone_cards.${i}.value`} fallback={v} as="div" label={`Startpagina · Mobiel kaartwaarde ${i + 1}`} className={`text-[8px] font-black mt-1 ${v === 'Bekijk' ? 'text-[5.5px] font-semibold text-slate-400' : ''}`} style={{ color: v === 'Bekijk' ? undefined : NAVY }} /></div>
               <span className="w-5 h-5 rounded-md bg-orange-50 flex items-center justify-center"><I className={`w-3 h-3 ${c}`} /></span>
             </div>
           ))}
         </div>
         <div className="h-[28px] border-t border-slate-100 grid grid-cols-4 text-[4.5px] text-slate-400">
           {[[HomeIcon, 'Home'], [Users, 'Huurders'], [Wallet, 'Betalingen'], [MoreHorizontal, 'Meer']].map(([I, l], i) => (
-            <div key={l} className={`flex flex-col items-center justify-center gap-[2px] ${i === 0 ? 'text-[#FF5C00]' : ''}`}><I className="w-2.5 h-2.5" />{l}</div>
+            <div key={l} className={`flex flex-col items-center justify-center gap-[2px] ${i === 0 ? 'text-[#FF5C00]' : ''}`}><I className="w-2.5 h-2.5" /><EditableText path={`marketing.home.mockup.phone_nav.${i}`} fallback={l} as="span" label={`Startpagina · Mobiele navigatie ${i + 1}`} /></div>
           ))}
         </div>
       </div>
@@ -296,18 +312,19 @@ function ApkCard({ rel }) {
   const mb = rel ? `${(rel.size / 1024 / 1024).toFixed(0)} MB` : 'App';
   const link = rel ? { href: APK_URL, download: true } : { href: '#download', onClick: (e) => { e.preventDefault(); goToSection('download'); } };
   return (
-    <a {...link} data-testid="hero-apk-download"
+    <EditableLink path="marketing.download.hero.href" href={link.href} download={link.download} onClick={link.onClick}
+      label="Startpagina · Androiddownloadlink" data-testid="hero-apk-download"
       className="inline-flex items-center h-[56px] sm:whitespace-nowrap rounded-xl bg-white border border-slate-200 hover:border-[#FF5C00] shadow-[0_6px_16px_-10px_rgba(11,27,63,0.3)] transition-colors">
       <span className="flex-1 flex items-center gap-2.5 px-4 sm:px-5 text-[14px] sm:text-[15px] font-bold" style={{ color: NAVY }}>
         <svg viewBox="0 0 24 24" className="w-5 h-5" fill={NAVY} aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 10-.66-.38l-1.86 3.22a11.4 11.4 0 00-9.84 0L5.22 5.92a.38.38 0 10-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" /></svg>
-        Download de Android-app <Download className="w-4 h-4" />
+        <EditableText path="marketing.download.hero.label" fallback="Download de Android-app" as="span" label="Startpagina · Androiddownload knop" /> <Download className="w-4 h-4" />
       </span>
       <span className="h-8 w-px bg-slate-200" />
       <span className="px-4 leading-tight">
         <span className="block text-[12px] font-bold" style={{ color: NAVY }}>{v}</span>
         {mb && <span className="block text-[11px] text-slate-400">{mb}</span>}
       </span>
-    </a>
+    </EditableLink>
   );
 }
 
@@ -316,7 +333,9 @@ const TRUST = [[ShieldCheck, 'Veilig & betrouwbaar', 'Jouw gegevens zijn goed be
 export function LandingHero({ onDemo, apk }) {
   return (
     <section id="home" className="relative overflow-hidden bg-[#FBF8F5]" data-testid="hero-canvas">
-      <img src={HERO_BG} alt="" className="absolute inset-y-0 right-0 h-full w-full lg:w-[72%] object-cover object-right opacity-40 lg:opacity-100" />
+      <EditableImage path="v3.hero.background" fallback={HERO_BG} alt=""
+        label="Startpagina · Achtergrondafbeelding"
+        className="absolute inset-y-0 right-0 h-full w-full lg:w-[72%] object-cover object-right opacity-40 lg:opacity-100" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#FBF8F5] via-[#FBF8F5]/90 lg:via-[#FBF8F5]/60 to-transparent" />
       <div className="relative max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] pt-10 lg:pt-12 pb-12 lg:pb-14 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,640px),minmax(0,1fr)] gap-8 xl:gap-12 items-center">
         <div>
@@ -341,7 +360,10 @@ export function LandingHero({ onDemo, apk }) {
             {TRUST.map(([I, t, s], i) => (
               <div key={t} className={`flex items-center gap-3 pr-3 ${i ? 'sm:pl-4 sm:border-l border-slate-200' : ''}`} data-testid={`hero-trust-${i}`}>
                 <I className="w-9 h-9 shrink-0 text-[#FF5C00]" strokeWidth={1.8} />
-                <div className="min-w-0"><div className="text-[13px] font-bold" style={{ color: NAVY }}>{t}</div><div className="text-[11px] text-slate-400">{s}</div></div>
+                <div className="min-w-0">
+                  <EditableText path={`v3.hero.trust.${i}.title`} fallback={t} as="div" label={`Startpagina · Vertrouwen ${i + 1}`} className="text-[13px] font-bold" style={{ color: NAVY }} />
+                  <EditableText path={`v3.hero.trust.${i}.desc`} fallback={s} as="div" label={`Startpagina · Vertrouwen ${i + 1} toelichting`} className="text-[11px] text-slate-400" />
+                </div>
               </div>
             ))}
           </div>
@@ -370,8 +392,8 @@ export function LandingFeatures() {
               className="group bg-white rounded-xl px-5 py-6 flex items-start gap-4 text-left shadow-[0_8px_24px_-14px_rgba(11,27,63,0.18)] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-16px_rgba(11,27,63,0.28)] transition-[transform,box-shadow]">
               <span className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center shrink-0"><f.Icon className="w-6 h-6 text-[#FF5C00]" strokeWidth={1.9} /></span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[17px] font-black" style={{ color: NAVY }}>{f.title}</span>
-                <span className="block mt-2 text-[13px] text-slate-500 leading-relaxed">{f.desc}</span>
+                <EditableText path={`v3.features.items.${f.target}.title`} fallback={f.title} as="span" label={`Functiekaart · ${f.title}`} className="block text-[17px] font-black" style={{ color: NAVY }} />
+                <EditableText path={`v3.features.items.${f.target}.desc`} fallback={f.desc} as="span" label={`Functiekaart · ${f.title} toelichting`} className="block mt-2 text-[13px] text-slate-500 leading-relaxed" />
               </span>
               <ChevronRight className="w-5 h-5 mt-3 shrink-0 group-hover:text-[#FF5C00] group-hover:translate-x-0.5 transition-transform" style={{ color: NAVY }} />
             </button>

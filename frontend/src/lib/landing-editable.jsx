@@ -12,10 +12,12 @@
 // of er een superadmin-token is — de backend is de echte gatekeeper.
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const EditableContext = createContext({
   editMode: false,
   content: {},
+  page: '/',
   setContent: () => {},
   patch: () => {},
 });
@@ -54,6 +56,20 @@ export function setPath(obj, path, value) {
   return out;
 }
 
+function registerEditableField(path, label, kind, value, page) {
+  if (typeof window === 'undefined' || window.parent === window) return;
+  try {
+    window.parent.postMessage({
+      type: 'landing-edit-register',
+      path,
+      label: label || path.split('.').slice(1).join(' · ').replace(/_/g, ' '),
+      kind,
+      value: value == null ? '' : String(value),
+      page,
+    }, window.location.origin);
+  } catch { /* editor is optional outside the admin iframe */ }
+}
+
 /**
  * EditableProvider — beheert content + edit mode.
  *
@@ -64,6 +80,18 @@ export function setPath(obj, path, value) {
  */
 export function EditableProvider({ editMode, initialContent, onPatch, children }) {
   const [content, setContent] = useState(initialContent || {});
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!editMode || typeof window === 'undefined' || window.parent === window) return;
+    try {
+      window.parent.postMessage({
+        type: 'landing-edit-page',
+        page: location.pathname,
+      }, window.location.origin);
+      window.parent.postMessage({ type: 'landing-edit-ready' }, window.location.origin);
+    } catch { /* editor is optional outside the admin iframe */ }
+  }, [editMode, location.pathname]);
 
   // Sync wanneer parent een ander content-object binnenstuurt (bv. na publish).
   useEffect(() => {
@@ -75,10 +103,28 @@ export function EditableProvider({ editMode, initialContent, onPatch, children }
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (!data || typeof data !== 'object') return;
+      if (ev.source !== window.parent || ev.origin !== window.location.origin || !data || typeof data !== 'object') return;
       if (data.type === 'landing-edit-reset' && data.content) {
         setContent(data.content);
       }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [editMode]);
+
+  useEffect(() => {
+    if (!editMode) return undefined;
+    const handler = (ev) => {
+      const data = ev?.data;
+      if (ev.source !== window.parent || ev.origin !== window.location.origin
+        || !data || data.type !== 'landing-edit-focus' || !data.path) return;
+      const target = Array.from(document.querySelectorAll('[data-edit-path]'))
+        .find((element) => element.dataset.editPath === data.path);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (target.isContentEditable) target.focus();
+      else if (target.dataset.editKind === 'image') target.click();
+      else target.focus();
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -89,7 +135,7 @@ export function EditableProvider({ editMode, initialContent, onPatch, children }
     if (typeof onPatch === 'function') onPatch({ path, value });
   }, [onPatch]);
 
-  const ctx = { editMode, content, setContent, patch };
+  const ctx = { editMode, content, page: location.pathname, setContent, patch };
   return <EditableContext.Provider value={ctx}>{children}</EditableContext.Provider>;
 }
 
@@ -100,19 +146,30 @@ export function EditableProvider({ editMode, initialContent, onPatch, children }
  * - `as` is de HTML tag (default 'span')
  * - `multiline` staat enter toe en bewaart als één string
  */
-export function EditableText({ path, fallback, as: Tag = 'span', multiline = false, className = '', placeholder = '', ...rest }) {
-  const { editMode, content, patch } = useEditable();
+export function EditableText({ path, fallback, as: Tag = 'span', multiline = false, className = '', placeholder = '', label, children, ...rest }) {
+  const { editMode, content, page, patch } = useEditable();
   const ref = useRef(null);
-  const value = getPath(content, path, fallback) ?? '';
+  const storedValue = getPath(content, path, undefined);
+  const hasStoredValue = storedValue != null;
+  const value = hasStoredValue ? storedValue : (fallback ?? children ?? '');
+
+  useEffect(() => {
+    if (editMode && path) {
+      const fieldValue = typeof value === 'string' || typeof value === 'number'
+        ? value : ref.current?.innerText || '';
+      registerEditableField(path, label, 'text', fieldValue, page);
+    }
+  }, [children, editMode, label, page, path, value]);
 
   // Sync DOM bij externe state-wijzigingen (anders herschrijft React de cursor mid-typing weg).
   // Daarom dompelen we onze update via blur — niet via key per key — en gebruiken `defaultValue`-pattern.
   useEffect(() => {
     if (!editMode || !ref.current) return;
-    if (ref.current.innerText !== String(value)) {
+    if (hasStoredValue && ref.current.innerText !== String(value)) {
       ref.current.innerText = String(value);
     }
-  }, [editMode, value]);
+    ref.current.dataset.editInitialText = ref.current.innerText;
+  }, [editMode, hasStoredValue, value]);
 
   if (!editMode) {
     return <Tag className={className} {...rest}>{value}</Tag>;
@@ -120,7 +177,7 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
 
   const onBlur = () => {
     const nv = ref.current?.innerText ?? '';
-    if (nv !== String(value)) {
+    if (nv !== (ref.current?.dataset.editInitialText || '')) {
       patch(path, nv);
     }
   };
@@ -142,7 +199,7 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
       data-edit-placeholder={placeholder}
       className={`${className} outline outline-2 outline-dashed outline-orange-300/0 hover:outline-orange-400 focus:outline-orange-500 focus:outline-solid rounded transition-[outline-color] cursor-text`}
       {...rest}
-    />
+    >{value}</Tag>
   );
 }
 
@@ -153,15 +210,20 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
  * naar de parent. De parent toont de Asset Library / file picker en stuurt
  * het resultaat (URL) terug via `landing-edit-image-reply`.
  */
-export function EditableImage({ path, fallback, alt = '', className = '', ...imgProps }) {
-  const { editMode, content, patch } = useEditable();
+export function EditableImage({ path, fallback, alt = '', className = '', label, ...imgProps }) {
+  const { editMode, content, page, patch } = useEditable();
   const src = getPath(content, path, fallback);
+
+  useEffect(() => {
+    if (editMode && path) registerEditableField(path, label || alt || 'Afbeelding', 'image', src, page);
+  }, [alt, editMode, label, page, path, src]);
 
   useEffect(() => {
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (!data || data.type !== 'landing-edit-image-reply') return;
+      if (ev.source !== window.parent || ev.origin !== window.location.origin
+        || !data || data.type !== 'landing-edit-image-reply') return;
       if (data.path === path && data.url) {
         patch(path, data.url);
       }
@@ -172,7 +234,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
 
   const requestUpload = () => {
     try {
-      window.parent?.postMessage({ type: 'landing-edit-image-request', path, current: src }, '*');
+      window.parent?.postMessage({ type: 'landing-edit-image-request', path, current: src }, window.location.origin);
     } catch { /* no-op */ }
   };
 
@@ -184,6 +246,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
     <button type="button" onClick={requestUpload}
       className="relative inline-block group cursor-pointer"
       data-edit-path={path}
+      data-edit-kind="image"
       title="Klik om afbeelding te wijzigen">
       <img loading="lazy" src={src} alt={alt} className={className} {...imgProps} />
       <span className="absolute inset-0 bg-orange-500/0 group-hover:bg-orange-500/30 transition-colors flex items-center justify-center">
@@ -193,6 +256,22 @@ export function EditableImage({ path, fallback, alt = '', className = '', ...img
       </span>
     </button>
   );
+}
+
+/** An editable marketing link whose destination is managed in the editor field list. */
+export function EditableLink({ path, href, as: Tag = 'a', label, children, ...rest }) {
+  const { editMode, content, page } = useEditable();
+  const value = getPath(content, path, href) ?? '';
+  const safeHref = typeof value === 'string'
+    && (/^(https?:|mailto:|tel:)/i.test(value) || /^(\/|#|\?|\.\.?\/)/.test(value))
+    ? value
+    : (href || '#');
+
+  useEffect(() => {
+    if (editMode && path) registerEditableField(path, label, 'link', value, page);
+  }, [editMode, label, page, path, value]);
+
+  return <Tag href={safeHref} data-edit-path={path} data-edit-kind="link" {...rest}>{children}</Tag>;
 }
 
 /**

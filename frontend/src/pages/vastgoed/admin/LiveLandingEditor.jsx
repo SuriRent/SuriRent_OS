@@ -25,6 +25,17 @@ const DEVICE_PRESETS = [
   { id: 'mobile',  label: 'Mobiel',  icon: Smartphone, w: 390, h: '100%' },
 ];
 
+const MARKETING_PAGES = [
+  { path: '/', label: 'Home' },
+  { path: '/functies', label: 'Functies' },
+  { path: '/contact', label: 'Contact' },
+  { path: '/over-ons', label: 'Over ons' },
+  { path: '/handleiding', label: 'Handleiding' },
+  { path: '/algemene-voorwaarden', label: 'Voorwaarden' },
+  { path: '/privacy', label: 'Privacy' },
+  { path: '/over-surirent', label: 'Over SuriRent' },
+];
+
 function setPath(obj, path, value) {
   if (!path) return obj;
   const parts = path.split('.');
@@ -41,6 +52,14 @@ function setPath(obj, path, value) {
   return out;
 }
 
+function getPath(obj, path) {
+  return path.split('.').reduce((value, key) => value?.[key], obj);
+}
+
+function previewUrl(path) {
+  return `${path}?edit=1&landing=1&_t=${Date.now()}`;
+}
+
 export default function LiveLandingEditor() {
   const iframeRef = useRef(null);
   const [draft, setDraft] = useState(null);            // content object van /superadmin/landing/content?mode=draft
@@ -53,11 +72,14 @@ export default function LiveLandingEditor() {
   const [device, setDevice] = useState('desktop');
   const [hasUnpublished, setHasUnpublished] = useState(false);
   const [iframeReady, setIframeReady] = useState(false);
+  const [previewPage, setPreviewPage] = useState('/');
+  const [previewSrc, setPreviewSrc] = useState(() => previewUrl('/'));
+  const [editableFields, setEditableFields] = useState([]);
+  const [contentOpen, setContentOpen] = useState(true);
+  const previewPageRef = useRef('/');
   // Image picker dialog
   const [imageReq, setImageReq] = useState(null);  // { path, current }
   const [uploadingImg, setUploadingImg] = useState(false);
-
-  const previewSrc = `/?edit=1&landing=1&_t=${draft ? '0' : Date.now()}`; // landing=1 voorkomt auto-redirect naar /login
 
   const loadDraft = useCallback(async () => {
     setLoading(true); setErr('');
@@ -79,9 +101,38 @@ export default function LiveLandingEditor() {
   useEffect(() => {
     const onMsg = (ev) => {
       const data = ev?.data;
-      if (!data || typeof data !== 'object') return;
+      if (ev.origin !== window.location.origin
+        || ev.source !== iframeRef.current?.contentWindow
+        || !data || typeof data !== 'object') return;
       if (data.type === 'landing-edit-ready') {
         setIframeReady(true);
+        return;
+      }
+      if (data.type === 'landing-edit-page' && typeof data.page === 'string') {
+        if (data.page !== previewPageRef.current) {
+          previewPageRef.current = data.page;
+          setPreviewPage(data.page);
+          setEditableFields([]);
+        }
+        return;
+      }
+      if (data.type === 'landing-edit-register' && data.path && typeof data.path === 'string') {
+        const page = typeof data.page === 'string' ? data.page : previewPageRef.current;
+        if (page !== previewPageRef.current) {
+          previewPageRef.current = page;
+          setPreviewPage(page);
+          setEditableFields([]);
+        }
+        const field = {
+          path: data.path,
+          label: data.label || data.path,
+          kind: ['text', 'image', 'link'].includes(data.kind) ? data.kind : 'text',
+          value: data.value == null ? '' : String(data.value),
+        };
+        setEditableFields((prev) => [
+          ...prev.filter((item) => item.path !== field.path),
+          field,
+        ]);
         return;
       }
       if (data.type === 'landing-edit-patch' && data.path) {
@@ -102,7 +153,7 @@ export default function LiveLandingEditor() {
     if (!iframeReady || !draft) return;
     try {
       iframeRef.current?.contentWindow?.postMessage(
-        { type: 'landing-edit-reset', content: draft }, '*',
+        { type: 'landing-edit-reset', content: draft }, window.location.origin,
       );
     } catch { /* no-op */ }
   }, [iframeReady, draft]);
@@ -157,7 +208,11 @@ export default function LiveLandingEditor() {
       await api.post('/superadmin/landing/discard');
       await loadDraft();
       // Force iframe-reload zodat hij de nieuwe state oppikt.
-      if (iframeRef.current) iframeRef.current.src = `/?edit=1&landing=1&_t=${Date.now()}`;
+      setPreviewPage('/');
+      previewPageRef.current = '/';
+      setEditableFields([]);
+      setIframeReady(false);
+      setPreviewSrc(previewUrl('/'));
       showToast('Concept gereset');
     } catch (e) {
       setErr(formatError(e));
@@ -194,7 +249,7 @@ export default function LiveLandingEditor() {
       const url = data.url;
       try {
         iframeRef.current?.contentWindow?.postMessage(
-          { type: 'landing-edit-image-reply', path: imageReq.path, url }, '*',
+          { type: 'landing-edit-image-reply', path: imageReq.path, url }, window.location.origin,
         );
       } catch { /* no-op */ }
       setDraft((prev) => setPath(prev || {}, imageReq.path, url));
@@ -206,6 +261,25 @@ export default function LiveLandingEditor() {
     } finally {
       setUploadingImg(false);
     }
+  };
+
+  const updateField = (path, value) => {
+    setDraft((prev) => setPath(prev || {}, path, value));
+    setDirty(true);
+  };
+
+  const focusField = (path) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'landing-edit-focus', path }, window.location.origin,
+    );
+  };
+
+  const openPreviewPage = (path) => {
+    previewPageRef.current = path;
+    setPreviewPage(path);
+    setEditableFields([]);
+    setIframeReady(false);
+    setPreviewSrc(previewUrl(path));
   };
 
   const dev = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0];
@@ -234,6 +308,23 @@ export default function LiveLandingEditor() {
             );
           })}
         </div>
+
+        <select value={previewPage} onChange={(event) => openPreviewPage(event.target.value)}
+          data-testid="landing-page-select"
+          className="h-9 max-w-44 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700">
+          {MARKETING_PAGES.map((page) => <option key={page.path} value={page.path}>{page.label}</option>)}
+          {!MARKETING_PAGES.some((page) => page.path === previewPage)
+            && <option value={previewPage}>{previewPage}</option>}
+        </select>
+
+        <button type="button" onClick={() => setContentOpen((value) => !value)}
+          data-testid="landing-content-toggle"
+          aria-expanded={contentOpen}
+          className={`h-9 px-3 rounded-lg border text-xs font-bold transition ${
+            contentOpen ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}>
+          Inhoud ({editableFields.length})
+        </button>
 
         <div className="flex-1" />
 
@@ -293,23 +384,79 @@ export default function LiveLandingEditor() {
         </div>
       )}
 
-      {/* Iframe preview */}
-      <div className="flex-1 min-h-0 bg-slate-100 flex items-center justify-center p-4 overflow-auto">
+      {/* Iframe preview and automatically discovered content fields */}
+      <div className="flex-1 min-h-0 bg-slate-100 flex flex-col lg:flex-row overflow-hidden">
         {loading ? (
-          <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
-        ) : (
-          <div className="bg-white rounded-xl shadow-2xl overflow-hidden mx-auto"
-            style={{
-              width: dev.w === '100%' ? '100%' : `${dev.w}px`,
-              maxWidth: '100%',
-              height: '100%',
-              maxHeight: '100%',
-              transition: 'width 250ms ease',
-            }}>
-            <iframe ref={iframeRef} title="Landing preview" src={previewSrc}
-              data-testid="landing-iframe"
-              className="w-full h-full border-0 block" />
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
           </div>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center p-4 overflow-auto">
+              <div className="bg-white rounded-xl shadow-2xl overflow-hidden mx-auto shrink-0"
+                style={{
+                  width: dev.w === '100%' ? '100%' : `${dev.w}px`,
+                  maxWidth: '100%',
+                  height: '100%',
+                  maxHeight: '100%',
+                  transition: 'width 250ms ease',
+                }}>
+                <iframe ref={iframeRef} title="Landing preview" src={previewSrc}
+                  data-testid="landing-iframe"
+                  className="w-full h-full border-0 block" />
+              </div>
+            </div>
+            {contentOpen && (
+              <aside className="w-full lg:w-[360px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
+                <div className="p-4 border-b border-slate-100">
+                  <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    Velden van deze pagina. Nieuwe tekst, afbeeldingen en links verschijnen hier automatisch zodra ze de bewerkbare marketingcomponenten gebruiken.
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    Pakketnamen, prijzen en limieten komen uit SaaS Pakketten, zodat de marketingprijzen gelijk blijven aan de facturatie.
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400 truncate" title={previewPage}>{previewPage}</p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+                  {editableFields.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">
+                      Nog geen bewerkbare velden gevonden. Controleer of de pagina is geladen, of kies een andere marketingpagina.
+                    </p>
+                  ) : editableFields.map((field) => {
+                    const current = getPath(draft || {}, field.path);
+                    const value = current == null ? field.value : String(current);
+                    return (
+                      <label key={field.path} className="block rounded-xl border border-slate-200 p-3 hover:border-emerald-300">
+                        <span className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
+                          <span className="truncate">{field.label}</span>
+                          <button type="button" onClick={() => focusField(field.path)}
+                            className="shrink-0 text-[10px] font-bold text-emerald-700 hover:underline">
+                            Toon
+                          </button>
+                        </span>
+                        <span className="mt-1 block truncate font-mono text-[9px] text-slate-400">{field.path}</span>
+                        {field.kind === 'text' ? (
+                          <textarea value={value} onChange={(event) => updateField(field.path, event.target.value)}
+                            rows={Math.min(5, Math.max(2, value.split('\n').length))}
+                            data-testid={`landing-field-${field.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                            className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                        ) : (
+                          <input value={value} onChange={(event) => updateField(field.path, event.target.value)}
+                            type="text" data-testid={`landing-field-${field.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                            className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                        )}
+                        {field.kind === 'image' && value && (
+                          <img loading="lazy" src={value.startsWith('/api/') ? `${(process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '')}${value}` : value}
+                            alt="" className="mt-2 h-20 w-full rounded-lg bg-slate-100 object-contain" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </aside>
+            )}
+          </>
         )}
       </div>
 
