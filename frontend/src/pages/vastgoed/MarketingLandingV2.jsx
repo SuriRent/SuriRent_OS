@@ -17,6 +17,7 @@ import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
 import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
+import Handleiding from '../marketing/Handleiding';
 
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
@@ -1444,6 +1445,7 @@ export default function MarketingLandingV2() {
   const showFeatureDetails = location.pathname === '/functies';
   const showContactPage = location.pathname === '/contact';
   const showAboutPage = location.pathname === '/over-ons';
+  const showManualPage = location.pathname === '/handleiding';
   const showLegalPage = Boolean(LEGAL_CONTENT[location.pathname]);
 
   useEffect(() => {
@@ -1452,7 +1454,7 @@ export default function MarketingLandingV2() {
   }, []);
 
   useEffect(() => {
-    if (['/functies', '/contact', '/over-ons', '/algemene-voorwaarden', '/privacy'].includes(location.pathname)) {
+    if (['/functies', '/contact', '/over-ons', '/handleiding', '/algemene-voorwaarden', '/privacy'].includes(location.pathname)) {
       window.scrollTo(0, 0);
     }
   }, [location.pathname]);
@@ -1578,7 +1580,12 @@ export default function MarketingLandingV2() {
             onInstall={pwaInstall.install} />
         )}
         <LandingHeader onLogin={onLogin} onRegister={onRegister} />
-        {showAboutPage ? (
+        {showManualPage ? (
+          <>
+            <Handleiding onDemo={onDemo} />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        ) : showAboutPage ? (
           <>
             <AboutPage onDemo={onDemo} onRegister={() => onRegister()} />
             <Footer onLogin={onLogin} apk={apk} />

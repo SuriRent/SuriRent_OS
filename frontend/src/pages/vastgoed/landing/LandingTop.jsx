@@ -31,6 +31,7 @@ const NAV = [
   { id: 'kiosk', label: 'Kiosk' },
   { id: 'pricing', label: 'Prijzen' },
   { id: 'faq', label: 'FAQ' },
+  { id: 'handleiding', label: 'Handleiding' },
   { id: 'contact', label: 'Contact' },
   { id: 'over-ons', label: 'Over ons' },
   { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden' },
@@ -72,6 +73,7 @@ export function LandingHeader({ onLogin, onRegister }) {
   const pick = (id) => {
     setOpen(false);
     if (id === 'features') navigate('/functies');
+    else if (id === 'handleiding') navigate('/handleiding');
     else if (id === 'contact') navigate('/contact');
     else if (id === 'over-ons') navigate('/over-ons');
     else if (id === 'algemene-voorwaarden' || id === 'privacy') navigate(`/${id}`);
@@ -84,6 +86,7 @@ export function LandingHeader({ onLogin, onRegister }) {
   useEffect(() => {
     const pageNavigation = {
       '/functies': 'features',
+      '/handleiding': 'handleiding',
       '/contact': 'contact',
       '/over-ons': 'over-ons',
       '/algemene-voorwaarden': 'algemene-voorwaarden',
