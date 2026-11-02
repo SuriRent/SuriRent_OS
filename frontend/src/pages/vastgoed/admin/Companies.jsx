@@ -62,7 +62,7 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
       <button type="button" aria-label="Bedrijfsdetails sluiten" onClick={onClose} className="absolute inset-0 cursor-default" />
       <section role="dialog" aria-modal="true" aria-labelledby="company-details-title"
         className="relative w-full sm:max-w-2xl h-full overflow-y-auto bg-[#F7F8FA] shadow-2xl">
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 sm:px-7 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 sm:px-6 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] font-extrabold text-orange-600">Bedrijfsbeheer</p>
             <h2 id="company-details-title" className="text-xl font-black text-slate-900 truncate">{company.name}</h2>
@@ -72,64 +72,64 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
           </button>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-5">
-          <div className="rounded-2xl bg-slate-950 p-5 text-white">
-            <div className="flex items-start justify-between gap-3">
+        <div className="p-4 sm:p-5 space-y-3">
+          <div className="rounded-2xl bg-slate-950 p-4 text-white">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wider text-white/60">Pakket</p>
-                <p className="text-2xl font-black mt-1 break-words">{plan?.name || company.plan || 'Geen pakket'}</p>
-                <p className="text-sm text-white/80 mt-1">{company.currency || 'SRD'} {Number(company.monthly_amount || 0).toLocaleString('nl-NL')} / {company.plan_interval || 'maand'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/60">Pakket</p>
+                <p className="text-xl font-black mt-0.5 break-words">{plan?.name || company.plan || 'Geen pakket'}</p>
+                <p className="text-sm text-white/80">{company.currency || 'SRD'} {Number(company.monthly_amount || 0).toLocaleString('nl-NL')} / {company.plan_interval || 'maand'}</p>
               </div>
               <CreditCard className="w-6 h-6 text-orange-300 shrink-0" />
             </div>
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-3">
               <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold ring-1 ring-inset ${status.className}`}>Abonnement: {status.label}</span>
               {company.active === false && <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/90">Platformtoegang uit</span>}
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             {[
               { label: 'Appartementen', value: company.stats?.apartments ?? '—', icon: Building2 },
               { label: 'Huurders', value: company.stats?.tenants ?? '—', icon: Users },
               { label: 'Gebruikers', value: company.stats?.admins ?? '—', icon: KeySquare },
             ].map((item) => {
               const Icon = item.icon;
-              return <div key={item.label} className="rounded-xl bg-white border border-slate-200 p-3">
-                <Icon className="w-4 h-4 text-orange-600 mb-2" />
-                <p className="text-xl font-black text-slate-900">{item.value}</p>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-600">{item.label}</p>
+              return <div key={item.label} className="rounded-xl bg-white border border-slate-200 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xl font-black text-slate-900">{item.value}</p>
+                  <Icon className="w-4 h-4 text-orange-600 shrink-0" />
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 leading-tight">{item.label}</p>
               </div>;
             })}
           </div>
 
-          <div className="rounded-2xl bg-white border border-slate-200 divide-y divide-slate-100">
-            <div className="p-4 flex items-start gap-3">
+          <div className="rounded-2xl bg-white border border-slate-200 grid sm:grid-cols-2">
+            <div className="p-3 flex items-start gap-2.5 border-b border-slate-100 sm:border-r">
               <Building2 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
-              <div className="min-w-0"><p className="text-sm font-bold text-slate-600">Bedrijf</p><p className="text-base font-semibold text-slate-900 break-words">{company.name} <span className="text-slate-500 font-normal">/{company.slug}</span></p></div>
+              <div className="min-w-0"><p className="text-xs font-bold text-slate-600">Bedrijf</p><p className="text-sm font-semibold text-slate-900 break-words">{company.name} <span className="text-slate-500 font-normal">/{company.slug}</span></p></div>
             </div>
-            <div className="p-4 flex items-start gap-3">
+            <div className="p-3 flex items-start gap-2.5 border-b border-slate-100">
               <Mail className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
-              <div className="min-w-0"><p className="text-sm font-bold text-slate-600">Contact</p><p className="text-base text-slate-900 break-all">{company.contact_email || company.owner_email || 'Geen e-mailadres opgegeven'}</p></div>
+              <div className="min-w-0"><p className="text-xs font-bold text-slate-600">Contact</p><p className="text-sm text-slate-900 break-all">{company.contact_email || company.owner_email || 'Geen e-mailadres opgegeven'}</p></div>
             </div>
-            {company.contact_phone && <div className="p-4 flex items-start gap-3"><Phone className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Telefoon</p><p className="text-base text-slate-900 break-words">{company.contact_phone}</p></div></div>}
-            {company.address && <div className="p-4 flex items-start gap-3"><MapPin className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Adres</p><p className="text-base text-slate-900 break-words">{company.address}</p></div></div>}
-            <div className="p-4 grid sm:grid-cols-2 gap-3">
-              <div className="flex items-start gap-3"><CalendarDays className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Proefperiode tot</p><p className="text-base text-slate-900">{formatDate(company.trial_ends_at)}</p></div></div>
-              <div className="flex items-start gap-3"><Clock3 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Verlenging</p><p className="text-base text-slate-900">{formatDate(company.subscription_renews_at || company.next_billing_date)}</p></div></div>
+            {company.contact_phone && <div className="p-3 flex items-start gap-2.5 border-b border-slate-100 sm:border-r"><Phone className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-slate-600">Telefoon</p><p className="text-sm text-slate-900 break-words">{company.contact_phone}</p></div></div>}
+            {company.address && <div className="p-3 flex items-start gap-2.5 border-b border-slate-100"><MapPin className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-slate-600">Adres</p><p className="text-sm text-slate-900 break-words">{company.address}</p></div></div>}
+            <div className="p-3 grid grid-cols-2 gap-2 sm:col-span-2">
+              <div className="flex items-start gap-2"><CalendarDays className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-slate-600">Proefperiode tot</p><p className="text-sm text-slate-900">{formatDate(company.trial_ends_at)}</p></div></div>
+              <div className="flex items-start gap-2"><Clock3 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div className="min-w-0"><p className="text-xs font-bold text-slate-600">Verlenging</p><p className="text-sm text-slate-900">{formatDate(company.subscription_renews_at || company.next_billing_date)}</p></div></div>
             </div>
           </div>
 
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="rounded-2xl bg-white border border-slate-200 p-4 space-y-3">
-            <h3 className="font-extrabold text-slate-900">Acties</h3>
-            <button type="button" onClick={openCustomerEnvironment} disabled={!!busy}
-              className="w-full min-h-11 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
-              <LogIn className="w-4 h-4" /> Klantomgeving openen (supportmodus)
-            </button>
-            <p className="text-[11px] text-slate-500">Opent de beheeromgeving namens de klant. De supportbalk biedt een knop om terug te keren.</p>
+          <div className="rounded-2xl bg-white border border-slate-200 p-3">
             <div className="grid sm:grid-cols-2 gap-2">
+              <button type="button" onClick={openCustomerEnvironment} disabled={!!busy}
+                className="sm:col-span-2 w-full min-h-10 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                <LogIn className="w-4 h-4" /> Klantomgeving openen
+              </button>
               <button type="button" onClick={onEdit} disabled={!!busy} className="h-10 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm font-bold text-slate-700 flex items-center justify-center gap-2 disabled:opacity-50">
                 <Pencil className="w-4 h-4" /> Gegevens wijzigen
               </button>
@@ -137,34 +137,34 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
                 {selected ? <Check className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
                 {selected ? 'Wis bedrijfsscope' : 'Selecteer bedrijfsscope'}
               </button>
-            </div>
-            {company.billing_status === 'trial' && (
-              <div className="flex gap-2 pt-2 border-t border-slate-100">
-                <select aria-label="Dagen proefperiode verlengen" value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm">
-                  {[7, 14, 30, 60, 90].map((value) => <option key={value} value={value}>{value} dagen</option>)}
-                </select>
-                <button type="button" onClick={() => runAction('extend', `/companies/${company.id}/extend-trial`, { days })} disabled={!!busy}
-                  className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50">
-                  {busy === 'extend' ? 'Bezig…' : 'Proef verlengen'}
+              {company.billing_status === 'trial' && (
+                <div className="sm:col-span-2 flex gap-2 pt-2 border-t border-slate-100">
+                  <select aria-label="Dagen proefperiode verlengen" value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm">
+                    {[7, 14, 30, 60, 90].map((value) => <option key={value} value={value}>{value} dagen</option>)}
+                  </select>
+                  <button type="button" onClick={() => runAction('extend', `/companies/${company.id}/extend-trial`, { days })} disabled={!!busy}
+                    className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50">
+                    {busy === 'extend' ? 'Bezig…' : 'Proef verlengen'}
+                  </button>
+                </div>
+              )}
+              {['cancelled', 'expired'].includes(company.billing_status) && (
+                <button type="button" onClick={() => {
+                  if (window.confirm(`Heractiveer het abonnement en de toegang voor ${company.name}?`)) {
+                    runAction('reactivate', `/companies/${company.id}/reactivate-subscription`);
+                  }
+                }} disabled={!!busy} data-testid="company-reactivate"
+                  className="sm:col-span-2 w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50">
+                  {busy === 'reactivate' ? 'Bezig…' : 'Abonnement heractiveren'}
                 </button>
-              </div>
-            )}
-            {['cancelled', 'expired'].includes(company.billing_status) && (
-              <button type="button" onClick={() => {
-                if (window.confirm(`Heractiveer het abonnement en de toegang voor ${company.name}?`)) {
-                  runAction('reactivate', `/companies/${company.id}/reactivate-subscription`);
-                }
-              }} disabled={!!busy} data-testid="company-reactivate"
-                className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50">
-                {busy === 'reactivate' ? 'Bezig…' : 'Abonnement heractiveren'}
-              </button>
-            )}
-            {['active', 'trial'].includes(company.billing_status) && (
-              <button type="button" onClick={cancelSubscription} disabled={!!busy}
-                className="w-full h-10 rounded-xl border border-red-200 hover:bg-red-50 text-red-700 text-sm font-bold disabled:opacity-50">
-                {busy === 'cancel' ? 'Bezig…' : 'Abonnement opzeggen'}
-              </button>
-            )}
+              )}
+              {['active', 'trial'].includes(company.billing_status) && (
+                <button type="button" onClick={cancelSubscription} disabled={!!busy}
+                  className="sm:col-span-2 w-full h-10 rounded-xl border border-red-200 hover:bg-red-50 text-red-700 text-sm font-bold disabled:opacity-50">
+                  {busy === 'cancel' ? 'Bezig…' : 'Abonnement opzeggen'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>
