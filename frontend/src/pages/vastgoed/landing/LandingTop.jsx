@@ -32,6 +32,7 @@ const NAV = [
   { id: 'pricing', label: 'Prijzen' },
   { id: 'faq', label: 'Service & FAQ' },
   { id: 'contact', label: 'Contact' },
+  { id: 'over-ons', label: 'Over ons' },
   { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden' },
   { id: 'privacy', label: 'Privacy' },
 ];
@@ -72,6 +73,7 @@ export function LandingHeader({ onLogin, onRegister }) {
     setOpen(false);
     if (id === 'features') navigate('/functies');
     else if (id === 'contact') navigate('/contact');
+    else if (id === 'over-ons') navigate('/over-ons');
     else if (id === 'algemene-voorwaarden' || id === 'privacy') navigate(`/${id}`);
     else if (id === 'home') {
       if (location.pathname === '/') goToSection('home');
@@ -83,6 +85,7 @@ export function LandingHeader({ onLogin, onRegister }) {
     const pageNavigation = {
       '/functies': 'features',
       '/contact': 'contact',
+      '/over-ons': 'over-ons',
       '/algemene-voorwaarden': 'algemene-voorwaarden',
       '/privacy': 'privacy',
     };

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, MapPin, Home as HomeIcon, Receipt, FileText, Users,
   Wallet, ScanLine, Building2, MessageCircle, Mail, Phone,
   Star, ArrowRight, Landmark, Download, Smartphone, Apple, Monitor,
-  Share2, Plus, Check,
+  Share2, Plus, Check, Target, Handshake, ShieldCheck,
 } from 'lucide-react';
 import { EditableProvider, EditableText, EditableImage, useLandingContent } from '../../lib/landing-editable';
 import StatusPill from '../../components/StatusPill';
@@ -804,6 +804,166 @@ function ContactPage() {
   );
 }
 
+function AboutPage({ onDemo, onRegister }) {
+  const principles = [
+    {
+      icon: Target,
+      title: 'Praktisch',
+      description: 'We richten ons op dagelijkse taken die verhuurders echt tijd kosten: administratie, betalingen en overzicht.',
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Overzichtelijk',
+      description: 'Belangrijke informatie over vastgoed, huurders en betalingen staat samen op één plek.',
+    },
+    {
+      icon: Handshake,
+      title: 'Dichtbij',
+      description: 'SuriRent is ontwikkeld met de praktijk van verhuur en vastgoedbeheer in Suriname als uitgangspunt.',
+    },
+  ];
+
+  const capabilities = [
+    ['Vastgoed organiseren', 'Breng locaties, gebouwen en verhuureenheden overzichtelijk samen.'],
+    ['Huurders en afspraken beheren', 'Bewaar contactgegevens en beheer contractinformatie op één plek.'],
+    ['Betalingen volgen', 'Houd ontvangen en openstaande betalingen duidelijk bij.'],
+  ];
+
+  return (
+    <main className="overflow-hidden bg-[#F8F9FC]" data-testid="about-page">
+      <section className="relative isolate">
+        <div className="absolute -right-36 -top-40 -z-10 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/10 blur-3xl" />
+        <div className="mx-auto grid max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[1.05fr,0.95fr] lg:px-10 lg:py-24 2xl:px-[120px]">
+          <div>
+            <p className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3.5 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">
+              <span className="h-2 w-2 rounded-full bg-[#FF5C00]" /> Over SuriRent
+            </p>
+            <h1 className="mt-6 max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.045em] text-[#0B1B3F] sm:text-5xl lg:text-6xl">
+              Verhuren met meer <span className="text-[#FF5C00]">overzicht</span> en rust.
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
+              SuriRent helpt verhuurders en vastgoedbeheerders in Suriname om hun dagelijkse beheer eenvoudiger te organiseren — van vastgoed en huurders tot contracten en betalingen.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button type="button" onClick={onDemo}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:bg-[#E65300]"
+                data-testid="about-demo">
+                Bekijk de demo <ArrowRight className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => onRegister()}
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-bold text-[#0B1B3F] transition hover:border-orange-300 hover:text-[#E65300]"
+                data-testid="about-register">
+                Start met SuriRent
+              </button>
+            </div>
+          </div>
+          <div className="relative mx-auto w-full max-w-[520px]">
+            <div className="absolute -inset-4 rounded-[34px] bg-gradient-to-br from-orange-200/70 via-white to-blue-100/80 blur-sm" />
+            <div className="relative overflow-hidden rounded-[28px] border border-white bg-white p-5 shadow-[0_30px_90px_-40px_rgba(11,27,63,0.38)] sm:p-7">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FF5C00] text-white">
+                    <Building2 className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-black text-[#0B1B3F]">Vastgoedbeheer</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Alles op één plek</p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">Overzicht</span>
+              </div>
+              <div className="space-y-3 py-5">
+                {[
+                  [Building2, 'Locaties en woningen', 'Geordend per verhuureenheid'],
+                  [Users, 'Huurders en contracten', 'Gegevens en afspraken bij elkaar'],
+                  [Wallet, 'Betalingen', 'Inzicht in ontvangen en openstaand'],
+                ].map(([Icon, title, description], index) => (
+                  <div key={title} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${index === 0 ? 'bg-orange-100 text-[#E65300]' : index === 1 ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-extrabold text-[#0B1B3F]">{title}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+                    </span>
+                    <Check className="ml-auto h-4 w-4 shrink-0 text-emerald-600" />
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl bg-[#0B1B3F] px-5 py-4 text-white">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/55">SuriRent</p>
+                <p className="mt-1 text-lg font-black">Meer grip op verhuurbeheer.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white px-5 py-16 sm:px-8 lg:px-10 lg:py-20 2xl:px-[120px]">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="max-w-3xl">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Waarom SuriRent</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-[#0B1B3F] sm:text-4xl">Gebouwd voor het dagelijkse beheer.</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600">
+              Verhuuradministratie groeit al snel uit tot losse lijstjes, berichten en documenten. SuriRent brengt die werkzaamheden samen in een digitale omgeving die je dagelijks kunt gebruiken.
+            </p>
+          </div>
+          <div className="mt-9 grid gap-4 md:grid-cols-3">
+            {principles.map(({ icon: Icon, title, description }, index) => (
+              <article key={title} className="rounded-3xl border border-slate-200 bg-[#F8F9FC] p-6 sm:p-7" data-testid={`about-principle-${index + 1}`}>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-[#E65300]"><Icon className="h-6 w-6" /></span>
+                <h3 className="mt-5 text-lg font-black text-[#0B1B3F]">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 py-16 sm:px-8 lg:px-10 lg:py-20 2xl:px-[120px]">
+        <div className="mx-auto grid max-w-[1200px] gap-10 lg:grid-cols-[0.8fr,1.2fr] lg:items-start">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E65300]">Eén platform</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-[#0B1B3F] sm:text-4xl">Van losse administratie naar helder overzicht.</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600">
+              Of je nu enkele woningen verhuurt of meerdere locaties beheert: SuriRent geeft je een centrale plek om je verhuurwerkzaamheden bij te houden.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {capabilities.map(([title, description], index) => (
+              <article key={title} className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0B1B3F] text-sm font-black text-white">0{index + 1}</span>
+                <div>
+                  <h3 className="font-black text-[#0B1B3F]">{title}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600">{description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 pb-16 sm:px-8 lg:px-10 lg:pb-20 2xl:px-[120px]">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-start justify-between gap-6 rounded-[28px] bg-[#0B1B3F] p-7 text-white sm:p-10 lg:flex-row lg:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FF8A3D]">SuriRent voor verhuurders</p>
+            <h2 className="mt-3 max-w-2xl text-2xl font-black tracking-tight sm:text-3xl">Klaar om je verhuurbeheer overzichtelijker te maken?</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">Ontdek hoe het platform werkt of maak je eigen account aan.</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <button type="button" onClick={onDemo} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#FF5C00] px-5 text-sm font-black text-white transition hover:bg-[#E65300]">
+              Bekijk de demo <ArrowRight className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => onRegister()} className="inline-flex h-12 items-center rounded-xl border border-white/25 px-5 text-sm font-bold text-white transition hover:bg-white/10">
+              Registreren
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 const LEGAL_CONTENT = {
   '/algemene-voorwaarden': {
     eyebrow: 'Juridische informatie',
@@ -1283,6 +1443,7 @@ export default function MarketingLandingV2() {
   const showSkeleton = !editMode && !hasInstantContent && contentLoading;
   const showFeatureDetails = location.pathname === '/functies';
   const showContactPage = location.pathname === '/contact';
+  const showAboutPage = location.pathname === '/over-ons';
   const showLegalPage = Boolean(LEGAL_CONTENT[location.pathname]);
 
   useEffect(() => {
@@ -1291,7 +1452,7 @@ export default function MarketingLandingV2() {
   }, []);
 
   useEffect(() => {
-    if (['/functies', '/contact', '/algemene-voorwaarden', '/privacy'].includes(location.pathname)) {
+    if (['/functies', '/contact', '/over-ons', '/algemene-voorwaarden', '/privacy'].includes(location.pathname)) {
       window.scrollTo(0, 0);
     }
   }, [location.pathname]);
@@ -1417,7 +1578,12 @@ export default function MarketingLandingV2() {
             onInstall={pwaInstall.install} />
         )}
         <LandingHeader onLogin={onLogin} onRegister={onRegister} />
-        {showLegalPage ? (
+        {showAboutPage ? (
+          <>
+            <AboutPage onDemo={onDemo} onRegister={() => onRegister()} />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        ) : showLegalPage ? (
           <>
             <LegalPage pathname={location.pathname} />
             <Footer onLogin={onLogin} apk={apk} />

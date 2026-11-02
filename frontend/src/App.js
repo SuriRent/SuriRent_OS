@@ -128,6 +128,7 @@ function MarketingRoutes() {
       <Route path="/" element={<MarketingLanding />} />
       <Route path="/functies" element={<MarketingLanding />} />
       <Route path="/contact" element={<MarketingLanding />} />
+      <Route path="/over-ons" element={<MarketingLanding />} />
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/over-surirent" element={<OverSuriRent />} />
@@ -259,6 +260,7 @@ function HybridRoutes() {
       <Route path="/" element={<MarketingLanding />} />
       <Route path="/functies" element={<MarketingLanding />} />
       <Route path="/contact" element={<MarketingLanding />} />
+      <Route path="/over-ons" element={<MarketingLanding />} />
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/login" element={<LoginPage />} />
