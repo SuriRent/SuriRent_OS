@@ -13,7 +13,7 @@ import {
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
-  Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi,
+  Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi, Sparkles,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
@@ -352,6 +352,10 @@ function KioskAdminMenu() {
         onClick: () => navAdmin(id, 'admin'),
       })),
     ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
+    ...(role === 'admin' ? [{
+      id: 'tour', label: 'Rondleiding starten', Icon: Sparkles, testid: 'kiosk-admin-menu-tour',
+      onClick: () => window.dispatchEvent(new CustomEvent('kiosk-tour-start')),
+    }] : []),
   ];
   return (
     <div className="relative shrink-0">
@@ -4455,7 +4459,8 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
             <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
               <Icon className="w-5 h-5 text-white sm:text-orange-600" />
             </div>
-            <h3 className="text-lg font-black text-white sm:text-slate-900">{title}</h3>
+            <h3 className="text-lg font-black text-white sm:text-slate-900"
+              data-testid={`${testId}-title`}>{title}</h3>
           </div>
           <button onClick={onClose} data-testid={`${testId}-close`}
             className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-transparent sm:hover:bg-slate-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center active:bg-white/30">
@@ -5449,6 +5454,35 @@ export default function KioskLayout() {
     return () => window.removeEventListener('kiosk-nav', onNav);
   }, []);
   const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const onTourNavigate = (event) => {
+      const route = event.detail || {};
+      setShowInvoicesModal(false);
+      setAdminPopup(null);
+      setNfcLink(null);
+      setSearchOpen(false);
+      if (route.type === 'settings') {
+        setStep('select');
+        setAdminPopup(`inst-${route.id}`);
+      } else if (route.type === 'page') {
+        setStep('select');
+        if (route.id === 'facturen') setShowInvoicesModal(true);
+        else setAdminPopup(route.id);
+      } else if (route.type === 'nfc') {
+        setStep('select');
+        setNfcLink({ uid: '' });
+      } else if (route.type === 'cash') {
+        setStep('kasgeld');
+      } else if (route.type === 'search') {
+        setStep('select');
+        setSearchOpen(true);
+      } else if (route.type === 'home') {
+        setStep('select');
+      }
+    };
+    window.addEventListener('kiosk-tour-navigate', onTourNavigate);
+    return () => window.removeEventListener('kiosk-tour-navigate', onTourNavigate);
+  }, []);
   const pickSearched = (a) => {
     setSearchOpen(false);
     prefetchOverview(a?.tenant_id);
