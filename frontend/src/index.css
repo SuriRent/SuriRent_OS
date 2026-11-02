@@ -243,39 +243,6 @@ body:has(.fixed.inset-0.z-50.bg-black\/60) nav.md\:hidden {
 
 ::selection { background: #FF5C00; color: #fff; }
 
-/* Shared SaaS-console skin: keep every superadmin module on the same
-   calm surface, card, form, and primary-action system. */
-.saas-console-content {
-  --saas-accent: #087a3d;
-  --saas-accent-hover: #066332;
-  --saas-accent-soft: #e8f5ed;
-}
-.saas-console-content h1 {
-  font-weight: 900;
-  letter-spacing: -0.035em;
-}
-.saas-console-content [class~="bg-white"][class~="rounded-2xl"] {
-  border-color: #e2eae5;
-  box-shadow: 0 8px 24px -18px rgba(18, 54, 35, 0.32);
-}
-.saas-console-content input:not([type="checkbox"]):not([type="radio"]):focus,
-.saas-console-content select:focus,
-.saas-console-content textarea:focus {
-  border-color: var(--saas-accent) !important;
-  box-shadow: 0 0 0 3px rgba(8, 122, 61, 0.12);
-  outline: none;
-}
-.saas-console-content button[class*="bg-orange-500"],
-.saas-console-content button[class*="bg-[#FF5C00]"] {
-  background-color: var(--saas-accent);
-  border-color: var(--saas-accent);
-}
-.saas-console-content button[class*="bg-orange-500"]:hover,
-.saas-console-content button[class*="bg-[#FF5C00]"]:hover {
-  background-color: var(--saas-accent-hover);
-  border-color: var(--saas-accent-hover);
-}
-
 /* Smooth scrolling */
 html { scroll-behavior: smooth; }
 
