@@ -15,6 +15,7 @@ import { EditableProvider, EditableText, EditableImage, EditableLink, getPath, u
 import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import { translateMarketingText } from '../../lib/marketing-language';
 import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
 import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
 import Handleiding from '../marketing/Handleiding';
@@ -284,23 +285,25 @@ const FEATURE_LABELS = [
   { key: 'allow_branding', label: 'White-label branding' },
   { key: 'allow_backup',   label: 'Backup & Herstel' },
 ];
-const fmtLimit = (v) => (v === -1 || v == null ? '∞' : new Intl.NumberFormat('nl-NL').format(v));
+const fmtLimit = (v, language) => (v === -1 || v == null ? '∞' : new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(v));
 
-function formatAmount(n) {
+function formatAmount(n, language) {
   try {
-    return new Intl.NumberFormat('nl-NL').format(Math.round(Number(n) || 0));
+    return new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(Math.round(Number(n) || 0));
   } catch {
     return String(n);
   }
 }
 
 function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
+  const { language } = useEditable();
   const [plans, setPlans] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [showEnterprise, setShowEnterprise] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
     (async () => {
       try {
         const backend = (typeof process !== 'undefined' && process.env?.REACT_APP_BACKEND_URL) || '';
@@ -315,7 +318,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
             id: p.id,
             name: p.name,
             amount: p.amount,
-            price: formatAmount(p.amount),
+            price: formatAmount(p.amount, language),
             sub: `${p.currency} / maand`,
             desc: p.description || '',
             features: p.features || [],
@@ -330,11 +333,11 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
       } catch {
         // Fallback op de oorspronkelijke hardcoded plans als de backend niet bereikbaar is.
         setPlans([
-          { name: 'Starter', price: '3.000', sub: 'SRD / maand',
+          { name: 'Starter', price: formatAmount(3000, language), sub: 'SRD / maand',
             desc: 'Voor kleinere vastgoedbeheerders.',
             features: ['Onbeperkt appartementen', 'Online betalen', 'WhatsApp & E-mail'],
             cta: 'Start trial' },
-          { name: 'Professional', price: '5.000', sub: 'SRD / maand', highlight: true,
+          { name: 'Professional', price: formatAmount(5000, language), sub: 'SRD / maand', highlight: true,
             desc: 'Met Kiosk terminal en alle functies.',
             features: ['Alles uit Starter', 'Kiosk terminal', 'Shelly stroombeheer', 'Prioriteit support'],
             cta: 'Demo aanvragen' },
@@ -345,7 +348,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [language]);
 
   if (!loaded) {
     return (
@@ -396,15 +399,15 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
                 </div>
               )}
               <p className={`text-sm font-black tracking-wider uppercase mb-4 ${p.highlight ? 'text-[#FF8A3D]' : 'text-[#FF5C00]'}`}>
-                {p.name}
+                {translateMarketingText(p.name, language)}
               </p>
               <div className="flex items-baseline gap-1.5">
                 <span className={`text-5xl lg:text-6xl font-black tracking-tighter ${p.highlight ? 'text-white' : 'text-[#0B1B3F]'}`}>
-                  {p.price === 'Custom' ? 'Op maat' : p.price}
+                  {p.price === 'Custom' ? translateMarketingText('Op maat', language) : p.price}
                 </span>
                 {p.price !== 'Custom' && (
                   <span className={`text-sm font-bold ${p.highlight ? 'text-white/50' : 'text-slate-500'}`}>
-                    {p.sub}
+                    {translateMarketingText(p.sub, language)}
                   </span>
                 )}
               </div>
@@ -450,7 +453,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
                           <EditableText path={`marketing.pricing.limit_labels.${index}`} fallback={f.label} as="span" label={`Prijzen · Limietlabel ${index + 1}`} />
                         </span>
                         <span className={`text-sm font-black font-mono tabular-nums ${p.highlight ? 'text-white' : 'text-slate-900'}`}>
-                          {fmtLimit(p.limits[f.key])}
+                          {fmtLimit(p.limits[f.key], language)}
                         </span>
                       </div>
                     ))}
@@ -499,7 +502,7 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
 // verschijnt in `enterprise_leads` collectie voor opvolging.
 // =====================================================================
 function EnterpriseLeadModal({ onClose, editMode }) {
-  const { content } = useEditable();
+  const { content, language } = useEditable();
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '',
     apartments: '', tenants: '', locations: '', employees: '', message: '',
@@ -508,7 +511,11 @@ function EnterpriseLeadModal({ onClose, editMode }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const text = (path, fallback) => getPath(content, path, fallback);
+  const text = (path, fallback) => (
+    language === 'en'
+      ? getPath(content, `i18n.en.${path}`, translateMarketingText(getPath(content, path, fallback), language))
+      : getPath(content, path, fallback)
+  );
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -595,7 +602,7 @@ function EnterpriseLeadModal({ onClose, editMode }) {
                 </div>
               </div>
               <FormField label={<EditableText path="marketing.enterprise_modal.fields.message" fallback="Boodschap / vereisten" as="span" label="Enterprise-aanvraag · Berichtveld" />}><textarea rows={3} value={form.message} onChange={(e) => set('message', e.target.value)} data-testid="ent-input-message" className={INPUT_CLS + ' resize-none'} placeholder={text('marketing.enterprise_modal.placeholders.message', 'Bijvoorbeeld: SLA-eisen, integraties, tijdlijn…')} /></FormField>
-              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="ent-error">{error}</p>}
+              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="ent-error">{translateMarketingText(error, language)}</p>}
               <div className="flex gap-2 pt-2">
                 <button onClick={onClose} data-testid="ent-cancel" className="flex-1 h-11 rounded-lg border-2 border-slate-200 text-slate-700 font-black hover:bg-slate-50"><EditableText path="marketing.enterprise_modal.cancel" fallback="Annuleren" as="span" label="Enterprise-aanvraag · Annuleerknop" /></button>
                 <button onClick={submit} disabled={submitting || editMode} data-testid="ent-submit" className="flex-1 h-11 rounded-lg bg-[#0B1B3F] hover:bg-[#FF5C00] text-white font-black inline-flex items-center justify-center gap-2 disabled:opacity-50">
@@ -677,6 +684,7 @@ function FAQSection() {
 }
 
 function ContactPage({ editMode }) {
+  const { language } = useEditable();
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -741,7 +749,7 @@ function ContactPage({ editMode }) {
             <div className="rounded-[24px] border border-slate-100 bg-[#F8FAFC] p-2 shadow-[0_24px_60px_-40px_rgba(11,27,63,0.36)]">
               <div className="relative overflow-hidden rounded-[18px]">
                 <iframe
-                  title="Kaart van Paramaribo, Suriname"
+                  title={translateMarketingText('Kaart van Paramaribo, Suriname', language)}
                   src={'https://maps.google.com/maps?q=Paramaribo%2C%20Suriname&z=12&output=embed'}
                   className="h-72 w-full border-0 sm:h-[360px]"
                   loading="lazy"
@@ -804,7 +812,7 @@ function ContactPage({ editMode }) {
                     <textarea required rows={5} maxLength={3000} value={form.message} onChange={(event) => update('message', event.target.value)}
                       className={`${INPUT_CLS} mt-2 h-auto resize-y py-3`} data-testid="contact-message" />
                   </label>
-                  {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="contact-error">{error}</p>}
+                  {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="contact-error">{translateMarketingText(error, language)}</p>}
                   <button type="submit" disabled={submitting || editMode}
                     className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white transition-colors hover:bg-[#E65300] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     data-testid="contact-submit">
@@ -1071,6 +1079,7 @@ function LegalPage({ pathname }) {
 const INSTALL_DISMISS_KEY = 'install_banner_dismissed_at';
 
 function PersistentInstallBanner({ deferredPrompt, platform, installed, onInstall }) {
+  const { language } = useEditable();
   const [dismissed, setDismissed] = useState(() => {
     try {
       const at = parseInt(localStorage.getItem(INSTALL_DISMISS_KEY) || '0', 10);
@@ -1111,7 +1120,7 @@ function PersistentInstallBanner({ deferredPrompt, platform, installed, onInstal
           <EditableText path="marketing.install.banner.button" fallback="Installeer" as="span" label="Installatiebanner · Knop" /> <ArrowRight className="w-3 h-3" />
         </button>
         <button onClick={handleDismiss} data-testid="install-banner-close"
-          aria-label="Verberg installatie-banner"
+          aria-label={translateMarketingText('Verberg installatie-banner', language)}
           className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white">
           <X className="w-4 h-4" />
         </button>
@@ -1479,7 +1488,7 @@ const SEO_DEFAULTS = {
 };
 
 function MarketingSeo({ pathname }) {
-  const { content } = useEditable();
+  const { content, language } = useEditable();
   const pageKey = ({
     '/': 'home',
     '/functies': 'features',
@@ -1490,8 +1499,14 @@ function MarketingSeo({ pathname }) {
     '/privacy': 'privacy',
   })[pathname] || 'home';
   const fallback = SEO_DEFAULTS[pathname] || SEO_DEFAULTS['/'];
-  const title = content?.marketing?.seo?.[pageKey]?.title || fallback.title;
-  const description = content?.marketing?.seo?.[pageKey]?.description || fallback.description;
+  const sourceTitle = content?.marketing?.seo?.[pageKey]?.title || fallback.title;
+  const sourceDescription = content?.marketing?.seo?.[pageKey]?.description || fallback.description;
+  const title = language === 'en'
+    ? getPath(content, `i18n.en.marketing.seo.${pageKey}.title`, translateMarketingText(sourceTitle, language))
+    : sourceTitle;
+  const description = language === 'en'
+    ? getPath(content, `i18n.en.marketing.seo.${pageKey}.description`, translateMarketingText(sourceDescription, language))
+    : sourceDescription;
 
   useEffect(() => {
     document.title = title;
@@ -1658,7 +1673,7 @@ export default function MarketingLandingV2() {
   }
 
   return (
-    <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch}>
+    <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch} enableLanguageSwitcher>
       <div className="min-h-screen bg-white text-[#0B1B3F] antialiased selection:bg-[#FF5C00] selection:text-white">
         <MarketingSeo pathname={location.pathname} />
         {editMode && (

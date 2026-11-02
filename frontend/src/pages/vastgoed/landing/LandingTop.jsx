@@ -7,7 +7,9 @@ import {
   FileText, BookOpen, Settings, Bell, Home as HomeIcon, Wallet, AlertCircle, MoreHorizontal,
 } from 'lucide-react';
 import { EditableText, EditableImage, EditableLink, EditableMedia, getPath, useEditable } from '../../../lib/landing-editable';
+import { translateMarketingText } from '../../../lib/marketing-language';
 import StatusPill from '../../../components/StatusPill';
+import MarketingLanguageSwitcher from '../../../components/MarketingLanguageSwitcher';
 
 export const NAVY = '#0B1B3F';
 const ORANGE = '#FF5C00';
@@ -71,7 +73,7 @@ function Logo() {
 export function LandingHeader({ onLogin, onRegister }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { editMode } = useEditable();
+  const { editMode, language } = useEditable();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState('home');
   const pick = (event) => {
@@ -118,8 +120,9 @@ export function LandingHeader({ onLogin, onRegister }) {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100" data-testid="landing-header">
       <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-[76px] flex items-center justify-between gap-6">
         <Logo />
-        <div className="flex items-center gap-3 lg:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
           <div className="hidden lg:block"><StatusPill /></div>
+          <MarketingLanguageSwitcher />
           <button onClick={onLogin} data-testid="topheader-login"
             className="hidden sm:inline-flex h-[44px] px-7 rounded-xl border border-slate-300 bg-white hover:border-[#FF5C00] text-[15px] font-bold items-center gap-2.5 transition-colors" style={{ color: NAVY }}>
             <Lock className="w-4 h-4" /><EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" />
@@ -128,7 +131,7 @@ export function LandingHeader({ onLogin, onRegister }) {
             className="hidden sm:inline-flex h-[44px] px-7 rounded-xl bg-[#FF5C00] hover:bg-[#E65300] text-white text-[15px] font-bold items-center gap-2.5 shadow-[0_8px_18px_-8px_rgba(255,92,0,0.8)] transition-colors">
             <User className="w-5 h-5" /><EditableText path="v2.brand.cta_register" fallback="Registreren" as="span" />
           </button>
-          <button onClick={() => setOpen(!open)} data-testid="topheader-mobile-menu" aria-label={open ? 'Sluit menu' : 'Open menu'}
+          <button onClick={() => setOpen(!open)} data-testid="topheader-mobile-menu" aria-label={translateMarketingText(open ? 'Sluit menu' : 'Open menu', language)}
             className="xl:hidden w-11 h-11 rounded-xl border border-slate-200 flex items-center justify-center">
             {open ? <X className="w-5 h-5" style={{ color: NAVY }} /> : <Menu className="w-5 h-5" style={{ color: NAVY }} />}
           </button>
@@ -297,7 +300,7 @@ function requestHeroMediaUpload(path, typePath, current, mediaType) {
   }, window.location.origin);
 }
 
-function DeviceStage({ editMode, laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType, showMockups }) {
+function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType, showMockups }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -329,7 +332,7 @@ function DeviceStage({ editMode, laptopMediaUrl, laptopMediaType, phoneMediaUrl,
             'v3.hero.laptop_media_url', 'v3.hero.laptop_media_type', laptopMediaUrl, laptopMediaType,
           )} data-testid="hero-laptop-media-upload"
             className="absolute left-[50px] top-[35px] z-20 rounded-lg bg-[#FF5C00] px-3 py-2 text-[13px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
-            Laptop · foto/video
+            {translateMarketingText('Laptop · foto/video', language)}
           </button>
         )}
         {editMode && (showMockups || !phoneMediaUrl) && (
@@ -337,7 +340,7 @@ function DeviceStage({ editMode, laptopMediaUrl, laptopMediaType, phoneMediaUrl,
             'v3.hero.phone_media_url', 'v3.hero.phone_media_type', phoneMediaUrl, phoneMediaType,
           )} data-testid="hero-phone-media-upload"
             className="absolute right-1 top-[110px] z-20 max-w-[150px] rounded-lg bg-[#FF5C00] px-2 py-2 text-[12px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
-            Telefoon · foto/video
+            {translateMarketingText('Telefoon · foto/video', language)}
           </button>
         )}
       </div>
@@ -346,7 +349,7 @@ function DeviceStage({ editMode, laptopMediaUrl, laptopMediaType, phoneMediaUrl,
 }
 
 function HeroVisual() {
-  const { editMode, content } = useEditable();
+  const { editMode, content, language } = useEditable();
   const savedLaptopMediaUrl = getPath(content, 'v3.hero.laptop_media_url');
   const laptopMediaUrl = savedLaptopMediaUrl ?? getPath(content, 'v3.hero.device_media_url', '');
   const laptopMediaType = savedLaptopMediaUrl == null
@@ -368,12 +371,12 @@ function HeroVisual() {
             label="Startpagina · Telefoonscherm foto of video" />
         </div>
       )}
-      <DeviceStage editMode={editMode} laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
+      <DeviceStage editMode={editMode} language={language} laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
         phoneMediaUrl={phoneMediaUrl} phoneMediaType={phoneMediaType} showMockups={editMode && showMockups} />
       {editMode && hasMedia && (
         <button type="button" onClick={() => setShowMockups((visible) => !visible)}
           className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-extrabold text-slate-800 shadow-lg">
-          {showMockups ? 'Terug naar foto/video' : 'Mockupteksten bewerken'}
+          {translateMarketingText(showMockups ? 'Terug naar foto/video' : 'Mockupteksten bewerken', language)}
         </button>
       )}
     </div>

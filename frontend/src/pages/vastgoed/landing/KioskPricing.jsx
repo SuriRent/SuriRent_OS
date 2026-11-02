@@ -1,7 +1,8 @@
 // Kiosk-onderdeel (licht) met nagebouwde tablet + prijsvergelijker voor de landing.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Building2, Delete, Minus, Plus, Sparkles } from 'lucide-react';
-import { EditableText, EditableImage } from '../../../lib/landing-editable';
+import { EditableText, EditableImage, useEditable } from '../../../lib/landing-editable';
+import { translateMarketingText } from '../../../lib/marketing-language';
 import { NAVY } from './LandingTop';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', 'del'];
@@ -130,6 +131,7 @@ export function pickPlan(plans, n) {
 }
 
 export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
+  const { language } = useEditable();
   const [raw, setRaw] = useState('25');
   const n = Math.max(1, Math.min(100000, parseInt(raw, 10) || 1));
   const plan = useMemo(() => pickPlan(plans, n), [plans, n]);
@@ -141,7 +143,7 @@ export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
         <p className="text-[12px] font-black tracking-[0.08em] uppercase text-[#FF5C00] flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> <EditableText path="marketing.pricing.advisor.eyebrow" fallback="Prijsvergelijker" as="span" label="Prijzen · Vergelijkerlabel" /></p>
         <EditableText path="marketing.pricing.advisor.question" fallback="Hoeveel appartementen beheert u?" as="p" label="Prijzen · Vergelijkervraag" className="mt-1.5 text-xl font-black" style={{ color: NAVY }} />
         <div className="mt-4 flex items-center gap-2">
-          <button type="button" onClick={() => set(n - 1)} data-testid="price-advisor-minus" aria-label="Minder"
+          <button type="button" onClick={() => set(n - 1)} data-testid="price-advisor-minus" aria-label={translateMarketingText('Minder', language)}
             className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-orange-50 flex items-center justify-center" style={{ color: NAVY }}><Minus className="w-5 h-5" /></button>
           <label className="flex-1 h-12 rounded-xl border border-slate-200 focus-within:border-[#FF5C00] flex items-center gap-2 px-3">
             <Building2 className="w-5 h-5 text-slate-400" />
@@ -149,7 +151,7 @@ export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
               className="w-full bg-transparent outline-none text-lg font-black tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" style={{ color: NAVY }} />
             <EditableText path="marketing.pricing.advisor.unit" fallback="appt." as="span" label="Prijzen · Eenheid appartementen" className="text-sm font-semibold text-slate-400" />
           </label>
-          <button type="button" onClick={() => set(n + 1)} data-testid="price-advisor-plus" aria-label="Meer"
+          <button type="button" onClick={() => set(n + 1)} data-testid="price-advisor-plus" aria-label={translateMarketingText('Meer', language)}
             className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-orange-50 flex items-center justify-center" style={{ color: NAVY }}><Plus className="w-5 h-5" /></button>
         </div>
         <input type="range" min={1} max={750} value={Math.min(n, 750)} onChange={(e) => set(parseInt(e.target.value, 10))} data-testid="price-advisor-range"
@@ -160,12 +162,12 @@ export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
         <EditableText path="marketing.pricing.advisor.result_label" fallback="Ons advies" as="p" label="Prijzen · Advieslabel" className="text-[11px] font-bold uppercase tracking-wide text-slate-400" />
         {plan ? (
           <>
-            <p className="mt-1 text-2xl font-black" style={{ color: NAVY }} data-testid="price-advisor-plan">{plan.name}</p>
+            <p className="mt-1 text-2xl font-black" style={{ color: NAVY }} data-testid="price-advisor-plan">{translateMarketingText(plan.name, language)}</p>
             <p className="mt-1 flex items-baseline gap-1.5">
               <span className="text-4xl font-black tracking-tight text-[#FF5C00]" data-testid="price-advisor-price">{plan.price}</span>
-              <span className="text-sm font-bold text-slate-500">{plan.sub}</span>
+              <span className="text-sm font-bold text-slate-500">{translateMarketingText(plan.sub, language)}</span>
             </p>
-            <EditableText path="marketing.pricing.advisor.limit_description" fallback={max === -1 || max == null ? 'Onbeperkt appartementen' : `Tot ${new Intl.NumberFormat('nl-NL').format(max)} appartementen`}
+            <EditableText path="marketing.pricing.advisor.limit_description" fallback={max === -1 || max == null ? 'Onbeperkt appartementen' : `Tot ${new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(max)} appartementen`}
               as="p" label="Prijzen · Limiettoelichting" className="mt-1 text-xs text-slate-500" />
             <button type="button" onClick={() => onChoose(plan.id)} data-testid="price-advisor-cta"
               className="mt-4 w-full h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E65300] text-white text-sm font-black inline-flex items-center justify-center gap-2">
@@ -175,7 +177,7 @@ export function PriceAdvisor({ plans, onChoose, onEnterprise }) {
           <>
             <EditableText path="marketing.pricing.advisor.enterprise_name" fallback="Enterprise" as="p" label="Prijzen · Maatwerkpakket" className="mt-1 text-2xl font-black" style={{ color: NAVY }} data-testid="price-advisor-plan" />
             <EditableText path="marketing.pricing.advisor.custom_price" fallback="Op maat" as="p" label="Prijzen · Maatwerkprijs" className="mt-1 text-4xl font-black tracking-tight text-[#FF5C00]" data-testid="price-advisor-price" />
-            <EditableText path="marketing.pricing.advisor.enterprise_description" fallback={`Voor ${new Intl.NumberFormat('nl-NL').format(n)} appartementen maken wij een offerte op maat.`}
+            <EditableText path="marketing.pricing.advisor.enterprise_description" fallback={`Voor ${new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(n)} appartementen maken wij een offerte op maat.`}
               as="p" multiline label="Prijzen · Maatwerkomschrijving" className="mt-1 text-xs text-slate-500" />
             <button type="button" onClick={onEnterprise} data-testid="price-advisor-cta"
               className="mt-4 w-full h-12 rounded-xl bg-[#0B1B3F] hover:bg-[#FF5C00] text-white text-sm font-black inline-flex items-center justify-center gap-2">

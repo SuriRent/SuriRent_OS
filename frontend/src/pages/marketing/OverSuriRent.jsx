@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Users, FileText, Receipt, Bell, BarChart3, Check } from 'lucide-react';
-import { EditableProvider, EditableText, EditableLink, useEditable, useLandingContent } from '../../lib/landing-editable';
+import MarketingLanguageSwitcher from '../../components/MarketingLanguageSwitcher';
+import { EditableProvider, EditableText, EditableLink, getPath, useEditable, useLandingContent } from '../../lib/landing-editable';
+import { translateMarketingText } from '../../lib/marketing-language';
 
 /**
  * Publieke "Over SuriRent" pagina — full-content SEO landing die de gehele
@@ -23,14 +25,14 @@ export default function OverSuriRent() {
   if (loading && !editMode) return <div className="min-h-screen bg-white" />;
 
   return (
-    <EditableProvider editMode={editMode} initialContent={content} onPatch={onPatch}>
+    <EditableProvider editMode={editMode} initialContent={content} onPatch={onPatch} enableLanguageSwitcher>
       <OverSuriRentContent editMode={editMode} />
     </EditableProvider>
   );
 }
 
 function OverSuriRentContent({ editMode }) {
-  const { content } = useEditable();
+  const { content, language } = useEditable();
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
   useEffect(() => {
@@ -54,19 +56,25 @@ function OverSuriRentContent({ editMode }) {
   }, []);
 
   useEffect(() => {
-    const title = content?.marketing?.over_surirent?.seo_title
+    const sourceTitle = content?.marketing?.over_surirent?.seo_title
       || 'Over SuriRent — Vastgoedbeheer & verhuursoftware voor Suriname';
-    const description = content?.marketing?.over_surirent?.seo_description
+    const sourceDescription = content?.marketing?.over_surirent?.seo_description
       || 'SuriRent N.V. is een Surinaams technologiebedrijf dat vastgoedbeheer digitaliseert. Beheer vastgoed, huurders, contracten, facturen en betalingen vanuit één centraal platform.';
+    const title = language === 'en'
+      ? getPath(content, 'i18n.en.marketing.over_surirent.seo_title', translateMarketingText(sourceTitle, language))
+      : sourceTitle;
+    const description = language === 'en'
+      ? getPath(content, 'i18n.en.marketing.over_surirent.seo_description', translateMarketingText(sourceDescription, language))
+      : sourceDescription;
     document.title = title;
     const meta = document.querySelector('meta[name="description"]');
     if (meta) meta.setAttribute('content', description);
-  }, [content]);
+  }, [content, language]);
   const formatPrice = (plan) => {
-    if (plan?.amount == null) return 'Op aanvraag';
+    if (plan?.amount == null) return translateMarketingText('Op aanvraag', language);
     const amount = Number(plan?.amount);
-    if (!Number.isFinite(amount)) return 'Op aanvraag';
-    return `${plan.currency || 'SRD'} ${new Intl.NumberFormat('nl-NL').format(amount)}`;
+    if (!Number.isFinite(amount)) return translateMarketingText('Op aanvraag', language);
+    return `${plan.currency || 'SRD'} ${new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(amount)}`;
   };
   const starterPlan = plans.find((plan) => plan.id === 'starter');
   const professionalPlan = plans.find((plan) => plan.id === 'professional');
@@ -91,6 +99,9 @@ function OverSuriRentContent({ editMode }) {
   return (
     <div className="min-h-screen bg-white text-slate-900" data-testid="over-surirent-page">
       <div className="max-w-4xl mx-auto px-6 py-16 md:py-24">
+        <div className="mb-6 flex justify-end">
+          <MarketingLanguageSwitcher />
+        </div>
         <div className="sr-only" aria-hidden="true">
           <EditableText path="marketing.over_surirent.seo_title" fallback="Over SuriRent — Vastgoedbeheer & verhuursoftware voor Suriname"
             label="Over SuriRent · SEO-titel" />
@@ -155,13 +166,13 @@ function OverSuriRentContent({ editMode }) {
           <EditableText path="marketing.over_surirent.pricing.heading" fallback="Prijsstructuur" as="h2" label="Over SuriRent · Prijskop" className="text-2xl font-black mb-4" />
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-6 rounded-2xl border-2 border-slate-200">
-              <p className="text-sm font-bold text-slate-500 mb-1">{starterPlan?.name || 'Starter'}</p>
-              <p className="text-3xl font-black mb-2">{plansLoading ? 'Laden…' : formatPrice(starterPlan)} {!plansLoading && starterPlan?.amount != null && <span className="text-sm font-medium text-slate-500">/ maand</span>}</p>
+              <p className="text-sm font-bold text-slate-500 mb-1">{translateMarketingText(starterPlan?.name || 'Starter', language)}</p>
+              <p className="text-3xl font-black mb-2">{translateMarketingText(plansLoading ? 'Laden…' : formatPrice(starterPlan), language)} {!plansLoading && starterPlan?.amount != null && <span className="text-sm font-medium text-slate-500">{translateMarketingText('/ maand', language)}</span>}</p>
               <EditableText path="marketing.over_surirent.pricing.starter.description" fallback={starterPlan?.description || 'Ideaal voor kleinere verhuurders die willen starten met digitale administratie.'} as="p" multiline label="Over SuriRent · Starteromschrijving" className="text-sm text-slate-600" />
             </div>
             <div className="p-6 rounded-2xl border-2 border-orange-500 bg-orange-50/40">
-              <p className="text-sm font-bold text-orange-600 mb-1">{professionalPlan?.name || 'Professional'}</p>
-              <p className="text-3xl font-black mb-2">{plansLoading ? 'Laden…' : formatPrice(professionalPlan)} {!plansLoading && professionalPlan?.amount != null && <span className="text-sm font-medium text-slate-500">/ maand</span>}</p>
+              <p className="text-sm font-bold text-orange-600 mb-1">{translateMarketingText(professionalPlan?.name || 'Professional', language)}</p>
+              <p className="text-3xl font-black mb-2">{translateMarketingText(plansLoading ? 'Laden…' : formatPrice(professionalPlan), language)} {!plansLoading && professionalPlan?.amount != null && <span className="text-sm font-medium text-slate-500">{translateMarketingText('/ maand', language)}</span>}</p>
               <EditableText path="marketing.over_surirent.pricing.professional.description" fallback={professionalPlan?.description || 'Voor vastgoedbeheerders en complexen met meerdere verhuureenheden.'} as="p" multiline label="Over SuriRent · Professionalomschrijving" className="text-sm text-slate-600" />
             </div>
           </div>

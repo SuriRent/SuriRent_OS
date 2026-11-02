@@ -13,6 +13,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { translateMarketingNode } from './marketing-language';
 
 const EditableContext = createContext({
   editMode: false,
@@ -20,6 +21,8 @@ const EditableContext = createContext({
   page: '/',
   setContent: () => {},
   patch: () => {},
+  language: 'nl',
+  setLanguage: () => {},
 });
 
 export function useEditable() {
@@ -79,9 +82,37 @@ function registerEditableField(path, label, kind, value, page, metadata = {}) {
  *  - initialContent (obj): initial state (vaak van /api/landing/content)
  *  - onPatch (fn): callback ({path, value}) na elke wijziging (gebruikt voor postMessage naar parent)
  */
-export function EditableProvider({ editMode, initialContent, onPatch, children }) {
+export function EditableProvider({ editMode, initialContent, onPatch, enableLanguageSwitcher = false, children }) {
   const [content, setContent] = useState(initialContent || {});
+  const [selectedLanguage, setLanguageState] = useState(() => {
+    if (!enableLanguageSwitcher) return 'nl';
+    try {
+      return window.localStorage.getItem('surirent-marketing-language') === 'en' ? 'en' : 'nl';
+    } catch {
+      return 'nl';
+    }
+  });
+  const language = enableLanguageSwitcher ? selectedLanguage : 'nl';
   const location = useLocation();
+  const setLanguage = useCallback((nextLanguage) => {
+    if (!enableLanguageSwitcher) return;
+    const next = nextLanguage === 'en' ? 'en' : 'nl';
+    setLanguageState(next);
+    try {
+      window.localStorage.setItem('surirent-marketing-language', next);
+    } catch {
+      // The selected language still applies for this page when storage is unavailable.
+    }
+  }, [enableLanguageSwitcher]);
+
+  useEffect(() => {
+    if (!enableLanguageSwitcher) return undefined;
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = language;
+    return () => {
+      document.documentElement.lang = previousLanguage;
+    };
+  }, [enableLanguageSwitcher, language]);
 
   useEffect(() => {
     if (!editMode || typeof window === 'undefined' || window.parent === window) return;
@@ -136,8 +167,11 @@ export function EditableProvider({ editMode, initialContent, onPatch, children }
     if (typeof onPatch === 'function') onPatch({ path, value });
   }, [onPatch]);
 
-  const ctx = { editMode, content, page: location.pathname, setContent, patch };
-  return <EditableContext.Provider value={ctx}>{children}</EditableContext.Provider>;
+  const ctx = { editMode, content, page: location.pathname, setContent, patch, language, setLanguage };
+  const localizedChildren = enableLanguageSwitcher && language === 'en'
+    ? translateMarketingNode(children, language)
+    : children;
+  return <EditableContext.Provider value={ctx}>{localizedChildren}</EditableContext.Provider>;
 }
 
 /**
@@ -148,19 +182,25 @@ export function EditableProvider({ editMode, initialContent, onPatch, children }
  * - `multiline` staat enter toe en bewaart als één string
  */
 export function EditableText({ path, fallback, as: Tag = 'span', multiline = false, className = '', placeholder = '', label, children, ...rest }) {
-  const { editMode, content, page, patch } = useEditable();
+  const { editMode, content, page, patch, language } = useEditable();
   const ref = useRef(null);
-  const storedValue = getPath(content, path, undefined);
+  const localizedPath = language === 'en' && path ? `i18n.en.${path}` : path;
+  const localizedValue = language === 'en' ? getPath(content, localizedPath, undefined) : undefined;
+  const storedValue = localizedValue ?? getPath(content, path, undefined);
   const hasStoredValue = storedValue != null;
-  const value = hasStoredValue ? storedValue : (fallback ?? children ?? '');
+  const sourceValue = hasStoredValue ? storedValue : (getPath(content, path, undefined) ?? fallback ?? children ?? '');
+  const value = language === 'en' && localizedValue == null
+    ? translateMarketingNode(sourceValue, language)
+    : sourceValue;
+  const editPath = language === 'en' && path ? localizedPath : path;
 
   useEffect(() => {
-    if (editMode && path) {
+    if (editMode && editPath) {
       const fieldValue = typeof value === 'string' || typeof value === 'number'
         ? value : ref.current?.innerText || '';
-      registerEditableField(path, label, 'text', fieldValue, page);
+      registerEditableField(editPath, label, 'text', fieldValue, page);
     }
-  }, [children, editMode, label, page, path, value]);
+  }, [children, editMode, editPath, label, page, value]);
 
   // Sync DOM bij externe state-wijzigingen (anders herschrijft React de cursor mid-typing weg).
   // Daarom dompelen we onze update via blur — niet via key per key — en gebruiken `defaultValue`-pattern.
@@ -179,7 +219,7 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
   const onBlur = () => {
     const nv = ref.current?.innerText ?? '';
     if (nv !== (ref.current?.dataset.editInitialText || '')) {
-      patch(path, nv);
+      patch(editPath, nv);
     }
   };
   const onKeyDown = (e) => {
