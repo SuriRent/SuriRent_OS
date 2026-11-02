@@ -32,6 +32,8 @@ const NAV = [
   { id: 'pricing', label: 'Prijzen' },
   { id: 'faq', label: 'Service & FAQ' },
   { id: 'contact', label: 'Contact' },
+  { id: 'algemene-voorwaarden', label: 'Algemene voorwaarden' },
+  { id: 'privacy', label: 'Privacy' },
 ];
 
 export const FEATURES = [
@@ -70,6 +72,7 @@ export function LandingHeader({ onLogin, onRegister }) {
     setOpen(false);
     if (id === 'features') navigate('/functies');
     else if (id === 'contact') navigate('/contact');
+    else if (id === 'algemene-voorwaarden' || id === 'privacy') navigate(`/${id}`);
     else if (id === 'home') {
       if (location.pathname === '/') goToSection('home');
       else navigate('/#home');
@@ -77,12 +80,14 @@ export function LandingHeader({ onLogin, onRegister }) {
     else navigate(id.startsWith('feature-') ? `/functies#${id}` : `/#${id}`);
   };
   useEffect(() => {
-    if (location.pathname === '/functies') {
-      setActive('features');
-      return undefined;
-    }
-    if (location.pathname === '/contact') {
-      setActive('contact');
+    const pageNavigation = {
+      '/functies': 'features',
+      '/contact': 'contact',
+      '/algemene-voorwaarden': 'algemene-voorwaarden',
+      '/privacy': 'privacy',
+    };
+    if (pageNavigation[location.pathname]) {
+      setActive(pageNavigation[location.pathname]);
       return undefined;
     }
     const onScroll = () => {

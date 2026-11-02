@@ -805,6 +805,78 @@ function ContactPage() {
   );
 }
 
+const LEGAL_CONTENT = {
+  '/algemene-voorwaarden': {
+    eyebrow: 'Juridische informatie',
+    title: 'Algemene voorwaarden',
+    intro: 'Deze conceptvoorwaarden beschrijven op hoofdlijnen het gebruik van SuriRent. Laat de inhoud controleren en aanvullen voordat je deze als bindende voorwaarden publiceert.',
+    sections: [
+      ['1. Gebruik van SuriRent', 'SuriRent biedt hulpmiddelen voor vastgoed- en huurbeheer. Je bent zelf verantwoordelijk voor het aanmaken en beheren van je account, het beveiligen van je inloggegevens en het correct gebruik van de functies.'],
+      ['2. Account en gegevens', 'Houd je accountgegevens actueel en geef alleen personen toegang die bevoegd zijn om namens jouw organisatie te handelen. Je blijft verantwoordelijk voor de gegevens die jij of je gebruikers invoeren en voor de benodigde rechten en toestemmingen daarvoor.'],
+      ['3. Abonnement en betaling', 'De gekozen abonnementsvorm, inbegrepen functies, eventuele gebruikslimieten en prijzen worden bij het aanbod of in je account vermeld. Betalings- en abonnementsafspraken moeten vóór publicatie worden afgestemd op het actuele aanbod van SuriRent.'],
+      ['4. Beschikbaarheid en onderhoud', 'We streven naar een goed werkende dienst. Onderhoud, updates, storingen bij externe dienstverleners of omstandigheden buiten onze invloed kunnen de beschikbaarheid tijdelijk beïnvloeden. Maak waar nodig eigen exports en back-ups van belangrijke gegevens.'],
+      ['5. Zorgvuldig gebruik', 'Gebruik SuriRent niet voor onrechtmatige activiteiten, het schenden van rechten van anderen of het verstoren van de dienst. We kunnen passende maatregelen nemen bij misbruik of een beveiligingsrisico, met inachtneming van toepasselijke afspraken en wetgeving.'],
+      ['6. Intellectuele eigendom', 'De software, vormgeving en merkmiddelen van SuriRent blijven beschermd door de toepasselijke intellectuele-eigendomsrechten. Je krijgt alleen het gebruiksrecht dat nodig is om de dienst volgens je abonnement te gebruiken.'],
+      ['7. Aansprakelijkheid en beëindiging', 'Afspraken over aansprakelijkheid, opzegtermijnen, gegevens na beëindiging en eventuele restitutie moeten worden afgestemd op het daadwerkelijke product en toepasselijk recht. Neem hiervoor contact op met SuriRent.'],
+      ['8. Wijzigingen en contact', 'De definitieve voorwaarden moeten aangeven hoe wijzigingen worden aangekondigd en wanneer zij ingaan. Vragen over deze concepttekst kun je sturen naar info@surirent.sr.'],
+    ],
+  },
+  '/privacy': {
+    eyebrow: 'Juridische informatie',
+    title: 'Privacyverklaring',
+    intro: 'Deze conceptverklaring legt in algemene zin uit welke persoonsgegevens bij gebruik van SuriRent kunnen worden verwerkt. Controleer en vul haar aan op basis van de werkelijke gegevensstromen en toepasselijke privacywetgeving.',
+    sections: [
+      ['1. Wie is verantwoordelijk?', 'Deze concepttekst noemt SuriRent als contactpunt voor vragen over privacy. Vul vóór publicatie de volledige juridische naam, het vestigingsadres en de juiste contactgegevens in van de organisatie die verantwoordelijk is voor de verwerking.'],
+      ['2. Welke gegevens kunnen worden verwerkt?', 'Afhankelijk van je gebruik kan SuriRent account- en contactgegevens, technische loggegevens en de gegevens die een organisatie invoert over locaties, woningen, huurders, contracten, facturen en betalingen verwerken. Dien geen gegevens in die niet nodig zijn voor het gebruik van de dienst.'],
+      ['3. Waarvoor gebruiken we gegevens?', 'Gegevens kunnen nodig zijn om accounts en de dienst te beheren, functies uit te voeren, ondersteuning te bieden, beveiliging te bewaken en wettelijke verplichtingen na te komen. De precieze doelen, rechtsgronden en bewaartermijnen moeten vóór publicatie worden bevestigd.'],
+      ['4. Gegevens van huurders en andere betrokkenen', 'Organisaties die SuriRent gebruiken blijven verantwoordelijk voor het bepalen welke gegevens zij invoeren en voor het informeren van hun huurders, medewerkers en andere betrokkenen. De rolverdeling tussen SuriRent en deze organisaties moet contractueel en juridisch worden vastgelegd.'],
+      ['5. Delen en doorgifte', 'Voor hosting, e-mail, betalingen en andere functies kunnen dienstverleners worden ingezet. Vermeld in de definitieve verklaring welke partijen dit zijn, waar gegevens worden verwerkt en welke passende afspraken voor eventuele internationale doorgifte gelden.'],
+      ['6. Beveiliging en bewaartermijn', 'Er worden passende technische en organisatorische maatregelen nagestreefd om gegevens te beschermen. Beschrijf hier de daadwerkelijk toegepaste maatregelen en bewaartermijnen; verwijder of anonimiseer gegevens wanneer ze niet langer nodig zijn, volgens de definitieve bewaarbeleidsregels.'],
+      ['7. Jouw privacyrechten', 'Afhankelijk van de toepasselijke wetgeving kunnen betrokkenen rechten hebben met betrekking tot hun persoonsgegevens. De definitieve verklaring moet uitleggen hoe verzoeken kunnen worden ingediend en hoe daarop wordt gereageerd.'],
+      ['8. Contact en updates', 'Voor privacyvragen kun je contact opnemen via info@surirent.sr. Voeg hier vóór publicatie de juiste contactpersoon, eventuele toezichthouderinformatie en de datum van de laatste wijziging toe.'],
+    ],
+  },
+};
+
+function LegalPage({ pathname }) {
+  const content = LEGAL_CONTENT[pathname];
+  if (!content) return null;
+
+  return (
+    <main className="bg-white" data-testid={`legal-page-${pathname.slice(1)}`}>
+      <section className="relative isolate overflow-hidden bg-[#FBF8F5]">
+        <div className="absolute -right-36 -top-40 -z-10 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/10 blur-3xl" />
+        <div className="mx-auto max-w-[1440px] px-5 py-14 sm:px-8 lg:px-10 lg:py-20 2xl:px-[120px]">
+          <p className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3.5 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">
+            <span className="h-2 w-2 rounded-full bg-[#FF5C00]" /> {content.eyebrow}
+          </p>
+          <h1 className="mt-5 max-w-4xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-[#0B1B3F] sm:text-5xl lg:text-6xl">
+            {content.title}
+          </h1>
+          <p className="mt-5 max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">{content.intro}</p>
+        </div>
+      </section>
+      <section className="bg-white px-5 py-12 sm:px-8 sm:py-16 lg:px-10 lg:py-20 2xl:px-[120px]">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-8 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50/70 p-4 text-sm leading-relaxed text-[#7C3514]">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white font-black text-[#FF5C00]">!</span>
+            <p><strong>Concepttekst:</strong> deze informatie is een startpunt en is niet juridisch beoordeeld. Vul ontbrekende gegevens aan en laat de tekst controleren voordat je deze als definitief beleid gebruikt.</p>
+          </div>
+          <div className="divide-y divide-slate-100 rounded-[24px] border border-slate-100 bg-white px-5 shadow-[0_24px_60px_-40px_rgba(11,27,63,0.3)] sm:px-8">
+            {content.sections.map(([heading, body]) => (
+              <article key={heading} className="py-6 sm:py-7">
+                <h2 className="text-lg font-black tracking-tight text-[#0B1B3F] sm:text-xl">{heading}</h2>
+                <p className="mt-2 text-sm leading-7 text-slate-600 sm:text-base">{body}</p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-6 text-xs text-slate-400">Concept voor beoordeling — geen juridisch advies.</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 // =============================================================================
 // PersistentInstallBanner — slide-down sticky bovenaan de marketing landing
 // die verschijnt zodra `beforeinstallprompt` capturet is (Chrome/Edge/Android)
@@ -1213,6 +1285,7 @@ export default function MarketingLandingV2() {
   const showSkeleton = !editMode && !hasInstantContent && contentLoading;
   const showFeatureDetails = location.pathname === '/functies';
   const showContactPage = location.pathname === '/contact';
+  const showLegalPage = Boolean(LEGAL_CONTENT[location.pathname]);
 
   useEffect(() => {
     document.body.style.backgroundColor = '#FFFFFF';
@@ -1220,7 +1293,7 @@ export default function MarketingLandingV2() {
   }, []);
 
   useEffect(() => {
-    if (location.pathname === '/functies' || location.pathname === '/contact') {
+    if (['/functies', '/contact', '/algemene-voorwaarden', '/privacy'].includes(location.pathname)) {
       window.scrollTo(0, 0);
     }
   }, [location.pathname]);
@@ -1389,7 +1462,12 @@ export default function MarketingLandingV2() {
             onInstall={pwaInstall.install} />
         )}
         <LandingHeader onLogin={onLogin} onRegister={onRegister} />
-        {showContactPage ? (
+        {showLegalPage ? (
+          <>
+            <LegalPage pathname={location.pathname} />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        ) : showContactPage ? (
           <>
             <ContactPage />
             <Footer onLogin={onLogin} apk={apk} />
