@@ -704,7 +704,7 @@ async def _send_trial_reminders():
             <p>{body_msg}</p>
             <table class="kv">
               <tr><td>Pakket</td><td>{plan['name']}</td></tr>
-              <tr><td>Bedrag</td><td>{plan['currency']} {int(plan['amount']):,}/maand</td></tr>
+              <tr><td>Bedrag</td><td>{plan['currency']} {int(plan['amount']):,} / {_plan_interval_label(plan)}</td></tr>
               <tr><td>Verloopdatum</td><td>{end.strftime("%d %b %Y")}</td></tr>
             </table>
             <p style="margin-top:14px;"><a href="{app_url}/admin" style="display:inline-block;background:{cta_color};color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:700;">Open dashboard om te betalen</a></p>
@@ -1207,7 +1207,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                     contact_name=body.name,
                     email=email,
                     plan_name=plan_info["name"],
-                    plan_price_text=f"{plan_info['currency']} {int(plan_info['amount']):,}/maand".replace(",", "."),
+                    plan_price_text=f"{plan_info['currency']} {int(plan_info['amount']):,} / {_plan_interval_label(plan_info)}".replace(",", "."),
                     login_url=login_query_url,
                     subdomain_url=None,
                     kiosk_pin=None,
@@ -1234,7 +1234,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                 <h1 style="font-size:16px;margin-top:18px;">Uw pakket</h1>
                 <table class="kv">
                   <tr><td>Pakket</td><td>{plan_info['name']}</td></tr>
-                  <tr><td>Prijs</td><td>{plan_info['currency']} {int(plan_info['amount']):,}/maand</td></tr>
+                  <tr><td>Prijs</td><td>{plan_info['currency']} {int(plan_info['amount']):,} / {_plan_interval_label(plan_info)}</td></tr>
                   <tr><td>Proefperiode</td><td>14 dagen gratis</td></tr>
                 </table>
 
@@ -2272,6 +2272,11 @@ def _plan_period_end(plan: Optional[dict], start: datetime) -> Optional[datetime
     return start + timedelta(days={"quarter": 90, "year": 365}.get(interval, 30))
 
 
+def _plan_interval_label(plan: Optional[dict]) -> str:
+    interval = str((plan or {}).get("interval") or "month").lower()
+    return {"quarter": "kwartaal", "year": "jaar", "lifetime": "eenmalig", "once": "eenmalig"}.get(interval, "maand")
+
+
 def now_utc_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -2874,6 +2879,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
     now = now_utc()
+    period_end = _plan_period_end(plan, now)
     inv = {
         "id": new_id(),
         "company_id": cid,
@@ -2884,7 +2890,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         "status": "open",
         "kind": "subscription",
         "period_start": iso(now),
-        "period_end": iso(now + timedelta(days=30)),
+        "period_end": iso(period_end) if period_end else None,
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
     }

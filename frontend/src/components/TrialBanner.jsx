@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Clock, ArrowRight, X, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
+import { useBrandedNavigate } from '../lib/branded-nav';
+
+const intervalLabel = (interval) => ({
+  quarter: 'kwartaal',
+  year: 'jaar',
+  lifetime: 'eenmalig',
+  once: 'eenmalig',
+}[interval] || 'maand');
 
 export default function TrialBanner() {
+  const navigate = useBrandedNavigate();
   const [info, setInfo] = useState(null);
   const [dismissed, setDismissed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -20,6 +29,7 @@ export default function TrialBanner() {
 
   const isBlocking = info.status === 'expired' || info.status === 'cancelled' || info.status === 'past_due' || (info.days_left ?? 1) <= 0;
   const days = Math.max(0, info.days_left ?? 0);
+  const billingInterval = intervalLabel(info.plan?.interval);
 
   const openDetails = async () => {
     if (!bank) {
@@ -56,7 +66,7 @@ export default function TrialBanner() {
             {headline}
           </p>
           <p className="text-[11px] sm:text-xs text-white/90 truncate">
-            {info.plan?.name} pakket · {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')}/maand · betaal per bankoverschrijving
+            {info.plan?.name} pakket · {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')} / {billingInterval} · betaal per bankoverschrijving
           </p>
         </div>
         <button onClick={openDetails} data-testid="trial-upgrade-btn"
@@ -87,7 +97,7 @@ export default function TrialBanner() {
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-orange-700">Pakket {info.plan?.name}</p>
               <p className="text-2xl font-extrabold text-[#FF5C00] mt-1">
                 {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')}
-                <span className="text-xs font-medium text-slate-500 ml-1">/maand</span>
+                <span className="text-xs font-medium text-slate-500 ml-1">/ {billingInterval}</span>
               </p>
               {(info.plan?.features || []).length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
@@ -108,7 +118,7 @@ export default function TrialBanner() {
                   <Row label="Tenaamstelling" value={bank.account_name} />
                   <Row label="Rekeningnummer" value={bank.account_number} mono />
                   {bank.swift && <Row label="SWIFT" value={bank.swift} mono />}
-                  <Row label="Bedrag" value={`${info.currency} ${Number(info.monthly_amount || 0).toLocaleString('nl-NL')}`} mono />
+                  <Row label={`Bedrag per ${billingInterval}`} value={`${info.currency} ${Number(info.monthly_amount || 0).toLocaleString('nl-NL')}`} mono />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2">
                   Vermeld bij betaling: <span className="font-mono font-bold text-slate-600">ABONNEMENT — {info.plan?.name}</span>
@@ -118,6 +128,17 @@ export default function TrialBanner() {
                   {bank.support_email && <>E-mail <a href={`mailto:${bank.support_email}`} className="text-orange-600 font-bold">{bank.support_email}</a></>}
                 </p>
               </div>
+            )}
+
+            {bank && (info.currency || 'SRD') === 'SRD' && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin/instellingen?tab=bank#abonnement')}
+                data-testid="trial-upload-payment-proof"
+                className="w-full h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm mb-3 inline-flex items-center justify-center gap-2"
+              >
+                Ik heb betaald — betaalbewijs uploaden <ArrowRight className="w-4 h-4" />
+              </button>
             )}
 
             <button onClick={() => setShowDetails(false)}

@@ -16,6 +16,12 @@ const fmt = (n, c = 'SRD') => {
 };
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const isOpen = (i) => !['paid', 'superseded', 'cancelled', 'void'].includes(i.status);
+const intervalLabel = (interval) => ({
+  quarter: 'kwartaal',
+  year: 'jaar',
+  lifetime: 'eenmalig',
+  once: 'eenmalig',
+}[interval] || 'maand');
 const METHOD_LABEL = { creditcard: 'Creditcard', ideal: 'iDEAL', bank: 'Bank', stripe: 'Stripe', contant: 'Contant' };
 const STATUS_LABEL = { trial: 'Proefperiode', active: 'Actief', expired: 'Verlopen', cancelled: 'Opgezegd' };
 const CARD = 'bg-white rounded-2xl border border-orange-100';
@@ -267,7 +273,7 @@ function PlanCard({ plan, currentPlanId, onSelect, busy }) {
       {isCurrent && <span className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FF5C00] text-white">Huidig</span>}
       <p className="text-base font-black text-slate-900">{plan.name}</p>
       <p className="text-xs text-slate-500 mt-0.5 pr-14">{plan.description}</p>
-      <p className="text-2xl font-black text-slate-900 mt-4 tracking-tight">{fmt(plan.amount, plan.currency)}<span className="text-xs font-semibold text-slate-400 ml-1">/maand</span></p>
+      <p className="text-2xl font-black text-slate-900 mt-4 tracking-tight">{fmt(plan.amount, plan.currency)}<span className="text-xs font-semibold text-slate-400 ml-1">/ {intervalLabel(plan.interval)}</span></p>
       <ul className="mt-3 space-y-1.5 flex-1">
         {(plan.features || []).map((f) => (
           <li key={f} className="flex items-start gap-2 text-[13px] text-slate-600"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />{f}</li>
@@ -288,7 +294,6 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
   const fileInput = useRef(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
-  if (!invoice) return <p className="text-xs text-slate-400">Wacht op een nieuwe factuur om bewijs te kunnen uploaden.</p>;
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -299,7 +304,7 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
     try {
       const fd = new FormData();
       fd.append('file', f);
-      fd.append('invoice_id', invoice.id);
+      if (invoice?.id) fd.append('invoice_id', invoice.id);
       const { data } = await api.post('/billing/me/bank-confirm', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setResult(data);
       if (data.status === 'paid') onSuccess?.();
@@ -312,7 +317,11 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
         <ScanLine className="w-4 h-4 text-[#FF5C00]" />
         <p className="text-sm font-black text-slate-900">Betaalbewijs uploaden</p>
       </div>
-      <p className="text-xs text-slate-500 mb-4 leading-relaxed">Wij controleren automatisch bedrag, datum en omschrijving. Bij een match wordt uw abonnement direct geactiveerd.</p>
+      <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+        {invoice
+          ? 'Wij controleren automatisch bedrag, datum en omschrijving. Bij een match wordt uw abonnement direct geactiveerd.'
+          : 'Na je bankoverschrijving maken we bij het uploaden automatisch de eerste factuur aan. Bij een match wordt je abonnement direct geactiveerd.'}
+      </p>
       <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={onFile} className="hidden" data-testid="saas-bank-proof-input" />
       {!result && (
         <button onClick={() => fileInput.current?.click()} disabled={busy} data-testid="saas-bank-proof-upload-btn"
@@ -359,9 +368,10 @@ function KV({ label, value, mono, onCopy, copied, wrap }) {
   );
 }
 
-function BankPanel({ details, invoice, company, onSuccess, onErr }) {
+function BankPanel({ details, invoice, amount, currency, company, onSuccess, onErr }) {
   const [copied, setCopied] = useState('');
   const refText = `ABONNEMENT — ${company} — ${invoice ? new Date(invoice.created_at).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }) : 'huidige maand'}`;
+  const paymentAmount = invoice ? fmt(invoice.amount, invoice.currency) : fmt(amount, currency);
   const copy = (label, value) => { navigator.clipboard.writeText(value || ''); setCopied(label); setTimeout(() => setCopied(''), 1500); };
   return (
     <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6 [&>*]:min-w-0" data-testid="saas-bank-box">
@@ -374,7 +384,7 @@ function BankPanel({ details, invoice, company, onSuccess, onErr }) {
         <KV label="Tenaamstelling" value={details.account_name} onCopy={() => copy('account_name', details.account_name)} copied={copied === 'account_name'} />
         <KV label="Rekeningnummer" value={details.account_number} mono onCopy={() => copy('account_number', details.account_number)} copied={copied === 'account_number'} />
         {details.swift && <KV label="SWIFT" value={details.swift} mono onCopy={() => copy('swift', details.swift)} copied={copied === 'swift'} />}
-        {invoice && <KV label="Bedrag" value={fmt(invoice.amount, invoice.currency)} mono />}
+        {paymentAmount && <KV label="Bedrag" value={paymentAmount} mono />}
         <KV label="Omschrijving" value={refText} mono wrap onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
         {(details.whatsapp || details.support_email) && (
           <p className="text-[11px] text-slate-500 mt-3">
@@ -405,6 +415,12 @@ export default function MijnAbonnement() {
   const [apBusy, setApBusy] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('tab') === 'bank') {
+      setTab('bank');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     api.get('/saas-stripe/public-config').then(({ data }) => setStripeOn(!!writeSeed('/saas-stripe/public-config', data?.enabled ? 1 : 0))).catch(() => setStripeOn(false));
@@ -441,7 +457,7 @@ export default function MijnAbonnement() {
 
   const changePlan = async (plan) => {
     const word = plan.amount > (me?.monthly_amount || 0) ? 'opwaarderen' : 'downgraden';
-    if (!window.confirm(`Pakket ${word} naar ${plan.name} (${fmt(plan.amount, plan.currency)}/maand)?`)) return;
+    if (!window.confirm(`Pakket ${word} naar ${plan.name} (${fmt(plan.amount, plan.currency)} / ${intervalLabel(plan.interval)})?`)) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       const { data } = await api.put('/billing/me/plan', { plan: plan.id });
@@ -496,7 +512,7 @@ export default function MijnAbonnement() {
           </div>
         )}
         {tab === 'bank' && showBank && (
-          <BankPanel details={bank} invoice={oldestOpen} company={me.company_name || 'UW BEDRIJF'}
+          <BankPanel details={bank} invoice={oldestOpen} amount={me.monthly_amount} currency={me.currency} company={me.company_name || 'UW BEDRIJF'}
             onSuccess={() => { setMsg('Betaling automatisch goedgekeurd — abonnement is geactiveerd!'); load(); }} onErr={setErr} />
         )}
       </div>

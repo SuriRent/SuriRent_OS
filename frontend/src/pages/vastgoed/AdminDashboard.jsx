@@ -721,6 +721,7 @@ function SidebarSettingsDropdown({ tab, isActive }) {
 function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCompany }) {
   const groups = groupTabs(tabs);
   const canCollapseGroups = user?.role === 'superadmin';
+  const isSaasConsole = canCollapseGroups;
   const activeGroup = groups.find((group) => group.items.some((item) => item.id === active))?.key;
   const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(
     groups.map((group) => [group.key, !canCollapseGroups || group.key === activeGroup]),
@@ -762,10 +763,12 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
   }, [activeCompany?.logo_url]);
   const resolvedLogo = resolveLogoUrl(logoUrl);
   return (
-    <aside className="hidden md:flex flex-col w-56 lg:w-64 sticky top-0 h-screen bg-white border-r border-slate-100 shadow-[1px_0_3px_0_rgba(15,23,42,0.04)]"
+    <aside className={`hidden md:flex flex-col w-56 lg:w-64 sticky top-0 h-screen border-r shadow-[1px_0_3px_0_rgba(15,23,42,0.04)] ${
+      isSaasConsole ? 'bg-[#101827] border-slate-800' : 'bg-white border-slate-100'
+    }`}
       data-testid="sidebar">
       {/* HEADER — logo + bedrijfsnaam, vaste hoogte */}
-      <div className="px-5 pt-6 pb-5 flex items-center gap-3 border-b border-slate-100">
+      <div className={`px-5 pt-6 pb-5 flex items-center gap-3 border-b ${isSaasConsole ? 'border-slate-800' : 'border-slate-100'}`}>
         {resolvedLogo ? (
           <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 p-1.5 shadow-[0_8px_18px_-6px_rgba(15,23,42,0.10)] shrink-0 overflow-hidden"
             data-testid="sidebar-company-logo">
@@ -781,10 +784,10 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
         <div className="min-w-0">
           <p className="text-base font-black tracking-tight leading-tight truncate"
             data-testid="sidebar-company-name" title={fullName}>
-            <span className="text-slate-900">{nameA}</span><span className="text-[#FF5C00]">{nameB}</span>
+            <span className={isSaasConsole ? 'text-white' : 'text-slate-900'}>{nameA}</span><span className="text-[#FF5C00]">{nameB}</span>
           </p>
-          <p className="text-[9px] text-slate-500 font-bold tracking-[0.22em] uppercase">
-            {user?.role === 'superadmin' ? 'Superadmin' : 'Beheer Suite'}
+          <p className={`text-[9px] font-bold tracking-[0.22em] uppercase ${isSaasConsole ? 'text-orange-300' : 'text-slate-500'}`}>
+            {isSaasConsole ? 'SaaS Console' : 'Beheer Suite'}
           </p>
         </div>
       </div>
@@ -796,12 +799,14 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
             {canCollapseGroups ? (
               <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [g.key]: !current[g.key] }))}
                 aria-expanded={!!openGroups[g.key]} data-testid={`sidebar-group-${g.key}`}
-                className="w-full flex items-center justify-between px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400 hover:text-slate-600">
+                className={`w-full flex items-center justify-between px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase ${
+                  isSaasConsole ? 'text-slate-500 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'
+                }`}>
                 <span>{g.label}</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${openGroups[g.key] ? '' : '-rotate-90'}`} />
               </button>
             ) : (
-              <div className="px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400">
+              <div className={`px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase ${isSaasConsole ? 'text-slate-500' : 'text-slate-400'}`}>
                 {g.label}
               </div>
             )}
@@ -821,7 +826,9 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                     className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                       isActive
                         ? 'bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white shadow-[0_10px_22px_-8px_rgba(255,92,0,0.65)]'
-                        : 'text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] hover:translate-x-0.5'
+                        : isSaasConsole
+                          ? 'text-slate-300 hover:bg-slate-800 hover:text-white hover:translate-x-0.5'
+                          : 'text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] hover:translate-x-0.5'
                     }`}>
                     {isActive && (
                       <span aria-hidden className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full bg-white/80" />
@@ -858,19 +865,23 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
       </nav>
 
       {/* FOOTER — user pill + logout */}
-      <div className="border-t border-orange-100/60 px-3 py-3 bg-white/60 backdrop-blur-sm">
-        <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-xl bg-orange-50/60">
+      <div className={`border-t px-3 py-3 backdrop-blur-sm ${
+        isSaasConsole ? 'border-slate-800 bg-slate-950/60' : 'border-orange-100/60 bg-white/60'
+      }`}>
+        <div className={`flex items-center gap-2 px-3 py-2 mb-1 rounded-xl ${isSaasConsole ? 'bg-slate-900' : 'bg-orange-50/60'}`}>
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#FF8A3D] to-[#C74600] text-white text-[11px] font-black flex items-center justify-center shrink-0">
             {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-700 truncate leading-tight">{user?.name || 'Beheerder'}</p>
-            <p className="text-[10px] text-slate-500 truncate leading-tight">{user?.email}</p>
+            <p className={`text-[11px] font-bold truncate leading-tight ${isSaasConsole ? 'text-slate-100' : 'text-slate-700'}`}>{user?.name || 'Beheerder'}</p>
+            <p className={`text-[10px] truncate leading-tight ${isSaasConsole ? 'text-slate-400' : 'text-slate-500'}`}>{user?.email}</p>
           </div>
           <LiveIndicator compact />
         </div>
         <button onClick={onLogout} data-testid="logout-btn"
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            isSaasConsole ? 'text-slate-400 hover:bg-red-500/10 hover:text-red-300' : 'text-slate-500 hover:bg-red-50 hover:text-red-600'
+          }`}>
           <LogOut className="w-3.5 h-3.5" /> Uitloggen
         </button>
       </div>
@@ -4448,10 +4459,64 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
   );
 }
 
+function SaasConsoleHeader({ user, tab, tabs, onChange }) {
+  const current = tabs.find((item) => item.id === tab);
+  const CurrentIcon = current?.icon || LayoutDashboard;
+  const shortcuts = [
+    { id: 'companies', label: 'Bedrijven', icon: Building2 },
+    { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
+    { id: 'saas_pending', label: 'OCR-queue', icon: ScanLine },
+  ];
+  return (
+    <header
+      className="sticky top-0 z-30 px-3 sm:px-5 md:px-7 text-white bg-gradient-to-r from-[#FF7A24] via-[#F45B00] to-[#C74600] shadow-[0_8px_24px_-12px_rgba(124,45,18,0.65)]"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      data-testid="saas-console-header"
+    >
+      <div className="min-h-[68px] flex items-center gap-3 md:gap-5 max-w-[1800px] mx-auto">
+        <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-white/15 border border-white/20 p-1.5 shrink-0">
+          <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.2em] font-black text-white/75">SuriRent · SaaS Console</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <CurrentIcon className="hidden sm:block w-4 h-4 shrink-0" />
+            <h1 className="text-lg md:text-xl font-black tracking-tight truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+          </div>
+        </div>
+        <nav className="hidden md:flex items-center gap-2" aria-label="Snelle SaaS-acties">
+          {shortcuts.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" onClick={() => onChange(id)} data-testid={`saas-console-shortcut-${id}`}
+              className="h-10 px-3 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-extrabold inline-flex items-center gap-2 transition-colors">
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </nav>
+        <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-black/10 border border-white/15 max-w-[180px]">
+          <span className="w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.85)]" />
+          <span className="text-[11px] font-bold truncate">{user?.name || user?.email || 'Superadmin'}</span>
+        </div>
+      </div>
+      <nav className="md:hidden flex items-center gap-2 overflow-x-auto pb-2.5 -mx-1 px-1" aria-label="Snelle SaaS-acties mobiel">
+        {shortcuts.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" onClick={() => onChange(id)} data-testid={`saas-console-shortcut-${id}`}
+            className="shrink-0 h-9 px-3 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-[11px] font-extrabold inline-flex items-center gap-1.5">
+            <Icon className="w-3.5 h-3.5" /> {label}
+          </button>
+        ))}
+        <span className="sm:hidden shrink-0 inline-flex items-center gap-1.5 px-2 text-[10px] font-bold text-white/90">
+          <span className="w-2 h-2 rounded-full bg-emerald-300" /> {user?.name || 'Superadmin'}
+        </span>
+      </nav>
+    </header>
+  );
+}
+
 export default function AdminDashboard() {
   useHidePwaSplash();
   const { user, logout, activeCompany, refresh: refreshAuth } = useAuth();
   const tabs = getTabsFor(user);
+  const isSaasConsole = user?.role === 'superadmin';
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
   // bij eerste render zodat de PWA-launch direct in de juiste tab opent.
@@ -4683,15 +4748,16 @@ export default function AdminDashboard() {
   // Superadmin + impersonators zien uiteraard nooit iets.
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex">
+    <div className={`min-h-screen flex ${isSaasConsole ? 'bg-[#0B1220]' : 'bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
       <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
         user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />
       <div className="flex-1 flex flex-col min-w-0">
-        <MobileTopLogo user={user} activeCompany={activeCompany} />
-        <DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} />
+        {isSaasConsole
+          ? <SaasConsoleHeader user={user} tab={tab} tabs={tabs} onChange={handleSetTab} />
+          : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} /></>}
         <ImpersonationBanner />
         <TrialBanner />
-        <main className="flex-1 p-5 md:px-6 md:py-5 lg:px-8 lg:pt-3 pb-32 md:pb-8 w-full">
+        <main className={`flex-1 p-4 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-5 pb-32 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F5F9] md:rounded-tl-3xl' : ''}`}>
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
