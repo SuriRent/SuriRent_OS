@@ -4967,9 +4967,13 @@ export default function KioskLayout() {
   useHidePwaSplash();
   const navigate = useBrandedNavigate();
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
-  const [step, setStep] = useState(() => (localStorage.getItem('kiosk_token') ? 'select' : 'check'));
+  const [step, setStep] = useState(() => {
+    const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
+    return !isDemoLaunch && localStorage.getItem('kiosk_token') ? 'select' : 'check';
+  });
   const [demoLoginError, setDemoLoginError] = useState('');
   const demoLoginStarted = useRef(false);
+  const demoSession = useRef(new URLSearchParams(window.location.search).get('demo') === '1');
   const [apartment, setApartment] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
@@ -5073,6 +5077,7 @@ export default function KioskLayout() {
         localStorage.setItem('kiosk_token', data.kiosk_token);
         localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
         localStorage.setItem('is_demo_session', '1');
+        demoSession.current = true;
         if (data.company?.slug) localStorage.setItem('pwa_company_slug', data.company.slug);
         setCompany(data.company || null);
         window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.hash}`);
@@ -5290,7 +5295,7 @@ export default function KioskLayout() {
 
   const exit = useCallback(async () => {
     kioskLiveBye();
-    const wasDemo = (() => {
+    const wasDemo = demoSession.current || (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
     })();

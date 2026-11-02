@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { appLink } from '../../lib/env';
-import { useAuth } from '../../lib/auth';
 import {
   Menu, X, Lock, ChevronRight, ChevronDown, ChevronUp,
   LayoutDashboard, MapPin, Home as HomeIcon, Receipt, FileText, Users,
@@ -1265,7 +1264,6 @@ export default function MarketingLandingV2() {
   useHidePwaSplash();
   const navigate = useNavigate();
   const location = useLocation();
-  const { refresh: refreshAuth } = useAuth();
   const pwaInstall = usePwaInstall();
   const apk = useLatestApk();
 
@@ -1352,62 +1350,12 @@ export default function MarketingLandingV2() {
     } catch { /* ignore */ }
   }, [editMode]);
 
-  // Demo launcher — logt direct in op de demo en navigeert naar het juiste doel
-  // (admin / huurder kiosk / klantenscherm / huurportaal). Slaat token op
-  // zodat de doelroute meteen authenticated is.
-  const launchDemo = useCallback(async (target = '/admin') => {
+  const launchDemo = useCallback(() => {
     if (editMode) return;
-    const appDemoUrl = appLink('/kiosk?demo=1');
-    if (new URL(appDemoUrl, window.location.href).origin !== window.location.origin) {
-      window.location.assign(appDemoUrl);
-      return;
-    }
-    try {
-      const backend = process.env.REACT_APP_BACKEND_URL || '';
-      const res = await fetch(`${backend}/api/auth/demo-login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (!data?.token || !data?.kiosk_token) throw new Error('Demo-login gaf geen kiosktoegang terug.');
-      try {
-        localStorage.setItem('admin_token', data.token);
-        localStorage.setItem('kiosk_token', data.kiosk_token);
-        if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
-        // Sla de demo-slug op — zodat branded routes blijven werken, maar
-        // logout het netjes opruimt. We taggen 'm óók als demo zodat de
-        // logout-flow weet dat hij naar landing moet ipv naar PIN.
-        if (data.company?.slug) {
-          localStorage.setItem('pwa_company_slug', data.company.slug);
-        }
-        localStorage.setItem('is_demo_session', '1');
-      } catch { /* noop */ }
-      }
-      // Navigeer naar het doel — gebruik window.location voor cross-route
-      // hard nav (sommige doelen zitten onder app subdomain in productie).
-      const t = appLink(target);
-      if (t.startsWith('http')) {
-        // Cross-domain: cookie is al gezet op app-domein, target laadt fresh.
-        window.location.href = t;
-      } else {
-        // Same-origin (preview/hybrid): ververs AuthProvider ZODAT `user`
-        // niet null is als <Protected> straks matcht. Zonder deze refresh
-        // ziet Protected user=null en flitst /login kort in beeld.
-        try { await refreshAuth(); } catch { /* niet fataal */ }
-        navigate(t, { replace: true });
-      }
-    } catch (e) {
-      // Fallback: ga naar /login met demo intent zodat gebruiker handmatig kan inloggen
-      const t = appLink('/login?demo=1');
-      if (t.startsWith('http')) window.location.href = t;
-      else navigate(t);
-    }
-  }, [editMode, navigate, refreshAuth]);
+    window.location.assign(appLink('/kiosk?demo=1'));
+  }, [editMode]);
 
-  const onDemo = () => launchDemo('/kiosk');
+  const onDemo = launchDemo;
   const onWhatsApp = () => {
     if (editMode) return;
     window.open('https://wa.me/597XXXXXXX?text=Ik%20wil%20graag%20een%20demo%20van%20SuriRent', '_blank');
