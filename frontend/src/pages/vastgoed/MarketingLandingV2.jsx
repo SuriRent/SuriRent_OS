@@ -724,13 +724,13 @@ function ContactPage({ editMode }) {
               as="p" multiline label="Contact · Introductie" className="mt-5 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg" />
           </div>
           <EditableLink path="marketing.contact.email_href" href="mailto:info@surirent.sr" label="Contact · E-mailadreslink"
-            className="group flex items-center gap-4 rounded-2xl border border-white bg-white/85 p-4 shadow-[0_22px_55px_-35px_rgba(11,27,63,0.35)] transition-transform hover:-translate-y-1 sm:p-5">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><Mail className="h-5 w-5" /></span>
-            <span>
+            className="group flex min-w-0 items-center gap-4 rounded-2xl border border-white bg-white/85 p-4 shadow-[0_22px_55px_-35px_rgba(11,27,63,0.35)] transition-transform hover:-translate-y-1 sm:p-5">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><Mail className="h-5 w-5" /></span>
+            <span className="min-w-0">
               <EditableText path="marketing.contact.email_label" fallback="Mail ons rechtstreeks" as="span" label="Contact · E-mail label" className="block text-xs font-bold text-slate-500" />
-              <EditableText path="marketing.contact.email" fallback="info@surirent.sr" as="span" label="Contact · E-mailadres" className="mt-1 block text-sm font-black text-[#0B1B3F] group-hover:text-[#FF5C00]" />
+              <EditableText path="marketing.contact.email" fallback="info@surirent.sr" as="span" label="Contact · E-mailadres" className="mt-1 block break-all text-sm font-black text-[#0B1B3F] group-hover:text-[#FF5C00]" />
             </span>
-            <ArrowRight className="ml-3 h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
+            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
           </EditableLink>
         </div>
       </section>
@@ -748,8 +748,8 @@ function ContactPage({ editMode }) {
                   referrerPolicy="no-referrer-when-downgrade"
                   allowFullScreen
                 />
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 rounded-xl border border-white/70 bg-white/95 p-3 shadow-lg backdrop-blur">
-                  <p className="flex items-center gap-2 text-sm font-black text-[#0B1B3F]"><MapPin className="h-4 w-4 text-[#FF5C00]" /><EditableText path="marketing.contact.location" fallback="Paramaribo, Suriname" as="span" label="Contact · Locatie" /></p>
+                <div className="absolute bottom-3 left-3 right-3 flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <p className="flex min-w-0 items-center gap-2 text-sm font-black text-[#0B1B3F]"><MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" /><EditableText path="marketing.contact.location" fallback="Paramaribo, Suriname" as="span" label="Contact · Locatie" /></p>
                   <EditableLink path="marketing.contact.map_href" href="https://maps.google.com/?q=Paramaribo%2C%20Suriname" label="Contact · Kaartlink" target="_blank" rel="noreferrer"
                     className="shrink-0 rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-[#E65300] transition-colors hover:bg-orange-100"><EditableText path="marketing.contact.map_label" fallback="Open kaart" as="span" label="Contact · Kaartknop" /></EditableLink>
                 </div>

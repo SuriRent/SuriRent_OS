@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList, LayoutDashboard,
   FileText, BookOpen, Settings, Bell, Home as HomeIcon, Wallet, AlertCircle, MoreHorizontal,
 } from 'lucide-react';
-import { EditableText, EditableImage, EditableLink, useEditable } from '../../../lib/landing-editable';
+import { EditableText, EditableImage, EditableLink, EditableMedia, getPath, useEditable } from '../../../lib/landing-editable';
 import StatusPill from '../../../components/StatusPill';
 
 export const NAVY = '#0B1B3F';
@@ -150,11 +150,11 @@ export function LandingHeader({ onLogin, onRegister }) {
         </div>
       </nav>
       {open && (
-        <div className="xl:hidden bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
+        <div className="xl:hidden max-h-[calc(100dvh-76px)] overflow-y-auto overscroll-contain bg-white border-t border-slate-100 px-5 py-4 space-y-1" data-testid="topheader-mobile-drawer">
           {NAV.map((n, i) => (
             <EditableLink key={n.id} path={`v3.nav.items.${i}.href`} href={n.href} label={`Navigatie · ${n.label}`}
               onClick={pick} data-testid={`mobile-nav-${n.id}`}
-              className={`w-full text-left px-3 py-3 text-base font-bold rounded-xl hover:bg-orange-50 ${active === n.id ? 'text-[#FF5C00]' : ''}`}
+              className={`flex w-full text-left px-3 py-3 text-base font-bold rounded-xl hover:bg-orange-50 ${active === n.id ? 'text-[#FF5C00]' : ''}`}
               style={active === n.id ? undefined : { color: NAVY }}>
               <EditableText path={`v3.nav.items.${i}.label`} fallback={n.label} as="span" label={`Navigatie · ${n.label}`} />
             </EditableLink>
@@ -307,6 +307,42 @@ function DeviceStage() {
   );
 }
 
+function HeroVisual() {
+  const { editMode, content } = useEditable();
+  const mediaUrl = getPath(content, 'v3.hero.device_media_url', '');
+  const mediaType = getPath(content, 'v3.hero.device_media_type', '');
+  const [showMockups, setShowMockups] = useState(false);
+  useEffect(() => setShowMockups(false), [mediaUrl, mediaType]);
+
+  if (!mediaUrl) {
+    return (
+      <>
+        <DeviceStage />
+        {editMode && <div className="hidden">
+          <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
+            label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full" />
+        </div>}
+      </>
+    );
+  }
+
+  const showMedia = !editMode || !showMockups;
+  return (
+    <div className="relative w-full">
+      {showMedia ? (
+        <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
+          label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full rounded-3xl shadow-[0_30px_70px_-30px_rgba(11,27,63,0.5)]" />
+      ) : <DeviceStage />}
+      {editMode && (
+        <button type="button" onClick={() => setShowMockups((visible) => !visible)}
+          className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-extrabold text-slate-800 shadow-lg">
+          {showMockups ? 'Terug naar foto/video' : 'Mockupteksten bewerken'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ApkCard({ rel }) {
   const v = rel ? `v${rel.version}` : 'Gratis';
   const mb = rel ? `${(rel.size / 1024 / 1024).toFixed(0)} MB` : 'App';
@@ -368,7 +404,7 @@ export function LandingHero({ onDemo, apk }) {
             ))}
           </div>
         </div>
-        <DeviceStage />
+        <HeroVisual />
       </div>
     </section>
   );

@@ -56,7 +56,7 @@ export function setPath(obj, path, value) {
   return out;
 }
 
-function registerEditableField(path, label, kind, value, page) {
+function registerEditableField(path, label, kind, value, page, metadata = {}) {
   if (typeof window === 'undefined' || window.parent === window) return;
   try {
     window.parent.postMessage({
@@ -66,6 +66,7 @@ function registerEditableField(path, label, kind, value, page) {
       kind,
       value: value == null ? '' : String(value),
       page,
+      ...metadata,
     }, window.location.origin);
   } catch { /* editor is optional outside the admin iframe */ }
 }
@@ -255,6 +256,66 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
         </span>
       </span>
     </button>
+  );
+}
+
+/** Editable hero media that accepts either a photo or a video URL. */
+export function EditableMedia({ path, typePath, className = '', label = 'Foto of video', poster = '' }) {
+  const { editMode, content, page, patch } = useEditable();
+  const src = getPath(content, path, '');
+  const mediaType = getPath(content, typePath, '');
+
+  useEffect(() => {
+    if (editMode && path) {
+      registerEditableField(path, label, 'media', src, page, { typePath, mediaType });
+    }
+  }, [editMode, label, mediaType, page, path, src, typePath]);
+
+  useEffect(() => {
+    if (!editMode) return undefined;
+    const handler = (ev) => {
+      const data = ev?.data;
+      if (ev.source !== window.parent || ev.origin !== window.location.origin
+        || !data || data.type !== 'landing-edit-media-reply' || data.path !== path) return;
+      patch(path, data.url || '');
+      if (typePath) patch(typePath, data.mediaType || '');
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [editMode, path, patch, typePath]);
+
+  const requestUpload = () => {
+    try {
+      window.parent?.postMessage({
+        type: 'landing-edit-media-request',
+        path,
+        typePath,
+        current: src,
+        mediaType,
+      }, window.location.origin);
+    } catch { /* editor is optional outside the admin iframe */ }
+  };
+
+  return (
+    <div className={`relative overflow-hidden ${className}`} data-edit-path={editMode ? path : undefined}
+      data-edit-kind={editMode ? 'media' : undefined}>
+      {src && mediaType.startsWith('video/')
+        ? <video src={src} poster={poster} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+        : src
+          ? <img loading="lazy" src={src} alt="" className="h-full w-full object-cover" />
+          : <div className="h-full w-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-500">
+            Upload een foto of video
+          </div>}
+      {editMode && (
+        <button type="button" onClick={requestUpload}
+          className="absolute inset-0 flex items-center justify-center bg-slate-950/10 hover:bg-slate-950/30 transition-colors"
+          aria-label="Foto of video wijzigen">
+          <span className="rounded-lg bg-white/95 px-3 py-2 text-sm font-extrabold text-slate-800 shadow">
+            Foto of video wijzigen
+          </span>
+        </button>
+      )}
+    </div>
   );
 }
 

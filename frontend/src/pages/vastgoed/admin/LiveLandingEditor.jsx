@@ -60,6 +60,12 @@ function previewUrl(path) {
   return `${path}?edit=1&landing=1&_t=${Date.now()}`;
 }
 
+function assetPreviewUrl(value) {
+  return value?.startsWith('/api/')
+    ? `${(process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '')}${value}`
+    : value;
+}
+
 export default function LiveLandingEditor() {
   const iframeRef = useRef(null);
   const [draft, setDraft] = useState(null);            // content object van /superadmin/landing/content?mode=draft
@@ -126,8 +132,10 @@ export default function LiveLandingEditor() {
         const field = {
           path: data.path,
           label: data.label || data.path,
-          kind: ['text', 'image', 'link'].includes(data.kind) ? data.kind : 'text',
+          kind: ['text', 'image', 'media', 'link'].includes(data.kind) ? data.kind : 'text',
           value: data.value == null ? '' : String(data.value),
+          typePath: typeof data.typePath === 'string' ? data.typePath : '',
+          mediaType: typeof data.mediaType === 'string' ? data.mediaType : '',
         };
         setEditableFields((prev) => [
           ...prev.filter((item) => item.path !== field.path),
@@ -141,7 +149,16 @@ export default function LiveLandingEditor() {
         return;
       }
       if (data.type === 'landing-edit-image-request' && data.path) {
-        setImageReq({ path: data.path, current: data.current || '' });
+        setImageReq({ path: data.path, current: data.current || '', allowVideo: false });
+      }
+      if (data.type === 'landing-edit-media-request' && data.path) {
+        setImageReq({
+          path: data.path,
+          typePath: data.typePath || '',
+          current: data.current || '',
+          mediaType: data.mediaType || '',
+          allowVideo: true,
+        });
       }
     };
     window.addEventListener('message', onMsg);
@@ -249,13 +266,19 @@ export default function LiveLandingEditor() {
       const url = data.url;
       try {
         iframeRef.current?.contentWindow?.postMessage(
-          { type: 'landing-edit-image-reply', path: imageReq.path, url }, window.location.origin,
+          imageReq.allowVideo
+            ? { type: 'landing-edit-media-reply', path: imageReq.path, url, mediaType: data.content_type, typePath: imageReq.typePath }
+            : { type: 'landing-edit-image-reply', path: imageReq.path, url },
+          window.location.origin,
         );
       } catch { /* no-op */ }
       setDraft((prev) => setPath(prev || {}, imageReq.path, url));
+      if (imageReq.allowVideo && imageReq.typePath) {
+        setDraft((prev) => setPath(prev || {}, imageReq.typePath, data.content_type || ''));
+      }
       setDirty(true);
       setImageReq(null);
-      showToast('Afbeelding bijgewerkt ✓');
+      showToast(imageReq.allowVideo ? 'Foto/video bijgewerkt ✓' : 'Afbeelding bijgewerkt ✓');
     } catch (e) {
       setErr(formatError(e, 'Upload mislukt'));
     } finally {
@@ -272,6 +295,21 @@ export default function LiveLandingEditor() {
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'landing-edit-focus', path }, window.location.origin,
     );
+  };
+
+  const clearMedia = () => {
+    if (!imageReq?.allowVideo) return;
+    setDraft((prev) => setPath(setPath(prev || {}, imageReq.path, ''), imageReq.typePath, ''));
+    iframeRef.current?.contentWindow?.postMessage({
+      type: 'landing-edit-media-reply',
+      path: imageReq.path,
+      typePath: imageReq.typePath,
+      url: '',
+      mediaType: '',
+    }, window.location.origin);
+    setDirty(true);
+    setImageReq(null);
+    showToast('Hero media verwijderd');
   };
 
   const openPreviewPage = (path) => {
@@ -411,7 +449,7 @@ export default function LiveLandingEditor() {
                 <div className="p-4 border-b border-slate-100">
                   <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                    Velden van deze pagina. Nieuwe tekst, afbeeldingen en links verschijnen hier automatisch zodra ze de bewerkbare marketingcomponenten gebruiken.
+                    Velden van deze pagina. Nieuwe tekst, afbeeldingen, video’s en links verschijnen hier automatisch zodra ze de bewerkbare marketingcomponenten gebruiken.
                   </p>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
                     Pakketnamen, prijzen en limieten komen uit SaaS Pakketten, zodat de marketingprijzen gelijk blijven aan de facturatie.
@@ -430,13 +468,49 @@ export default function LiveLandingEditor() {
                       <label key={field.path} className="block rounded-xl border border-slate-200 p-3 hover:border-emerald-300">
                         <span className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
                           <span className="truncate">{field.label}</span>
-                          <button type="button" onClick={() => focusField(field.path)}
-                            className="shrink-0 text-[10px] font-bold text-emerald-700 hover:underline">
-                            Toon
-                          </button>
+                          {field.kind !== 'media' && (
+                            <button type="button" onClick={() => focusField(field.path)}
+                              className="shrink-0 text-[10px] font-bold text-emerald-700 hover:underline">
+                              Toon
+                            </button>
+                          )}
                         </span>
                         <span className="mt-1 block truncate font-mono text-[9px] text-slate-400">{field.path}</span>
-                        {field.kind === 'text' ? (
+                        {field.kind === 'media' ? (
+                          <div className="mt-2">
+                            {value && (getPath(draft || {}, field.typePath) || field.mediaType).startsWith('video/') ? (
+                              <video src={assetPreviewUrl(value)} controls playsInline className="h-28 w-full rounded-lg bg-slate-100 object-contain" />
+                            ) : value ? (
+                              <img loading="lazy" src={assetPreviewUrl(value)} alt="" className="h-28 w-full rounded-lg bg-slate-100 object-contain" />
+                            ) : (
+                              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Geen foto of video ingesteld.</p>
+                            )}
+                            <div className="mt-2 flex gap-2">
+                              <button type="button"
+                                onClick={() => setImageReq({
+                                  path: field.path,
+                                  typePath: field.typePath,
+                                  current: value,
+                                  mediaType: getPath(draft || {}, field.typePath) || field.mediaType,
+                                  allowVideo: true,
+                                })}
+                                className="min-h-9 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-bold text-white hover:bg-emerald-800">
+                                Foto of video kiezen
+                              </button>
+                              {value && (
+                                <button type="button" onClick={() => {
+                                  updateField(field.path, '');
+                                  if (field.typePath) updateField(field.typePath, '');
+                                }} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                  Verwijderen
+                                </button>
+                              )}
+                            </div>
+                            <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                              De bestaande laptop- en telefoonmockupteksten blijven bewerkbaar. Kies in de preview “Mockupteksten bewerken” om ze te openen.
+                            </p>
+                          </div>
+                        ) : field.kind === 'text' ? (
                           <textarea value={value} onChange={(event) => updateField(field.path, event.target.value)}
                             rows={Math.min(5, Math.max(2, value.split('\n').length))}
                             data-testid={`landing-field-${field.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
@@ -447,7 +521,7 @@ export default function LiveLandingEditor() {
                             className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none" />
                         )}
                         {field.kind === 'image' && value && (
-                          <img loading="lazy" src={value.startsWith('/api/') ? `${(process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '')}${value}` : value}
+                          <img loading="lazy" src={assetPreviewUrl(value)}
                             alt="" className="mt-2 h-20 w-full rounded-lg bg-slate-100 object-contain" />
                         )}
                       </label>
@@ -468,27 +542,38 @@ export default function LiveLandingEditor() {
         </div>
       )}
 
-      {/* Image picker modal */}
+      {/* Image and video picker modal */}
       {imageReq && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setImageReq(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" data-testid="image-picker">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-extrabold text-slate-900">Afbeelding wijzigen</h3>
+              <h3 className="font-extrabold text-slate-900">{imageReq.allowVideo ? 'Hero foto of video wijzigen' : 'Afbeelding wijzigen'}</h3>
               <button onClick={() => setImageReq(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-xs text-slate-500 font-mono mb-3 truncate">{imageReq.path}</p>
-            {imageReq.current && (
-              <img loading="lazy" src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+            {imageReq.current && imageReq.allowVideo && imageReq.mediaType?.startsWith('video/') ? (
+              <video src={assetPreviewUrl(imageReq.current)} controls playsInline className="w-full h-40 rounded-lg mb-3 bg-slate-100 object-contain" />
+            ) : imageReq.current ? (
+              <img loading="lazy" src={assetPreviewUrl(imageReq.current)} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+            ) : null}
+            {imageReq.allowVideo && (
+              <p className="mb-3 text-xs text-slate-500">Afbeelding maximaal 5 MB; video MP4 of WebM maximaal 10 MB.</p>
             )}
             <label className="block">
-              <input type="file" accept="image/*"
+              <input type="file" accept={imageReq.allowVideo ? 'image/*,video/mp4,video/webm' : 'image/*'}
                 onChange={(e) => uploadImage(e.target.files?.[0])}
                 disabled={uploadingImg}
                 className="block w-full text-sm text-slate-600 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:font-bold file:text-sm file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer disabled:opacity-50" />
             </label>
+            {imageReq.allowVideo && imageReq.current && (
+              <button type="button" onClick={clearMedia} disabled={uploadingImg}
+                className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">
+                Hero foto/video verwijderen
+              </button>
+            )}
             {uploadingImg && (
               <p className="text-sm text-orange-600 flex items-center gap-2 mt-3">
                 <Loader2 className="w-4 h-4 animate-spin" /> Uploaden…

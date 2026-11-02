@@ -4,7 +4,7 @@ Stored in MongoDB collection `landing_content` with two documents:
   - {"id": "_published"}  — what the public marketing landing page renders
   - {"id": "_draft"}      — superadmin's working copy until they "Publish"
 
-Image uploads are stored in collection `landing_assets` with
+Image and video uploads are stored in collection `landing_assets` with
   {"id": "<uuid>", "filename": "...", "content_type": "...", "data_b64": "..."}
 and served back via /api/landing/asset/{id}.
 """

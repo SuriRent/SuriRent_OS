@@ -3213,6 +3213,7 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
 # Landing-page CMS (superadmin live editor)
 # =====================================================================
 MAX_LANDING_ASSET_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
+MAX_LANDING_VIDEO_BYTES = 10 * 1024 * 1024  # Keep Base64 assets below MongoDB's 16 MB document limit.
 
 
 def _to_webp_bytes(raw: bytes, content_type: str) -> tuple[bytes, str]:
@@ -3369,15 +3370,22 @@ async def discard_landing_draft(user=Depends(require_role("superadmin"))):
 @api.post("/superadmin/landing/upload")
 async def upload_landing_asset(file: UploadFile = File(...),
                                 user=Depends(require_role("superadmin"))):
-    """Upload an image (max 5 MB). Returns {url, id} where url is
-    /api/landing/asset/{id} and can be saved into any image_url field."""
-    raw = await file.read()
-    if len(raw) > MAX_LANDING_ASSET_BYTES:
-        raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB.")
-    ctype = (file.content_type or "").lower()
-    if not ctype.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
-    raw, ctype = _to_webp_bytes(raw, ctype)
+    """Upload a landing image or supported hero video and return its public asset URL."""
+    raw = await file.read(MAX_LANDING_VIDEO_BYTES + 1)
+    ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    if ctype.startswith("image/"):
+        if len(raw) > MAX_LANDING_ASSET_BYTES:
+            raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
+        raw, ctype = _to_webp_bytes(raw, ctype)
+    elif ctype in ("video/mp4", "video/webm"):
+        if len(raw) > MAX_LANDING_VIDEO_BYTES:
+            raise HTTPException(status_code=413, detail="Video groter dan 10 MB.")
+        is_mp4 = ctype == "video/mp4" and b"ftyp" in raw[4:16]
+        is_webm = ctype == "video/webm" and raw.startswith(b"\x1a\x45\xdf\xa3")
+        if not (is_mp4 or is_webm):
+            raise HTTPException(status_code=400, detail="Het videobestand is ongeldig of heeft een niet-ondersteund formaat.")
+    else:
+        raise HTTPException(status_code=400, detail="Kies een afbeelding, MP4- of WebM-video.")
     asset_id = new_id()
     await db.landing_assets.insert_one({
         "id": asset_id,
@@ -3385,10 +3393,11 @@ async def upload_landing_asset(file: UploadFile = File(...),
         "content_type": ctype,
         "data_b64": base64.b64encode(raw).decode("ascii"),
         "size": len(raw),
+        "kind": "video" if ctype.startswith("video/") else "image",
         "uploaded_by": user.get("email"),
         "uploaded_at": iso(now_utc()),
     })
-    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}"}
+    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}", "content_type": ctype}
 
 
 @api.post("/superadmin/landing/migrate-webp")
@@ -3473,7 +3482,7 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
     ctype = doc.get("content_type", "image/png")
     # Thumbnail: gecached in het doc na eerste generatie. Downscale via PIL
     # naar max 400px lange zijde, JPEG kwaliteit 78 — goed voor lijst-cards.
-    if thumb:
+    if thumb and ctype.startswith("image/"):
         cached = doc.get("thumb_b64")
         cached_ct = doc.get("thumb_content_type")
         if cached and cached_ct:
@@ -3521,6 +3530,7 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
         headers={
             "ETag": etag,
             "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
