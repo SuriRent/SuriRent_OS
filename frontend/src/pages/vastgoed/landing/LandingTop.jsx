@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, ChevronRight, Download, Lock, Menu, User, X, Search, ShieldCheck, Cloud, Headphones,
+  ArrowRight, ChevronRight, Download, Lock, Menu, User, X, ShieldCheck, Cloud, Headphones,
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList, LayoutDashboard,
   FileText, BookOpen, Settings, Bell, Home as HomeIcon, Wallet, AlertCircle, MoreHorizontal,
 } from 'lucide-react';
@@ -45,15 +45,6 @@ export const FEATURES = [
   { Icon: ClipboardList, title: 'Rapportage', desc: 'Inzicht in prestaties en financiële overzichten.', target: 'feature-1' },
 ];
 
-const SEARCH_ITEMS = [
-  ...NAV.map((item) => ({ label: item.label, target: item.id, terms: item.label.toLowerCase() })),
-  ...FEATURES.map((item) => ({
-    label: item.title,
-    target: item.target,
-    terms: `${item.title} ${item.desc}`.toLowerCase(),
-  })),
-];
-
 function Logo() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,43 +58,6 @@ function Logo() {
         <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" className="text-[#FF5C00]" />
       </span>
     </button>
-  );
-}
-
-function NavigationSearch({ onPick }) {
-  const [query, setQuery] = useState('');
-  const results = query.trim().length < 2 ? [] : SEARCH_ITEMS
-    .filter((item) => item.terms.includes(query.trim().toLowerCase()))
-    .slice(0, 6);
-
-  return (
-    <div className="relative w-full lg:w-[260px]" data-testid="nav-search">
-      <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-[#FF5C00] focus-within:ring-2 focus-within:ring-orange-100">
-        <Search className="h-4 w-4 shrink-0 text-slate-400" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && results.length) {
-              event.preventDefault();
-              onPick(results[0].target);
-              setQuery('');
-            }
-          }}
-          type="search" aria-label="Zoek op de website" placeholder="Zoeken..."
-          className="min-w-0 flex-1 bg-transparent text-sm text-[#0B1B3F] outline-none placeholder:text-slate-400" />
-      </label>
-      {query.trim().length >= 2 && (
-        <div className="absolute right-0 top-full z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-100 bg-white p-2 shadow-[0_20px_44px_-18px_rgba(11,27,63,0.3)]"
-          data-testid="nav-search-results">
-          {results.length ? results.map((item) => (
-            <button key={`${item.label}-${item.target}`} type="button"
-              onClick={() => { onPick(item.target); setQuery(''); }}
-              className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-bold text-[#0B1B3F] hover:bg-orange-50 hover:text-[#FF5C00]">
-              {item.label}
-            </button>
-          )) : <p className="px-3 py-2 text-sm text-slate-500">Geen resultaten gevonden.</p>}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -180,7 +134,6 @@ export function LandingHeader({ onLogin, onRegister }) {
               </button>
             </div>
           ))}
-          <div className="ml-auto py-1"><NavigationSearch onPick={pick} /></div>
         </div>
       </nav>
       {open && (
@@ -194,7 +147,6 @@ export function LandingHeader({ onLogin, onRegister }) {
             <button onClick={onLogin} data-testid="mobile-login" className="h-11 rounded-xl border border-slate-300 font-bold inline-flex items-center justify-center gap-2" style={{ color: NAVY }}><Lock className="w-4 h-4" /> Inloggen</button>
             <button onClick={() => { setOpen(false); onRegister(); }} data-testid="mobile-register" className="h-11 rounded-xl bg-[#FF5C00] text-white font-bold inline-flex items-center justify-center gap-2"><User className="w-4 h-4" /> Registreren</button>
           </div>
-          <div className="pt-3"><NavigationSearch onPick={pick} /></div>
           <div className="pt-3"><StatusPill /></div>
         </div>
       )}

@@ -103,60 +103,65 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
 
   return (
     <main data-testid="feature-details-page">
-      <section className="relative overflow-hidden bg-[#0B1B3F] text-white">
-        <div className="absolute -right-32 -top-40 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/20 blur-3xl" />
-        <div className="relative mx-auto grid max-w-[1440px] items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[0.8fr,1.2fr] lg:gap-14 lg:px-10 lg:py-20 2xl:px-[120px]">
+      <section className="relative isolate overflow-hidden bg-[#FBF8F5]">
+        <div className="absolute -right-40 -top-56 -z-10 h-[620px] w-[620px] rounded-full bg-[#FF5C00]/10 blur-3xl" />
+        <div className="absolute -bottom-56 left-1/4 -z-10 h-[460px] w-[460px] rounded-full bg-[#E8EEF8]/80 blur-3xl" />
+        <div className="relative mx-auto grid max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[0.85fr,1.15fr] lg:gap-16 lg:px-10 lg:py-24 2xl:px-[120px]">
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
-              <span className="h-2 w-2 rounded-full bg-[#FF8A3D]" /> SuriRent functies
+            <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3.5 py-2 text-xs font-black text-[#E65300] shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-[#FF5C00]" /> Het SuriRent platform
             </div>
-            <h1 className="mt-6 text-4xl font-black leading-[1.08] tracking-tight sm:text-5xl lg:text-[56px]">
-              Meer overzicht.<br /><span className="text-[#FF8A3D]">Minder handwerk.</span>
+            <h1 className="mt-6 text-4xl font-black leading-[1.04] tracking-[-0.04em] text-[#0B1B3F] sm:text-5xl lg:text-[60px]">
+              Verhuurbeheer,<br /><span className="text-[#FF5C00]">eindelijk eenvoudig.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">
-              Van locaties en huurders tot betalingen en facturen: ontdek hoe SuriRent je verhuurbeheer samenbrengt.
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
+              Van locaties en huurders tot betalingen en facturen: alles wat je nodig hebt voor overzichtelijk vastgoedbeheer, samengebracht op één plek.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <button onClick={onRegister} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white transition-colors hover:bg-[#E65300]">
+              <button onClick={onRegister} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white shadow-[0_12px_24px_-10px_rgba(255,92,0,0.8)] transition-colors hover:bg-[#E65300]">
                 Start gratis <ArrowRight className="h-4 w-4" />
               </button>
-              <button onClick={onDemo} className="inline-flex h-12 items-center rounded-xl border border-white/20 px-6 text-sm font-bold text-white transition-colors hover:bg-white/10">
+              <button onClick={onDemo} className="inline-flex h-12 items-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-bold text-[#0B1B3F] transition-colors hover:border-orange-200 hover:text-[#FF5C00]">
                 Bekijk de demo
               </button>
             </div>
-            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-xs font-semibold text-white/55">
-              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-[#FF8A3D]" /> Vastgoed op één plek</span>
-              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-[#FF8A3D]" /> Web en mobiel</span>
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold text-slate-600">
+              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Alles op één plek</span>
+              <span className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" /> Werkt op elk scherm</span>
             </div>
           </div>
           <div className="relative min-w-0 lg:pl-4">
-            <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-[#FF5C00]/25 to-transparent blur-xl" />
-            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-white shadow-[0_32px_80px_-32px_rgba(0,0,0,0.65)]">
-              <div className="flex h-10 items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4">
+            <div className="absolute -inset-5 rounded-[32px] bg-gradient-to-br from-[#FF5C00]/20 via-white/0 to-[#0B1B3F]/10 blur-2xl" />
+            <div className="relative rotate-[1deg] overflow-hidden rounded-[24px] border border-white bg-white p-2 shadow-[0_38px_90px_-40px_rgba(11,27,63,0.4)] sm:p-3">
+              <div className="flex h-10 items-center gap-1.5 rounded-t-xl border-b border-slate-100 bg-slate-50 px-4">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
-                <span className="ml-3 h-4 flex-1 rounded bg-white" />
+                <span className="ml-3 flex h-5 max-w-xs flex-1 items-center rounded-md border border-slate-100 bg-white px-3 text-[9px] font-medium text-slate-400">app.surirent.sr · Dashboard</span>
               </div>
               <EditableImage path="v2.features.rows.0.img" fallback={FEATURE_ROWS[0].img}
-                alt="SuriRent dashboard met vastgoedoverzicht" className="block aspect-[16/10] w-full object-cover object-top" />
+                alt="SuriRent dashboard met vastgoedoverzicht" className="block aspect-[16/10] w-full rounded-b-xl object-cover object-top" />
+            </div>
+            <div className="absolute -bottom-5 -left-2 flex items-center gap-3 rounded-2xl border border-white bg-white/95 p-3.5 shadow-[0_18px_42px_-22px_rgba(11,27,63,0.35)] backdrop-blur sm:-left-5 sm:p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50"><Check className="h-5 w-5 text-emerald-600" /></span>
+              <span><span className="block text-xs font-black text-[#0B1B3F]">Meer grip op je verhuur</span><span className="mt-0.5 block text-[11px] text-slate-500">Van administratie tot betaling</span></span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-slate-100 bg-white">
-        <div className="mx-auto grid max-w-[1440px] gap-3 px-5 py-8 sm:grid-cols-3 sm:px-8 lg:px-10 2xl:px-[120px]">
+      <section className="border-y border-slate-100 bg-white">
+        <div className="mx-auto grid max-w-[1440px] gap-3 px-5 py-7 sm:grid-cols-3 sm:px-8 lg:px-10 2xl:px-[120px]">
           {[
-            ['01', 'Beheer je locaties en woningen'],
-            ['02', 'Volg huur en betalingen'],
-            ['03', 'Houd facturen en acties bij'],
-          ].map(([number, label]) => (
-            <a key={number} href={`#feature-${Number(number) - 1}`}
-              className="group flex items-center gap-4 rounded-xl p-3 transition-colors hover:bg-slate-50">
-              <span className="text-xs font-black tracking-widest text-[#FF5C00]">{number}</span>
+            ['feature-1', MapPin, 'Locaties en woningen'],
+            ['feature-3', Wallet, 'Huur en betalingen'],
+            ['feature-4', FileText, 'Facturen en administratie'],
+          ].map(([target, Icon, label]) => (
+            <a key={label} href={`#${target}`}
+              className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-[#FBF8F5]/50 p-4 transition-all hover:-translate-y-0.5 hover:border-orange-100 hover:bg-orange-50/60">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#FF5C00] shadow-sm"><Icon className="h-5 w-5" /></span>
               <span className="text-sm font-bold text-[#0B1B3F] group-hover:text-[#FF5C00]">{label}</span>
-              <ChevronRight className="ml-auto h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
+              <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
             </a>
           ))}
         </div>
@@ -167,18 +172,18 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
         const reverse = index % 2 === 1;
         return (
           <section key={feature.id} id={feature.id}
-            className={index % 2 === 0 ? 'scroll-mt-36 bg-[#F8FAFC]' : 'scroll-mt-36 bg-white'}
+            className={index % 2 === 0 ? 'scroll-mt-36 bg-[#FBF8F5]' : 'scroll-mt-36 bg-white'}
             data-testid={`feature-detail-${index}`}>
-            <div className={`mx-auto grid max-w-[1440px] items-center gap-9 px-5 py-14 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:px-10 lg:py-20 2xl:px-[120px] ${reverse ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+            <div className={`mx-auto grid max-w-[1440px] items-center gap-10 px-5 py-16 sm:px-8 lg:grid-cols-2 lg:gap-20 lg:px-10 lg:py-24 2xl:px-[120px] ${reverse ? 'lg:[&>*:first-child]:order-2' : ''}`}>
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-orange-100 bg-white text-[#FF5C00] shadow-[0_12px_24px_-18px_rgba(255,92,0,0.7)]">
                   <Icon className="h-6 w-6" strokeWidth={1.9} />
                 </div>
                 <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-[#FF5C00]">
                   {String(index + 1).padStart(2, '0')} · {feature.eyebrow}
                 </p>
                 <EditableText path={`v2.features.rows.${index}.title`} fallback={feature.title}
-                  as="h2" className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-tight text-[#0B1B3F] lg:text-4xl" />
+                  as="h2" className="mt-3 max-w-xl text-3xl font-black leading-[1.08] tracking-tight text-[#0B1B3F] lg:text-[42px]" />
                 <EditableText path={`v2.features.rows.${index}.desc`} fallback={feature.desc}
                   as="p" multiline className="mt-4 max-w-xl text-base leading-relaxed text-slate-600" />
                 <ul className="mt-6 space-y-3">
@@ -193,7 +198,7 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
                 </ul>
               </div>
               <div className="min-w-0">
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_64px_-32px_rgba(11,27,63,0.32)]">
+                <div className="overflow-hidden rounded-[24px] border border-slate-200/80 bg-white p-2 shadow-[0_32px_72px_-36px_rgba(11,27,63,0.32)] sm:p-3">
                   <div className="flex h-9 items-center gap-1.5 border-b border-slate-100 bg-white px-3">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
@@ -201,7 +206,7 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
                     <span className="ml-3 h-4 flex-1 rounded bg-slate-50" />
                   </div>
                   <EditableImage path={`v2.features.rows.${index}.img`} fallback={feature.img}
-                    alt={feature.title} className="block aspect-[16/10] w-full object-cover object-top" />
+                    alt={feature.title} className="block aspect-[16/10] w-full rounded-b-xl object-cover object-top" />
                 </div>
               </div>
             </div>
@@ -698,44 +703,62 @@ function ContactPage() {
 
   return (
     <main data-testid="contact-page">
-      <section className="relative overflow-hidden bg-[#0B1B3F] text-white">
-        <div className="absolute -right-36 -top-40 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/20 blur-3xl" />
-        <div className="relative mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-10 lg:py-24 2xl:px-[120px]">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-[#FF8A3D]">Contact</p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">We helpen je graag verder.</h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/70 sm:text-lg">
-            Vraag een demo aan, stel je vraag of ontdek wat SuriRent voor jouw verhuurbeheer kan betekenen.
-          </p>
+      <section className="relative isolate overflow-hidden bg-[#FBF8F5]">
+        <div className="absolute -right-36 -top-40 -z-10 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/10 blur-3xl" />
+        <div className="mx-auto grid max-w-[1440px] items-center gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[1fr,auto] lg:px-10 lg:py-20 2xl:px-[120px]">
+          <div>
+            <p className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3.5 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">
+              <span className="h-2 w-2 rounded-full bg-[#FF5C00]" /> Contact
+            </p>
+            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-[#0B1B3F] sm:text-5xl lg:text-6xl">
+              Een vraag? <span className="text-[#FF5C00]">We denken met je mee.</span>
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
+              Vraag een demo aan, stel je vraag of ontdek hoe SuriRent jouw verhuurbeheer makkelijker maakt.
+            </p>
+          </div>
+          <a href="mailto:info@surirent.sr"
+            className="group flex items-center gap-4 rounded-2xl border border-white bg-white/85 p-4 shadow-[0_22px_55px_-35px_rgba(11,27,63,0.35)] transition-transform hover:-translate-y-1 sm:p-5">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><Mail className="h-5 w-5" /></span>
+            <span><span className="block text-xs font-bold text-slate-500">Mail ons rechtstreeks</span><span className="mt-1 block text-sm font-black text-[#0B1B3F] group-hover:text-[#FF5C00]">info@surirent.sr</span></span>
+            <ArrowRight className="ml-3 h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-[#FF5C00]" />
+          </a>
         </div>
       </section>
 
-      <section className="bg-[#F8FAFC] py-12 sm:py-16 lg:py-20">
-        <div className="mx-auto grid max-w-[1440px] gap-8 px-5 sm:px-8 lg:grid-cols-[0.8fr,1.2fr] lg:gap-12 lg:px-10 2xl:px-[120px]">
+      <section className="bg-white py-12 sm:py-16 lg:py-20">
+        <div className="mx-auto grid max-w-[1440px] items-start gap-8 px-5 sm:px-8 lg:grid-cols-[0.95fr,1.05fr] lg:gap-10 lg:px-10 2xl:px-[120px]">
           <div className="space-y-6">
-            <div className="rounded-2xl bg-white p-6 shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)] sm:p-8">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><Mail className="h-5 w-5" /></span>
-              <h2 className="mt-5 text-xl font-black text-[#0B1B3F]">Neem contact op</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">Stuur ons een bericht. We nemen zo snel mogelijk contact met je op.</p>
-              <a href="mailto:info@surirent.sr" className="mt-5 inline-flex font-bold text-[#FF5C00] hover:underline">info@surirent.sr</a>
+            <div className="rounded-[24px] border border-slate-100 bg-[#F8FAFC] p-2 shadow-[0_24px_60px_-40px_rgba(11,27,63,0.36)]">
+              <div className="relative overflow-hidden rounded-[18px]">
+                <iframe
+                  title="Kaart van Paramaribo, Suriname"
+                  src="https://maps.google.com/maps?q=Paramaribo%2C%20Suriname&z=12&output=embed"
+                  className="h-72 w-full border-0 sm:h-[360px]"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allowFullScreen
+                />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 rounded-xl border border-white/70 bg-white/95 p-3 shadow-lg backdrop-blur">
+                  <p className="flex items-center gap-2 text-sm font-black text-[#0B1B3F]"><MapPin className="h-4 w-4 text-[#FF5C00]" />Paramaribo, Suriname</p>
+                  <a href="https://maps.google.com/?q=Paramaribo%2C%20Suriname" target="_blank" rel="noreferrer"
+                    className="shrink-0 rounded-lg bg-orange-50 px-3 py-2 text-xs font-black text-[#E65300] transition-colors hover:bg-orange-100">Open kaart</a>
+                </div>
+              </div>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)]">
-              <iframe
-                title="Kaart van Paramaribo, Suriname"
-                src="https://maps.google.com/maps?q=Paramaribo%2C%20Suriname&z=12&output=embed"
-                className="h-64 w-full border-0 sm:h-72"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                allowFullScreen
-              />
-              <div className="flex items-center justify-between gap-4 p-4">
-                <p className="flex items-center gap-2 text-sm font-bold text-[#0B1B3F]"><MapPin className="h-4 w-4 text-[#FF5C00]" />Paramaribo, Suriname</p>
-                <a href="https://maps.google.com/?q=Paramaribo%2C%20Suriname" target="_blank" rel="noreferrer"
-                  className="shrink-0 text-xs font-bold text-[#FF5C00] hover:underline">Open kaart</a>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><MessageCircle className="h-4 w-4" /></span>
+                <span><span className="block text-xs font-bold text-slate-500">We reageren persoonlijk</span><span className="mt-1 block text-sm font-black text-[#0B1B3F]">Snel en betrokken</span></span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><Check className="h-4 w-4" /></span>
+                <span><span className="block text-xs font-bold text-slate-500">Waar je ook bent</span><span className="mt-1 block text-sm font-black text-[#0B1B3F]">Support in Suriname</span></span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)] sm:p-8 lg:p-10">
+          <div className="rounded-[24px] border border-slate-100 bg-white p-6 shadow-[0_24px_60px_-40px_rgba(11,27,63,0.36)] sm:p-8 lg:p-10">
             {submitted ? (
               <div className="flex min-h-[360px] flex-col items-center justify-center text-center" data-testid="contact-success">
                 <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-8 w-8" strokeWidth={3} /></span>
@@ -744,8 +767,9 @@ function ContactPage() {
               </div>
             ) : (
               <>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FF5C00]">Stuur een bericht</p>
+                <p className="inline-flex rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-[#E65300]">Stuur een bericht</p>
                 <h2 className="mt-2 text-2xl font-black text-[#0B1B3F] sm:text-3xl">Waar kunnen we je mee helpen?</h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">Vul het formulier in. We komen zo snel mogelijk bij je terug.</p>
                 <form onSubmit={submit} className="mt-7 space-y-5" data-testid="contact-form">
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block text-sm font-bold text-slate-700">Naam
@@ -1194,6 +1218,12 @@ export default function MarketingLandingV2() {
     document.body.style.backgroundColor = '#FFFFFF';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/functies' || location.pathname === '/contact') {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (editMode) return undefined;
