@@ -287,7 +287,17 @@ function PhoneMockup() {
 }
 
 // Schaalt de vaste mockup-compositie mee met de beschikbare breedte.
-function DeviceStage() {
+function requestHeroMediaUpload(path, typePath, current, mediaType) {
+  window.parent?.postMessage({
+    type: 'landing-edit-media-request',
+    path,
+    typePath,
+    current,
+    mediaType,
+  }, window.location.origin);
+}
+
+function DeviceStage({ editMode, laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType, showMockups }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -300,8 +310,36 @@ function DeviceStage() {
   return (
     <div ref={ref} className="w-full relative" style={{ height: 440 * scale }} data-testid="hero-devices">
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: 700, height: 440, transform: `scale(${scale})` }}>
-        <div className="absolute left-[30px] top-[20px]"><LaptopMockup /></div>
-        <div className="absolute right-0 top-[100px]"><PhoneMockup /></div>
+        <div className="absolute left-[30px] top-[20px]">
+          {!showMockups && laptopMediaUrl ? (
+            <EditableMedia path="v3.hero.laptop_media_url" typePath="v3.hero.laptop_media_type"
+              label="Startpagina · Laptop scherm foto of video" value={laptopMediaUrl} mediaTypeValue={laptopMediaType}
+              className="h-[410px] w-[600px] rounded-xl shadow-[0_30px_70px_-30px_rgba(11,27,63,0.5)]" />
+          ) : <LaptopMockup />}
+        </div>
+        <div className="absolute right-0 top-[100px]">
+          {!showMockups && phoneMediaUrl ? (
+            <EditableMedia path="v3.hero.phone_media_url" typePath="v3.hero.phone_media_type"
+              label="Startpagina · Telefoonscherm foto of video" value={phoneMediaUrl} mediaTypeValue={phoneMediaType}
+              className="h-[318px] w-[150px] rounded-[26px] border-[6px] border-[#111827] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.6)]" />
+          ) : <PhoneMockup />}
+        </div>
+        {editMode && (showMockups || !laptopMediaUrl) && (
+          <button type="button" onClick={() => requestHeroMediaUpload(
+            'v3.hero.laptop_media_url', 'v3.hero.laptop_media_type', laptopMediaUrl, laptopMediaType,
+          )} data-testid="hero-laptop-media-upload"
+            className="absolute left-[50px] top-[35px] z-20 rounded-lg bg-[#FF5C00] px-3 py-2 text-[13px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
+            Laptop · foto/video
+          </button>
+        )}
+        {editMode && (showMockups || !phoneMediaUrl) && (
+          <button type="button" onClick={() => requestHeroMediaUpload(
+            'v3.hero.phone_media_url', 'v3.hero.phone_media_type', phoneMediaUrl, phoneMediaType,
+          )} data-testid="hero-phone-media-upload"
+            className="absolute right-1 top-[110px] z-20 max-w-[150px] rounded-lg bg-[#FF5C00] px-2 py-2 text-[12px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
+            Telefoon · foto/video
+          </button>
+        )}
       </div>
     </div>
   );
@@ -309,47 +347,30 @@ function DeviceStage() {
 
 function HeroVisual() {
   const { editMode, content } = useEditable();
-  const mediaUrl = getPath(content, 'v3.hero.device_media_url', '');
-  const mediaType = getPath(content, 'v3.hero.device_media_type', '');
+  const savedLaptopMediaUrl = getPath(content, 'v3.hero.laptop_media_url');
+  const laptopMediaUrl = savedLaptopMediaUrl ?? getPath(content, 'v3.hero.device_media_url', '');
+  const laptopMediaType = savedLaptopMediaUrl == null
+    ? getPath(content, 'v3.hero.device_media_type', '')
+    : getPath(content, 'v3.hero.laptop_media_type', '');
+  const phoneMediaUrl = getPath(content, 'v3.hero.phone_media_url', '');
+  const phoneMediaType = getPath(content, 'v3.hero.phone_media_type', '');
+  const hasMedia = Boolean(laptopMediaUrl || phoneMediaUrl);
   const [showMockups, setShowMockups] = useState(false);
-  useEffect(() => setShowMockups(false), [mediaUrl, mediaType]);
+  useEffect(() => setShowMockups(false), [laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType]);
 
-  if (!mediaUrl) {
-    return (
-      <div className="relative">
-        <DeviceStage />
-        {editMode && (
-          <>
-            <div className="hidden">
-              <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
-                label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full" />
-            </div>
-            <button type="button"
-              onClick={() => window.parent?.postMessage({
-                type: 'landing-edit-media-request',
-                path: 'v3.hero.device_media_url',
-                typePath: 'v3.hero.device_media_type',
-                current: mediaUrl,
-                mediaType,
-              }, window.location.origin)}
-              data-testid="hero-media-upload"
-              className="absolute right-2 top-2 z-20 max-w-[calc(100%-1rem)] rounded-lg bg-[#FF5C00] px-3 py-2 text-xs font-extrabold text-white shadow-lg hover:bg-[#E65300] sm:right-4 sm:top-4 sm:px-4 sm:text-sm">
-              Foto of video uploaden
-            </button>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  const showMedia = !editMode || !showMockups;
   return (
     <div className="relative w-full">
-      {showMedia ? (
-        <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
-          label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full rounded-3xl shadow-[0_30px_70px_-30px_rgba(11,27,63,0.5)]" />
-      ) : <DeviceStage />}
       {editMode && (
+        <div className="hidden">
+          <EditableMedia path="v3.hero.laptop_media_url" typePath="v3.hero.laptop_media_type"
+            label="Startpagina · Laptop scherm foto of video" value={laptopMediaUrl} mediaTypeValue={laptopMediaType} />
+          <EditableMedia path="v3.hero.phone_media_url" typePath="v3.hero.phone_media_type"
+            label="Startpagina · Telefoonscherm foto of video" />
+        </div>
+      )}
+      <DeviceStage editMode={editMode} laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
+        phoneMediaUrl={phoneMediaUrl} phoneMediaType={phoneMediaType} showMockups={editMode && showMockups} />
+      {editMode && hasMedia && (
         <button type="button" onClick={() => setShowMockups((visible) => !visible)}
           className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-extrabold text-slate-800 shadow-lg">
           {showMockups ? 'Terug naar foto/video' : 'Mockupteksten bewerken'}

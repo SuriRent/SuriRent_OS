@@ -548,7 +548,7 @@ export default function LiveLandingEditor() {
           onClick={(e) => { if (e.target === e.currentTarget) setImageReq(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" data-testid="image-picker">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-extrabold text-slate-900">{imageReq.allowVideo ? 'Hero foto of video wijzigen' : 'Afbeelding wijzigen'}</h3>
+              <h3 className="font-extrabold text-slate-900">{imageReq.allowVideo ? 'Foto of video wijzigen' : 'Afbeelding wijzigen'}</h3>
               <button onClick={() => setImageReq(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X className="w-4 h-4" />
               </button>
@@ -560,7 +560,7 @@ export default function LiveLandingEditor() {
               <img loading="lazy" src={assetPreviewUrl(imageReq.current)} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
             ) : null}
             {imageReq.allowVideo && (
-              <p className="mb-3 text-xs text-slate-500">Afbeelding maximaal 5 MB; video MP4 of WebM maximaal 10 MB.</p>
+              <p className="mb-3 text-xs text-slate-500">Afbeelding maximaal 5 MB; video MP4 of WebM maximaal 100 MB.</p>
             )}
             <label className="block">
               <input type="file" accept={imageReq.allowVideo ? 'image/*,video/mp4,video/webm' : 'image/*'}
@@ -571,7 +571,7 @@ export default function LiveLandingEditor() {
             {imageReq.allowVideo && imageReq.current && (
               <button type="button" onClick={clearMedia} disabled={uploadingImg}
                 className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">
-                Hero foto/video verwijderen
+                Foto/video verwijderen
               </button>
             )}
             {uploadingImg && (

@@ -260,10 +260,10 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
 }
 
 /** Editable hero media that accepts either a photo or a video URL. */
-export function EditableMedia({ path, typePath, className = '', label = 'Foto of video', poster = '' }) {
+export function EditableMedia({ path, typePath, className = '', label = 'Foto of video', poster = '', value, mediaTypeValue }) {
   const { editMode, content, page, patch } = useEditable();
-  const src = getPath(content, path, '');
-  const mediaType = getPath(content, typePath, '');
+  const src = value ?? getPath(content, path, '');
+  const mediaType = mediaTypeValue ?? getPath(content, typePath, '');
 
   useEffect(() => {
     if (editMode && path) {

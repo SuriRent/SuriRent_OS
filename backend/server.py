@@ -15,13 +15,14 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
 from pymongo.errors import DuplicateKeyError
+from gridfs.errors import NoFile
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from contextlib import asynccontextmanager
 import io
 import base64
@@ -54,6 +55,7 @@ DB_NAME = os.environ["DB_NAME"]
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+landing_video_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="landing_video_blobs")
 
 # Pure auth-helpers zijn verplaatst naar auth_utils.py. We re-exporten
 # ze hier zodat bestaande route-code (en externe imports) blijven werken
@@ -3213,7 +3215,7 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
 # Landing-page CMS (superadmin live editor)
 # =====================================================================
 MAX_LANDING_ASSET_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
-MAX_LANDING_VIDEO_BYTES = 10 * 1024 * 1024  # Keep Base64 assets below MongoDB's 16 MB document limit.
+MAX_LANDING_VIDEO_BYTES = 100 * 1024 * 1024
 
 
 def _to_webp_bytes(raw: bytes, content_type: str) -> tuple[bytes, str]:
@@ -3371,32 +3373,55 @@ async def discard_landing_draft(user=Depends(require_role("superadmin"))):
 async def upload_landing_asset(file: UploadFile = File(...),
                                 user=Depends(require_role("superadmin"))):
     """Upload a landing image or supported hero video and return its public asset URL."""
-    raw = await file.read(MAX_LANDING_VIDEO_BYTES + 1)
     ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    is_video = ctype in ("video/mp4", "video/webm")
+    if not ctype.startswith("image/") and not is_video:
+        raise HTTPException(status_code=400, detail="Kies een afbeelding, MP4- of WebM-video.")
+    max_bytes = MAX_LANDING_VIDEO_BYTES if is_video else MAX_LANDING_ASSET_BYTES
+    asset_id = new_id()
+    filename = file.filename or f"asset-{asset_id}"
+    asset = {
+        "id": asset_id,
+        "filename": filename,
+        "content_type": ctype,
+        "kind": "video" if is_video else "image",
+        "uploaded_by": user.get("email"),
+        "uploaded_at": iso(now_utc()),
+    }
     if ctype.startswith("image/"):
+        raw = await file.read(max_bytes + 1)
         if len(raw) > MAX_LANDING_ASSET_BYTES:
             raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
         raw, ctype = _to_webp_bytes(raw, ctype)
-    elif ctype in ("video/mp4", "video/webm"):
-        if len(raw) > MAX_LANDING_VIDEO_BYTES:
-            raise HTTPException(status_code=413, detail="Video groter dan 10 MB.")
-        is_mp4 = ctype == "video/mp4" and b"ftyp" in raw[4:16]
-        is_webm = ctype == "video/webm" and raw.startswith(b"\x1a\x45\xdf\xa3")
+        asset["content_type"] = ctype
+        asset["size"] = len(raw)
+        asset["data_b64"] = base64.b64encode(raw).decode("ascii")
+    else:
+        header = await file.read(16)
+        is_mp4 = ctype == "video/mp4" and b"ftyp" in header[4:16]
+        is_webm = ctype == "video/webm" and header.startswith(b"\x1a\x45\xdf\xa3")
         if not (is_mp4 or is_webm):
             raise HTTPException(status_code=400, detail="Het videobestand is ongeldig of heeft een niet-ondersteund formaat.")
-    else:
-        raise HTTPException(status_code=400, detail="Kies een afbeelding, MP4- of WebM-video.")
-    asset_id = new_id()
-    await db.landing_assets.insert_one({
-        "id": asset_id,
-        "filename": file.filename or f"asset-{asset_id}",
-        "content_type": ctype,
-        "data_b64": base64.b64encode(raw).decode("ascii"),
-        "size": len(raw),
-        "kind": "video" if ctype.startswith("video/") else "image",
-        "uploaded_by": user.get("email"),
-        "uploaded_at": iso(now_utc()),
-    })
+        grid_in = landing_video_bucket.open_upload_stream(
+            filename, metadata={"content_type": ctype, "asset_id": asset_id},
+        )
+        size = 0
+        try:
+            chunk = header
+            while chunk:
+                size += len(chunk)
+                if size > max_bytes:
+                    raise HTTPException(status_code=413, detail="Video groter dan 100 MB.")
+                await grid_in.write(chunk)
+                chunk = await file.read(1024 * 1024)
+            await grid_in.close()
+        except Exception:
+            if not grid_in.closed:
+                await grid_in.abort()
+            raise
+        asset["size"] = size
+        asset["gridfs_id"] = grid_in._id
+    await db.landing_assets.insert_one(asset)
     return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}", "content_type": ctype}
 
 
@@ -3410,7 +3435,10 @@ async def migrate_landing_assets_to_webp(user=Depends(require_role("superadmin")
     upgrade nog originele bytes hebben. Deze endpoint kan de user 1x
     triggeren vanuit de Superadmin → Landing editor."""
     stats = {"total": 0, "converted": 0, "skipped_webp": 0, "failed": 0, "bytes_before": 0, "bytes_after": 0}
-    cursor = db.landing_assets.find({}, {"id": 1, "content_type": 1, "data_b64": 1, "size": 1})
+    cursor = db.landing_assets.find(
+        {"kind": {"$ne": "video"}},
+        {"id": 1, "content_type": 1, "data_b64": 1, "size": 1},
+    )
     async for doc in cursor:
         stats["total"] += 1
         ctype = (doc.get("content_type") or "").lower()
@@ -3474,6 +3502,69 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
     doc = await db.landing_assets.find_one({"id": asset_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Asset niet gevonden")
+    if doc.get("gridfs_id"):
+        try:
+            grid_out = await landing_video_bucket.open_download_stream(doc["gridfs_id"])
+        except NoFile as exc:
+            raise HTTPException(status_code=404, detail="Video niet gevonden") from exc
+        total_size = grid_out.length
+        start = 0
+        end = total_size - 1
+        range_header = request.headers.get("range")
+        status_code = 200
+        if range_header:
+            try:
+                unit, range_spec = range_header.split("=", 1)
+                if unit.strip().lower() != "bytes" or "," in range_spec:
+                    raise ValueError("Unsupported byte range")
+                start_text, end_text = range_spec.split("-", 1)
+                if not start_text:
+                    suffix_size = int(end_text)
+                    if suffix_size <= 0:
+                        raise ValueError("Invalid suffix range")
+                    start = max(total_size - suffix_size, 0)
+                else:
+                    start = int(start_text)
+                end = min(int(end_text), total_size - 1) if end_text else total_size - 1
+                if start < 0 or start >= total_size or start > end:
+                    raise ValueError("Unsatisfiable byte range")
+            except ValueError as exc:
+                grid_out.close()
+                raise HTTPException(
+                    status_code=416,
+                    detail="Ongeldig videobereik",
+                    headers={"Content-Range": f"bytes */{total_size}"},
+                ) from exc
+            grid_out.seek(start)
+            status_code = 206
+
+        async def stream_video():
+            remaining = end - start + 1
+            try:
+                while remaining:
+                    chunk = await grid_out.read(min(256 * 1024, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+            finally:
+                grid_out.close()
+
+        headers = {
+            "Content-Length": str(end - start + 1),
+            "Accept-Ranges": "bytes",
+            "ETag": etag,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if status_code == 206:
+            headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+        return StreamingResponse(
+            stream_video(),
+            media_type=doc.get("content_type", "video/mp4"),
+            status_code=status_code,
+            headers=headers,
+        )
     try:
         data = base64.b64decode(doc["data_b64"])
     except Exception:
