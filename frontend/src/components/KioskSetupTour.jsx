@@ -68,7 +68,7 @@ const TOUR_STEPS = {
     target: selectors.locationNew, next: 'awaiting-location',
   },
   locationPopupClose: {
-    group: 2, title: 'Sluit Locaties',
+    group: 3, title: 'Sluit Locaties',
     text: () => 'Sluit dit venster. Het beheermenu opent weer, zodat je Appartementen kunt kiezen.',
     target: selectors.locationPopupClose, next: 'apartmentsMenu',
   },
@@ -88,7 +88,7 @@ const TOUR_STEPS = {
     target: selectors.apartmentNew, next: 'awaiting-apartment',
   },
   apartmentPopupClose: {
-    group: 3, title: 'Sluit Appartementen',
+    group: 4, title: 'Sluit Appartementen',
     text: () => 'Sluit dit venster. Kies daarna Huurders in het beheermenu.',
     target: selectors.apartmentPopupClose, next: 'tenantsMenu',
   },
@@ -118,8 +118,8 @@ const SAVE_STAGE = {
 
 const STAGE_GROUPS = {
   settingsOpen: 1, settingsSection: 1, businessSave: 1, 'awaiting-profile': 1, settingsClose: 1, settingsMenuClose: 1,
-  openLocationsMenu: 2, locationsMenu: 2, locationNew: 2, 'awaiting-location': 2, locationPopupClose: 2,
-  openApartmentsMenu: 3, apartmentsMenu: 3, apartmentNew: 3, 'awaiting-apartment': 3, apartmentPopupClose: 3,
+  openLocationsMenu: 2, locationsMenu: 2, locationNew: 2, 'awaiting-location': 2, locationPopupClose: 3,
+  openApartmentsMenu: 3, apartmentsMenu: 3, apartmentNew: 3, 'awaiting-apartment': 3, apartmentPopupClose: 4,
   openTenantsMenu: 4, tenantsMenu: 4, tenantNew: 4, 'awaiting-tenant': 4,
 };
 
@@ -371,7 +371,7 @@ export default function KioskSetupTour({ enabled, companyId, onComplete }) {
             style={{ top: Math.max(4, rect.top - 34), left: Math.max(4, rect.left + rect.width / 2 - 12) }}>👇</div>
         </>
       )}
-      <section className={`fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 ${profileSaveOnly ? 'hidden' : ''}`}
+      <section className={`fixed pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 ${SAVE_STAGE[stage] ? 'hidden' : ''}`}
         style={{
           width: 'calc(100vw - 24px)',
           left: '50%',
