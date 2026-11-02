@@ -22,6 +22,7 @@ class RegisterIn(BaseModel):
     telefoon: Optional[str] = ""
     address: Optional[str] = ""
     plan: Optional[Literal["starter", "professional"]] = "starter"
+    personal_pin: Optional[str] = None  # 4 digits — personal login PIN
     kiosk_pin: Optional[str] = None  # 4 digits — set the kiosk PIN at registration
     country: Optional[Literal["SR", "NL"]] = None  # Explicit override; falls back to phone-based detection
 

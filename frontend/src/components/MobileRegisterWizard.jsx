@@ -1,18 +1,19 @@
 import { useEffect } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, Check, Eye, EyeOff, Globe, Loader2,
-  Lock, Mail, MapPin, Phone, Sparkles, User, X,
+  KeyRound, Lock, Mail, MapPin, Phone, Sparkles, User, X,
 } from 'lucide-react';
 import { useRegisterWizard } from './MobileAuthShell';
 import PasswordStrength from './PasswordStrength';
 
-const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket'];
-const TITLES = ['Je bedrijf', 'Jouw gegevens', 'Inloggegevens', 'Kies je pakket'];
+const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket', 'Controleren'];
+const TITLES = ['Je bedrijf', 'Jouw gegevens', 'Inloggegevens', 'Kies je pakket', 'Controleer je gegevens'];
 const SUBTITLES = [
   'Vertel ons over je verhuurbedrijf.',
   'Wie wordt het aanspreekpunt?',
-  'Gebruik je e-mailadres om straks in te loggen.',
-  'Kies je land en pakket. Je start met 14 dagen gratis.',
+  'Stel je e-mailadres, wachtwoord en persoonlijke PIN in.',
+  'Kies je land en pakket.',
+  'Controleer alle gegevens voordat je account wordt aangemaakt.',
 ];
 
 const inputClass = 'h-14 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FF5C00] focus:ring-4 focus:ring-orange-100';
@@ -35,11 +36,11 @@ function LabeledInput({ id, label, icon: Icon, children, optional }) {
 
 export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan }) {
   const {
-    step, companyName, setCompanyName, address, setAddress, name, setName,
+    step, setStep, companyName, setCompanyName, address, setAddress, name, setName,
     telefoon, setTelefoon, email, setEmail, password, setPassword, showPw,
-    setShowPw, country, setCountry, plan, setPlan, plans, loading, error,
-    success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev,
-    goToPortal,
+    setShowPw, personalPin, setPersonalPin, confirmPersonalPin, setConfirmPersonalPin,
+    country, setCountry, plan, setPlan, plans, loading, error, success,
+    chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal,
   } = useRegisterWizard({ onClose, initialPlan });
 
   useEffect(() => {
@@ -134,7 +135,7 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
                 </span>
               )}
             </div>
-            {chosenPlanName && step !== 3 && (
+            {chosenPlanName && step !== 3 && step !== 4 && (
               <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-bold text-[#E65300]" data-testid="chosen-plan-badge">
                 <Sparkles className="h-3.5 w-3.5" /> Je koos: {chosenPlanName}
               </div>
@@ -220,6 +221,26 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
                   </button>
                 </LabeledInput>
                 <div className="px-1"><PasswordStrength password={password} variant="light" /></div>
+                <LabeledInput id="register-personal-pin" label="Persoonlijke PIN (4 cijfers)" icon={KeyRound}>
+                  <input id="register-personal-pin" type="password" value={personalPin}
+                    onChange={(e) => setPersonalPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    data-testid="register-personal-pin" inputMode="numeric" autoComplete="new-password"
+                    maxLength={4} pattern="[0-9]{4}" required placeholder="Kies een 4-cijferige PIN"
+                    className={inputClass} />
+                </LabeledInput>
+                <LabeledInput id="register-personal-pin-confirm" label="Bevestig je PIN" icon={KeyRound}>
+                  <input id="register-personal-pin-confirm" type="password" value={confirmPersonalPin}
+                    onChange={(e) => setConfirmPersonalPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    data-testid="register-personal-pin-confirm" inputMode="numeric" autoComplete="new-password"
+                    maxLength={4} pattern="[0-9]{4}" required placeholder="Voer dezelfde PIN opnieuw in"
+                    className={inputClass} />
+                </LabeledInput>
+                {personalPin.length === 4 && confirmPersonalPin.length === 4 && personalPin !== confirmPersonalPin && (
+                  <p className="-mt-2 text-sm font-semibold text-red-600" role="alert">De PIN-codes komen niet overeen.</p>
+                )}
+                <p className="rounded-xl bg-orange-50 p-3 text-xs leading-relaxed text-slate-600">
+                  Met deze PIN kun je later snel inloggen. Je kunt ook altijd je e-mailadres en wachtwoord gebruiken.
+                </p>
               </div>
             )}
 
@@ -294,17 +315,79 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
                 </fieldset>
               </div>
             )}
+
+            {step === 4 && (
+              <div className="space-y-3" data-testid="register-review">
+                {[
+                  {
+                    title: 'Bedrijf',
+                    editStep: 0,
+                    rows: [['Bedrijfsnaam', companyName], ['Adres', address || 'Niet ingevuld'], ['Portal', portalPreview.slug]],
+                  },
+                  {
+                    title: 'Contactpersoon',
+                    editStep: 1,
+                    rows: [['Naam', name], ['Telefoon', telefoon || 'Niet ingevuld']],
+                  },
+                  {
+                    title: 'Inloggegevens',
+                    editStep: 2,
+                    rows: [['E-mailadres', email], ['Wachtwoord', password], ['Persoonlijke PIN', personalPin]],
+                  },
+                  {
+                    title: 'Pakket',
+                    editStep: 3,
+                    rows: [
+                      ['Land', country === 'NL' ? 'Nederland (EUR)' : 'Suriname (SRD)'],
+                      ['Pakket', (() => {
+                        const selectedPlan = plans.find((item) => item.id === plan);
+                        if (!selectedPlan) return plan;
+                        const currency = (selectedPlan.currency || 'SRD').toUpperCase();
+                        const amount = currency === 'EUR'
+                          ? `€${Number(selectedPlan.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : `${currency} ${Number(selectedPlan.amount).toLocaleString('nl-NL')}`;
+                        const interval = selectedPlan.interval === 'lifetime'
+                          ? 'eenmalig'
+                          : selectedPlan.interval === 'year' ? 'per jaar' : 'per maand';
+                        return `${selectedPlan.name} · ${Number(selectedPlan.amount) === 0 ? 'Gratis' : `${amount} ${interval}`}${selectedPlan.description ? ` · ${selectedPlan.description}` : ''}`;
+                      })()],
+                    ],
+                  },
+                ].map((section) => (
+                  <section key={section.title} className="rounded-xl border border-slate-200 bg-white p-3.5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h2 className="text-sm font-black text-[#0B1B3F]">{section.title}</h2>
+                      <button type="button" onClick={() => setStep(section.editStep)}
+                        className="rounded-lg px-2.5 py-1 text-xs font-bold text-[#E65300] hover:bg-orange-50">
+                        Wijzigen
+                      </button>
+                    </div>
+                    <dl className="space-y-1.5">
+                      {section.rows.map(([label, value]) => (
+                        <div key={label} className="grid grid-cols-[minmax(100px,0.8fr),minmax(0,1.2fr)] gap-2 text-xs">
+                          <dt className="text-slate-500">{label}</dt>
+                          <dd className="break-all font-semibold text-slate-800">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                ))}
+                <p className="rounded-xl bg-orange-50 p-3 text-xs leading-relaxed text-slate-600">
+                  Je wachtwoord en PIN zijn hier zichtbaar zodat je ze kunt controleren. Zorg dat niemand meekijkt.
+                </p>
+              </div>
+            )}
           </div>
 
           <footer className="shrink-0 border-t border-slate-200 bg-white px-5 pb-3 pt-3 sm:px-7">
             <button type="button" onClick={next} disabled={!stepValid || loading} data-testid="register-next"
               className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] text-base font-black text-white shadow-lg shadow-orange-200 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45">
               {loading ? <><Loader2 className="h-5 w-5 animate-spin" /> Account aanmaken...</> : (
-                <>{step < 3 ? 'Verder' : 'Account aanmaken'}<ArrowRight className="h-5 w-5" /></>
+                <>{step < 4 ? 'Verder' : 'Account aanmaken'}<ArrowRight className="h-5 w-5" /></>
               )}
             </button>
             <p className="mt-2 text-center text-[11px] text-slate-500">
-              {step < 3 ? 'Je gegevens blijven bewaard als je teruggaat.' : '14 dagen gratis proberen'}
+              {step < 3 ? 'Je gegevens blijven bewaard als je teruggaat.' : step === 3 ? '14 dagen gratis proberen' : 'Controleer alles voordat je account wordt aangemaakt.'}
             </p>
           </footer>
         </main>

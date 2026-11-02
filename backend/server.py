@@ -1072,6 +1072,9 @@ async def register(body: RegisterIn, request: Request, response: Response):
     existing = await db.users.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="E-mailadres is al in gebruik")
+    personal_pin = (body.personal_pin or "").strip()
+    if personal_pin and (not personal_pin.isdigit() or len(personal_pin) != 4):
+        raise HTTPException(status_code=400, detail="Persoonlijke PIN moet uit precies 4 cijfers bestaan")
 
     company_id = None
     company_payload = None
@@ -1140,6 +1143,9 @@ async def register(body: RegisterIn, request: Request, response: Response):
             company_id = default["id"]
             company_payload = {k: default[k] for k in ("id", "slug", "name", "plan")}
 
+    if personal_pin and company_id:
+        await _check_employee_pin_unique(company_id, personal_pin)
+
     user_doc = {
         "id": new_id(),
         "email": email,
@@ -1149,6 +1155,9 @@ async def register(body: RegisterIn, request: Request, response: Response):
         "password_hash": hash_password(body.password),
         "created_at": iso(now_utc()),
     }
+    if personal_pin:
+        user_doc["personal_pin_hash"] = hash_password(personal_pin)
+        user_doc["personal_pin_set_at"] = iso(now_utc())
     await db.users.insert_one(user_doc)
     token = create_token({
         "sub": user_doc["id"], "email": email, "type": "access",

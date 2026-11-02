@@ -5,7 +5,7 @@ import PersonalPinSetup from './PersonalPinSetup';
 //
 // Bevat twee componenten:
 //   - MobileEmailLogin    : e-mail + wachtwoord login (matcht PIN-pad)
-//   - MobileRegisterWizard: registratie als 4-stappen wizard
+//   - useRegisterWizard: shared registration flow for desktop and mobile
 //
 // Beide gebruiken hetzelfde visuele patroon als PinLanding op mobiel:
 //   - Full-screen primary background (oranje)
@@ -247,14 +247,15 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart }) {
 }
 
 // =====================================================================
-// MobileRegisterWizard — orange full-screen 4-stappen registratie.
+// Registration wizard steps:
 // Stappen:
 //   1) Bedrijf       (companyName + address)
 //   2) Persoon       (name + telefoon)
-//   3) Account       (email + wachtwoord)
-//   4) Pakket+Land   (country + plan) → submit
+//   3) Account       (email + wachtwoord + persoonlijke PIN)
+//   4) Pakket+Land   (country + plan)
+//   5) Controleren   (review all details) → submit
 // =====================================================================
-const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket'];
+const STEPS = ['Bedrijf', 'Persoon', 'Account', 'Pakket', 'Controleren'];
 
 // Gedeelde registratie-logica voor mobiele en desktop wizard.
 export function useRegisterWizard({ onClose, initialPlan }) {
@@ -268,6 +269,8 @@ export function useRegisterWizard({ onClose, initialPlan }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [personalPin, setPersonalPin] = useState('');
+  const [confirmPersonalPin, setConfirmPersonalPin] = useState('');
   const [country, setCountry] = useState('SR');
   const [plan, setPlan] = useState(typeof initialPlan === 'string' && initialPlan ? initialPlan : 'starter');
   const [plans, setPlans] = useState([]);
@@ -324,8 +327,10 @@ export function useRegisterWizard({ onClose, initialPlan }) {
   const stepValid = (() => {
     if (step === 0) return companyName.trim().length >= 2 && slugStatus !== 'taken';
     if (step === 1) return name.trim().length >= 2;
-    if (step === 2) return /\S+@\S+\.\S+/.test(email) && password.length >= 6;
+    if (step === 2) return /\S+@\S+\.\S+/.test(email) && password.length >= 6
+      && /^\d{4}$/.test(personalPin) && personalPin === confirmPersonalPin;
     if (step === 3) return Boolean(country && plan);
+    if (step === 4) return true;
     return false;
   })();
 
@@ -342,6 +347,7 @@ export function useRegisterWizard({ onClose, initialPlan }) {
         plan,
         country,
         slug: portalPreview.slug,
+        personal_pin: personalPin,
       });
       const newSlug = result?.company?.slug || '';
       if (newSlug) setRegisteredSlug(newSlug);
@@ -353,8 +359,13 @@ export function useRegisterWizard({ onClose, initialPlan }) {
 
   const next = () => {
     setError('');
-    if (!stepValid) return;
-    if (step < 3) setStep((s) => s + 1);
+    if (!stepValid) {
+      if (step === 2 && personalPin !== confirmPersonalPin) {
+        setError('De PIN-codes komen niet overeen.');
+      }
+      return;
+    }
+    if (step < 4) setStep((s) => s + 1);
     else submit();
   };
   const prev = () => {
@@ -367,7 +378,7 @@ export function useRegisterWizard({ onClose, initialPlan }) {
     if (registeredSlug) window.location.assign(`/${registeredSlug}/admin`);
     else window.location.assign('/admin');
   };
-  return { step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal };
+  return { step, setStep, companyName, setCompanyName, address, setAddress, name, setName, telefoon, setTelefoon, email, setEmail, password, setPassword, showPw, setShowPw, personalPin, setPersonalPin, confirmPersonalPin, setConfirmPersonalPin, country, setCountry, plan, setPlan, plans, loading, error, success, chosenPlanName, portalPreview, slugStatus, stepValid, next, prev, goToPortal };
 }
 
 export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan }) {

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, MapPin, Info, Loader2, Eye, EyeOff, Check, Globe, X, ChevronDown,
-  Home as HomeIcon, CreditCard, FileText, Tablet, ShieldCheck, Cloud, Headphones, User, Phone, Mail, Lock, Package,
+  Home as HomeIcon, CreditCard, FileText, Tablet, ShieldCheck, Cloud, Headphones, User, Phone, Mail, Lock, Package, ClipboardCheck, KeyRound,
 } from 'lucide-react';
 import { useRegisterWizard } from './MobileAuthShell';
 import PasswordStrength from './PasswordStrength';
@@ -13,9 +13,9 @@ const SIDE_BG = 'https://static.prod-images.emergentagent.com/jobs/112f335e-34a5
 const T = {
   nl: {
     close: 'Sluiten', prev: 'Vorige', next: 'Volgende', create: 'Account aanmaken', stepOf: (a, b) => `Stap ${a} van ${b}`,
-    steps: ['Bedrijf', 'Persoon', 'Account', 'Pakket'],
-    titles: ['Hoe heet je bedrijf?', 'Hoe mogen we je noemen?', 'Maak je account aan', 'Kies je pakket'],
-    subs: ['Vul de bedrijfsgegevens in om je SuriRent-account aan te maken.', 'Wie is de contactpersoon van het bedrijf?', 'Hiermee log je straks in op SuriRent.', 'Kies je land en het pakket dat bij je past. 14 dagen gratis proberen.'],
+    steps: ['Bedrijf', 'Persoon', 'Account', 'Pakket', 'Controleren'],
+    titles: ['Hoe heet je bedrijf?', 'Hoe mogen we je noemen?', 'Maak je account aan', 'Kies je pakket', 'Controleer je gegevens'],
+    subs: ['Vul de bedrijfsgegevens in om je SuriRent-account aan te maken.', 'Wie is de contactpersoon van het bedrijf?', 'Stel je e-mailadres, wachtwoord en persoonlijke PIN in.', 'Kies je land en het pakket dat bij je past.', 'Controleer alle gegevens voordat je account wordt aangemaakt.'],
     google: 'Snel registreren met Google', or: 'OF',
     company: 'Bedrijfsnaam', companyPh: 'Bijv. Demo Vastgoed N.V.', companyHint: 'Vul de volledige bedrijfsnaam in.',
     address: 'Adres', optional: '(optioneel)', addressPh: 'Straat, huisnummer, plaats', addressHint: 'Je kunt het adres later nog toevoegen.',
@@ -23,6 +23,11 @@ const T = {
     phone: 'Telefoon', phonePh: 'Bijv. +597 8801001', phoneHint: 'Voor support en WhatsApp-meldingen.',
     email: 'E-mailadres', emailPh: 'naam@bedrijf.sr', emailHint: 'Hier ontvang je bevestigingen.',
     password: 'Wachtwoord', passwordPh: 'Minimaal 6 tekens', country: 'Land & valuta', plan: 'Pakket', perMonth: '/m',
+    pin: 'Persoonlijke PIN (4 cijfers)', pinConfirm: 'Bevestig je PIN', pinHint: 'Met deze PIN kun je later snel inloggen.',
+    reviewCompany: 'Bedrijf', reviewPerson: 'Contactpersoon', reviewAccount: 'Inloggegevens', reviewPlan: 'Pakket',
+    reviewAddress: 'Adres', reviewPhone: 'Telefoon', reviewPortal: 'Portal', reviewEmail: 'E-mailadres',
+    reviewPassword: 'Wachtwoord', reviewPin: 'Persoonlijke PIN', reviewCountry: 'Land', reviewEdit: 'Wijzigen',
+    reviewSensitive: 'Je wachtwoord en PIN zijn zichtbaar zodat je ze kunt controleren. Zorg dat niemand meekijkt.',
     free: 'VRIJ', taken: 'BEZET', chosen: 'U koos', welcomeAt: 'Welkom bij', tagline: 'De complete huurbeheer oplossing voor vastgoed in Suriname.',
     feats: ['Beheer huurders en contracten', 'Automatiseer huurbetalingen & kwitanties', 'Genereer loonstroken en boekhouding', 'Selfservice kiosk terminal en PWA app'],
     script: ['Slimmer beheren.', 'Makkelijker verhuren.'], brandSub: ['Verhuur', 'Beheer', 'Financiën'], rights: 'Alle rechten voorbehouden.',
@@ -32,9 +37,9 @@ const T = {
   },
   en: {
     close: 'Close', prev: 'Back', next: 'Next', create: 'Create account', stepOf: (a, b) => `Step ${a} of ${b}`,
-    steps: ['Company', 'Person', 'Account', 'Plan'],
-    titles: ['What is your company called?', 'What should we call you?', 'Create your account', 'Choose your plan'],
-    subs: ['Enter your company details to create your SuriRent account.', 'Who is the contact person of the company?', 'You will use this to sign in to SuriRent.', 'Choose your country and the plan that suits you. 14-day free trial.'],
+    steps: ['Company', 'Person', 'Account', 'Plan', 'Review'],
+    titles: ['What is your company called?', 'What should we call you?', 'Create your account', 'Choose your plan', 'Review your details'],
+    subs: ['Enter your company details to create your SuriRent account.', 'Who is the contact person of the company?', 'Set your email, password and personal PIN.', 'Choose your country and the plan that suits you.', 'Review all details before creating your account.'],
     google: 'Quick sign-up with Google', or: 'OR',
     company: 'Company name', companyPh: 'E.g. Demo Real Estate Ltd.', companyHint: 'Enter the full company name.',
     address: 'Address', optional: '(optional)', addressPh: 'Street, number, city', addressHint: 'You can add the address later.',
@@ -42,6 +47,11 @@ const T = {
     phone: 'Phone', phonePh: 'E.g. +597 8801001', phoneHint: 'For support and WhatsApp notifications.',
     email: 'Email address', emailPh: 'name@company.com', emailHint: 'Confirmations are sent here.',
     password: 'Password', passwordPh: 'At least 6 characters', country: 'Country & currency', plan: 'Plan', perMonth: '/mo',
+    pin: 'Personal PIN (4 digits)', pinConfirm: 'Confirm your PIN', pinHint: 'Use this PIN to sign in quickly later.',
+    reviewCompany: 'Company', reviewPerson: 'Contact person', reviewAccount: 'Login details', reviewPlan: 'Plan',
+    reviewAddress: 'Address', reviewPhone: 'Phone', reviewPortal: 'Portal', reviewEmail: 'Email address',
+    reviewPassword: 'Password', reviewPin: 'Personal PIN', reviewCountry: 'Country', reviewEdit: 'Edit',
+    reviewSensitive: 'Your password and PIN are visible so you can check them. Make sure nobody is looking.',
     free: 'AVAILABLE', taken: 'TAKEN', chosen: 'You chose', welcomeAt: 'Welcome to', tagline: 'The complete rental management solution for real estate in Suriname.',
     feats: ['Manage tenants and contracts', 'Automate rent payments & receipts', 'Generate payslips and accounting', 'Self-service kiosk terminal and PWA app'],
     script: ['Smarter managing.', 'Easier renting.'], brandSub: ['Rental', 'Management', 'Finance'], rights: 'All rights reserved.',
@@ -51,7 +61,7 @@ const T = {
   },
 };
 
-const STEP_ICONS = [Building2, User, Lock, Package];
+const STEP_ICONS = [Building2, User, Lock, Package, ClipboardCheck];
 const FEAT_ICONS = [HomeIcon, CreditCard, FileText, Tablet];
 
 function Flag({ lang }) {
@@ -115,7 +125,7 @@ function IconInput({ icon: Icon, right, ...props }) {
 
 function Stepper({ step, labels }) {
   return (
-    <div className="grid grid-cols-4" data-testid="register-stepper">
+    <div className="grid grid-cols-5" data-testid="register-stepper">
       {labels.map((l, i) => (
         <div key={l} className="relative flex flex-col items-center" data-testid={`register-stepper-${i}`}>
           {i < labels.length - 1 && <span className={`absolute top-[18px] left-[calc(50%+26px)] right-[calc(-50%+26px)] h-[2px] rounded ${i < step ? 'bg-[#FF5C00]' : 'bg-slate-200'}`} />}
@@ -234,11 +244,11 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                   <StepIcon className="w-8 h-8 [@media(max-height:820px)]:w-6 [@media(max-height:820px)]:h-6 text-[#FF5C00]" />
                 </span>
                 <div className="min-w-0">
-                  <span className="inline-block px-2.5 py-1 rounded-md bg-orange-50 text-[13px] font-bold text-[#FF5C00]" data-testid="register-step-label">{t.stepOf(w.step + 1, 4)}</span>
+                  <span className="inline-block px-2.5 py-1 rounded-md bg-orange-50 text-[13px] font-bold text-[#FF5C00]" data-testid="register-step-label">{t.stepOf(w.step + 1, 5)}</span>
                   <h1 className="mt-1.5 [@media(max-height:820px)]:mt-1 text-[34px] [@media(max-height:820px)]:text-[28px] [@media(max-height:680px)]:text-2xl font-black tracking-tight leading-tight" style={{ color: NAVY }} data-testid="register-title">{t.titles[w.step]}</h1>
                   <p className="mt-1 [@media(max-height:820px)]:mt-0 text-[16px] [@media(max-height:820px)]:text-sm text-slate-500">{t.subs[w.step]}</p>
                 </div>
-                {w.chosenPlanName && w.step !== 3 && (
+                {w.chosenPlanName && w.step !== 3 && w.step !== 4 && (
                   <span className="ml-auto shrink-0 px-3 py-1.5 rounded-full bg-orange-50 text-[11px] font-black tracking-[0.14em] uppercase text-[#FF5C00]" data-testid="chosen-plan-badge">
                     {t.chosen}: {w.chosenPlanName}
                   </span>
@@ -256,7 +266,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                       {t.google}<ArrowRight className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-4"><span className="flex-1 h-px bg-slate-200" /><span className="text-[13px] font-semibold text-slate-500">{t.or}</span><span className="flex-1 h-px bg-slate-200" /></div>
-                    <div className="grid grid-cols-2 gap-8 [@media(max-height:820px)]:gap-4">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-5 [@media(max-height:820px)]:gap-4">
                       <Field icon={Building2} label={t.company} required hint={t.companyHint}>
                         <IconInput icon={Building2} value={w.companyName} onChange={(e) => w.setCompanyName(e.target.value)} placeholder={t.companyPh} data-testid="register-company" autoFocus />
                         {w.portalPreview.slug && (
@@ -296,6 +306,20 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                         right={<button type="button" onClick={() => w.setShowPw((s) => !s)} data-testid="register-password-toggle" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{w.showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>} />
                       <div className="mt-2.5"><PasswordStrength password={w.password} lang={lang} /></div>
                     </Field>
+                    <Field icon={KeyRound} label={t.pin} required>
+                      <IconInput icon={KeyRound} type="password" inputMode="numeric" autoComplete="new-password" maxLength={4}
+                        value={w.personalPin} onChange={(e) => w.setPersonalPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••" data-testid="register-personal-pin" />
+                      <p className="mt-2 text-xs text-slate-500">{t.pinHint}</p>
+                    </Field>
+                    <Field icon={KeyRound} label={t.pinConfirm} required>
+                      <IconInput icon={KeyRound} type="password" inputMode="numeric" autoComplete="new-password" maxLength={4}
+                        value={w.confirmPersonalPin} onChange={(e) => w.setConfirmPersonalPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••" data-testid="register-personal-pin-confirm" />
+                      {w.personalPin.length === 4 && w.confirmPersonalPin.length === 4 && w.personalPin !== w.confirmPersonalPin && (
+                        <p className="mt-2 text-xs font-semibold text-red-600" role="alert">De PIN-codes komen niet overeen.</p>
+                      )}
+                    </Field>
                   </div>
                 )}
                 {w.step === 3 && (
@@ -332,6 +356,55 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                     </Field>
                   </div>
                 )}
+                {w.step === 4 && (
+                  <div className="grid grid-cols-2 gap-3 [@media(max-height:820px)]:gap-2" data-testid="register-review">
+                    {[
+                      {
+                        title: t.reviewCompany, editStep: 0,
+                        rows: [[t.company, w.companyName], [t.address, w.address || '—'],
+                          [t.reviewPortal, `${w.portalPreview.host || 'app.surirent.sr'}/${w.portalPreview.slug}`]],
+                      },
+                      {
+                        title: t.reviewPerson, editStep: 1,
+                        rows: [[t.name, w.name], [t.phone, w.telefoon || '—']],
+                      },
+                      {
+                        title: t.reviewAccount, editStep: 2,
+                        rows: [[t.reviewEmail, w.email], [t.reviewPassword, w.password], [t.reviewPin, w.personalPin]],
+                      },
+                      {
+                        title: t.reviewPlan, editStep: 3,
+                        rows: [[t.reviewCountry, `${t.countries[w.country]} (${w.country === 'NL' ? 'EUR' : 'SRD'})`],
+                          [t.plan, (() => {
+                            const selectedPlan = w.plans.find((p) => p.id === w.plan);
+                            if (!selectedPlan) return w.plan;
+                            const interval = selectedPlan.interval === 'lifetime'
+                              ? 'eenmalig'
+                              : selectedPlan.interval === 'year' ? 'per jaar' : 'per maand';
+                            const pricing = Number(selectedPlan.amount) === 0 ? 'Gratis' : `${money(selectedPlan)} ${interval}`;
+                            return `${selectedPlan.name} · ${pricing}${selectedPlan.description ? ` · ${selectedPlan.description}` : ''}`;
+                          })()]],
+                      },
+                    ].map((section) => (
+                      <section key={section.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3" data-testid={`register-review-${section.editStep}`}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h2 className="text-sm font-black text-[#0B1B3F]">{section.title}</h2>
+                          <button type="button" onClick={() => w.setStep(section.editStep)}
+                            className="rounded-md px-2 py-1 text-xs font-bold text-[#E65300] hover:bg-orange-50">{t.reviewEdit}</button>
+                        </div>
+                        <dl className="space-y-1.5">
+                          {section.rows.map(([label, value]) => (
+                            <div key={label} className="grid grid-cols-[minmax(90px,0.8fr),minmax(0,1.2fr)] gap-2 text-xs">
+                              <dt className="text-slate-500">{label}</dt>
+                              <dd className="break-all font-semibold text-slate-800">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
+                    ))}
+                    <p className="col-span-2 rounded-lg bg-orange-50 px-3 py-2 text-xs text-slate-600">{t.reviewSensitive}</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-10 [@media(max-height:820px)]:mt-5 [@media(max-height:680px)]:mt-3 flex items-center justify-between gap-4">
@@ -341,7 +414,7 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                 </button>
                 <button type="button" onClick={w.next} disabled={!w.stepValid || w.loading} data-testid="register-next"
                   className="h-14 [@media(max-height:820px)]:h-11 [@media(max-height:680px)]:h-10 w-[440px] max-w-[55%] rounded-2xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white text-[16px] [@media(max-height:820px)]:text-sm font-black flex items-center justify-center gap-3 shadow-[0_14px_28px_-12px_rgba(255,92,0,0.9)] disabled:opacity-50 transition-opacity">
-                  {w.loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{w.step < 3 ? t.next : t.create}<ArrowRight className="w-5 h-5" /></>}
+                  {w.loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{w.step < 4 ? t.next : t.create}<ArrowRight className="w-5 h-5" /></>}
                 </button>
               </div>
             </div>
