@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, ChevronDown, ChevronRight, Download, Lock, Menu, User, X, ShieldCheck, Cloud, Headphones,
+  ArrowRight, ChevronRight, Download, Lock, Menu, User, X, Search, ShieldCheck, Cloud, Headphones,
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList, LayoutDashboard,
   FileText, BookOpen, Settings, Bell, Home as HomeIcon, Wallet, AlertCircle, MoreHorizontal,
 } from 'lucide-react';
@@ -27,10 +27,11 @@ const SPY = ['home', 'features', 'kiosk', 'pricing', 'faq'];
 
 const NAV = [
   { id: 'home', label: 'Home' },
-  { id: 'features', label: 'Functies', menu: true },
-  { id: 'kiosk', label: 'Kiosk PWA' },
+  { id: 'features', label: 'Functies' },
+  { id: 'kiosk', label: 'Kiosk' },
   { id: 'pricing', label: 'Prijzen' },
   { id: 'faq', label: 'Service & FAQ' },
+  { id: 'contact', label: 'Contact' },
 ];
 
 export const FEATURES = [
@@ -42,6 +43,15 @@ export const FEATURES = [
   { Icon: Tablet, title: 'Kiosk PWA', desc: 'Selfservice huurbetalingen via kiosk of app.', target: 'kiosk' },
   { Icon: Smartphone, title: 'PWA app', desc: 'Beheer je vastgoed op elk moment, overal.', target: 'download' },
   { Icon: ClipboardList, title: 'Rapportage', desc: 'Inzicht in prestaties en financiële overzichten.', target: 'feature-1' },
+];
+
+const SEARCH_ITEMS = [
+  ...NAV.map((item) => ({ label: item.label, target: item.id, terms: item.label.toLowerCase() })),
+  ...FEATURES.map((item) => ({
+    label: item.title,
+    target: item.target,
+    terms: `${item.title} ${item.desc}`.toLowerCase(),
+  })),
 ];
 
 function Logo() {
@@ -60,18 +70,39 @@ function Logo() {
   );
 }
 
-function FeaturesMenu({ onPick }) {
+function NavigationSearch({ onPick }) {
+  const [query, setQuery] = useState('');
+  const results = query.trim().length < 2 ? [] : SEARCH_ITEMS
+    .filter((item) => item.terms.includes(query.trim().toLowerCase()))
+    .slice(0, 6);
+
   return (
-    <div className="absolute left-0 top-full pt-3 z-50" data-testid="nav-features-menu">
-      <div className="w-[520px] grid grid-cols-2 gap-1 p-3 rounded-2xl bg-white border border-slate-100 shadow-[0_24px_48px_-16px_rgba(11,27,63,0.25)]">
-        {FEATURES.map((f) => (
-          <button key={f.title} onClick={() => onPick(f.target)} data-testid={`nav-feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
-            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-orange-50 text-left transition-colors">
-            <span className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0"><f.Icon className="w-4.5 h-4.5 text-[#FF5C00]" /></span>
-            <span className="text-sm font-bold" style={{ color: NAVY }}>{f.title}</span>
-          </button>
-        ))}
-      </div>
+    <div className="relative w-full lg:w-[260px]" data-testid="nav-search">
+      <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-[#FF5C00] focus-within:ring-2 focus-within:ring-orange-100">
+        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && results.length) {
+              event.preventDefault();
+              onPick(results[0].target);
+              setQuery('');
+            }
+          }}
+          type="search" aria-label="Zoek op de website" placeholder="Zoeken..."
+          className="min-w-0 flex-1 bg-transparent text-sm text-[#0B1B3F] outline-none placeholder:text-slate-400" />
+      </label>
+      {query.trim().length >= 2 && (
+        <div className="absolute right-0 top-full z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-100 bg-white p-2 shadow-[0_20px_44px_-18px_rgba(11,27,63,0.3)]"
+          data-testid="nav-search-results">
+          {results.length ? results.map((item) => (
+            <button key={`${item.label}-${item.target}`} type="button"
+              onClick={() => { onPick(item.target); setQuery(''); }}
+              className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-bold text-[#0B1B3F] hover:bg-orange-50 hover:text-[#FF5C00]">
+              {item.label}
+            </button>
+          )) : <p className="px-3 py-2 text-sm text-slate-500">Geen resultaten gevonden.</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -80,13 +111,15 @@ export function LandingHeader({ onLogin, onRegister }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const [menu, setMenu] = useState(false);
   const [active, setActive] = useState('home');
   const pick = (id) => {
     setOpen(false);
-    setMenu(false);
     if (id === 'features') navigate('/functies');
-    else if (id === 'home') navigate('/');
+    else if (id === 'contact') navigate('/contact');
+    else if (id === 'home') {
+      if (location.pathname === '/') goToSection('home');
+      else navigate('/#home');
+    }
     else navigate(id.startsWith('feature-') ? `/functies#${id}` : `/#${id}`);
   };
   useEffect(() => {
@@ -94,14 +127,26 @@ export function LandingHeader({ onLogin, onRegister }) {
       setActive('features');
       return undefined;
     }
+    if (location.pathname === '/contact') {
+      setActive('contact');
+      return undefined;
+    }
     const onScroll = () => {
       let cur = 'home';
       SPY.forEach((id) => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 136) cur = id; });
       setActive(cur);
     };
-    onScroll();
+    const timer = location.hash ? setTimeout(() => {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 136, behavior: 'smooth' });
+      onScroll();
+    }, 100) : null;
+    if (!location.hash) onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, [location.pathname, location.hash]);
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100" data-testid="landing-header">
@@ -126,16 +171,16 @@ export function LandingHeader({ onLogin, onRegister }) {
       <nav className="hidden xl:block h-[52px] border-t border-slate-50">
         <div className="max-w-[1440px] mx-auto px-5 lg:px-10 2xl:px-[120px] h-full flex items-center justify-start gap-6 2xl:gap-9">
           {NAV.map((n) => (
-            <div key={n.id} className="relative h-full" onMouseEnter={() => n.menu && setMenu(true)} onMouseLeave={() => n.menu && setMenu(false)}>
-              <button onClick={() => (n.menu ? navigate('/functies') : pick(n.id))} data-testid={`secnav-${n.id}`}
+            <div key={n.id} className="relative h-full">
+              <button onClick={() => pick(n.id)} data-testid={`secnav-${n.id}`}
                 className={`relative h-full flex items-center gap-1 text-[15px] font-bold whitespace-nowrap transition-colors ${active === n.id ? 'text-[#FF5C00]' : 'hover:text-[#FF5C00]'}`}
                 style={active === n.id ? undefined : { color: NAVY }}>
-                {n.label}{n.menu && <ChevronDown className={`w-4 h-4 transition-transform ${menu ? 'rotate-180' : ''}`} />}
+                {n.label}
                 {active === n.id && <span className="absolute left-0 right-0 bottom-[6px] h-[2px] rounded-full bg-[#FF5C00]" />}
               </button>
-              {n.menu && menu && <FeaturesMenu onPick={pick} />}
             </div>
           ))}
+          <div className="ml-auto py-1"><NavigationSearch onPick={pick} /></div>
         </div>
       </nav>
       {open && (
@@ -149,6 +194,7 @@ export function LandingHeader({ onLogin, onRegister }) {
             <button onClick={onLogin} data-testid="mobile-login" className="h-11 rounded-xl border border-slate-300 font-bold inline-flex items-center justify-center gap-2" style={{ color: NAVY }}><Lock className="w-4 h-4" /> Inloggen</button>
             <button onClick={() => { setOpen(false); onRegister(); }} data-testid="mobile-register" className="h-11 rounded-xl bg-[#FF5C00] text-white font-bold inline-flex items-center justify-center gap-2"><User className="w-4 h-4" /> Registreren</button>
           </div>
+          <div className="pt-3"><NavigationSearch onPick={pick} /></div>
           <div className="pt-3"><StatusPill /></div>
         </div>
       )}

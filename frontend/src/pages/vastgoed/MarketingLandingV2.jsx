@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { appLink } from '../../lib/env';
 import { useAuth } from '../../lib/auth';
 import {
-  Menu, X, Search, Lock, ChevronRight, ChevronDown, ChevronUp,
+  Menu, X, Lock, ChevronRight, ChevronDown, ChevronUp,
   LayoutDashboard, MapPin, Home as HomeIcon, Receipt, FileText, Users,
   Wallet, ScanLine, Building2, MessageCircle, Mail, Phone,
   Star, ArrowRight, Landmark, Download, Smartphone, Apple, Monitor,
@@ -57,37 +57,6 @@ const SHOTS = {
   kioskOverview: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/t334vu2t_13.png',
   kioskNumpad:   'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mjshklb8_14.png',
 };
-
-// =============================================================================
-// Search index — koppelt zoektermen aan secties + product cards
-// =============================================================================
-const SEARCH_INDEX = [
-  { label: 'Beheer Suite · Overzicht', section: 'feature-0',
-    terms: ['beheer', 'suite', 'overzicht', 'dashboard', 'kas', 'saldo', 'kpi'] },
-  { label: 'Locaties · Multi-vestiging', section: 'feature-1',
-    terms: ['locatie', 'locaties', 'vestiging', 'complex', 'groep'] },
-  { label: 'Appartementen', section: 'feature-2',
-    terms: ['appartement', 'appartementen', 'eenheid', 'unit', 'huis', 'woning', 'qr', 'shelly', 'smart breaker'] },
-  { label: 'Betalingen · Kwitanties · OCR', section: 'feature-3',
-    terms: ['betaling', 'betalingen', 'kwitantie', 'kwitanties', 'pdf', 'ocr', 'gemini', 'ai'] },
-  { label: 'Facturen · 3-bucket logica', section: 'feature-4',
-    terms: ['factuur', 'facturen', 'achterstand', 'lopende maand', 'vooruit', 'betalingsregeling', 'regeling'] },
-  { label: 'Kiosk PWA · Selfservice', section: 'kiosk',
-    terms: ['kiosk', 'pwa', 'selfservice', 'tablet', 'pin', 'huurder portal', 'huurderportaal'] },
-  { label: 'Prijzen · Starter · Pro · Enterprise', section: 'pricing',
-    terms: ['prijs', 'prijzen', 'kosten', 'tarief', 'starter', 'pro', 'enterprise', 'plan', 'plannen', 'abonnement'] },
-  { label: 'Service & FAQ', section: 'faq',
-    terms: ['faq', 'vraag', 'vragen', 'service', 'help', 'setup', 'veilig', 'security', 'opzeggen', 'opzegging', 'ios', 'android', 'white-label', 'whitelabel', 'branding'] },
-];
-
-function searchIndex(q) {
-  const term = (q || '').toLowerCase().trim();
-  if (term.length < 2) return [];
-  return SEARCH_INDEX.filter((s) =>
-    s.label.toLowerCase().includes(term)
-    || s.terms.some((t) => t.includes(term) || term.includes(t)),
-  ).slice(0, 6);
-}
 
 // =============================================================================
 // Feature details page
@@ -697,6 +666,121 @@ function FAQSection() {
   );
 }
 
+function ContactPage() {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const backend = process.env.REACT_APP_BACKEND_URL || '';
+      const response = await fetch(`${backend}/api/public/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.detail || 'Je bericht kon niet worden verzonden. Probeer het opnieuw.');
+      }
+      setSubmitted(true);
+    } catch (submitError) {
+      setError(submitError.message || 'Je bericht kon niet worden verzonden. Probeer het opnieuw.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <main data-testid="contact-page">
+      <section className="relative overflow-hidden bg-[#0B1B3F] text-white">
+        <div className="absolute -right-36 -top-40 h-[520px] w-[520px] rounded-full bg-[#FF5C00]/20 blur-3xl" />
+        <div className="relative mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-10 lg:py-24 2xl:px-[120px]">
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-[#FF8A3D]">Contact</p>
+          <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">We helpen je graag verder.</h1>
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/70 sm:text-lg">
+            Vraag een demo aan, stel je vraag of ontdek wat SuriRent voor jouw verhuurbeheer kan betekenen.
+          </p>
+        </div>
+      </section>
+
+      <section className="bg-[#F8FAFC] py-12 sm:py-16 lg:py-20">
+        <div className="mx-auto grid max-w-[1440px] gap-8 px-5 sm:px-8 lg:grid-cols-[0.8fr,1.2fr] lg:gap-12 lg:px-10 2xl:px-[120px]">
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-white p-6 shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)] sm:p-8">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]"><Mail className="h-5 w-5" /></span>
+              <h2 className="mt-5 text-xl font-black text-[#0B1B3F]">Neem contact op</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">Stuur ons een bericht. We nemen zo snel mogelijk contact met je op.</p>
+              <a href="mailto:info@surirent.sr" className="mt-5 inline-flex font-bold text-[#FF5C00] hover:underline">info@surirent.sr</a>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)]">
+              <iframe
+                title="Kaart van Paramaribo, Suriname"
+                src="https://maps.google.com/maps?q=Paramaribo%2C%20Suriname&z=12&output=embed"
+                className="h-64 w-full border-0 sm:h-72"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+              <div className="flex items-center justify-between gap-4 p-4">
+                <p className="flex items-center gap-2 text-sm font-bold text-[#0B1B3F]"><MapPin className="h-4 w-4 text-[#FF5C00]" />Paramaribo, Suriname</p>
+                <a href="https://maps.google.com/?q=Paramaribo%2C%20Suriname" target="_blank" rel="noreferrer"
+                  className="shrink-0 text-xs font-bold text-[#FF5C00] hover:underline">Open kaart</a>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-[0_20px_50px_-36px_rgba(11,27,63,0.35)] sm:p-8 lg:p-10">
+            {submitted ? (
+              <div className="flex min-h-[360px] flex-col items-center justify-center text-center" data-testid="contact-success">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-8 w-8" strokeWidth={3} /></span>
+                <h2 className="mt-5 text-2xl font-black text-[#0B1B3F]">Bedankt voor je bericht!</h2>
+                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">Je bericht is verstuurd. We nemen zo snel mogelijk contact met je op.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FF5C00]">Stuur een bericht</p>
+                <h2 className="mt-2 text-2xl font-black text-[#0B1B3F] sm:text-3xl">Waar kunnen we je mee helpen?</h2>
+                <form onSubmit={submit} className="mt-7 space-y-5" data-testid="contact-form">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="block text-sm font-bold text-slate-700">Naam
+                      <input required maxLength={120} value={form.name} onChange={(event) => update('name', event.target.value)}
+                        className={`${INPUT_CLS} mt-2`} autoComplete="name" data-testid="contact-name" />
+                    </label>
+                    <label className="block text-sm font-bold text-slate-700">E-mailadres
+                      <input required type="email" maxLength={160} value={form.email} onChange={(event) => update('email', event.target.value)}
+                        className={`${INPUT_CLS} mt-2`} autoComplete="email" data-testid="contact-email" />
+                    </label>
+                  </div>
+                  <label className="block text-sm font-bold text-slate-700">Telefoonnummer <span className="font-normal text-slate-400">(optioneel)</span>
+                    <input type="tel" maxLength={40} value={form.phone} onChange={(event) => update('phone', event.target.value)}
+                      className={`${INPUT_CLS} mt-2`} autoComplete="tel" data-testid="contact-phone" />
+                  </label>
+                  <label className="block text-sm font-bold text-slate-700">Bericht
+                    <textarea required rows={5} maxLength={3000} value={form.message} onChange={(event) => update('message', event.target.value)}
+                      className={`${INPUT_CLS} mt-2 h-auto resize-y py-3`} data-testid="contact-message" />
+                  </label>
+                  {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="contact-error">{error}</p>}
+                  <button type="submit" disabled={submitting}
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-6 text-sm font-black text-white transition-colors hover:bg-[#E65300] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    data-testid="contact-submit">
+                    {submitting ? 'Versturen…' : 'Verstuur bericht'} <ArrowRight className="h-4 w-4" />
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 // =============================================================================
 // PersistentInstallBanner — slide-down sticky bovenaan de marketing landing
 // die verschijnt zodra `beforeinstallprompt` capturet is (Chrome/Edge/Android)
@@ -1008,10 +1092,11 @@ function Footer({ onLogin, apk }) {
           <div>
             <p className="text-xs font-black tracking-[0.22em] uppercase text-white mb-4">Product</p>
             <ul className="space-y-2.5 text-sm">
-              <li><a href="#features" className="hover:text-[#FF5C00] transition-colors">Functies</a></li>
-              <li><a href="#kiosk" className="hover:text-[#FF5C00] transition-colors">Kiosk PWA</a></li>
-              <li><a href="#pricing" className="hover:text-[#FF5C00] transition-colors">Prijzen</a></li>
-              <li><a href="#faq" className="hover:text-[#FF5C00] transition-colors">FAQ</a></li>
+              <li><a href="/functies" className="hover:text-[#FF5C00] transition-colors">Functies</a></li>
+              <li><a href="/#kiosk" className="hover:text-[#FF5C00] transition-colors">Kiosk</a></li>
+              <li><a href="/#pricing" className="hover:text-[#FF5C00] transition-colors">Prijzen</a></li>
+              <li><a href="/#faq" className="hover:text-[#FF5C00] transition-colors">FAQ</a></li>
+              <li><a href="/contact" className="hover:text-[#FF5C00] transition-colors">Contact</a></li>
             </ul>
           </div>
           <div>
@@ -1103,6 +1188,7 @@ export default function MarketingLandingV2() {
   // flicker bij een cold visit.
   const showSkeleton = !editMode && !hasInstantContent && contentLoading;
   const showFeatureDetails = location.pathname === '/functies';
+  const showContactPage = location.pathname === '/contact';
 
   useEffect(() => {
     document.body.style.backgroundColor = '#FFFFFF';
@@ -1273,7 +1359,12 @@ export default function MarketingLandingV2() {
             onInstall={pwaInstall.install} />
         )}
         <LandingHeader onLogin={onLogin} onRegister={onRegister} />
-        {showFeatureDetails ? (
+        {showContactPage ? (
+          <>
+            <ContactPage />
+            <Footer onLogin={onLogin} apk={apk} />
+          </>
+        ) : showFeatureDetails ? (
           <>
             <FeatureDetailsPage onDemo={onDemo} onRegister={() => onRegister()} />
             <Footer onLogin={onLogin} apk={apk} />

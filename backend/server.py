@@ -3845,6 +3845,58 @@ class EnterpriseLeadIn(BaseModel):
     message: Optional[str] = ""
 
 
+class ContactMessageIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(default="", max_length=40)
+    message: str = Field(min_length=1, max_length=3000)
+
+
+@api.post("/public/contact")
+async def submit_contact_message(body: ContactMessageIn):
+    """Public contact form; stores the message and notifies platform admins."""
+    name = body.name.strip()
+    message = body.message.strip()
+    if not name or not message:
+        raise HTTPException(status_code=400, detail="Naam en bericht zijn verplicht")
+
+    doc = {
+        "id": new_id(),
+        "name": name,
+        "email": str(body.email).strip().lower()[:160],
+        "phone": (body.phone or "").strip(),
+        "message": message,
+        "status": "new",
+        "created_at": iso(now_utc()),
+    }
+    await db.contact_messages.insert_one(doc)
+
+    try:
+        from html import escape
+        from email_service import send_platform_email, wrap_template
+
+        html = wrap_template(
+            "<h1>Nieuw contactbericht</h1>"
+            f"<p><strong>Naam:</strong> {escape(doc['name'])}</p>"
+            f"<p><strong>E-mail:</strong> {escape(doc['email'])}</p>"
+            f"<p><strong>Telefoon:</strong> {escape(doc['phone'] or '—')}</p>"
+            f"<p style='white-space:pre-wrap'>{escape(doc['message'])}</p>",
+            footer="SuriRent · Website contact",
+        )
+        admins = await db.users.find({"role": "superadmin"}, {"_id": 0, "email": 1}).to_list(20)
+        for admin in admins:
+            if admin.get("email"):
+                await send_platform_email(
+                    to=admin["email"],
+                    subject=f"Nieuw contactbericht — {doc['name'][:80]}",
+                    body_html=html,
+                )
+    except Exception as error:
+        print(f"[website-contact] mail warn: {error}")
+
+    return {"ok": True, "message_id": doc["id"]}
+
+
 @api.post("/public/enterprise-lead")
 async def submit_enterprise_lead(body: EnterpriseLeadIn):
     """Publieke intake — Enterprise "Custom" aanvraag vanaf de landingpage.
