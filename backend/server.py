@@ -5815,8 +5815,8 @@ async def admin_open_kiosk(
 ):
     """Laat een ingelogde admin/superadmin direct een kiosk-token verkrijgen
     voor zijn huidige actieve bedrijf — zonder dat er een PIN ingevoerd hoeft
-    te worden. Gebruikt door de 'Open Kiosk' knop in het Beheer-dashboard.
-    Het admin-token blijft behouden zodat de admin terug kan naar Beheer.
+    te worden. Gebruikt om beheerders rechtstreeks Kiosk Beheer te laten openen.
+    Het admin-token blijft behouden voor beheeracties in de kiosk.
 
     Fallback-keten voor het bepalen van het bedrijf:
       1. `company_id` uit de request body

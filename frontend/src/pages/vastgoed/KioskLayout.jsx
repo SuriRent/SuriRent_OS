@@ -217,15 +217,20 @@ function MobileAddFab({ onOpen }) {
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
 const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
 
-// Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
+// Beheerder-menu (dropdown) in de desktop-kop.
 const ADMIN_MENU_ITEMS = [
   { id: 'nfc', label: 'NFC-tag', Icon: Wifi, onClick: () => navAdmin('nfc', 'admin') },
   { id: 'kasgeld', label: 'Kasgeld', Icon: Wallet, onClick: () => window.dispatchEvent(new CustomEvent('go-tab', { detail: 'kasgeld' })) },
 ];
 
-// Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
-const HAMBURGER_HIDDEN = ['instellingen', 'overzicht'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
+
+function requestedAdminStep() {
+  const page = new URLSearchParams(window.location.search).get('admin');
+  if (page === 'kasgeld') return 'kasgeld';
+  if (page === 'nfc') return 'select';
+  return KIOSK_ADMIN_PAGES[page] ? `admin:${page}` : 'select';
+}
 
 // Menu: telefoon = volledig scherm (zoals het + menu), desktop/iPad = popup in het midden.
 function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
@@ -259,7 +264,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
             {items.map((t, i) => (
               <button key={t.id} type="button" role="menuitem" data-testid={t.testid} onClick={() => { onClose(); t.onClick(); }}
                 style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
-                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 md:bg-slate-50 md:hover:bg-orange-50 md:ring-1 md:ring-slate-100 shadow-lg md:shadow-none py-6 md:py-5 px-3 min-h-[130px] md:min-h-[120px] transition-[background-color,transform] active:scale-95 animate-in fade-in slide-in-from-bottom-1 fill-mode-both">
+                className={`flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 md:bg-slate-50 md:hover:bg-orange-50 md:ring-1 md:ring-slate-100 shadow-lg md:shadow-none py-6 md:py-5 px-3 min-h-[130px] md:min-h-[120px] transition-[background-color,transform] active:scale-95 animate-in fade-in slide-in-from-bottom-1 fill-mode-both ${t.className || ''}`}>
                 <span className="w-14 h-14 md:w-12 md:h-12 rounded-2xl bg-orange-100 flex items-center justify-center">
                   <t.Icon className="w-7 h-7 md:w-6 md:h-6 text-orange-600" strokeWidth={2} />
                 </span>
@@ -340,8 +345,12 @@ function KioskAdminMenu() {
   if (!isAdmin) return null;
   const items = [
     ...Object.keys(KIOSK_ADMIN_PAGES)
-      .filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)))
-      .map((id) => ({ id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon, testid: `kiosk-admin-menu-${id}`, onClick: () => navAdmin(id, 'admin') })),
+      .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
+      .map((id) => ({
+        id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
+        testid: `kiosk-admin-menu-${id}`, className: id === 'instellingen' ? 'md:hidden' : '',
+        onClick: () => navAdmin(id, 'admin'),
+      })),
     ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
   ];
   return (
@@ -4969,7 +4978,7 @@ export default function KioskLayout() {
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
   const [step, setStep] = useState(() => {
     const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
-    return !isDemoLaunch && localStorage.getItem('kiosk_token') ? 'select' : 'check';
+    return !isDemoLaunch && localStorage.getItem('kiosk_token') ? requestedAdminStep() : 'check';
   });
   const [demoLoginError, setDemoLoginError] = useState('');
   const demoLoginStarted = useRef(false);
@@ -5060,7 +5069,7 @@ export default function KioskLayout() {
       else if (key === 'kasgeld') setStep('kasgeld');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
-      else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' })); else adminRef.current?.(); }
+      else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
   }, []);
@@ -5090,7 +5099,8 @@ export default function KioskLayout() {
     const tok = localStorage.getItem('kiosk_token');
     if (!tok) { navigate('/login?target=kiosk', { replace: true }); return; }
     setCompany(getKioskCompany());
-    setStep('select');
+    setStep(requestedAdminStep());
+    if (new URLSearchParams(window.location.search).get('admin') === 'nfc') setNfcLink({ uid: '' });
   }, [navigate]);
 
   // Tijdens kiosk-modus moet body/root in PWA standalone ORANJE zijn (zodat
@@ -5332,19 +5342,16 @@ export default function KioskLayout() {
   }, []);
 
 
-  // "Beheerder" knop in de kiosk: als de PIN-login een admin-token heeft
-  // afgegeven (PIN is shared secret van het bedrijf), spring direct naar
-  // /admin. We doen een hard navigation zodat AuthProvider zijn /auth/me
-  // opnieuw uitvoert met het nieuwe admin_token (en niet de oude user=null
-  // state uit de cache van vóór de PIN-login).
-  // Voor MEDEWERKER-logins (employee-PIN, geen admin_token): verbergen we
-  // de knop volledig — zij mogen niet bij de Beheer-omgeving. Daarom geven
-  // we adminMode hieronder alleen door aan de buttons als er een token is.
+  // Open het beheermenu binnen de kiosk; medewerkers zonder beheer-token
+  // worden naar de beheer-login gestuurd.
   const adminMode = useCallback(() => {
-    let hasAdminToken = false;
-    try { hasAdminToken = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
-    if (hasAdminToken) {
-      window.location.assign('/admin');
+    let hasAdminAccess = false;
+    try {
+      hasAdminAccess = !!localStorage.getItem('admin_token')
+        || localStorage.getItem('kiosk_admin_cookie') === '1';
+    } catch { /* ignore */ }
+    if (hasAdminAccess) {
+      window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' }));
     } else {
       navigate('/login?view=admin', { replace: true });
     }

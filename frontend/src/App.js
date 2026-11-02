@@ -11,7 +11,8 @@ import RotateNotice from './components/RotateNotice';
 import { KtpPrintToast } from './components/KtpPrintToast';
 import BrandedShell from './components/BrandedShell';
 import { isMarketingHost, appUrl } from './lib/env';
-import { brandedSlugFromPath } from './lib/branded-nav';
+import { brandedSlugFromPath, useBrandedNavigate } from './lib/branded-nav';
+import { api, formatError } from './lib/api';
 
 // LAZY LOADED ROUTES — Code-splitting per route zodat een kiosk-bezoeker
 // NIET de admin-bundle hoeft te downloaden (en andersom). Initial paint
@@ -81,7 +82,7 @@ function BrandedRouteTree() {
       <Routes>
         <Route path="" element={<LoginPage />} />
         <Route path="login" element={<LoginPage />} />
-        <Route path="admin/*" element={<Protected><AdminDashboard /></Protected>} />
+        <Route path="admin/*" element={<Protected><AdminRoute /></Protected>} />
         <Route path="saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
         <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
@@ -119,6 +120,105 @@ function Protected({ children }) {
     return <Navigate to={target} replace />;
   }
   return children;
+}
+
+const KIOSK_ADMIN_DESTINATIONS = {
+  overview: 'overzicht',
+  locations: 'locaties',
+  apartments: 'appartementen',
+  tenants: 'huurders',
+  contracts: 'contracten',
+  payments: 'betalingen',
+  invoices: 'facturen',
+  payment_plans: 'regelingen',
+  deposits: 'borg',
+  maintenance: 'onderhoud',
+  kasgeld: 'kasgeld',
+  employees: 'werknemers',
+  notifications: 'notificaties',
+  instellingen: 'instellingen',
+  settings: 'instellingen',
+  branding: 'instellingen',
+  mijn_abonnement: 'instellingen',
+  mijn_landing: 'instellingen',
+  setup_wizard: 'instellingen',
+  business_info: 'instellingen',
+  backup_restore: 'instellingen',
+  nfc: 'nfc',
+};
+
+const KIOSK_ADMIN_SECTIONS = {
+  mijn_abonnement: 'abonnement',
+  mijn_landing: 'landing',
+  setup_wizard: 'setup',
+  business_info: 'bedrijf',
+  branding: 'branding',
+  backup_restore: 'backup',
+  settings: 'integraties',
+};
+
+function AdminRoute() {
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useBrandedNavigate();
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const segments = location.pathname.split('/').filter(Boolean);
+  const adminIndex = segments.indexOf('admin');
+  const legacyTab = adminIndex >= 0 ? segments[adminIndex + 1] : '';
+  const destination = KIOSK_ADMIN_DESTINATIONS[legacyTab] || '';
+  const legacySection = KIOSK_ADMIN_SECTIONS[legacyTab];
+
+  useEffect(() => {
+    if (!user || user.role === 'superadmin') return undefined;
+    let cancelled = false;
+    setError('');
+
+    (async () => {
+      try {
+        if (user.role === 'admin' || user.role === 'boekhouder') {
+          const companyId = localStorage.getItem('active_company_id');
+          const { data } = await api.post('/auth/admin-to-kiosk', companyId ? { company_id: companyId } : {});
+          if (!data?.token) throw new Error('Kiosk Beheer kon niet worden geopend.');
+          localStorage.setItem('kiosk_token', data.token);
+          localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
+          localStorage.setItem('pwa_preferred_role', 'kiosk');
+        }
+        if (cancelled) return;
+        const params = new URLSearchParams(location.search);
+        if (destination) params.set('admin', destination);
+        else params.delete('admin');
+        const query = params.toString();
+        const hash = location.hash || (legacySection ? `#${legacySection}` : '');
+        navigate(`/kiosk${query ? `?${query}` : ''}${hash}`, { replace: true });
+      } catch (e) {
+        if (!cancelled) setError(formatError(e, 'Kiosk Beheer kon niet worden geopend.'));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [user, destination, legacySection, location.search, location.hash, navigate, attempt]);
+
+  if (user?.role === 'superadmin') return <AdminDashboard />;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="max-w-md text-center">
+        {!error ? (
+          <div className="text-sm font-bold text-slate-600">Kiosk Beheer wordt geopend…</div>
+        ) : (
+          <>
+            <h1 className="text-lg font-black text-slate-900">Kiosk Beheer is niet beschikbaar</h1>
+            <p className="mt-2 text-sm text-slate-600">{error}</p>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)}
+              className="mt-5 rounded-xl bg-[#FF5C00] px-5 py-3 text-sm font-black text-white">
+              Opnieuw proberen
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MarketingRoutes() {
@@ -216,7 +316,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
-      <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
       <Route path="/betalen/:token" element={<KioskStripePay />} />
       <Route path="/kiosk" element={<KioskLayout />} />
@@ -268,7 +368,7 @@ function HybridRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
-      <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
