@@ -4967,6 +4967,8 @@ export default function KioskLayout() {
   const navigate = useBrandedNavigate();
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
   const [step, setStep] = useState(() => (localStorage.getItem('kiosk_token') ? 'select' : 'check'));
+  const [demoLoginError, setDemoLoginError] = useState('');
+  const demoLoginStarted = useRef(false);
   const [apartment, setApartment] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
@@ -5060,6 +5062,25 @@ export default function KioskLayout() {
 
   useEffect(() => {
     // document.title wordt centraal beheerd door usePwaManifest() in App.js
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('demo') === '1') {
+      if (demoLoginStarted.current) return;
+      demoLoginStarted.current = true;
+      api.post('/auth/demo-login').then(({ data }) => {
+        if (!data?.token || !data?.kiosk_token) throw new Error('Demo-login gaf geen kiosktoegang terug.');
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('kiosk_token', data.kiosk_token);
+        localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
+        localStorage.setItem('is_demo_session', '1');
+        if (data.company?.slug) localStorage.setItem('pwa_company_slug', data.company.slug);
+        setCompany(data.company || null);
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.hash}`);
+        setStep('select');
+      }).catch((error) => {
+        setDemoLoginError(formatError(error, 'De demo kan momenteel niet worden geopend.'));
+      });
+      return;
+    }
     const tok = localStorage.getItem('kiosk_token');
     if (!tok) { navigate('/login?target=kiosk', { replace: true }); return; }
     setCompany(getKioskCompany());
@@ -5502,8 +5523,14 @@ export default function KioskLayout() {
           className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'}`}
           style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
-            <div className="h-full bg-orange-500 flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
+              {demoLoginError ? (
+                <>
+                  <p className="max-w-md font-bold text-white" role="alert">{demoLoginError}</p>
+                  <button type="button" onClick={() => window.location.assign('/')}
+                    className="rounded-xl bg-white px-5 py-3 font-black text-[#0B1B3F]">Terug naar SuriRent</button>
+                </>
+              ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
             </div>
           )}
           {step === 'select' && (

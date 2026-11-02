@@ -1667,9 +1667,14 @@ async def demo_login(response: Response):
         "sub": user["id"], "email": DEMO_EMAIL, "type": "access",
         "company_id": company["id"], "role": "admin",
     }, ACCESS_MIN)
+    kiosk_token = create_token({
+        "sub": "kiosk", "type": "kiosk", "company_id": company["id"],
+    }, KIOSK_TOKEN_MIN)
     _set_access_cookie(response, token)
+    _set_access_cookie(response, kiosk_token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
     return {
         "token": token,
+        "kiosk_token": kiosk_token,
         "email": DEMO_EMAIL,
         "password": DEMO_PASSWORD,
         "company": {k: company.get(k) for k in ("id", "slug", "name")},

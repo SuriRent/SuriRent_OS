@@ -1357,6 +1357,11 @@ export default function MarketingLandingV2() {
   // zodat de doelroute meteen authenticated is.
   const launchDemo = useCallback(async (target = '/admin') => {
     if (editMode) return;
+    const appDemoUrl = appLink('/kiosk?demo=1');
+    if (new URL(appDemoUrl, window.location.href).origin !== window.location.origin) {
+      window.location.assign(appDemoUrl);
+      return;
+    }
     try {
       const backend = process.env.REACT_APP_BACKEND_URL || '';
       const res = await fetch(`${backend}/api/auth/demo-login`, {
@@ -1367,17 +1372,19 @@ export default function MarketingLandingV2() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (data?.token) {
-        try {
-          localStorage.setItem('admin_token', data.token);
-          // Sla de demo-slug op — zodat branded routes blijven werken, maar
-          // logout het netjes opruimt. We taggen 'm óók als demo zodat de
-          // logout-flow weet dat hij naar landing moet ipv naar PIN.
-          if (data.company?.slug) {
-            localStorage.setItem('pwa_company_slug', data.company.slug);
-          }
-          localStorage.setItem('is_demo_session', '1');
-        } catch { /* noop */ }
+      if (!data?.token || !data?.kiosk_token) throw new Error('Demo-login gaf geen kiosktoegang terug.');
+      try {
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('kiosk_token', data.kiosk_token);
+        if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
+        // Sla de demo-slug op — zodat branded routes blijven werken, maar
+        // logout het netjes opruimt. We taggen 'm óók als demo zodat de
+        // logout-flow weet dat hij naar landing moet ipv naar PIN.
+        if (data.company?.slug) {
+          localStorage.setItem('pwa_company_slug', data.company.slug);
+        }
+        localStorage.setItem('is_demo_session', '1');
+      } catch { /* noop */ }
       }
       // Navigeer naar het doel — gebruik window.location voor cross-route
       // hard nav (sommige doelen zitten onder app subdomain in productie).
