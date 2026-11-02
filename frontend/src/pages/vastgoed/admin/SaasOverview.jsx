@@ -45,12 +45,12 @@ const STATUS_LABEL = {
 // PageHeader — identieke opmaak als in AdminDashboard.jsx (regel 850).
 function PageHeader({ title, subtitle, action }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+    <div className="flex flex-wrap items-start sm:items-end justify-between gap-3 mb-4 sm:mb-6 min-w-0">
+      <div className="min-w-0 flex-1">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight break-words">{title}</h1>
+        {subtitle && <p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>}
       </div>
-      {action}
+      <div className="shrink-0">{action}</div>
     </div>
   );
 }
@@ -130,15 +130,16 @@ export default function SaasOverview() {
   const activePct = companiesTotal === 0 ? 0 : Math.round((activeCount / companiesTotal) * 100);
 
   return (
-    <div data-testid="saas-overview-page">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-5" data-testid="saas-overview-page">
       <PageHeader
         title="SaaS Overzicht"
         subtitle="Snelle blik op uw platform · bedrijven, abonnementen en inkomsten"
         action={
           <button onClick={load} disabled={refreshing} data-testid="saas-overview-refresh"
-            className="h-10 px-4 rounded-xl bg-white border border-slate-200 hover:border-orange-300 text-sm font-bold text-slate-700 flex items-center gap-2 disabled:opacity-50">
+            className="h-10 w-10 sm:w-auto sm:px-4 rounded-xl bg-white border border-slate-200 hover:border-orange-300 text-sm font-bold text-slate-700 flex items-center justify-center gap-2 disabled:opacity-50"
+            aria-label="Overzicht vernieuwen">
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Vernieuwen
+            <span className="hidden sm:inline">Vernieuwen</span>
           </button>
         }
       />
@@ -156,9 +157,9 @@ export default function SaasOverview() {
       {/* ===================================================================
           MOBIEL/TABLET — 4 mini-stats card (spiegel van beheerder mobiel)
           =================================================================== */}
-      <div className="lg:hidden bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 mb-4" data-testid="saas-portfolio-card-mobile">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-3 sm:p-4" data-testid="saas-portfolio-card-mobile">
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Platform in één oogopslag</p>
-        <div className="grid grid-cols-4 divide-x divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 sm:gap-y-0">
           {[
             { label: 'Bedrijven', value: hasOverview ? companiesTotal : '—', icon: Building2, accent: 'bg-orange-50 text-[#FF5C00]' },
             { label: 'Actief', value: hasOverview ? activeCount : '—', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-600' },
@@ -167,12 +168,14 @@ export default function SaasOverview() {
           ].map((c) => {
             const Icon = c.icon;
             return (
-              <div key={c.label} className="px-1.5 first:pl-0 last:pr-0 text-center">
-                <div className={`w-10 h-10 rounded-full ${c.accent} flex items-center justify-center mx-auto mb-2`}>
+              <div key={c.label} className="flex items-center gap-2.5 px-2 sm:px-3 min-w-0 sm:justify-center sm:flex-col sm:text-center">
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full ${c.accent} flex items-center justify-center shrink-0`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <p className="text-xl font-black text-slate-900 tracking-tight" data-testid={`saas-stat-m-${c.label.toLowerCase()}`}>{c.value}</p>
-                <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{c.label}</p>
+                <div className="min-w-0 sm:mt-1">
+                  <p className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight" data-testid={`saas-stat-m-${c.label.toLowerCase()}`}>{c.value}</p>
+                  <p className="text-[10px] text-slate-500 font-semibold truncate">{c.label}</p>
+                </div>
               </div>
             );
           })}
@@ -183,10 +186,10 @@ export default function SaasOverview() {
           DESKTOP — Luxe hero + 4 KPI's + 4 Snelle acties
           Structuur identiek aan beheerder-Overzicht in AdminDashboard.jsx
           =================================================================== */}
-      <div className="hidden lg:block">
+      <div className="block min-w-0">
         {/* ============ HERO · SaaS Kas Saldo Banking-stijl ============ */}
         <div
-          className="relative overflow-hidden rounded-3xl mb-5 p-7 text-white shadow-[0_24px_60px_-24px_rgba(15,23,42,0.55)]"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-7 text-white shadow-[0_24px_60px_-24px_rgba(15,23,42,0.55)]"
           style={{
             background:
               'radial-gradient(circle at 0% 0%, #2A1A0A 0%, #1A1208 35%, #0B0805 100%)',
@@ -206,10 +209,10 @@ export default function SaasOverview() {
               backgroundSize: '32px 32px',
             }} />
 
-          <div className="relative flex items-start justify-between gap-6 mb-6">
+          <div className="relative flex flex-wrap items-start justify-between gap-3 sm:gap-6 mb-4 sm:mb-6">
             <div>
               <div className="flex items-center gap-2.5 mb-1.5">
-                <span className="w-9 h-9 rounded-xl flex items-center justify-center"
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: 'linear-gradient(135deg, #F8C260 0%, #D4A037 60%, #8B6914 100%)' }}>
                   <Crown className="w-4.5 h-4.5 text-[#1A1208]" />
                 </span>
@@ -218,7 +221,7 @@ export default function SaasOverview() {
                   SaaS Kas saldo
                 </p>
               </div>
-              <h2 className="text-3xl font-black tracking-tight leading-tight"
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight"
                 style={{
                   background: 'linear-gradient(90deg, #FFF6D6 0%, #F8C260 60%, #D4A037 100%)',
                   WebkitBackgroundClip: 'text',
@@ -227,13 +230,13 @@ export default function SaasOverview() {
                 }}>
                 Totaal ontvangen
               </h2>
-              <p className="text-xs text-white/50 font-semibold mt-1">
+              <p className="text-[11px] sm:text-xs text-white/60 font-semibold mt-1">
                 Alle betaalde abonnementen · Bron: Subscription facturen
               </p>
             </div>
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
               data-testid="saas-hero-cash-cta"
-              className="group inline-flex items-center gap-2 px-4 h-10 rounded-full text-xs font-black tracking-wider uppercase transition-all border"
+              className="group inline-flex items-center justify-center gap-2 px-3 sm:px-4 min-h-10 rounded-xl sm:rounded-full text-[10px] sm:text-xs font-black tracking-wide sm:tracking-wider uppercase transition-all border"
               style={{
                 background: 'linear-gradient(135deg, rgba(248,194,96,0.18) 0%, rgba(212,160,55,0.08) 100%)',
                 borderColor: 'rgba(248,194,96,0.35)',
@@ -245,7 +248,7 @@ export default function SaasOverview() {
           </div>
 
           {/* 3 Currency tiles — banking style */}
-          <div className="relative grid grid-cols-3 gap-4">
+          <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
             {[
               { cur: 'SRD', label: 'Surinaamse Dollar', symbol: 'SRD' },
               { cur: 'EUR', label: 'Euro', symbol: '€' },
@@ -255,24 +258,24 @@ export default function SaasOverview() {
               const positive = v >= 0;
               return (
                 <div key={cur}
-                  className="relative rounded-2xl p-4 overflow-hidden backdrop-blur-sm"
+                  className="relative rounded-xl sm:rounded-2xl p-3 sm:p-4 overflow-hidden backdrop-blur-sm min-w-0"
                   style={{
                     background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.015) 100%)',
                     border: '1px solid rgba(248,194,96,0.18)',
                   }}
                   data-testid={`saas-hero-cash-tile-${cur.toLowerCase()}`}>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black tracking-[0.18em] uppercase"
                         style={{ color: '#F0C97A' }}>{cur}</span>
-                      <span className="text-[10px] text-white/40 font-semibold">{label}</span>
+                      <span className="hidden md:inline text-[10px] text-white/50 font-semibold truncate">{label}</span>
                     </div>
                     <span className="inline-flex w-6 h-6 rounded-full items-center justify-center"
                       style={{ background: 'rgba(248,194,96,0.12)' }}>
                       <TrendingUp className="w-3 h-3" style={{ color: positive ? '#86EFAC' : '#FCA5A5' }} />
                     </span>
                   </div>
-                  <p className="text-3xl font-black tracking-tight leading-none text-white"
+                  <p className="text-2xl sm:text-3xl font-black tracking-tight leading-none text-white break-all"
                     data-testid={`saas-kpi-cash-${cur.toLowerCase()}`}>
                     <span className="text-base font-bold opacity-60 mr-1">{symbol === 'SRD' ? '' : symbol}</span>
                     {hasOverview ? Math.round(v).toLocaleString('nl-NL') : '—'}
@@ -287,9 +290,9 @@ export default function SaasOverview() {
         </div>
 
         {/* ============ KPI rij — 4 tegels ============ */}
-        <div className="grid grid-cols-4 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           {/* Bedrijven */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
             <div className="flex items-start gap-3 relative">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center shrink-0 shadow-inner">
@@ -319,7 +322,7 @@ export default function SaasOverview() {
           {/* Klanten */}
           <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_clients' }))}
             data-testid="saas-kpi-clients-cta"
-            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-5 relative overflow-hidden hover:border-amber-200 transition-colors">
+            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-amber-200 transition-colors">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
             <div className="flex items-start gap-3 relative">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center shrink-0 shadow-inner">
@@ -341,7 +344,7 @@ export default function SaasOverview() {
           {/* Open · lopende maand */}
           <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
             data-testid="saas-kpi-current-open"
-            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
+            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
             <div className="flex items-start gap-3 relative">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center shrink-0 shadow-inner">
@@ -363,7 +366,7 @@ export default function SaasOverview() {
           {/* Achterstand */}
           <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
             data-testid="saas-kpi-overdue"
-            className={`text-left rounded-2xl p-5 relative overflow-hidden transition-shadow ${
+            className={`text-left rounded-2xl p-4 sm:p-5 relative overflow-hidden transition-shadow ${
               overdueCount > 0
                 ? 'bg-gradient-to-br from-red-500 via-red-600 to-red-700 text-white border border-red-700 hover:shadow-[0_12px_28px_-8px_rgba(220,38,38,0.5)]'
                 : 'bg-white border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] hover:border-emerald-200'
@@ -396,12 +399,12 @@ export default function SaasOverview() {
         </div>
 
         {/* ============ Snelle acties — 4 knoppen ============ */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-3.5 mb-5">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-3.5">
           <div className="flex items-center justify-between mb-2.5 px-1.5">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Snelle acties</p>
-            <span className="text-[10px] text-slate-400 font-semibold">Klik om naar de sectie te springen</span>
+            <span className="hidden sm:inline text-[10px] text-slate-400 font-semibold">Klik om naar de sectie te springen</span>
           </div>
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
               data-testid="saas-quick-new-invoice"
               className="group flex items-center gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100/40 hover:from-orange-100 hover:to-orange-200/60 border border-orange-100 hover:border-orange-300 transition-all">
@@ -466,14 +469,14 @@ export default function SaasOverview() {
           =================================================================== */}
 
       {/* Online bedrijven — live presence */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] mb-6" data-testid="online-section">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] overflow-hidden" data-testid="online-section">
+        <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
             </span>
-            <h2 className="font-extrabold text-slate-900">Nu online · {hasPresence ? onlineCompanies.length : '—'}</h2>
+            <h2 className="font-extrabold text-sm sm:text-base text-slate-900">Nu online · {hasPresence ? onlineCompanies.length : '—'}</h2>
           </div>
           <p className="text-[11px] text-slate-400 font-mono">Drempel: 5 min</p>
         </div>
@@ -489,11 +492,14 @@ export default function SaasOverview() {
         ) : (
           <div className="divide-y divide-slate-100">
             {onlineCompanies.map((c) => (
-              <div key={c.id} className="px-5 py-3 flex items-center gap-3" data-testid={`online-row-${c.id}`}>
+              <div key={c.id} className="px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 min-w-0" data-testid={`online-row-${c.id}`}>
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-900 truncate">{c.name}</p>
                   <p className="text-xs text-slate-500 font-mono truncate">/{c.slug}</p>
+                  <span className={`sm:hidden inline-flex mt-1 text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
+                    {STATUS_LABEL[c.billing_status] || c.billing_status}
+                  </span>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                   <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
@@ -503,7 +509,7 @@ export default function SaasOverview() {
                     <span className="text-[10px] font-bold text-slate-500">{c.active_users} user{c.active_users === 1 ? '' : 's'}</span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500 shrink-0 font-mono">{fmtRelative(c.last_seen_at)}</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 shrink-0 font-mono max-w-[5.5rem] sm:max-w-none truncate text-right">{fmtRelative(c.last_seen_at)}</p>
               </div>
             ))}
           </div>
@@ -512,17 +518,17 @@ export default function SaasOverview() {
 
       {/* Trial verloopt bijna */}
       {trialExpiring.length > 0 && (
-        <section className="bg-amber-50 rounded-2xl border-2 border-amber-200 mb-6 overflow-hidden" data-testid="trial-expiring-section">
-          <div className="px-5 py-3 border-b border-amber-200 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-700" />
-            <h2 className="font-extrabold text-amber-900">Proefperiode verloopt binnen 3 dagen · {trialExpiring.length}</h2>
+        <section className="bg-amber-50 rounded-2xl border-2 border-amber-200 overflow-hidden" data-testid="trial-expiring-section">
+          <div className="px-3 sm:px-5 py-3 border-b border-amber-200 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+            <h2 className="font-extrabold text-sm sm:text-base text-amber-900">Proefperiode verloopt binnen 3 dagen · {trialExpiring.length}</h2>
           </div>
           <div className="divide-y divide-amber-100">
             {trialExpiring.map((c) => {
               const end = new Date(c.trial_ends_at);
               const days = Math.ceil((end.getTime() - Date.now()) / 86400000);
               return (
-                <div key={c.id} className="px-5 py-3 flex items-center gap-3" data-testid={`trial-expiring-row-${c.id}`}>
+                <div key={c.id} className="px-3 sm:px-5 py-3 flex items-center gap-3" data-testid={`trial-expiring-row-${c.id}`}>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-slate-900 truncate">{c.name}</p>
                     <p className="text-xs text-slate-500 font-mono truncate">/{c.slug}</p>
@@ -538,10 +544,10 @@ export default function SaasOverview() {
       )}
 
       {/* Recent gezien (offline) */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)]" data-testid="offline-section">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-extrabold text-slate-900">Recent gezien · {hasPresence ? offlineCompanies.length : '—'}</h2>
-          <p className="text-[11px] text-slate-400">gesorteerd op laatst actief</p>
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] overflow-hidden" data-testid="offline-section">
+        <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-1">
+          <h2 className="font-extrabold text-sm sm:text-base text-slate-900">Recent gezien · {hasPresence ? offlineCompanies.length : '—'}</h2>
+          <p className="text-[10px] sm:text-[11px] text-slate-400">gesorteerd op laatst actief</p>
         </div>
         {!hasPresence ? (
           <div className="px-5 py-8 text-center text-amber-700 text-sm" role="status">
@@ -549,16 +555,19 @@ export default function SaasOverview() {
           </div>
         ) : <div className="divide-y divide-slate-100">
           {offlineCompanies.slice(0, 10).map((c) => (
-            <div key={c.id} className="px-5 py-3 flex items-center gap-3" data-testid={`offline-row-${c.id}`}>
+            <div key={c.id} className="px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 min-w-0" data-testid={`offline-row-${c.id}`}>
               <span className="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-slate-900 truncate">{c.name}</p>
                 <p className="text-xs text-slate-500 font-mono truncate">/{c.slug}</p>
+                <span className={`sm:hidden inline-flex mt-1 text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
+                  {STATUS_LABEL[c.billing_status] || c.billing_status}
+                </span>
               </div>
-              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
+              <span className={`hidden sm:inline-flex text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
                 {STATUS_LABEL[c.billing_status] || c.billing_status}
               </span>
-              <p className="text-[11px] text-slate-500 shrink-0 font-mono w-24 text-right">{fmtRelative(c.last_seen_at)}</p>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 shrink-0 font-mono w-20 sm:w-24 truncate text-right">{fmtRelative(c.last_seen_at)}</p>
             </div>
           ))}
           {offlineCompanies.length === 0 && (
