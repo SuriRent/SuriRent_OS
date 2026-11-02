@@ -61,10 +61,10 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
     <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex justify-end" data-testid="company-details-overlay">
       <button type="button" aria-label="Bedrijfsdetails sluiten" onClick={onClose} className="absolute inset-0 cursor-default" />
       <section role="dialog" aria-modal="true" aria-labelledby="company-details-title"
-        className="relative w-full max-w-xl h-full overflow-y-auto bg-[#F7F8FA] shadow-2xl">
+        className="relative w-full sm:max-w-2xl h-full overflow-y-auto bg-[#F7F8FA] shadow-2xl">
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-5 sm:px-7 py-4 flex items-center justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] font-extrabold text-orange-600">Bedrijfsbeheer</p>
+            <p className="text-xs uppercase tracking-[0.18em] font-extrabold text-orange-600">Bedrijfsbeheer</p>
             <h2 id="company-details-title" className="text-xl font-black text-slate-900 truncate">{company.name}</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Sluiten" className="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center">
@@ -72,19 +72,19 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
           </button>
         </div>
 
-        <div className="p-5 sm:p-7 space-y-5">
+        <div className="p-5 sm:p-6 space-y-5">
           <div className="rounded-2xl bg-slate-950 p-5 text-white">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-white/60">Abonnementsstatus</p>
-                <p className="text-2xl font-black mt-1">{status.label}</p>
-                <p className="text-sm text-white/70 mt-1">{plan?.name || company.plan || 'Geen pakket'} · {company.currency || 'SRD'} {Number(company.monthly_amount || 0).toLocaleString('nl-NL')} / {company.plan_interval || 'maand'}</p>
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/60">Pakket</p>
+                <p className="text-2xl font-black mt-1 break-words">{plan?.name || company.plan || 'Geen pakket'}</p>
+                <p className="text-sm text-white/80 mt-1">{company.currency || 'SRD'} {Number(company.monthly_amount || 0).toLocaleString('nl-NL')} / {company.plan_interval || 'maand'}</p>
               </div>
               <CreditCard className="w-6 h-6 text-orange-300 shrink-0" />
             </div>
             <div className="flex flex-wrap gap-2 mt-4">
-              <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ring-1 ring-inset ${status.className}`}>{status.label}</span>
-              {company.active === false && <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/80">Platformtoegang uit</span>}
+              <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold ring-1 ring-inset ${status.className}`}>Abonnement: {status.label}</span>
+              {company.active === false && <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/90">Platformtoegang uit</span>}
             </div>
           </div>
 
@@ -98,25 +98,25 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
               return <div key={item.label} className="rounded-xl bg-white border border-slate-200 p-3">
                 <Icon className="w-4 h-4 text-orange-600 mb-2" />
                 <p className="text-xl font-black text-slate-900">{item.value}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.label}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-600">{item.label}</p>
               </div>;
             })}
           </div>
 
           <div className="rounded-2xl bg-white border border-slate-200 divide-y divide-slate-100">
             <div className="p-4 flex items-start gap-3">
-              <Building2 className="w-4 h-4 mt-0.5 text-slate-400" />
-              <div><p className="text-xs font-bold text-slate-500">Bedrijf</p><p className="text-sm font-semibold text-slate-900">{company.name} <span className="text-slate-400 font-normal">/{company.slug}</span></p></div>
+              <Building2 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
+              <div className="min-w-0"><p className="text-sm font-bold text-slate-600">Bedrijf</p><p className="text-base font-semibold text-slate-900 break-words">{company.name} <span className="text-slate-500 font-normal">/{company.slug}</span></p></div>
             </div>
             <div className="p-4 flex items-start gap-3">
-              <Mail className="w-4 h-4 mt-0.5 text-slate-400" />
-              <div><p className="text-xs font-bold text-slate-500">Contact</p><p className="text-sm text-slate-900">{company.contact_email || company.owner_email || 'Geen e-mailadres opgegeven'}</p></div>
+              <Mail className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
+              <div className="min-w-0"><p className="text-sm font-bold text-slate-600">Contact</p><p className="text-base text-slate-900 break-all">{company.contact_email || company.owner_email || 'Geen e-mailadres opgegeven'}</p></div>
             </div>
-            {company.contact_phone && <div className="p-4 flex items-start gap-3"><Phone className="w-4 h-4 mt-0.5 text-slate-400" /><div><p className="text-xs font-bold text-slate-500">Telefoon</p><p className="text-sm text-slate-900">{company.contact_phone}</p></div></div>}
-            {company.address && <div className="p-4 flex items-start gap-3"><MapPin className="w-4 h-4 mt-0.5 text-slate-400" /><div><p className="text-xs font-bold text-slate-500">Adres</p><p className="text-sm text-slate-900">{company.address}</p></div></div>}
+            {company.contact_phone && <div className="p-4 flex items-start gap-3"><Phone className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Telefoon</p><p className="text-base text-slate-900 break-words">{company.contact_phone}</p></div></div>}
+            {company.address && <div className="p-4 flex items-start gap-3"><MapPin className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Adres</p><p className="text-base text-slate-900 break-words">{company.address}</p></div></div>}
             <div className="p-4 grid sm:grid-cols-2 gap-3">
-              <div className="flex items-start gap-3"><CalendarDays className="w-4 h-4 mt-0.5 text-slate-400" /><div><p className="text-xs font-bold text-slate-500">Proefperiode tot</p><p className="text-sm text-slate-900">{formatDate(company.trial_ends_at)}</p></div></div>
-              <div className="flex items-start gap-3"><Clock3 className="w-4 h-4 mt-0.5 text-slate-400" /><div><p className="text-xs font-bold text-slate-500">Verlenging</p><p className="text-sm text-slate-900">{formatDate(company.subscription_renews_at || company.next_billing_date)}</p></div></div>
+              <div className="flex items-start gap-3"><CalendarDays className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Proefperiode tot</p><p className="text-base text-slate-900">{formatDate(company.trial_ends_at)}</p></div></div>
+              <div className="flex items-start gap-3"><Clock3 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /><div><p className="text-sm font-bold text-slate-600">Verlenging</p><p className="text-base text-slate-900">{formatDate(company.subscription_renews_at || company.next_billing_date)}</p></div></div>
             </div>
           </div>
 
