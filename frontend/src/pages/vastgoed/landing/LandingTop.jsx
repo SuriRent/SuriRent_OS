@@ -316,13 +316,29 @@ function HeroVisual() {
 
   if (!mediaUrl) {
     return (
-      <>
+      <div className="relative">
         <DeviceStage />
-        {editMode && <div className="hidden">
-          <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
-            label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full" />
-        </div>}
-      </>
+        {editMode && (
+          <>
+            <div className="hidden">
+              <EditableMedia path="v3.hero.device_media_url" typePath="v3.hero.device_media_type"
+                label="Startpagina · Hero foto of video" className="aspect-[700/440] w-full" />
+            </div>
+            <button type="button"
+              onClick={() => window.parent?.postMessage({
+                type: 'landing-edit-media-request',
+                path: 'v3.hero.device_media_url',
+                typePath: 'v3.hero.device_media_type',
+                current: mediaUrl,
+                mediaType,
+              }, window.location.origin)}
+              data-testid="hero-media-upload"
+              className="absolute right-2 top-2 z-20 max-w-[calc(100%-1rem)] rounded-lg bg-[#FF5C00] px-3 py-2 text-xs font-extrabold text-white shadow-lg hover:bg-[#E65300] sm:right-4 sm:top-4 sm:px-4 sm:text-sm">
+              Foto of video uploaden
+            </button>
+          </>
+        )}
+      </div>
     );
   }
 
