@@ -260,22 +260,31 @@ export default function MobileRegisterWizard({ onClose, primary = '#FF5C00', ini
                     <div className="space-y-2.5">
                       {plans.map((item) => {
                         const selected = plan === item.id;
-                        const amount = (item.currency || 'SRD').toUpperCase() === 'EUR'
+                        const currency = (item.currency || 'SRD').toUpperCase();
+                        const amount = currency === 'EUR'
                           ? `€${Number(item.amount).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                          : `${item.currency} ${Number(item.amount).toLocaleString('nl-NL')}`;
+                          : `${currency} ${Number(item.amount).toLocaleString('nl-NL')}`;
+                        const billingLabel = item.interval === 'lifetime'
+                          ? 'eenmalig'
+                          : item.interval === 'year'
+                            ? 'per jaar'
+                            : 'per maand';
                         return (
                           <button key={item.id} type="button" onClick={() => setPlan(item.id)}
                             data-testid={`register-plan-${item.id}`} aria-pressed={selected}
-                            className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 p-3.5 text-left transition ${
+                            className={`w-full rounded-xl border-2 p-3.5 text-left transition ${
                               selected ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 bg-white'
                             }`}>
-                            <span className="min-w-0">
-                              <span className="block font-extrabold text-[#0B1B3F]">{item.name}</span>
-                              <span className="mt-0.5 block truncate text-xs text-slate-500">{item.description}</span>
+                            <span className="flex min-w-0 items-center justify-between gap-3">
+                              <span className="min-w-0 break-words font-extrabold text-[#0B1B3F]">{item.name}</span>
+                              {selected && <Check className="h-5 w-5 shrink-0 text-[#FF5C00]" strokeWidth={2.5} />}
                             </span>
-                            <span className="shrink-0 text-right">
-                              <span className="block text-lg font-black text-[#FF5C00]">{amount}</span>
-                              <span className="text-[11px] text-slate-500">per maand</span>
+                            {item.description && (
+                              <span className="mt-1 block whitespace-normal break-words text-xs leading-relaxed text-slate-600">{item.description}</span>
+                            )}
+                            <span className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                              <span className="text-lg font-black text-[#FF5C00]">{Number(item.amount) === 0 ? 'Gratis' : amount}</span>
+                              {Number(item.amount) !== 0 && <span className="text-xs text-slate-500">{billingLabel}</span>}
                             </span>
                           </button>
                         );
