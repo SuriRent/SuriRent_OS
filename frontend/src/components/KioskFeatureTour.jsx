@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Sparkles, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, MousePointer2, Sparkles, X } from 'lucide-react';
 
 const TOUR_STEPS = [
   {
@@ -58,9 +58,105 @@ const TOUR_STEPS = [
   },
   {
     title: 'Beheer',
-    description: 'Open het beheermenu om tussen de beheeronderdelen te wisselen. De rondleiding is later ook opnieuw te starten vanuit dit menu.',
+    description: 'In dit menu open je alle beheeronderdelen. Na de rondleiding kun je hem hier opnieuw starten.',
+    route: { type: 'admin-menu' },
+    target: 'kiosk-admin-menu-title',
+  },
+  {
+    title: 'Snelle toevoeging onderaan',
+    description: 'De onderste balk geeft snelle acties. Op een telefoon tik je op de grote plus; op een computer staan de acties direct in de balk. De tour wijst hier de plus of de balk aan.',
     route: { type: 'home' },
-    target: 'kiosk-admin-menu-btn',
+    target: { desktop: 'kiosk-bottom-bar', mobile: 'kiosk-mobile-bottom-bar', smallMobile: 'kiosk-mobile-fab' },
+  },
+  {
+    title: 'Snel toevoegen openen',
+    description: 'Tik op de plus om het menu Snel toevoegen te openen. Hier staan veelgebruikte acties bij elkaar, zodat je niet eerst een beheerscherm hoeft op te zoeken.',
+    route: { type: 'quick-sheet' },
+    target: 'kiosk-add-sheet-title',
+  },
+  {
+    title: 'Nieuwe huurder via Snel toevoegen',
+    description: 'Dit opent het snelle huurdersformulier. Vul minimaal de naam in en koppel zo nodig meteen het appartement. Sla pas op als de gegevens gecontroleerd zijn.',
+    route: { type: 'quick-action', key: 'tenant' },
+    target: 'add-tenant-name',
+  },
+  {
+    title: 'Nieuw appartement via Snel toevoegen',
+    description: 'Vul het huisnummer, de huurprijs en de valuta in. Kies de locatie zodat je het appartement later makkelijk terugvindt.',
+    route: { type: 'quick-action', key: 'apartment' },
+    target: 'add-apartment-number',
+  },
+  {
+    title: 'Nieuwe locatie via Snel toevoegen',
+    description: 'Maak een groep voor appartementen aan. Geef de locatie een herkenbare naam en vul eventueel het adres in.',
+    route: { type: 'quick-action', key: 'location' },
+    target: 'add-location-name',
+  },
+  {
+    title: 'Nieuw contract via Snel toevoegen',
+    description: 'Kies de huurder en het appartement en controleer de startdatum, einddatum en betaalafspraken voordat je opslaat.',
+    route: { type: 'quick-action', key: 'contract' },
+    target: 'add-contract-tenant',
+  },
+  {
+    title: 'Nieuwe factuur via Snel toevoegen',
+    description: 'Gebruik dit formulier om een factuur voor een huurder en periode aan te maken. Controleer de selectie voordat je de factuur opslaat.',
+    route: { type: 'quick-action', key: 'invoice' },
+    target: 'add-invoice-title',
+  },
+  {
+    title: 'Betalingen inzien via Snel toevoegen',
+    description: 'Opent de lijst met recente betalingen. Controleer per regel de huurder, het bedrag en de status.',
+    route: { type: 'quick-action', key: 'payments' },
+    target: 'payments-viewer-title',
+  },
+  {
+    title: 'Onderhoud via Snel toevoegen',
+    description: 'Kies het appartement en beschrijf het probleem. Voeg prioriteit en eventuele kosten toe om de melding vast te leggen.',
+    route: { type: 'quick-action', key: 'maintenance' },
+    target: 'add-maintenance-title',
+  },
+  {
+    title: 'NFC-tag via Snel toevoegen',
+    description: 'Opent het scherm om een NFC-tag aan een huurder of appartement te koppelen. Controleer de gekozen koppeling voordat je opslaat.',
+    route: { type: 'quick-action', key: 'nfc' },
+    target: 'nfc-link-modal',
+  },
+  {
+    title: 'Kasgeld via Snel toevoegen',
+    description: 'Opent kasgeld. Gebruik Nieuwe mutatie om een inkomsten- of uitgavenbedrag, omschrijving en categorie te registreren.',
+    route: { type: 'quick-action', key: 'kasgeld' },
+    target: 'kasgeld-new-btn',
+  },
+  {
+    title: 'Beheerder via Snel toevoegen',
+    description: 'Opent het beheermenu met de beheerpagina’s. Kies daar bijvoorbeeld Locaties, Huurders of Instellingen.',
+    route: { type: 'quick-action', key: 'admin' },
+    target: 'kiosk-admin-menu',
+  },
+  {
+    title: 'Uitloggen via Snel toevoegen',
+    description: 'Deze knop meldt de kioskgebruiker af. De rondleiding voert de actie niet uit, zodat je sessie open blijft.',
+    route: { type: 'quick-sheet' },
+    target: 'kiosk-tile-exit',
+  },
+  {
+    title: 'Bonnen en printers via Snel toevoegen',
+    description: 'In dit blok zie je de bonnenstatus en, afhankelijk van het apparaat, opties voor een printer. Koppelen of scannen start je zelf wanneer je er klaar voor bent.',
+    route: { type: 'quick-sheet' },
+    target: 'kiosk-sheet-live-actions',
+  },
+  {
+    title: 'Scan ID via Snel toevoegen',
+    description: 'Opent de camera om een identiteitsbewijs te scannen en huurdersgegevens over te nemen. De tour start de camera niet automatisch; tik zelf op Scan ID als je toestemming geeft.',
+    route: { type: 'quick-sheet' },
+    target: 'kiosk-sheet-scan-id',
+  },
+  {
+    title: 'Weergave aanpassen via Snel toevoegen',
+    description: 'Met deze knop wissel je tussen de witte en oranje kioskweergave. De knop verandert de weergave direct wanneer je erop tikt.',
+    route: { type: 'quick-sheet' },
+    target: 'kiosk-sheet-theme-toggle',
   },
   {
     title: 'Locaties',
@@ -149,26 +245,37 @@ const TOUR_STEPS = [
 ];
 
 function getTargetRect(target) {
-  const element = document.querySelector(`[data-testid="${target}"]`);
+  const selector = resolveTarget(target);
+  const element = document.querySelector(`[data-testid="${selector}"]`);
   if (!element) return null;
   const { top, right, bottom, left, width, height } = element.getBoundingClientRect();
   if (!width || !height) return null;
   return { top, right, bottom, left, width, height };
 }
 
+function resolveTarget(target) {
+  if (typeof target === 'string') return target;
+  if (window.innerWidth < 390) return target.smallMobile || target.mobile || target.desktop;
+  if (window.innerWidth < 768) return target.mobile || target.desktop;
+  return target.desktop || target.mobile;
+}
+
 export default function KioskFeatureTour({ promptOpen, active, onStart, onSkip, onFinish }) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
+  const [targetUnavailable, setTargetUnavailable] = useState(false);
   const current = TOUR_STEPS[index];
 
   useEffect(() => {
     if (!active) return undefined;
     const step = TOUR_STEPS[index];
     setRect(null);
+    setTargetUnavailable(false);
     window.dispatchEvent(new CustomEvent('kiosk-tour-navigate', { detail: step.route }));
 
     const updateRect = () => {
       const next = getTargetRect(step.target);
+      if (next) setTargetUnavailable(false);
       setRect((currentRect) => {
         if (!next || !currentRect) return next;
         return Object.keys(next).every((key) => next[key] === currentRect[key]) ? currentRect : next;
@@ -176,10 +283,14 @@ export default function KioskFeatureTour({ promptOpen, active, onStart, onSkip, 
     };
     updateRect();
     const interval = window.setInterval(updateRect, 250);
+    const timeout = window.setTimeout(() => {
+      if (!getTargetRect(step.target)) setTargetUnavailable(true);
+    }, 5000);
     window.addEventListener('resize', updateRect);
     window.addEventListener('scroll', updateRect, true);
     return () => {
       window.clearInterval(interval);
+      window.clearTimeout(timeout);
       window.removeEventListener('resize', updateRect);
       window.removeEventListener('scroll', updateRect, true);
     };
@@ -234,6 +345,18 @@ export default function KioskFeatureTour({ promptOpen, active, onStart, onSkip, 
     setIndex(nextIndex);
   };
 
+  const calloutStyle = rect && rect.top + rect.height / 2 > window.innerHeight * 0.55
+    ? { top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }
+    : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)' };
+  const pointerLeft = rect && Math.max(8, Math.min(
+    rect.right < window.innerWidth - 48 ? rect.right + 4 : rect.left - 44,
+    window.innerWidth - 44,
+  ));
+  const pointerTop = rect && Math.max(8, Math.min(
+    rect.top + Math.min(rect.height / 2, 28) - 18,
+    window.innerHeight - 44,
+  ));
+
   return (
     <div className="pointer-events-none fixed inset-0 z-[300]" data-testid="kiosk-feature-tour">
       {rect && (
@@ -248,12 +371,19 @@ export default function KioskFeatureTour({ promptOpen, active, onStart, onSkip, 
           }}
         />
       )}
-      <section className="pointer-events-auto fixed inset-x-3 bottom-3 mx-auto w-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(30rem,calc(100vw-3rem))] sm:p-5"
+      {rect && (
+        <div aria-hidden="true" className="fixed flex h-9 w-9 items-center justify-center rounded-full bg-[#FF5C00] text-white shadow-lg ring-4 ring-white/90 animate-bounce"
+          style={{ left: pointerLeft, top: pointerTop }}>
+          <MousePointer2 className="h-5 w-5" />
+        </div>
+      )}
+      <section style={calloutStyle}
+        className="pointer-events-auto fixed inset-x-3 mx-auto w-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_50px_-12px_rgba(11,27,63,0.42)] sm:inset-x-auto sm:right-6 sm:w-[min(30rem,calc(100vw-3rem))] sm:p-5"
         role="dialog" aria-modal="false" aria-labelledby="kiosk-tour-title">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-widest text-[#C74600]">
-              Onderdeel {index + 1} van {TOUR_STEPS.length}
+              Stap {index + 1} van {TOUR_STEPS.length}
             </p>
             <h2 id="kiosk-tour-title" className="mt-1 text-xl font-black text-slate-900">{current.title}</h2>
           </div>
@@ -263,6 +393,15 @@ export default function KioskFeatureTour({ promptOpen, active, onStart, onSkip, 
           </button>
         </div>
         <p className="mt-2 text-sm leading-6 text-slate-600">{current.description}</p>
+        {!rect && (
+          <p role={targetUnavailable ? 'alert' : 'status'}
+            className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${targetUnavailable ? 'bg-amber-50 text-amber-800' : 'bg-orange-50 text-[#9A3412]'}`}>
+            {targetUnavailable ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />}
+            {targetUnavailable
+              ? 'Dit onderdeel is niet zichtbaar geworden. Gebruik Terug of Volgende om verder te gaan.'
+              : 'Het scherm wordt geopend…'}
+          </p>
+        )}
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-[#FF5C00] transition-all"
             style={{ width: `${((index + 1) / TOUR_STEPS.length) * 100}%` }} />

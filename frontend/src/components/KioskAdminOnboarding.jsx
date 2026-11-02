@@ -71,11 +71,13 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
         }}
         onSkip={() => {
           try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+          window.dispatchEvent(new CustomEvent('kiosk-tour-navigate', { detail: { type: 'home' } }));
           setTourPromptOpen(false);
           setTourActive(false);
         }}
         onFinish={() => {
           try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+          window.dispatchEvent(new CustomEvent('kiosk-tour-navigate', { detail: { type: 'home' } }));
           setTourActive(false);
         }} />
     </>

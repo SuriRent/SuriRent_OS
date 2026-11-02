@@ -185,34 +185,34 @@ export default function SetupWizard({ onFinish } = {}) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4" data-testid="setup-wizard">
+    <div className="max-w-6xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
       {/* Header */}
-      <div className="bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-white/10" />
+      <div className="bg-gradient-to-br from-[#0B1B3F] via-[#17325E] to-[#C74600] text-white rounded-3xl p-5 sm:p-7 shadow-lg relative overflow-hidden">
+        <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full border-[24px] border-white/[0.06]" />
+        <div className="absolute -bottom-16 -left-8 w-40 h-40 rounded-full bg-[#FF8A3D]/15" />
         <div className="relative">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-5 h-5" />
-            <p className="text-[11px] uppercase tracking-[0.2em] font-black opacity-90">Setup Wizard</p>
+            <Sparkles className="w-4 h-4 text-[#FFB276]" />
+            <p className="text-[11px] uppercase tracking-[0.18em] font-black text-white/75">Aan de slag</p>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black mb-1">
-            {allDone ? 'Setup afgerond 🎉' : 'Stap voor stap je platform inrichten'}
+          <h2 className="text-2xl sm:text-3xl font-black mb-1 tracking-tight">
+            {allDone ? 'Je Kiosk is klaar' : 'Richt je Kiosk stap voor stap in'}
           </h2>
-          <p className="text-sm opacity-90 mb-3">
+          <p className="text-sm text-white/80 mb-4">
             Stap <strong>{idx + 1} van {STEPS.length}</strong> · {currentStep.label}
           </p>
           <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-            <div className="h-full bg-white rounded-full transition-all duration-500"
+            <div className="h-full bg-[#FF8A3D] rounded-full transition-all duration-500"
               style={{ width: `${Math.round(((idx + 1) / STEPS.length) * 100)}%` }} />
           </div>
-          <p className="text-[11px] opacity-80 mt-2">
-            Belangrijke basisstappen: <strong>{completed}/{total}</strong> afgerond.
+          <p className="text-[11px] text-white/75 mt-2">
+            Basis ingericht: <strong className="text-white">{completed} van {total}</strong>
           </p>
         </div>
       </div>
 
       {/* Step pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" data-testid="wizard-steps">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2" data-testid="wizard-steps">
         {STEPS.map((s, i) => {
           const Icon = s.icon;
           const done = stepDone(s.id);
@@ -222,8 +222,8 @@ export default function SetupWizard({ onFinish } = {}) {
             <button key={s.id} onClick={() => setIdx(i)}
               disabled={disabled}
               data-testid={`wizard-step-${s.id}`}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-40
-                ${active ? 'bg-slate-900 text-white' : done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-400'}`}>
+              className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-40
+                ${active ? 'bg-[#0B1B3F] text-white shadow-md shadow-[#0B1B3F]/15' : done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-[#FF8A3D]'}`}>
               {done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               <span>{i + 1}. {s.label}</span>
             </button>
@@ -232,7 +232,7 @@ export default function SetupWizard({ onFinish } = {}) {
       </div>
 
       {/* Step content */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-md p-5 sm:p-6">
+      <div className="bg-white border border-slate-200/90 rounded-3xl shadow-[0_10px_35px_-24px_rgba(11,27,63,0.45)] p-4 sm:p-7">
         {err && (
           <div className="flex items-center justify-between gap-3 px-3 py-2 mb-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm font-bold">
               <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4 flex-shrink-0" /> {err}</span>
@@ -262,7 +262,7 @@ export default function SetupWizard({ onFinish } = {}) {
         {currentStep.id === 'tenant' && <StepTenant tenant={tenant} setTenant={setTenant} apts={apts} tenants={tenants} status={status} />}
 
         {/* Navigation */}
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+        <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 mt-6 -mx-4 px-4 py-3 border-t border-slate-200 bg-white/95 backdrop-blur-sm sm:-mx-7 sm:px-7">
           <button onClick={prevStep} disabled={idx === 0}
             data-testid="wizard-prev"
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -288,7 +288,7 @@ export default function SetupWizard({ onFinish } = {}) {
                 </button>
               ) : (
                 <button onClick={nextStep} data-testid="wizard-next"
-                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
                   Volgende <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -306,7 +306,7 @@ export default function SetupWizard({ onFinish } = {}) {
               )}
               {formStepDone('apartment') && (
                 <button onClick={nextStep} data-testid="wizard-next"
-                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
                   Volgende <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -324,7 +324,7 @@ export default function SetupWizard({ onFinish } = {}) {
               )}
               {stepDone('tenant') && (
                 <button onClick={nextStep} data-testid="wizard-next"
-                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
                   {idx === STEPS.length - 1 ? 'Afronden' : 'Volgende'} <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -332,7 +332,7 @@ export default function SetupWizard({ onFinish } = {}) {
           )}
           {currentStep.settings && (
             <button onClick={nextStep} disabled={!savedSettings[currentStep.id]} data-testid="wizard-next"
-              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition disabled:opacity-50 disabled:cursor-not-allowed">
               {savedSettings[currentStep.id] ? 'Volgende' : 'Bewaar eerst'} <ArrowRight className="w-4 h-4" />
             </button>
           )}
@@ -344,7 +344,7 @@ export default function SetupWizard({ onFinish } = {}) {
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
           <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-          Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
+            Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
           </p>
         </div>
       )}

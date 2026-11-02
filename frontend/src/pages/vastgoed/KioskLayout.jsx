@@ -251,7 +251,8 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
             <div className="w-10 h-10 rounded-xl bg-white/20 md:bg-orange-100 flex items-center justify-center">
               <Icon className="w-6 h-6 text-white md:text-[#FF5C00]" strokeWidth={2.4} />
             </div>
-            <h3 className="text-xl font-black text-white md:text-slate-900">{title}</h3>
+            <h3 className="text-xl font-black text-white md:text-slate-900"
+              data-testid={`${testId}-title`}>{title}</h3>
           </div>
           <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
             className="w-11 h-11 rounded-xl bg-white/20 md:bg-slate-100 md:hover:bg-slate-200 flex items-center justify-center transition">
@@ -288,8 +289,13 @@ const returnToMenu = () => {
 function useMenuReopen(name, setOpen) {
   useEffect(() => {
     const h = (e) => { if (e.detail === name) setOpen(true); };
+    const close = () => setOpen(false);
     window.addEventListener('kiosk-open-menu', h);
-    return () => window.removeEventListener('kiosk-open-menu', h);
+    window.addEventListener('kiosk-close-menu', close);
+    return () => {
+      window.removeEventListener('kiosk-open-menu', h);
+      window.removeEventListener('kiosk-close-menu', close);
+    };
   }, [name, setOpen]);
 }
 
@@ -4918,7 +4924,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
           <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
             <Plus className="w-6 h-6 text-white" strokeWidth={3} />
           </div>
-          <h3 className="text-xl font-black text-white">Snel toevoegen</h3>
+          <h3 className="text-xl font-black text-white" data-testid="kiosk-add-sheet-title">Snel toevoegen</h3>
         </div>
         <button onClick={onClose} data-testid="kiosk-add-sheet-close"
           className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition">
@@ -5457,10 +5463,22 @@ export default function KioskLayout() {
   useEffect(() => {
     const onTourNavigate = (event) => {
       const route = event.detail || {};
+      window.dispatchEvent(new CustomEvent('kiosk-close-menu'));
       setShowInvoicesModal(false);
       setAdminPopup(null);
       setNfcLink(null);
       setSearchOpen(false);
+      setShowAddSheet(false);
+      setShowAddTenant(false);
+      setShowAddApartment(false);
+      setShowAddLocation(false);
+      setShowAddContract(false);
+      setShowAddInvoice(false);
+      setShowPaymentsViewer(false);
+      setShowAddMaintenance(false);
+      setPhoneScanOpen(false);
+      setDepositFor(null);
+      setContractFor(null);
       if (route.type === 'settings') {
         setStep('select');
         setAdminPopup(`inst-${route.id}`);
@@ -5476,6 +5494,15 @@ export default function KioskLayout() {
       } else if (route.type === 'search') {
         setStep('select');
         setSearchOpen(true);
+      } else if (route.type === 'quick-sheet') {
+        setStep('select');
+        setShowAddSheet(true);
+      } else if (route.type === 'quick-action') {
+        setStep('select');
+        window.setTimeout(() => handleSheetPick(route.key), 120);
+      } else if (route.type === 'admin-menu') {
+        setStep('select');
+        window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' }));
       } else if (route.type === 'home') {
         setStep('select');
       }
