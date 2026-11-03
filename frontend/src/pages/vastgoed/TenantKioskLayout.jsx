@@ -225,8 +225,11 @@ function LoginView({ branding, onLoggedIn, prefill }) {
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [lastUid, setLastUid] = useState('');
-  const [mode, setMode] = useState('nfc');
+  const [mode, setMode] = useState('pin');
   const [pin, setPin] = useState('');
+  const [tenants, setTenants] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState('');
   const [showForgot, setShowForgot] = useState(false);
   // refs voor handleScan deps zonder rerender storm
   const busyRef = useRef(false);
@@ -273,7 +276,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
     setError('');
     setHint('');
     try {
-      const payload = { pin: code };
+      const payload = { pin: code, tenant_id: selected?.id };
       if (branding?.id) payload.company_id = branding.id;
       else if (branding?.slug) payload.company_slug = branding.slug;
       else throw new Error('Geen bedrijfscontext gevonden — open de Huurder Kiosk via de QR-code.');
@@ -289,11 +292,21 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [branding?.id, branding?.slug, onLoggedIn]);
+  }, [branding?.id, branding?.slug, onLoggedIn, selected?.id]);
 
   useEffect(() => {
-    if (mode === 'pin' && pin.length === PIN_LENGTH) submitPin(pin);
-  }, [mode, pin, submitPin]);
+    if (!branding?.id && !branding?.slug) return;
+    let cancelled = false;
+    const params = branding.id ? { company_id: branding.id } : { company_slug: branding.slug };
+    api.get('/tenant-portal/directory', { params })
+      .then(({ data }) => { if (!cancelled) setTenants(data?.tenants || []); })
+      .catch(() => { if (!cancelled) setTenants([]); });
+    return () => { cancelled = true; };
+  }, [branding?.id, branding?.slug]);
+
+  useEffect(() => {
+    if (mode === 'pin' && selected && pin.length === PIN_LENGTH) submitPin(pin);
+  }, [mode, selected, pin, submitPin]);
 
   // === URL-tag NFC (iOS Safari + universele fallback) ===
   // Een NFC-tag geprogrammeerd met `https://<host>/kiosk/huurder?nfc=<UID>`
@@ -380,7 +393,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
   const hasWebNfc = typeof window !== 'undefined' && 'NDEFReader' in window;
 
   return (
-    <div className="min-h-full w-full flex flex-col items-center justify-center px-5 py-8"
+    <div className="min-h-full w-full flex flex-col items-center justify-start sm:justify-center px-5 py-6 overflow-y-auto"
       data-testid="tk-login">
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -402,20 +415,69 @@ function LoginView({ branding, onLoggedIn, prefill }) {
           {welcome}
         </h1>
         <p className="text-sm text-white/85 mt-2 max-w-xs">
-          {branding?.tagline || (mode === 'pin' ? 'Voer uw PIN in om in te loggen' : 'Tik uw NFC-kaart om in te loggen')}
+          {branding?.tagline || (mode === 'pin' ? (selected ? 'Voer uw PIN in om in te loggen' : 'Kies uw appartement en log in met uw PIN') : 'Tik uw NFC-kaart om in te loggen')}
         </p>
 
         {mode === 'pin' ? (
-          <div className="w-full mt-8 flex flex-col items-center gap-6" data-testid="tk-pin-login">
-            <PinDots value={pin} error={!!error} />
-            {error && <p className="text-sm font-bold text-white bg-red-500/40 px-4 py-2 rounded-full" data-testid="tk-pin-error">{error}</p>}
-            <PinPad value={pin} busy={busy}
-              onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
-              onBack={() => setPin((p) => p.slice(0, -1))} />
-            <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
-              className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
-              PIN vergeten?
-            </button>
+          <div className="w-full mt-6 flex flex-col items-center gap-4" data-testid="tk-pin-login">
+            {!selected ? (
+              <div className="w-full" data-testid="tk-tenant-list">
+                <p className="text-sm font-bold text-white mb-3">Kies uw appartement</p>
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek op naam of appartement"
+                  data-testid="tk-tenant-search"
+                  className="w-full h-12 px-4 rounded-2xl bg-white text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none mb-3" />
+                {tenants === null ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-white mx-auto my-6" />
+                ) : (() => {
+                  const q = search.trim().toLowerCase();
+                  const list = tenants.filter((t) => !q || t.name.toLowerCase().includes(q) || String(t.apartment).toLowerCase().includes(q));
+                  if (!list.length) {
+                    return <p className="text-sm text-white/85 py-6" data-testid="tk-tenant-empty">
+                      {tenants.length ? 'Geen huurder gevonden' : 'Nog geen huurders met PIN. Vraag de beheerder om een PIN in te stellen.'}
+                    </p>;
+                  }
+                  return (
+                    <div className="max-h-[52vh] overflow-y-auto space-y-2 pr-1 text-left">
+                      {list.map((t) => (
+                        <button key={t.id} onClick={() => { setSelected(t); setPin(''); setError(''); }}
+                          data-testid={`tk-tenant-${t.id}`}
+                          className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white shadow-[0_6px_0_rgba(0,0,0,0.08)] active:translate-y-[2px] transition">
+                          <span className="min-w-[3.5rem] h-12 px-2 rounded-xl bg-orange-50 text-[#FF5C00] font-black text-lg flex items-center justify-center">
+                            {t.apartment || '—'}
+                          </span>
+                          <span className="font-bold text-slate-900 truncate">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 bg-white/95 rounded-2xl px-4 py-2" data-testid="tk-selected-tenant">
+                  <span className="px-2 h-9 rounded-lg bg-orange-50 text-[#FF5C00] font-black flex items-center">{selected.apartment || '—'}</span>
+                  <span className="font-bold text-slate-900">{selected.name}</span>
+                </div>
+                <p className="text-sm text-white/90">Voer uw PIN in</p>
+                <PinDots value={pin} error={!!error} />
+                {error && <p className="text-sm font-bold text-white bg-red-500/40 px-4 py-2 rounded-full" data-testid="tk-pin-error">{error}</p>}
+                <div className="w-full max-w-[300px]">
+                  <PinPad value={pin} busy={busy}
+                    onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
+                    onBack={() => setPin((p) => p.slice(0, -1))} />
+                </div>
+                <div className="flex items-center gap-5">
+                  <button onClick={() => { setSelected(null); setPin(''); setError(''); }} data-testid="tk-change-tenant"
+                    className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
+                    Andere huurder
+                  </button>
+                  <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
+                    className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
+                    PIN vergeten?
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (<>
         {/* NFC TAP ZONE — grote pulserende cirkel met kaart-icoon */}

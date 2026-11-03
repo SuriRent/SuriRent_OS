@@ -6508,6 +6508,31 @@ class TenantPinLoginIn(BaseModel):
     pin: str = Field(min_length=4, max_length=4)
     company_id: Optional[str] = None
     company_slug: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+
+@api.get("/tenant-portal/directory")
+async def tenant_portal_directory(company_id: Optional[str] = None, company_slug: Optional[str] = None):
+    """Publiek: huurders met een PIN, gesorteerd op appartement, voor de keuzelijst op de Huurder Kiosk."""
+    cid = company_id
+    if not cid and company_slug:
+        c = await db.companies.find_one({"slug": company_slug.lower()}, {"_id": 0, "id": 1})
+        cid = c["id"] if c else None
+    if not cid:
+        raise HTTPException(status_code=400, detail="Bedrijfscontext ontbreekt")
+    tenants = await db.tenants.find(
+        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
+        {"_id": 0, "id": 1, "name": 1, "apartment_id": 1},
+    ).to_list(2000)
+    aids = list({t["apartment_id"] for t in tenants if t.get("apartment_id")})
+    apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1}).to_list(None) if aids else []
+    numbers = {a["id"]: a.get("number") or "" for a in apts}
+    items = [
+        {"id": t["id"], "name": t.get("name") or "", "apartment": numbers.get(t.get("apartment_id"), "")}
+        for t in tenants
+    ]
+    items.sort(key=lambda i: (i["apartment"] == "", str(i["apartment"]).lower(), i["name"].lower()))
+    return {"tenants": items}
 
 
 # =====================================================================
@@ -6757,8 +6782,11 @@ async def tenant_portal_pin_login(body: TenantPinLoginIn, request: Request, resp
         raise HTTPException(status_code=400, detail="Bedrijfscontext ontbreekt")
     throttle_key = f"tenant-pin:{_client_ip(request)}:{cid}"
     _pin_throttle_check(throttle_key)
+    tenant_query = {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}}
+    if body.tenant_id:
+        tenant_query["id"] = body.tenant_id
     cursor = db.tenants.find(
-        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
+        tenant_query,
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "pin_hash": 1, "company_id": 1, "apartment_id": 1},
     )
     match = None
