@@ -3,13 +3,33 @@ import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
 function Rocker({ on, busy, onToggle }) {
+  const isOn = on === true;
+  const isOff = on === false;
+  const leverPosition = isOn ? '-translate-y-7 -rotate-12' : isOff ? 'translate-y-7 rotate-12' : '';
   return (
-    <button type="button" onClick={onToggle} disabled={busy} role="switch" aria-checked={!!on} data-testid="power-rocker"
-      className={`relative w-44 h-24 rounded-full p-2 transition-colors duration-300 shadow-inner disabled:opacity-70 ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-      <span className={`absolute top-2 left-2 w-20 h-20 rounded-full bg-white shadow-lg flex items-center justify-center transition-transform duration-300 ${on ? 'translate-x-[80px]' : 'translate-x-0'}`}>
-        {busy ? <Loader2 className="w-8 h-8 animate-spin text-slate-500" /> : <Power className={`w-8 h-8 ${on ? 'text-emerald-600' : 'text-slate-400'}`} strokeWidth={2.6} />}
+    <button type="button" onClick={onToggle} disabled={busy} role="switch" aria-checked={isOn}
+      aria-label={`Stroom ${isOn ? 'uitschakelen' : 'inschakelen'}`} data-testid="power-rocker"
+      className="relative w-40 h-56 rounded-2xl border border-slate-400 bg-gradient-to-br from-slate-100 via-slate-300 to-slate-400 p-3 shadow-[inset_0_2px_5px_rgba(255,255,255,0.9),0_12px_24px_rgba(15,23,42,0.22)] disabled:opacity-80">
+      <span className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute bottom-2 left-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute bottom-2 right-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="relative flex h-full flex-col items-center rounded-xl border border-slate-500 bg-gradient-to-b from-slate-700 to-slate-900 px-3 py-3 shadow-inner">
+        <span className="flex w-full items-center justify-between text-[9px] font-black tracking-[0.18em] text-slate-300">
+          <span>BREAKER</span>
+          <span className={`h-2.5 w-2.5 rounded-full ring-2 ring-black/30 ${isOn ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.65)]' : 'bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.7)]'}`} />
+        </span>
+        <span className={`mt-3 text-xs font-black tracking-widest ${isOn ? 'text-emerald-300' : 'text-slate-500'}`}>I&nbsp; ON</span>
+        <span className="relative my-1 flex w-20 flex-1 items-center justify-center rounded-full border border-black/50 bg-black/50 shadow-inner">
+          <span className="absolute inset-x-0 top-1/2 h-px bg-white/10" />
+          <span className={`relative z-10 flex h-16 w-12 items-center justify-center rounded-lg border border-slate-400 bg-gradient-to-br from-slate-100 via-white to-slate-400 shadow-[0_5px_8px_rgba(0,0,0,0.45)] transition-transform duration-300 ${leverPosition}`}>
+            <span className="h-10 w-2 rounded-full bg-gradient-to-r from-slate-400 via-white to-slate-400 shadow-sm" />
+            {busy && <Loader2 className="absolute h-5 w-5 animate-spin text-slate-700" />}
+          </span>
+        </span>
+        <span className={`mb-1 text-xs font-black tracking-widest ${isOff ? 'text-red-300' : 'text-slate-500'}`}>O&nbsp; OFF</span>
+        <span className="text-[8px] font-bold tracking-[0.2em] text-slate-500">SURI RENT</span>
       </span>
-      <span className={`absolute top-1/2 -translate-y-1/2 text-white font-black text-lg ${on ? 'left-6' : 'right-6 !text-slate-500'}`}>{on ? 'AAN' : 'UIT'}</span>
     </button>
   );
 }
