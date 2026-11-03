@@ -12577,7 +12577,6 @@ async def system_status():
       • api          — FastAPI proces draait (impliciet: deze route reageert)
       • database     — MongoDB ping
       • huurder_kiosk — Huurder kiosk route + tenant-portal endpoint
-      • klantenscherm — Customer display feed endpoint
     """
     import time
     from pymongo.errors import PyMongoError
@@ -12627,22 +12626,6 @@ async def system_status():
         "id": "huurder_kiosk",
         "label": "Huurder Kiosk + Portaal",
         "status": hk_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 4) Klantenscherm — check kasgeld feed bron
-    t0 = time.perf_counter()
-    kl_status = "operational"
-    try:
-        await asyncio.wait_for(db.kasgeld.estimated_document_count(), timeout=2.0)
-    except Exception:
-        kl_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "klantenscherm",
-        "label": "Klantenscherm",
-        "status": kl_status,
         "latency_ms": int((time.perf_counter() - t0) * 1000),
     })
 
