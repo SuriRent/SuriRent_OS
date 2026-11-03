@@ -7034,7 +7034,17 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
                     fines_total = round(fine_amt * overdue_count, 2)
     except Exception:  # noqa: BLE001
         pass
+    kov_company = await db.companies.find_one(
+        {"id": tenant.get("company_id")},
+        {"_id": 0, "contact_phone": 1, "contact_email": 1, "whatsapp_number": 1},
+    ) if tenant.get("company_id") else None
+    kov_company = kov_company or {}
     return {
+        "company": {
+            "phone": kov_company.get("contact_phone") or "",
+            "email": kov_company.get("contact_email") or "",
+            "whatsapp": kov_company.get("whatsapp_number") or kov_company.get("contact_phone") or "",
+        },
         "tenant": {"id": tenant["id"], "name": tenant["name"], "phone": tenant.get("phone"), "email": tenant.get("email")},
         "apartment": apt and {
             "id": apt["id"], "number": apt["number"], "address": apt.get("address", ""),

@@ -1745,17 +1745,15 @@ function MeView({ overview, onBack }) {
 // =====================================================================
 // CONTACT
 // =====================================================================
-function ContactView({ overview, branding, onBack }) {
-  const phone = overview?.company?.phone || branding?.phone || '';
-  const email = overview?.company?.email || branding?.email || '';
+function ContactView({ overview, branding }) {
+  const co = overview?.company || {};
+  const phone = co.phone || branding?.contact_phone || branding?.phone || '';
+  const wa = co.whatsapp || branding?.whatsapp_number || phone;
+  const email = co.email || branding?.contact_email || branding?.email || '';
   return (
-    <div className="min-h-full w-full px-4 sm:px-6 py-5 sm:py-8" data-testid="tk-contact">
+    <div className="min-h-full w-full px-4 sm:px-6 py-3" data-testid="tk-contact">
       <div className="max-w-2xl mx-auto">
-        <button onClick={onBack} data-testid="tk-contact-back"
-          className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-widest text-white/85 hover:text-white mb-4">
-          <ArrowLeft className="w-3.5 h-3.5" /> Terug
-        </button>
-        <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Contact</h2>
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Contact</h2>
         <p className="text-sm text-white/85 mt-1 mb-5">Direct in contact met uw beheerder.</p>
         <div className="space-y-2.5">
           {phone ? (
@@ -1765,7 +1763,7 @@ function ContactView({ overview, branding, onBack }) {
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Phone className="w-6 h-6" /></div>
                 <div><p className="text-base font-black text-slate-900">Bel beheerder</p><p className="text-xs text-slate-500">{phone}</p></div>
               </a>
-              <a href={`https://wa.me/${phone.replace(/[^\d]/g, '')}`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://wa.me/${String(wa).replace(/[^\d]/g, '')}`} target="_blank" rel="noopener noreferrer"
                 data-testid="tk-whatsapp"
                 className="block bg-white rounded-2xl shadow-lg active:shadow-md p-4 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Phone className="w-6 h-6" /></div>
