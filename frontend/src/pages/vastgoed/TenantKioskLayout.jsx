@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscribeNfc } from '../../lib/nfc-bus';
 import { useSearchParams } from 'react-router-dom';
-import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -2003,7 +2002,6 @@ const TK_NEXT = { dashboard: 'pay' };
 // =====================================================================
 export default function TenantKioskLayout() {
   useHidePwaSplash();
-  const navigate = useBrandedNavigate();
   const [searchParams] = useSearchParams();
   const aptId = searchParams.get('apt');
   const tenantIdParam = searchParams.get('t');
@@ -2168,7 +2166,7 @@ export default function TenantKioskLayout() {
             </span>
           )}
           {withLogout && (
-            <button onClick={authed ? logout : () => navigate('/')}
+            <button onClick={authed ? logout : () => setLoginMode('pin')}
               data-testid="tk-logout"
               className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded-lg px-4 py-2 text-sm inline-flex items-center gap-1.5">
               <LogOut className="w-4 h-4" /> Uit
@@ -2207,7 +2205,7 @@ export default function TenantKioskLayout() {
           items={[
             { id: 'pin', label: 'Appartement', icon: HomeIcon, active: !nfcOn, onClick: () => setLoginMode('pin') },
             { id: 'nfc', label: 'NFC', icon: Smartphone, active: nfcOn, onClick: () => setLoginMode('nfc') },
-            { id: 'close', label: 'Sluiten', icon: X, onClick: () => navigate('/') },
+            { id: 'close', label: 'Sluiten', icon: X, onClick: () => { setLoginMode('pin'); window.scrollTo?.(0, 0); } },
           ]} />
       </div>
     );
