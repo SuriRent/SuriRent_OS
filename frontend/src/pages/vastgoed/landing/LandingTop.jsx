@@ -11,7 +11,6 @@ import { translateMarketingText } from '../../../lib/marketing-language';
 import StatusPill from '../../../components/StatusPill';
 
 export const NAVY = '#0B1B3F';
-const ORANGE = '#FF5C00';
 const HERO_BG = 'https://static.prod-images.emergentagent.com/jobs/112f335e-34a5-41f6-964a-ace72b419b81/images/1fa6bb1bb7a7e25e40033b14ab2a139b4e1bd6c79ca079680347d5553f2f07f4.jpeg';
 const APK_URL = `${process.env.REACT_APP_BACKEND_URL}/api/public/apk/download`;
 
@@ -174,78 +173,90 @@ const SIDEBAR = [[LayoutDashboard, 'Dashboard'], [Users, 'Huurders'], [Wallet, '
 const KPIS = [['Totaal huurders', '12', '+1 deze maand', 'text-emerald-600'], ['Ontvangen betalingen', 'SRD 78.500', '+12% deze maand', 'text-emerald-600'], ['Openstaand saldo', 'SRD 25.750', '-8% deze maand', 'text-red-500'], ['Actieve contracten', '11', '100%', 'text-emerald-600']];
 const PAYS = [['J. Ramautar', 'Huis 7A', 'SRD 7.000', '25 apr 2026', true], ['S. Gonesh', 'Huis 7B', 'SRD 6.000', '24 apr 2026', true], ['L. Soekhlal', 'Huis 7C', 'SRD 7.000', '24 apr 2026', true], ['M. Kanhai', 'Huis 7D', 'SRD 6.000', '23 apr 2026', false]];
 
-function LaptopMockup({ mediaUrl = '', mediaType = '', showMockups = false }) {
+function LaptopMockup({ mediaUrl = '', mediaType = '', showMedia = false }) {
   return (
     <div className="w-[600px]" data-testid="hero-laptop">
       <div className="rounded-t-[22px] bg-[#111827] p-[10px] pb-[12px] shadow-[0_40px_80px_-30px_rgba(11,27,63,0.55)]">
-        <div className="relative rounded-[6px] overflow-hidden bg-white flex h-[340px]">
-          {mediaUrl && !showMockups ? (
+        <div className="relative rounded-[6px] overflow-hidden bg-white h-[340px]">
+          {showMedia && mediaUrl ? (
             <EditableMedia path="v3.hero.laptop_custom_media_url" typePath="v3.hero.laptop_custom_media_type"
               label="Startpagina · Laptop scherm foto of video" value={mediaUrl} mediaTypeValue={mediaType}
               fit="cover" className="absolute inset-0 z-10 h-full w-full bg-[#F8FAFC]" />
-          ) : <>
-          <div className="w-[128px] bg-[#0E1A33] px-2.5 py-3 shrink-0">
-            <div className="flex items-center gap-1.5 mb-4 px-1">
-              <span className="w-5 h-5 rounded-md bg-[#FF5C00] p-[3px]"><EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
-              <span className="text-[12px] font-black text-white">
-                <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
-                <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF5C00]" />
-              </span>
-            </div>
-            {SIDEBAR.map(([I, l], i) => (
-              <div key={l} className={`flex items-center gap-2 px-2 h-[24px] rounded-md mb-[3px] text-[8px] font-semibold ${i === 0 ? 'bg-[#FF5C00] text-white' : 'text-white/70'}`}>
-                <I className="w-3 h-3" /><EditableText path={`marketing.home.mockup.sidebar.${i}`} fallback={l} as="span" label={`Startpagina · Dashboard menu ${i + 1}`} />
-              </div>
-            ))}
-          </div>
-          <div className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#F8FAFC]">
-            <div className="flex items-center justify-between text-[7px] text-slate-400">
-              <span>☰</span>
-              <div className="flex items-center gap-3"><EditableText path="marketing.home.mockup.today" fallback="Vandaag" as="span" label="Startpagina · Dashboard mock-up datum" className="px-2 py-0.5 rounded bg-white border border-slate-100" /><Bell className="w-2.5 h-2.5" /><span className="w-3.5 h-3.5 rounded-full bg-slate-300" /></div>
-            </div>
-            <EditableText path="marketing.home.mockup.dashboard_title" fallback="Dashboard" as="div" label="Startpagina · Dashboard mock-up titel" className="text-[13px] font-black mt-1.5" style={{ color: NAVY }} />
-            <EditableText path="marketing.home.mockup.dashboard_description" fallback="Overzicht van je vastgoed en huurders." as="div" label="Startpagina · Dashboard mock-up toelichting" className="text-[6.5px] text-slate-400" />
-            <div className="grid grid-cols-4 gap-1.5 mt-2.5">
-              {KPIS.map(([l, v, d, c], i) => (
-                <div key={l} className="rounded-md bg-white border border-slate-100 px-2 py-1.5">
-                  <EditableText path={`marketing.home.mockup.kpis.${i}.label`} fallback={l} as="div" label={`Startpagina · Dashboard KPI ${i + 1}`} className="text-[5.5px] text-slate-400" />
-                  <EditableText path={`marketing.home.mockup.kpis.${i}.value`} fallback={v} as="div" label={`Startpagina · Dashboard KPI-waarde ${i + 1}`} className="text-[9px] font-black mt-1" style={{ color: NAVY }} />
-                  <EditableText path={`marketing.home.mockup.kpis.${i}.trend`} fallback={d} as="div" label={`Startpagina · Dashboard KPI-trend ${i + 1}`} className={`text-[5.5px] mt-1 ${c}`} />
+          ) : (
+            <div className="flex h-full bg-[#F5F7FB]">
+              <aside className="w-[112px] shrink-0 bg-[#101B35] px-2.5 py-3">
+                <div className="mb-5 flex items-center gap-1.5 px-1">
+                  <span className="h-6 w-6 rounded-lg bg-[#FF5C00] p-[4px]">
+                    <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="h-full w-full" />
+                  </span>
+                  <span className="text-[10px] font-black text-white">
+                    <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
+                    <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF7A36]" />
+                  </span>
                 </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-[1fr,108px] gap-1.5 mt-2">
-              <div className="rounded-md bg-white border border-slate-100 p-2">
-                <EditableText path="marketing.home.mockup.payments_title" fallback="Recente betalingen" as="div" label="Startpagina · Dashboard betalingenkop" className="text-[7.5px] font-bold mb-1.5" style={{ color: NAVY }} />
-                <div className="grid grid-cols-[1.2fr,1fr,1fr,1fr,0.9fr] text-[5.5px] text-slate-400 pb-1 border-b border-slate-100">
-                  {['Huurder', 'Appartement', 'Bedrag', 'Datum', 'Status'].map((header, i) => <EditableText key={header} path={`marketing.home.mockup.payment_headers.${i}`} fallback={header} as="span" label={`Startpagina · Betalingstabel kolom ${i + 1}`} />)}
+                <div className="space-y-1">
+                  {SIDEBAR.map(([I, l], i) => (
+                    <div key={l} className={`flex h-[27px] items-center gap-2 rounded-lg px-2 text-[8px] font-semibold ${i === 0 ? 'bg-[#FF5C00] text-white' : 'text-white/65'}`}>
+                      <I className="h-3.5 w-3.5 shrink-0" />
+                      <EditableText path={`marketing.home.mockup.sidebar.${i}`} fallback={l} as="span" label={`Startpagina · Dashboard menu ${i + 1}`} />
+                    </div>
+                  ))}
                 </div>
-                {PAYS.map(([n, a, b, d, ok], i) => (
-                  <div key={n} className="grid grid-cols-[1.2fr,1fr,1fr,1fr,0.9fr] items-center text-[6px] text-slate-600 h-[20px] border-b border-slate-50">
-                    <EditableText path={`marketing.home.mockup.payments.${i}.tenant`} fallback={n} as="span" label={`Startpagina · Mockupbetaling ${i + 1} huurder`} />
-                    <EditableText path={`marketing.home.mockup.payments.${i}.property`} fallback={a} as="span" label={`Startpagina · Mockupbetaling ${i + 1} woning`} />
-                    <EditableText path={`marketing.home.mockup.payments.${i}.amount`} fallback={b} as="span" label={`Startpagina · Mockupbetaling ${i + 1} bedrag`} />
-                    <EditableText path={`marketing.home.mockup.payments.${i}.date`} fallback={d} as="span" label={`Startpagina · Mockupbetaling ${i + 1} datum`} />
-                    <EditableText path={`marketing.home.mockup.payments.${i}.status`} fallback={ok ? 'Ontvangen' : 'Achterstand'} as="span" label={`Startpagina · Mockupbetaling ${i + 1} status`} className={`px-1 py-[1px] rounded text-[5px] w-fit ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`} />
+                <div className="mt-4 rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-[7px] text-white/65">
+                  <span className="mb-1 block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Alles bijgewerkt
+                </div>
+              </aside>
+              <main className="min-w-0 flex-1 px-3.5 py-3">
+                <div className="mb-2 flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <div className="min-w-0">
+                    <EditableText path="marketing.home.mockup.dashboard_title" fallback="Dashboard" as="div" label="Startpagina · Dashboard mock-up titel" className="text-[15px] font-black leading-tight" style={{ color: NAVY }} />
+                    <EditableText path="marketing.home.mockup.dashboard_description" fallback="Overzicht van je vastgoed en huurders." as="div" label="Startpagina · Dashboard mock-up toelichting" className="mt-0.5 text-[8px] text-slate-500" />
                   </div>
-                ))}
-              </div>
-              <div className="rounded-md bg-white border border-slate-100 p-2 flex flex-col items-center">
-                <EditableText path="marketing.home.mockup.overdue_title" fallback="Huurachterstand" as="div" label="Startpagina · Dashboard achterstandkop" className="text-[7.5px] font-bold self-start" style={{ color: NAVY }} />
-                <svg viewBox="0 0 36 36" className="w-[62px] h-[62px] mt-2">
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="#F1F5F9" strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15" fill="none" stroke={ORANGE} strokeWidth="3" strokeDasharray="70 100" strokeLinecap="round" transform="rotate(-90 18 18)" />
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="#B91C1C" strokeWidth="3" strokeDasharray="14 100" strokeDashoffset="-72" strokeLinecap="round" transform="rotate(-90 18 18)" />
-                  <EditableText path="marketing.home.mockup.overdue_value" fallback="2" as="text" label="Startpagina · Dashboard mock-up aantal"
-                    x="18" y="18" textAnchor="middle" fontSize="7" fontWeight="900" fill={NAVY} />
-                  <EditableText path="marketing.home.mockup.overdue_label" fallback="Huurders" as="text" label="Startpagina · Dashboard mock-up grafieklabel"
-                    x="18" y="23" textAnchor="middle" fontSize="2.6" fontWeight="700" fill={NAVY} />
-                </svg>
-                <EditableText path="marketing.home.mockup.overdue_link" fallback="Bekijk details →" as="div" label="Startpagina · Dashboard detailslink" className="mt-auto text-[5.5px] font-bold" style={{ color: NAVY }} />
-              </div>
+                  <div className="flex shrink-0 items-center gap-2 text-slate-400">
+                    <EditableText path="marketing.home.mockup.today" fallback="Vandaag" as="span" label="Startpagina · Dashboard mock-up datum" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[7px] font-semibold text-slate-600" />
+                    <Bell className="h-3.5 w-3.5" />
+                    <span className="h-5 w-5 rounded-full bg-orange-100" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {KPIS.map(([l, v, d, c], i) => (
+                    <div key={l} className="min-w-0 rounded-lg border border-slate-200/80 bg-white px-2 py-2 shadow-[0_2px_8px_-6px_rgba(11,27,63,0.3)]">
+                      <EditableText path={`marketing.home.mockup.kpis.${i}.label`} fallback={l} as="div" label={`Startpagina · Dashboard KPI ${i + 1}`} className="truncate text-[7px] font-semibold text-slate-500" />
+                      <EditableText path={`marketing.home.mockup.kpis.${i}.value`} fallback={v} as="div" label={`Startpagina · Dashboard KPI-waarde ${i + 1}`} className="mt-1 truncate text-[13px] font-black leading-none" style={{ color: NAVY }} />
+                      <EditableText path={`marketing.home.mockup.kpis.${i}.trend`} fallback={d} as="div" label={`Startpagina · Dashboard KPI-trend ${i + 1}`} className={`mt-1 truncate text-[7px] font-bold ${c}`} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-[minmax(0,1fr),112px] gap-1.5">
+                  <div className="min-w-0 rounded-lg border border-slate-200/80 bg-white p-2">
+                    <EditableText path="marketing.home.mockup.payments_title" fallback="Recente betalingen" as="div" label="Startpagina · Dashboard betalingenkop" className="mb-1.5 text-[9px] font-extrabold" style={{ color: NAVY }} />
+                    <div className="grid grid-cols-[1.2fr,0.8fr,0.9fr,0.8fr] gap-1 border-b border-slate-100 pb-1 text-[6.5px] font-bold uppercase tracking-wide text-slate-400">
+                      {[['Huurder', 0], ['Appartement', 1], ['Bedrag', 2], ['Status', 4]].map(([header, index], i) => <EditableText key={header} path={`marketing.home.mockup.payment_headers.${index}`} fallback={header} as="span" label={`Startpagina · Betalingstabel kolom ${i + 1}`} className="truncate" />)}
+                    </div>
+                    {PAYS.slice(0, 3).map(([n, a, b, , ok], i) => (
+                      <div key={n} className="grid h-[28px] grid-cols-[1.2fr,0.8fr,0.9fr,0.8fr] items-center gap-1 border-b border-slate-50 text-[7px] text-slate-600">
+                        <EditableText path={`marketing.home.mockup.payments.${i}.tenant`} fallback={n} as="span" label={`Startpagina · Mockupbetaling ${i + 1} huurder`} className="truncate font-semibold" />
+                        <EditableText path={`marketing.home.mockup.payments.${i}.property`} fallback={a} as="span" label={`Startpagina · Mockupbetaling ${i + 1} woning`} className="truncate" />
+                        <EditableText path={`marketing.home.mockup.payments.${i}.amount`} fallback={b} as="span" label={`Startpagina · Mockupbetaling ${i + 1} bedrag`} className="truncate font-bold" />
+                        <EditableText path={`marketing.home.mockup.payments.${i}.status`} fallback={ok ? 'Ontvangen' : 'Achterstand'} as="span" label={`Startpagina · Mockupbetaling ${i + 1} status`} className={`w-fit truncate rounded-full px-1.5 py-0.5 text-[6px] font-bold ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col rounded-lg border border-slate-200/80 bg-white p-2">
+                    <EditableText path="marketing.home.mockup.overdue_title" fallback="Huurachterstand" as="div" label="Startpagina · Dashboard achterstandkop" className="text-[8px] font-extrabold" style={{ color: NAVY }} />
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-[4px] border-orange-100 border-t-[#FF5C00] text-[11px] font-black" style={{ color: NAVY }}>
+                        <EditableText path="marketing.home.mockup.overdue_value" fallback="2" as="span" label="Startpagina · Dashboard mock-up aantal" />
+                      </div>
+                      <EditableText path="marketing.home.mockup.overdue_label" fallback="Huurders" as="span" label="Startpagina · Dashboard mock-up grafieklabel" className="text-[7px] font-semibold text-slate-500" />
+                    </div>
+                    <EditableText path="marketing.home.mockup.overdue_link" fallback="Bekijk details →" as="div" label="Startpagina · Dashboard detailslink" className="mt-auto pt-2 text-[7px] font-bold text-[#E65300]" />
+                  </div>
+                </div>
+              </main>
             </div>
-          </div>
-          </>}
+          )}
         </div>
       </div>
       <div className="h-[14px] mx-[-36px] rounded-b-[14px] bg-gradient-to-b from-[#E5E7EB] to-[#9CA3AF] relative">
@@ -257,58 +268,67 @@ function LaptopMockup({ mediaUrl = '', mediaType = '', showMockups = false }) {
 
 const PHONE_CARDS = [['Mijn huurders', '12', Users, 'text-[#FF5C00]'], ['Betalingen', '8', Wallet, 'text-[#FF5C00]'], ['Achterstand', '2', AlertCircle, 'text-[#FF5C00]'], ['Rapporten', 'Bekijk', FileText, 'text-blue-600']];
 
-function PhoneMockup({ mediaUrl = '', mediaType = '', showMockups = false }) {
+function PhoneMockup({ mediaUrl = '', mediaType = '', showMedia = false }) {
   return (
     <div className="w-[150px] rounded-[26px] bg-[#111827] p-[6px] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.6)]" data-testid="hero-phone">
       <div className="rounded-[21px] bg-white overflow-hidden h-[318px] flex flex-col relative">
-        {mediaUrl && !showMockups ? (
+        {showMedia && mediaUrl ? (
           <EditableMedia path="v3.hero.phone_custom_media_url" typePath="v3.hero.phone_custom_media_type"
             label="Startpagina · Telefoonscherm foto of video" value={mediaUrl} mediaTypeValue={mediaType}
             fit="cover" className="absolute inset-0 z-10 h-full w-full bg-white" />
-        ) : <>
-        <div className="h-[18px] flex items-center justify-between px-3 text-[6px] font-bold" style={{ color: NAVY }}>
-          <span>9:41</span><span className="w-[46px] h-[11px] rounded-full bg-[#111827] absolute left-1/2 -translate-x-1/2 top-[4px]" /><span>●●</span>
-        </div>
-        <div className="flex items-center justify-between px-2.5 py-1.5">
-          <span className="flex items-center gap-1">          <span className="w-3.5 h-3.5 rounded bg-[#FF5C00] p-[2px]"><EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="w-full h-full" /></span>
-            <span className="text-[8px] font-black" style={{ color: NAVY }}>
-              <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
-              <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF5C00]" />
-            </span></span>
-          <Bell className="w-2.5 h-2.5 text-slate-500" />
-        </div>
-        <EditableText path="marketing.home.mockup.greeting" fallback="Goedemorgen, beheerder" as="div" label="Startpagina · Mobiel mock-up begroeting" className="px-2.5 text-[7px] font-black" style={{ color: NAVY }} />
-        <div className="flex-1 px-2.5 pt-2 space-y-1.5">
-          {PHONE_CARDS.map(([l, v, I, c], i) => (
-            <div key={l} className="rounded-lg border border-slate-100 bg-white px-2 py-2 flex items-center justify-between shadow-[0_2px_6px_-3px_rgba(11,27,63,0.15)]">
-              <div><EditableText path={`marketing.home.mockup.phone_cards.${i}.label`} fallback={l} as="div" label={`Startpagina · Mobiel kaart ${i + 1}`} className="text-[5.5px] text-slate-400" /><EditableText path={`marketing.home.mockup.phone_cards.${i}.value`} fallback={v} as="div" label={`Startpagina · Mobiel kaartwaarde ${i + 1}`} className={`text-[8px] font-black mt-1 ${v === 'Bekijk' ? 'text-[5.5px] font-semibold text-slate-400' : ''}`} style={{ color: v === 'Bekijk' ? undefined : NAVY }} /></div>
-              <span className="w-5 h-5 rounded-md bg-orange-50 flex items-center justify-center"><I className={`w-3 h-3 ${c}`} /></span>
+        ) : (
+          <>
+            <div className="relative flex h-[22px] shrink-0 items-center justify-between px-3 text-[7px] font-bold" style={{ color: NAVY }}>
+              <span>9:41</span>
+              <span className="absolute left-1/2 top-[4px] h-[10px] w-[42px] -translate-x-1/2 rounded-full bg-[#111827]" />
+              <span className="text-[6px] tracking-wide">● ● ●</span>
             </div>
-          ))}
-        </div>
-        <div className="h-[28px] border-t border-slate-100 grid grid-cols-4 text-[4.5px] text-slate-400">
-          {[[HomeIcon, 'Home'], [Users, 'Huurders'], [Wallet, 'Betalingen'], [MoreHorizontal, 'Meer']].map(([I, l], i) => (
-            <div key={l} className={`flex flex-col items-center justify-center gap-[2px] ${i === 0 ? 'text-[#FF5C00]' : ''}`}><I className="w-2.5 h-2.5" /><EditableText path={`marketing.home.mockup.phone_nav.${i}`} fallback={l} as="span" label={`Startpagina · Mobiele navigatie ${i + 1}`} /></div>
-          ))}
-        </div>
-        </>}
+            <div className="flex h-[32px] shrink-0 items-center justify-between border-b border-slate-100 px-2.5">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="h-5 w-5 shrink-0 rounded-md bg-[#FF5C00] p-[3px]">
+                  <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className="h-full w-full" />
+                </span>
+                <span className="truncate text-[9px] font-black" style={{ color: NAVY }}>
+                  <EditableText path="v2.brand.name_prefix" fallback="Suri" as="span" label="Merk · Voorvoegsel" />
+                  <EditableText path="v2.brand.name_suffix" fallback="Rent" as="span" label="Merk · Achtervoegsel" className="text-[#FF5C00]" />
+                </span>
+              </span>
+              <Bell className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+            </div>
+            <div className="px-2.5 pt-2">
+              <EditableText path="marketing.home.mockup.greeting" fallback="Goedemorgen, beheerder" as="div" label="Startpagina · Mobiel mock-up begroeting" className="truncate text-[8px] font-semibold text-slate-500" />
+              <div className="mt-0.5 text-[11px] font-black leading-tight" style={{ color: NAVY }}>Jouw overzicht</div>
+            </div>
+            <div className="flex-1 space-y-1.5 px-2.5 pt-2">
+              {PHONE_CARDS.map(([l, v, I, c], i) => (
+                <div key={l} className="flex min-h-[43px] items-center justify-between rounded-lg border border-slate-100 bg-white px-2.5 shadow-[0_3px_10px_-7px_rgba(11,27,63,0.35)]">
+                  <div className="min-w-0">
+                    <EditableText path={`marketing.home.mockup.phone_cards.${i}.label`} fallback={l} as="div" label={`Startpagina · Mobiel kaart ${i + 1}`} className="truncate text-[7px] font-semibold text-slate-500" />
+                    <EditableText path={`marketing.home.mockup.phone_cards.${i}.value`} fallback={v} as="div" label={`Startpagina · Mobiel kaartwaarde ${i + 1}`} className={`mt-0.5 truncate font-black leading-tight ${v === 'Bekijk' ? 'text-[9px] font-semibold text-slate-500' : 'text-[12px]'}`} style={{ color: v === 'Bekijk' ? undefined : NAVY }} />
+                  </div>
+                  <span className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-50">
+                    <I className={`h-4 w-4 ${c}`} />
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="grid h-[30px] shrink-0 grid-cols-4 border-t border-slate-100 bg-white text-[6px] text-slate-400">
+              {[[HomeIcon, 'Home'], [Users, 'Huurders'], [Wallet, 'Betalingen'], [MoreHorizontal, 'Meer']].map(([I, l], i) => (
+                <div key={l} className={`flex flex-col items-center justify-center gap-0.5 ${i === 0 ? 'font-bold text-[#FF5C00]' : ''}`}>
+                  <I className="h-3.5 w-3.5" />
+                  <EditableText path={`marketing.home.mockup.phone_nav.${i}`} fallback={l} as="span" label={`Startpagina · Mobiele navigatie ${i + 1}`} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 // Schaalt de vaste mockup-compositie mee met de beschikbare breedte.
-function requestHeroMediaUpload(path, typePath, current, mediaType) {
-  window.parent?.postMessage({
-    type: 'landing-edit-media-request',
-    path,
-    typePath,
-    current,
-    mediaType,
-  }, window.location.origin);
-}
-
-function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType, showMockups }) {
+function DeviceStage({ laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType, showMedia }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -322,27 +342,11 @@ function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phon
     <div ref={ref} className="w-full relative" style={{ height: 440 * scale }} data-testid="hero-devices">
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: 700, height: 440, transform: `scale(${scale})` }}>
         <div className="absolute left-[30px] top-[20px]">
-          <LaptopMockup mediaUrl={laptopMediaUrl} mediaType={laptopMediaType} showMockups={showMockups} />
+          <LaptopMockup mediaUrl={laptopMediaUrl} mediaType={laptopMediaType} showMedia={showMedia} />
         </div>
         <div className="absolute right-0 top-[100px] z-[15]">
-          <PhoneMockup mediaUrl={phoneMediaUrl} mediaType={phoneMediaType} showMockups={showMockups} />
+          <PhoneMockup mediaUrl={phoneMediaUrl} mediaType={phoneMediaType} showMedia={showMedia} />
         </div>
-        {editMode && (showMockups || !laptopMediaUrl) && (
-          <button type="button" onClick={() => requestHeroMediaUpload(
-            'v3.hero.laptop_custom_media_url', 'v3.hero.laptop_custom_media_type', laptopMediaUrl, laptopMediaType,
-          )} data-testid="hero-laptop-media-upload"
-            className="absolute left-[50px] top-[35px] z-20 rounded-lg bg-[#FF5C00] px-3 py-2 text-[13px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
-            {translateMarketingText('Laptop · foto/video', language)}
-          </button>
-        )}
-        {editMode && (showMockups || !phoneMediaUrl) && (
-          <button type="button" onClick={() => requestHeroMediaUpload(
-            'v3.hero.phone_custom_media_url', 'v3.hero.phone_custom_media_type', phoneMediaUrl, phoneMediaType,
-          )} data-testid="hero-phone-media-upload"
-            className="absolute right-1 top-[110px] z-20 max-w-[150px] rounded-lg bg-[#FF5C00] px-2 py-2 text-[12px] font-extrabold text-white shadow-lg hover:bg-[#E65300]">
-            {translateMarketingText('Telefoon · foto/video', language)}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -357,8 +361,8 @@ function HeroVisual() {
   const phoneMediaUrl = savedPhoneMediaUrl || HERO_PHONE_DEFAULT;
   const phoneMediaType = savedPhoneMediaUrl ? getPath(content, 'v3.hero.phone_custom_media_type', '') : '';
   const hasMedia = Boolean(laptopMediaUrl || phoneMediaUrl);
-  const [showMockups, setShowMockups] = useState(false);
-  useEffect(() => setShowMockups(false), [laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType]);
+  const [showMedia, setShowMedia] = useState(false);
+  useEffect(() => setShowMedia(false), [laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType]);
 
   return (
     <div className="relative w-full">
@@ -370,12 +374,12 @@ function HeroVisual() {
             label="Startpagina · Telefoonscherm foto of video" value={phoneMediaUrl} mediaTypeValue={phoneMediaType} />
         </div>
       )}
-      <DeviceStage editMode={editMode} language={language} laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
-        phoneMediaUrl={phoneMediaUrl} phoneMediaType={phoneMediaType} showMockups={editMode && showMockups} />
+      <DeviceStage laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
+        phoneMediaUrl={phoneMediaUrl} phoneMediaType={phoneMediaType} showMedia={editMode && showMedia} />
       {editMode && hasMedia && (
-        <button type="button" onClick={() => setShowMockups((visible) => !visible)}
+        <button type="button" onClick={() => setShowMedia((visible) => !visible)}
           className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-extrabold text-slate-800 shadow-lg">
-          {translateMarketingText(showMockups ? 'Terug naar foto/video' : 'Mockupteksten bewerken', language)}
+          {translateMarketingText(showMedia ? 'Mockupteksten bewerken' : 'Foto/video bekijken', language)}
         </button>
       )}
     </div>
