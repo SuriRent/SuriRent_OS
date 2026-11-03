@@ -144,7 +144,7 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
                   className="ml-3 flex h-5 max-w-xs flex-1 items-center rounded-md border border-slate-100 bg-white px-3 text-[9px] font-medium text-slate-400" />
               </div>
               <EditableImage path="v2.features.rows.0.img" fallback={FEATURE_ROWS[0].img}
-                alt="SuriRent dashboard met vastgoedoverzicht" className="block aspect-[16/10] w-full rounded-b-xl object-cover object-top" />
+                alt="SuriRent dashboard met vastgoedoverzicht" className="block aspect-[16/10] w-full rounded-b-xl bg-slate-50 object-contain object-center" />
             </div>
             <div className="absolute -bottom-5 -left-2 flex items-center gap-3 rounded-2xl border border-white bg-white/95 p-3.5 shadow-[0_18px_42px_-22px_rgba(11,27,63,0.35)] backdrop-blur sm:-left-5 sm:p-4">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50"><Check className="h-5 w-5 text-emerald-600" /></span>
@@ -213,7 +213,7 @@ function FeatureDetailsPage({ onDemo, onRegister }) {
                     <span className="ml-3 h-4 flex-1 rounded bg-slate-50" />
                   </div>
                   <EditableImage path={`v2.features.rows.${index}.img`} fallback={feature.img}
-                    alt={feature.title} label={`Functies · Sectie ${index + 1} afbeelding`} className="block aspect-[16/10] w-full rounded-b-xl object-cover object-top" />
+                    alt={feature.title} label={`Functies · Sectie ${index + 1} afbeelding`} className="block aspect-[16/10] w-full rounded-b-xl bg-slate-50 object-contain object-center" />
                 </div>
               </div>
             </div>

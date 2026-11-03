@@ -168,6 +168,8 @@ export function LandingHeader({ onLogin, onRegister }) {
 }
 
 // ---------------- Mockups ----------------
+const HERO_LAPTOP_DEFAULT = '/kiosk-icons/screenshots/marketing-laptop-default.png';
+const HERO_PHONE_DEFAULT = '/kiosk-icons/screenshots/marketing-phone-default.png';
 const SIDEBAR = [[LayoutDashboard, 'Dashboard'], [Users, 'Huurders'], [Wallet, 'Betalingen'], [FileText, 'Contracten'], [BookOpen, 'Boekhouding'], [BarChart3, 'Rapporten'], [Settings, 'Instellingen']];
 const KPIS = [['Totaal huurders', '12', '+1 deze maand', 'text-emerald-600'], ['Ontvangen betalingen', 'SRD 78.500', '+12% deze maand', 'text-emerald-600'], ['Openstaand saldo', 'SRD 25.750', '-8% deze maand', 'text-red-500'], ['Actieve contracten', '11', '100%', 'text-emerald-600']];
 const PAYS = [['J. Ramautar', 'Huis 7A', 'SRD 7.000', '25 apr 2026', true], ['S. Gonesh', 'Huis 7B', 'SRD 6.000', '24 apr 2026', true], ['L. Soekhlal', 'Huis 7C', 'SRD 7.000', '24 apr 2026', true], ['M. Kanhai', 'Huis 7D', 'SRD 6.000', '23 apr 2026', false]];
@@ -348,13 +350,15 @@ function DeviceStage({ editMode, language, laptopMediaUrl, laptopMediaType, phon
 
 function HeroVisual() {
   const { editMode, content, language } = useEditable();
-  const savedLaptopMediaUrl = getPath(content, 'v3.hero.laptop_media_url');
-  const laptopMediaUrl = savedLaptopMediaUrl ?? getPath(content, 'v3.hero.device_media_url', '');
-  const laptopMediaType = savedLaptopMediaUrl == null
-    ? getPath(content, 'v3.hero.device_media_type', '')
-    : getPath(content, 'v3.hero.laptop_media_type', '');
-  const phoneMediaUrl = getPath(content, 'v3.hero.phone_media_url', '');
-  const phoneMediaType = getPath(content, 'v3.hero.phone_media_type', '');
+  const savedLaptopMediaUrl = getPath(content, 'v3.hero.laptop_media_url', '');
+  const legacyLaptopMediaUrl = getPath(content, 'v3.hero.device_media_url', '');
+  const laptopMediaUrl = savedLaptopMediaUrl || legacyLaptopMediaUrl || HERO_LAPTOP_DEFAULT;
+  const laptopMediaType = savedLaptopMediaUrl
+    ? getPath(content, 'v3.hero.laptop_media_type', '')
+    : legacyLaptopMediaUrl ? getPath(content, 'v3.hero.device_media_type', '') : '';
+  const savedPhoneMediaUrl = getPath(content, 'v3.hero.phone_media_url', '');
+  const phoneMediaUrl = savedPhoneMediaUrl || HERO_PHONE_DEFAULT;
+  const phoneMediaType = savedPhoneMediaUrl ? getPath(content, 'v3.hero.phone_media_type', '') : '';
   const hasMedia = Boolean(laptopMediaUrl || phoneMediaUrl);
   const [showMockups, setShowMockups] = useState(false);
   useEffect(() => setShowMockups(false), [laptopMediaUrl, laptopMediaType, phoneMediaUrl, phoneMediaType]);
@@ -366,7 +370,7 @@ function HeroVisual() {
           <EditableMedia path="v3.hero.laptop_media_url" typePath="v3.hero.laptop_media_type"
             label="Startpagina · Laptop scherm foto of video" value={laptopMediaUrl} mediaTypeValue={laptopMediaType} />
           <EditableMedia path="v3.hero.phone_media_url" typePath="v3.hero.phone_media_type"
-            label="Startpagina · Telefoonscherm foto of video" />
+            label="Startpagina · Telefoonscherm foto of video" value={phoneMediaUrl} mediaTypeValue={phoneMediaType} />
         </div>
       )}
       <DeviceStage editMode={editMode} language={language} laptopMediaUrl={laptopMediaUrl} laptopMediaType={laptopMediaType}
