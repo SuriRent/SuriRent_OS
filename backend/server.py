@@ -279,6 +279,22 @@ TENANT_SCOPED_COLLECTIONS = [
     "push_subs", "locations",
 ]
 
+# Extra collections die in een volledige backup (v2) meegaan: instellingen,
+# kiosk-koppelingen, betalingsregelingen, stroom, notities, boetes, ID-foto's
+# en logo's (landing_assets) en bankafschriften. Sleutel = unieke veldnaam.
+BACKUP_EXTRA_COLLECTIONS = {
+    "company_settings": "company_id", "company_landings": "id",
+    "payment_plans": "id", "payment_plan_installments": "id", "payment_plan_reminders": "id",
+    "tenant_notes": "id", "fines": "id", "power_devices": "id", "power_log": "id",
+    "kiosk_pins": "company_id", "kiosk_printers": "id", "kiosk_id_owners": "kiosk_id",
+    "kiosk_emp_state": "emp_key", "kiosk_stripe_payments": "id", "kiosk_print_log": "id",
+    "bank_statements": "id", "landing_assets": "id", "audit_log": "id",
+    "notifications": "id", "fcm_tokens": "id", "sent_invoice_reminders": "invoice_id",
+    "kiosk_devices_seen": "key",
+}
+BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_billing_date",
+                       "trial_started_at", "trial_ends_at", "pending_invoice_id"}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -5418,11 +5434,11 @@ async def export_company_backup(user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
 
     backup = {
-        "format_version": 1,
+        "format_version": 2,
         "exported_at": now_utc_iso(),
         "company_id": cid,
         "company": company,
-        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})],
+        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0})],
         "collections": {},
     }
     for coll in TENANT_SCOPED_COLLECTIONS:
@@ -5430,6 +5446,31 @@ async def export_company_backup(user=Depends(get_current_user)):
         async for d in db[coll].find({"company_id": cid}, {"_id": 0}):
             docs.append(d)
         backup["collections"][coll] = docs
+    plan_ids = [p["id"] async for p in db.payment_plans.find({"company_id": cid}, {"_id": 0, "id": 1})]
+    user_ids = [u["id"] for u in backup["users"] if u.get("id")]
+    for coll in BACKUP_EXTRA_COLLECTIONS:
+        if coll == "company_landings":
+            query = {"id": cid}
+        elif coll == "payment_plan_installments":
+            query = {"$or": [{"company_id": cid}, {"plan_id": {"$in": plan_ids}}]}
+        elif coll in ("notifications", "fcm_tokens"):
+            query = {"$or": [{"company_id": cid}, {"user_id": {"$in": user_ids}}]}
+        else:
+            query = {"company_id": cid}
+        try:
+            backup["collections"][coll] = [d async for d in db[coll].find(query, {"_id": 0})]
+        except Exception:
+            backup["collections"][coll] = []
+
+    # Foto's (ID-kaart, pasfoto, logo) staan in landing_assets zonder company_id:
+    # haal ze op via de verwijzingen in huurders, bedrijf en overige data.
+    import re as _re
+    refs = set(_re.findall(r"/api/landing/asset/([A-Za-z0-9_-]+)",
+                           json.dumps([company, backup["collections"]], default=str)))
+    backup["collections"]["landing_assets"] = [
+        a async for a in db.landing_assets.find({"id": {"$in": list(refs)}}, {"_id": 0})
+    ] if refs else []
+    backup["summary"] = {k: len(v) for k, v in backup["collections"].items()}
 
     # Bouw een filename met datum + slug voor downloadbestand.
     slug = (company.get("slug") or cid)[:32]
@@ -5453,7 +5494,7 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     - `mode='replace'`: wist alle company-scoped data en importeert opnieuw (destructief!).
     Superadmin kan via `target_company_id` data naar een ander bedrijf migreren."""
     backup = body.backup or {}
-    if backup.get("format_version") != 1:
+    if backup.get("format_version") not in (1, 2):
         raise HTTPException(status_code=400, detail="Onbekend backup formaat")
     src_cid = backup.get("company_id")
     if not src_cid:
@@ -5474,29 +5515,35 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     summary = {"target_company_id": target_cid, "mode": body.mode, "collections": {}}
 
     # Replace-modus: wipe eerst alle tenant-scoped collections voor target.
+    # Extra collections (v2) worden alleen gewist als de backup ze ook bevat.
+    full = backup.get("format_version") == 2
     if body.mode == "replace":
-        for coll in TENANT_SCOPED_COLLECTIONS:
-            res = await db[coll].delete_many({"company_id": target_cid})
+        for coll in TENANT_SCOPED_COLLECTIONS + (list(BACKUP_EXTRA_COLLECTIONS) if full else []):
+            query = {"id": target_cid} if coll == "company_landings" else {"company_id": target_cid}
+            res = await db[coll].delete_many(query)
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
 
     # Re-import elke collection. Forceer company_id en strip _id om dup-conflicten te voorkomen.
     collections_in = backup.get("collections") or {}
     for coll, docs in collections_in.items():
-        if coll not in TENANT_SCOPED_COLLECTIONS:
+        if coll not in TENANT_SCOPED_COLLECTIONS and not (full and coll in BACKUP_EXTRA_COLLECTIONS):
             continue
+        key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
         ins = 0
         upd = 0
         for d in docs:
             d = {k: v for k, v in (d or {}).items() if k != "_id"}
-            d["company_id"] = target_cid
-            doc_id = d.get("id") or new_id()
-            d["id"] = doc_id
-            res = await db[coll].update_one(
-                {"id": doc_id, "company_id": target_cid},
-                {"$set": d},
-                upsert=True,
-            )
+            if coll == "company_landings":
+                d["id"] = target_cid
+            else:
+                d["company_id"] = target_cid
+            if key == "id":
+                d["id"] = d.get("id") or new_id()
+            if d.get(key) is None:
+                continue
+            flt = {key: d[key]} if coll in ("company_landings", "landing_assets") else {key: d[key], "company_id": target_cid}
+            res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
             if res.upserted_id is not None:
                 ins += 1
             elif res.modified_count > 0:
@@ -5504,6 +5551,28 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
         summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
         summary["collections"][coll]["inserted"] += ins
         summary["collections"][coll]["upserted"] += upd
+
+    if full:
+        # Bedrijfsinstellingen (branding, SMTP, Stripe, stroom, bon, ...) terugzetten.
+        cdoc = {k: v for k, v in (backup.get("company") or {}).items()
+                if k not in BACKUP_COMPANY_KEEP and k != "_id"}
+        if cdoc:
+            await db.companies.update_one({"id": target_cid}, {"$set": cdoc})
+            summary["company_settings_restored"] = True
+        # Gebruikers (beheerders/medewerkers incl. PIN) — nooit een e-mail van een ander bedrijf overschrijven.
+        u_ins = 0
+        for u in backup.get("users") or []:
+            u = {k: v for k, v in (u or {}).items() if k != "_id"}
+            if not u.get("id") or not u.get("email"):
+                continue
+            other = await db.users.find_one({"email": u["email"], "company_id": {"$ne": target_cid}}, {"_id": 1})
+            if other or u.get("role") == "superadmin":
+                continue
+            u["company_id"] = target_cid
+            r = await db.users.update_one({"id": u["id"]}, {"$set": u}, upsert=True)
+            if r.upserted_id is not None or r.modified_count:
+                u_ins += 1
+        summary["users_restored"] = u_ins
 
     summary["restored_at"] = now_utc_iso()
     return summary

@@ -43,8 +43,8 @@ export default function BackupRestore() {
     try {
       const text = await file.text();
       const backup = JSON.parse(text);
-      if (backup.format_version !== 1) {
-        throw new Error('Ongeldig backup formaat (verwacht v1)');
+      if (![1, 2].includes(backup.format_version)) {
+        throw new Error('Ongeldig backup formaat');
       }
       if (mode === 'replace') {
         const ok = window.confirm(
@@ -115,8 +115,10 @@ export default function BackupRestore() {
           </div>
           <div className="p-6 space-y-3">
             <p className="text-sm text-slate-600 leading-relaxed">
-              Inclusief: appartementen, huurders, contracten, betalingen, facturen, kasgeld, medewerkers, locaties en onderhoud.
-              Bewaar het bestand veilig — het bevat persoonlijke gegevens van uw huurders.
+              Volledige backup van de hele kiosk-beheeromgeving: bedrijfsgegevens, branding, e-mail (SMTP), facturen-automatisering,
+              borg, Stripe, stroom (Tuya), bon en printers, kiosk-apparaten, gebruikers en PIN&apos;s, locaties, appartementen, huurders
+              (inclusief ID-kaart en foto), contracten, betalingen, betalingsregelingen, facturen, onderhoud, werknemers, notificaties,
+              NFC-tags en kasgeld. Bewaar het bestand veilig — het bevat persoonlijke gegevens en geheime sleutels.
             </p>
             <button onClick={downloadBackup} disabled={downloading}
               data-testid="backup-download-btn"
