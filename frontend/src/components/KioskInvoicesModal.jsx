@@ -225,7 +225,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide xwide tall>
         {() => (
           <>
             {msg && (
