@@ -10,7 +10,7 @@ import {
   Home as HomeIcon, Mail, Wallet, FileText,
   HelpCircle, Send, Check, ArrowRight, Banknote, Droplets, AlertCircle,
   QrCode, Smartphone, Clock as ClockIcon, Receipt, Hash, X, Printer,
-  Landmark, FileUp,
+  Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
@@ -226,19 +226,18 @@ function SetupPinView({ branding, tenantSetup, onSetupComplete }) {
 //   3. URL-tag `?nfc=<UID>` (iOS Safari + universele fallback)
 // Onbekende kaart → duidelijke melding "vraag de beheerder om te koppelen".
 // =====================================================================
-function LoginView({ branding, onLoggedIn, prefill }) {
+function LoginView({ branding, onLoggedIn, prefill, mode = 'pin' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [lastUid, setLastUid] = useState('');
-  const [mode, setMode] = useState('pin');
   const [pin, setPin] = useState('');
   const [tenants, setTenants] = useState(null);
   const [selected, setSelected] = useState(null);
   const [showForgot, setShowForgot] = useState(false);
+  useEffect(() => { setPin(''); setSelected(null); setError(''); setHint(''); }, [mode]);
   // refs voor handleScan deps zonder rerender storm
   const busyRef = useRef(false);
-  const navigate = useBrandedNavigate();
 
   const handleScan = useCallback(async (rawUid) => {
     if (busyRef.current) return;
@@ -402,30 +401,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
     const closeModal = () => { setSelected(null); setPin(''); setError(''); };
     return (
       <div className="min-h-full w-full flex flex-col" data-testid="tk-login">
-        <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            {branding?.logo_url ? (
-              <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-11 h-11 object-contain rounded-xl bg-white/95 p-1" />
-            ) : (
-              <HomeIcon className="w-9 h-9 text-white" strokeWidth={2.4} />
-            )}
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
-              {branding?.app_name || branding?.name || 'Huurder Kiosk'}
-            </h1>
-          </div>
-          <p className="hidden md:block flex-1 text-sm font-bold text-white/95 truncate">
-            {[branding?.address, 'Kies uw appartement'].filter(Boolean).join(' • ')}
-          </p>
-          <div className="flex-1 md:flex-none flex items-center gap-2 justify-end">
-            <button onClick={() => { setMode('nfc'); setPin(''); setError(''); setHint(''); setSelected(null); }}
-              data-testid="tk-toggle-mode" title="Inloggen met NFC"
-              className="w-11 h-11 shrink-0 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center">
-              <Smartphone className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 px-4 sm:px-6 pb-6" data-testid="tk-tenant-list">
+        <div className="flex-1 px-3 sm:px-5 pt-4 pb-6" data-testid="tk-tenant-list">
           {tenants === null ? (
             <Loader2 className="w-10 h-10 animate-spin text-white mx-auto mt-16" />
           ) : !list.length ? (
@@ -562,18 +538,6 @@ function LoginView({ branding, onLoggedIn, prefill }) {
             Houd uw kaart of telefoon tegen de scanner
           </p>
         )}
-        <button onClick={() => { setMode('pin'); setError(''); setHint(''); }}
-          data-testid="tk-toggle-mode"
-          className="mt-6 px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-extrabold">
-          Inloggen met PIN
-        </button>
-
-        {/* Logout/back voor het geval iemand per ongeluk hier komt */}
-        <button onClick={() => navigate('/')}
-          data-testid="tk-nfc-cancel"
-          className="mt-8 text-xs font-bold text-white/70 hover:text-white underline underline-offset-4">
-          Sluiten
-        </button>
       </motion.div>
     </div>
   );
@@ -761,9 +725,9 @@ function DashboardView({ overview, onAction, onHistory }) {
           overlappen. */}
       <div className="md:flex-1 md:min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3">
         {/* LEFT — Financieel overzicht (kiosk-style) */}
-        <div className="bg-white rounded-2xl flex-none md:flex-[3] flex flex-col p-3 sm:p-4 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm sm:text-base font-bold text-slate-900">Financieel overzicht</h3>
+        <div className="bg-white rounded-3xl shadow-lg flex-none md:flex-[3] flex flex-col p-4 sm:p-6 min-w-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900">Financieel overzicht</h3>
           </div>
           <div className="flex-1 divide-y divide-slate-100">
             {items.map((it) => {
@@ -838,7 +802,7 @@ function DashboardView({ overview, onAction, onHistory }) {
         </div>
 
         {/* RIGHT — Te betalen + Volgende + Geschiedenis (kiosk-style) */}
-        <div className="bg-white rounded-2xl flex-none md:flex-[2] flex flex-col items-center justify-center text-center p-3 sm:p-6 md:min-h-[260px]">
+        <div className="bg-white rounded-3xl shadow-lg flex-none md:flex-[2] flex flex-col items-center justify-center text-center p-4 sm:p-8 md:min-h-[260px]">
           <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-1.5 sm:mb-3 ${
             hasBalance ? 'bg-orange-100' : 'bg-emerald-100'
           }`}>
@@ -856,7 +820,7 @@ function DashboardView({ overview, onAction, onHistory }) {
             {hasBalance ? 'U heeft een openstaand bedrag.' : 'U bent volledig bij. Bedankt!'}
           </p>
           <button onClick={() => onAction('pay')} data-testid="tk-tile-pay"
-            className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-lg font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 sm:py-3.5 active:scale-[0.98]">
+            className="w-full max-w-xs bg-[#FF6B1A] hover:bg-[#F26A12] text-white text-base sm:text-xl font-black rounded-2xl flex items-center justify-center gap-2 transition py-3 sm:py-4 active:scale-[0.98] shadow-md">
             Volgende <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           <button onClick={onHistory} data-testid="tk-tile-history"
@@ -864,16 +828,6 @@ function DashboardView({ overview, onAction, onHistory }) {
             <ClockIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Betalingsgeschiedenis
           </button>
         </div>
-      </div>
-
-      {/* Secondary tiles (kleiner, onderaan) */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 pb-3">
-        <SecondaryTile icon={Wrench} label="Onderhoud" testId="tk-tile-maintenance"
-          accent="bg-sky-50 text-sky-600" onClick={() => onAction('maintenance')} />
-        <SecondaryTile icon={User} label="Gegevens" testId="tk-tile-me"
-          accent="bg-emerald-50 text-emerald-600" onClick={() => onAction('me')} />
-        <SecondaryTile icon={Phone} label="Contact" testId="tk-tile-contact"
-          accent="bg-violet-50 text-violet-600" onClick={() => onAction('contact')} />
       </div>
     </div>
   );
@@ -1904,6 +1858,72 @@ function CompanyPicker({ onPicked }) {
 }
 
 // =====================================================================
+// KIOSK SHELL — bovenbalk + onderbalk in dezelfde stijl als de beheerkiosk
+// =====================================================================
+function TenantTopBar({ branding, subtitle, right }) {
+  return (
+    <header className="kiosk-chrome fixed top-0 left-0 right-0 z-[100] flex items-center gap-3 md:gap-6 px-3 py-2 md:py-3 bg-[#FF6B1A] border-b border-[#E04E00]/40 shadow-md"
+      style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 8px)' }}
+      data-testid="tk-topbar">
+      <div className="flex items-center gap-3 min-w-0">
+        {branding?.logo_url ? (
+          <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-10 h-10 object-contain rounded-xl bg-white/95 p-1" />
+        ) : (
+          <HomeIcon className="w-8 h-8 text-white" strokeWidth={2.4} />
+        )}
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
+          {branding?.app_name || branding?.name || 'Huurder Kiosk'}
+        </h1>
+      </div>
+      <div className="hidden md:flex flex-1 items-center gap-2 min-w-0 text-white/95 font-bold text-sm">
+        <MapPin className="w-4 h-4 shrink-0" />
+        <span className="truncate">{[branding?.address, subtitle].filter(Boolean).join(' • ')}</span>
+      </div>
+      <div className="flex-1 md:flex-none flex items-center justify-end gap-2">{right}</div>
+    </header>
+  );
+}
+
+function TenantBarBtn({ dir, onClick, disabled }) {
+  const Icon = dir === 'back' ? ChevronLeft : ChevronRight;
+  return (
+    <button onClick={onClick} disabled={disabled} data-testid={`tk-bar-${dir}`}
+      className="shrink-0 w-16 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-[#F26A12] bg-white font-semibold text-[10px] lg:text-xs disabled:opacity-35 active:scale-95 transition">
+      <Icon className="w-7 h-7" />
+      {dir === 'back' ? 'Terug' : 'Volgende'}
+    </button>
+  );
+}
+
+function TenantBottomBar({ items, onBack, onNext, canBack, canNext }) {
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-[110] border-t bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      data-testid="tk-bottombar">
+      <div className="flex items-stretch gap-1 px-2 py-2">
+        <TenantBarBtn dir="back" onClick={onBack} disabled={!canBack} />
+        {items.map((it) => (
+          <button key={it.id} onClick={it.onClick} data-testid={`tk-nav-${it.id}`}
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl py-2 px-1 transition ${
+              it.active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'
+            }`}>
+            <it.icon className="w-6 h-6" strokeWidth={1.8} />
+            <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold truncate max-w-full">{it.label}</span>
+          </button>
+        ))}
+        <TenantBarBtn dir="next" onClick={onNext} disabled={!canNext} />
+      </div>
+    </nav>
+  );
+}
+
+const TK_BACK = {
+  pay: 'dashboard', 'pay-method': 'pay', 'pay-bank': 'pay-method',
+  history: 'dashboard', maintenance: 'dashboard', me: 'dashboard', contact: 'dashboard',
+};
+const TK_NEXT = { dashboard: 'pay' };
+
+// =====================================================================
 // CONTAINER
 // =====================================================================
 export default function TenantKioskLayout() {
@@ -1914,7 +1934,8 @@ export default function TenantKioskLayout() {
   const tenantIdParam = searchParams.get('t');
   const [authed, setAuthed] = useState(() => !!localStorage.getItem(TENANT_TOKEN_KEY));
   const [view, setView] = useState('dashboard');
-  const [payload, setPayload] = useState(null);  // payment-flow draft
+  const [loginMode, setLoginMode] = useState('pin');
+  const [payload, setPayload] = useState(null);  // payment-flow draft = useState(null);  // payment-flow draft
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [prefill, setPrefill] = useState(null);
@@ -2085,9 +2106,11 @@ export default function TenantKioskLayout() {
 
   // --- Not authed: show PIN-only login (or company picker if no context) ---
   if (!authed) {
+    const nfcOn = loginMode === 'nfc';
     return (
       <div style={wrapper} className="flex flex-col">
-        <div className="flex-1">
+        <TenantTopBar branding={branding} subtitle={nfcOn ? 'Inloggen met NFC' : 'Kies uw appartement'} />
+        <div className="flex-1" style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)', paddingBottom: 96 }}>
           <AnimatePresence mode="wait">
             <motion.div key={needsCompanyPick ? 'picker' : 'login'} variants={slideVariants}
               initial="enter" animate="center" exit="exit"
@@ -2096,16 +2119,21 @@ export default function TenantKioskLayout() {
               {needsCompanyPick && !prefill?.email && !tenantSetup ? (
                 <CompanyPicker onPicked={(data) => { setBranding(data); setNeedsCompanyPick(false); }} />
               ) : (
-                <LoginView branding={branding}
+                <LoginView branding={branding} mode={loginMode}
                   prefill={prefill || (tenantSetup ? { firstName: tenantSetup.firstName } : null)}
                   onLoggedIn={() => setAuthed(true)} />
               )}
             </motion.div>
           </AnimatePresence>
         </div>
-        {/* Footer verwijderd op de NFC-login pagina — geen "Gopi Appartements
-            + Uit" balk meer. Op ingelogde pagina's blijft er een compacte
-            Uit-knop rechtsboven staan (zie hoofd-return). */}
+        <TenantBottomBar
+          canBack={nfcOn} canNext={!nfcOn}
+          onBack={() => setLoginMode('pin')} onNext={() => setLoginMode('nfc')}
+          items={[
+            { id: 'pin', label: 'Appartement', icon: HomeIcon, active: !nfcOn, onClick: () => setLoginMode('pin') },
+            { id: 'nfc', label: 'NFC', icon: Smartphone, active: nfcOn, onClick: () => setLoginMode('nfc') },
+            { id: 'close', label: 'Sluiten', icon: X, onClick: () => navigate('/') },
+          ]} />
       </div>
     );
   }
@@ -2122,18 +2150,15 @@ export default function TenantKioskLayout() {
   // --- Authed views ---
   return (
     <div style={wrapperLocked} className="flex flex-col relative">
-      {/* Compacte Uit-knop rechtsboven — vervangt de brede footer met
-          bedrijfsnaam + Uit die de gebruiker uit de layout wilde. Alleen
-          zichtbaar op ingelogde screens. Blijft binnen de safe-area zodat
-          het niet achter de iPhone notch verdwijnt. */}
-      <button onClick={logout}
-        data-testid="tk-logout"
-        title="Uitloggen"
-        style={{ top: 'calc(var(--kiosk-sat) + 12px)' }}
-        className="fixed right-4 z-50 bg-white/95 hover:bg-white text-slate-700 font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow-lg">
-        <LogOut className="w-3.5 h-3.5" /> Uit
-      </button>
-      <div className="flex-1 min-h-0 flex flex-col">
+      <TenantTopBar branding={branding}
+        subtitle={overview?.tenant?.apartment_number || overview?.tenant?.apartment || ''}
+        right={(
+          <button onClick={logout} data-testid="tk-logout" title="Uitloggen"
+            className="bg-white/95 hover:bg-white text-[#F26A12] font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow">
+            <LogOut className="w-4 h-4" /> Uitloggen
+          </button>
+        )} />
+      <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)', paddingBottom: 96 }}>
         <AnimatePresence mode="wait">
           <motion.div key={view} variants={slideVariants}
             initial="enter" animate="center" exit="exit"
@@ -2187,8 +2212,17 @@ export default function TenantKioskLayout() {
           </motion.div>
         </AnimatePresence>
       </div>
-      {/* Grote onder-footer verwijderd — alleen de kleine Uit-knop
-          rechtsboven blijft (zie hierboven). */}
+      <TenantBottomBar
+        canBack={!!TK_BACK[view]} canNext={!!TK_NEXT[view]}
+        onBack={() => setView(TK_BACK[view])} onNext={() => setView(TK_NEXT[view])}
+        items={[
+          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => setView('dashboard') },
+          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => setView('pay') },
+          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => setView('history') },
+          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => setView('maintenance') },
+          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => setView('me') },
+          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => setView('contact') },
+        ]} />
     </div>
   );
 }
