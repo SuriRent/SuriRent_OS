@@ -2,26 +2,34 @@ import { useState, useEffect, useCallback } from 'react';
 import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
-function BreakerTile({ on }) {
+function BreakerTile({ device }) {
+  const { on, apartment_number: apartmentNumber, tenant_name: tenantName } = device;
   const isOn = on === true;
   const isOff = on === false;
   return (
     <span aria-hidden="true"
-      className="relative flex h-16 w-14 items-center justify-center rounded-xl border border-slate-400 bg-gradient-to-br from-slate-100 via-slate-300 to-slate-400 p-1.5 shadow-[inset_0_1px_3px_rgba(255,255,255,0.9),0_4px_8px_rgba(15,23,42,0.2)]">
-      <span className="absolute left-1 top-1 h-1 w-1 rounded-full bg-slate-500" />
-      <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-slate-500" />
-      <span className="absolute bottom-1 left-1 h-1 w-1 rounded-full bg-slate-500" />
-      <span className="absolute bottom-1 right-1 h-1 w-1 rounded-full bg-slate-500" />
-      <span className="flex h-full w-full flex-col items-center rounded-lg border border-slate-600 bg-gradient-to-b from-slate-700 to-slate-900 px-1 py-1.5 shadow-inner">
-        <span className={`h-1.5 w-1.5 rounded-full ${isOn ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.75)]' : 'bg-amber-300 shadow-[0_0_5px_rgba(252,211,77,0.7)]'}`} />
-        <span className="relative my-1 flex w-7 flex-1 items-center justify-center rounded-full bg-black/50 shadow-inner">
-          <span className={`relative flex h-6 w-4 items-center justify-center rounded border border-slate-400 bg-gradient-to-br from-white to-slate-400 shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-transform duration-300 ${isOn ? '-translate-y-1.5 -rotate-12' : isOff ? 'translate-y-1.5 rotate-12' : ''}`}>
-            <span className="h-4 w-0.5 rounded-full bg-slate-300" />
+      className="relative flex min-h-48 w-full flex-col rounded-xl border border-slate-400 bg-gradient-to-br from-slate-100 via-slate-300 to-slate-500 p-2 shadow-[inset_0_1px_3px_rgba(255,255,255,0.9),0_6px_12px_rgba(15,23,42,0.24)]">
+      <span className="absolute left-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute bottom-1.5 left-1.5 h-1.5 w-1.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-slate-500 shadow-inner" />
+      <span className="flex flex-1 flex-col items-center rounded-lg border border-slate-600 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 px-3 py-2.5 shadow-inner">
+        <span className="flex w-full items-center justify-between border-b border-white/10 pb-2 text-[9px] font-black tracking-[0.18em] text-slate-300">
+          <span>BREAKER · SURI RENT</span>
+          <span className={`h-2.5 w-2.5 rounded-full ring-2 ring-black/30 ${isOn ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.75)]' : 'bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.7)]'}`} />
+        </span>
+        <span className="mt-2 flex w-full flex-col items-center rounded-md border border-slate-400/40 bg-gradient-to-b from-slate-100 to-slate-300 px-2 py-1.5 shadow-sm">
+          <span className="max-w-full truncate text-sm font-black leading-tight text-slate-900">{apartmentNumber}</span>
+          <span className="max-w-full truncate text-[10px] font-semibold leading-tight text-slate-600">{tenantName || 'Geen huurder'}</span>
+        </span>
+        <span className={`mt-2 text-[9px] font-black tracking-widest ${isOn ? 'text-emerald-300' : 'text-slate-500'}`}>I&nbsp; ON</span>
+        <span className="relative my-1 flex w-16 flex-1 items-center justify-center rounded-full border border-black/50 bg-black/50 shadow-inner">
+          <span className="absolute inset-x-0 top-1/2 h-px bg-white/10" />
+          <span className={`relative z-10 flex h-10 w-7 items-center justify-center rounded-md border border-slate-400 bg-gradient-to-br from-slate-100 via-white to-slate-400 shadow-[0_4px_7px_rgba(0,0,0,0.45)] transition-transform duration-300 ${isOn ? '-translate-y-2 -rotate-12' : isOff ? 'translate-y-2 rotate-12' : ''}`}>
+            <span className="h-7 w-1 rounded-full bg-gradient-to-r from-slate-400 via-white to-slate-400 shadow-sm" />
           </span>
         </span>
-        <span className={`text-[7px] font-black leading-none ${isOn ? 'text-emerald-300' : isOff ? 'text-red-300' : 'text-slate-400'}`}>
-          {isOn ? 'I ON' : isOff ? 'O OFF' : '—'}
-        </span>
+        <span className={`mb-0.5 text-[9px] font-black tracking-widest ${isOff ? 'text-red-300' : 'text-slate-500'}`}>O&nbsp; OFF</span>
       </span>
     </span>
   );
@@ -214,13 +222,9 @@ export default function PowerControl({ kiosk = false }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
         {devices.map((d) => (
           <button key={d.id} type="button" onClick={() => setOpen(d)} data-testid={`power-tile-${d.id}`}
-            className={`rounded-2xl p-4 flex flex-col items-center text-center gap-2 shadow-lg border-2 transition active:scale-95 bg-white hover:-translate-y-0.5 ${d.on === true ? 'border-emerald-400' : d.on === false ? 'border-red-300' : 'border-transparent'}`}>
-            <BreakerTile on={d.on} />
-            <span className="font-black text-slate-900 text-base leading-tight">{d.apartment_number}</span>
-            <span className="text-xs text-slate-500 truncate max-w-full">{d.tenant_name || 'Geen huurder'}</span>
-            <span className={`text-[11px] font-black rounded-full px-2.5 py-0.5 ${d.on === true ? 'bg-emerald-100 text-emerald-700' : d.on === false ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-              {d.on === true ? 'AAN' : d.on === false ? 'UIT' : 'ONBEKEND'}
-            </span>
+            aria-label={`${d.apartment_number}, ${d.tenant_name || 'Geen huurder'}, stroom ${d.on === true ? 'aan' : d.on === false ? 'uit' : 'onbekend'}. Open bediening.`}
+            className="rounded-2xl border-0 bg-transparent p-0 text-left shadow-none transition active:scale-[0.98] hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <BreakerTile device={d} />
           </button>
         ))}
         {free.map((a) => (
