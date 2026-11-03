@@ -6,36 +6,48 @@ function BreakerTile({ device, orangeMode = false }) {
   const { on, apartment_number: apartmentNumber, tenant_name: tenantName } = device;
   const isOn = on === true;
   const isOff = on === false;
+  const screw = (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-400 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-[inset_0_1px_2px_rgba(255,255,255,0.65),0_2px_3px_rgba(15,23,42,0.35)]">
+      <span className="h-4 w-4 rounded-full border border-slate-600/70 bg-gradient-to-br from-slate-400 to-slate-600 shadow-inner">
+        <span className="block h-full w-full rotate-45 rounded-full border-y border-slate-300/70" />
+      </span>
+    </span>
+  );
   return (
     <span aria-hidden="true"
-      className="relative flex min-h-52 w-full flex-col overflow-hidden rounded-xl border border-slate-400 bg-gradient-to-b from-white via-slate-100 to-slate-300 p-2 shadow-[inset_0_1px_2px_rgba(255,255,255,0.95),0_8px_18px_rgba(15,23,42,0.22)]">
-      <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 left-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="flex flex-none items-center justify-between px-2 py-1 text-[9px] font-bold tracking-widest text-slate-500">
-        <span>N&nbsp; INPUT</span><span>L</span>
+      className="relative mx-auto flex min-h-[17rem] w-full max-w-[11rem] flex-col overflow-hidden rounded-lg border border-slate-400 bg-gradient-to-b from-white via-slate-100 to-slate-300 p-1.5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.95),0_8px_18px_rgba(15,23,42,0.22)]">
+      <span className="flex flex-none items-center justify-between rounded-t border-b border-slate-300 bg-gradient-to-b from-white to-slate-200 px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
+        <span>N</span><span>POWER</span><span>L↓</span>
       </span>
-      <span className="mx-1 flex flex-1 flex-col items-center rounded-md border border-slate-300 bg-gradient-to-b from-white to-slate-100 p-1.5 shadow-inner">
-        <span className={`flex w-full items-center justify-between rounded px-2 py-1 text-[9px] font-black tracking-[0.16em] text-white ${orangeMode ? 'bg-[#E85D0F]' : 'bg-slate-800'}`}>
-          <span>SURIRENT · POWER</span>
-          <span className={`h-2 w-2 rounded-full border border-white/40 ${isOn ? 'bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-400 shadow-[0_0_7px_rgba(248,113,113,0.7)]' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]'}`} />
+      <span className="flex flex-none items-center justify-around bg-gradient-to-b from-slate-200 to-slate-300 py-1.5">
+        {screw}{screw}
+      </span>
+      <span className="mx-1 flex flex-1 flex-col items-center border-x border-slate-300 bg-gradient-to-b from-slate-100 to-slate-300 px-2 py-1.5">
+        <span className="flex w-full items-center justify-between rounded-sm bg-gradient-to-b from-slate-800 to-slate-950 px-2 py-1.5 text-[8px] font-black tracking-[0.14em] text-white shadow-sm">
+          <span className={orangeMode ? 'text-orange-400' : 'text-sky-300'}>SURI RENT</span>
+          <span className={`h-2 w-2 rounded-full border border-white/30 ${isOn ? 'bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-400 shadow-[0_0_7px_rgba(248,113,113,0.7)]' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]'}`} />
         </span>
-        <span className="mt-1.5 flex w-full min-w-0 flex-col items-center rounded border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+        <span className="mt-2 flex w-full min-w-0 flex-col items-center border border-slate-400 bg-white px-2 py-1 text-center shadow-sm">
           <span className="max-w-full truncate text-sm font-black leading-tight text-slate-900">{apartmentNumber}</span>
-          <span className="max-w-full truncate text-[10px] font-medium leading-tight text-slate-500">{tenantName || 'Geen huurder'}</span>
+          <span className="max-w-full truncate text-[9px] font-medium leading-tight text-slate-500">{tenantName || 'Geen huurder'}</span>
         </span>
-        <span className="mt-2 flex flex-1 items-center justify-center">
-          <span className={`flex h-12 w-12 items-center justify-center rounded-full border-[3px] shadow-[inset_0_2px_3px_rgba(255,255,255,0.6),0_3px_6px_rgba(15,23,42,0.25)] transition duration-300 ${orangeMode ? 'border-orange-800 bg-gradient-to-b from-orange-300 to-[#F26A12]' : 'border-slate-600 bg-gradient-to-b from-sky-300 to-cyan-600'} ${isOn ? 'ring-2 ring-emerald-300/70' : isOff ? 'opacity-70' : 'opacity-85'}`}>
-            <Power className={`h-6 w-6 ${orangeMode ? 'text-white' : 'text-slate-800'}`} strokeWidth={2.6} />
+        <span className="mt-2 flex items-center gap-1 text-[7px] font-bold tracking-wider text-slate-600">
+          <span>kWh</span><span className="text-slate-400">·</span><span>W</span><span className="text-slate-400">·</span><span>V</span>
+        </span>
+        <span className="my-1 flex flex-1 items-center justify-center">
+          <span className={`flex h-11 w-11 items-center justify-center rounded-full border-[3px] shadow-[inset_0_2px_3px_rgba(255,255,255,0.65),0_3px_6px_rgba(15,23,42,0.3)] transition duration-300 ${orangeMode ? 'border-sky-800 bg-gradient-to-b from-sky-300 to-cyan-600' : 'border-slate-600 bg-gradient-to-b from-sky-300 to-cyan-600'} ${isOn ? 'ring-2 ring-emerald-400/80' : isOff ? 'opacity-75' : 'opacity-90'}`}>
+            <Power className="h-6 w-6 text-slate-800" strokeWidth={2.6} />
           </span>
         </span>
-        <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-black tracking-widest ${isOn ? 'bg-emerald-100 text-emerald-800' : isOff ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
-          {isOn ? 'AAN' : isOff ? 'UIT' : 'STATUS ONBEKEND'}
+        <span className={`text-[8px] font-black tracking-widest ${isOn ? 'text-emerald-700' : isOff ? 'text-red-700' : 'text-slate-500'}`}>
+          {isOn ? 'I  AAN' : isOff ? 'O  UIT' : 'STATUS ONBEKEND'}
         </span>
       </span>
-      <span className="flex flex-none items-center justify-between px-2 py-1 text-[9px] font-bold tracking-widest text-slate-500">
-        <span>N&nbsp; OUTPUT</span><span>L</span>
+      <span className="flex flex-none items-center justify-around bg-gradient-to-b from-slate-300 to-slate-200 py-1.5">
+        {screw}{screw}
+      </span>
+      <span className="flex flex-none items-center justify-between rounded-b border-t border-slate-300 bg-gradient-to-b from-slate-200 to-white px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
+        <span>N</span><span>LOAD</span><span>L↓</span>
       </span>
     </span>
   );
