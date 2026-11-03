@@ -69,20 +69,12 @@ export default function Invoices({ kiosk = false }) {
     await Promise.all([refetchI(), refetchT(), refetchC()]);
   }, [refetchI, refetchT, refetchC]);
   // The invoice list uses SWRInfinite, which is not covered by normal SWR
-  // key invalidation. Refresh it directly for invoice-affecting live events.
+  // key invalidation. Refresh it directly for company live events, including
+  // payment notifications that do not carry a resource path.
   useEffect(() => {
     const onLiveChange = (event) => {
-      const paths = event?.detail?.paths || [event?.detail?.path];
-      const affectsInvoices = paths.some((path) => typeof path === 'string' && (
-        path.startsWith('/api/invoices')
-        || path.startsWith('/api/payments')
-        || path.startsWith('/api/payment-plans')
-        || path.startsWith('/api/tenants')
-        || path.startsWith('/api/apartments')
-        || path.startsWith('/api/contracts')
-        || path.startsWith('/api/kiosk')
-      ));
-      if (affectsInvoices) load();
+      const type = event?.detail?.type;
+      if (type === 'change' || type === 'notification') load();
     };
     window.addEventListener('surirent:live-change', onLiveChange);
     return () => window.removeEventListener('surirent:live-change', onLiveChange);
