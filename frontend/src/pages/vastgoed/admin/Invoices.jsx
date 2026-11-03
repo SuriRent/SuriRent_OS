@@ -68,7 +68,25 @@ export default function Invoices({ kiosk = false }) {
   const load = useCallback(async () => {
     await Promise.all([refetchI(), refetchT(), refetchC()]);
   }, [refetchI, refetchT, refetchC]);
-  // POLLING VERWIJDERD (2026-02-28): SWR + SSE dekken updates.
+  // The invoice list uses SWRInfinite, which is not covered by normal SWR
+  // key invalidation. Refresh it directly for invoice-affecting live events.
+  useEffect(() => {
+    const onLiveChange = (event) => {
+      const paths = event?.detail?.paths || [event?.detail?.path];
+      const affectsInvoices = paths.some((path) => typeof path === 'string' && (
+        path.startsWith('/api/invoices')
+        || path.startsWith('/api/payments')
+        || path.startsWith('/api/payment-plans')
+        || path.startsWith('/api/tenants')
+        || path.startsWith('/api/apartments')
+        || path.startsWith('/api/contracts')
+        || path.startsWith('/api/kiosk')
+      ));
+      if (affectsInvoices) load();
+    };
+    window.addEventListener('surirent:live-change', onLiveChange);
+    return () => window.removeEventListener('surirent:live-change', onLiveChange);
+  }, [load]);
 
   // Luister naar `invoice-delete` event vanaf <InvoiceRow> en voer DELETE uit.
   useEffect(() => {
