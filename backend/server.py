@@ -7061,6 +7061,15 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
     }
 
 
+@api.get("/tenant-portal/payment-methods")
+async def tenant_portal_payment_methods(tenant=Depends(get_tenant_session)):
+    """Betaalmethodes die de huurder in de kiosk te zien krijgt.
+    Voorlopig alleen PIN; Stripe (kaart/iDEAL) volgt zodra daar een huurder-flow voor is."""
+    return {"methods": [
+        {"id": "pin", "label": "PIN", "sub": "Betaal met uw pinpas"},
+    ]}
+
+
 @api.get("/tenant-portal/payments")
 async def tenant_portal_payments(tenant=Depends(get_tenant_session)):
     docs = await db.payments.find({"tenant_id": tenant["id"]}, {"_id": 0}).sort("paid_at", -1).to_list(200)
@@ -7364,7 +7373,7 @@ class TenantMaintenanceIn(BaseModel):
 class TenantPaymentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank"] = "contant"
+    method: Literal["contant", "bank", "pin"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None
@@ -7483,7 +7492,7 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
     )
-    payment_status = "pending_approval" if needs_proof else "approved"
+    payment_status = "pending_approval" if (needs_proof or body.method == "pin") else "approved"
     doc = await _create_payment_doc(
         pin, company_id=tenant.get("company_id"),
         approved_by=tenant.get("name") or "Huurder Kiosk",
@@ -7522,7 +7531,14 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     enriched = await _enrich_payment(doc)
     # Notify admins of the company about the self-service payment.
     try:
-        if needs_proof:
+        if body.method == "pin":
+            await _notify_company_admins(
+                tenant.get("company_id"),
+                f"Pinbetaling wacht op goedkeuring · {enriched.get('currency', '')} {float(enriched.get('amount', 0)):,.2f}",
+                f"{enriched.get('tenant_name') or tenant.get('name')} via Huurder Kiosk — controleer de pinbetaling",
+                {"kind": "payment_pending", "url": "/admin/payments", "payment_id": enriched.get("id"), "badge_inc": 1},
+            )
+        elif needs_proof:
             method_label = "Bankoverschrijving"
             extra = ""
             if is_bank:
@@ -19233,7 +19249,7 @@ async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
 
 
 class _TenantPayInstallmentIn(BaseModel):
-    method: Literal["contant", "bank"] = "contant"
+    method: Literal["contant", "bank", "pin"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
 
@@ -19255,7 +19271,7 @@ async def tenant_portal_pay_installment(
         method=body.method, amount=body.amount, note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
         approved_by_label=tenant.get("name") or "Huurder Kiosk",
-        status="approved",
+        status="pending_approval" if body.method == "pin" else "approved",
     )
     # Notify admins (zelfde flow als bij /tenant-portal/payments)
     try:

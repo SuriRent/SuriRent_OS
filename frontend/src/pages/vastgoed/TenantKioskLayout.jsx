@@ -1162,13 +1162,22 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 }
 
 // =====================================================================
-// PAY METHOD — Bankoverschrijving
+// PAY METHOD — door de beheerder ingeschakelde methodes
 // =====================================================================
+const PIN_METHOD = { v: 'pin', l: 'PIN', sub: 'Betaal met uw pinpas', icon: CreditCard };
+
 function TenantPayMethod({ payload, onConfirm }) {
   const cur = payload.currency || 'SRD';
-  const methods = [
-    { v: 'bank', l: 'Bankoverschrijving', sub: 'Upload bankafschrift', icon: Landmark, accent: 'sky' },
-  ];
+  const [methods, setMethods] = useState([PIN_METHOD]);
+  useEffect(() => {
+    api.get('/tenant-portal/payment-methods')
+      .then(({ data }) => {
+        const list = (data?.methods || []).filter((m) => m.id === 'pin')
+          .map((m) => ({ ...PIN_METHOD, l: m.label || PIN_METHOD.l, sub: m.sub || PIN_METHOD.sub }));
+        if (list.length) setMethods(list);
+      })
+      .catch(() => {});
+  }, []);
   return (
     <div className="h-full flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }} data-testid="tk-pay-method">
       <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-3">
@@ -1436,6 +1445,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
 
   const methodLabel = {
     contant: 'Contant',
+    pin: 'PIN',
     bank: 'Bankoverschrijving',
   }[payload.method] || payload.method;
 
@@ -1482,6 +1492,13 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
             <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200" data-testid="tk-bank-warning">
               <p className="text-xs font-bold text-amber-800 leading-snug">
                 ⏳ Uw betaling wordt automatisch gecontroleerd via OCR. Als het bedrag en de datum kloppen wordt de betaling direct goedgekeurd, anders verifieert een beheerder uw bewijs.
+              </p>
+            </div>
+          )}
+          {payload.method === 'pin' && (
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200" data-testid="tk-pin-warning">
+              <p className="text-xs font-bold text-amber-800 leading-snug">
+                ⏳ Uw pinbetaling wordt door de beheerder gecontroleerd en daarna verwerkt.
               </p>
             </div>
           )}
