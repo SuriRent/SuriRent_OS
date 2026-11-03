@@ -279,6 +279,21 @@ async def device_switch(dev_id: str, body: SwitchIn, user: dict = Depends(_admin
     return {"ok": True, "on": body.on}
 
 
+@router.post("/power/switch-all")
+async def switch_all(body: SwitchIn, user: dict = Depends(_admin)):
+    cid = _deps.company_id_of(user)
+    by = user.get("name") or user.get("email") or "beheerder"
+    devs = await _deps.db.power_devices.find({"company_id": cid}, {"_id": 0}).to_list(1000)
+    done, failed = 0, []
+    for d in devs:
+        try:
+            await _switch(cid, d, body.on, by, "handmatig (alles)")
+            done += 1
+        except Exception as e:  # noqa: BLE001
+            failed.append({"id": d["id"], "error": str(e)})
+    return {"ok": not failed, "done": done, "failed": failed}
+
+
 @router.get("/power/log")
 async def power_log(user: dict = Depends(_admin)):
     cid = _deps.company_id_of(user)
@@ -312,7 +327,7 @@ async def enforce_company(cid: str, overdue_fn) -> None:
                     await _deps.notify_company_admins(
                         cid, "Stroom wordt afgesloten",
                         f"{tenant['name']} heeft {months}+ maanden achterstand. Stroom gaat over {grace} dag(en) uit.",
-                        {"kind": "power", "url": "/admin/instellingen#stroom"})
+                        {"kind": "power", "url": "/admin/power"})
                     await _deps.notify_tenant_power(
                         cid, tenant["id"],
                         f"Beste {tenant['name']}, u heeft {months} maanden of meer achterstand. "
@@ -325,7 +340,7 @@ async def enforce_company(cid: str, overdue_fn) -> None:
                     await _switch(cid, dev, False, "auto", f"{months} maanden achterstand")
                     await _deps.notify_company_admins(
                         cid, "Stroom uitgezet", f"Stroom van {tenant['name']} is uitgezet wegens achterstand.",
-                        {"kind": "power", "url": "/admin/instellingen#stroom"})
+                        {"kind": "power", "url": "/admin/power"})
                     await _deps.notify_tenant_power(
                         cid, tenant["id"],
                         "Uw stroom is uitgezet wegens achterstand. Na betaling gaat de stroom automatisch weer aan.")

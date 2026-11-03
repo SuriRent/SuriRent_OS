@@ -150,6 +150,24 @@ export default function PowerSettings() {
             <span className="px-3 py-1.5 rounded-full bg-red-100 text-red-600">{devices.filter((d) => d.on === false).length} uit</span>
             <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-600">{free.length} niet gekoppeld</span>
           </div>
+          {devices.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {[[true, 'Alles aan', 'bg-emerald-600 hover:bg-emerald-700'], [false, 'Alles uit', 'bg-red-500 hover:bg-red-600']].map(([on, label, cls]) => (
+                <button key={label} type="button" disabled={!!busy} data-testid={`power-all-${on ? 'on' : 'off'}`}
+                  onClick={() => {
+                    if (!window.confirm(`${label} voor ${devices.length} appartement(en)?`)) return;
+                    run('all', async () => {
+                      const { data } = await api.post('/power/switch-all', { on });
+                      await loadDevices();
+                      if (data.failed?.length) throw new Error(`${data.done} gelukt, ${data.failed.length} mislukt: ${data.failed[0].error}`);
+                    }, `${label}: gelukt.`);
+                  }}
+                  className={`h-10 px-4 rounded-xl text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50 ${cls}`}>
+                  {busy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />} {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {devices.map((d) => <DeviceRow key={d.id} d={d} onChanged={loadDevices} onMsg={say} />)}
         {free.map((a) => (

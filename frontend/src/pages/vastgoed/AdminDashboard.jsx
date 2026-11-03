@@ -55,6 +55,7 @@ const loadMaintenance = () => import('./admin/Maintenance');
 const loadKasgeld = () => import('./admin/Kasgeld');
 const loadNotifications = () => import('./admin/Notifications');
 const loadPaymentPlans = () => import('./admin/PaymentPlans');
+const loadPower = () => import('./admin/PowerSettings');
 const loadCompanies = () => import('./admin/Companies');
 const Contracts = lazy(loadContracts);
 const Invoices = lazy(loadInvoices);
@@ -65,6 +66,7 @@ const Maintenance = lazy(loadMaintenance);
 const Kasgeld = lazy(loadKasgeld);
 const Notifications = lazy(loadNotifications);
 const PaymentPlans = lazy(loadPaymentPlans);
+const PowerAdmin = lazy(loadPower);
 const Companies = lazy(loadCompanies);
 
 const ADMIN_TAB_LOADERS = [
@@ -622,6 +624,7 @@ const BASE_TABS = [
   { id: 'payment_plans', label: 'Betalingsregelingen', icon: Calendar },
   { id: 'deposits', label: 'Borg', icon: ShieldCheck },
   { id: 'maintenance', label: 'Onderhoud', icon: Wrench },
+  { id: 'power', label: 'Stroom', icon: Power },
   { id: 'kasgeld', label: 'Kasgeld', icon: Wallet },
   { id: 'employees', label: 'Werknemers', icon: Users },
   { id: 'notifications', label: 'Notificaties', icon: Bell },
@@ -659,7 +662,7 @@ function getTabsFor(user) {
 const SIDEBAR_GROUPS = {
   hoofd: { label: 'Hoofd', ids: ['overview', 'locations', 'apartments', 'tenants', 'contracts'] },
   geld: { label: 'Financieel', ids: ['payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld'] },
-  ops: { label: 'Operaties', ids: ['maintenance', 'employees', 'notifications'] },
+  ops: { label: 'Operaties', ids: ['maintenance', 'power', 'employees', 'notifications'] },
   account: { label: 'Account', ids: ['instellingen'] },
 };
 const SAAS_SIDEBAR_GROUPS = {
@@ -4898,6 +4901,7 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'payment_plans'} tabId="payment_plans" currentTab={tab}><PaymentPlans /></KeepAliveTab>
           <KeepAliveTab active={tab === 'deposits'} tabId="deposits" currentTab={tab}><Deposits /></KeepAliveTab>
           <KeepAliveTab active={tab === 'maintenance'} tabId="maintenance" currentTab={tab}><Maintenance /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'power'} tabId="power" currentTab={tab}><PowerAdmin /></KeepAliveTab>
           <KeepAliveTab active={tab === 'kasgeld'} tabId="kasgeld" currentTab={tab}><Kasgeld /></KeepAliveTab>
           <KeepAliveTab active={tab === 'employees'} tabId="employees" currentTab={tab}><Employees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'notifications'} tabId="notifications" currentTab={tab}><Notifications /></KeepAliveTab>

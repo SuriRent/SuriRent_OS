@@ -7,7 +7,6 @@ import Branding from './Branding';
 import BackupRestore from './BackupRestore';
 import SettingsPage from './Settings';
 import StripeCompanySettings from './StripeCompanySettings';
-import PowerSettings from './PowerSettings';
 import KioskDevices from './KioskDevices';
 import BonPrinter from './BonPrinter';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
@@ -22,7 +21,6 @@ const RENDER = {
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   deposit: () => <SettingsPage initialSection="deposit" hideSubNav />,
   stripe: () => <StripeCompanySettings />,
-  stroom: () => <PowerSettings />,
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
   'bon-printer': () => <BonPrinter />,
   'kiosk-apparaten': () => <KioskDevices />,
