@@ -68,6 +68,12 @@ function PinPad({ value, onDigit, onBack, busy }) {
   );
 }
 
+function TenantAvatar({ url, name, iconClass = 'w-10 h-10' }) {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) return <Building2 className={`${iconClass} text-[#FF5C00]`} />;
+  return <img src={resolveLogoUrl(url)} alt={name} onError={() => setBroken(true)} className="w-full h-full object-cover" />;
+}
+
 function PinDots({ value, error }) {
   return (
     <div className="flex items-center gap-3 sm:gap-4" data-testid="tk-pin-dots">
@@ -441,11 +447,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
                   data-testid={`tk-tenant-${t.id}`}
                   className="flex flex-col items-center gap-1 px-3 py-6 rounded-3xl bg-white shadow-lg active:scale-[0.98] transition">
                   <span className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-2">
-                    {t.avatar_url ? (
-                      <img loading="lazy" src={resolveLogoUrl(t.avatar_url)} alt={t.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Building2 className="w-10 h-10 text-[#FF5C00]" />
-                    )}
+                    <TenantAvatar url={t.avatar_url} name={t.name} />
                   </span>
                   <span className="font-black text-2xl sm:text-3xl text-slate-900 uppercase tracking-tight">Huis {t.apartment || '—'}</span>
                   <span className="flex items-center gap-1.5 text-sm sm:text-base font-semibold text-slate-700 max-w-full">
@@ -470,11 +472,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
                   <X className="w-5 h-5" />
                 </button>
                 <span className="w-20 h-20 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
-                  {selected.avatar_url ? (
-                    <img src={resolveLogoUrl(selected.avatar_url)} alt={selected.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Building2 className="w-9 h-9 text-[#FF5C00]" />
-                  )}
+                  <TenantAvatar url={selected.avatar_url} name={selected.name} iconClass="w-9 h-9" />
                 </span>
                 <div className="text-center text-white" data-testid="tk-selected-tenant">
                   <p className="font-black text-2xl uppercase leading-tight">Huis {selected.apartment || '—'}</p>
