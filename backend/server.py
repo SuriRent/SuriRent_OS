@@ -108,7 +108,14 @@ async def get_current_user(request: Request) -> dict:
                     gu["active_company_id"] = gu.get("company_id")
                     return gu
 
-    token = extract_token(request, "access_token")
+    # EventSource cannot send Authorization headers. On the admin SSE route,
+    # the frontend supplies its current bearer token as ?token=...; prefer it
+    # over a possibly stale httpOnly cookie, matching normal API requests.
+    token = (
+        request.query_params.get("token")
+        if request.url.path == "/api/admin/events"
+        else None
+    ) or extract_token(request, "access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
     try:
@@ -6529,7 +6536,13 @@ TENANT_TOKEN_MIN = KIOSK_TOKEN_MIN  # 1 jaar
 
 
 async def get_tenant_session(request: Request) -> dict:
-    token = extract_token(request, "tenant_token")
+    # EventSource supplies the active tenant token in the query string. Prefer
+    # it on this read-only stream if an older tenant cookie is still present.
+    token = (
+        request.query_params.get("token")
+        if request.url.path == "/api/tenant-portal/events"
+        else None
+    ) or extract_token(request, "tenant_token")
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
     try:
