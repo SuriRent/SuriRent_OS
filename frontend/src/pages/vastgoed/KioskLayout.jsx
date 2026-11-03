@@ -1,5 +1,6 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
+import PhotoUpload from '../../components/PhotoUpload';
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
@@ -4636,8 +4637,10 @@ const modalLabelCls = 'text-xs font-bold text-slate-500 uppercase tracking-wide'
 function AddLocationModal({ onClose, onSaved }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [createdLocation, setCreatedLocation] = useState(null);
 
   const save = async () => {
     if (!name.trim()) { setErr('Naam is verplicht'); return; }
@@ -4645,8 +4648,10 @@ function AddLocationModal({ onClose, onSaved }) {
     try {
       const body = { name: name.trim() };
       if (address.trim()) body.address = address.trim();
+      if (photoUrl.trim()) body.photo_url = photoUrl.trim();
       const r = await api.post('/locations', body);
-      onSaved && onSaved(r?.data);
+      if (!r?.data?.id) throw new Error('Locatie is aangemaakt, maar kan niet worden geopend. Probeer de kiosk te vernieuwen.');
+      setCreatedLocation(r.data);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
@@ -4655,29 +4660,49 @@ function AddLocationModal({ onClose, onSaved }) {
     <KioskModalShell title="Nieuwe locatie" Icon={MapPin}
       testId="add-location" onClose={onClose}
       footer={(
-        <button onClick={save} disabled={saving || !name.trim()}
-          data-testid="add-location-save"
-          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          {saving ? 'Opslaan…' : 'Locatie opslaan'}
-        </button>
+        createdLocation ? (
+          <button type="button" onClick={() => onSaved?.(createdLocation)}
+            data-testid="add-location-open"
+            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2">
+            <MapPin className="w-4 h-4" /> Ga naar {createdLocation.name}
+          </button>
+        ) : (
+          <button onClick={save} disabled={saving || !name.trim()}
+            data-testid="add-location-save"
+            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {saving ? 'Opslaan…' : 'Locatie opslaan'}
+          </button>
+        )
       )}>
       {({ accent }) => (
         <>
-          <label className="block">
-            <span className={modalLabelCls}>Naam *</span>
-            <input value={name} onChange={(e) => setName(e.target.value)}
-              autoFocus data-testid="add-location-name"
-              placeholder="Hoofdvestiging, Filiaal…"
-              className={modalInputCls(accent)} />
-          </label>
-          <label className="block">
-            <span className={modalLabelCls}>Adres</span>
-            <input value={address} onChange={(e) => setAddress(e.target.value)}
-              data-testid="add-location-address"
-              placeholder="Straatnaam nr, Stad"
-              className={modalInputCls(accent)} />
-          </label>
+          {createdLocation ? (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3"
+              data-testid="add-location-success">
+              <p className="font-bold">Locatie aangemaakt</p>
+              <p className="mt-1 text-sm">Open {createdLocation.name} om de appartementen daar te bekijken of toe te voegen.</p>
+            </div>
+          ) : (
+            <>
+              <label className="block">
+                <span className={modalLabelCls}>Naam *</span>
+                <input value={name} onChange={(e) => setName(e.target.value)}
+                  autoFocus data-testid="add-location-name"
+                  placeholder="Hoofdvestiging, Filiaal…"
+                  className={modalInputCls(accent)} />
+              </label>
+              <label className="block">
+                <span className={modalLabelCls}>Adres</span>
+                <input value={address} onChange={(e) => setAddress(e.target.value)}
+                  data-testid="add-location-address"
+                  placeholder="Straatnaam nr, Stad"
+                  className={modalInputCls(accent)} />
+              </label>
+              <PhotoUpload value={photoUrl} onChange={setPhotoUrl} label="Locatiefoto"
+                height="h-36" showUrlField={false} capture="environment" testId="add-location-photo" />
+            </>
+          )}
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-location-error">{err}</div>
@@ -5878,8 +5903,9 @@ export default function KioskLayout() {
       {showAddLocation && (
         <AddLocationModal
           onClose={() => setShowAddLocation(false)}
-          onSaved={() => {
+          onSaved={(created) => {
             setShowAddLocation(false);
+            try { sessionStorage.setItem('kiosk_sel_loc', created.id); } catch { /* noop */ }
             invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
