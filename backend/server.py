@@ -7063,11 +7063,62 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
 
 @api.get("/tenant-portal/payment-methods")
 async def tenant_portal_payment_methods(tenant=Depends(get_tenant_session)):
-    """Betaalmethodes die de huurder in de kiosk te zien krijgt.
-    Voorlopig alleen PIN; Stripe (kaart/iDEAL) volgt zodra daar een huurder-flow voor is."""
-    return {"methods": [
-        {"id": "pin", "label": "PIN", "sub": "Betaal met uw pinpas"},
-    ]}
+    """Betaalmethodes voor de huurderkiosk: PIN altijd, creditcard (QR → telefoon)
+    zodra de beheerder Stripe met kaartbetaling heeft ingeschakeld."""
+    from routes.company_stripe import _active, _cfg_doc
+    methods = [{"id": "pin", "label": "PIN", "sub": "Betaal met uw pinpas"}]
+    try:
+        a = _active((await _cfg_doc(tenant.get("company_id"))).get("stripe_config") or {})
+        if a["enabled"] and "card" in a["methods"]:
+            methods.append({"id": "creditcard", "label": "Creditcard", "sub": "Scan de QR-code met uw telefoon"})
+    except Exception as e:  # noqa: BLE001
+        print(f"[tenant-portal] stripe config lezen mislukt: {e}")
+    return {"methods": methods}
+
+
+class TenantStripeIntentIn(BaseModel):
+    amount: float
+    currency: Literal["SRD", "USD", "EUR"] = "SRD"
+
+
+@api.post("/tenant-portal/stripe/intent")
+async def tenant_portal_stripe_intent(body: TenantStripeIntentIn, tenant=Depends(get_tenant_session)):
+    from routes.company_stripe import KioskIntentIn, kiosk_stripe_intent
+    return await kiosk_stripe_intent(
+        KioskIntentIn(tenant_id=tenant["id"], amount=body.amount, currency=body.currency, method="card"),
+        {"company_id": tenant.get("company_id")},
+    )
+
+
+@api.get("/tenant-portal/stripe/status/{pi_id}")
+async def tenant_portal_stripe_status(pi_id: str, tenant=Depends(get_tenant_session)):
+    from routes.company_stripe import kiosk_stripe_status
+    tx = await db.kiosk_stripe_payments.find_one(
+        {"payment_intent_id": pi_id, "tenant_id": tenant["id"]}, {"_id": 0, "id": 1})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Niet gevonden")
+    return await kiosk_stripe_status(pi_id, {"company_id": tenant.get("company_id")})
+
+
+async def _tenant_consume_stripe(tenant: dict, pi_id: str, amount: float) -> None:
+    """Verifieer dat de Stripe-betaling van deze huurder geslaagd is en boek er
+    maximaal het betaalde bedrag van (meerdere posten mogen samen één betaling delen)."""
+    from routes.company_stripe import _refresh
+    tx = await db.kiosk_stripe_payments.find_one(
+        {"payment_intent_id": pi_id, "tenant_id": tenant["id"], "company_id": tenant.get("company_id")}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Stripe-betaling niet gevonden")
+    tx = await _refresh(tx)
+    if tx["status"] != "paid":
+        raise HTTPException(status_code=400, detail="Stripe-betaling is nog niet voltooid")
+    await db.kiosk_stripe_payments.update_one(
+        {"payment_intent_id": pi_id, "booked_amount": {"$exists": False}}, {"$set": {"booked_amount": 0.0}})
+    limit = float(tx["amount"]) + 0.01 - float(amount)
+    res = await db.kiosk_stripe_payments.find_one_and_update(
+        {"payment_intent_id": pi_id, "booked_amount": {"$lte": limit}},
+        {"$inc": {"booked_amount": float(amount)}})
+    if not res:
+        raise HTTPException(status_code=409, detail="Bedrag komt niet overeen met de Stripe-betaling")
 
 
 @api.get("/tenant-portal/payments")
@@ -7373,12 +7424,13 @@ class TenantMaintenanceIn(BaseModel):
 class TenantPaymentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "pin"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None
     note: Optional[str] = ""
     invoice_id: Optional[str] = None
+    stripe_payment_intent_id: Optional[str] = None
     # Bankoverschrijving-velden (alleen relevant als method == "bank")
     bank_country: Optional[Literal["SR", "NL"]] = None
     bank_statement_id: Optional[str] = None  # asset-id van geüpload afschrift
@@ -7454,6 +7506,12 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     is_bank = body.method == "bank"
     needs_proof = is_bank
     proof_label = "Bankafschrift"
+    if body.method == "creditcard":
+        if not body.stripe_payment_intent_id:
+            raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
+        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
+    elif body.stripe_payment_intent_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
     if needs_proof:
         if not body.bank_statement_id:
             raise HTTPException(
@@ -7491,6 +7549,7 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         period_year=period_year,
         note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
+        stripe_payment_intent_id=body.stripe_payment_intent_id,
     )
     payment_status = "pending_approval" if (needs_proof or body.method == "pin") else "approved"
     doc = await _create_payment_doc(
@@ -19249,9 +19308,10 @@ async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
 
 
 class _TenantPayInstallmentIn(BaseModel):
-    method: Literal["contant", "bank", "pin"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
+    stripe_payment_intent_id: Optional[str] = None
 
 
 @app.post("/api/tenant-portal/payment-plans/{plan_id}/installments/{seq}/pay")
@@ -19266,6 +19326,10 @@ async def tenant_portal_pay_installment(
     )
     if not plan:
         raise HTTPException(status_code=404, detail="Regeling niet gevonden")
+    if body.method == "creditcard":
+        if not body.stripe_payment_intent_id or not body.amount:
+            raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
+        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",

@@ -1166,14 +1166,72 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 // =====================================================================
 const PIN_METHOD = { v: 'pin', l: 'PIN', sub: 'Betaal met uw pinpas', icon: CreditCard };
 
+const CARD_METHOD = { v: 'creditcard', l: 'Creditcard', sub: 'Scan de QR-code met uw telefoon', icon: CreditCard };
+
+// QR-popup: de huurder scant de code en betaalt op de telefoon; de kiosk pollt de status.
+function TenantStripeQr({ payload, onPaid, onClose }) {
+  const [state, setState] = useState({ phase: 'loading', token: '', pi: '', mode: '', err: '' });
+  useEffect(() => {
+    let stop = false;
+    let timer = null;
+    const poll = (pi) => {
+      api.get(`/tenant-portal/stripe/status/${pi}`).then(({ data }) => {
+        if (stop) return;
+        if (data?.status === 'paid') { onPaid(pi); return; }
+        if (data?.status === 'failed') {
+          setState((s) => ({ ...s, phase: 'error', err: 'Betaling mislukt of geweigerd.' }));
+          return;
+        }
+        timer = setTimeout(() => poll(pi), 2000);
+      }).catch(() => { if (!stop) timer = setTimeout(() => poll(pi), 3000); });
+    };
+    api.post('/tenant-portal/stripe/intent', { amount: payload.amount, currency: payload.currency || 'SRD' })
+      .then(({ data }) => {
+        if (stop) return;
+        setState({ phase: 'qr', token: data.token, pi: data.payment_intent_id, mode: data.mode, err: '' });
+        poll(data.payment_intent_id);
+      })
+      .catch((e) => { if (!stop) setState({ phase: 'error', token: '', pi: '', mode: '', err: formatError(e, 'Kon de betaling niet starten') }); });
+    return () => { stop = true; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const cur = payload.currency || 'SRD';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-testid="tk-stripe-qr">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl">
+        <h3 className="text-2xl font-black text-slate-900">Betaal met creditcard</h3>
+        <p className="text-[#F26A12] font-black text-2xl mt-1">{fmtMoney(payload.amount, cur)}</p>
+        {state.phase === 'loading' && <p className="mt-8 mb-8 text-slate-500">QR-code wordt gemaakt…</p>}
+        {state.phase === 'qr' && (
+          <>
+            <div className="mt-5 inline-block p-4 bg-white rounded-2xl border-2 border-slate-200">
+              <QRCodeSVG value={`${window.location.origin}/betalen/${state.token}`} size={220} />
+            </div>
+            <p className="mt-4 text-slate-600 text-sm">Scan de QR-code met de camera van uw telefoon en betaal veilig met uw creditcard. Dit scherm gaat vanzelf verder.</p>
+            {state.mode === 'test' && <p className="mt-2 text-xs font-bold text-amber-600">Testmodus</p>}
+          </>
+        )}
+        {state.phase === 'error' && <p className="mt-6 mb-4 text-red-600 font-semibold" data-testid="tk-stripe-error">{state.err}</p>}
+        <button onClick={onClose} data-testid="tk-stripe-cancel"
+          className="mt-6 w-full rounded-2xl bg-slate-100 text-slate-700 font-bold py-3">Annuleren</button>
+      </div>
+    </div>
+  );
+}
+
 function TenantPayMethod({ payload, onConfirm }) {
   const cur = payload.currency || 'SRD';
   const [methods, setMethods] = useState([PIN_METHOD]);
+  const [qrOpen, setQrOpen] = useState(false);
   useEffect(() => {
     api.get('/tenant-portal/payment-methods')
       .then(({ data }) => {
-        const list = (data?.methods || []).filter((m) => m.id === 'pin')
-          .map((m) => ({ ...PIN_METHOD, l: m.label || PIN_METHOD.l, sub: m.sub || PIN_METHOD.sub }));
+        const list = (data?.methods || [])
+          .filter((m) => m.id === 'pin' || m.id === 'creditcard')
+          .map((m) => {
+            const base = m.id === 'creditcard' ? CARD_METHOD : PIN_METHOD;
+            return { ...base, l: m.label || base.l, sub: m.sub || base.sub };
+          });
         if (list.length) setMethods(list);
       })
       .catch(() => {});
@@ -1191,7 +1249,7 @@ function TenantPayMethod({ payload, onConfirm }) {
           {methods.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.v} onClick={() => onConfirm({ ...payload, method: m.v })}
+              <button key={m.v} onClick={() => (m.v === 'creditcard' ? setQrOpen(true) : onConfirm({ ...payload, method: m.v }))}
                 data-testid={`tk-method-${m.v}`}
                 className="bg-white rounded-3xl p-5 sm:p-8 flex items-center gap-5 text-left hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
                 <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 rounded-3xl flex items-center justify-center bg-[#FFF1E8] text-[#F26A12]">
@@ -1206,6 +1264,10 @@ function TenantPayMethod({ payload, onConfirm }) {
           })}
         </div>
       </div>
+      {qrOpen && (
+        <TenantStripeQr payload={payload} onClose={() => setQrOpen(false)}
+          onPaid={(pi) => { setQrOpen(false); onConfirm({ ...payload, method: 'creditcard', stripe_payment_intent_id: pi, stripe_paid: true }); }} />
+      )}
     </div>
   );
 }
@@ -1399,11 +1461,14 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
         bank_country: payload.bank_country,
         bank_statement_id: payload.bank_statement_id,
       } : {};
+      const stripeExtras = payload.method === 'creditcard'
+        ? { stripe_payment_intent_id: payload.stripe_payment_intent_id } : {};
       const planItems = payload.plan_items || [];
       const plainItems = payload.plain_items || [];
       for (const pi of planItems) {
         await api.post(`/tenant-portal/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`, {
           method: payload.method,
+          ...stripeExtras,
           amount: pi.amount,
           note: `Huurder Kiosk — termijn ${pi.seq}`,
           ...bankExtras,
@@ -1420,6 +1485,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
             period_year: it.period_year || undefined,
             note: payload.note || '',
             ...bankExtras,
+            ...stripeExtras,
           });
         }
       } else if (planItems.length === 0) {
@@ -1433,6 +1499,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
           period_year: payload.period_year || undefined,
           note: payload.note || '',
           ...bankExtras,
+          ...stripeExtras,
         });
       }
       playSuccessPing();
@@ -1443,9 +1510,20 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
     } finally { setBusy(false); }
   };
 
+  // Al betaald op de telefoon: direct boeken, geen extra bevestiging nodig.
+  const autoSubmitted = useRef(false);
+  useEffect(() => {
+    if (payload.stripe_paid && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      submit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const methodLabel = {
     contant: 'Contant',
     pin: 'PIN',
+    creditcard: 'Creditcard',
     bank: 'Bankoverschrijving',
   }[payload.method] || payload.method;
 
