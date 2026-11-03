@@ -5864,7 +5864,7 @@ export default function KioskLayout() {
           )}
           {step === 'stroom' && hasAdminAccess && (
             <div className="h-full overflow-y-auto bg-orange-500" data-testid="kiosk-stroom">
-              <PowerControl kiosk />
+              <PowerControl kiosk orangeMode={!isWhite} />
             </div>
           )}
           {step === 'overview' && apartment && (
@@ -6070,7 +6070,7 @@ export default function KioskLayout() {
         <TenantInfoModal apartment={apartment} mode={tenantModal} onClose={() => setTenantModal(null)} />
       )}
       {tenantModal === 'power' && apartment && (
-        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} />
+        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} orangeMode={!isWhite} />
       )}
     </div>
     </KioskThemeCtx.Provider>
