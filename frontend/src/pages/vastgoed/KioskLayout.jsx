@@ -13,8 +13,9 @@ import {
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
-  Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi, Sparkles,
+  Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
 } from 'lucide-react';
+  import PowerControl from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -398,7 +399,7 @@ function ThemeToggle({ testId, className = '' }) {
 }
 
 const STEP_TITLES = {
-  kasgeld: 'Kasgeldbeheer', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
+  kasgeld: 'Kasgeldbeheer', stroom: 'Stroom', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
@@ -4932,6 +4933,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
     { key: 'nfc',         label: 'NFC-tag koppelen',  Icon: Nfc },
+    ...(hasAdminAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -5107,6 +5109,7 @@ export default function KioskLayout() {
       else if (key === 'payments') setShowPaymentsViewer(true);
       else if (key === 'maintenance') setShowAddMaintenance(true);
       else if (key === 'kasgeld') setStep('kasgeld');
+      else if (key === 'stroom') setStep('stroom');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
       else if (key === 'settings') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' }));
@@ -5450,7 +5453,7 @@ export default function KioskLayout() {
     Object.entries(popupSetters).forEach(([k, [, set]]) => set(k === key));
     setAdminPopup(null);
   };
-  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
+  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step === 'stroom' || step.startsWith('admin:');
   const sameEntry = (e) => e && e.step === step && e.apartment?.id === apartment?.id && e.popup === popupKey;
   useEffect(() => {
     const h = hist.current;
@@ -5661,6 +5664,11 @@ export default function KioskLayout() {
           {step === 'kasgeld' && (
             <KasgeldPanel onBack={() => setStep('select')} />
           )}
+          {step === 'stroom' && hasAdminAccess && (
+            <div className="h-full overflow-y-auto bg-orange-500" data-testid="kiosk-stroom">
+              <PowerControl kiosk />
+            </div>
+          )}
           {step === 'overview' && apartment && (
             <TenantOverview key={apartment.id} apartment={apartment} onBack={reset}
               onPay={(d) => { setOverview(d); setStep('pay'); }} />
@@ -5842,9 +5850,10 @@ export default function KioskLayout() {
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
+              ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ].map(({ id, label, icon: Icon, testid, onClick }) => {
-              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
+              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom');
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>

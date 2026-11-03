@@ -55,7 +55,7 @@ const loadMaintenance = () => import('./admin/Maintenance');
 const loadKasgeld = () => import('./admin/Kasgeld');
 const loadNotifications = () => import('./admin/Notifications');
 const loadPaymentPlans = () => import('./admin/PaymentPlans');
-const loadPower = () => import('./admin/PowerSettings');
+const loadPower = () => import('./admin/PowerControl');
 const loadCompanies = () => import('./admin/Companies');
 const Contracts = lazy(loadContracts);
 const Invoices = lazy(loadInvoices);

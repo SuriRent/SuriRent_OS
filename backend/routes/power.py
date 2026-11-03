@@ -41,6 +41,13 @@ async def _admin(user: dict = Depends(_deps.get_current_user)) -> dict:
     return user
 
 
+async def _owner(user: dict = Depends(_admin)) -> dict:
+    # Kiosk-medewerkers (staff) mogen schakelen, maar de instellingen niet wijzigen.
+    if user.get("staff"):
+        raise HTTPException(403, "Alleen de beheerder kan de stroominstellingen wijzigen")
+    return user
+
+
 def _mask(v: str) -> str:
     return (v[:3] + "…" + v[-3:]) if v and len(v) > 8 else ("•" * len(v or ""))
 
@@ -163,7 +170,7 @@ async def get_power_config(user: dict = Depends(_admin)):
 
 
 @router.put("/power/config")
-async def put_power_config(body: PowerConfigIn, user: dict = Depends(_admin)):
+async def put_power_config(body: PowerConfigIn, user: dict = Depends(_owner)):
     cid = _deps.company_id_of(user)
     if body.region not in TUYA_HOSTS:
         raise HTTPException(400, "Onbekende Tuya-regio")
@@ -182,7 +189,7 @@ async def put_power_config(body: PowerConfigIn, user: dict = Depends(_admin)):
 
 
 @router.post("/power/config/test")
-async def test_power_config(user: dict = Depends(_admin)):
+async def test_power_config(user: dict = Depends(_owner)):
     try:
         await _tuya(await _cfg(_deps.company_id_of(user)), "GET", "/v1.0/token?grant_type=1", with_token=False)
     except TuyaError as e:
@@ -217,7 +224,7 @@ async def list_devices(user: dict = Depends(_admin)):
 
 
 @router.post("/power/devices")
-async def save_device(body: DeviceIn, user: dict = Depends(_admin)):
+async def save_device(body: DeviceIn, user: dict = Depends(_owner)):
     cid = _deps.company_id_of(user)
     if not await _deps.db.apartments.find_one({"id": body.apartment_id, "company_id": cid}, {"_id": 1}):
         raise HTTPException(404, "Appartement niet gevonden")
@@ -240,7 +247,7 @@ async def _own_device(cid: str, dev_id: str) -> dict:
 
 
 @router.delete("/power/devices/{dev_id}")
-async def delete_device(dev_id: str, user: dict = Depends(_admin)):
+async def delete_device(dev_id: str, user: dict = Depends(_owner)):
     cid = _deps.company_id_of(user)
     await _own_device(cid, dev_id)
     await _deps.db.power_devices.delete_one({"id": dev_id, "company_id": cid})

@@ -1,66 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Power, Check, AlertCircle, Loader2, Save, Trash2, RefreshCw, Plus } from 'lucide-react';
+import { Zap, Check, AlertCircle, Loader2, Save, Trash2, Plus } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
 const CARD = 'bg-white rounded-2xl border border-orange-100';
 const INPUT = 'w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none text-sm';
 const LBL = 'block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1';
 
-function DeviceRow({ d, onChanged, onMsg }) {
-  const [st, setSt] = useState(null);
-  const [busy, setBusy] = useState('');
-  const refresh = useCallback(async () => {
-    setBusy('read');
-    try { const { data } = await api.get(`/power/devices/${d.id}/status`); setSt(data); }
-    catch (e) { onMsg('err', formatError(e)); } finally { setBusy(''); }
-  }, [d.id, onMsg]);
-  const toggle = async () => {
-    const next = !(st?.on ?? d.on);
-    setBusy('switch');
-    try { await api.post(`/power/devices/${d.id}/switch`, { on: next }); await refresh(); onChanged(); }
-    catch (e) { onMsg('err', formatError(e)); setBusy(''); }
-  };
-  const remove = async () => {
-    if (!window.confirm(`Schakelaar van ${d.apartment_number} ontkoppelen?`)) return;
-    try { await api.delete(`/power/devices/${d.id}`); onChanged(); } catch (e) { onMsg('err', formatError(e)); }
-  };
-  const on = st?.on ?? d.on;
-  return (
-    <div className="p-4 flex flex-wrap items-center gap-3" data-testid={`power-device-${d.id}`}>
-      <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${on ? 'bg-emerald-100 text-emerald-600' : on === false ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400'}`}>
-        <Zap className="w-5 h-5" />
-      </span>
-      <div className="flex-1 min-w-[140px]">
-        <p className="text-sm font-black text-slate-900">{d.apartment_number}{d.tenant_name ? ` — ${d.tenant_name}` : ''}</p>
-        <p className="text-[11px] text-slate-500 font-mono truncate">{d.tuya_device_id}</p>
-        {d.notice_at && d.on !== false && <p className="text-[11px] font-bold text-amber-600">Afsluiting aangekondigd</p>}
-        {d.exempt && <p className="text-[11px] text-slate-500">Uitgezonderd van automatische afsluiting</p>}
-      </div>
-      {st && (
-        <div className="text-xs text-slate-600 grid grid-cols-2 gap-x-4 tabular-nums">
-          {st.power_w != null && <span>{st.power_w} W</span>}
-          {st.current_a != null && <span>{st.current_a} A</span>}
-          {st.voltage_v != null && <span>{st.voltage_v} V</span>}
-          {st.energy_kwh != null && <span>{st.energy_kwh} kWh</span>}
-        </div>
-      )}
-      <button type="button" onClick={refresh} disabled={!!busy} aria-label="Verbruik ophalen"
-        className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-        {busy === 'read' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-      </button>
-      <button type="button" onClick={toggle} disabled={!!busy} data-testid={`power-toggle-${d.id}`}
-        className={`h-10 px-4 rounded-xl font-bold text-sm flex items-center gap-2 text-white ${on ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-50`}>
-        {busy === 'switch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
-        {on ? 'Uitzetten' : 'Aanzetten'}
-      </button>
-      <button type="button" onClick={remove} aria-label="Ontkoppelen"
-        className="h-10 w-10 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center">
-        <Trash2 className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
+// Instellingen voor Stroom: Tuya-koppeling, automatisch afsluiten en schakelaars koppelen.
+// Het aan- en uitzetten zelf gebeurt in Beheer → Stroom en in de kiosk.
 export default function PowerSettings() {
   const [cfg, setCfg] = useState(null);
   const [form, setForm] = useState({});
@@ -91,6 +38,10 @@ export default function PowerSettings() {
   };
   const save = () => run('save', async () => { await api.put('/power/config', form); await load(); }, 'Stroominstellingen opgeslagen.');
   const test = () => run('test', () => api.post('/power/config/test'), 'Verbonden met Tuya.');
+  const unlink = (d) => {
+    if (!window.confirm(`Schakelaar van ${d.apartment_number} ontkoppelen?`)) return;
+    run('unlink', async () => { await api.delete(`/power/devices/${d.id}`); await loadDevices(); }, 'Schakelaar ontkoppeld.');
+  };
 
   if (!cfg) return <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -142,34 +93,24 @@ export default function PowerSettings() {
         </button>
       </div>
 
-      <div className={`${CARD} divide-y divide-orange-50`} data-testid="power-overview">
-        <div className="p-5 space-y-3">
-          <p className="text-sm font-black text-slate-900">Alle appartementen</p>
-          <div className="flex flex-wrap gap-2 text-xs font-bold">
-            <span className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700">{devices.filter((d) => d.on === true).length} aan</span>
-            <span className="px-3 py-1.5 rounded-full bg-red-100 text-red-600">{devices.filter((d) => d.on === false).length} uit</span>
-            <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-600">{free.length} niet gekoppeld</span>
-          </div>
-          {devices.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {[[true, 'Alles aan', 'bg-emerald-600 hover:bg-emerald-700'], [false, 'Alles uit', 'bg-red-500 hover:bg-red-600']].map(([on, label, cls]) => (
-                <button key={label} type="button" disabled={!!busy} data-testid={`power-all-${on ? 'on' : 'off'}`}
-                  onClick={() => {
-                    if (!window.confirm(`${label} voor ${devices.length} appartement(en)?`)) return;
-                    run('all', async () => {
-                      const { data } = await api.post('/power/switch-all', { on });
-                      await loadDevices();
-                      if (data.failed?.length) throw new Error(`${data.done} gelukt, ${data.failed.length} mislukt: ${data.failed[0].error}`);
-                    }, `${label}: gelukt.`);
-                  }}
-                  className={`h-10 px-4 rounded-xl text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50 ${cls}`}>
-                  {busy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />} {label}
-                </button>
-              ))}
-            </div>
-          )}
+      <div className={`${CARD} divide-y divide-orange-50`} data-testid="power-links">
+        <div className="p-5">
+          <p className="text-sm font-black text-slate-900">Schakelaars koppelen</p>
+          <p className="text-xs text-slate-500 mt-1">Koppel per appartement het Tuya device-id van de schakelaar. Aan- en uitzetten doet u in Beheer → Stroom.</p>
         </div>
-        {devices.map((d) => <DeviceRow key={d.id} d={d} onChanged={loadDevices} onMsg={say} />)}
+        {devices.map((d) => (
+          <div key={d.id} className="p-4 flex items-center gap-3" data-testid={`power-device-${d.id}`}>
+            <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600"><Zap className="w-5 h-5" /></span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-slate-900">{d.apartment_number}</p>
+              <p className="text-[11px] text-slate-500 font-mono truncate">{d.tuya_device_id}</p>
+            </div>
+            <button type="button" onClick={() => unlink(d)} aria-label="Ontkoppelen"
+              className="h-10 w-10 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
         {free.map((a) => (
           <div key={a.id} className="p-4 flex flex-wrap items-center gap-3" data-testid={`power-free-${a.id}`}>
             <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-slate-100 text-slate-300"><Zap className="w-5 h-5" /></span>
