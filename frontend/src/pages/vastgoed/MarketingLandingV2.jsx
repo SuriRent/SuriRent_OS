@@ -1681,7 +1681,7 @@ export default function MarketingLandingV2() {
   }
 
   return (
-    <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch} enableLanguageSwitcher>
+    <EditableProvider editMode={editMode} initialContent={initialContent} onPatch={onPatch}>
       <div className="min-h-screen bg-white text-[#0B1B3F] antialiased selection:bg-[#FF5C00] selection:text-white">
         <MarketingSeo pathname={location.pathname} />
         {editMode && (

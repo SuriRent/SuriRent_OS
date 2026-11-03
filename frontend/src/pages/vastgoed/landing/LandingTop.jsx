@@ -9,7 +9,6 @@ import {
 import { EditableText, EditableImage, EditableLink, EditableMedia, getPath, useEditable } from '../../../lib/landing-editable';
 import { translateMarketingText } from '../../../lib/marketing-language';
 import StatusPill from '../../../components/StatusPill';
-import MarketingLanguageSwitcher from '../../../components/MarketingLanguageSwitcher';
 
 export const NAVY = '#0B1B3F';
 const ORANGE = '#FF5C00';
@@ -118,7 +117,6 @@ export function LandingHeader({ onLogin, onRegister }) {
         <Logo />
         <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
           <div className="hidden lg:block"><StatusPill /></div>
-          <MarketingLanguageSwitcher />
           <button onClick={onLogin} data-testid="topheader-login"
             className="hidden sm:inline-flex h-[44px] px-7 rounded-xl border border-slate-300 bg-white hover:border-[#FF5C00] text-[15px] font-bold items-center gap-2.5 transition-colors" style={{ color: NAVY }}>
             <Lock className="w-4 h-4" /><EditableText path="v2.brand.cta_login" fallback="Inloggen" as="span" />

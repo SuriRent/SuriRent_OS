@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Users, FileText, Receipt, Bell, BarChart3, Check } from 'lucide-react';
-import MarketingLanguageSwitcher from '../../components/MarketingLanguageSwitcher';
 import { EditableProvider, EditableText, EditableLink, getPath, useEditable, useLandingContent } from '../../lib/landing-editable';
 import { translateMarketingText } from '../../lib/marketing-language';
 
@@ -25,7 +24,7 @@ export default function OverSuriRent() {
   if (loading && !editMode) return <div className="min-h-screen bg-white" />;
 
   return (
-    <EditableProvider editMode={editMode} initialContent={content} onPatch={onPatch} enableLanguageSwitcher>
+    <EditableProvider editMode={editMode} initialContent={content} onPatch={onPatch}>
       <OverSuriRentContent editMode={editMode} />
     </EditableProvider>
   );
@@ -99,9 +98,6 @@ function OverSuriRentContent({ editMode }) {
   return (
     <div className="min-h-screen bg-white text-slate-900" data-testid="over-surirent-page">
       <div className="max-w-4xl mx-auto px-6 py-16 md:py-24">
-        <div className="mb-6 flex justify-end">
-          <MarketingLanguageSwitcher />
-        </div>
         <div className="sr-only" aria-hidden="true">
           <EditableText path="marketing.over_surirent.seo_title" fallback="Over SuriRent — Vastgoedbeheer & verhuursoftware voor Suriname"
             label="Over SuriRent · SEO-titel" />
