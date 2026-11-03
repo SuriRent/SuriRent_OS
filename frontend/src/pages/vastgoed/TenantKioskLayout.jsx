@@ -10,7 +10,7 @@ import {
   Home as HomeIcon, Mail, Wallet, FileText,
   HelpCircle, Send, Check, ArrowRight, Banknote, Droplets, AlertCircle,
   QrCode, Smartphone, Clock as ClockIcon, Receipt, Hash, X, Printer,
-  Landmark, FileUp, Search,
+  Landmark, FileUp,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
@@ -71,7 +71,7 @@ function PinPad({ value, onDigit, onBack, busy }) {
 function TenantAvatar({ url, name, iconClass = 'w-10 h-10' }) {
   const [broken, setBroken] = useState(false);
   if (!url || broken) return <Building2 className={`${iconClass} text-[#FF5C00]`} />;
-  return <img src={resolveLogoUrl(url)} alt={name} onError={() => setBroken(true)} className="w-full h-full object-cover" />;
+  return <img src={resolveLogoUrl(url)} alt="" onError={() => setBroken(true)} className="w-full h-full object-cover" />;
 }
 
 function PinDots({ value, error }) {
@@ -235,7 +235,6 @@ function LoginView({ branding, onLoggedIn, prefill }) {
   const [pin, setPin] = useState('');
   const [tenants, setTenants] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState('');
   const [showForgot, setShowForgot] = useState(false);
   // refs voor handleScan deps zonder rerender storm
   const busyRef = useRef(false);
@@ -399,8 +398,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
   const hasWebNfc = typeof window !== 'undefined' && 'NDEFReader' in window;
 
   if (mode === 'pin') {
-    const q = search.trim().toLowerCase();
-    const list = (tenants || []).filter((t) => !q || t.name.toLowerCase().includes(q) || String(t.apartment).toLowerCase().includes(q));
+    const list = tenants || [];
     const closeModal = () => { setSelected(null); setPin(''); setError(''); };
     return (
       <div className="min-h-full w-full flex flex-col" data-testid="tk-login">
@@ -419,12 +417,6 @@ function LoginView({ branding, onLoggedIn, prefill }) {
             {[branding?.address, 'Kies uw appartement'].filter(Boolean).join(' • ')}
           </p>
           <div className="flex-1 md:flex-none flex items-center gap-2 justify-end">
-            <label className="flex items-center gap-2 h-11 px-4 rounded-full bg-white text-[#FF5C00] font-extrabold text-sm w-full max-w-[240px]">
-              <Search className="w-4 h-4 shrink-0" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek huurder"
-                data-testid="tk-tenant-search"
-                className="w-full bg-transparent placeholder-[#FF5C00] focus:outline-none" />
-            </label>
             <button onClick={() => { setMode('nfc'); setPin(''); setError(''); setHint(''); setSelected(null); }}
               data-testid="tk-toggle-mode" title="Inloggen met NFC"
               className="w-11 h-11 shrink-0 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center">
@@ -449,10 +441,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
                   <span className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-2">
                     <TenantAvatar url={t.avatar_url} name={t.name} />
                   </span>
-                  <span className="font-black text-2xl sm:text-3xl text-slate-900 uppercase tracking-tight">Huis {t.apartment || '—'}</span>
-                  <span className="flex items-center gap-1.5 text-sm sm:text-base font-semibold text-slate-700 max-w-full">
-                    <User className="w-4 h-4 shrink-0" /><span className="truncate">{t.name}</span>
-                  </span>
+                  <span className="font-black text-2xl sm:text-3xl text-slate-900 uppercase tracking-tight">{t.apartment || '—'}</span>
                 </button>
               ))}
             </div>
@@ -462,7 +451,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
         <AnimatePresence>
           {selected && (
             <motion.div key="pin-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto"
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
               onClick={closeModal} data-testid="tk-pin-modal">
               <motion.div initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
@@ -475,8 +464,7 @@ function LoginView({ branding, onLoggedIn, prefill }) {
                   <TenantAvatar url={selected.avatar_url} name={selected.name} iconClass="w-9 h-9" />
                 </span>
                 <div className="text-center text-white" data-testid="tk-selected-tenant">
-                  <p className="font-black text-2xl uppercase leading-tight">Huis {selected.apartment || '—'}</p>
-                  <p className="font-semibold text-white/90">{selected.name}</p>
+                  <p className="font-black text-2xl uppercase leading-tight">{selected.apartment || '—'}</p>
                 </div>
                 <p className="text-sm font-bold text-white/90">Voer uw PIN in</p>
                 <PinDots value={pin} error={!!error} />
