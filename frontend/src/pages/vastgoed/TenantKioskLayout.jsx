@@ -398,7 +398,8 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="w-full max-w-md flex flex-col items-center text-center">
+        className={`w-full flex flex-col items-center text-center ${mode === 'pin' && !selected ? 'max-w-6xl' : 'max-w-md'}`}>
+        {!(mode === 'pin' && !selected) && (<>
         {/* Logo */}
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5">
           {branding?.logo_url ? (
@@ -417,15 +418,32 @@ function LoginView({ branding, onLoggedIn, prefill }) {
         <p className="text-sm text-white/85 mt-2 max-w-xs">
           {branding?.tagline || (mode === 'pin' ? (selected ? 'Voer uw PIN in om in te loggen' : 'Kies uw appartement en log in met uw PIN') : 'Tik uw NFC-kaart om in te loggen')}
         </p>
+        </>)}
 
         {mode === 'pin' ? (
-          <div className="w-full mt-6 flex flex-col items-center gap-4" data-testid="tk-pin-login">
+          <div className="w-full mt-2 flex flex-col items-center gap-4" data-testid="tk-pin-login">
             {!selected ? (
               <div className="w-full" data-testid="tk-tenant-list">
-                <p className="text-sm font-bold text-white mb-3">Kies uw appartement</p>
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek op naam of appartement"
-                  data-testid="tk-tenant-search"
-                  className="w-full h-12 px-4 rounded-2xl bg-white text-slate-900 placeholder-slate-400 text-sm font-semibold focus:outline-none mb-3" />
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5 text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-2xl bg-white/95 flex items-center justify-center p-1.5 shrink-0">
+                      {branding?.logo_url ? (
+                        <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
+                      ) : (
+                        <HomeIcon className="w-7 h-7 text-[#FF5C00]" strokeWidth={2.4} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
+                        {branding?.app_name || branding?.name || 'Huurder Kiosk'}
+                      </h1>
+                      <p className="text-sm font-bold text-white/90">Kies uw appartement</p>
+                    </div>
+                  </div>
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek huurder"
+                    data-testid="tk-tenant-search"
+                    className="h-11 w-full sm:w-64 px-4 rounded-full bg-white text-slate-900 placeholder-slate-400 text-sm font-bold focus:outline-none" />
+                </div>
                 {tenants === null ? (
                   <Loader2 className="w-8 h-8 animate-spin text-white mx-auto my-6" />
                 ) : (() => {
@@ -437,15 +455,22 @@ function LoginView({ branding, onLoggedIn, prefill }) {
                     </p>;
                   }
                   return (
-                    <div className="max-h-[52vh] overflow-y-auto space-y-2 pr-1 text-left">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                       {list.map((t) => (
                         <button key={t.id} onClick={() => { setSelected(t); setPin(''); setError(''); }}
                           data-testid={`tk-tenant-${t.id}`}
-                          className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white shadow-[0_6px_0_rgba(0,0,0,0.08)] active:translate-y-[2px] transition">
-                          <span className="min-w-[3.5rem] h-12 px-2 rounded-xl bg-orange-50 text-[#FF5C00] font-black text-lg flex items-center justify-center">
-                            {t.apartment || '—'}
+                          className="flex flex-col items-center gap-1 p-4 rounded-3xl bg-white shadow-[0_8px_0_rgba(0,0,0,0.08)] active:translate-y-[3px] transition">
+                          <span className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-1">
+                            {t.avatar_url ? (
+                              <img loading="lazy" src={resolveLogoUrl(t.avatar_url)} alt={t.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Building2 className="w-9 h-9 text-[#FF5C00]" />
+                            )}
                           </span>
-                          <span className="font-bold text-slate-900 truncate">{t.name}</span>
+                          <span className="font-black text-xl sm:text-2xl text-slate-900 uppercase tracking-tight">Huis {t.apartment || '—'}</span>
+                          <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 max-w-full">
+                            <User className="w-4 h-4 shrink-0" /><span className="truncate">{t.name}</span>
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -454,11 +479,18 @@ function LoginView({ branding, onLoggedIn, prefill }) {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 bg-white/95 rounded-2xl px-4 py-2" data-testid="tk-selected-tenant">
-                  <span className="px-2 h-9 rounded-lg bg-orange-50 text-[#FF5C00] font-black flex items-center">{selected.apartment || '—'}</span>
-                  <span className="font-bold text-slate-900">{selected.name}</span>
+                <div className="w-full flex flex-col items-center gap-1 bg-white rounded-3xl p-5 shadow-[0_8px_0_rgba(0,0,0,0.08)]" data-testid="tk-selected-tenant">
+                  <span className="w-20 h-20 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden">
+                    {selected.avatar_url ? (
+                      <img src={resolveLogoUrl(selected.avatar_url)} alt={selected.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-9 h-9 text-[#FF5C00]" />
+                    )}
+                  </span>
+                  <span className="font-black text-2xl text-slate-900 uppercase">Huis {selected.apartment || '—'}</span>
+                  <span className="font-semibold text-slate-600">{selected.name}</span>
                 </div>
-                <p className="text-sm text-white/90">Voer uw PIN in</p>
+                <p className="text-sm font-bold text-white/90">Voer uw PIN in</p>
                 <PinDots value={pin} error={!!error} />
                 {error && <p className="text-sm font-bold text-white bg-red-500/40 px-4 py-2 rounded-full" data-testid="tk-pin-error">{error}</p>}
                 <div className="w-full max-w-[300px]">

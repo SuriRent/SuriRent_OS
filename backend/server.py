@@ -6522,13 +6522,14 @@ async def tenant_portal_directory(company_id: Optional[str] = None, company_slug
         raise HTTPException(status_code=400, detail="Bedrijfscontext ontbreekt")
     tenants = await db.tenants.find(
         {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
-        {"_id": 0, "id": 1, "name": 1, "apartment_id": 1},
+        {"_id": 0, "id": 1,         "name": 1, "apartment_id": 1, "avatar_url": 1},
     ).to_list(2000)
     aids = list({t["apartment_id"] for t in tenants if t.get("apartment_id")})
     apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1}).to_list(None) if aids else []
     numbers = {a["id"]: a.get("number") or "" for a in apts}
     items = [
-        {"id": t["id"], "name": t.get("name") or "", "apartment": numbers.get(t.get("apartment_id"), "")}
+        {"id": t["id"], "name": t.get("name") or "", "apartment": numbers.get(t.get("apartment_id"), ""),
+         "avatar_url": t.get("avatar_url") or ""}
         for t in tenants
     ]
     items.sort(key=lambda i: (i["apartment"] == "", str(i["apartment"]).lower(), i["name"].lower()))
