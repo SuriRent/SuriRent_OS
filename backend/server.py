@@ -12624,7 +12624,7 @@ async def system_status():
             overall_status = "degraded"
     components.append({
         "id": "huurder_kiosk",
-        "label": "Huurder Kiosk + Portaal",
+        "label": "Huurder Kiosk",
         "status": hk_status,
         "latency_ms": int((time.perf_counter() - t0) * 1000),
     })
