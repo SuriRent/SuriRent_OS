@@ -52,6 +52,28 @@ function SwitchDialog({ dev, onClose, onChanged }) {
   );
 }
 
+// Stroomschakelaar van één appartement (kiosk, gekozen huurder).
+export function ApartmentPower({ apartmentId, onClose }) {
+  const [dev, setDev] = useState(undefined);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    api.get('/power/devices')
+      .then(({ data }) => setDev(data.find((d) => d.apartment_id === apartmentId) || null))
+      .catch((e) => { setErr(formatError(e)); setDev(null); });
+  }, [apartmentId]);
+  if (dev === undefined) return null;
+  if (dev) return <SwitchDialog dev={dev} onClose={onClose} onChanged={() => {}} />;
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+        <Zap className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+        <p className="font-black text-slate-900">{err || 'Geen schakelaar gekoppeld aan dit appartement'}</p>
+        <button type="button" onClick={onClose} className="mt-4 h-11 px-6 rounded-xl bg-slate-100 font-bold text-sm">Sluiten</button>
+      </div>
+    </div>
+  );
+}
+
 // Stroom bedienen per appartement: kies een tegel, zet de schakelaar aan of uit.
 export default function PowerControl({ kiosk = false }) {
   const [devices, setDevices] = useState([]);

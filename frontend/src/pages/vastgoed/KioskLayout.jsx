@@ -15,7 +15,7 @@ import {
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
 } from 'lucide-react';
-  import PowerControl from './admin/PowerControl';
+  import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -1219,6 +1219,12 @@ function TenantOverview({ apartment, onBack, onPay }) {
   }, [apartment]);
 
   useEffect(() => { reload(); }, [reload]);
+  const actRef = useRef({});
+  useEffect(() => {
+    const onAct = (e) => actRef.current[e.detail]?.();
+    window.addEventListener('kiosk-tenant-action', onAct);
+    return () => window.removeEventListener('kiosk-tenant-action', onAct);
+  }, []);
   useEffect(() => {
     const onInv = (e) => { const t = e.detail?.tenant_id; if (!t || t === apartment?.tenant_id) reload(true); };
     window.addEventListener('kiosk-overview-invalidate', onInv);
@@ -1275,6 +1281,14 @@ function TenantOverview({ apartment, onBack, onPay }) {
   // (Internet-item is verwijderd op 2026-02-22)
   const totalDue = currentMonthAmount + openRent;
   const allPaid = totalDue <= 0;
+  actRef.current = {
+    pay: () => onPay({ ...data, total_due: totalDue,
+      open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
+      current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
+      future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
+      current_month_invoice: currentInvoice }),
+    history: () => setShowHistory(true),
+  };
   const cur = balance.currency || apt.currency || 'SRD';
 
   // Subtitel onder "Achterstallige huur" — toont de maanden compact.
@@ -4432,6 +4446,56 @@ function KioskHistBtn({ dir, disabled, onClick, white }) {
   );
 }
 
+// Gegevens en contact van de gekozen huurder (onderbalk bij een gekozen appartement).
+function TenantInfoModal({ apartment, mode, onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (!apartment?.tenant_id) return;
+    takeOverview(apartment.tenant_id).then((r) => setData(r.data)).catch((e) => setErr(formatError(e)));
+  }, [apartment]);
+  const t = data?.tenant || {};
+  const apt = data?.apartment || {};
+  const phone = String(t.phone || '').trim();
+  const digits = phone.replace(/\D/g, '');
+  const rows = [
+    ['Naam', t.name], ['Appartement', apt.number || apartment?.number], ['Telefoon', phone],
+    ['E-mail', t.email], ['Huur', apt.rent_amount != null ? fmtMoney(Number(apt.rent_amount), apt.currency || 'SRD') : ''],
+  ].filter(([, v]) => v);
+  const btn = 'h-12 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition';
+  return (
+    <KioskModalShell title={mode === 'contact' ? 'Contact' : 'Gegevens'} Icon={mode === 'contact' ? Smartphone : User}
+      testId={`tenant-${mode}`} onClose={onClose}>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {!data && !err && <div className="py-8 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-orange-500" /></div>}
+      {data && mode !== 'contact' && (
+        <dl className="divide-y divide-slate-100">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-4 py-2.5 text-sm">
+              <dt className="font-semibold text-slate-500">{k}</dt>
+              <dd className="font-bold text-slate-900 text-right break-all">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {data && mode === 'contact' && (
+        <div className="space-y-2">
+          <p className="text-sm font-bold text-slate-900">{t.name}{phone ? ` · ${phone}` : ''}</p>
+          {digits ? (
+            <>
+              <a href={`tel:${phone}`} className={`${btn} bg-orange-500 text-white`}>Bellen</a>
+              <a href={`https://wa.me/${digits}`} target="_blank" rel="noreferrer" className={`${btn} bg-emerald-500 text-white`}>
+                <MessageCircle className="w-4 h-4" /> WhatsApp
+              </a>
+            </>
+          ) : <p className="text-sm text-slate-500">Geen telefoonnummer bekend.</p>}
+          {t.email && <a href={`mailto:${t.email}`} className={`${btn} bg-slate-100 text-slate-800`}>E-mail</a>}
+        </div>
+      )}
+    </KioskModalShell>
+  );
+}
+
 function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
   const [host, setHost] = useState(null);
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
@@ -5026,6 +5090,7 @@ export default function KioskLayout() {
   const demoLoginStarted = useRef(false);
   const demoSession = useRef(new URLSearchParams(window.location.search).get('demo') === '1');
   const [apartment, setApartment] = useState(null);
+  const [tenantModal, setTenantModal] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
   const [paymentResult, setPaymentResult] = useState(null);
@@ -5481,6 +5546,18 @@ export default function KioskLayout() {
   const canBack = hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
+  const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
+  const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
+  const tenantBarItems = [
+    { id: 'overview', label: 'Overzicht', icon: Wallet, testid: 'kiosk-tb-overview', onClick: () => { openOnly(null); setTenantModal(null); setStep('overview'); } },
+    { id: 'pay', label: 'Betalen', icon: CreditCard, testid: 'kiosk-tb-pay', onClick: () => { openOnly(null); setTenantModal(null); if (step === 'overview') tenantAct('pay'); } },
+    { id: 'history', label: 'Geschiedenis', icon: Receipt, testid: 'kiosk-tb-history', onClick: () => { if (step !== 'overview') setStep('overview'); setTimeout(() => tenantAct('history'), step === 'overview' ? 0 : 400); } },
+    { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-tb-maintenance', onClick: () => { setTenantModal(null); openOnly('add-maintenance'); } },
+    { id: 'info', label: 'Gegevens', icon: User, testid: 'kiosk-tb-info', onClick: () => { openOnly(null); setTenantModal('info'); } },
+    { id: 'contact', label: 'Contact', icon: Smartphone, testid: 'kiosk-tb-contact', onClick: () => { openOnly(null); setTenantModal('contact'); } },
+    ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
+    { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
+  ];
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
     const onNav = (e) => {
@@ -5843,7 +5920,7 @@ export default function KioskLayout() {
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
-            {[
+            {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
@@ -5852,8 +5929,9 @@ export default function KioskLayout() {
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
               ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
-            ].map(({ id, label, icon: Icon, testid, onClick }) => {
-              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom');
+            ]).map(({ id, label, icon: Icon, testid, onClick }) => {
+              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
@@ -5866,6 +5944,12 @@ export default function KioskLayout() {
           </div>
         </nav>
       ), document.body)}
+      {tenantModal && tenantModal !== 'power' && apartment && (
+        <TenantInfoModal apartment={apartment} mode={tenantModal} onClose={() => setTenantModal(null)} />
+      )}
+      {tenantModal === 'power' && apartment && (
+        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} />
+      )}
     </div>
     </KioskThemeCtx.Provider>
   );
