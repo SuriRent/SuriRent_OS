@@ -403,7 +403,7 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
-function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, title = 'Kies uw appartement' }) {
+function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, tenant, title = 'Kies uw appartement' }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
@@ -422,6 +422,14 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
         <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        {tenant && (
+          <div className="flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
+            <div className="w-9 h-9 [&>div]:!w-9 [&>div]:!h-9 [&>div]:!ring-0 shrink-0">
+              <OverviewTenantPhoto src={tenant.photo} name={tenant.name} />
+            </div>
+            <span className="hidden sm:block text-sm font-black text-slate-800 truncate">{tenant.name}</span>
+          </div>
+        )}
         {onSearch && (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
             className="hidden md:flex h-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 items-center gap-2 md:px-4 font-bold transition-colors">
@@ -609,10 +617,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2">
           {visible.map((a) => {
-            // Conditioneel: als beheerder `show_tenant_photo` heeft
-            // aangezet EN er is een pasfoto (avatar of ID-kaart) EN het
-            // appartement is bewoond, tonen we die i.p.v. het icoon.
-            const photo = a.show_tenant_photo && a.tenant_id
+            // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
+            const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
               : null;
             const photoSrc = photo && !/^https?:/.test(photo)
@@ -5704,6 +5710,9 @@ export default function KioskLayout() {
       {showTopHead && (
         <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
+            tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
+              ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
+              : null}
             onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>
       )}
