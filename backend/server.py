@@ -12576,11 +12576,8 @@ async def system_status():
     cacheable voor 30s. Components:
       • api          — FastAPI proces draait (impliciet: deze route reageert)
       • database     — MongoDB ping
-      • admin_app    — Admin Dashboard frontend bundle bereikbaar (via API ping
-                       want zelfde dyno als landing)
       • huurder_kiosk — Huurder kiosk route + tenant-portal endpoint
       • klantenscherm — Customer display feed endpoint
-      • landing      — Marketing landing content fetch
     """
     import time
     from pymongo.errors import PyMongoError
@@ -12646,38 +12643,6 @@ async def system_status():
         "id": "klantenscherm",
         "label": "Klantenscherm",
         "status": kl_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 5) Admin Dashboard — check companies collection
-    t0 = time.perf_counter()
-    ad_status = "operational"
-    try:
-        await asyncio.wait_for(db.companies.estimated_document_count(), timeout=2.0)
-    except Exception:
-        ad_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "admin_app",
-        "label": "Admin Dashboard",
-        "status": ad_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 6) Landing content
-    t0 = time.perf_counter()
-    landing_status = "operational"
-    try:
-        await asyncio.wait_for(db.landing_content.estimated_document_count(), timeout=2.0)
-    except Exception:
-        landing_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "landing",
-        "label": "Marketing site",
-        "status": landing_status,
         "latency_ms": int((time.perf_counter() - t0) * 1000),
     })
 
