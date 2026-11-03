@@ -1710,31 +1710,33 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
+    <div className="fixed inset-0 z-50 bg-[#FF6B1A] flex flex-col px-3 sm:px-6"
       style={{
-        paddingTop: 'max(var(--kiosk-sat), 1rem)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1rem)',
-        /* Brand-georiënteerde overlay zodat in PWA-kiosk de home-indicator
-           gebied dezelfde oranje kleur houdt als de rest van de kiosk,
-           in plaats van een zwarte band. */
-        backgroundColor: 'rgba(199, 70, 0, 0.55)',
+        paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 96px)',
       }}
       data-testid="kiosk-history-modal">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] my-auto overflow-hidden flex flex-col">
-        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-              <ClockIcon className="w-4 h-4 text-orange-500" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900">Betalingsgeschiedenis</h3>
-              <p className="text-xs text-slate-500 truncate">Appt. {apartment?.number}</p>
-            </div>
+      <div className="flex items-center justify-between flex-wrap gap-2 py-2 shrink-0">
+        <button onClick={onClose} data-testid="history-close"
+          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
+          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
+        </button>
+        <span className="text-sm sm:text-base font-semibold text-white">Betalingsgeschiedenis</span>
+        <div className="text-right text-white hidden sm:block">
+          <p className="text-[10px] sm:text-xs opacity-70">Appt. {apartment?.number}</p>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
+        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+            <ClockIcon className="w-4 h-4 text-orange-500" />
           </div>
-          <button onClick={onClose} data-testid="history-close"
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-slate-900">Betalingen</h3>
+            <p className="text-xs text-slate-500 truncate">
+              {items ? `${items.length} betaling${items.length === 1 ? '' : 'en'}` : 'Laden…'}
+            </p>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3"
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
@@ -1797,10 +1799,6 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
               </div>
             </div>
           ))}
-        </div>
-        <div className="px-5 sm:px-6 py-3 border-t border-slate-100 shrink-0">
-          <button onClick={onClose}
-            className="w-full h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Sluiten</button>
         </div>
       </div>
     </div>
