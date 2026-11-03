@@ -558,6 +558,7 @@ async def lifespan(app: FastAPI):
         import asyncio as _aio4
         _aio4.create_task(_installment_reminder_loop())
         _aio4.create_task(_upcoming_invoice_reminder_loop())
+        _aio4.create_task(_power_enforce_loop())
 
     # Eenmalig/idempotent: facturen van reeds gearchiveerde huurders archiveren.
     try:
@@ -855,6 +856,30 @@ async def _overdue_push_loop():
         except Exception:
             pass
         await _aio.sleep(15 * 60)
+
+
+async def _power_notify_tenant(cid: str, tenant_id: str, text: str) -> None:
+    """Bericht (WhatsApp, anders SMS) naar de huurder over de stroom; faalt stil."""
+    try:
+        t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "phone": 1})
+        cfg = await get_company_section(cid, "twilio")
+        if t and t.get("phone") and cfg.get("enabled"):
+            await _twilio_send(cfg, "whatsapp" if cfg.get("whatsapp_number") else "sms", t["phone"], text)
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] huurder-bericht mislukt: {e}")
+
+
+async def _power_enforce_loop():
+    """Elke 10 minuten: stroom aankondigen/afsluiten bij achterstand en weer aanzetten na betaling."""
+    import asyncio as _aio
+    from routes import power as _power
+    await _aio.sleep(60)
+    while True:
+        try:
+            await _power.enforce_all(_company_overdue_tenants)
+        except Exception as e:  # noqa: BLE001
+            print(f"[power] loop error: {e}")
+        await _aio.sleep(10 * 60)
 
 
 app = FastAPI(title="Vastgoed Kiosk API", lifespan=lifespan)
@@ -18955,6 +18980,7 @@ _route_deps.send_saas_payment_email = _send_saas_payment_email
 _route_deps.get_eur_per_srd = _get_eur_per_srd
 _route_deps.ensure_open_invoice = _ensure_open_invoice_for_company
 _route_deps.notify_company_admins = _notify_company_admins
+_route_deps.notify_tenant_power = _power_notify_tenant
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
@@ -18964,6 +18990,8 @@ from routes import saas_stripe as _saas_stripe_routes  # noqa: E402
 app.include_router(_saas_stripe_routes.router, prefix="/api")
 from routes import company_stripe as _company_stripe_routes  # noqa: E402
 app.include_router(_company_stripe_routes.router, prefix="/api")
+from routes import power as _power_routes  # noqa: E402
+app.include_router(_power_routes.router, prefix="/api")
 
 # AI-assistent — aparte router met eigen /api/assistant/* endpoints
 from ai_assistant import router as _assistant_router  # noqa: E402
