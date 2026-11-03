@@ -10,7 +10,7 @@ import {
   Home as HomeIcon, Mail, Wallet, FileText,
   HelpCircle, Send, Check, ArrowRight, Banknote, Droplets, AlertCircle,
   QrCode, Smartphone, Clock as ClockIcon, Receipt, Hash, X, Printer,
-  Landmark, FileUp,
+  Landmark, FileUp, Search,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
@@ -392,14 +392,122 @@ function LoginView({ branding, onLoggedIn, prefill }) {
 
   const hasWebNfc = typeof window !== 'undefined' && 'NDEFReader' in window;
 
+  if (mode === 'pin') {
+    const q = search.trim().toLowerCase();
+    const list = (tenants || []).filter((t) => !q || t.name.toLowerCase().includes(q) || String(t.apartment).toLowerCase().includes(q));
+    const closeModal = () => { setSelected(null); setPin(''); setError(''); };
+    return (
+      <div className="min-h-full w-full flex flex-col" data-testid="tk-login">
+        <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            {branding?.logo_url ? (
+              <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-11 h-11 object-contain rounded-xl bg-white/95 p-1" />
+            ) : (
+              <HomeIcon className="w-9 h-9 text-white" strokeWidth={2.4} />
+            )}
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
+              {branding?.app_name || branding?.name || 'Huurder Kiosk'}
+            </h1>
+          </div>
+          <p className="hidden md:block flex-1 text-sm font-bold text-white/95 truncate">
+            {[branding?.address, 'Kies uw appartement'].filter(Boolean).join(' • ')}
+          </p>
+          <div className="flex-1 md:flex-none flex items-center gap-2 justify-end">
+            <label className="flex items-center gap-2 h-11 px-4 rounded-full bg-white text-[#FF5C00] font-extrabold text-sm w-full max-w-[240px]">
+              <Search className="w-4 h-4 shrink-0" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek huurder"
+                data-testid="tk-tenant-search"
+                className="w-full bg-transparent placeholder-[#FF5C00] focus:outline-none" />
+            </label>
+            <button onClick={() => { setMode('nfc'); setPin(''); setError(''); setHint(''); setSelected(null); }}
+              data-testid="tk-toggle-mode" title="Inloggen met NFC"
+              className="w-11 h-11 shrink-0 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center">
+              <Smartphone className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 sm:px-6 pb-6" data-testid="tk-tenant-list">
+          {tenants === null ? (
+            <Loader2 className="w-10 h-10 animate-spin text-white mx-auto mt-16" />
+          ) : !list.length ? (
+            <p className="text-center text-white/90 font-bold py-16" data-testid="tk-tenant-empty">
+              {tenants.length ? 'Geen huurder gevonden' : 'Nog geen huurders met PIN. Vraag de beheerder om een PIN in te stellen.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5">
+              {list.map((t) => (
+                <button key={t.id} onClick={() => { setSelected(t); setPin(''); setError(''); }}
+                  data-testid={`tk-tenant-${t.id}`}
+                  className="flex flex-col items-center gap-1 px-3 py-6 rounded-3xl bg-white shadow-lg active:scale-[0.98] transition">
+                  <span className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-2">
+                    {t.avatar_url ? (
+                      <img loading="lazy" src={resolveLogoUrl(t.avatar_url)} alt={t.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-10 h-10 text-[#FF5C00]" />
+                    )}
+                  </span>
+                  <span className="font-black text-2xl sm:text-3xl text-slate-900 uppercase tracking-tight">Huis {t.apartment || '—'}</span>
+                  <span className="flex items-center gap-1.5 text-sm sm:text-base font-semibold text-slate-700 max-w-full">
+                    <User className="w-4 h-4 shrink-0" /><span className="truncate">{t.name}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {selected && (
+            <motion.div key="pin-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto"
+              onClick={closeModal} data-testid="tk-pin-modal">
+              <motion.div initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm my-auto rounded-3xl bg-[#FF5C00] p-5 shadow-2xl flex flex-col items-center gap-3">
+                <button onClick={closeModal} aria-label="Sluiten" data-testid="tk-pin-close"
+                  className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center">
+                  <X className="w-5 h-5" />
+                </button>
+                <span className="w-20 h-20 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
+                  {selected.avatar_url ? (
+                    <img src={resolveLogoUrl(selected.avatar_url)} alt={selected.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-9 h-9 text-[#FF5C00]" />
+                  )}
+                </span>
+                <div className="text-center text-white" data-testid="tk-selected-tenant">
+                  <p className="font-black text-2xl uppercase leading-tight">Huis {selected.apartment || '—'}</p>
+                  <p className="font-semibold text-white/90">{selected.name}</p>
+                </div>
+                <p className="text-sm font-bold text-white/90">Voer uw PIN in</p>
+                <PinDots value={pin} error={!!error} />
+                {error && <p className="text-sm font-bold text-white bg-red-600/60 px-4 py-1.5 rounded-full" data-testid="tk-pin-error">{error}</p>}
+                <div className="w-full max-w-[260px]">
+                  <PinPad value={pin} busy={busy}
+                    onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
+                    onBack={() => setPin((p) => p.slice(0, -1))} />
+                </div>
+                <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
+                  className="text-xs font-bold text-white/85 hover:text-white underline underline-offset-4">
+                  PIN vergeten?
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {showForgot && <ForgotPinSheet branding={branding} onClose={() => setShowForgot(false)} />}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full w-full flex flex-col items-center justify-start sm:justify-center px-5 py-6 overflow-y-auto"
       data-testid="tk-login">
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className={`w-full flex flex-col items-center text-center ${mode === 'pin' && !selected ? 'max-w-6xl' : 'max-w-md'}`}>
-        {!(mode === 'pin' && !selected) && (<>
+        className="w-full flex flex-col items-center text-center max-w-md">
         {/* Logo */}
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5">
           {branding?.logo_url ? (
@@ -416,103 +524,9 @@ function LoginView({ branding, onLoggedIn, prefill }) {
           {welcome}
         </h1>
         <p className="text-sm text-white/85 mt-2 max-w-xs">
-          {branding?.tagline || (mode === 'pin' ? (selected ? 'Voer uw PIN in om in te loggen' : 'Kies uw appartement en log in met uw PIN') : 'Tik uw NFC-kaart om in te loggen')}
+          {branding?.tagline || 'Tik uw NFC-kaart om in te loggen'}
         </p>
-        </>)}
 
-        {mode === 'pin' ? (
-          <div className="w-full mt-2 flex flex-col items-center gap-4" data-testid="tk-pin-login">
-            {!selected ? (
-              <div className="w-full" data-testid="tk-tenant-list">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-5 text-left">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-white/95 flex items-center justify-center p-1.5 shrink-0">
-                      {branding?.logo_url ? (
-                        <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-full h-full object-contain" />
-                      ) : (
-                        <HomeIcon className="w-7 h-7 text-[#FF5C00]" strokeWidth={2.4} />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
-                        {branding?.app_name || branding?.name || 'Huurder Kiosk'}
-                      </h1>
-                      <p className="text-sm font-bold text-white/90">Kies uw appartement</p>
-                    </div>
-                  </div>
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zoek huurder"
-                    data-testid="tk-tenant-search"
-                    className="h-11 w-full sm:w-64 px-4 rounded-full bg-white text-slate-900 placeholder-slate-400 text-sm font-bold focus:outline-none" />
-                </div>
-                {tenants === null ? (
-                  <Loader2 className="w-8 h-8 animate-spin text-white mx-auto my-6" />
-                ) : (() => {
-                  const q = search.trim().toLowerCase();
-                  const list = tenants.filter((t) => !q || t.name.toLowerCase().includes(q) || String(t.apartment).toLowerCase().includes(q));
-                  if (!list.length) {
-                    return <p className="text-sm text-white/85 py-6" data-testid="tk-tenant-empty">
-                      {tenants.length ? 'Geen huurder gevonden' : 'Nog geen huurders met PIN. Vraag de beheerder om een PIN in te stellen.'}
-                    </p>;
-                  }
-                  return (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {list.map((t) => (
-                        <button key={t.id} onClick={() => { setSelected(t); setPin(''); setError(''); }}
-                          data-testid={`tk-tenant-${t.id}`}
-                          className="flex flex-col items-center gap-1 p-4 rounded-3xl bg-white shadow-[0_8px_0_rgba(0,0,0,0.08)] active:translate-y-[3px] transition">
-                          <span className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-1">
-                            {t.avatar_url ? (
-                              <img loading="lazy" src={resolveLogoUrl(t.avatar_url)} alt={t.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Building2 className="w-9 h-9 text-[#FF5C00]" />
-                            )}
-                          </span>
-                          <span className="font-black text-xl sm:text-2xl text-slate-900 uppercase tracking-tight">Huis {t.apartment || '—'}</span>
-                          <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 max-w-full">
-                            <User className="w-4 h-4 shrink-0" /><span className="truncate">{t.name}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <>
-                <div className="w-full flex flex-col items-center gap-1 bg-white rounded-3xl p-5 shadow-[0_8px_0_rgba(0,0,0,0.08)]" data-testid="tk-selected-tenant">
-                  <span className="w-20 h-20 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden">
-                    {selected.avatar_url ? (
-                      <img src={resolveLogoUrl(selected.avatar_url)} alt={selected.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Building2 className="w-9 h-9 text-[#FF5C00]" />
-                    )}
-                  </span>
-                  <span className="font-black text-2xl text-slate-900 uppercase">Huis {selected.apartment || '—'}</span>
-                  <span className="font-semibold text-slate-600">{selected.name}</span>
-                </div>
-                <p className="text-sm font-bold text-white/90">Voer uw PIN in</p>
-                <PinDots value={pin} error={!!error} />
-                {error && <p className="text-sm font-bold text-white bg-red-500/40 px-4 py-2 rounded-full" data-testid="tk-pin-error">{error}</p>}
-                <div className="w-full max-w-[300px]">
-                  <PinPad value={pin} busy={busy}
-                    onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
-                    onBack={() => setPin((p) => p.slice(0, -1))} />
-                </div>
-                <div className="flex items-center gap-5">
-                  <button onClick={() => { setSelected(null); setPin(''); setError(''); }} data-testid="tk-change-tenant"
-                    className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
-                    Andere huurder
-                  </button>
-                  <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
-                    className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
-                    PIN vergeten?
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (<>
-        {/* NFC TAP ZONE — grote pulserende cirkel met kaart-icoon */}
         <div className="relative mt-10 mb-4" data-testid="tk-nfc-tap-zone">
           {/* Pulserende ringen — visueel signaal dat de scanner ACTIEF luistert */}
           {!busy && !error && (
@@ -562,14 +576,11 @@ function LoginView({ branding, onLoggedIn, prefill }) {
             Houd uw kaart of telefoon tegen de scanner
           </p>
         )}
-        </>)}
-
-        <button onClick={() => { setMode((m) => (m === 'nfc' ? 'pin' : 'nfc')); setPin(''); setError(''); setHint(''); }}
+        <button onClick={() => { setMode('pin'); setError(''); setHint(''); }}
           data-testid="tk-toggle-mode"
           className="mt-6 px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-extrabold">
-          {mode === 'nfc' ? 'Inloggen met PIN' : 'Inloggen met NFC'}
+          Inloggen met PIN
         </button>
-        {showForgot && <ForgotPinSheet branding={branding} onClose={() => setShowForgot(false)} />}
 
         {/* Logout/back voor het geval iemand per ongeluk hier komt */}
         <button onClick={() => navigate('/')}
