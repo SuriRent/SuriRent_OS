@@ -4389,11 +4389,29 @@ function AddApartmentModal({ onClose, onSaved }) {
   const [number, setNumber] = useState('');
   const [rent, setRent] = useState('');
   const [currency, setCurrency] = useState('SRD');
-  const [description, setDescription] = useState('');
+  const [locationId, setLocationId] = useState(() => {
+    try { return sessionStorage.getItem('kiosk_sel_loc') || ''; } catch { return ''; }
+  });
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
+
+  useEffect(() => {
+    fetchKioskSelect()
+      .then((data) => {
+        const available = data.locations.filter((location) => location.id !== '_none');
+        setLocations(available);
+        setLocationId((current) => available.some((location) => location.id === current)
+          ? current
+          : available.length === 1 ? available[0].id : '');
+      })
+      .catch((e) => setErr(formatError(e)))
+      .finally(() => setLoadingLocations(false));
+  }, []);
 
   const save = async () => {
     const n = String(number || '').trim();
@@ -4402,8 +4420,7 @@ function AddApartmentModal({ onClose, onSaved }) {
     if (!r || r <= 0) { setErr('Huur bedrag moet groter dan 0 zijn'); return; }
     setSaving(true); setErr('');
     try {
-      const body = { number: n, rent_amount: r, currency };
-      if (description.trim()) body.description = description.trim();
+      const body = { number: n, rent_amount: r, currency, location_id: locationId || null, photo_url: photoUrl.trim() };
       const res = await api.post('/apartments', body);
       onSaved && onSaved(res?.data);
     } catch (e) { setErr(formatError(e)); }
@@ -4451,12 +4468,19 @@ function AddApartmentModal({ onClose, onSaved }) {
             </label>
           </div>
           <label className="block">
-            <span className={modalLabelCls}>Omschrijving (optioneel)</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)}
-              data-testid="add-apartment-description"
-              placeholder="Type / verdieping / kenmerk"
-              className={modalInputCls(accent)} />
+            <span className={modalLabelCls}>Locatie</span>
+            <select value={locationId} onChange={(e) => setLocationId(e.target.value)}
+              data-testid="add-apartment-location"
+              disabled={loadingLocations}
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">{loadingLocations ? 'Locaties laden…' : '— Geen locatie —'}</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>{location.name}{location.address ? ` · ${location.address}` : ''}</option>
+              ))}
+            </select>
           </label>
+          <PhotoUpload value={photoUrl} onChange={setPhotoUrl} label="Foto van het appartement"
+            height="h-36" showUrlField={false} capture="environment" testId="add-apartment-photo" />
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-apartment-error">
