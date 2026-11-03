@@ -987,21 +987,17 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2" data-testid="tk-pay-select">
-      <div className="flex items-center justify-between flex-wrap gap-2 py-2 pr-20 sm:pr-24">
-        <button onClick={onBack} data-testid="tk-payselect-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <span className="text-sm sm:text-base font-semibold text-white">Wat wilt u betalen?</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 py-3">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Wat wilt u betalen?</h2>
         <div className="text-right text-white hidden sm:block">
-          <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
-          {apt && <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>}
+          <p className="text-sm font-bold">{tenant.name}</p>
+          {apt && <p className="text-xs opacity-80">{apt.number}</p>}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2">
+      <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0 pb-2">
         {/* LEFT — items checklist */}
-        <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col min-w-0 p-2 sm:p-3">
+        <div className="bg-white rounded-3xl shadow-lg flex-1 md:flex-[3] flex flex-col min-w-0 p-3 sm:p-5">
           {(enabled.length > 1 || planInstallments.length > 0) && (
             <button onClick={selectAll} data-testid="tk-pay-select-all"
               className={`w-full flex items-center justify-between rounded-lg border-2 transition px-2.5 py-2 sm:px-3 sm:py-2.5 mb-1.5 ${
@@ -1107,7 +1103,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
           )}
 
           <button onClick={handleNext} disabled={!canProceed} data-testid="tk-payment-next-btn"
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-3 sm:py-3.5 mt-1.5 text-sm sm:text-base font-bold">
+            className="w-full bg-[#FF6B1A] hover:bg-[#F26A12] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-4 mt-2 text-base sm:text-xl font-black shadow-md">
             <span>Volgende — {fmt(activeAmount)}</span> <ArrowRight className="w-5 h-5" />
           </button>
 
@@ -1141,7 +1137,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
         </div>
 
         {/* RIGHT — Desktop keypad */}
-        <div className="bg-white rounded-2xl hidden md:flex flex-none md:flex-[2] flex-col min-w-0 p-4 sm:p-5">
+        <div className="bg-white rounded-3xl shadow-lg hidden md:flex flex-none md:flex-[2] flex-col min-w-0 p-4 sm:p-6">
           <h4 className="text-sm sm:text-base font-bold text-slate-900 mb-0.5">Bedrag invoeren</h4>
           <p className="text-xs text-slate-400 mb-3">Totaal openstaand: {fmt(totalDue)}</p>
           <div className={`border-2 rounded-lg transition px-3 py-3 mb-3 ${hasCustom ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}`}>
@@ -1168,45 +1164,33 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 // =====================================================================
 // PAY METHOD — Bankoverschrijving
 // =====================================================================
-function TenantPayMethod({ payload, overview, onBack, onConfirm }) {
-  const { tenant, apartment: apt } = overview;
+function TenantPayMethod({ payload, onConfirm }) {
   const cur = payload.currency || 'SRD';
   const methods = [
     { v: 'bank', l: 'Bankoverschrijving', sub: 'Upload bankafschrift', icon: Landmark, accent: 'sky' },
   ];
   return (
     <div className="h-full flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }} data-testid="tk-pay-method">
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
-        <button onClick={onBack} data-testid="tk-method-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
-          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <span className="text-sm sm:text-base font-semibold text-white">
-          Hoe wilt u betalen? <span className="ml-2 opacity-80">{fmtMoney(payload.amount, cur)}</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-3">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Hoe wilt u betalen?</h2>
+        <span className="bg-white text-[#F26A12] font-black text-lg sm:text-2xl rounded-2xl px-4 py-1.5 shadow-md" data-testid="tk-method-amount">
+          {fmtMoney(payload.amount, cur)}
         </span>
-        <div className="text-right text-white">
-          <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
-          {apt && <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>}
-        </div>
       </div>
       <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-4xl w-full px-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl w-full px-2">
           {methods.map((m) => {
             const Icon = m.icon;
             return (
               <button key={m.v} onClick={() => onConfirm({ ...payload, method: m.v })}
                 data-testid={`tk-method-${m.v}`}
-                className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl">
-                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mb-0 sm:mb-4 ${
-                  m.accent === 'emerald' ? 'bg-emerald-100 text-emerald-600'
-                    : m.accent === 'sky' ? 'bg-sky-100 text-sky-600'
-                    : 'bg-red-100 text-red-600'
-                }`}>
-                  <Icon className="w-7 h-7 sm:w-10 sm:h-10" />
+                className="bg-white rounded-3xl p-5 sm:p-8 flex items-center gap-5 text-left hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 rounded-3xl flex items-center justify-center bg-[#FFF1E8] text-[#F26A12]">
+                  <Icon className="w-9 h-9 sm:w-14 sm:h-14" strokeWidth={1.8} />
                 </div>
-                <div className="sm:text-center">
-                  <p className="text-base sm:text-xl font-extrabold text-slate-900">{m.l}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{m.sub}</p>
+                <div>
+                  <p className="text-xl sm:text-3xl font-black text-slate-900">{m.l}</p>
+                  <p className="text-sm sm:text-base text-slate-500 mt-1">{m.sub}</p>
                 </div>
               </button>
             );
