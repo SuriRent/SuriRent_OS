@@ -3579,7 +3579,9 @@ async def upload_landing_asset(file: UploadFile = File(...),
         raw = await file.read(max_bytes + 1)
         if len(raw) > MAX_LANDING_ASSET_BYTES:
             raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
-        raw, ctype = _to_webp_bytes(raw, ctype)
+        # Preserve the uploaded bytes so screenshots and fine text are not
+        # softened by lossy WebP conversion. The 5 MB source limit also keeps
+        # the Base64-encoded MongoDB document within its size limit.
         asset["content_type"] = ctype
         asset["size"] = len(raw)
         asset["data_b64"] = base64.b64encode(raw).decode("ascii")
