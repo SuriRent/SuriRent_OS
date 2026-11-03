@@ -213,7 +213,7 @@ function SetupPinView({ branding, tenantSetup, onSetupComplete }) {
 
 
 // =====================================================================
-// LOGIN view — NFC-only (PIN flow is verwijderd op verzoek van de eigenaar).
+// LOGIN view — NFC of 4-cijferige PIN.
 // Werkt via 3 input-bronnen:
 //   1. Web NFC API (Android Chrome) — built-in NFC chip via NDEFReader
 //   2. USB HID NFC-lezer (keyboard emulation) — rapid burst + Enter
@@ -225,6 +225,9 @@ function LoginView({ branding, onLoggedIn, prefill }) {
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [lastUid, setLastUid] = useState('');
+  const [mode, setMode] = useState('nfc');
+  const [pin, setPin] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
   // refs voor handleScan deps zonder rerender storm
   const busyRef = useRef(false);
   const navigate = useBrandedNavigate();
@@ -262,6 +265,35 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       setBusy(false);
     }
   }, [branding?.id, branding?.slug, onLoggedIn]);
+
+  const submitPin = useCallback(async (code) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError('');
+    setHint('');
+    try {
+      const payload = { pin: code };
+      if (branding?.id) payload.company_id = branding.id;
+      else if (branding?.slug) payload.company_slug = branding.slug;
+      else throw new Error('Geen bedrijfscontext gevonden — open de Huurder Kiosk via de QR-code.');
+      const { data } = await api.post('/tenant-portal/pin-login', payload);
+      localStorage.setItem(TENANT_TOKEN_KEY, data.token);
+      try { playSuccessPing(); } catch { /* noop */ }
+      onLoggedIn();
+    } catch (e) {
+      try { playErrorBuzz(); } catch { /* noop */ }
+      setError(e?.response?.status === 401 ? 'Onjuiste PIN' : (formatError(e) || 'Inloggen met PIN mislukt'));
+      setTimeout(() => setPin(''), 700);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [branding?.id, branding?.slug, onLoggedIn]);
+
+  useEffect(() => {
+    if (mode === 'pin' && pin.length === PIN_LENGTH) submitPin(pin);
+  }, [mode, pin, submitPin]);
 
   // === URL-tag NFC (iOS Safari + universele fallback) ===
   // Een NFC-tag geprogrammeerd met `https://<host>/kiosk/huurder?nfc=<UID>`
@@ -370,9 +402,22 @@ function LoginView({ branding, onLoggedIn, prefill }) {
           {welcome}
         </h1>
         <p className="text-sm text-white/85 mt-2 max-w-xs">
-          {branding?.tagline || 'Tik uw NFC-kaart om in te loggen'}
+          {branding?.tagline || (mode === 'pin' ? 'Voer uw PIN in om in te loggen' : 'Tik uw NFC-kaart om in te loggen')}
         </p>
 
+        {mode === 'pin' ? (
+          <div className="w-full mt-8 flex flex-col items-center gap-6" data-testid="tk-pin-login">
+            <PinDots value={pin} error={!!error} />
+            {error && <p className="text-sm font-bold text-white bg-red-500/40 px-4 py-2 rounded-full" data-testid="tk-pin-error">{error}</p>}
+            <PinPad value={pin} busy={busy}
+              onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
+              onBack={() => setPin((p) => p.slice(0, -1))} />
+            <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
+              className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-4">
+              PIN vergeten?
+            </button>
+          </div>
+        ) : (<>
         {/* NFC TAP ZONE — grote pulserende cirkel met kaart-icoon */}
         <div className="relative mt-10 mb-4" data-testid="tk-nfc-tap-zone">
           {/* Pulserende ringen — visueel signaal dat de scanner ACTIEF luistert */}
@@ -423,6 +468,14 @@ function LoginView({ branding, onLoggedIn, prefill }) {
             Houd uw kaart of telefoon tegen de scanner
           </p>
         )}
+        </>)}
+
+        <button onClick={() => { setMode((m) => (m === 'nfc' ? 'pin' : 'nfc')); setPin(''); setError(''); setHint(''); }}
+          data-testid="tk-toggle-mode"
+          className="mt-6 px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-extrabold">
+          {mode === 'nfc' ? 'Inloggen met PIN' : 'Inloggen met NFC'}
+        </button>
+        {showForgot && <ForgotPinSheet branding={branding} onClose={() => setShowForgot(false)} />}
 
         {/* Logout/back voor het geval iemand per ongeluk hier komt */}
         <button onClick={() => navigate('/')}
