@@ -124,6 +124,8 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
     if user.get("disabled") or user.get("role") == "kiosk":
         raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
+    if payload.get("staff"):
+        user["staff"] = True
     # Impersonation context carried via JWT payload
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
@@ -1673,7 +1675,8 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
         c = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
         ktoken = create_token({"sub": "kiosk", "type": "kiosk", "company_id": cid}, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, ktoken, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        return {"kiosk": True, "token": ktoken, "company": c,
+        staff = await _staff_admin_token(cid, response) or {}
+        return {"kiosk": True, "token": ktoken, "company": c, "admin_token": staff.get("admin_token"),
                 "employee": {"id": emp.get("id"), "name": emp.get("name") or u.get("name", ""), "pin": pin},
                 "user": {"email": u["email"], "name": u.get("name", ""), "role": "kiosk"}}
     token = create_token({
@@ -6323,6 +6326,24 @@ async def admin_open_kiosk(
     }
 
 
+async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
+    """Beheer-token voor een kiosk-medewerker: werkt als de eigenaar van het bedrijf,
+    gemarkeerd met staff=True zodat de kiosk de Instellingen verbergt."""
+    u = await db.users.find_one(
+        {"company_id": cid, "role": {"$in": ["admin", "owner"]}, "disabled": {"$ne": True}},
+        {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1, "company_id": 1},
+        sort=[("created_at", 1)],
+    )
+    if not u:
+        return None
+    atoken = create_token({
+        "sub": u["id"], "email": u["email"], "type": "access", "staff": True,
+        "company_id": u.get("company_id"), "role": u.get("role", "admin"),
+    }, ACCESS_MIN)
+    _set_access_cookie(response, atoken)
+    return {"admin_token": atoken}
+
+
 @api.post("/auth/kiosk-pin")
 async def kiosk_pin(body: PinIn, request: Request, response: Response):
     """Verifieer een PIN binnen de SCOPE van één bedrijf.
@@ -6388,10 +6409,11 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             "sub": "kiosk", "type": "kiosk", "company_id": cid,
         }, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
+        staff = await _staff_admin_token(cid, response) or {}
         return {
             "token": token,
             "company": c and {k: c[k] for k in ("id", "slug", "name")},
-            "admin_token": None,
+            "admin_token": staff.get("admin_token"),
             "admin_user": None,
             "employee": {
                 "id": matched_emp["id"],

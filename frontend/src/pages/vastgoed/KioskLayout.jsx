@@ -299,11 +299,15 @@ function useMenuReopen(name, setOpen) {
   }, [name, setOpen]);
 }
 
+function isStaffSession() {
+  try { return localStorage.getItem('kiosk_staff') === '1'; } catch { return false; }
+}
+
 function useAdminRole(isAdmin) {
   const [role, setRole] = useState(null);
   useEffect(() => {
     if (!isAdmin) return;
-    api.get('/auth/me').then((r) => setRole(r?.data?.role || null)).catch(() => {});
+    api.get('/auth/me').then((r) => setRole(r?.data?.staff ? 'staff' : (r?.data?.role || null))).catch(() => {});
   }, [isAdmin]);
   return role;
 }
@@ -312,7 +316,7 @@ function useAdminRole(isAdmin) {
 function KioskBell() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const role = useAdminRole(isAdmin);
-  if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin') return null;
+  if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin' || role === 'staff') return null;
   return (
     <div className="kiosk-bell shrink-0" data-testid="kiosk-subscription-bell">
       <SubscriptionBell compact backPath="/kiosk" onOpenSub={() => navAdmin('inst-abonnement')} />
@@ -327,7 +331,7 @@ function KioskSettingsMenu() {
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
-  if (!isAdmin || !role || role === 'boekhouder') return null;
+  if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
   const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
@@ -351,10 +355,11 @@ function KioskAdminMenu() {
   if (!isAdmin) return null;
   const items = [
     ...Object.keys(KIOSK_ADMIN_PAGES)
+      .filter((id) => id !== 'instellingen')
       .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
       .map((id) => ({
         id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
-        testid: `kiosk-admin-menu-${id}`, className: id === 'instellingen' ? 'md:hidden' : '',
+        testid: `kiosk-admin-menu-${id}`,
         onClick: () => navAdmin(id, 'admin'),
       })),
     ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
@@ -4980,10 +4985,10 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
             className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
             <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
           </button>
-          {hasAdminAccess ? (
-            <button onClick={() => onPick('admin')} data-testid="kiosk-tile-admin"
+          {hasAdminAccess && !isStaffSession() ? (
+            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings"
               className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
-              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Beheerder
+              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Instellingen
             </button>
           ) : <span />}
           <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
@@ -5104,6 +5109,7 @@ export default function KioskLayout() {
       else if (key === 'kasgeld') setStep('kasgeld');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
+      else if (key === 'settings') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' }));
       else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
