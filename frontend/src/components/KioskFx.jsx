@@ -1,5 +1,41 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight, Search, X } from 'lucide-react';
+import { api } from '../lib/api';
+
+// Eén gedeelde huurderslijst (foto's komen uit Huurders) voor alle beheerpagina's.
+let tenantPhotoCache = null;
+let tenantPhotoPromise = null;
+function loadTenantPhotos() {
+  if (tenantPhotoCache) return Promise.resolve(tenantPhotoCache);
+  if (!tenantPhotoPromise) {
+    tenantPhotoPromise = api.get('/tenants').then(({ data }) => {
+      const map = {};
+      (data || []).forEach((t) => { map[t.id] = { name: t.name, photo: t.avatar_url || t.id_photo_url || '' }; });
+      tenantPhotoCache = map;
+      return map;
+    }).catch(() => { tenantPhotoPromise = null; return {}; });
+  }
+  return tenantPhotoPromise;
+}
+
+export function TenantPhoto({ tenantId, name, size = 40 }) {
+  const [map, setMap] = useState(tenantPhotoCache || {});
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadTenantPhotos().then((m) => { if (alive) setMap(m); });
+    return () => { alive = false; };
+  }, []);
+  const info = map[tenantId] || {};
+  const src = info.photo && !/^https?:/.test(info.photo) ? `${process.env.REACT_APP_BACKEND_URL}${info.photo}` : info.photo;
+  const ini = (name || info.name || '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <span className="shrink-0 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center text-[#FF5C00] font-black"
+      style={{ width: size, height: size, fontSize: size * 0.38 }} data-testid="tenant-photo">
+      {src && !bad ? <img src={src} alt="" className="w-full h-full object-cover" onError={() => setBad(true)} /> : ini}
+    </span>
+  );
+}
 
 // Bouwstenen in exact dezelfde opmaak als de Kiosk Facturen-popup.
 export const KioskFxCtx = createContext(false);
@@ -45,7 +81,7 @@ export function FxSearch({ value, onChange, placeholder, testId }) {
 }
 
 // Lijst-rij: naam / sub / meta links, bedrag + status rechts, chevron.
-export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId }) {
+export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId, tenantId }) {
   const Tag = actions ? 'div' : 'button';
   const extra = actions
     ? { role: onClick ? 'button' : undefined, tabIndex: onClick ? 0 : undefined, onKeyDown: (e) => { if (e.key === 'Enter' && onClick) onClick(); } }
@@ -53,6 +89,7 @@ export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, 
   return (
     <Tag onClick={onClick} data-testid={testId} {...extra}
       className={`w-full text-left rounded-xl border border-slate-200 ${onClick ? 'hover:border-orange-300 cursor-pointer' : ''} px-4 py-3 flex ${actions ? 'flex-wrap sm:flex-nowrap' : ''} items-center justify-between gap-x-3 gap-y-2 transition-colors bg-white`}>
+      {tenantId && <TenantPhoto tenantId={tenantId} name={typeof title === 'string' ? title : ''} size={40} />}
       <div className="min-w-0 flex-1">
         <div className="text-sm font-black text-slate-900 truncate">{title}</div>
         {sub && <div className="text-xs text-slate-500 truncate">{sub}</div>}

@@ -300,7 +300,7 @@ export default function Deposits({ embedded = false }) {
               const st = DEPOSIT_STATUS[d.status] || DEPOSIT_STATUS.held;
               const meta = d.status !== 'held' && d.amount_due > 0 ? `Nog te betalen: ${fmtMoney(d.amount_due, d.currency)}`
                 : d.status !== 'held' && d.refund_amount != null ? `Terugbetaald: ${fmtMoney(d.refund_amount, d.currency)}` : d.receipt_no || undefined;
-              return <FxRow key={d.id} testId={`dep-row-${d.id}`} onClick={() => setDetail(d)} title={d.tenant_name}
+              return <FxRow key={d.id} testId={`dep-row-${d.id}`} tenantId={d.tenant_id} onClick={() => setDetail(d)} title={d.tenant_name}
                 sub={d.apartment_number ? `Appt. ${d.apartment_number}` : 'Geen appartement'} meta={meta}
                 amount={fmtMoney(d.amount, d.currency)} status={st.label} tone={TONE[d.status] || 'orange'} />;
             })}

@@ -255,7 +255,7 @@ export default function Contracts({ embedded = false }) {
         <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder, contract of appartement…" testId="contract-search" />
         {!loaded ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen contracten gevonden." testId="contracts-empty" /> : rows.map((c) => {
           const signed = !!c.signed_at;
-          return <FxRow key={c.id} testId={`contract-row-${c.id}`} title={c.tenant_name || 'Onbekende huurder'}
+          return <FxRow key={c.id} testId={`contract-row-${c.id}`} tenantId={c.tenant_id} title={c.tenant_name || 'Onbekende huurder'}
             sub={[c.contract_number, `Appt. ${c.apartment_number || '—'}`].filter(Boolean).join(' · ')}
             meta={c.start_date ? `${c.start_date}${c.end_date ? ` → ${c.end_date}` : ''}` : undefined}
             status={signed ? 'Ondertekend' : 'Concept'} tone={signed ? 'green' : 'amber'}

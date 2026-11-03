@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { FxStats, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
+import { FxStats, FxSearch, FxRow, FxEmpty, TenantPhoto } from '../../../components/KioskFx';
 import { hostConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
@@ -21,17 +21,6 @@ import { playApproveConfirm, playErrorBuzz, playSwoosh } from '../../../lib/tap-
 // =====================================================================
 // Helpers
 // =====================================================================
-function initials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-function avatarColor(name) {
-  let h = 0;
-  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
-  return { bg: `hsl(${h}, 65%, 92%)`, fg: `hsl(${h}, 45%, 35%)` };
-}
 function fmtAmount(value, currency) {
   return fmtMoney(value, currency).replace(currency, '').trim();
 }
@@ -107,14 +96,10 @@ const METHOD_PILL_CLASSES = {
 // "Goedkeuren" knop ipv expand. Bedrag in oranje (waarschuwing kleur).
 // =====================================================================
 function PendingPaymentCard({ p, onApprove }) {
-  const avatar = avatarColor(p.tenant_name);
   return (
     <div data-testid={`pending-card-${p.id}`}
       className="bg-white rounded-2xl border border-amber-100 shadow-[0_1px_3px_-1px_rgba(245,158,11,0.15)] p-3 flex items-center gap-3 min-w-0">
-      <div className="rounded-full flex items-center justify-center font-black shrink-0 shadow-[0_1px_3px_-1px_rgba(0,0,0,0.10)]"
-        style={{ background: avatar.bg, color: avatar.fg, width: 42, height: 42, fontSize: 14 }}>
-        {initials(p.tenant_name)}
-      </div>
+      <TenantPhoto tenantId={p.tenant_id} name={p.tenant_name} size={42} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-extrabold text-slate-900 leading-tight truncate text-[15px]">
@@ -310,7 +295,6 @@ export function ApprovePaymentSheet({ payment, onCancel, onApproved, modalClassN
 // Mobile-only (phone) views — geinspireerd op POS-terminal screenshot
 // =====================================================================
 function MobilePaymentCard({ p, onClick }) {
-  const avatar = avatarColor(p.tenant_name);
   // Op verzoek gebruiker (2026-02): appartement als hoofdtitel, huurder
   // als groene badge. Sub-lijn toont locatie + methode-pill onderaan.
   const aptTitle = p.apartment_number;
@@ -324,14 +308,7 @@ function MobilePaymentCard({ p, onClick }) {
         padding: 'clamp(11px, 3.4vw, 16px) clamp(13px, 3.8vw, 18px)',
       }}>
       <div className="flex items-center gap-3 min-w-0">
-        <div className="rounded-full flex items-center justify-center font-black shrink-0 shadow-[0_1px_3px_-1px_rgba(0,0,0,0.10)]"
-          style={{
-            background: avatar.bg, color: avatar.fg,
-            width: 'clamp(42px, 11vw, 52px)', height: 'clamp(42px, 11vw, 52px)',
-            fontSize: 'clamp(14px, 3.8vw, 17px)',
-          }}>
-          {initials(p.tenant_name)}
-        </div>
+        <TenantPhoto tenantId={p.tenant_id} name={p.tenant_name} size={48} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-extrabold text-slate-900 leading-tight truncate"
@@ -1123,7 +1100,7 @@ export default function Payments({ embedded = false }) {
           </div>
           <FxSearch value={search} onChange={setSearch} placeholder="Zoek huurder, kwitantie of appartement…" testId="payment-search" />
           {pending.map((p) => (
-            <FxRow key={p.id} testId={`pending-card-${p.id}`} onClick={() => setApproveFor(p)} title={p.tenant_name || 'Onbekende huurder'}
+            <FxRow key={p.id} testId={`pending-card-${p.id}`} tenantId={p.tenant_id} onClick={() => setApproveFor(p)} title={p.tenant_name || 'Onbekende huurder'}
               sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
               meta={p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : undefined}
               amount={fmtMoney(p.amount, p.currency)} status="Te keuren" tone="amber" />
@@ -1131,7 +1108,7 @@ export default function Payments({ embedded = false }) {
           {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div>
             : filteredItems.length === 0 ? <FxEmpty text={totalCount === 0 ? 'Nog geen betalingen.' : 'Geen betalingen gevonden.'} testId="payments-empty" />
             : filteredItems.map((p) => (
-              <FxRow key={p.id} testId={`payment-row-${p.id}`} onClick={() => setDetailPayment(p)} title={p.tenant_name || 'Onbekende huurder'}
+              <FxRow key={p.id} testId={`payment-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetailPayment(p)} title={p.tenant_name || 'Onbekende huurder'}
                 sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
                 meta={`${p.paid_at ? new Date(p.paid_at).toLocaleDateString('nl-NL') : ''}${p.method ? ` · ${METHOD_LABELS[p.method] || p.method}` : ''}`}
                 amount={fmtMoney(p.amount, p.currency)} status={CATEGORY_LABELS[p.category] || 'Betaald'} tone="green" />

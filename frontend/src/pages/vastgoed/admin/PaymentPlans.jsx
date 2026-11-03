@@ -100,7 +100,7 @@ export default function PaymentPlans({ embedded = false }) {
         {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
         {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen betalingsregelingen gevonden." testId="plans-empty" /> : rows.map((p) => {
           const [l, tone] = ST[p.status] || [p.status, 'slate'];
-          return <FxRow key={p.id} testId={`plan-row-${p.id}`} onClick={() => setDetail(p)} title={p.tenant_name || 'Onbekende huurder'}
+          return <FxRow key={p.id} testId={`plan-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetail(p)} title={p.tenant_name || 'Onbekende huurder'}
             sub={`${p.apartment_number ? `Appt. ${p.apartment_number} · ` : ''}${p.installments.length} termijnen`}
             meta={`${fmtMoney(p.paid_amount, p.currency)} van ${fmtMoney(p.total_amount, p.currency)} betaald${p.overdue_count > 0 ? ` · ${p.overdue_count} achterstallig` : ''}`}
             amount={fmtMoney(p.remaining_amount, p.currency)} status={p.overdue_count > 0 && p.status === 'active' ? `${p.overdue_count} achter` : l}

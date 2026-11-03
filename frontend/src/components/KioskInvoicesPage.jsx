@@ -8,6 +8,7 @@ import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpe
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
+import { TenantPhoto } from './KioskFx';
 
 const CARD = 'bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(120,40,0,0.45)] flex flex-col min-h-0 overflow-hidden';
 const TABS = [
@@ -48,6 +49,7 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
       <button type="button" onClick={() => onOpen(g)} className="text-left pl-5 pr-4 pt-4 pb-3 flex-1 flex flex-col justify-start hover:bg-orange-50/40 transition-colors"
         data-testid={`kiosk-inv-open-${g.tenant_id}`}>
         <div className="flex items-start gap-2">
+          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
           <div className="min-w-0 flex-1">
             <p className="text-lg font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
             <p className="text-sm font-bold text-slate-700 truncate">{g.tenant_name}</p>
