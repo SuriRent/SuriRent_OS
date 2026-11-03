@@ -39,7 +39,7 @@ const defaultConfig = {
   revalidateOnFocus: false,      // was: true — te agressief, veroorzaakte flikker
   revalidateOnReconnect: true,
   revalidateIfStale: false,      // cache is goed genoeg tot expliciete mutate()
-  revalidateOnMount: undefined,  // laat SWR zelf beslissen (skip als cache present)
+  revalidateOnMount: true,       // cached data direct tonen en op elk schermbezoek vers ophalen
   dedupingInterval: 500,         // 500ms — laat SSE-driven refetches instant door
   focusThrottleInterval: 60000,
   keepPreviousData: true,        // vorige data blijft zichtbaar tijdens fetch

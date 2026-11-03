@@ -52,6 +52,21 @@ const noop = () => {};
 
 prefetchKioskSelect();
 
+function useKioskLiveRefresh(refresh) {
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+  useEffect(() => {
+    const onChange = () => refreshRef.current();
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+}
+
 // Hook: tracked `visualViewport` (iOS/Android). Retourneert de huidige
 // hoogte + offsetTop van de VISUELE viewport (het gebied dat niet door
 // het toetsenbord wordt bedekt). Modals die deze waardes als `top` +
@@ -464,13 +479,24 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
   const [linkApt, setLinkApt] = useState(null);
-  const reloadSelect = () => {
+  const reloadSelect = useCallback(() => {
     invalidateKioskSelect();
     fetchKioskSelect().then((d) => {
       setApartments(d.apartments);
       setLocations(d.locations.filter((l) => l.id !== '_none'));
     }).catch(() => {});
-  };
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => reloadSelect();
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('surirent:live-change', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reloadSelect]);
 
   useEffect(() => {
     fetchKioskSelect().then((d) => {
@@ -744,12 +770,12 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
       if (!sc.name && !sc.id_number) setErr('ID-kaart niet goed gelezen — vul de gegevens zelf in of scan opnieuw.');
     } catch (e) { setErr(formatError(e)); } finally { setScanning(false); if (scanRef.current) scanRef.current.value = ''; }
   };
-  useEffect(() => {
-    api.get('/kiosk/tenants/unassigned').then((r) => {
+  const loadUnassigned = useCallback(() => api.get('/kiosk/tenants/unassigned').then((r) => {
       setList(r.data || []);
       if (!(r.data || []).length) setTab('new');
-    }).catch((e) => { setList([]); setErr(formatError(e)); });
-  }, []);
+    }).catch((e) => { setList([]); setErr(formatError(e)); }), []);
+  useEffect(() => { loadUnassigned(); }, [loadUnassigned]);
+  useKioskLiveRefresh(loadUnassigned);
   const shown = (list || []).filter((t) => !q || `${t.name} ${t.phone || ''} ${t.id_number || ''}`.toLowerCase().includes(q.toLowerCase()));
   const canSave = tab === 'existing' ? !!pick : f.name.trim().length > 1;
   const save = async () => {
@@ -1001,13 +1027,13 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
 function NotesButton({ tenantId, tenantName }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(null);
-  useEffect(() => {
-    let mounted = true;
+  const loadCount = useCallback(() => {
     api.get(`/kiosk/tenants/${tenantId}/notes`)
-      .then((r) => { if (mounted) setCount((r.data || []).length); })
-      .catch(() => { if (mounted) setCount(0); });
-    return () => { mounted = false; };
+      .then((r) => setCount((r.data || []).length))
+      .catch(() => setCount(0));
   }, [tenantId]);
+  useEffect(() => { loadCount(); }, [loadCount]);
+  useKioskLiveRefresh(loadCount);
   return (
     <>
       <button onClick={() => setOpen(true)} data-testid="overview-notes-btn"
@@ -1047,6 +1073,7 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
   }, [tenantId, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
+  useKioskLiveRefresh(load);
 
   const add = async () => {
     const t = text.trim();
@@ -1183,7 +1210,9 @@ function prefetchOverview(tid) {
   _ovPrefetch.set(tid, { p: fetchOverview(tid), at: Date.now() });
 }
 // Betaling via beheer → prefetch-cache weg, zodat de kiosk vers ophaalt.
-window.addEventListener('kiosk-overview-invalidate', () => _ovPrefetch.clear());
+const clearOverviewPrefetch = () => _ovPrefetch.clear();
+window.addEventListener('kiosk-overview-invalidate', clearOverviewPrefetch);
+window.addEventListener('surirent:live-change', clearOverviewPrefetch);
 function takeOverview(tid) {
   const hit = _ovPrefetch.get(tid);
   _ovPrefetch.delete(tid);
@@ -1236,6 +1265,16 @@ function TenantOverview({ apartment, onBack, onPay }) {
     window.addEventListener('kiosk-overview-invalidate', onInv);
     return () => window.removeEventListener('kiosk-overview-invalidate', onInv);
   }, [reload, apartment?.tenant_id]);
+  useEffect(() => {
+    const onChange = () => reload(true);
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reload]);
 
   if (loading) return <div className="h-full bg-orange-500 flex items-center justify-center"><Loader2 className="w-10 h-10 text-white animate-spin" /></div>;
   if (err || !data) return <div className="h-full bg-orange-500 flex items-center justify-center text-white p-8">{err || 'Geen data'}</div>;
@@ -1623,10 +1662,21 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   const [waState, setWaState] = useState({});
   // Voorkomt dubbele afdruk/whatsapp-taps op dezelfde payment.
   const [busy, setBusy] = useState({});
-  useEffect(() => {
+  const loadPayments = useCallback(() => {
     api.get(`/kiosk/tenants/${tenant.id}/payments`)
-      .then((r) => setItems(r.data)).catch((e) => setErr(formatError(e)));
+      .then((r) => { setItems(r.data); setErr(''); }).catch((e) => setErr(formatError(e)));
   }, [tenant.id]);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+  useEffect(() => {
+    const onChange = () => loadPayments();
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadPayments]);
 
   // Stille afdruk: haal de PDF als blob op via de authenticated axios
   // client (window.open naar /api/... werkt niet altijd in de kiosk-PWA
@@ -1870,8 +1920,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planSuccess, setPlanSuccess] = useState(null);  // {id, num_installments, total_amount}
 
-  useEffect(() => {
-    api.get(`/kiosk/tenants/${tenant.id}/payment-plans`)
+  const loadPaymentPlans = useCallback(() => api.get(`/kiosk/tenants/${tenant.id}/payment-plans`)
       .then((r) => {
         const out = [];
         const linked = new Set();
@@ -1892,8 +1941,9 @@ function PaySelect({ overview, onBack, onConfirm }) {
         setPlanInstallments(out);
         setPlanLinkedInvIds(linked);
       })
-      .catch(() => { setPlanInstallments([]); setPlanLinkedInvIds(new Set()); });
-  }, [tenant.id]);
+      .catch(() => { setPlanInstallments([]); setPlanLinkedInvIds(new Set()); }), [tenant.id]);
+  useEffect(() => { loadPaymentPlans(); }, [loadPaymentPlans]);
+  useKioskLiveRefresh(loadPaymentPlans);
 
   const planItemKey = (it) => `plan:${it.planId}:${it.seq}`;
   const invItemKey = (inv) => `inv:${inv.id}`;
@@ -3282,8 +3332,9 @@ function KasgeldPanel({ onBack }) {
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
   const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
 
-  const load = useCallback(async () => {
-    setLoading(true); setErr('');
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    setErr('');
     try {
       const [b, l] = await Promise.all([
         api.get('/kiosk/kasgeld/balance'),
@@ -3296,6 +3347,16 @@ function KasgeldPanel({ onBack }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const onChange = () => load({ quiet: true });
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
 
   // Groepeer alle mutations per YYYY-MM, nieuwste maand eerst.
   const monthGroups = useMemo(() => {
@@ -4159,16 +4220,13 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
   // ziet de beheerder alleen tekst en niet de originele scan.
   const [scannedIdFile, setScannedIdFile] = useState(null);
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/apartments').then((r) => {
-      if (!alive) return;
+  const loadApartments = useCallback(() => api.get('/apartments').then((r) => {
       const list = Array.isArray(r?.data) ? r.data : [];
       // Alleen vrije appartementen aanbieden
       setApartments(list.filter((a) => a.status === 'vacant'));
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+    }).catch(() => {}), []);
+  useEffect(() => { loadApartments(); }, [loadApartments]);
+  useKioskLiveRefresh(loadApartments);
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
@@ -4647,15 +4705,12 @@ function AddContractModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    Promise.all([api.get('/tenants'), api.get('/apartments')]).then(([tr, ar]) => {
-      if (!alive) return;
+  const loadTenantAndApartments = useCallback(() => Promise.all([api.get('/tenants'), api.get('/apartments')]).then(([tr, ar]) => {
       setTenants(Array.isArray(tr?.data) ? tr.data : []);
       setApartments(Array.isArray(ar?.data) ? ar.data : []);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+    }).catch(() => {}), []);
+  useEffect(() => { loadTenantAndApartments(); }, [loadTenantAndApartments]);
+  useKioskLiveRefresh(loadTenantAndApartments);
 
   useEffect(() => {
     let alive = true;
@@ -4777,7 +4832,9 @@ function AddContractModal({ onClose, onSaved }) {
 // Nieuwe factuur vanuit de menubalk — zelfde formulier als beheer (incl. Historische achterstand).
 function KioskInvoiceFormModal({ onClose, onSaved }) {
   const [tenants, setTenants] = useState([]);
-  useEffect(() => { api.get('/tenants').then((r) => setTenants(Array.isArray(r?.data) ? r.data : [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => api.get('/tenants').then((r) => setTenants(Array.isArray(r?.data) ? r.data : [])).catch(() => {}), []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useKioskLiveRefresh(loadTenants);
   return (
     <KioskModalShell title="Facturen" Icon={Receipt} testId="add-invoice" onClose={onClose}>
       <InvoiceForm inline tenants={tenants} onCancel={onClose} onSaved={onSaved} />
@@ -4793,15 +4850,12 @@ function PaymentsViewerModal({ onClose }) {
   const [payments, setPayments] = useState([]);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/payments', { params: { limit: 50 } }).then((r) => {
-      if (!alive) return;
+  const loadPayments = useCallback(() => api.get('/payments', { params: { limit: 50 } }).then((r) => {
       setPayments(Array.isArray(r?.data) ? r.data : []);
     }).catch((e) => setErr(formatError(e)))
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+      .finally(() => setLoading(false)), []);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+  useKioskLiveRefresh(loadPayments);
 
   return (
     <KioskModalShell title="Betalingen inzien" Icon={Banknote}
@@ -4864,14 +4918,11 @@ function AddMaintenanceModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/apartments').then((r) => {
-      if (!alive) return;
+  const loadApartments = useCallback(() => api.get('/apartments').then((r) => {
       setApartments(Array.isArray(r?.data) ? r.data : []);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+    }).catch(() => {}), []);
+  useEffect(() => { loadApartments(); }, [loadApartments]);
+  useKioskLiveRefresh(loadApartments);
 
   const save = async () => {
     if (!aptId) { setErr('Kies een appartement'); return; }
@@ -5112,6 +5163,20 @@ export default function KioskLayout() {
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
   // Bump om ApartmentSelect te forceren opnieuw te fetchen na een aanmaak
   const [apartmentsReloadKey, setApartmentsReloadKey] = useState(0);
+
+  // Tijdens de huurder-overview en betaalkeuze worden deze data als state
+  // doorgegeven tussen schermen; houd ze bij wijzigingen op beide apparaten
+  // direct vers zonder de lopende bevestiging/betaling te onderbreken.
+  useEffect(() => {
+    if (!apartment?.tenant_id || step !== 'pay') return undefined;
+    const refresh = () => {
+      fetchOverview(apartment.tenant_id)
+        .then(({ data }) => setOverview(data))
+        .catch(() => {});
+    };
+    window.addEventListener('surirent:live-change', refresh);
+    return () => window.removeEventListener('surirent:live-change', refresh);
+  }, [apartment?.tenant_id, step]);
 
   // Bottom-sheet actie-refs — handleSheetPick wordt vroeg in de component
   // gedeclareerd, maar `exit` en `adminMode` pas later. We vangen hun

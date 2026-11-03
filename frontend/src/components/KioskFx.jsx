@@ -5,6 +5,13 @@ import { api } from '../lib/api';
 // Eén gedeelde huurderslijst (foto's komen uit Huurders) voor alle beheerpagina's.
 let tenantPhotoCache = null;
 let tenantPhotoPromise = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('surirent:live-change', () => {
+    tenantPhotoCache = null;
+    tenantPhotoPromise = null;
+    window.dispatchEvent(new Event('kiosk-tenant-photos-change'));
+  });
+}
 function loadTenantPhotos() {
   if (tenantPhotoCache) return Promise.resolve(tenantPhotoCache);
   if (!tenantPhotoPromise) {
@@ -23,8 +30,13 @@ export function TenantPhoto({ tenantId, name, size = 40 }) {
   const [bad, setBad] = useState(false);
   useEffect(() => {
     let alive = true;
-    loadTenantPhotos().then((m) => { if (alive) setMap(m); });
-    return () => { alive = false; };
+    const load = () => loadTenantPhotos().then((m) => { if (alive) setMap(m); });
+    load();
+    window.addEventListener('kiosk-tenant-photos-change', load);
+    return () => {
+      alive = false;
+      window.removeEventListener('kiosk-tenant-photos-change', load);
+    };
   }, []);
   const info = map[tenantId] || {};
   const src = info.photo && !/^https?:/.test(info.photo) ? `${process.env.REACT_APP_BACKEND_URL}${info.photo}` : info.photo;

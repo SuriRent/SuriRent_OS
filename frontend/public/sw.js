@@ -131,12 +131,13 @@ self.addEventListener('fetch', (event) => {
   // data verder kan. We cachen alleen idempotente GET's (POST/PUT/DELETE
   // worden niet geraakt — door de `req.method !== 'GET'` check hierboven).
   //
-  // Opt-out: endpoints met `?nocache=1` of SSE (`/admin/events`) worden
+  // Opt-out: endpoints met `?nocache=...`, expliciete no-cache headers of SSE (`/admin/events`) worden
   // nooit gecacht om te voorkomen dat we live-stream events uit cache
   // halen.
   if (url.pathname.startsWith('/api/')) {
     const isSSE = url.pathname.includes('/events') || (req.headers.get('accept') || '').includes('event-stream');
-    const noCache = url.searchParams.get('nocache') === '1';
+    const noCache = url.searchParams.has('nocache')
+      || /no-cache/i.test(req.headers.get('cache-control') || '');
     if (isSSE || noCache) return;  // bypass → geen interceptie
     event.respondWith((async () => {
       const cache = await caches.open(RUNTIME_CACHE);
@@ -452,4 +453,3 @@ self.addEventListener('message', (event) => {
     })());
   }
 });
-

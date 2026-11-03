@@ -18,6 +18,7 @@ import {
   readCachedBranding, applyBranding, resolveLogoUrl,
 } from '../../lib/branding';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import { startTenantLive, stopTenantLive } from '../../lib/tenant-live';
 
 const TENANT_TOKEN_KEY = 'tenant_token';
 const PIN_LENGTH = 4;
@@ -667,15 +668,12 @@ function DashboardView({ overview, onAction, onHistory }) {
   // én een "Via betalingsregeling"-label als de factuur in een actief plan zit.
   const [invoices, setInvoices] = useState([]);
   const [planInvoiceIds, setPlanInvoiceIds] = useState(new Set());
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const loadInvoiceDetails = useCallback(async () => {
       try {
         const [invRes, planRes] = await Promise.all([
           api.get('/tenant-portal/invoices'),
           api.get('/tenant-portal/payment-plans').catch(() => ({ data: [] })),
         ]);
-        if (cancelled) return;
         setInvoices(invRes.data || []);
         const ids = new Set();
         for (const p of planRes.data || []) {
@@ -685,9 +683,12 @@ function DashboardView({ overview, onAction, onHistory }) {
         }
         setPlanInvoiceIds(ids);
       } catch { /* stilzwijgend */ }
-    })();
-    return () => { cancelled = true; };
   }, []);
+  useEffect(() => { loadInvoiceDetails(); }, [loadInvoiceDetails]);
+  useEffect(() => {
+    window.addEventListener('surirent:tenant-live-change', loadInvoiceDetails);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadInvoiceDetails);
+  }, [loadInvoiceDetails]);
   const partialOrOpen = (invoices || []).filter(
     (i) => (i.status || '').toLowerCase() !== 'paid' && Number(i.remaining_amount ?? i.amount) > 0,
   ).sort((a, b) => (a.period_year - b.period_year) || (a.period_month - b.period_month));
@@ -875,8 +876,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
   // {planId, planCurrency, seq, due_date, amount, label}.
   const [planInstallments, setPlanInstallments] = useState([]);
 
-  useEffect(() => {
-    api.get('/tenant-portal/payment-plans')
+  const loadPlans = useCallback(() => api.get('/tenant-portal/payment-plans')
       .then((r) => {
         const out = [];
         for (const p of r.data || []) {
@@ -895,8 +895,12 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
         out.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
         setPlanInstallments(out);
       })
-      .catch(() => setPlanInstallments([]));
-  }, [cur]);
+      .catch(() => setPlanInstallments([])), [cur]);
+  useEffect(() => { loadPlans(); }, [loadPlans]);
+  useEffect(() => {
+    window.addEventListener('surirent:tenant-live-change', loadPlans);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadPlans);
+  }, [loadPlans]);
 
   const planItemKey = (it) => `plan:${it.planId}:${it.seq}`;
 
@@ -1606,10 +1610,13 @@ function TenantHistoryView({ overview, onBack }) {
   const [err, setErr] = useState('');
   const apt = overview?.apartment;
 
+  const loadPayments = useCallback(() => api.get('/tenant-portal/payments')
+    .then((r) => { setItems(r.data || []); setErr(''); }).catch((e) => setErr(formatError(e))), []);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
   useEffect(() => {
-    api.get('/tenant-portal/payments')
-      .then((r) => setItems(r.data || [])).catch((e) => setErr(formatError(e)));
-  }, []);
+    window.addEventListener('surirent:tenant-live-change', loadPayments);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadPayments);
+  }, [loadPayments]);
 
   const openPdf = async (paymentId) => {
     // We hebben tenant_token — gebruik blob-fetch zodat de PDF met de
@@ -2092,18 +2099,30 @@ export default function TenantKioskLayout() {
   }, [tenantIdParam, authed]);
 
   // 3) Overview laden na login
-  const loadOverview = useCallback(async () => {
+  const loadOverview = useCallback(async (quiet = false) => {
     if (!authed) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     try {
       const { data } = await api.get('/tenant-portal/overview');
       setOverview(data);
-    } catch {
-      localStorage.removeItem(TENANT_TOKEN_KEY);
-      setAuthed(false);
-    } finally { setLoading(false); }
+    } catch (e) {
+      if (e?.response?.status === 401) {
+        localStorage.removeItem(TENANT_TOKEN_KEY);
+        setAuthed(false);
+      }
+    } finally { if (!quiet) setLoading(false); }
   }, [authed]);
-  useEffect(() => { if (authed) loadOverview(); }, [authed, loadOverview]);
+  useEffect(() => {
+    if (!authed) return undefined;
+    loadOverview();
+    startTenantLive();
+    const refresh = () => loadOverview(true);
+    window.addEventListener('surirent:tenant-live-change', refresh);
+    return () => {
+      window.removeEventListener('surirent:tenant-live-change', refresh);
+      stopTenantLive();
+    };
+  }, [authed, loadOverview]);
 
   const logout = () => {
     api.post('/tenant-portal/logout').catch(() => {});

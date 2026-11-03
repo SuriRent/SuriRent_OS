@@ -174,7 +174,20 @@ export default function KioskInvoicesPage({ onBack }) {
     reloadCredits();
   }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
-  useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => {
+    api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => {
+    const onChange = () => { load(); loadTenants(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load, loadTenants]);
 
   const groups = useMemo(() => {
     if (!data) return [];

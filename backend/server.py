@@ -996,6 +996,10 @@ async def _live_sync_broadcast(request: Request, call_next):
                 payload = _pyjwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALG])
             except Exception:
                 return response
+            if payload.get("type") == "tenant":
+                token_kind = "tenant"
+            elif payload.get("type") == "kiosk":
+                token_kind = "kiosk"
             cid = payload.get("company_id")
             if not cid and token_kind == "tenant":
                 # Tenant JWT bevat alleen sub=tenant_id → lookup company_id
@@ -6542,6 +6546,46 @@ async def get_tenant_session(request: Request) -> dict:
     return tenant
 
 
+@api.get("/tenant-portal/events")
+async def tenant_portal_events(request: Request):
+    """Realtime invalidations voor alleen de eigen, ingelogde huurderportal."""
+    tenant = await get_tenant_session(request)
+    company_id = tenant.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Geen bedrijf")
+    channel = _sse_channel(company_id)
+    queue = _bus_subscribe(channel, maxsize=100)
+    relevant_prefixes = (
+        "/api/tenants", "/api/apartments", "/api/contracts",
+        "/api/payments", "/api/invoices", "/api/payment-plans",
+        "/api/maintenance", "/api/companies/me",
+    )
+
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'type': 'ready'})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    path = str(event.get("path") or "")
+                    if event.get("type") == "notification" or any(path.startswith(p) for p in relevant_prefixes):
+                        # Alleen een generieke invalidatie delen; geen gegevens of
+                        # acties van andere huurders naar de client sturen.
+                        yield f"data: {json.dumps({'type': 'change'})}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+        finally:
+            _bus_unsubscribe(channel, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 class TenantLoginIn(BaseModel):
     identifier: str  # phone or email
     pin: str = Field(min_length=4, max_length=4)
@@ -11323,7 +11367,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         await push_printers()
         while True:
             ev = await queue.get()
-            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
+            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
             elif ev.get("type") == "presence_changed":
                 await push_printers()
@@ -11731,7 +11775,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
 
     async def receive():
@@ -17407,11 +17451,22 @@ def _sse_channel(company_id: str) -> str:
 
 
 async def _sse_broadcast(company_id: str, event: dict):
-    """Publish naar de cross-replica bus. Alle SSE-loops (op elke pod)
-    ontvangen het en dispatchen naar hun lokale subscribers."""
+    """Publish alle company data-wijzigingen naar SSE en kiosk-WebSockets."""
     if not company_id:
         return
     await _bus_publish(_sse_channel(company_id), event)
+    if event.get("type") == "change":
+        path = str(event.get("path") or "")
+        if path.startswith("/api/"):
+            await _kb_publish(
+                _kiosk_admin_channel(company_id),
+                {"type": "data_changed", "path": path},
+            )
+    elif event.get("type") == "notification":
+        await _kb_publish(
+            _kiosk_admin_channel(company_id),
+            {"type": "data_changed", "path": "/api/notifications"},
+        )
 
 
 @api.get("/admin/events")

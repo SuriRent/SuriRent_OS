@@ -32,6 +32,8 @@ let _visibilityBound = false;
 let _lastMessageAt = 0;   // performance.now() van laatste event/heartbeat
 let _watchdogTimer = null;
 const _listeners = new Set();
+let _liveRefreshTimer = null;
+const _pendingLiveChanges = new Map();
 
 // Watchdog: als er >25s geen event/heartbeat binnenkwam terwijl de tab
 // zichtbaar is, forceer een reconnect. iOS Safari kan een EventSource
@@ -101,77 +103,89 @@ function _dispatch(data) {
 // op device B automatisch revalideren, ook als de huidige pagina geen
 // eigen useAdminEvents hook heeft.
 // =====================================================================
+function _flushLiveChanges() {
+  _liveRefreshTimer = null;
+  const changes = Array.from(_pendingLiveChanges.values());
+  _pendingLiveChanges.clear();
+  if (!changes.length) return;
+  const first = changes[0];
+  try {
+    window.dispatchEvent(new CustomEvent('surirent:live-change', {
+      detail: { ...first, paths: changes.map((item) => item.path) },
+    }));
+  } catch { /* noop */ }
+  const keys = new Set();
+  changes.forEach((change) => {
+    const path = String(change.path || '');
+    if (path === '/api/notifications' || change.type === 'notification') {
+      ['/notifications', '/admin/stats'].forEach((key) => keys.add(key));
+      return;
+    }
+    const root = path.slice(4).split('/').filter(Boolean)[0];
+    if (!root) return;
+    keys.add(`/${root}`);
+    const related = {
+      apartments: ['/tenants', '/contracts', '/maintenance', '/invoices', '/payment-plans'],
+      contracts: ['/tenants', '/apartments'],
+      tenants: ['/apartments', '/contracts', '/invoices', '/payments', '/payment-plans', '/deposits'],
+      payments: ['/invoices', '/payment-plans', '/tenants', '/admin/stats'],
+      invoices: ['/payment-plans', '/tenants', '/admin/stats'],
+      'payment-plans': ['/invoices', '/tenants'],
+      deposits: ['/tenants', '/contracts'],
+      locations: ['/apartments'],
+      kasgeld: ['/kasgeld/balance'],
+      employees: ['/salaries'],
+      salaries: ['/employees'],
+      maintenance: ['/apartments'],
+      kiosk: ['/apartments', '/locations', '/tenants', '/contracts', '/payments', '/invoices', '/payment-plans', '/kasgeld', '/kasgeld/balance'],
+      'tenant-portal': ['/payments', '/invoices', '/payment-plans', '/tenants', '/apartments', '/contracts', '/maintenance'],
+      'companies': ['/settings', '/admin/stats'],
+      'settings': ['/companies/me/branding', '/admin/stats'],
+      power: ['/apartments'],
+    };
+    (related[root] || []).forEach((key) => keys.add(key));
+    if (!related[root] && !new Set([
+      'apartments', 'contracts', 'tenants', 'payments', 'invoices',
+      'payment-plans', 'deposits', 'locations', 'kasgeld', 'employees',
+      'salaries', 'maintenance', 'kiosk', 'tenant-portal', 'companies',
+      'settings', 'power', 'notifications', 'employees',
+    ]).has(root)) {
+      _forceFullRevalidate();
+      return;
+    }
+  });
+  if (!keys.size) return;
+  try {
+    swrGlobalMutate(
+      (key) => typeof key === 'string' && Array.from(keys).some((base) =>
+        key === base || key.startsWith(`${base}/`) || key.startsWith(`${base}?`)),
+      undefined,
+      { revalidate: true },
+    );
+  } catch (e) { _log('targeted mutate throw', e); }
+  _infinite.forEach((entry) => {
+    if (Array.from(keys).some((key) => key === entry.prefix
+      || key.startsWith(`${entry.prefix}/`) || key.startsWith(`${entry.prefix}?`)
+      || entry.prefix.startsWith(`${key}/`) || entry.prefix.startsWith(`${key}?`))) {
+      entry.fn();
+    }
+  });
+}
+
 function _globalInvalidate(data) {
   if (data?.type !== 'change' && data?.type !== 'notification') {
     _log('skip (type niet change/notification):', data?.type);
     return;
   }
-  try { window.dispatchEvent(new CustomEvent('surirent:live-change', { detail: data })); } catch { /* noop */ }
-
   const rawPath = String(data?.path || '');
-  if (!rawPath.startsWith('/api/')) {
+  if (rawPath && !rawPath.startsWith('/api/')) {
     _log('skip (path niet /api/):', rawPath);
     return;
   }
-  const swrKey = rawPath.slice(4); // '/api/tenants' → '/tenants'
-  _log('invalidate', { path: rawPath, key: swrKey, method: data?.method });
-
-  // 1) Alle keys die onder het gemuteerde API-pad vallen
-  let mutatedCount = 0;
-  try {
-    const p = swrGlobalMutate(
-      (k) => {
-        if (typeof k !== 'string') return false;
-        const match = k === swrKey || k.startsWith(swrKey + '/') || swrKey.startsWith(k + '/') || swrKey.startsWith(k + '?');
-        if (match) mutatedCount += 1;
-        return match;
-      },
-      undefined,
-      { revalidate: true },
-    );
-    // swrGlobalMutate met filter → geeft Promise[] terug, log wanneer klaar
-    if (p && typeof p.then === 'function') {
-      p.then(() => _log('primary refetch klaar', { key: swrKey, matched: mutatedCount }))
-       .catch((e) => _log('primary refetch fout', e));
-    }
-  } catch (e) { _log('primary mutate throw', e); }
-
-  _refreshInfinite(swrKey);
-
-  // 2) Cross-collectie afhankelijkheden — bijv. betaling raakt facturen én plans
-  const crossInvalidate = ['/admin/stats'];
-  if (swrKey.startsWith('/payments')) {
-    crossInvalidate.push('/invoices', '/payment-plans', '/payment-plans?status=active', '/tenants');
-  }
-  if (swrKey.includes('/assign-tenant') || swrKey.includes('/remove-tenant')) {
-    crossInvalidate.push('/tenants', '/apartments');
-  }
-  if (swrKey.startsWith('/contracts')) crossInvalidate.push('/tenants', '/apartments');
-  if (swrKey.startsWith('/payment-plans') || swrKey.startsWith('/invoices')) {
-    crossInvalidate.push('/payment-plans?status=active', '/payment-plans');
-  }
-  if (swrKey.startsWith('/tenants') || swrKey.startsWith('/apartments')) {
-    crossInvalidate.push('/tenants', '/apartments');
-  }
-  // Kiosk-endpoints → mappen naar hun admin-equivalenten zodat een
-  // kiosk-medewerker actie de admin-schermen live update.
-  if (swrKey.startsWith('/kiosk/kasgeld')) {
-    crossInvalidate.push('/kasgeld', '/kasgeld/balance');
-  }
-  if (swrKey.startsWith('/kiosk/payments')) {
-    crossInvalidate.push('/payments', '/payments?status=pending_approval', '/invoices', '/tenants', '/payment-plans?status=active');
-  }
-  crossInvalidate.forEach((base) => {
-    _refreshInfinite(base);
-    try {
-      swrGlobalMutate(
-        (k) => typeof k === 'string' && (k === base || k.startsWith(base + '/') || k.startsWith(base + '?')),
-        undefined,
-        { revalidate: true },
-      );
-    } catch (e) { _log('cross mutate throw', base, e); }
-  });
-  if (crossInvalidate.length > 0) _log('cross-invalidate', crossInvalidate);
+  const key = `${rawPath}:${String(data?.method || '').toUpperCase()}`;
+  _pendingLiveChanges.set(key, data);
+  if (!_liveRefreshTimer) _liveRefreshTimer = setTimeout(_flushLiveChanges, 100);
+  _log('live refresh queued', { path: rawPath, method: data?.method });
 }
 
 // =====================================================================
@@ -300,6 +314,17 @@ function _ensureConnected() {
   if (!_es && !_retryTimer) _connect();
 }
 
+/** Laat een wijziging die buiten de SSE-stream binnenkwam (kiosk-WebSocket)
+ *  dezelfde SWR-verversing doen als een SSE-event. */
+export function applyLiveChange(path, method = 'POST') {
+  _globalInvalidate({ type: 'change', path, method });
+}
+
+/** Verwerk een burst kiosk-WebSocket updates als één live-refresh. */
+export function applyLiveChanges(paths, method = 'POST') {
+  (paths || []).forEach((path) => _globalInvalidate({ type: 'change', path, method }));
+}
+
 /** Bootstrap zonder React-hook — vanuit AuthProvider aan te roepen zodra
  *  de admin ingelogd is, zodat SSE actief is óók op pagina's die geen
  *  eigen `useAdminEvents` gebruiken (Facturen-lijst, Bedrijven, …). */
@@ -311,6 +336,8 @@ export function bootstrapAdminEvents() {
 export function closeAdminEvents() {
   _closed = true;
   if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+  if (_liveRefreshTimer) { clearTimeout(_liveRefreshTimer); _liveRefreshTimer = null; }
+  _pendingLiveChanges.clear();
   if (_es) { try { _es.close(); } catch { /* noop */ } _es = null; }
   _listeners.clear();
 }
@@ -343,13 +370,6 @@ export function useAdminEvents(onEvent, { enabled = true } = {}) {
 // useSWRInfinite-keys worden door SWR's filter-mutate overgeslagen; daarom
 // registreren infinite-lijsten (bv. Facturen) hier zelf hun refresh.
 const _infinite = new Set();
-function _refreshInfinite(key) {
-  _infinite.forEach((e) => {
-    if (e.pending || !(key === e.prefix || key.startsWith(e.prefix + '/') || key.startsWith(e.prefix + '?'))) return;
-    e.pending = true; // meerdere events in dezelfde tick → één refresh
-    setTimeout(() => { e.pending = false; e.fn(); }, 0);
-  });
-}
 export function registerInfiniteRefresh(prefix, fn) {
   const e = { prefix, fn };
   _infinite.add(e);

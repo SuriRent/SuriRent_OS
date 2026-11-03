@@ -538,11 +538,12 @@ function PlanDetail({ planId, initial, onBack, embedded = false }) {
   // ziet de admin de bijgestelde termijnen pas na handmatige refresh.
   useEffect(() => {
     const handler = (e) => {
-      const path = String(e?.detail?.path || '');
-      if (!path) return;
-      if (path.startsWith('/api/payments')
-          || path.startsWith('/api/invoices')
-          || path.startsWith(`/api/payment-plans/${planId}`)) {
+      const paths = e?.detail?.paths || [e?.detail?.path];
+      if (paths.some((path) => typeof path === 'string' && (
+        path.startsWith('/api/payments')
+        || path.startsWith('/api/invoices')
+        || path.startsWith(`/api/payment-plans/${planId}`)
+      ))) {
         load();
       }
     };

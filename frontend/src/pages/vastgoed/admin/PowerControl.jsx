@@ -19,9 +19,23 @@ function SwitchDialog({ dev, onClose, onChanged }) {
   const [st, setSt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => {
+  const loadStatus = useCallback(() => {
     api.get(`/power/devices/${dev.id}/status`).then(({ data }) => { setSt(data); if (data.on != null) setOn(data.on); }).catch(() => {});
   }, [dev.id]);
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => {
+    const onChange = (e) => {
+      const paths = e.detail?.paths || [e.detail?.path];
+      if (paths.some((path) => !path || path.includes('/power'))) loadStatus();
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') loadStatus(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadStatus]);
   const toggle = async () => {
     setBusy(true); setErr('');
     try {
@@ -56,11 +70,25 @@ function SwitchDialog({ dev, onClose, onChanged }) {
 export function ApartmentPower({ apartmentId, onClose }) {
   const [dev, setDev] = useState(undefined);
   const [err, setErr] = useState('');
-  useEffect(() => {
+  const loadDevice = useCallback(() => {
     api.get('/power/devices')
       .then(({ data }) => setDev(data.find((d) => d.apartment_id === apartmentId) || null))
       .catch((e) => { setErr(formatError(e)); setDev(null); });
   }, [apartmentId]);
+  useEffect(() => { loadDevice(); }, [loadDevice]);
+  useEffect(() => {
+    const onChange = (e) => {
+      const paths = e.detail?.paths || [e.detail?.path];
+      if (paths.some((path) => !path || path.includes('/power'))) loadDevice();
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') loadDevice(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadDevice]);
   if (dev === undefined) return null;
   if (dev) return <SwitchDialog dev={dev} onClose={onClose} onChanged={() => {}} />;
   return (
@@ -90,6 +118,16 @@ export default function PowerControl({ kiosk = false }) {
   }, []);
   useEffect(() => {
     load().catch((e) => setErr(formatError(e))).finally(() => setLoading(false));
+  }, [load]);
+  useEffect(() => {
+    const onChange = () => { load().catch((e) => setErr(formatError(e))); };
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
 
   const all = async (on) => {
