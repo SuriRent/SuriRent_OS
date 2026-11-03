@@ -1193,7 +1193,6 @@ function TenantStripeQr({ payload, onPaid, onClose }) {
       })
       .catch((e) => { if (!stop) setState({ phase: 'error', token: '', pi: '', mode: '', err: formatError(e, 'Kon de betaling niet starten') }); });
     return () => { stop = true; if (timer) clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const cur = payload.currency || 'SRD';
   return (
@@ -1517,7 +1516,6 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
       autoSubmitted.current = true;
       submit();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const methodLabel = {
