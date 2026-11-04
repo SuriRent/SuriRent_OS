@@ -252,7 +252,6 @@ function LaptopMockup() {
             </footer>
           </div>
         </div>
-      </div>
       <div className="h-[14px] mx-[-36px] rounded-b-[14px] bg-gradient-to-b from-[#E5E7EB] to-[#9CA3AF] relative">
         <span className="absolute left-1/2 -translate-x-1/2 top-0 w-[90px] h-[5px] rounded-b-md bg-[#9CA3AF]" />
       </div>
