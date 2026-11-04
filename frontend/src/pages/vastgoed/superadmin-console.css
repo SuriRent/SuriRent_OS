@@ -4,6 +4,11 @@ html[data-pwa-role="superadmin"] body {
   overflow-x: hidden;
 }
 
+[data-testid="saas-console-mobile-menu-overlay"],
+[data-testid="saas-console-mobile-menu"] {
+  background-color: #e8f5ed;
+}
+
 [data-testid="saas-console-shell"],
 [data-testid="saas-console-shell"] > div,
 [data-testid="saas-console-shell"] main,
@@ -99,4 +104,28 @@ html[data-pwa-role="superadmin"] .from-orange-400.to-orange-600 {
   --tw-gradient-from: #10b981 var(--tw-gradient-from-position) !important;
   --tw-gradient-to: #047857 var(--tw-gradient-to-position) !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+@media (max-width: 639px) {
+  html[data-pwa-role="superadmin"] [data-superadmin-fullscreen-dialog] {
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
+  html[data-pwa-role="superadmin"] [data-superadmin-fullscreen-dialog] > :not(.absolute) {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-top: max(env(safe-area-inset-top, 0px), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+    overscroll-behavior: contain;
+  }
 }

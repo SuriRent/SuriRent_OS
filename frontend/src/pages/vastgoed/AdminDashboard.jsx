@@ -4595,28 +4595,28 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
         </button>
       </div>
       {menuOpen && createPortal(
-        <div className="fixed inset-0 z-[120] flex flex-col bg-emerald-700"
+        <div className="fixed inset-0 z-[120] flex flex-col bg-[#E8F5ED]"
           onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
           <div id="saas-console-mobile-menu" role="dialog" aria-modal="true"
             aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
             onClick={(event) => event.stopPropagation()}
-            className="flex min-h-0 flex-1 flex-col bg-emerald-700"
+            className="flex min-h-0 flex-1 flex-col bg-[#E8F5ED]"
             style={{
               paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
               paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
             }}>
-            <div className="flex shrink-0 items-center justify-between border-b border-white/15 px-4 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-emerald-200 px-4 py-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
                   <LayoutDashboard className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">SaaS Beheer</p>
-                  <h2 className="text-lg font-black text-white">Navigatie</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">SaaS Beheer</p>
+                  <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
                 </div>
               </div>
               <button type="button" onClick={() => setMenuOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-800 shadow-sm hover:bg-emerald-100"
                 aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
                 <X className="h-5 w-5" />
               </button>
@@ -4627,7 +4627,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                 {groups.map((group) => (
                   <section key={group.key} aria-labelledby={`saas-console-mobile-group-${group.key}`}>
                     <h3 id={`saas-console-mobile-group-${group.key}`}
-                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">
+                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
                       {group.label}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">

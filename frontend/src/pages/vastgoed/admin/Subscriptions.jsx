@@ -60,7 +60,8 @@ function ExtendModal({ company, onClose, onDone }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8" data-testid="extend-modal">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-extrabold text-slate-900">Proefperiode verlengen</h3>
@@ -166,6 +167,7 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
 
   return (
     <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4"
+      data-superadmin-fullscreen-dialog="true"
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg min-w-0 p-4 sm:p-8 max-h-[90vh] overflow-y-auto overscroll-contain"
         style={{ maxHeight: 'calc(100dvh - 1rem)' }} data-testid="register-payment-modal">
@@ -359,7 +361,8 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="new-invoice-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -486,7 +489,8 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="new-plan-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -607,7 +611,8 @@ function KasMutationModal({ companies, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="kas-mutation-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
