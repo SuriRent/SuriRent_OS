@@ -44,6 +44,7 @@ from pdf_gen import (
     reminder_pdf_blue_house,
 )
 from invoice_payments import paid_amounts_by_invoice as _paid_amounts_by_invoice
+from document_images import pdf_first_page_jpeg
 from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
     ALLOWED_FEATURE_ICONS,
@@ -15687,15 +15688,14 @@ async def invoice_image_endpoint(invoice_id: str):
             location_name = loc.get("name")
     brand = await _company_brand_info(inv.get("company_id"))
     inv2 = {**inv, **brand, "location_name": location_name}
-    pdf_bytes = await asyncio.to_thread(invoice_pdf, inv2, t, a, [])
     try:
-        import pymupdf
-        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-        pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(2.5, 2.5))
-        jpg = pix.tobytes("jpeg", jpg_quality=85)
-        doc.close()
+        pdf_bytes = await asyncio.to_thread(invoice_pdf, inv2, t, a, [])
+        jpg = await asyncio.to_thread(pdf_first_page_jpeg, pdf_bytes)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image render fout: {e}")
+        _logging.getLogger("uvicorn.error").exception(
+            "Invoice JPG generation failed for invoice id=%s", invoice_id,
+        )
+        raise HTTPException(status_code=500, detail="Factuurbon kon niet als JPG worden gemaakt") from e
     from fastapi.responses import Response as _Resp
     return _Resp(
         content=jpg,

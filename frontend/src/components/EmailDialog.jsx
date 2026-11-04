@@ -6,10 +6,9 @@ import { openWhatsApp } from '../lib/external-link';
 /**
  * SendDialog — E-mail-only versie (WhatsApp/SMS tabs verwijderd op verzoek
  * gebruiker feb 2026). Bovenaan zit een grote "Verzenden per e-mail" knop
- * en onderaan een aparte "Open WhatsApp met huurder"-knop die via de Web
- * Share API de bijbehorende JPG-foto (voor payments) direct als bijlage
- * naar WhatsApp stuurt. Bij overige document-types valt hij terug op de
- * wa.me deeplink met PDF-link.
+ * en onderaan een aparte "Open WhatsApp met huurder"-knop die waar mogelijk
+ * de bijbehorende JPG via de Web Share API deelt. Zonder bestandsdeling wordt
+ * de JPG gedownload en de chat geopend zodat de gebruiker deze kan bijvoegen.
  *
  * Props:
  *  - documentType: 'payment' | 'invoice' | 'contract' | 'overdue-reminder'
@@ -74,31 +73,58 @@ export function SendDialog({
     if (!phone) return;
     const greeting = `Beste ${tenantName || 'huurder'},`;
     const intro = msg.trim() || `Hierbij uw ${documentLabel}.`;
-    // Probeer eerst Web Share met JPG-bijlage — huurder ziet dan de foto
-    // direct in de chat, niet als link (gevraagd door gebruiker).
+    const shareText = `${greeting}\n\n${intro}`;
     if (imageEndpoint) {
       setWaSharing(true);
+      setErr('');
+      const fallbackTab = window.open('about:blank', '_blank');
       try {
         const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}${imageEndpoint}`);
-        if (resp.ok) {
-          const blob = await resp.blob();
-          const file = new File([blob], `${documentLabel}-${documentId.slice(0, 8)}.jpg`, { type: 'image/jpeg' });
-          const shareText = `${greeting}\n\n${intro}`;
-          if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        if (!resp.ok) throw new Error(`Bon ophalen mislukt (${resp.status})`);
+        const blob = await resp.blob();
+        const file = new File([blob], `${documentLabel}-${documentId.slice(0, 8)}.jpg`, { type: 'image/jpeg' });
+        let canShareFile = false;
+        try {
+          canShareFile = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+        } catch {
+          canShareFile = false;
+        }
+        if (canShareFile) {
+          try {
             await navigator.share({ files: [file], text: shareText, title });
-            setWaSharing(false);
+            if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
             return;
+          } catch (e) {
+            if (e?.name === 'AbortError') {
+              if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
+              return;
+            }
           }
         }
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+        const fallbackText = `${shareText}\n\nDe bon is gedownload. Voeg de JPG-afbeelding als bijlage toe aan dit gesprek.`;
+        if (fallbackTab && !fallbackTab.closed) {
+          fallbackTab.location.replace(`https://wa.me/${phone}?text=${encodeURIComponent(fallbackText)}`);
+        } else {
+          openWhatsApp(phone, fallbackText);
+        }
+        setOk('De bon is gedownload en WhatsApp is geopend. Voeg de JPG daar als bijlage toe.');
       } catch (e) {
-        if (e && e.name === 'AbortError') { setWaSharing(false); return; }
-        // eslint-disable-next-line no-console
-        console.warn('[SendDialog] share fout, fallback wa.me', e);
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
+        if (e?.name !== 'AbortError') setErr(e?.message || 'Bon delen is mislukt.');
+      } finally {
+        setWaSharing(false);
       }
-      setWaSharing(false);
+      return;
     }
-    // Betalingsbewijzen en facturen delen als JPG; andere documenten houden
-    // hun bestaande PDF-link.
+    // Andere documenttypes zonder JPG blijven via de bestaande documentlink lopen.
     const apiBase = (api.defaults.baseURL || `${window.location.origin}/api`).replace(/\/+$/, '');
     const imagePath = documentType === 'payment'
       ? `/payments/${documentId}/image`
