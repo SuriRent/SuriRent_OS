@@ -75,14 +75,23 @@ function RouteFallback() {
 }
 
 function AuthSessionNotice() {
+  const location = useLocation();
+  const isAdminRoute = !isMarketingHost()
+    && location.pathname.split('/').filter(Boolean).includes('admin');
   const [checking, setChecking] = useState(false);
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
-    const show = () => setVisible(true);
+    if (!isAdminRoute) {
+      setVisible(false);
+      setMessage('');
+    }
+    const show = () => {
+      if (isAdminRoute) setVisible(true);
+    };
     window.addEventListener('surirent:auth-error', show);
     return () => window.removeEventListener('surirent:auth-error', show);
-  }, []);
+  }, [isAdminRoute]);
 
   const checkSession = async () => {
     setChecking(true);
@@ -97,7 +106,7 @@ function AuthSessionNotice() {
     }
   };
 
-  if (!visible) return null;
+  if (!visible || !isAdminRoute) return null;
   return (
     <div role="alert" data-testid="auth-session-notice"
       className="fixed inset-x-3 top-3 z-[1000] mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-xl">
