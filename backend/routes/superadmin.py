@@ -241,6 +241,12 @@ async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
                 "source": "manual",
             }
             await _deps.db.subscription_payments.insert_one(payment)
+            if _deps.notify_superadmins:
+                await _deps.notify_superadmins(
+                    "payments", "SaaS-betaling geregistreerd",
+                    f"{(company or {}).get('name', 'Klant')}: {payment['currency']} {payment['amount']:,.2f}.",
+                    {"kind": "saas_payment", "url": "/admin/saas_payments"},
+                )
             if company and company.get("billing_status") != "active":
                 await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
         return invoice
@@ -282,6 +288,12 @@ async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
         "source": "manual",
     }
     await _deps.db.subscription_payments.insert_one(payment)
+    if _deps.notify_superadmins:
+        await _deps.notify_superadmins(
+            "payments", "SaaS-betaling geregistreerd",
+            f"{company.get('name', 'Klant')}: {payment['currency']} {payment['amount']:,.2f}.",
+            {"kind": "saas_payment", "url": "/admin/saas_payments"},
+        )
     await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
     await _deps.send_saas_payment_email(
         company, payment["amount"], payment["currency"], payment["method"], inv_id,

@@ -754,6 +754,10 @@ async def _daily_billing_checks_loop():
                     _log.info(f"[invoice-reminders] emailed {len(sent)} companies @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[invoice-reminders] cycle failed: {e}")
+            try:
+                await _notify_saas_invoice_summary()
+            except Exception as e:
+                _log.warning(f"[saas-push-summary] cycle failed: {e}")
         except _aio.CancelledError:
             return
         except Exception as e:
@@ -1285,6 +1289,11 @@ async def register(body: RegisterIn, request: Request, response: Response):
         await db.companies.insert_one(c)
         company_id = c["id"]
         company_payload = {k: c[k] for k in ("id", "slug", "name", "plan")}
+        await _notify_superadmins(
+            "new_customers", "Nieuwe klant geregistreerd",
+            f"{c['name']} heeft zich aangemeld voor SuriRent.",
+            {"kind": "saas_new_customer", "url": "/admin/companies"},
+        )
 
     else:
         # Backwards compat: join the default company when company_name is omitted.
@@ -2129,6 +2138,11 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
                 "needs_onboarding": True,
                 "created_at": iso(now_utc()),
             })
+            await _notify_superadmins(
+                "new_customers", "Nieuwe klant geregistreerd",
+                f"{name or email} heeft zich aangemeld via Google.",
+                {"kind": "saas_new_customer", "url": "/admin/companies"},
+            )
             update["company_id"] = new_company_id
         await db.users.update_one({"email": email}, {"$set": update}, upsert=False)
         user_doc = {**existing, **update}
@@ -2165,6 +2179,11 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
                 "needs_onboarding": True,
                 "created_at": iso(now_utc()),
             })
+            await _notify_superadmins(
+                "new_customers", "Nieuwe klant geregistreerd",
+                f"{name or email} heeft zich aangemeld via Google.",
+                {"kind": "saas_new_customer", "url": "/admin/companies"},
+            )
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_doc = {
             "user_id": user_id,
@@ -3254,6 +3273,11 @@ async def _record_saas_payment_manual(
         "bank_statement_id": statement_id,
     }
     await db.subscription_payments.insert_one(pay)
+    await _notify_superadmins(
+        "payments", "SaaS-betaling ontvangen",
+        f"{company.get('name', 'Klant')}: {currency} {amount:,.2f}.",
+        {"kind": "saas_payment", "url": "/admin/saas_payments"},
+    )
     if updated_invoice.get("status") == "paid":
         await _activate_company_after_saas_payment(
             company["id"], plan_in_payment=invoice.get("plan"), invoice=updated_invoice,
@@ -6031,6 +6055,11 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
         "created_by": user.get("email"),
     }
     await db.subscription_payments.insert_one(pay)
+    await _notify_superadmins(
+        "payments", "SaaS-betaling ontvangen",
+        f"{c.get('name', 'Klant')}: {pay['currency']} {pay['amount']:,.2f}.",
+        {"kind": "saas_payment", "url": "/admin/saas_payments"},
+    )
 
     if inv.get("status") == "paid":
         await _activate_company_after_saas_payment(
@@ -6285,6 +6314,25 @@ async def get_saas_settings(user=Depends(require_role("superadmin"))):
         "branding": doc.get("branding", {
             "platform_name": "SuriRent", "app_url": "",
         }),
+        "push_notifications": _saas_push_preferences(doc.get("push_notifications")),
+    }
+
+
+SAAS_PUSH_PREFERENCE_DEFAULTS = {
+    "enabled": True,
+    "new_customers": True,
+    "payments": True,
+    "open_invoices": True,
+    "arrears": True,
+    "trials_expired": True,
+}
+
+
+def _saas_push_preferences(value: dict | None = None) -> dict:
+    value = value if isinstance(value, dict) else {}
+    return {
+        key: bool(value.get(key, default))
+        for key, default in SAAS_PUSH_PREFERENCE_DEFAULTS.items()
     }
 
 
@@ -6293,6 +6341,7 @@ class SaasSettingsIn(BaseModel):
     fx: Optional[dict] = None
     smtp: Optional[dict] = None
     branding: Optional[dict] = None
+    push_notifications: Optional[dict] = None
 
 
 @api.put("/superadmin/settings")
@@ -6303,6 +6352,11 @@ async def update_saas_settings(body: SaasSettingsIn, user=Depends(require_role("
         update["banking"] = body.banking
     if body.branding is not None:
         update["branding"] = body.branding
+    if body.push_notifications is not None:
+        update["push_notifications"] = _saas_push_preferences({
+            **_saas_push_preferences(existing.get("push_notifications")),
+            **body.push_notifications,
+        })
     if body.fx is not None:
         cur = existing.get("fx", {}) or {}
         new_fx = {
@@ -17354,6 +17408,107 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
     return sum(1 for r in results if r is True)
 
 
+async def _notify_superadmins(category: str, title: str, body: str, data: dict | None = None) -> int:
+    """Send SaaS event pushes only to registered superadmin devices."""
+    if category not in SAAS_PUSH_PREFERENCE_DEFAULTS:
+        return 0
+    try:
+        prefs_doc = await db.saas_settings.find_one(
+            {"id": SAAS_SETTINGS_ID}, {"_id": 0, "push_notifications": 1},
+        ) or {}
+        prefs = _saas_push_preferences(prefs_doc.get("push_notifications"))
+        if not prefs["enabled"] or not prefs[category]:
+            return 0
+
+        superadmin_ids = [
+            user["id"] async for user in db.users.find(
+                {"role": "superadmin"}, {"_id": 0, "id": 1},
+            )
+        ]
+        if not superadmin_ids:
+            return 0
+        subs = [
+            sub async for sub in db.push_subs.find(
+                {"user_id": {"$in": superadmin_ids}}, {"_id": 0},
+            )
+        ]
+        if not subs:
+            return 0
+
+        payload_data = {"audience": "superadmin", **(data or {})}
+
+        async def _send_one(sub):
+            ok = await asyncio.to_thread(
+                send_push,
+                {"endpoint": sub["endpoint"], "keys": sub["keys"]},
+                title,
+                body,
+                payload_data,
+            )
+            if not ok:
+                await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
+            return ok
+
+        results = await asyncio.gather(*[_send_one(sub) for sub in subs], return_exceptions=True)
+        failures = [result for result in results if isinstance(result, BaseException)]
+        if failures:
+            import logging
+            logging.getLogger("uvicorn.error").warning(
+                "[superadmin-push] %d subscription(s) failed: %s",
+                len(failures), failures[0],
+            )
+        return sum(1 for result in results if result is True)
+    except Exception as exc:
+        import logging
+        logging.getLogger("uvicorn.error").exception("[superadmin-push] dispatch failed: %s", exc)
+        return 0
+
+
+async def _notify_saas_invoice_summary() -> None:
+    """Send at most one daily push per category while unpaid SaaS invoices exist."""
+    invoices = await db.subscription_invoices.find(
+        {"status": {"$in": ["open", "overdue"]}},
+        {"_id": 0, "id": 1, "status": 1, "due_date": 1},
+    ).to_list(5000)
+    open_count = len(invoices)
+    today = now_utc().date().isoformat()
+    overdue_count = 0
+    for invoice in invoices:
+        due_date = invoice.get("due_date")
+        status = invoice.get("status")
+        if status == "overdue" or (due_date and str(due_date)[:10] < today):
+            overdue_count += 1
+
+    summaries = (
+        ("open_invoices", "Openstaande SaaS-facturen",
+         f"Er staan {open_count} openstaande SaaS-factuur{'en' if open_count != 1 else ''}."),
+        ("arrears", "SaaS-betalingsachterstanden",
+         f"{overdue_count} SaaS-factuur{'en zijn' if overdue_count != 1 else ' is'} vervallen."),
+    )
+    for category, title, body in summaries:
+        count = overdue_count if category == "arrears" else open_count
+        if not count:
+            continue
+        marker_id = f"{category}:{today}"
+        try:
+            await db.saas_push_daily.update_one(
+                {"_id": category},
+                {"$setOnInsert": {"last_sent_date": ""}},
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            pass
+        claimed = await db.saas_push_daily.update_one(
+            {"_id": category, "last_sent_date": {"$ne": today}},
+            {"$set": {"last_sent_date": today, "marker": marker_id}},
+        )
+        if claimed.modified_count:
+            await _notify_superadmins(
+                category, title, body,
+                {"kind": f"saas_{category}", "url": "/admin/saas_invoices"},
+            )
+
+
 # =====================================================================
 # Goedkeuren / Afwijzen vanuit de melding (PWA + Android-app)
 # =====================================================================
@@ -19114,11 +19269,18 @@ async def _enforce_billing_expirations():
         except Exception:
             continue
         if end <= now:
-            await db.companies.update_one(
-                {"id": c["id"]},
+            expiration_result = await db.companies.update_one(
+                {"id": c["id"], "billing_status": "trial"},
                 {"$set": {"billing_status": "expired", "expired_at": end.isoformat()}},
             )
+            if not expiration_result.modified_count:
+                continue
             expired.append(c)
+            await _notify_superadmins(
+                "trials_expired", "Proefperiode verlopen",
+                f"De proefperiode van {c.get('name', 'een klant')} is verlopen.",
+                {"kind": "saas_trial_expired", "url": "/admin/companies"},
+            )
             if c.get("owner_email"):
                 try:
                     await _saas_email(
@@ -19244,6 +19406,7 @@ _route_deps.send_saas_payment_email = _send_saas_payment_email
 _route_deps.get_eur_per_srd = _get_eur_per_srd
 _route_deps.ensure_open_invoice = _ensure_open_invoice_for_company
 _route_deps.notify_company_admins = _notify_company_admins
+_route_deps.notify_superadmins = _notify_superadmins
 _route_deps.notify_tenant_power = _power_notify_tenant
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")

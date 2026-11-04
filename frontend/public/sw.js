@@ -329,12 +329,13 @@ self.addEventListener('push', (event) => {
     try { data = event.data.json(); } catch { data.body = event.data.text(); }
   }
   const kind = (data.data && data.data.kind) || 'info';
+  const isSuperadmin = (data.data && data.data.audience) === 'superadmin';
   const inc = (data.data && data.data.badge_inc) || 1;
   const requireApproval = !!(data.data && data.data.require_approval);
   const options = {
     body: data.body || '',
-    icon: '/kiosk-icons/kiosk-192.png',
-    badge: '/kiosk-icons/kiosk-72.png',
+    icon: isSuperadmin ? '/kiosk-icons/superadmin-192.png' : '/kiosk-icons/kiosk-192.png',
+    badge: isSuperadmin ? '/kiosk-icons/superadmin-72.png' : '/kiosk-icons/kiosk-72.png',
     data: data.data || {},
     vibrate: requireApproval ? [300, 100, 300, 100, 300, 100, 500] : [200, 100, 200, 100, 300],
     actions: (data.data && data.data.action_token) ? [

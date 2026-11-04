@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap,
+  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap, Bell, Smartphone,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import ApkReleases from './ApkReleases';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const rawData = window.atob((base64String + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+}
 
 function Section({ title, icon: Icon, children, accent }) {
   return (
@@ -131,6 +137,9 @@ export default function SaasSettings() {
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [pushDeviceCount, setPushDeviceCount] = useState(0);
+  const [pushDeviceBusy, setPushDeviceBusy] = useState(false);
+  const [pushDeviceError, setPushDeviceError] = useState('');
 
   // --- Mijn Account (superadmin login-gegevens) ---
   const [account, setAccount] = useState(null);
@@ -172,6 +181,7 @@ export default function SaasSettings() {
       const payload = {
         banking: data.banking,
         branding: data.branding,
+        push_notifications: data.push_notifications,
         fx: {
           mode: data.fx?.mode || 'auto',
           manual_eur_per_srd: Number(data.fx?.manual_eur_per_srd) || 0,
@@ -253,6 +263,46 @@ export default function SaasSettings() {
       setPinError(formatError(e, 'Pincode kon niet worden opgeslagen.'));
     } finally { setPinSaving(false); }
   };
+
+  const enablePushOnDevice = async () => {
+    setPushDeviceBusy(true);
+    setPushDeviceError('');
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        throw new Error('Pushmeldingen worden niet ondersteund in deze browser.');
+      }
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('Sta meldingen toe in de browserinstellingen.');
+
+      const { data: vapid } = await api.get('/push/vapid-public-key');
+      if (!vapid.public_key) throw new Error('VAPID public key ontbreekt.');
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapid.public_key),
+        });
+      }
+      const value = subscription.toJSON();
+      await api.post('/push/subscribe', {
+        endpoint: value.endpoint,
+        keys: value.keys,
+        user_agent: navigator.userAgent || '',
+      });
+      const { data: status } = await api.get('/push/status');
+      setPushDeviceCount(status.devices || 0);
+    } catch (e) {
+      setPushDeviceError(e.message || formatError(e, 'Pushmeldingen activeren is mislukt.'));
+    } finally { setPushDeviceBusy(false); }
+  };
+
+  useEffect(() => {
+    api.get('/push/status').then(({ data: status }) => setPushDeviceCount(status.devices || 0))
+      .catch(() => {});
+  }, []);
 
   if (loading || !data) {
     return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
@@ -359,6 +409,48 @@ export default function SaasSettings() {
         </Section>
 
         <StripeSection />
+
+        <Section title="Superadmin pushmeldingen" icon={Bell} accent="bg-emerald-100 text-emerald-600">
+          <p className="text-xs text-slate-500">
+            Kies welke SaaS-gebeurtenissen een pushmelding sturen. Meldingen komen alleen op apparaten
+            waarop je hieronder push hebt ingeschakeld.
+          </p>
+          <Toggle label="Pushmeldingen in- of uitschakelen"
+            hint="Hoofdschakelaar voor alle onderstaande categorieën"
+            value={data.push_notifications?.enabled}
+            onChange={(v) => upd('push_notifications', { enabled: v })}
+            testid="saas-push-enabled" />
+          {[
+            ['new_customers', 'Nieuwe klantregistraties'],
+            ['payments', 'Ontvangen SaaS-betalingen'],
+            ['open_invoices', 'Openstaande SaaS-facturen'],
+            ['arrears', 'Vervallen facturen en achterstanden'],
+            ['trials_expired', 'Verlopen proefperiodes'],
+          ].map(([key, label]) => (
+            <Toggle key={key} label={label}
+              value={data.push_notifications?.[key]}
+              onChange={(v) => upd('push_notifications', { [key]: v })}
+              testid={`saas-push-${key}`} />
+          ))}
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-emerald-900">
+              <Smartphone className="w-4 h-4 shrink-0" />
+              <span>{pushDeviceCount} superadmin-apparaat{pushDeviceCount === 1 ? '' : 'en'} gekoppeld</span>
+            </div>
+            <button type="button" onClick={enablePushOnDevice} disabled={pushDeviceBusy}
+              data-testid="saas-push-device-enable"
+              className="shrink-0 h-10 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50">
+              {pushDeviceBusy ? 'Bezig…' : 'Dit apparaat koppelen'}
+            </button>
+          </div>
+          {pushDeviceError && (
+            <p className="text-xs text-red-700" role="alert" data-testid="saas-push-device-error">{pushDeviceError}</p>
+          )}
+          <p className="text-[11px] text-slate-400">
+            Facturen en achterstanden worden dagelijks samengevat. Activeer meldingen ook via de browser
+            of PWA-toestemming wanneer daarom wordt gevraagd.
+          </p>
+        </Section>
 
         <Section title="Wisselkoers SRD → EUR" icon={RefreshCw} accent="bg-amber-100 text-amber-600">
           <div className="flex gap-2">
