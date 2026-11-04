@@ -36,7 +36,11 @@ export default function AuthCallback() {
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const user = await r.json();
-        const u = user?.user || user;
+        try {
+          if (user?.access_token) localStorage.setItem('admin_token', user.access_token);
+        } catch { /* cookie authentication remains available */ }
+        const u = { ...(user?.user || user) };
+        delete u.access_token;
         try {
           const em = u?.email;
           if (em) { localStorage.setItem('device_user_email', em); localStorage.setItem('device_user_name', u?.name || em.split('@')[0]); }

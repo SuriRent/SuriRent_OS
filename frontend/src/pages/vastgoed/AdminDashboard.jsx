@@ -4850,6 +4850,7 @@ export default function AdminDashboard() {
     } catch { /* noop */ }
     try {
       localStorage.removeItem('admin_token');
+      localStorage.removeItem('auth_user_cache');
       localStorage.removeItem('kiosk_token');
       localStorage.removeItem('active_company_id');
       localStorage.removeItem('pwa_preferred_role');

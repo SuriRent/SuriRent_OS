@@ -12,6 +12,23 @@ function prefetchDashboard(u) {
 const AuthContext = createContext(null);
 
 const ACTIVE_COMPANY_KEY = 'active_company_id';
+const CACHED_USER_KEY = 'auth_user_cache';
+
+function readCachedUser() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHED_USER_KEY) || 'null');
+    return cached && typeof cached.id === 'string' ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheUser(user) {
+  try {
+    if (user?.id) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(CACHED_USER_KEY);
+  } catch { /* cached login display is best-effort */ }
+}
 
 /**
  * Issue & store een long-lived device-bound QR token.
@@ -38,7 +55,10 @@ async function autoLoginWithSaved() {
     if (!data?.token) return null; // bv. kiosk-medewerker (PIN-stap) → handmatig
     localStorage.setItem('admin_token', data.token);
     const { data: me } = await api.get('/auth/me');
-    return me;
+    if (me?.access_token) localStorage.setItem('admin_token', me.access_token);
+    const userData = { ...me };
+    delete userData.access_token;
+    return userData;
   } catch { return null; }
 }
 
@@ -56,7 +76,7 @@ async function issueDeviceQrTokenSilently() {
 
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined); // undefined = loading, null = not logged
+  const [user, setUser] = useState(() => readCachedUser()); // retain the last signed-in UI through transient API failures
   const [loading, setLoading] = useState(true);
   const [activeCompanyId, setActiveCompanyIdState] = useState(() => localStorage.getItem(ACTIVE_COMPANY_KEY) || null);
   const [activeCompany, setActiveCompanyMeta] = useState(null);
@@ -64,10 +84,16 @@ export function AuthProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const { data } = await api.get('/auth/me');
-      setUser(data);
+      try {
+        if (data?.access_token) localStorage.setItem('admin_token', data.access_token);
+      } catch { /* cookie authentication remains available */ }
+      const userData = { ...data };
+      delete userData.access_token;
+      setUser(userData);
+      cacheUser(userData);
       // Resolve active company meta from /me
-      if (data?.active_company) {
-        setActiveCompanyMeta(data.active_company);
+      if (userData?.active_company) {
+        setActiveCompanyMeta(userData.active_company);
       } else {
         setActiveCompanyMeta(null);
       }
@@ -75,8 +101,8 @@ export function AuthProvider({ children }) {
       // apparaten werkt op ELKE pagina — óók pagina's die zelf geen
       // useAdminEvents-hook gebruiken (Facturen-lijst, Bedrijven, …).
       // De singleton in admin-events.js voorkomt dubbele connecties.
-      if (data?.id) bootstrapAdminEvents();
-      prefetchDashboard(data);
+      if (userData?.id) bootstrapAdminEvents();
+      prefetchDashboard(userData);
       // Backfill device_qr_token voor gebruikers die al ingelogd waren VOOR
       // we deze feature toevoegden. Eenmalig: als er geen token in
       // localStorage staat én we hebben een geldige sessie → uitgeven.
@@ -87,14 +113,16 @@ export function AuthProvider({ children }) {
           issueDeviceQrTokenSilently();
         }
       } catch { /* ignore */ }
-      return data;
+      return userData;
     } catch {
       const me = await autoLoginWithSaved();
-      setUser(me || null);
-      setActiveCompanyMeta(me?.active_company || null);
-      if (me?.id) bootstrapAdminEvents();
-      prefetchDashboard(me);
-      return me || null;
+      const retainedUser = me || readCachedUser();
+      setUser(retainedUser);
+      if (me) cacheUser(me);
+      setActiveCompanyMeta(retainedUser?.active_company || null);
+      if (retainedUser?.id) bootstrapAdminEvents();
+      prefetchDashboard(retainedUser);
+      return retainedUser;
     } finally {
       setLoading(false);
     }
@@ -126,6 +154,7 @@ export function AuthProvider({ children }) {
       return data;
     }
     if (data?.token) localStorage.setItem('admin_token', data.token);
+    cacheUser(data.user);
     prefetchDashboard(data.user);
     // "Onthoud mij" vóór setUser opslaan (setUser triggert direct de redirect).
     try {
@@ -171,6 +200,7 @@ export function AuthProvider({ children }) {
   const register = async (payload) => {
     const { data } = await api.post('/auth/register', payload);
     if (data?.token) localStorage.setItem('admin_token', data.token);
+    cacheUser(data.user);
     setUser(data.user);
     setActiveCompanyMeta(data.company || null);
     return data;
@@ -187,6 +217,7 @@ export function AuthProvider({ children }) {
     try { await api.post('/auth/logout'); } catch (err) { console.warn('Admin logout API failed (continuing client-side):', err); }
     try { localStorage.setItem('auto_login_paused', '1'); } catch { /* ignore */ }
     localStorage.removeItem('admin_token');
+    cacheUser(null);
     try { Object.keys(localStorage).filter((k) => k.startsWith('stats_cache_')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
     localStorage.removeItem('kiosk_token');
     localStorage.removeItem(ACTIVE_COMPANY_KEY);

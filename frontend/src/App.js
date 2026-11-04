@@ -73,6 +73,42 @@ function RouteFallback() {
   return <div className="min-h-screen" style={{ background: 'transparent' }} />;
 }
 
+function AuthSessionNotice() {
+  const [checking, setChecking] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    const show = () => setVisible(true);
+    window.addEventListener('surirent:auth-error', show);
+    return () => window.removeEventListener('surirent:auth-error', show);
+  }, []);
+
+  const checkSession = async () => {
+    setChecking(true);
+    setMessage('');
+    try {
+      await api.get('/auth/me');
+      window.location.reload();
+    } catch {
+      setMessage('De gegevens zijn nog niet beschikbaar. Je sessie blijft behouden; probeer het opnieuw zodra de verbinding werkt.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  if (!visible) return null;
+  return (
+    <div role="alert" data-testid="auth-session-notice"
+      className="fixed inset-x-3 top-3 z-[1000] mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-xl">
+      <span>{message || 'Gegevens konden niet worden geladen. Je blijft ingelogd; probeer opnieuw of log zelf uit.'}</span>
+      <button type="button" onClick={checkSession} disabled={checking} data-testid="auth-session-check"
+        className="shrink-0 rounded-xl bg-[#FF5C00] px-4 py-2 font-bold text-white disabled:opacity-60">
+        {checking ? 'Opnieuw proberen…' : 'Opnieuw proberen'}
+      </button>
+    </div>
+  );
+}
+
 /* Per-company branded routes (path-based). Mounted under both AppRoutes and
    HybridRoutes so each bedrijf krijgt: `/c/<slug>/{login,kiosk,kiosk/huurder,kiosk/klant,admin,...}`
    met de eigen kleur + logo. Subdomain-based branding (klantnaam.surirent.sr) blijft
@@ -447,6 +483,7 @@ export default function App() {
     return (
       <AuthProvider>
         <PwaManifestSync />
+        <AuthSessionNotice />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Root op custom domain = tenant landing page */}
@@ -488,6 +525,7 @@ export default function App() {
   return (
     <AuthProvider>
       <PwaManifestSync />
+      <AuthSessionNotice />
       <Suspense fallback={<RouteFallback />}>
         {mode === 'marketing' && <MarketingRoutes />}
         {mode === 'app' && <AppRoutes />}

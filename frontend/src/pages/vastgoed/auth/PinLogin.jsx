@@ -57,6 +57,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
         localStorage.setItem('kiosk_staff', '1');
       } else {
         localStorage.removeItem('admin_token');
+        localStorage.removeItem('auth_user_cache');
         localStorage.removeItem('kiosk_staff');
       }
     } catch { /* ignore */ }

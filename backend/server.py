@@ -161,42 +161,57 @@ async def get_current_user(request: Request) -> dict:
     if google_tok:
         sess = await db.user_sessions.find_one({"session_token": google_tok}, {"_id": 0})
         if sess:
-            exp = sess.get("expires_at")
-            if isinstance(exp, str):
-                try:
-                    exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
-                except Exception:
-                    exp = None
-            if exp and exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if exp and exp >= now_utc():
-                gu = await db.users.find_one({"user_id": sess["user_id"]},
-                                              {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
-                if gu:
-                    # Zorg dat downstream code de standaard velden vindt.
-                    gu.setdefault("id", gu.get("user_id"))
-                    gu.setdefault("role", "admin")
-                    gu["active_company_id"] = gu.get("company_id")
-                    return await _enforce_user_billing_access(gu, request)
+            gu = await db.users.find_one({"user_id": sess["user_id"]},
+                                          {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
+            if gu:
+                # De sessie blijft bestaan tot /auth/logout de rij verwijdert.
+                gu.setdefault("id", gu.get("user_id"))
+                gu.setdefault("role", "admin")
+                gu["active_company_id"] = gu.get("company_id")
+                return await _enforce_user_billing_access(gu, request)
 
     # EventSource cannot send Authorization headers. On the admin SSE route,
     # the frontend supplies its current bearer token as ?token=...; prefer it
     # over a possibly stale httpOnly cookie, matching normal API requests.
-    token = (
+    event_token = (
         request.query_params.get("token")
         if request.url.path == "/api/admin/events"
         else None
-    ) or extract_token(request, "access_token")
-    if not token:
+    )
+    auth_header = request.headers.get("Authorization", "")
+    bearer_token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+    cookie_token = request.cookies.get("access_token")
+    query_token = request.query_params.get("token")
+    tokens = [event_token] if event_token else [cookie_token, bearer_token, query_token]
+    tokens = list(dict.fromkeys(token for token in tokens if token))
+    if not tokens:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
-    try:
-        payload = decode_token(token)
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Ongeldig token type")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token verlopen")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Ongeldig token")
+
+    payload = None
+    auth_error = None
+    for token in tokens:
+        try:
+            candidate = decode_token(token, verify_exp=False)
+            # Normal admin sessions (including tokens issued before this
+            # change) do not expire. Time-limited impersonation still does.
+            if candidate.get("original_user_id"):
+                candidate = decode_token(token)
+        except jwt.ExpiredSignatureError:
+            auth_error = HTTPException(status_code=401, detail="Token verlopen")
+            continue
+        except jwt.InvalidTokenError:
+            auth_error = HTTPException(status_code=401, detail="Ongeldig token")
+            continue
+        if candidate.get("type") != "access":
+            auth_error = HTTPException(status_code=401, detail="Ongeldig token type")
+            continue
+        payload = candidate
+        break
+
+    if payload is None:
+        if auth_error:
+            raise auth_error
+        raise HTTPException(status_code=401, detail="Niet ingelogd")
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
@@ -1114,7 +1129,7 @@ def _set_access_cookie(response: Response, token: str, name="access_token", minu
     secure_flag = (os.environ.get("COOKIE_SECURE", "1").strip() == "1")
     response.set_cookie(
         key=name, value=token, httponly=True, secure=secure_flag,
-        samesite="lax", max_age=minutes * 60, path="/",
+        samesite="lax", max_age=minutes * 60 if minutes is not None else None, path="/",
     )
 
 
@@ -1678,7 +1693,7 @@ async def qr_claim(token: str, request: Request, user=Depends(get_current_user_o
         raise
     except Exception:
         pass
-    # Genereer een verse access token voor de DESKTOP sessie. Korte TTL.
+    # Genereer een verse access token voor de desktop sessie.
     desktop_token = create_token({
         "sub": user["id"], "email": user["email"], "type": "access",
         "company_id": user.get("company_id"), "role": user.get("role", "admin"),
@@ -1966,7 +1981,16 @@ async def me(user=Depends(get_current_user)):
             # Expose de onboarding-flag zodat de frontend na reload nog
             # steeds weet dat er een "Kies uw portalnaam" modal moet komen.
             company["needs_onboarding"] = bool(c.get("needs_onboarding"))
-    return {**user, "active_company": company}
+    result = {**user, "active_company": company}
+    if not user.get("original_user_id"):
+        token_payload = {
+            "sub": user["id"], "email": user.get("email"), "type": "access",
+            "company_id": user.get("company_id"), "role": user.get("role", "admin"),
+        }
+        if user.get("staff"):
+            token_payload["staff"] = True
+        result["access_token"] = create_token(token_payload, ACCESS_MIN)
+    return result
 
 
 # ============== Emergent Google OAuth ==============
@@ -2104,8 +2128,7 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
         }
         await db.users.insert_one(user_doc)
 
-    # Sla sessie op. Emergent session_token is 7 dagen geldig.
-    expires_at = now_utc() + timedelta(days=365)
+    # De login-session wordt beëindigd door /auth/logout, niet door een timer.
     # Wis EERST alle stale sessies op dit apparaat:
     #   1) Eventuele OUDE session_token cookie in de browser → DB rij weg
     #      (behalve als het toevallig hetzelfde token is als het nieuwe).
@@ -2127,7 +2150,7 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
         {"$set": {
             "session_token": session_token,
             "user_id": user_doc.get("user_id") or user_doc.get("id"),
-            "expires_at": iso(expires_at),
+            "expires_at": None,
             "created_at": iso(now_utc()),
         }},
         upsert=True,
@@ -2147,6 +2170,12 @@ async def google_auth_callback(body: GoogleCallbackIn, request: Request, respons
         needs_onb = bool(co and co.get("needs_onboarding"))
     return {
         "user_id": user_doc.get("user_id") or user_doc.get("id"),
+        "access_token": create_token({
+            "sub": user_doc.get("id") or user_doc.get("user_id"),
+            "email": email, "type": "access",
+            "company_id": user_doc.get("company_id"),
+            "role": user_doc.get("role", "admin"),
+        }, ACCESS_MIN),
         "email": email, "name": name, "picture": picture,
         "role": user_doc.get("role", "admin"),
         "needs_onboarding": needs_onb,
@@ -6637,7 +6666,7 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
 # =====================================================================
 # Tenant portal auth
 # =====================================================================
-TENANT_TOKEN_MIN = KIOSK_TOKEN_MIN  # 1 jaar
+TENANT_TOKEN_MIN = KIOSK_TOKEN_MIN
 
 
 async def get_tenant_session(request: Request) -> dict:
@@ -6651,11 +6680,9 @@ async def get_tenant_session(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
     try:
-        payload = decode_token(token)
+        payload = decode_token(token, verify_exp=False)
         if payload.get("type") != "tenant":
             raise HTTPException(status_code=401, detail="Ongeldig token type")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Sessie verlopen")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Ongeldig token")
     tenant = await db.tenants.find_one({"id": payload["sub"]}, {"_id": 0, "pin_hash": 0})

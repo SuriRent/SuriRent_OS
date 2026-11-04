@@ -5612,6 +5612,7 @@ export default function KioskLayout() {
       localStorage.removeItem('kiosk_token');
       localStorage.removeItem('kiosk_company');
       localStorage.removeItem('admin_token');
+      localStorage.removeItem('auth_user_cache');
       localStorage.removeItem('kiosk_admin_cookie');
       localStorage.removeItem('pwa_preferred_role');
       localStorage.removeItem('active_company_id');

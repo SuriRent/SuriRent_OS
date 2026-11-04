@@ -6,6 +6,8 @@ Iter 34 — Backend regression tests for:
   (C) Customer Display PUT/GET roundtrip (operator → public projection)
 """
 import os
+from urllib.parse import urlparse
+
 import requests
 import pytest
 
@@ -73,6 +75,25 @@ class TestAuthCookies:
             timeout=15,
         )
         assert r2.status_code == 200, f"bearer fallback failed: {r2.status_code} {r2.text}"
+
+    def test_me_falls_back_to_bearer_when_access_cookie_is_stale(self):
+        s = requests.Session()
+        login = _login(s)
+        assert login.status_code == 200
+        token = login.json().get("access_token") or login.json().get("token")
+        assert token
+
+        host = urlparse(BASE_URL).hostname
+        s.cookies.set("access_token", "stale-cookie-token", domain=host, path="/")
+        response = s.get(
+            f"{BASE_URL}/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        assert response.status_code == 200, (
+            f"fresh bearer token failed behind stale cookie: "
+            f"{response.status_code} {response.text}"
+        )
 
     def test_logout_clears_all_three_cookies(self):
         s = requests.Session()
