@@ -12625,7 +12625,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
         return {"sent": False, "reason": "no_tenant_email"}
 
     try:
-        pdf_bytes = await asyncio.to_thread(receipt_pdf, p_enriched)
+        pdf_bytes = await _payment_bon_pdf(p_enriched)
         brand_kwargs = await _tenant_email_brand(cid)
         # Periode-regel — voorheen ontbrak deze in de kiosk-email, waardoor
         # de huurder niet zag voor welke maand de kwitantie was.
@@ -12661,7 +12661,7 @@ async def kiosk_email_receipt(payment_id: str, _session=Depends(get_kiosk_sessio
             cfg, to,
             f"Kwitantie {p_enriched['receipt_number']}{subject_period}",
             wrap_template(content, **brand_kwargs),
-            attachments=[(f"kwitantie-{p_enriched['receipt_number']}.pdf", pdf_bytes, "application/pdf")],
+            attachments=[(f"bon-{p_enriched['receipt_number']}.pdf", pdf_bytes, "application/pdf")],
         )
         return {"sent": True, "to": to}
     except EmailError as e:
@@ -12719,8 +12719,8 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
         f"Bedrag: {p_enriched['currency']} {p_enriched['amount']:.2f}\n"
         f"{period_line}"
         f"Methode: {p_enriched.get('method', '')}\n\n"
-        f"📷 De kwitantie is als foto meegestuurd — bewaar hem in uw galerij.\n"
-        f"📄 PDF-versie: {pdf_link}"
+        f"📷 De bon is als foto meegestuurd — bewaar hem in uw galerij.\n"
+        f"📄 PDF-versie van de bon: {pdf_link}"
     )
 
     # Probeer WhatsApp eerst (als geconfigureerd), val terug op SMS.
@@ -13000,13 +13000,12 @@ def _pdf_response(pdf_bytes: bytes, filename: str) -> StreamingResponse:
 
 @api.get("/payments/{payment_id}/pdf")
 async def payment_pdf(payment_id: str):
-    """Public: download PDF receipt by payment id. No auth so we can email/share link."""
+    """Public: download the thermal receipt PDF by payment id."""
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p, include_logo=True)
-    pdf = await asyncio.to_thread(receipt_pdf, p)
-    return _pdf_response(pdf, f"kwitantie-{p['receipt_number']}.pdf")
+    pdf = await _payment_bon_pdf(p)
+    return _pdf_response(pdf, f"bon-{p['receipt_number']}.pdf")
 
 
 _FONT_PRESETS = {"klein": (12, 16, 13, 18), "normaal": (16, 20, 18, 22), "groot": (20, 26, 22, 28)}
@@ -13150,6 +13149,42 @@ def _render_receipt_png(data: dict) -> bytes:
     buf = BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
+
+
+def _receipt_png_to_jpg(png_bytes: bytes) -> bytes:
+    from PIL import Image
+    from io import BytesIO
+
+    image = Image.open(BytesIO(png_bytes)).convert("RGB")
+    out = BytesIO()
+    image.save(out, "JPEG", quality=90, optimize=True)
+    return out.getvalue()
+
+
+def _receipt_png_to_pdf(png_bytes: bytes, paper_width: int) -> bytes:
+    """Embed the exact shared bon image into a PDF with thermal paper dimensions."""
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+    from PIL import Image
+    from io import BytesIO
+
+    with Image.open(BytesIO(png_bytes)) as image:
+        image_width, image_height = image.size
+    page_width = (80 if paper_width == 80 else 58) * mm
+    page_height = page_width * image_height / image_width
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(page_width, page_height), pageCompression=1)
+    pdf.drawImage(ImageReader(BytesIO(png_bytes)), 0, 0, width=page_width, height=page_height)
+    pdf.showPage()
+    pdf.save()
+    return output.getvalue()
+
+
+async def _payment_bon_pdf(payment: dict) -> bytes:
+    data = await _receipt_print_data(payment)
+    png = await asyncio.to_thread(_render_receipt_png, data)
+    return await asyncio.to_thread(_receipt_png_to_pdf, png, data.get("paper_width", 58))
 
 
 @api.get("/kiosk/payments/{payment_id}/print-data")
@@ -13708,31 +13743,18 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
 
 @api.get("/payments/{payment_id}/image")
 async def payment_image(payment_id: str):
-    """Render kwitantie als JPG foto — bedoeld om eenvoudig via WhatsApp
-    als foto te delen (in plaats van als PDF-bijlage). Geen auth zodat de
-    huurder de afbeelding ook direct kan ontvangen via een gedeelde link.
-    """
+    """Public thermal-bon JPG for WhatsApp and other sharing."""
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    p = await _enrich_payment(p, include_logo=True)
-    pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
-    # PDF eerste pagina → JPG via pymupdf (zoom 2.5× voor scherpe weergave
-    # op iPhone retina-schermen)
-    try:
-        import pymupdf
-        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-        page = doc[0]
-        pix = page.get_pixmap(matrix=pymupdf.Matrix(2.5, 2.5))
-        jpg = pix.tobytes("jpeg", jpg_quality=85)
-        doc.close()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image render fout: {e}")
+    data = await _receipt_print_data(p)
+    png = await asyncio.to_thread(_render_receipt_png, data)
+    jpg = await asyncio.to_thread(_receipt_png_to_jpg, png)
     from fastapi.responses import Response as _Resp
     return _Resp(
         content=jpg,
         media_type="image/jpeg",
-        headers={"Content-Disposition": f'inline; filename="kwitantie-{p["receipt_number"]}.jpg"'},
+        headers={"Content-Disposition": f'inline; filename="bon-{p["receipt_number"]}.jpg"'},
     )
 
 
@@ -18562,7 +18584,7 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     to = (body.to or tenant.get("email") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="Geen ontvanger — vul een e-mailadres in of zet er een bij de huurder")
-    pdf_bytes = await asyncio.to_thread(receipt_pdf, p)
+    pdf_bytes = await _payment_bon_pdf(p)
     brand_kwargs = await _tenant_email_brand(company_id_of(user))
     extra_note = f"<p>{body.message}</p>" if body.message else ""
     # Periode-regel — voorheen ontbrak deze in de e-mail, waardoor de huurder
@@ -18595,7 +18617,7 @@ async def email_payment_receipt(payment_id: str, body: EmailSendIn, user=Depends
     try:
         await send_email(cfg, to, f"Kwitantie {p['receipt_number']}{subject_period} - {brand_kwargs['brand_name']}",
                          wrap_template(content, **brand_kwargs),
-                         attachments=[(f"kwitantie-{p['receipt_number']}.pdf", pdf_bytes, "application/pdf")])
+                         attachments=[(f"bon-{p['receipt_number']}.pdf", pdf_bytes, "application/pdf")])
     except EmailError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"ok": True, "sent_to": to}
@@ -18747,12 +18769,12 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
     msg = (
         f"{extra}"
         f"Hallo {tenant.get('name', 'huurder')},\n\n"
-        f"Bij dezen je kwitantie {p['receipt_number']}:\n"
+        f"Bij dezen je bon {p['receipt_number']}:\n"
         f"• Bedrag: {p['currency']} {p['amount']:.2f}\n"
         f"• Datum: {p.get('paid_at', '')[:10]}\n"
         f"• Methode: {p.get('method', '')}\n\n"
-        f"📷 De kwitantie is als foto meegestuurd — bewaar hem in uw galerij.\n"
-        f"📄 PDF-versie: {_public_url(f'/api/payments/{payment_id}/pdf')}\n\n"
+        f"📷 De bon is als foto meegestuurd — bewaar hem in uw galerij.\n"
+        f"📄 PDF-versie van de bon: {_public_url(f'/api/payments/{payment_id}/pdf')}\n\n"
         f"— {brand_name}"
     )
     # Voor WhatsApp: stuur JPG kwitantie als media-bijlage (inline preview).
@@ -19255,7 +19277,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
         )
         remaining = total_inst - paid_inst
         amount = float(inst.get("amount") or 0)
-        # Bouw publieke kwitantie-links — Twilio WhatsApp toont een JPG inline
+        # Bouw publieke bon-links — Twilio WhatsApp toont een JPG inline
         # als media bijlage; PDF-link komt in de tekst voor download/print.
         payment_id = inst.get("payment_id")
         receipt_image_url = _public_url(f"/api/payments/{payment_id}/image") if payment_id else None
@@ -19281,7 +19303,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                 f"Nog *{remaining}* termijn{'en' if remaining != 1 else ''} te gaan.{nl}\n\n"
             )
         if receipt_pdf_url:
-            body += f"📄 Kwitantie PDF: {receipt_pdf_url}\n\n"
+            body += f"📄 Bon PDF: {receipt_pdf_url}\n\n"
         body += f"— {await _brand_name_of(cid)}"
         if cfg.get("enabled") and phone:
             try:
@@ -19323,8 +19345,8 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                         payment_doc = await db.payments.find_one({"id": payment_id}, {"_id": 0})
                         if payment_doc:
                             enriched = await _enrich_payment(payment_doc)
-                            pdf_bytes = await asyncio.to_thread(receipt_pdf, enriched)
-                            attachments = [(f"kwitantie-{enriched.get('receipt_number','')}.pdf", pdf_bytes, "application/pdf")]
+                            pdf_bytes = await _payment_bon_pdf(enriched)
+                            attachments = [(f"bon-{enriched.get('receipt_number','')}.pdf", pdf_bytes, "application/pdf")]
                     except Exception as e:  # noqa: BLE001
                         print(f"[plan-notify] pdf-attach fail: {e}")
                 await send_email(
