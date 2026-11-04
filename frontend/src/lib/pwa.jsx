@@ -206,7 +206,10 @@ export function InstallPrompt() {
           {ios ? (
             <p className="text-xs text-slate-600 mt-1 leading-snug">
               Tik op <Share className={`inline w-3.5 h-3.5 -mt-0.5 ${isSuperadmin ? 'text-emerald-700' : 'text-[#FF5C00]'}`} /> Delen
-              {' '}en kies <span className="font-bold">"Zet op beginscherm"</span> om {isSuperadmin ? 'SuriRent Superadmin' : 'SuriRent'} als app te gebruiken.
+              {' '}en kies <span className="font-bold">"Zet op beginscherm"</span>.
+              {isSuperadmin
+                ? ' Laat "Open als webapp" ingeschakeld en tik op "Voeg toe". Open daarna SuriRent vanaf het nieuwe beginschermicoon; in Safari blijft de adresbalk zichtbaar.'
+                : ' Open daarna SuriRent vanaf het nieuwe beginschermicoon.'}
             </p>
           ) : (
             <p className="text-xs text-slate-600 mt-1 leading-snug">
