@@ -18759,7 +18759,7 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
         f"Je factuur {inv['invoice_number']} voor {period}:\n"
         f"• Bedrag: {inv['currency']} {inv['amount']:.2f}\n"
         f"• Status: {inv['status']}\n\n"
-        f"PDF: {_public_url(f'/api/invoices/{invoice_id}/pdf')}\n\n"
+        f"Bon JPG: {_public_url(f'/api/invoices/{invoice_id}/image')}\n\n"
         f"— {brand_name}"
     )
     await _twilio_send(cfg, body.channel, to, msg)
@@ -18800,9 +18800,9 @@ async def tenant_payment_reminder(
     total = sum(float(i.get("amount", 0)) for i in invs)
     lines = []
     for i in invs:
-        pdf_link = _public_url(f"/api/invoices/{i['id']}/pdf")
+        image_link = _public_url(f"/api/invoices/{i['id']}/image")
         month_lbl = months_nl[i['period_month']-1].capitalize()
-        lines.append(f"• {month_lbl} {i['period_year']}: {cur} {float(i['amount']):.2f}\n  {pdf_link}")
+        lines.append(f"• {month_lbl} {i['period_year']}: {cur} {float(i['amount']):.2f}\n  {image_link}")
     period_label = ", ".join(f"{months_nl[i['period_month']-1].capitalize()} {i['period_year']}" for i in invs[:3])
     if len(invs) > 3:
         period_label += f" (+{len(invs) - 3} meer)"

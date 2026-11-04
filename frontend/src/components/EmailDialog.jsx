@@ -97,12 +97,19 @@ export function SendDialog({
       }
       setWaSharing(false);
     }
-    // Fallback: stuur de bonfoto-link voor betalingen; overige documenten
-    // behouden hun eigen PDF-link.
-    const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
-    const documentUrl = documentType === 'payment'
-      ? `${apiBase}/payments/${documentId}/image`
-      : `${apiBase}/${documentType === 'overdue-reminder' ? 'tenants' : documentType + 's'}/${documentId}/pdf`;
+    // Betalingsbewijzen en facturen delen als JPG; andere documenten houden
+    // hun bestaande PDF-link.
+    const apiBase = (api.defaults.baseURL || `${window.location.origin}/api`).replace(/\/+$/, '');
+    const imagePath = documentType === 'payment'
+      ? `/payments/${documentId}/image`
+      : documentType === 'invoice'
+        ? `/invoices/${documentId}/image`
+        : documentType === 'overdue-reminder'
+          ? `/tenants/${documentId}/reminder-image`
+          : null;
+    const documentUrl = imagePath
+      ? `${apiBase}${imagePath}`
+      : `${apiBase}/${documentType}s/${documentId}/pdf`;
     const fullMsg = `${greeting}\n\n${intro}\n\n${documentUrl}\n\nMet vriendelijke groet,\nSuriRent`;
     openWhatsApp(phone, fullMsg);
   };

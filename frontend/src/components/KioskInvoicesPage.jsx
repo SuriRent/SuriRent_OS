@@ -4,6 +4,7 @@ import {
   Banknote, MessageCircle, Share2, Trash2, CheckCircle2, ChevronRight, X,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../lib/api';
+import { openWhatsApp } from '../lib/external-link';
 import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpers';
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
@@ -81,14 +82,42 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
   );
 }
 
-async function shareInvoice(inv) {
-  const url = `${process.env.REACT_APP_BACKEND_URL}/api/invoices/${inv.id}/image`;
+async function shareInvoice(inv, tenant) {
+  const apiBase = (api.defaults.baseURL || `${window.location.origin}/api`).replace(/\/+$/, '');
+  const url = `${apiBase}/invoices/${inv.id}/image`;
+  const phone = String(tenant?.phone || '').replace(/\D/g, '');
+  const message = `Hierbij uw factuur ${inv.invoice_number || ''} voor ${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}.\nBon: ${url}`;
+  const fallbackTab = window.open('about:blank', '_blank');
+  const fallback = () => {
+    if (phone.length >= 7) {
+      if (fallbackTab && !fallbackTab.closed) {
+        fallbackTab.location.replace(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
+      } else {
+        openWhatsApp(phone, message);
+      }
+    } else if (fallbackTab && !fallbackTab.closed) {
+      fallbackTab.location.replace(url);
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  };
   try {
-    const blob = await (await fetch(url)).blob();
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Factuurbon ophalen mislukt (${response.status})`);
+    const blob = await response.blob();
     const file = new File([blob], `factuur-${inv.invoice_number}.jpg`, { type: 'image/jpeg' });
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: `Factuur ${inv.invoice_number}` }); return; }
-  } catch { /* valt terug op openen */ }
-  window.open(url, '_blank');
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: `Factuur ${inv.invoice_number}` });
+      if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
+      return;
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
+      return;
+    }
+  }
+  fallback();
 }
 
 function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) {
@@ -105,7 +134,7 @@ function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) 
         ? <span className={`text-lg font-black ${late ? 'text-red-600' : 'text-orange-600'}`}>{money(rest, inv.currency)}</span>
         : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1"><CheckCircle2 className="w-4 h-4" /> Betaald</span>}
       <InvoiceExtraActions inv={inv} open={open} credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />
-      <button type="button" onClick={() => shareInvoice(inv)} aria-label="Delen" data-testid={`kiosk-inv-share-${inv.id}`}
+      <button type="button" onClick={() => shareInvoice(inv, tenant)} aria-label="Delen" data-testid={`kiosk-inv-share-${inv.id}`}
         className="w-11 h-11 rounded-xl bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors"><Share2 className="w-5 h-5" /></button>
       {open && (
         <button type="button" onClick={() => onDelete(inv)} aria-label="Verwijderen" data-testid={`kiosk-inv-delete-${inv.id}`}

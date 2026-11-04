@@ -9,8 +9,7 @@ import CreditBadge from './CreditBadge';
 
 // =====================================================================
 // Reminder message builder — vult tenant's eigen bedrijfsnaam in (nooit
-// "SuriRent") en voegt publieke PDF-links toe zodat WhatsApp automatisch
-// een preview toont van de factuur.
+// "SuriRent") en voegt publieke bon-JPG-links toe voor WhatsApp.
 // =====================================================================
 function buildReminderMessage(group, companyName) {
   const cur = group.currency;
@@ -23,7 +22,7 @@ function buildReminderMessage(group, companyName) {
     : (group.overdue || []);
   const list = items
     .map((i) => {
-      const jpgUrl = i.id ? `${window.location.origin}/api/invoices/${i.id}/pdf` : '';
+      const jpgUrl = i.id ? `${process.env.REACT_APP_BACKEND_URL}/api/invoices/${i.id}/image` : '';
       const line = `• ${MONTHS_NL[i.period_month - 1]} ${i.period_year}: ${cur} ${Number(i.amount).toFixed(2)}`;
       return jpgUrl ? `${line}\n  ${jpgUrl}` : line;
     })
