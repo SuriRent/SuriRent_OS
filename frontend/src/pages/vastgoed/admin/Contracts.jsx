@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty, FxIconBtn } from '../../../components/KioskFx';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { Plus, Trash2, X, Check, Loader2, FileText, ExternalLink, Copy, Pencil, Mail } from 'lucide-react';
@@ -16,6 +16,8 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentDayLoading, setPaymentDayLoading] = useState(true);
+  const paymentDayEdited = useRef(false);
 
   // When tenant changes, auto-suggest apartment if tenant has one
   useEffect(() => {
@@ -25,13 +27,32 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
     }
   }, [data.tenant_id, data.apartment_id, tenants]);
 
+  useEffect(() => {
+    let alive = true;
+    api.get('/settings')
+      .then(({ data: settings }) => {
+        const configuredDay = Number(settings?.invoicing?.contract_payment_day);
+        if (alive && !paymentDayEdited.current) {
+          setData((current) => ({ ...current, payment_day: Number.isInteger(configuredDay) && configuredDay >= 1 && configuredDay <= 31 ? configuredDay : 1 }));
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setData((current) => ({ ...current, payment_day: null }));
+          setError(formatError(e));
+        }
+      })
+      .finally(() => { if (alive) setPaymentDayLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
   const save = async () => {
     setLoading(true); setError('');
     try {
       const { data: r } = await api.post('/contracts', {
         ...data,
         deposit_amount: parseFloat(data.deposit_amount) || 0,
-        payment_day: parseInt(data.payment_day) || 1,
+        payment_day: data.payment_day ? parseInt(data.payment_day) : undefined,
       });
       onSaved(r);
     } catch (e) { setError(formatError(e)); }
@@ -51,7 +72,7 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
         apartment_id: data.apartment_id,
         start_date: data.start_date,
         end_date: data.end_date,
-        payment_day: parseInt(data.payment_day) || 1,
+        payment_day: data.payment_day ? parseInt(data.payment_day) : undefined,
         deposit_amount: parseFloat(data.deposit_amount) || 0,
         terms: data.terms || '',
       }, { responseType: 'blob' });
@@ -126,9 +147,13 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Betaaldag</label>
-              <input type="number" min={1} max={28} value={data.payment_day} onChange={(e) => setData({ ...data, payment_day: e.target.value })}
+              <input type="number" min={1} max={31} value={data.payment_day ?? ''} disabled={paymentDayLoading}
+                onChange={(e) => { paymentDayEdited.current = true; setData({ ...data, payment_day: e.target.value }); }}
                 data-testid="contract-payday"
                 className="w-full mt-1 h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+              <p className="mt-1 text-[11px] text-slate-500">
+                {paymentDayLoading ? 'Standaard betaaldag laden…' : 'Standaard overgenomen van de vervaldag bij Facturen automatisering; per contract aanpasbaar.'}
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Borg</label>
@@ -166,13 +191,22 @@ function ContractForm({ tenants, apartments, onCancel, onSaved }) {
 
 export default function Contracts({ embedded = false }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
-  const { data: itemsRaw, mutate: refetchC, isLoading: loadingC } = useApiSWR('/contracts');
-  const { data: tenantsRaw, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
-  const { data: apartmentsRaw, mutate: refetchA, isLoading: loadingA } = useApiSWR('/apartments');
+  const { data: itemsRaw, error: errorC, mutate: refetchC, isLoading: loadingC } = useApiSWR('/contracts');
+  const { data: tenantsRaw, error: errorT, mutate: refetchT, isLoading: loadingT } = useApiSWR('/tenants');
+  const { data: apartmentsRaw, error: errorA, mutate: refetchA, isLoading: loadingA } = useApiSWR('/apartments');
   const items = itemsRaw || [];
   const tenants = tenantsRaw || [];
   const apartments = apartmentsRaw || [];
-  const loaded = !loadingC && !loadingT && !loadingA;
+  const settled = [
+    [itemsRaw, errorC],
+    [tenantsRaw, errorT],
+    [apartmentsRaw, errorA],
+  ].every(([data, error]) => data !== undefined || !!error);
+  const loadErrors = [
+    errorC && itemsRaw === undefined ? errorC : null,
+    errorT && tenantsRaw === undefined ? errorT : null,
+    errorA && apartmentsRaw === undefined ? errorA : null,
+  ].filter(Boolean);
   const [creating, setCreating] = useState(false);
   const [emailing, setEmailing] = useState(null);
   const [filter, setFilter] = useState('all'); // all | signed | draft
@@ -224,13 +258,21 @@ export default function Contracts({ embedded = false }) {
     return (
       <div className="space-y-4" data-testid="contracts-page">
         {confirmNode}
+        {loadErrors.length > 0 && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span>Contractgegevens konden niet volledig worden geladen: {formatError(loadErrors[0])}</span>
+            <button type="button" onClick={load} className="rounded-lg bg-white px-3 py-2 font-bold text-red-700 ring-1 ring-red-200 hover:bg-red-100">
+              Opnieuw proberen
+            </button>
+          </div>
+        )}
         <FxStats testId="contract-fx-stats" items={[['Contracten', counts.all, 'orange'], ['Ondertekend', counts.signed, 'green'], ['Concept', counts.draft, 'amber']]} />
         <FxTabs testPrefix="contract" value={filter} onChange={setFilter} tabs={[
           { v: 'all', label: 'Alles', count: counts.all }, { v: 'signed', label: 'Ondertekend', count: counts.signed }, { v: 'draft', label: 'Concept', count: counts.draft }]} />
         <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder, contract of appartement…" testId="contract-search" />
-        {!loaded ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen contracten gevonden." testId="contracts-empty" /> : rows.map((c) => {
+        {!settled ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen contracten gevonden." testId="contracts-empty" /> : rows.map((c) => {
           const signed = !!c.signed_at;
-          return <FxRow key={c.id} testId={`contract-row-${c.id}`} title={c.tenant_name || 'Onbekende huurder'}
+          return <FxRow key={c.id} testId={`contract-row-${c.id}`} tenantId={c.tenant_id} title={c.tenant_name || 'Onbekende huurder'}
             sub={[c.contract_number, `Appt. ${c.apartment_number || '—'}`].filter(Boolean).join(' · ')}
             meta={c.start_date ? `${c.start_date}${c.end_date ? ` → ${c.end_date}` : ''}` : undefined}
             status={signed ? 'Ondertekend' : 'Concept'} tone={signed ? 'green' : 'amber'}
@@ -257,6 +299,14 @@ export default function Contracts({ embedded = false }) {
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="contracts-page">
       {confirmNode}
+      {loadErrors.length > 0 && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>Contractgegevens konden niet volledig worden geladen: {formatError(loadErrors[0])}</span>
+          <button type="button" onClick={load} className="rounded-lg bg-white px-3 py-2 font-bold text-red-700 ring-1 ring-red-200 hover:bg-red-100">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
       {/* Header — inline titel + subtitel + oranje "Nieuw contract" knop.
           Zelfde patroon als Betalingsregelingen zodat de app consistent voelt. */}
       <div className={`${embedded ? 'hidden' : 'flex'} items-center justify-between gap-3 flex-nowrap`}>
@@ -294,7 +344,7 @@ export default function Contracts({ embedded = false }) {
         ))}
       </div>
 
-      {!loaded ? (
+      {!settled ? (
         <ListSkeleton rows={5} testid="contracts-skeleton" />
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="contracts-empty">

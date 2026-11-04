@@ -1,8 +1,10 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
+import PhotoUpload from '../../components/PhotoUpload';
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
+import { publicMarketingUrl } from '../../lib/env';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Sun, Palette, Menu as MenuIcon, ScanLine,
@@ -12,8 +14,9 @@ import {
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
-  Landmark as LandmarkIcon, Users, Database, FileSignature, Wifi,
+  Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
 } from 'lucide-react';
+  import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -49,6 +52,21 @@ import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetch
 const noop = () => {};
 
 prefetchKioskSelect();
+
+function useKioskLiveRefresh(refresh) {
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+  useEffect(() => {
+    const onChange = () => refreshRef.current();
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+}
 
 // Hook: tracked `visualViewport` (iOS/Android). Retourneert de huidige
 // hoogte + offsetTop van de VISUELE viewport (het gebied dat niet door
@@ -216,15 +234,20 @@ function MobileAddFab({ onOpen }) {
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
 const KioskThemeCtx = createContext({ theme: 'orange', toggle: () => {}, isAdmin: false });
 
-// Beheerder-menu (dropdown) in de desktop-kop; functies worden later stap voor stap toegevoegd.
+// Beheerder-menu (dropdown) in de desktop-kop.
 const ADMIN_MENU_ITEMS = [
   { id: 'nfc', label: 'NFC-tag', Icon: Wifi, onClick: () => navAdmin('nfc', 'admin') },
   { id: 'kasgeld', label: 'Kasgeld', Icon: Wallet, onClick: () => window.dispatchEvent(new CustomEvent('go-tab', { detail: 'kasgeld' })) },
 ];
 
-// Zelfde rechten als de beheeromgeving (BOEKHOUDER_TABS).
-const HAMBURGER_HIDDEN = ['instellingen', 'overzicht'];
 const BOEKHOUDER_KIOSK_PAGES = ['overzicht', 'huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties'];
+
+function requestedAdminStep() {
+  const page = new URLSearchParams(window.location.search).get('admin');
+  if (page === 'kasgeld') return 'kasgeld';
+  if (page === 'nfc') return 'select';
+  return KIOSK_ADMIN_PAGES[page] ? `admin:${page}` : 'select';
+}
 
 // Menu: telefoon = volledig scherm (zoals het + menu), desktop/iPad = popup in het midden.
 function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
@@ -245,7 +268,8 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
             <div className="w-10 h-10 rounded-xl bg-white/20 md:bg-orange-100 flex items-center justify-center">
               <Icon className="w-6 h-6 text-white md:text-[#FF5C00]" strokeWidth={2.4} />
             </div>
-            <h3 className="text-xl font-black text-white md:text-slate-900">{title}</h3>
+            <h3 className="text-xl font-black text-white md:text-slate-900"
+              data-testid={`${testId}-title`}>{title}</h3>
           </div>
           <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
             className="w-11 h-11 rounded-xl bg-white/20 md:bg-slate-100 md:hover:bg-slate-200 flex items-center justify-center transition">
@@ -258,7 +282,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
             {items.map((t, i) => (
               <button key={t.id} type="button" role="menuitem" data-testid={t.testid} onClick={() => { onClose(); t.onClick(); }}
                 style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
-                className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 md:bg-slate-50 md:hover:bg-orange-50 md:ring-1 md:ring-slate-100 shadow-lg md:shadow-none py-6 md:py-5 px-3 min-h-[130px] md:min-h-[120px] transition-[background-color,transform] active:scale-95 animate-in fade-in slide-in-from-bottom-1 fill-mode-both">
+                className={`flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 md:bg-slate-50 md:hover:bg-orange-50 md:ring-1 md:ring-slate-100 shadow-lg md:shadow-none py-6 md:py-5 px-3 min-h-[130px] md:min-h-[120px] transition-[background-color,transform] active:scale-95 animate-in fade-in slide-in-from-bottom-1 fill-mode-both ${t.className || ''}`}>
                 <span className="w-14 h-14 md:w-12 md:h-12 rounded-2xl bg-orange-100 flex items-center justify-center">
                   <t.Icon className="w-7 h-7 md:w-6 md:h-6 text-orange-600" strokeWidth={2} />
                 </span>
@@ -282,16 +306,25 @@ const returnToMenu = () => {
 function useMenuReopen(name, setOpen) {
   useEffect(() => {
     const h = (e) => { if (e.detail === name) setOpen(true); };
+    const close = () => setOpen(false);
     window.addEventListener('kiosk-open-menu', h);
-    return () => window.removeEventListener('kiosk-open-menu', h);
+    window.addEventListener('kiosk-close-menu', close);
+    return () => {
+      window.removeEventListener('kiosk-open-menu', h);
+      window.removeEventListener('kiosk-close-menu', close);
+    };
   }, [name, setOpen]);
+}
+
+function isStaffSession() {
+  try { return localStorage.getItem('kiosk_staff') === '1'; } catch { return false; }
 }
 
 function useAdminRole(isAdmin) {
   const [role, setRole] = useState(null);
   useEffect(() => {
     if (!isAdmin) return;
-    api.get('/auth/me').then((r) => setRole(r?.data?.role || null)).catch(() => {});
+    api.get('/auth/me').then((r) => setRole(r?.data?.staff ? 'staff' : (r?.data?.role || null))).catch(() => {});
   }, [isAdmin]);
   return role;
 }
@@ -300,7 +333,7 @@ function useAdminRole(isAdmin) {
 function KioskBell() {
   const { isAdmin } = useContext(KioskThemeCtx);
   const role = useAdminRole(isAdmin);
-  if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin') return null;
+  if (!isAdmin || !role || role === 'boekhouder' || role === 'superadmin' || role === 'staff') return null;
   return (
     <div className="kiosk-bell shrink-0" data-testid="kiosk-subscription-bell">
       <SubscriptionBell compact backPath="/kiosk" onOpenSub={() => navAdmin('inst-abonnement')} />
@@ -315,7 +348,7 @@ function KioskSettingsMenu() {
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
-  if (!isAdmin || !role || role === 'boekhouder') return null;
+  if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
   const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
@@ -339,9 +372,18 @@ function KioskAdminMenu() {
   if (!isAdmin) return null;
   const items = [
     ...Object.keys(KIOSK_ADMIN_PAGES)
-      .filter((id) => !HAMBURGER_HIDDEN.includes(id) && (role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id)))
-      .map((id) => ({ id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon, testid: `kiosk-admin-menu-${id}`, onClick: () => navAdmin(id, 'admin') })),
+      .filter((id) => id !== 'instellingen')
+      .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
+      .map((id) => ({
+        id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
+        testid: `kiosk-admin-menu-${id}`,
+        onClick: () => navAdmin(id, 'admin'),
+      })),
     ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
+    ...(role === 'admin' ? [{
+      id: 'tour', label: 'Rondleiding starten', Icon: Sparkles, testid: 'kiosk-admin-menu-tour',
+      onClick: () => window.dispatchEvent(new CustomEvent('kiosk-tour-start')),
+    }] : []),
   ];
   return (
     <div className="relative shrink-0">
@@ -373,11 +415,11 @@ function ThemeToggle({ testId, className = '' }) {
 }
 
 const STEP_TITLES = {
-  kasgeld: 'Kasgeldbeheer', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
+  kasgeld: 'Kasgeldbeheer', stroom: 'Stroom', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
-function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, title = 'Kies uw appartement' }) {
+function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, tenant, title = 'Kies uw appartement' }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
@@ -396,6 +438,14 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
         <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        {tenant && (
+          <div className="flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
+            <div className="w-9 h-9 [&>div]:!w-9 [&>div]:!h-9 [&>div]:!ring-0 shrink-0">
+              <OverviewTenantPhoto src={tenant.photo} name={tenant.name} />
+            </div>
+            <span className="hidden sm:block text-sm font-black text-slate-800 truncate">{tenant.name}</span>
+          </div>
+        )}
         {onSearch && (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
             className="hidden md:flex h-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 items-center gap-2 md:px-4 font-bold transition-colors">
@@ -430,13 +480,24 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
   const [linkApt, setLinkApt] = useState(null);
-  const reloadSelect = () => {
+  const reloadSelect = useCallback(() => {
     invalidateKioskSelect();
     fetchKioskSelect().then((d) => {
       setApartments(d.apartments);
       setLocations(d.locations.filter((l) => l.id !== '_none'));
     }).catch(() => {});
-  };
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => reloadSelect();
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('surirent:live-change', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reloadSelect]);
 
   useEffect(() => {
     fetchKioskSelect().then((d) => {
@@ -583,10 +644,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2">
           {visible.map((a) => {
-            // Conditioneel: als beheerder `show_tenant_photo` heeft
-            // aangezet EN er is een pasfoto (avatar of ID-kaart) EN het
-            // appartement is bewoond, tonen we die i.p.v. het icoon.
-            const photo = a.show_tenant_photo && a.tenant_id
+            // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
+            const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
               : null;
             const photoSrc = photo && !/^https?:/.test(photo)
@@ -712,12 +771,12 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
       if (!sc.name && !sc.id_number) setErr('ID-kaart niet goed gelezen — vul de gegevens zelf in of scan opnieuw.');
     } catch (e) { setErr(formatError(e)); } finally { setScanning(false); if (scanRef.current) scanRef.current.value = ''; }
   };
-  useEffect(() => {
-    api.get('/kiosk/tenants/unassigned').then((r) => {
+  const loadUnassigned = useCallback(() => api.get('/kiosk/tenants/unassigned').then((r) => {
       setList(r.data || []);
       if (!(r.data || []).length) setTab('new');
-    }).catch((e) => { setList([]); setErr(formatError(e)); });
-  }, []);
+    }).catch((e) => { setList([]); setErr(formatError(e)); }), []);
+  useEffect(() => { loadUnassigned(); }, [loadUnassigned]);
+  useKioskLiveRefresh(loadUnassigned);
   const shown = (list || []).filter((t) => !q || `${t.name} ${t.phone || ''} ${t.id_number || ''}`.toLowerCase().includes(q.toLowerCase()));
   const canSave = tab === 'existing' ? !!pick : f.name.trim().length > 1;
   const save = async () => {
@@ -969,13 +1028,13 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
 function NotesButton({ tenantId, tenantName }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(null);
-  useEffect(() => {
-    let mounted = true;
+  const loadCount = useCallback(() => {
     api.get(`/kiosk/tenants/${tenantId}/notes`)
-      .then((r) => { if (mounted) setCount((r.data || []).length); })
-      .catch(() => { if (mounted) setCount(0); });
-    return () => { mounted = false; };
+      .then((r) => setCount((r.data || []).length))
+      .catch(() => setCount(0));
   }, [tenantId]);
+  useEffect(() => { loadCount(); }, [loadCount]);
+  useKioskLiveRefresh(loadCount);
   return (
     <>
       <button onClick={() => setOpen(true)} data-testid="overview-notes-btn"
@@ -1015,6 +1074,7 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
   }, [tenantId, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
+  useKioskLiveRefresh(load);
 
   const add = async () => {
     const t = text.trim();
@@ -1151,7 +1211,9 @@ function prefetchOverview(tid) {
   _ovPrefetch.set(tid, { p: fetchOverview(tid), at: Date.now() });
 }
 // Betaling via beheer → prefetch-cache weg, zodat de kiosk vers ophaalt.
-window.addEventListener('kiosk-overview-invalidate', () => _ovPrefetch.clear());
+const clearOverviewPrefetch = () => _ovPrefetch.clear();
+window.addEventListener('kiosk-overview-invalidate', clearOverviewPrefetch);
+window.addEventListener('surirent:live-change', clearOverviewPrefetch);
 function takeOverview(tid) {
   const hit = _ovPrefetch.get(tid);
   _ovPrefetch.delete(tid);
@@ -1193,11 +1255,27 @@ function TenantOverview({ apartment, onBack, onPay }) {
   }, [apartment]);
 
   useEffect(() => { reload(); }, [reload]);
+  const actRef = useRef({});
+  useEffect(() => {
+    const onAct = (e) => actRef.current[e.detail]?.();
+    window.addEventListener('kiosk-tenant-action', onAct);
+    return () => window.removeEventListener('kiosk-tenant-action', onAct);
+  }, []);
   useEffect(() => {
     const onInv = (e) => { const t = e.detail?.tenant_id; if (!t || t === apartment?.tenant_id) reload(true); };
     window.addEventListener('kiosk-overview-invalidate', onInv);
     return () => window.removeEventListener('kiosk-overview-invalidate', onInv);
   }, [reload, apartment?.tenant_id]);
+  useEffect(() => {
+    const onChange = () => reload(true);
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reload]);
 
   if (loading) return <div className="h-full bg-orange-500 flex items-center justify-center"><Loader2 className="w-10 h-10 text-white animate-spin" /></div>;
   if (err || !data) return <div className="h-full bg-orange-500 flex items-center justify-center text-white p-8">{err || 'Geen data'}</div>;
@@ -1249,6 +1327,14 @@ function TenantOverview({ apartment, onBack, onPay }) {
   // (Internet-item is verwijderd op 2026-02-22)
   const totalDue = currentMonthAmount + openRent;
   const allPaid = totalDue <= 0;
+  actRef.current = {
+    pay: () => onPay({ ...data, total_due: totalDue,
+      open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
+      current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
+      future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
+      current_month_invoice: currentInvoice }),
+    history: () => setShowHistory(true),
+  };
   const cur = balance.currency || apt.currency || 'SRD';
 
   // Subtitel onder "Achterstallige huur" — toont de maanden compact.
@@ -1577,10 +1663,21 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   const [waState, setWaState] = useState({});
   // Voorkomt dubbele afdruk/whatsapp-taps op dezelfde payment.
   const [busy, setBusy] = useState({});
-  useEffect(() => {
+  const loadPayments = useCallback(() => {
     api.get(`/kiosk/tenants/${tenant.id}/payments`)
-      .then((r) => setItems(r.data)).catch((e) => setErr(formatError(e)));
+      .then((r) => { setItems(r.data); setErr(''); }).catch((e) => setErr(formatError(e)));
   }, [tenant.id]);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+  useEffect(() => {
+    const onChange = () => loadPayments();
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadPayments]);
 
   // Stille afdruk: haal de PDF als blob op via de authenticated axios
   // client (window.open naar /api/... werkt niet altijd in de kiosk-PWA
@@ -1670,31 +1767,33 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
+    <div className="fixed inset-0 z-50 bg-[#FF6B1A] flex flex-col px-3 sm:px-6"
       style={{
-        paddingTop: 'max(var(--kiosk-sat), 1rem)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1rem)',
-        /* Brand-georiënteerde overlay zodat in PWA-kiosk de home-indicator
-           gebied dezelfde oranje kleur houdt als de rest van de kiosk,
-           in plaats van een zwarte band. */
-        backgroundColor: 'rgba(199, 70, 0, 0.55)',
+        paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 96px)',
       }}
       data-testid="kiosk-history-modal">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] my-auto overflow-hidden flex flex-col">
-        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-              <ClockIcon className="w-4 h-4 text-orange-500" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900">Betalingsgeschiedenis</h3>
-              <p className="text-xs text-slate-500 truncate">Appt. {apartment?.number}</p>
-            </div>
+      <div className="flex items-center justify-between flex-wrap gap-2 py-2 shrink-0">
+        <button onClick={onClose} data-testid="history-close"
+          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
+          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
+        </button>
+        <span className="text-sm sm:text-base font-semibold text-white">Betalingsgeschiedenis</span>
+        <div className="text-right text-white hidden sm:block">
+          <p className="text-[10px] sm:text-xs opacity-70">Appt. {apartment?.number}</p>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
+        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+            <ClockIcon className="w-4 h-4 text-orange-500" />
           </div>
-          <button onClick={onClose} data-testid="history-close"
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-slate-900">Betalingen</h3>
+            <p className="text-xs text-slate-500 truncate">
+              {items ? `${items.length} betaling${items.length === 1 ? '' : 'en'}` : 'Laden…'}
+            </p>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3"
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
@@ -1757,10 +1856,6 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
               </div>
             </div>
           ))}
-        </div>
-        <div className="px-5 sm:px-6 py-3 border-t border-slate-100 shrink-0">
-          <button onClick={onClose}
-            className="w-full h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Sluiten</button>
         </div>
       </div>
     </div>
@@ -1826,8 +1921,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planSuccess, setPlanSuccess] = useState(null);  // {id, num_installments, total_amount}
 
-  useEffect(() => {
-    api.get(`/kiosk/tenants/${tenant.id}/payment-plans`)
+  const loadPaymentPlans = useCallback(() => api.get(`/kiosk/tenants/${tenant.id}/payment-plans`)
       .then((r) => {
         const out = [];
         const linked = new Set();
@@ -1848,8 +1942,9 @@ function PaySelect({ overview, onBack, onConfirm }) {
         setPlanInstallments(out);
         setPlanLinkedInvIds(linked);
       })
-      .catch(() => { setPlanInstallments([]); setPlanLinkedInvIds(new Set()); });
-  }, [tenant.id]);
+      .catch(() => { setPlanInstallments([]); setPlanLinkedInvIds(new Set()); }), [tenant.id]);
+  useEffect(() => { loadPaymentPlans(); }, [loadPaymentPlans]);
+  useKioskLiveRefresh(loadPaymentPlans);
 
   const planItemKey = (it) => `plan:${it.planId}:${it.seq}`;
   const invItemKey = (inv) => `inv:${inv.id}`;
@@ -3238,8 +3333,9 @@ function KasgeldPanel({ onBack }) {
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
   const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
 
-  const load = useCallback(async () => {
-    setLoading(true); setErr('');
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    setErr('');
     try {
       const [b, l] = await Promise.all([
         api.get('/kiosk/kasgeld/balance'),
@@ -3252,6 +3348,16 @@ function KasgeldPanel({ onBack }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const onChange = () => load({ quiet: true });
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
 
   // Groepeer alle mutations per YYYY-MM, nieuwste maand eerst.
   const monthGroups = useMemo(() => {
@@ -4115,16 +4221,13 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
   // ziet de beheerder alleen tekst en niet de originele scan.
   const [scannedIdFile, setScannedIdFile] = useState(null);
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/apartments').then((r) => {
-      if (!alive) return;
+  const loadApartments = useCallback(() => api.get('/apartments').then((r) => {
       const list = Array.isArray(r?.data) ? r.data : [];
       // Alleen vrije appartementen aanbieden
       setApartments(list.filter((a) => a.status === 'vacant'));
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+    }).catch(() => {}), []);
+  useEffect(() => { loadApartments(); }, [loadApartments]);
+  useKioskLiveRefresh(loadApartments);
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
 
@@ -4286,11 +4389,29 @@ function AddApartmentModal({ onClose, onSaved }) {
   const [number, setNumber] = useState('');
   const [rent, setRent] = useState('');
   const [currency, setCurrency] = useState('SRD');
-  const [description, setDescription] = useState('');
+  const [locationId, setLocationId] = useState(() => {
+    try { return sessionStorage.getItem('kiosk_sel_loc') || ''; } catch { return ''; }
+  });
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
   // Body scroll-lock wordt beheerd door KioskModalShell → useBodyScrollLock.
+
+  useEffect(() => {
+    fetchKioskSelect()
+      .then((data) => {
+        const available = data.locations.filter((location) => location.id !== '_none');
+        setLocations(available);
+        setLocationId((current) => available.some((location) => location.id === current)
+          ? current
+          : available.length === 1 ? available[0].id : '');
+      })
+      .catch((e) => setErr(formatError(e)))
+      .finally(() => setLoadingLocations(false));
+  }, []);
 
   const save = async () => {
     const n = String(number || '').trim();
@@ -4299,8 +4420,7 @@ function AddApartmentModal({ onClose, onSaved }) {
     if (!r || r <= 0) { setErr('Huur bedrag moet groter dan 0 zijn'); return; }
     setSaving(true); setErr('');
     try {
-      const body = { number: n, rent_amount: r, currency };
-      if (description.trim()) body.description = description.trim();
+      const body = { number: n, rent_amount: r, currency, location_id: locationId || null, photo_url: photoUrl.trim() };
       const res = await api.post('/apartments', body);
       onSaved && onSaved(res?.data);
     } catch (e) { setErr(formatError(e)); }
@@ -4348,12 +4468,19 @@ function AddApartmentModal({ onClose, onSaved }) {
             </label>
           </div>
           <label className="block">
-            <span className={modalLabelCls}>Omschrijving (optioneel)</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)}
-              data-testid="add-apartment-description"
-              placeholder="Type / verdieping / kenmerk"
-              className={modalInputCls(accent)} />
+            <span className={modalLabelCls}>Locatie</span>
+            <select value={locationId} onChange={(e) => setLocationId(e.target.value)}
+              data-testid="add-apartment-location"
+              disabled={loadingLocations}
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">{loadingLocations ? 'Locaties laden…' : '— Geen locatie —'}</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>{location.name}{location.address ? ` · ${location.address}` : ''}</option>
+              ))}
+            </select>
           </label>
+          <PhotoUpload value={photoUrl} onChange={setPhotoUrl} label="Foto van het appartement"
+            height="h-36" showUrlField={false} capture="environment" testId="add-apartment-photo" />
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-apartment-error">
@@ -4406,6 +4533,56 @@ function KioskHistBtn({ dir, disabled, onClick, white }) {
   );
 }
 
+// Gegevens en contact van de gekozen huurder (onderbalk bij een gekozen appartement).
+function TenantInfoModal({ apartment, mode, onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (!apartment?.tenant_id) return;
+    takeOverview(apartment.tenant_id).then((r) => setData(r.data)).catch((e) => setErr(formatError(e)));
+  }, [apartment]);
+  const t = data?.tenant || {};
+  const apt = data?.apartment || {};
+  const phone = String(t.phone || '').trim();
+  const digits = phone.replace(/\D/g, '');
+  const rows = [
+    ['Naam', t.name], ['Appartement', apt.number || apartment?.number], ['Telefoon', phone],
+    ['E-mail', t.email], ['Huur', apt.rent_amount != null ? fmtMoney(Number(apt.rent_amount), apt.currency || 'SRD') : ''],
+  ].filter(([, v]) => v);
+  const btn = 'h-12 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition';
+  return (
+    <KioskModalShell title={mode === 'contact' ? 'Contact' : 'Gegevens'} Icon={mode === 'contact' ? Smartphone : User}
+      testId={`tenant-${mode}`} onClose={onClose}>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {!data && !err && <div className="py-8 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-orange-500" /></div>}
+      {data && mode !== 'contact' && (
+        <dl className="divide-y divide-slate-100">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-4 py-2.5 text-sm">
+              <dt className="font-semibold text-slate-500">{k}</dt>
+              <dd className="font-bold text-slate-900 text-right break-all">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {data && mode === 'contact' && (
+        <div className="space-y-2">
+          <p className="text-sm font-bold text-slate-900">{t.name}{phone ? ` · ${phone}` : ''}</p>
+          {digits ? (
+            <>
+              <a href={`tel:${phone}`} className={`${btn} bg-orange-500 text-white`}>Bellen</a>
+              <a href={`https://wa.me/${digits}`} target="_blank" rel="noreferrer" className={`${btn} bg-emerald-500 text-white`}>
+                <MessageCircle className="w-4 h-4" /> WhatsApp
+              </a>
+            </>
+          ) : <p className="text-sm text-slate-500">Geen telefoonnummer bekend.</p>}
+          {t.email && <a href={`mailto:${t.email}`} className={`${btn} bg-slate-100 text-slate-800`}>E-mail</a>}
+        </div>
+      )}
+    </KioskModalShell>
+  );
+}
+
 function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
   const [host, setHost] = useState(null);
   // Track visualViewport zodat de modal automatisch mee-krimpt met het
@@ -4445,7 +4622,8 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
             <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
               <Icon className="w-5 h-5 text-white sm:text-orange-600" />
             </div>
-            <h3 className="text-lg font-black text-white sm:text-slate-900">{title}</h3>
+            <h3 className="text-lg font-black text-white sm:text-slate-900"
+              data-testid={`${testId}-title`}>{title}</h3>
           </div>
           <button onClick={onClose} data-testid={`${testId}-close`}
             className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-transparent sm:hover:bg-slate-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center active:bg-white/30">
@@ -4483,8 +4661,10 @@ const modalLabelCls = 'text-xs font-bold text-slate-500 uppercase tracking-wide'
 function AddLocationModal({ onClose, onSaved }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [createdLocation, setCreatedLocation] = useState(null);
 
   const save = async () => {
     if (!name.trim()) { setErr('Naam is verplicht'); return; }
@@ -4492,8 +4672,10 @@ function AddLocationModal({ onClose, onSaved }) {
     try {
       const body = { name: name.trim() };
       if (address.trim()) body.address = address.trim();
+      if (photoUrl.trim()) body.photo_url = photoUrl.trim();
       const r = await api.post('/locations', body);
-      onSaved && onSaved(r?.data);
+      if (!r?.data?.id) throw new Error('Locatie is aangemaakt, maar kan niet worden geopend. Probeer de kiosk te vernieuwen.');
+      setCreatedLocation(r.data);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
@@ -4502,29 +4684,49 @@ function AddLocationModal({ onClose, onSaved }) {
     <KioskModalShell title="Nieuwe locatie" Icon={MapPin}
       testId="add-location" onClose={onClose}
       footer={(
-        <button onClick={save} disabled={saving || !name.trim()}
-          data-testid="add-location-save"
-          className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          {saving ? 'Opslaan…' : 'Locatie opslaan'}
-        </button>
+        createdLocation ? (
+          <button type="button" onClick={() => onSaved?.(createdLocation)}
+            data-testid="add-location-open"
+            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2">
+            <MapPin className="w-4 h-4" /> Ga naar {createdLocation.name}
+          </button>
+        ) : (
+          <button onClick={save} disabled={saving || !name.trim()}
+            data-testid="add-location-save"
+            className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {saving ? 'Opslaan…' : 'Locatie opslaan'}
+          </button>
+        )
       )}>
       {({ accent }) => (
         <>
-          <label className="block">
-            <span className={modalLabelCls}>Naam *</span>
-            <input value={name} onChange={(e) => setName(e.target.value)}
-              autoFocus data-testid="add-location-name"
-              placeholder="Hoofdvestiging, Filiaal…"
-              className={modalInputCls(accent)} />
-          </label>
-          <label className="block">
-            <span className={modalLabelCls}>Adres</span>
-            <input value={address} onChange={(e) => setAddress(e.target.value)}
-              data-testid="add-location-address"
-              placeholder="Straatnaam nr, Stad"
-              className={modalInputCls(accent)} />
-          </label>
+          {createdLocation ? (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3"
+              data-testid="add-location-success">
+              <p className="font-bold">Locatie aangemaakt</p>
+              <p className="mt-1 text-sm">Open {createdLocation.name} om de appartementen daar te bekijken of toe te voegen.</p>
+            </div>
+          ) : (
+            <>
+              <label className="block">
+                <span className={modalLabelCls}>Naam *</span>
+                <input value={name} onChange={(e) => setName(e.target.value)}
+                  autoFocus data-testid="add-location-name"
+                  placeholder="Hoofdvestiging, Filiaal…"
+                  className={modalInputCls(accent)} />
+              </label>
+              <label className="block">
+                <span className={modalLabelCls}>Adres</span>
+                <input value={address} onChange={(e) => setAddress(e.target.value)}
+                  data-testid="add-location-address"
+                  placeholder="Straatnaam nr, Stad"
+                  className={modalInputCls(accent)} />
+              </label>
+              <PhotoUpload value={photoUrl} onChange={setPhotoUrl} label="Locatiefoto"
+                height="h-36" showUrlField={false} capture="environment" testId="add-location-photo" />
+            </>
+          )}
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-location-error">{err}</div>
@@ -4546,17 +4748,35 @@ function AddContractModal({ onClose, onSaved }) {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState('');
   const [payDay, setPayDay] = useState(1);
+  const [paymentDayLoading, setPaymentDayLoading] = useState(true);
+  const paymentDayEdited = useRef(false);
   const [deposit, setDeposit] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    Promise.all([api.get('/tenants'), api.get('/apartments')]).then(([tr, ar]) => {
-      if (!alive) return;
+  const loadTenantAndApartments = useCallback(() => Promise.all([api.get('/tenants'), api.get('/apartments')]).then(([tr, ar]) => {
       setTenants(Array.isArray(tr?.data) ? tr.data : []);
       setApartments(Array.isArray(ar?.data) ? ar.data : []);
-    }).catch(() => {});
+    }).catch(() => {}), []);
+  useEffect(() => { loadTenantAndApartments(); }, [loadTenantAndApartments]);
+  useKioskLiveRefresh(loadTenantAndApartments);
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/settings')
+      .then(({ data }) => {
+        const configuredDay = Number(data?.invoicing?.contract_payment_day);
+        if (alive && !paymentDayEdited.current) {
+          setPayDay(Number.isInteger(configuredDay) && configuredDay >= 1 && configuredDay <= 31 ? configuredDay : 1);
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setPayDay(null);
+          setErr(formatError(e));
+        }
+      })
+      .finally(() => { if (alive) setPaymentDayLoading(false); });
     return () => { alive = false; };
   }, []);
 
@@ -4570,7 +4790,7 @@ function AddContractModal({ onClose, onSaved }) {
         tenant_id: tenantId,
         apartment_id: aptId,
         start_date: startDate,
-        payment_day: Number(payDay) || 1,
+        ...(payDay ? { payment_day: Number(payDay) } : {}),
         deposit_amount: parseFloat(String(deposit).replace(',', '.')) || 0,
       };
       if (endDate) body.end_date = endDate;
@@ -4584,7 +4804,7 @@ function AddContractModal({ onClose, onSaved }) {
     <KioskModalShell title="Nieuw contract" Icon={FileText}
       testId="add-contract" onClose={onClose}
       footer={(
-        <button onClick={save} disabled={saving || !tenantId || !aptId || !startDate}
+        <button onClick={save} disabled={saving || paymentDayLoading || !tenantId || !aptId || !startDate}
           data-testid="add-contract-save"
           className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -4630,8 +4850,8 @@ function AddContractModal({ onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className={modalLabelCls}>Betaaldag</span>
-              <input type="number" min="1" max="31" value={payDay}
-                onChange={(e) => setPayDay(e.target.value)}
+              <input type="number" min="1" max="31" value={payDay ?? ''} disabled={paymentDayLoading}
+                onChange={(e) => { paymentDayEdited.current = true; setPayDay(e.target.value); }}
                 data-testid="add-contract-payday" className={modalInputCls(accent)} />
             </label>
             <label className="block">
@@ -4642,6 +4862,9 @@ function AddContractModal({ onClose, onSaved }) {
                 data-testid="add-contract-deposit" className={modalInputCls(accent)} />
             </label>
           </div>
+          <p className="text-[11px] text-slate-500">
+            {paymentDayLoading ? 'Standaard betaaldag laden…' : 'Standaard overgenomen van de vervaldag bij Facturen automatisering; per contract aanpasbaar.'}
+          </p>
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-contract-error">{err}</div>
@@ -4658,7 +4881,9 @@ function AddContractModal({ onClose, onSaved }) {
 // Nieuwe factuur vanuit de menubalk — zelfde formulier als beheer (incl. Historische achterstand).
 function KioskInvoiceFormModal({ onClose, onSaved }) {
   const [tenants, setTenants] = useState([]);
-  useEffect(() => { api.get('/tenants').then((r) => setTenants(Array.isArray(r?.data) ? r.data : [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => api.get('/tenants').then((r) => setTenants(Array.isArray(r?.data) ? r.data : [])).catch(() => {}), []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useKioskLiveRefresh(loadTenants);
   return (
     <KioskModalShell title="Facturen" Icon={Receipt} testId="add-invoice" onClose={onClose}>
       <InvoiceForm inline tenants={tenants} onCancel={onClose} onSaved={onSaved} />
@@ -4674,15 +4899,12 @@ function PaymentsViewerModal({ onClose }) {
   const [payments, setPayments] = useState([]);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/payments', { params: { limit: 50 } }).then((r) => {
-      if (!alive) return;
+  const loadPayments = useCallback(() => api.get('/payments', { params: { limit: 50 } }).then((r) => {
       setPayments(Array.isArray(r?.data) ? r.data : []);
     }).catch((e) => setErr(formatError(e)))
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+      .finally(() => setLoading(false)), []);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+  useKioskLiveRefresh(loadPayments);
 
   return (
     <KioskModalShell title="Betalingen inzien" Icon={Banknote}
@@ -4745,14 +4967,11 @@ function AddMaintenanceModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/apartments').then((r) => {
-      if (!alive) return;
+  const loadApartments = useCallback(() => api.get('/apartments').then((r) => {
       setApartments(Array.isArray(r?.data) ? r.data : []);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+    }).catch(() => {}), []);
+  useEffect(() => { loadApartments(); }, [loadApartments]);
+  useKioskLiveRefresh(loadApartments);
 
   const save = async () => {
     if (!aptId) { setErr('Kies een appartement'); return; }
@@ -4882,6 +5101,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
     { key: 'nfc',         label: 'NFC-tag koppelen',  Icon: Nfc },
+    ...(hasAdminAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4903,7 +5123,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
           <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
             <Plus className="w-6 h-6 text-white" strokeWidth={3} />
           </div>
-          <h3 className="text-xl font-black text-white">Snel toevoegen</h3>
+          <h3 className="text-xl font-black text-white" data-testid="kiosk-add-sheet-title">Snel toevoegen</h3>
         </div>
         <button onClick={onClose} data-testid="kiosk-add-sheet-close"
           className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition">
@@ -4935,10 +5155,10 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
             className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
             <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
           </button>
-          {hasAdminAccess ? (
-            <button onClick={() => onPick('admin')} data-testid="kiosk-tile-admin"
+          {hasAdminAccess && !isStaffSession() ? (
+            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings"
               className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
-              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Beheerder
+              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Instellingen
             </button>
           ) : <span />}
           <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
@@ -4966,8 +5186,15 @@ export default function KioskLayout() {
   useHidePwaSplash();
   const navigate = useBrandedNavigate();
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
-  const [step, setStep] = useState(() => (localStorage.getItem('kiosk_token') ? 'select' : 'check'));
+  const [step, setStep] = useState(() => {
+    const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
+    return !isDemoLaunch && localStorage.getItem('kiosk_token') ? requestedAdminStep() : 'check';
+  });
+  const [demoLoginError, setDemoLoginError] = useState('');
+  const demoLoginStarted = useRef(false);
+  const demoSession = useRef(new URLSearchParams(window.location.search).get('demo') === '1');
   const [apartment, setApartment] = useState(null);
+  const [tenantModal, setTenantModal] = useState(null);
   const [overview, setOverview] = useState(null);
   const [paymentPayload, setPaymentPayload] = useState(null);
   const [paymentResult, setPaymentResult] = useState(null);
@@ -4985,6 +5212,20 @@ export default function KioskLayout() {
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
   // Bump om ApartmentSelect te forceren opnieuw te fetchen na een aanmaak
   const [apartmentsReloadKey, setApartmentsReloadKey] = useState(0);
+
+  // Tijdens de huurder-overview en betaalkeuze worden deze data als state
+  // doorgegeven tussen schermen; houd ze bij wijzigingen op beide apparaten
+  // direct vers zonder de lopende bevestiging/betaling te onderbreken.
+  useEffect(() => {
+    if (!apartment?.tenant_id || step !== 'pay') return undefined;
+    const refresh = () => {
+      fetchOverview(apartment.tenant_id)
+        .then(({ data }) => setOverview(data))
+        .catch(() => {});
+    };
+    window.addEventListener('surirent:live-change', refresh);
+    return () => window.removeEventListener('surirent:live-change', refresh);
+  }, [apartment?.tenant_id, step]);
 
   // Bottom-sheet actie-refs — handleSheetPick wordt vroeg in de component
   // gedeclareerd, maar `exit` en `adminMode` pas later. We vangen hun
@@ -5051,19 +5292,42 @@ export default function KioskLayout() {
       else if (key === 'payments') setShowPaymentsViewer(true);
       else if (key === 'maintenance') setShowAddMaintenance(true);
       else if (key === 'kasgeld') setStep('kasgeld');
+      else if (key === 'stroom') setStep('stroom');
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
-      else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' })); else adminRef.current?.(); }
+      else if (key === 'settings') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' }));
+      else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
   }, []);
 
   useEffect(() => {
     // document.title wordt centraal beheerd door usePwaManifest() in App.js
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('demo') === '1') {
+      if (demoLoginStarted.current) return;
+      demoLoginStarted.current = true;
+      api.post('/auth/demo-login').then(({ data }) => {
+        if (!data?.token || !data?.kiosk_token) throw new Error('Demo-login gaf geen kiosktoegang terug.');
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('kiosk_token', data.kiosk_token);
+        localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
+        localStorage.setItem('is_demo_session', '1');
+        demoSession.current = true;
+        if (data.company?.slug) localStorage.setItem('pwa_company_slug', data.company.slug);
+        setCompany(data.company || null);
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.hash}`);
+        setStep('select');
+      }).catch((error) => {
+        setDemoLoginError(formatError(error, 'De demo kan momenteel niet worden geopend.'));
+      });
+      return;
+    }
     const tok = localStorage.getItem('kiosk_token');
     if (!tok) { navigate('/login?target=kiosk', { replace: true }); return; }
     setCompany(getKioskCompany());
-    setStep('select');
+    setStep(requestedAdminStep());
+    if (new URLSearchParams(window.location.search).get('admin') === 'nfc') setNfcLink({ uid: '' });
   }, [navigate]);
 
   // Tijdens kiosk-modus moet body/root in PWA standalone ORANJE zijn (zodat
@@ -5266,8 +5530,12 @@ export default function KioskLayout() {
     return undefined;
   }, [step]);
 
-  const exit = useCallback(() => {
+  const exit = useCallback(async () => {
     kioskLiveBye();
+    const wasDemo = demoSession.current || (() => {
+      try { return localStorage.getItem('is_demo_session') === '1'; }
+      catch { return false; }
+    })();
     // VOLLEDIGE reset zodat een volgende gebruiker (vooral een andere
     // medewerker op een gedeeld kiosk-toestel) cleanly bij de PIN-keypad
     // landt zonder oude tokens of role-voorkeur. Anders krijgt de PWA
@@ -5280,6 +5548,10 @@ export default function KioskLayout() {
       localStorage.removeItem('kiosk_admin_cookie');
       localStorage.removeItem('pwa_preferred_role');
       localStorage.removeItem('active_company_id');
+      if (wasDemo) {
+        localStorage.removeItem('is_demo_session');
+        localStorage.removeItem('pwa_company_slug');
+      }
     } catch { /* ignore */ }
     try {
       // Ook oude sessionStorage keys opruimen (backwards-compat).
@@ -5290,25 +5562,23 @@ export default function KioskLayout() {
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
     } catch { /* ignore */ }
-    // Beheerder-sessie (cookie) ook afmelden, anders stuurt de login-pagina direct terug naar de kiosk.
-    // Hard reload zodat AuthProvider zijn cached state óók kwijt is.
-    api.post('/auth/logout').catch(() => {}).finally(() => window.location.assign('/login?pick=1&loggedout=1'));
+    // Wacht tot auth-cookies gewist zijn voordat we de kiosk verlaten.
+    api.post('/auth/logout').catch(() => {}).finally(() => {
+      window.location.assign(wasDemo ? publicMarketingUrl() || '/' : '/login?pick=1&loggedout=1');
+    });
   }, []);
 
 
-  // "Beheerder" knop in de kiosk: als de PIN-login een admin-token heeft
-  // afgegeven (PIN is shared secret van het bedrijf), spring direct naar
-  // /admin. We doen een hard navigation zodat AuthProvider zijn /auth/me
-  // opnieuw uitvoert met het nieuwe admin_token (en niet de oude user=null
-  // state uit de cache van vóór de PIN-login).
-  // Voor MEDEWERKER-logins (employee-PIN, geen admin_token): verbergen we
-  // de knop volledig — zij mogen niet bij de Beheer-omgeving. Daarom geven
-  // we adminMode hieronder alleen door aan de buttons als er een token is.
+  // Open het beheermenu binnen de kiosk; medewerkers zonder beheer-token
+  // worden naar de beheer-login gestuurd.
   const adminMode = useCallback(() => {
-    let hasAdminToken = false;
-    try { hasAdminToken = !!localStorage.getItem('admin_token'); } catch { /* ignore */ }
-    if (hasAdminToken) {
-      window.location.assign('/admin');
+    let hasAdminAccess = false;
+    try {
+      hasAdminAccess = !!localStorage.getItem('admin_token')
+        || localStorage.getItem('kiosk_admin_cookie') === '1';
+    } catch { /* ignore */ }
+    if (hasAdminAccess) {
+      window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' }));
     } else {
       navigate('/login?view=admin', { replace: true });
     }
@@ -5366,7 +5636,7 @@ export default function KioskLayout() {
     Object.entries(popupSetters).forEach(([k, [, set]]) => set(k === key));
     setAdminPopup(null);
   };
-  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step.startsWith('admin:');
+  const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step === 'stroom' || step.startsWith('admin:');
   const sameEntry = (e) => e && e.step === step && e.apartment?.id === apartment?.id && e.popup === popupKey;
   useEffect(() => {
     const h = hist.current;
@@ -5394,6 +5664,18 @@ export default function KioskLayout() {
   const canBack = hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
+  const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
+  const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
+  const tenantBarItems = [
+    { id: 'overview', label: 'Overzicht', icon: Wallet, testid: 'kiosk-tb-overview', onClick: () => { openOnly(null); setTenantModal(null); setStep('overview'); } },
+    { id: 'pay', label: 'Betalen', icon: CreditCard, testid: 'kiosk-tb-pay', onClick: () => { openOnly(null); setTenantModal(null); if (step === 'overview') tenantAct('pay'); } },
+    { id: 'history', label: 'Geschiedenis', icon: Receipt, testid: 'kiosk-tb-history', onClick: () => { if (step !== 'overview') setStep('overview'); setTimeout(() => tenantAct('history'), step === 'overview' ? 0 : 400); } },
+    { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-tb-maintenance', onClick: () => { setTenantModal(null); openOnly('add-maintenance'); } },
+    { id: 'info', label: 'Gegevens', icon: User, testid: 'kiosk-tb-info', onClick: () => { openOnly(null); setTenantModal('info'); } },
+    { id: 'contact', label: 'Contact', icon: Smartphone, testid: 'kiosk-tb-contact', onClick: () => { openOnly(null); setTenantModal('contact'); } },
+    ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
+    { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
+  ];
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
     const onNav = (e) => {
@@ -5406,6 +5688,56 @@ export default function KioskLayout() {
     return () => window.removeEventListener('kiosk-nav', onNav);
   }, []);
   const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const onTourNavigate = (event) => {
+      const route = event.detail || {};
+      window.dispatchEvent(new CustomEvent('kiosk-close-menu'));
+      setShowInvoicesModal(false);
+      setAdminPopup(null);
+      setNfcLink(null);
+      setSearchOpen(false);
+      setShowAddSheet(false);
+      setShowAddTenant(false);
+      setShowAddApartment(false);
+      setShowAddLocation(false);
+      setShowAddContract(false);
+      setShowAddInvoice(false);
+      setShowPaymentsViewer(false);
+      setShowAddMaintenance(false);
+      setPhoneScanOpen(false);
+      setDepositFor(null);
+      setContractFor(null);
+      if (route.type === 'settings') {
+        setStep('select');
+        setAdminPopup(`inst-${route.id}`);
+      } else if (route.type === 'page') {
+        setStep('select');
+        if (route.id === 'facturen') setShowInvoicesModal(true);
+        else setAdminPopup(route.id);
+      } else if (route.type === 'nfc') {
+        setStep('select');
+        setNfcLink({ uid: '' });
+      } else if (route.type === 'cash') {
+        setStep('kasgeld');
+      } else if (route.type === 'search') {
+        setStep('select');
+        setSearchOpen(true);
+      } else if (route.type === 'quick-sheet') {
+        setStep('select');
+        setShowAddSheet(true);
+      } else if (route.type === 'quick-action') {
+        setStep('select');
+        window.setTimeout(() => handleSheetPick(route.key), 120);
+      } else if (route.type === 'admin-menu') {
+        setStep('select');
+        window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' }));
+      } else if (route.type === 'home') {
+        setStep('select');
+      }
+    };
+    window.addEventListener('kiosk-tour-navigate', onTourNavigate);
+    return () => window.removeEventListener('kiosk-tour-navigate', onTourNavigate);
+  }, []);
   const pickSearched = (a) => {
     setSearchOpen(false);
     prefetchOverview(a?.tenant_id);
@@ -5492,6 +5824,9 @@ export default function KioskLayout() {
       {showTopHead && (
         <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
+            tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
+              ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
+              : null}
             onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>
       )}
@@ -5502,8 +5837,14 @@ export default function KioskLayout() {
           className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'}`}
           style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
-            <div className="h-full bg-orange-500 flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
+              {demoLoginError ? (
+                <>
+                  <p className="max-w-md font-bold text-white" role="alert">{demoLoginError}</p>
+                  <button type="button" onClick={() => window.location.assign('/')}
+                    className="rounded-xl bg-white px-5 py-3 font-black text-[#0B1B3F]">Terug naar SuriRent</button>
+                </>
+              ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
             </div>
           )}
           {step === 'select' && (
@@ -5520,6 +5861,11 @@ export default function KioskLayout() {
           )}
           {step === 'kasgeld' && (
             <KasgeldPanel onBack={() => setStep('select')} />
+          )}
+          {step === 'stroom' && hasAdminAccess && (
+            <div className="h-full overflow-y-auto bg-orange-500" data-testid="kiosk-stroom">
+              <PowerControl kiosk orangeMode={!isWhite} />
+            </div>
           )}
           {step === 'overview' && apartment && (
             <TenantOverview key={apartment.id} apartment={apartment} onBack={reset}
@@ -5581,8 +5927,9 @@ export default function KioskLayout() {
       {showAddLocation && (
         <AddLocationModal
           onClose={() => setShowAddLocation(false)}
-          onSaved={() => {
+          onSaved={(created) => {
             setShowAddLocation(false);
+            try { sessionStorage.setItem('kiosk_sel_loc', created.id); } catch { /* noop */ }
             invalidateKioskSelect(); setApartmentsReloadKey((k) => k + 1);
           }} />
       )}
@@ -5695,16 +6042,18 @@ export default function KioskLayout() {
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
-            {[
+            {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
+              ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
-            ].map(({ id, label, icon: Icon, testid, onClick }) => {
-              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld');
+            ]).map(({ id, label, icon: Icon, testid, onClick }) => {
+              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
@@ -5717,6 +6066,12 @@ export default function KioskLayout() {
           </div>
         </nav>
       ), document.body)}
+      {tenantModal && tenantModal !== 'power' && apartment && (
+        <TenantInfoModal apartment={apartment} mode={tenantModal} onClose={() => setTenantModal(null)} />
+      )}
+      {tenantModal === 'power' && apartment && (
+        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} orangeMode={!isWhite} />
+      )}
     </div>
     </KioskThemeCtx.Provider>
   );

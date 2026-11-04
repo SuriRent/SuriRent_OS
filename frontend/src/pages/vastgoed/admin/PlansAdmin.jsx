@@ -191,6 +191,7 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
               <option value="month">Per maand</option>
               <option value="quarter">Per kwartaal</option>
               <option value="year">Per jaar</option>
+              <option value="lifetime">Eenmalig (levenslang)</option>
             </select>
           </div>
         </div>
@@ -285,8 +286,12 @@ export default function PlansAdmin() {
   const handleDelete = async (plan) => {
     const confirmMsg = `Plan "${plan.name}" verwijderen? Als er nog bedrijven op dit plan zitten wordt hij alleen op inactief gezet.`;
     if (!window.confirm(confirmMsg)) return;
-    await api.delete(`/superadmin/plans/${plan.id}`);
-    await load();
+    try {
+      await api.delete(`/superadmin/plans/${plan.id}`);
+      await load();
+    } catch (e) {
+      setError(formatError(e, 'Pakket verwijderen mislukt'));
+    }
   };
 
   return (
@@ -307,7 +312,10 @@ export default function PlansAdmin() {
       </div>
 
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+        <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center justify-between gap-3">
+          <span>{error}</span>
+          <button onClick={load} disabled={loading} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
+        </div>
       )}
 
       {loading ? (

@@ -13,7 +13,7 @@ const fmt = (n, c = 'SRD') => (String(c).toUpperCase() === 'EUR'
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
 // Bouwt de abonnementsmeldingen: verlopen, proef/vernieuwing bijna, open facturen.
-function buildAlerts(me, invoices, stripeOn) {
+function buildAlerts(me, invoices, stripeOn, bankOn) {
   const out = [];
   if (!me) return out;
   const now = Date.now();
@@ -29,7 +29,8 @@ function buildAlerts(me, invoices, stripeOn) {
   for (const inv of open) {
     const overdue = inv.period_start && new Date(inv.period_start).getTime() < now - 3 * DAY;
     out.push({
-      id: inv.id, invoice: inv, tone: overdue ? 'red' : 'orange', icon: Receipt, pay: stripeOn,
+      id: inv.id, invoice: inv, tone: overdue ? 'red' : 'orange', icon: Receipt,
+      pay: stripeOn, bankPay: bankOn && (inv.currency || me.currency || 'SRD').toUpperCase() === 'SRD',
       title: overdue ? 'Achterstallige factuur' : 'Nieuwe factuur',
       text: `${fmt(inv.amount, inv.currency)} · ${fmtDate(inv.period_start)} → ${fmtDate(inv.period_end)}`,
     });
@@ -49,6 +50,7 @@ export default function SubscriptionBell({ onOpenSub, backPath, compact = false 
   const [me, setMe] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [stripeOn, setStripeOn] = useState(false);
+  const [bankOn, setBankOn] = useState(false);
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const subPath = `${slug ? `/c/${slug}` : ''}/admin/instellingen#abonnement`;
@@ -59,7 +61,8 @@ export default function SubscriptionBell({ onOpenSub, backPath, compact = false 
         api.get('/billing/me'), api.get('/billing/me/invoices'),
         api.get('/saas-stripe/public-config').catch(() => ({ data: {} })),
       ]);
-      setMe(m.data); setInvoices(inv.data || []); setStripeOn(!!cfg.data?.enabled);
+      const bank = (m.data.currency || 'SRD').toUpperCase() === 'SRD';
+      setMe(m.data); setInvoices(inv.data || []); setStripeOn(!!cfg.data?.enabled); setBankOn(bank);
     } catch { /* stil falen */ }
   }, []);
 
@@ -90,13 +93,17 @@ export default function SubscriptionBell({ onOpenSub, backPath, compact = false 
     };
   }, [open]);
 
-  const alerts = useMemo(() => buildAlerts(me, invoices, stripeOn), [me, invoices, stripeOn]);
+  const alerts = useMemo(() => buildAlerts(me, invoices, stripeOn, bankOn), [me, invoices, stripeOn, bankOn]);
   const count = alerts.length;
   const urgent = alerts.some((a) => a.tone === 'red');
 
   const pay = (inv, method) => {
     setOpen(false);
     navigate(`/saas/checkout/${inv.id}?method=${method}&back=${encodeURIComponent(backPath || subPath)}`);
+  };
+  const payByBank = (inv) => {
+    setOpen(false);
+    navigate(`/saas/bank-checkout/${inv.id}?back=${encodeURIComponent(backPath || subPath)}`);
   };
   const goSub = () => { setOpen(false); if (onOpenSub) onOpenSub(); else navigate(subPath); };
 
@@ -151,16 +158,24 @@ export default function SubscriptionBell({ onOpenSub, backPath, compact = false 
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-bold text-slate-900">{a.title}</p>
                           <p className="text-[11px] text-slate-500 mt-0.5">{a.text}</p>
-                          {a.pay && (
-                            <div className="flex gap-1.5 mt-2">
-                              <button onClick={() => pay(a.invoice, 'card')} data-testid={`subscription-pay-card-${a.id}`}
-                                className="h-8 px-2.5 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-                                <CreditCard className="w-3.5 h-3.5" /> Creditcard
-                              </button>
-                              <button onClick={() => pay(a.invoice, 'ideal')} data-testid={`subscription-pay-ideal-${a.id}`}
-                                className="h-8 px-2.5 rounded-lg bg-[#CC0066] hover:bg-[#B0005A] text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-                                <Landmark className="w-3.5 h-3.5" /> iDEAL
-                              </button>
+                          {(a.pay || a.bankPay) && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {a.pay && <>
+                                <button onClick={() => pay(a.invoice, 'card')} data-testid={`subscription-pay-card-${a.id}`}
+                                  className="h-8 px-2.5 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
+                                  <CreditCard className="w-3.5 h-3.5" /> Creditcard
+                                </button>
+                                <button onClick={() => pay(a.invoice, 'ideal')} data-testid={`subscription-pay-ideal-${a.id}`}
+                                  className="h-8 px-2.5 rounded-lg bg-[#CC0066] hover:bg-[#B0005A] text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
+                                  <Landmark className="w-3.5 h-3.5" /> iDEAL
+                                </button>
+                              </>}
+                              {a.bankPay && (
+                                <button onClick={() => payByBank(a.invoice)} data-testid={`subscription-pay-bank-${a.id}`}
+                                  className="h-8 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
+                                  <Landmark className="w-3.5 h-3.5" /> Bankoverschrijving
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

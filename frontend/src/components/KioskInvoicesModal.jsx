@@ -166,7 +166,20 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
     reloadCredits();
   }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
-  useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => {
+    api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => {
+    const refresh = () => { load(); loadTenants(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('surirent:live-change', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load, loadTenants]);
 
   const groups = useMemo(() => {
     if (!data) return [];
@@ -212,7 +225,7 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide xwide tall>
         {() => (
           <>
             {msg && (

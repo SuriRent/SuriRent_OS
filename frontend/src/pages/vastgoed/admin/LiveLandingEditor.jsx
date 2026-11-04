@@ -25,6 +25,17 @@ const DEVICE_PRESETS = [
   { id: 'mobile',  label: 'Mobiel',  icon: Smartphone, w: 390, h: '100%' },
 ];
 
+const MARKETING_PAGES = [
+  { path: '/', label: 'Home' },
+  { path: '/functies', label: 'Functies' },
+  { path: '/contact', label: 'Contact' },
+  { path: '/over-ons', label: 'Over ons' },
+  { path: '/handleiding', label: 'Handleiding' },
+  { path: '/algemene-voorwaarden', label: 'Voorwaarden' },
+  { path: '/privacy', label: 'Privacy' },
+  { path: '/over-surirent', label: 'Over SuriRent' },
+];
+
 function setPath(obj, path, value) {
   if (!path) return obj;
   const parts = path.split('.');
@@ -41,6 +52,20 @@ function setPath(obj, path, value) {
   return out;
 }
 
+function getPath(obj, path) {
+  return path.split('.').reduce((value, key) => value?.[key], obj);
+}
+
+function previewUrl(path) {
+  return `${path}?edit=1&landing=1&_t=${Date.now()}`;
+}
+
+function assetPreviewUrl(value) {
+  return value?.startsWith('/api/')
+    ? `${(process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '')}${value}`
+    : value;
+}
+
 export default function LiveLandingEditor() {
   const iframeRef = useRef(null);
   const [draft, setDraft] = useState(null);            // content object van /superadmin/landing/content?mode=draft
@@ -53,11 +78,14 @@ export default function LiveLandingEditor() {
   const [device, setDevice] = useState('desktop');
   const [hasUnpublished, setHasUnpublished] = useState(false);
   const [iframeReady, setIframeReady] = useState(false);
+  const [previewPage, setPreviewPage] = useState('/');
+  const [previewSrc, setPreviewSrc] = useState(() => previewUrl('/'));
+  const [editableFields, setEditableFields] = useState([]);
+  const [contentOpen, setContentOpen] = useState(true);
+  const previewPageRef = useRef('/');
   // Image picker dialog
   const [imageReq, setImageReq] = useState(null);  // { path, current }
   const [uploadingImg, setUploadingImg] = useState(false);
-
-  const previewSrc = `/?edit=1&landing=1&_t=${draft ? '0' : Date.now()}`; // landing=1 voorkomt auto-redirect naar /login
 
   const loadDraft = useCallback(async () => {
     setLoading(true); setErr('');
@@ -79,9 +107,40 @@ export default function LiveLandingEditor() {
   useEffect(() => {
     const onMsg = (ev) => {
       const data = ev?.data;
-      if (!data || typeof data !== 'object') return;
+      if (ev.origin !== window.location.origin
+        || ev.source !== iframeRef.current?.contentWindow
+        || !data || typeof data !== 'object') return;
       if (data.type === 'landing-edit-ready') {
         setIframeReady(true);
+        return;
+      }
+      if (data.type === 'landing-edit-page' && typeof data.page === 'string') {
+        if (data.page !== previewPageRef.current) {
+          previewPageRef.current = data.page;
+          setPreviewPage(data.page);
+          setEditableFields([]);
+        }
+        return;
+      }
+      if (data.type === 'landing-edit-register' && data.path && typeof data.path === 'string') {
+        const page = typeof data.page === 'string' ? data.page : previewPageRef.current;
+        if (page !== previewPageRef.current) {
+          previewPageRef.current = page;
+          setPreviewPage(page);
+          setEditableFields([]);
+        }
+        const field = {
+          path: data.path,
+          label: data.label || data.path,
+          kind: ['text', 'image', 'media', 'link'].includes(data.kind) ? data.kind : 'text',
+          value: data.value == null ? '' : String(data.value),
+          typePath: typeof data.typePath === 'string' ? data.typePath : '',
+          mediaType: typeof data.mediaType === 'string' ? data.mediaType : '',
+        };
+        setEditableFields((prev) => [
+          ...prev.filter((item) => item.path !== field.path),
+          field,
+        ]);
         return;
       }
       if (data.type === 'landing-edit-patch' && data.path) {
@@ -90,7 +149,16 @@ export default function LiveLandingEditor() {
         return;
       }
       if (data.type === 'landing-edit-image-request' && data.path) {
-        setImageReq({ path: data.path, current: data.current || '' });
+        setImageReq({ path: data.path, current: data.current || '', allowVideo: false });
+      }
+      if (data.type === 'landing-edit-media-request' && data.path) {
+        setImageReq({
+          path: data.path,
+          typePath: data.typePath || '',
+          current: data.current || '',
+          mediaType: data.mediaType || '',
+          allowVideo: true,
+        });
       }
     };
     window.addEventListener('message', onMsg);
@@ -102,7 +170,7 @@ export default function LiveLandingEditor() {
     if (!iframeReady || !draft) return;
     try {
       iframeRef.current?.contentWindow?.postMessage(
-        { type: 'landing-edit-reset', content: draft }, '*',
+        { type: 'landing-edit-reset', content: draft }, window.location.origin,
       );
     } catch { /* no-op */ }
   }, [iframeReady, draft]);
@@ -113,15 +181,17 @@ export default function LiveLandingEditor() {
   };
 
   const saveDraft = useCallback(async () => {
-    if (!draft) return;
+    if (!draft) return false;
     setSaving(true); setErr('');
     try {
       const { data } = await api.put('/superadmin/landing/content', { content: draft });
       setHasUnpublished(!!data.has_unpublished_changes);
       setDirty(false);
       showToast('Concept opgeslagen ✓');
+      return true;
     } catch (e) {
       setErr(formatError(e, 'Opslaan mislukt'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -135,7 +205,7 @@ export default function LiveLandingEditor() {
   }, [dirty, saveDraft]);
 
   const publish = async () => {
-    if (dirty) await saveDraft();
+    if (dirty && !(await saveDraft())) return;
     if (!window.confirm('Concept publiceren naar de live landing page? Deze wijzigingen worden direct zichtbaar voor bezoekers.')) return;
     setPublishing(true); setErr('');
     try {
@@ -155,7 +225,11 @@ export default function LiveLandingEditor() {
       await api.post('/superadmin/landing/discard');
       await loadDraft();
       // Force iframe-reload zodat hij de nieuwe state oppikt.
-      if (iframeRef.current) iframeRef.current.src = `/?edit=1&landing=1&_t=${Date.now()}`;
+      setPreviewPage('/');
+      previewPageRef.current = '/';
+      setEditableFields([]);
+      setIframeReady(false);
+      setPreviewSrc(previewUrl('/'));
       showToast('Concept gereset');
     } catch (e) {
       setErr(formatError(e));
@@ -192,18 +266,58 @@ export default function LiveLandingEditor() {
       const url = data.url;
       try {
         iframeRef.current?.contentWindow?.postMessage(
-          { type: 'landing-edit-image-reply', path: imageReq.path, url }, '*',
+          imageReq.allowVideo
+            ? { type: 'landing-edit-media-reply', path: imageReq.path, url, mediaType: data.content_type, typePath: imageReq.typePath }
+            : { type: 'landing-edit-image-reply', path: imageReq.path, url },
+          window.location.origin,
         );
       } catch { /* no-op */ }
       setDraft((prev) => setPath(prev || {}, imageReq.path, url));
+      if (imageReq.allowVideo && imageReq.typePath) {
+        setDraft((prev) => setPath(prev || {}, imageReq.typePath, data.content_type || ''));
+      }
       setDirty(true);
       setImageReq(null);
-      showToast('Afbeelding bijgewerkt ✓');
+      showToast(imageReq.allowVideo ? 'Foto/video bijgewerkt ✓' : 'Afbeelding bijgewerkt ✓');
     } catch (e) {
       setErr(formatError(e, 'Upload mislukt'));
     } finally {
       setUploadingImg(false);
     }
+  };
+
+  const updateField = (path, value) => {
+    setDraft((prev) => setPath(prev || {}, path, value));
+    setDirty(true);
+  };
+
+  const focusField = (path) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'landing-edit-focus', path }, window.location.origin,
+    );
+  };
+
+  const clearMedia = () => {
+    if (!imageReq?.allowVideo) return;
+    setDraft((prev) => setPath(setPath(prev || {}, imageReq.path, ''), imageReq.typePath, ''));
+    iframeRef.current?.contentWindow?.postMessage({
+      type: 'landing-edit-media-reply',
+      path: imageReq.path,
+      typePath: imageReq.typePath,
+      url: '',
+      mediaType: '',
+    }, window.location.origin);
+    setDirty(true);
+    setImageReq(null);
+    showToast('Hero media verwijderd');
+  };
+
+  const openPreviewPage = (path) => {
+    previewPageRef.current = path;
+    setPreviewPage(path);
+    setEditableFields([]);
+    setIframeReady(false);
+    setPreviewSrc(previewUrl(path));
   };
 
   const dev = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0];
@@ -232,6 +346,23 @@ export default function LiveLandingEditor() {
             );
           })}
         </div>
+
+        <select value={previewPage} onChange={(event) => openPreviewPage(event.target.value)}
+          data-testid="landing-page-select"
+          className="h-9 max-w-44 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700">
+          {MARKETING_PAGES.map((page) => <option key={page.path} value={page.path}>{page.label}</option>)}
+          {!MARKETING_PAGES.some((page) => page.path === previewPage)
+            && <option value={previewPage}>{previewPage}</option>}
+        </select>
+
+        <button type="button" onClick={() => setContentOpen((value) => !value)}
+          data-testid="landing-content-toggle"
+          aria-expanded={contentOpen}
+          className={`h-9 px-3 rounded-lg border text-xs font-bold transition ${
+            contentOpen ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}>
+          Inhoud ({editableFields.length})
+        </button>
 
         <div className="flex-1" />
 
@@ -291,23 +422,115 @@ export default function LiveLandingEditor() {
         </div>
       )}
 
-      {/* Iframe preview */}
-      <div className="flex-1 min-h-0 bg-slate-100 flex items-center justify-center p-4 overflow-auto">
+      {/* Iframe preview and automatically discovered content fields */}
+      <div className="flex-1 min-h-0 bg-slate-100 flex flex-col lg:flex-row overflow-hidden">
         {loading ? (
-          <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
-        ) : (
-          <div className="bg-white rounded-xl shadow-2xl overflow-hidden mx-auto"
-            style={{
-              width: dev.w === '100%' ? '100%' : `${dev.w}px`,
-              maxWidth: '100%',
-              height: '100%',
-              maxHeight: '100%',
-              transition: 'width 250ms ease',
-            }}>
-            <iframe ref={iframeRef} title="Landing preview" src={previewSrc}
-              data-testid="landing-iframe"
-              className="w-full h-full border-0 block" />
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
           </div>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center p-4 overflow-auto">
+              <div className="bg-white rounded-xl shadow-2xl overflow-hidden mx-auto shrink-0"
+                style={{
+                  width: dev.w === '100%' ? '100%' : `${dev.w}px`,
+                  maxWidth: '100%',
+                  height: '100%',
+                  maxHeight: '100%',
+                  transition: 'width 250ms ease',
+                }}>
+                <iframe ref={iframeRef} title="Landing preview" src={previewSrc}
+                  data-testid="landing-iframe"
+                  className="w-full h-full border-0 block" />
+              </div>
+            </div>
+            {contentOpen && (
+              <aside className="w-full lg:w-[360px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
+                <div className="p-4 border-b border-slate-100">
+                  <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    Velden van deze pagina. Nieuwe tekst, afbeeldingen, video’s en links verschijnen hier automatisch zodra ze de bewerkbare marketingcomponenten gebruiken.
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    Pakketnamen, prijzen en limieten komen uit SaaS Pakketten, zodat de marketingprijzen gelijk blijven aan de facturatie.
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold text-slate-400 truncate" title={previewPage}>{previewPage}</p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+                  {editableFields.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">
+                      Nog geen bewerkbare velden gevonden. Controleer of de pagina is geladen, of kies een andere marketingpagina.
+                    </p>
+                  ) : editableFields.map((field) => {
+                    const current = getPath(draft || {}, field.path);
+                    const value = current == null ? field.value : String(current);
+                    return (
+                      <label key={field.path} className="block rounded-xl border border-slate-200 p-3 hover:border-emerald-300">
+                        <span className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
+                          <span className="truncate">{field.label}</span>
+                          {field.kind !== 'media' && (
+                            <button type="button" onClick={() => focusField(field.path)}
+                              className="shrink-0 text-[10px] font-bold text-emerald-700 hover:underline">
+                              Toon
+                            </button>
+                          )}
+                        </span>
+                        <span className="mt-1 block truncate font-mono text-[9px] text-slate-400">{field.path}</span>
+                        {field.kind === 'media' ? (
+                          <div className="mt-2">
+                            {value && (getPath(draft || {}, field.typePath) || field.mediaType).startsWith('video/') ? (
+                              <video src={assetPreviewUrl(value)} controls playsInline className="h-28 w-full rounded-lg bg-slate-100 object-contain" />
+                            ) : value ? (
+                              <img loading="lazy" src={assetPreviewUrl(value)} alt="" className="h-28 w-full rounded-lg bg-slate-100 object-contain" />
+                            ) : (
+                              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Geen foto of video ingesteld.</p>
+                            )}
+                            <div className="mt-2 flex gap-2">
+                              <button type="button"
+                                onClick={() => setImageReq({
+                                  path: field.path,
+                                  typePath: field.typePath,
+                                  current: value,
+                                  mediaType: getPath(draft || {}, field.typePath) || field.mediaType,
+                                  allowVideo: true,
+                                })}
+                                className="min-h-9 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-bold text-white hover:bg-emerald-800">
+                                Foto of video kiezen
+                              </button>
+                              {value && (
+                                <button type="button" onClick={() => {
+                                  updateField(field.path, '');
+                                  if (field.typePath) updateField(field.typePath, '');
+                                }} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                  Verwijderen
+                                </button>
+                              )}
+                            </div>
+                            <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                              De laptop- en telefoonmockups zijn zelf opgebouwde, bewerkbare schermen. Pas de teksten aan in de preview of via de inhoudsvelden.
+                            </p>
+                          </div>
+                        ) : field.kind === 'text' ? (
+                          <textarea value={value} onChange={(event) => updateField(field.path, event.target.value)}
+                            rows={Math.min(5, Math.max(2, value.split('\n').length))}
+                            data-testid={`landing-field-${field.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                            className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                        ) : (
+                          <input value={value} onChange={(event) => updateField(field.path, event.target.value)}
+                            type="text" data-testid={`landing-field-${field.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                            className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                        )}
+                        {field.kind === 'image' && value && (
+                          <img loading="lazy" src={assetPreviewUrl(value)}
+                            alt="" className="mt-2 h-20 w-full rounded-lg bg-slate-100 object-contain" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </aside>
+            )}
+          </>
         )}
       </div>
 
@@ -319,27 +542,38 @@ export default function LiveLandingEditor() {
         </div>
       )}
 
-      {/* Image picker modal */}
+      {/* Image and video picker modal */}
       {imageReq && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setImageReq(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" data-testid="image-picker">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-extrabold text-slate-900">Afbeelding wijzigen</h3>
+              <h3 className="font-extrabold text-slate-900">{imageReq.allowVideo ? 'Foto of video wijzigen' : 'Afbeelding wijzigen'}</h3>
               <button onClick={() => setImageReq(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-xs text-slate-500 font-mono mb-3 truncate">{imageReq.path}</p>
-            {imageReq.current && (
-              <img loading="lazy" src={imageReq.current} alt="" className="w-full h-32 object-cover rounded-lg mb-3 bg-slate-100" />
+            {imageReq.current && imageReq.allowVideo && imageReq.mediaType?.startsWith('video/') ? (
+              <video src={assetPreviewUrl(imageReq.current)} controls playsInline className="w-full h-40 rounded-lg mb-3 bg-slate-100 object-contain" />
+            ) : imageReq.current ? (
+              <img loading="lazy" src={assetPreviewUrl(imageReq.current)} alt="" className="w-full h-32 object-contain rounded-lg mb-3 bg-slate-100" />
+            ) : null}
+            {imageReq.allowVideo && (
+              <p className="mb-3 text-xs text-slate-500">Afbeelding maximaal 5 MB; video MP4 of WebM maximaal 100 MB.</p>
             )}
             <label className="block">
-              <input type="file" accept="image/*"
+              <input type="file" accept={imageReq.allowVideo ? 'image/*,video/mp4,video/webm' : 'image/*'}
                 onChange={(e) => uploadImage(e.target.files?.[0])}
                 disabled={uploadingImg}
                 className="block w-full text-sm text-slate-600 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:font-bold file:text-sm file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer disabled:opacity-50" />
             </label>
+            {imageReq.allowVideo && imageReq.current && (
+              <button type="button" onClick={clearMedia} disabled={uploadingImg}
+                className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">
+                Foto/video verwijderen
+              </button>
+            )}
             {uploadingImg && (
               <p className="text-sm text-orange-600 flex items-center gap-2 mt-3">
                 <Loader2 className="w-4 h-4 animate-spin" /> Uploaden…

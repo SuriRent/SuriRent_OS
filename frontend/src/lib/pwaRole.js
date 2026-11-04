@@ -1,10 +1,10 @@
-// Remember which "role" (kiosk / admin / tenant) the user typically uses.
+// Remember which entry point (kiosk / beheer / tenant) the user typically uses.
 // When the PWA is launched in standalone mode and we have a stored preference,
 // LoginPage auto-redirects there so the app feels like a dedicated role-app.
 
 const KEY = 'pwa_preferred_role';
 
-/** kiosk | admin | tenant | null */
+/** kiosk | admin (Kiosk Beheer) | tenant | null */
 export function getPreferredRole() {
   try {
     const v = localStorage.getItem(KEY);
@@ -36,6 +36,8 @@ export function isStandalonePWA() {
 
 export function routeForRole(role) {
   if (role === 'kiosk') return '/kiosk';
+  // /admin is role-gated: ordinary company admins are redirected to Kiosk Beheer,
+  // while superadmins keep their dedicated dashboard.
   if (role === 'admin') return '/admin';
   if (role === 'tenant') return '/kiosk/huurder';
   return '/login';

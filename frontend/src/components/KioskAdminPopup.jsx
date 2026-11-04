@@ -41,7 +41,7 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
     </div>
   );
   return (
-    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide xwide={!!inst} tall>
+    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide xwide tall>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
         {inst ? <Page embedded section={inst.id} /> : (
           <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4" data-testid={`kiosk-popup-${id}-content`}><Page embedded /></div></KioskFxCtx.Provider>

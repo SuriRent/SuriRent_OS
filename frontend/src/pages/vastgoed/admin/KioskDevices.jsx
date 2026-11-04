@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Printer, Pencil, Trash2 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { useAutoRefresh } from '../../../lib/auto-refresh';
 
 function PrinterList() {
   const [list, setList] = useState(null);
   const load = useCallback(() => api.get('/settings/kiosk-printers').then(({ data }) => setList(data)).catch(() => setList([])), []);
-  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load, 15000);
 
   const rename = async (p) => {
     const name = window.prompt('Nieuwe naam voor deze KT-V520', p.name);
@@ -53,7 +55,8 @@ function UnboundDevices({ printers, onLinked }) {
   const [items, setItems] = useState([]);
   const [pick, setPick] = useState({});
   const load = useCallback(() => api.get('/settings/kiosk-unbound-devices').then(({ data }) => setItems(data || [])).catch(() => setItems([])), []);
-  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load, 15000);
   const link = async (kid) => {
     const pid = pick[kid] || printers[0].id;
     try { await api.post(`/settings/kiosk-printers/${pid}/link-device`, { kiosk_id: kid }); load(); onLinked(); } catch (e) { window.alert(formatError(e)); }
@@ -88,7 +91,8 @@ const ROLE_NL = { admin: 'Beheerder', employee: 'Medewerker', printer: 'Printer-
 function DevicesSeen() {
   const [list, setList] = useState(null);
   const load = useCallback(() => api.get('/settings/kiosk-devices-seen').then(({ data }) => setList(data)).catch(() => setList([])), []);
-  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load, 20000);
   return (
     <div className="bg-white rounded-2xl border border-orange-100 p-5" data-testid="kiosk-devices-seen">
       <p className="font-black text-slate-900">Kiosk-toestellen (diagnose, laatste 7 dagen)</p>

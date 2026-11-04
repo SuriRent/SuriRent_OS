@@ -22,6 +22,7 @@ class RegisterIn(BaseModel):
     telefoon: Optional[str] = ""
     address: Optional[str] = ""
     plan: Optional[Literal["starter", "professional"]] = "starter"
+    personal_pin: Optional[str] = None  # 4 digits — personal login PIN
     kiosk_pin: Optional[str] = None  # 4 digits — set the kiosk PIN at registration
     country: Optional[Literal["SR", "NL"]] = None  # Explicit override; falls back to phone-based detection
 
@@ -130,7 +131,7 @@ class PaymentIn(BaseModel):
     apartment_id: Optional[str] = None
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "creditcard", "ideal"] = "contant"
+    method: Literal["contant", "bank", "creditcard", "ideal", "pin"] = "contant"
     stripe_payment_intent_id: Optional[str] = None
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None

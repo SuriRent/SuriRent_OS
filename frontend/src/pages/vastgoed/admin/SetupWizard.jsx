@@ -1,35 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Building2, Smartphone, Home, User, CheckCircle2, ArrowRight, ArrowLeft,
+  Building2, CheckCircle2, Home, User, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
   FileText,
-  Palette, UsersRound,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
   SmtpForm,
   InvoicingForm,
 } from './Settings';
-import Branding from './Branding';
-import Locations from './Locations';
-import Employees from './Employees';
 
-// Stap-definities in de exacte volgorde door de gebruiker gewenst.
-// Alle stappen zijn inline bewerkbaar binnen de wizard.
+const CORE_STEP_IDS = ['profile', 'locations', 'apartment', 'tenant'];
+
 const STEPS = [
   { id: 'profile', label: 'Bedrijfsgegevens', icon: Building2 },
-  { id: 'branding', label: 'Branding', icon: Palette },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
-  { id: 'locations', label: 'Locaties', icon: MapPin },
-  { id: 'apartment', label: 'Appartementen', icon: Home },
-  { id: 'tenant', label: 'Huurders', icon: User },
-  { id: 'employees', label: 'Werknemers', icon: UsersRound },
+  { id: 'locations', label: 'Locaties aanmaken', icon: MapPin },
+  { id: 'apartment', label: 'Appartementen aanmaken', icon: Home },
+  { id: 'tenant', label: 'Huurders aanmaken of koppelen', icon: User },
 ];
 
 export default function SetupWizard({ onFinish } = {}) {
   const [status, setStatus] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [savedSettings, setSavedSettings] = useState({});
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,22 +32,29 @@ export default function SetupWizard({ onFinish } = {}) {
   const [msg, setMsg] = useState('');
 
   const [profile, setProfile] = useState({});
-  const [apartment, setApartment] = useState({ number: '', address: '', rent_amount: '', currency: 'SRD' });
-  const [tenant, setTenant] = useState({ name: '', phone: '', email: '', apartment_id: '' });
+  const [apartment, setApartment] = useState({ number: '', address: '', rent_amount: '', currency: 'SRD', location_id: '' });
+  const [tenant, setTenant] = useState({ mode: 'new', name: '', phone: '', email: '', apartment_id: '', existing_tenant_id: '' });
   const [apts, setApts] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [location, setLocation] = useState({ name: '', address: '' });
 
   const loadStatus = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const [{ data: st }, { data: prof }, { data: aptList }, { data: settingsData }] = await Promise.all([
+      const [{ data: st }, { data: prof }, { data: aptList }, { data: settingsData }, { data: locationList }, { data: tenantList }] = await Promise.all([
         api.get('/companies/me/setup-status'),
         api.get('/companies/me/branding'),
-        api.get('/apartments').catch(() => ({ data: [] })),
-        api.get('/settings').catch(() => ({ data: null })),
+        api.get('/apartments'),
+        api.get('/settings'),
+        api.get('/locations'),
+        api.get('/tenants'),
       ]);
       setStatus(st);
       setProfile(prof || {});
       setApts(aptList || []);
+      setTenants(tenantList || []);
+      setLocations(locationList || []);
       setSettings(settingsData);
     } catch (e) { setErr(formatError(e)); }
     finally { setLoading(false); }
@@ -74,21 +76,24 @@ export default function SetupWizard({ onFinish } = {}) {
 
   const formStepDone = (id) => (status?.steps || []).find((s) => s.id === id)?.done;
   const stepDone = (id) => {
-    if (['profile', 'apartment', 'tenant'].includes(id)) return formStepDone(id);
+    if (CORE_STEP_IDS.includes(id)) return formStepDone(id);
     // Voor settings-secties: zichtbaar als "klaar" wanneer enabled in settings
     if (settings && settings[id]?.enabled) return true;
     return false;
   };
 
-  const requiredIds = ['profile', 'apartment', 'tenant'];
-  const completed = requiredIds.filter((id) => formStepDone(id)).length;
+  const requiredIds = CORE_STEP_IDS;
+  const completed = requiredIds.filter((id) => stepDone(id)).length;
   const total = requiredIds.length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const allDone = completed === total;
+  const allDone = completed === total && stepDone('tenant');
 
   const saveProfile = async () => {
     setSaving(true); setErr('');
     try {
+      if (!profile.name?.trim()) { setErr('Bedrijfsnaam is verplicht'); return false; }
+      if (!profile.contact_email?.trim() && !profile.contact_phone?.trim()) {
+        setErr('Vul een contact-e-mailadres of telefoonnummer in'); return false;
+      }
       await api.put('/companies/me/profile', {
         name: profile.name || '',
         contact_email: profile.contact_email || '',
@@ -104,10 +109,29 @@ export default function SetupWizard({ onFinish } = {}) {
     finally { setSaving(false); }
   };
 
+  const createLocation = async () => {
+    setSaving(true); setErr('');
+    try {
+      if (!location.name.trim()) { setErr('Naam van de locatie is verplicht'); return false; }
+      const { data } = await api.post('/locations', {
+        name: location.name.trim(),
+        address: location.address.trim(),
+      });
+      setLocations((prev) => [...prev, data]);
+      setApartment((prev) => ({ ...prev, location_id: data.id }));
+      await loadStatus();
+      showOk(`Locatie ${data.name} aangemaakt`);
+      setLocation({ name: '', address: '' });
+      return true;
+    } catch (e) { setErr(formatError(e)); return false; }
+    finally { setSaving(false); }
+  };
+
   const createApartment = async () => {
     setSaving(true); setErr('');
     try {
       if (!apartment.number?.trim()) { setErr('Huisnummer is verplicht'); return false; }
+      if (!apartment.location_id) { setErr('Kies de locatie van dit appartement'); return false; }
       if (!Number(apartment.rent_amount) || Number(apartment.rent_amount) <= 0) {
         setErr('Huurprijs moet > 0 zijn'); return false;
       }
@@ -116,12 +140,13 @@ export default function SetupWizard({ onFinish } = {}) {
         address: apartment.address || '',
         rent_amount: Number(apartment.rent_amount),
         currency: apartment.currency || 'SRD',
+        location_id: apartment.location_id,
       });
       setApts((prev) => [...prev, data]);
       setTenant((t) => ({ ...t, apartment_id: data.id }));
       await loadStatus();
       showOk(`Appartement ${data.number} aangemaakt`);
-      setApartment({ number: '', address: '', rent_amount: '', currency: 'SRD' });
+      setApartment({ number: '', address: '', rent_amount: '', currency: 'SRD', location_id: '' });
       return true;
     } catch (e) { setErr(formatError(e)); return false; }
     finally { setSaving(false); }
@@ -130,6 +155,20 @@ export default function SetupWizard({ onFinish } = {}) {
   const createTenant = async () => {
     setSaving(true); setErr('');
     try {
+      if (!tenant.apartment_id) { setErr('Kies het appartement waaraan je de huurder wilt koppelen'); return false; }
+      const selectedApartment = apts.find((item) => item.id === tenant.apartment_id);
+      if (!selectedApartment || selectedApartment.tenant_id || selectedApartment.status === 'occupied') {
+        setErr('Kies een leeg appartement om een huurder te koppelen');
+        return false;
+      }
+      if (tenant.mode === 'existing') {
+        if (!tenant.existing_tenant_id) { setErr('Kies een bestaande huurder'); return false; }
+        await api.post(`/apartments/${tenant.apartment_id}/assign-tenant`, { tenant_id: tenant.existing_tenant_id });
+        await loadStatus();
+        const selected = tenants.find((item) => item.id === tenant.existing_tenant_id);
+        showOk(`Huurder ${selected?.name || ''} gekoppeld`);
+        return true;
+      }
       if (!tenant.name?.trim()) { setErr('Naam is verplicht'); return false; }
       await api.post('/tenants', {
         name: tenant.name.trim(),
@@ -139,50 +178,52 @@ export default function SetupWizard({ onFinish } = {}) {
       });
       await loadStatus();
       showOk(`Huurder ${tenant.name} aangemaakt`);
-      setTenant({ name: '', phone: '', email: '', apartment_id: '' });
+      setTenant({ mode: 'new', name: '', phone: '', email: '', apartment_id: '', existing_tenant_id: '' });
       return true;
     } catch (e) { setErr(formatError(e)); return false; }
     finally { setSaving(false); }
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4" data-testid="setup-wizard">
+    <div className="max-w-6xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
       {/* Header */}
-      <div className="bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-white/10" />
+      <div className="bg-gradient-to-br from-[#0B1B3F] via-[#17325E] to-[#C74600] text-white rounded-3xl p-5 sm:p-7 shadow-lg relative overflow-hidden">
+        <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full border-[24px] border-white/[0.06]" />
+        <div className="absolute -bottom-16 -left-8 w-40 h-40 rounded-full bg-[#FF8A3D]/15" />
         <div className="relative">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-5 h-5" />
-            <p className="text-[11px] uppercase tracking-[0.2em] font-black opacity-90">Setup Wizard</p>
+            <Sparkles className="w-4 h-4 text-[#FFB276]" />
+            <p className="text-[11px] uppercase tracking-[0.18em] font-black text-white/75">Aan de slag</p>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black mb-1">
-            {allDone ? 'Basis-setup klaar 🎉' : 'Stap voor stap je platform inrichten'}
+          <h2 className="text-2xl sm:text-3xl font-black mb-1 tracking-tight">
+            {allDone ? 'Je Kiosk is klaar' : 'Richt je Kiosk stap voor stap in'}
           </h2>
-          <p className="text-sm opacity-90 mb-3">
-            Stap <strong>{idx + 1} van {STEPS.length}</strong> · {STEPS[idx].label}
+          <p className="text-sm text-white/80 mb-4">
+            Stap <strong>{idx + 1} van {STEPS.length}</strong> · {currentStep.label}
           </p>
           <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-            <div className="h-full bg-white rounded-full transition-all duration-500"
+            <div className="h-full bg-[#FF8A3D] rounded-full transition-all duration-500"
               style={{ width: `${Math.round(((idx + 1) / STEPS.length) * 100)}%` }} />
           </div>
-          <p className="text-[11px] opacity-80 mt-2">
-            Verplichte basis: <strong>{completed}/{total}</strong> ({percent}%) — overige stappen zijn optioneel.
+          <p className="text-[11px] text-white/75 mt-2">
+            Basis ingericht: <strong className="text-white">{completed} van {total}</strong>
           </p>
         </div>
       </div>
 
       {/* Step pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" data-testid="wizard-steps">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2" data-testid="wizard-steps">
         {STEPS.map((s, i) => {
           const Icon = s.icon;
           const done = stepDone(s.id);
           const active = i === idx;
+          const disabled = i > idx;
           return (
             <button key={s.id} onClick={() => setIdx(i)}
+              disabled={disabled}
               data-testid={`wizard-step-${s.id}`}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex-shrink-0
-                ${active ? 'bg-slate-900 text-white' : done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-400'}`}>
+              className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-40
+                ${active ? 'bg-[#0B1B3F] text-white shadow-md shadow-[#0B1B3F]/15' : done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-[#FF8A3D]'}`}>
               {done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               <span>{i + 1}. {s.label}</span>
             </button>
@@ -191,10 +232,11 @@ export default function SetupWizard({ onFinish } = {}) {
       </div>
 
       {/* Step content */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-md p-5 sm:p-6">
+      <div className="bg-white border border-slate-200/90 rounded-3xl shadow-[0_10px_35px_-24px_rgba(11,27,63,0.45)] p-4 sm:p-7">
         {err && (
-          <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm font-bold">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" /> {err}
+          <div className="flex items-center justify-between gap-3 px-3 py-2 mb-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm font-bold">
+              <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4 flex-shrink-0" /> {err}</span>
+              <button type="button" onClick={loadStatus} className="shrink-0 underline underline-offset-2">Opnieuw proberen</button>
           </div>
         )}
         {msg && (
@@ -204,17 +246,23 @@ export default function SetupWizard({ onFinish } = {}) {
         )}
 
         {currentStep.id === 'profile' && <StepProfile profile={profile} setProfile={setProfile} />}
-        {currentStep.id === 'branding' && <Branding />}
         {currentStep.settings && settings && (
-          <SettingsSectionWrapper step={currentStep} settings={settings} />
+          <SettingsSectionWrapper
+            step={currentStep}
+            settings={settings}
+            onSaved={(values) => {
+              setSettings((current) => ({ ...current, [currentStep.id]: values }));
+              setSavedSettings((current) => ({ ...current, [currentStep.id]: true }));
+            }}
+            onDirty={() => setSavedSettings((current) => ({ ...current, [currentStep.id]: false }))}
+          />
         )}
-        {currentStep.id === 'locations' && <Locations />}
-        {currentStep.id === 'apartment' && <StepApartment apartment={apartment} setApartment={setApartment} apts={apts} />}
-        {currentStep.id === 'tenant' && <StepTenant tenant={tenant} setTenant={setTenant} apts={apts} status={status} />}
-        {currentStep.id === 'employees' && <Employees />}
+        {currentStep.id === 'locations' && <StepLocation location={location} setLocation={setLocation} locations={locations} />}
+        {currentStep.id === 'apartment' && <StepApartment apartment={apartment} setApartment={setApartment} apts={apts} locations={locations} />}
+        {currentStep.id === 'tenant' && <StepTenant tenant={tenant} setTenant={setTenant} apts={apts} tenants={tenants} status={status} />}
 
         {/* Navigation */}
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+        <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 mt-6 -mx-4 px-4 py-3 border-t border-slate-200 bg-white/95 backdrop-blur-sm sm:-mx-7 sm:px-7">
           <button onClick={prevStep} disabled={idx === 0}
             data-testid="wizard-prev"
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -229,6 +277,23 @@ export default function SetupWizard({ onFinish } = {}) {
               {!saving && <ArrowRight className="w-4 h-4" />}
             </button>
           )}
+          {currentStep.id === 'locations' && (
+            <div className="flex items-center gap-2">
+              {!formStepDone('locations') ? (
+                <button onClick={async () => { if (await createLocation()) nextStep(); }} disabled={saving}
+                  data-testid="wizard-save-location"
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white font-black shadow-md active:scale-95 transition disabled:opacity-50">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Locatie aanmaken'}
+                  {!saving && <ArrowRight className="w-4 h-4" />}
+                </button>
+              ) : (
+                <button onClick={nextStep} data-testid="wizard-next"
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
+                  Volgende <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
           {currentStep.id === 'apartment' && (
             <div className="flex items-center gap-2">
               {!formStepDone('apartment') && (
@@ -241,7 +306,7 @@ export default function SetupWizard({ onFinish } = {}) {
               )}
               {formStepDone('apartment') && (
                 <button onClick={nextStep} data-testid="wizard-next"
-                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
                   Volgende <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -249,26 +314,26 @@ export default function SetupWizard({ onFinish } = {}) {
           )}
           {currentStep.id === 'tenant' && (
             <div className="flex items-center gap-2">
-              {!formStepDone('tenant') && (
+              {!stepDone('tenant') && (
                 <button onClick={async () => { if (await createTenant()) nextStep(); }} disabled={saving}
                   data-testid="wizard-save-tenant"
                   className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white font-black shadow-md active:scale-95 transition disabled:opacity-50">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aanmaken & volgende'}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : tenant.mode === 'existing' ? 'Koppelen & volgende' : 'Aanmaken & volgende'}
                   {!saving && <ArrowRight className="w-4 h-4" />}
                 </button>
               )}
-              {formStepDone('tenant') && (
+              {stepDone('tenant') && (
                 <button onClick={nextStep} data-testid="wizard-next"
-                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
-                  Volgende <ArrowRight className="w-4 h-4" />
+                  className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition">
+                  {idx === STEPS.length - 1 ? 'Afronden' : 'Volgende'} <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
           )}
-          {(currentStep.settings || ['branding', 'locations', 'employees'].includes(currentStep.id)) && (
-            <button onClick={nextStep} data-testid="wizard-next"
-              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-slate-900 text-white font-black">
-              {idx === STEPS.length - 1 ? 'Klaar' : 'Volgende'} <ArrowRight className="w-4 h-4" />
+          {currentStep.settings && (
+            <button onClick={nextStep} disabled={!savedSettings[currentStep.id]} data-testid="wizard-next"
+              className="flex items-center gap-1.5 px-5 h-11 rounded-xl bg-[#0B1B3F] hover:bg-[#17325E] text-white font-black transition disabled:opacity-50 disabled:cursor-not-allowed">
+              {savedSettings[currentStep.id] ? 'Volgende' : 'Bewaar eerst'} <ArrowRight className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -277,9 +342,9 @@ export default function SetupWizard({ onFinish } = {}) {
       {allDone && (
         <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 text-center" data-testid="wizard-complete">
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
-          <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Basis-setup compleet!</h3>
+          <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-            Bedrijfsgegevens, eerste appartement en eerste huurder zijn ingesteld. Optionele integraties (e-mail, facturen automatisering...) kun je elk moment instellen.
+            Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
           </p>
         </div>
       )}
@@ -290,7 +355,7 @@ export default function SetupWizard({ onFinish } = {}) {
 // ============================================================
 // SETTINGS WRAPPER — embed Settings.jsx sub-forms inline
 // ============================================================
-function SettingsSectionWrapper({ step, settings }) {
+function SettingsSectionWrapper({ step, settings, onSaved, onDirty }) {
   return (
     <div data-testid={`wizard-settings-${step.id}`}>
       <div className="mb-3">
@@ -298,8 +363,11 @@ function SettingsSectionWrapper({ step, settings }) {
           <step.icon className="w-5 h-5" /> {step.label}
         </h3>
       </div>
-      {step.id === 'smtp' && <SmtpForm initial={settings.smtp} />}
-      {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
+      {step.id === 'smtp' && <SmtpForm initial={settings.smtp} onSaved={onSaved} onDirty={onDirty} />}
+      {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} onSaved={onSaved} onDirty={onDirty} />}
+      <p className="mt-3 text-xs text-slate-500">
+        Sla je instellingen op met de knop in het formulier en kies daarna <strong>Volgende</strong>.
+      </p>
     </div>
   );
 }
@@ -347,7 +415,28 @@ function StepProfile({ profile, setProfile }) {
   );
 }
 
-function StepApartment({ apartment, setApartment, apts }) {
+function StepLocation({ location, setLocation, locations }) {
+  const upd = (key, value) => setLocation((current) => ({ ...current, [key]: value }));
+  return (
+    <div className="space-y-3" data-testid="wizard-location">
+      <div className="mb-2">
+        <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><MapPin className="w-5 h-5" /> Eerste locatie</h3>
+        <p className="text-xs text-slate-500">Maak een locatie aan om je appartementen overzichtelijk te groeperen.</p>
+      </div>
+      {locations.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          Je hebt al {locations.length} {locations.length === 1 ? 'locatie' : 'locaties'}. Je kunt doorgaan of nog een locatie toevoegen.
+        </div>
+      )}
+      <FormField label="Naam locatie *" value={location.name} onChange={(e) => upd('name', e.target.value)}
+        placeholder="Bijv. Residentie Palm" data-testid="wizard-location-name" />
+      <FormField label="Adres" value={location.address} onChange={(e) => upd('address', e.target.value)}
+        placeholder="Straat 123, Paramaribo" data-testid="wizard-location-address" />
+    </div>
+  );
+}
+
+function StepApartment({ apartment, setApartment, apts, locations }) {
   const upd = (k, v) => setApartment((a) => ({ ...a, [k]: v }));
   return (
     <div className="space-y-3" data-testid="wizard-apartment">
@@ -361,7 +450,7 @@ function StepApartment({ apartment, setApartment, apts }) {
           {apts.length > 5 ? ` en ${apts.length - 5} meer` : ''}.
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Huisnummer *" value={apartment.number} onChange={(e) => upd('number', e.target.value)}
           placeholder="bv. 7B" data-testid="wizard-apt-number" />
         <FormField label="Huurprijs per maand *" type="number" value={apartment.rent_amount}
@@ -379,39 +468,74 @@ function StepApartment({ apartment, setApartment, apts }) {
       </label>
       <FormField label="Adres (optioneel)" value={apartment.address} onChange={(e) => upd('address', e.target.value)}
         placeholder="Hoofdstraat 12B, Paramaribo" data-testid="wizard-apt-address" />
+      <label className="block">
+        <span className="block text-xs font-bold text-slate-700 mb-1">Locatie *</span>
+        <select value={apartment.location_id || ''} onChange={(e) => upd('location_id', e.target.value)}
+          data-testid="wizard-apt-location"
+          className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none bg-white">
+          <option value="">Kies een locatie</option>
+          {locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+      </label>
     </div>
   );
 }
 
-function StepTenant({ tenant, setTenant, apts, status }) {
+function StepTenant({ tenant, setTenant, apts, tenants, status }) {
   const upd = (k, v) => setTenant((t) => ({ ...t, [k]: v }));
+  const availableTenants = tenants.filter((item) => !item.apartment_id || item.apartment_id === tenant.apartment_id);
   return (
     <div className="space-y-3" data-testid="wizard-tenant">
       <div className="mb-2">
         <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><User className="w-5 h-5" /> Huurders</h3>
-        <p className="text-xs text-slate-500">Koppel je eerste huurder aan een appartement. Hij/zij stelt straks bij eerste QR-scan een eigen PIN in.</p>
+        <p className="text-xs text-slate-500">Maak een huurder aan of koppel een bestaande huurder aan een appartement.</p>
       </div>
       {(status?.counts?.tenants || 0) > 0 && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700">
           ✓ Je hebt al {status.counts.tenants} huurder{status.counts.tenants === 1 ? '' : 's'}.
         </div>
       )}
-      <FormField label="Naam *" value={tenant.name} onChange={(e) => upd('name', e.target.value)}
-        placeholder="bv. Jan Jansen" data-testid="wizard-tenant-name" />
-      <div className="grid grid-cols-2 gap-3">
-        <FormField icon={Phone} label="Telefoon" type="tel" value={tenant.phone}
-          onChange={(e) => upd('phone', e.target.value)} placeholder="+597 ..." data-testid="wizard-tenant-phone" />
-        <FormField icon={Mail} label="E-mail" type="email" value={tenant.email}
-          onChange={(e) => upd('email', e.target.value)} placeholder="huurder@..." data-testid="wizard-tenant-email" />
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Huurder toevoegen">
+        <button type="button" onClick={() => upd('mode', 'new')} data-testid="wizard-tenant-mode-new"
+          className={`h-10 rounded-xl border-2 text-sm font-bold ${tenant.mode === 'new' ? 'border-[#FF5C00] bg-orange-50 text-[#C74600]' : 'border-slate-200 text-slate-600'}`}>
+          Nieuwe huurder
+        </button>
+        <button type="button" onClick={() => upd('mode', 'existing')} data-testid="wizard-tenant-mode-existing"
+          disabled={availableTenants.length === 0}
+          className={`h-10 rounded-xl border-2 text-sm font-bold disabled:opacity-40 ${tenant.mode === 'existing' ? 'border-[#FF5C00] bg-orange-50 text-[#C74600]' : 'border-slate-200 text-slate-600'}`}>
+          Bestaande huurder koppelen
+        </button>
       </div>
+      {tenant.mode === 'existing' ? (
+        <label className="block">
+          <span className="block text-xs font-bold text-slate-700 mb-1">Bestaande huurder *</span>
+          <select value={tenant.existing_tenant_id} onChange={(e) => upd('existing_tenant_id', e.target.value)}
+            data-testid="wizard-existing-tenant"
+            className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none">
+            <option value="">Kies een huurder</option>
+            {availableTenants.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+      ) : (
+        <>
+          <FormField label="Naam *" value={tenant.name} onChange={(e) => upd('name', e.target.value)}
+            placeholder="bv. Jan Jansen" data-testid="wizard-tenant-name" />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField icon={Phone} label="Telefoon" type="tel" value={tenant.phone}
+              onChange={(e) => upd('phone', e.target.value)} placeholder="+597 ..." data-testid="wizard-tenant-phone" />
+            <FormField icon={Mail} label="E-mail" type="email" value={tenant.email}
+              onChange={(e) => upd('email', e.target.value)} placeholder="huurder@..." data-testid="wizard-tenant-email" />
+          </div>
+        </>
+      )}
       <label className="block">
-        <span className="block text-xs font-bold text-slate-700 mb-1">Appartement</span>
+        <span className="block text-xs font-bold text-slate-700 mb-1">Appartement *</span>
         <select value={tenant.apartment_id} onChange={(e) => upd('apartment_id', e.target.value)}
           data-testid="wizard-tenant-apt"
           className="w-full h-10 px-3 border-2 border-slate-200 rounded-lg text-sm focus:border-slate-900 focus:outline-none">
-          <option value="">— Geen (kan later gekoppeld worden)</option>
+          <option value="">Kies een appartement</option>
           {apts.map((a) => (
-            <option key={a.id} value={a.id}>
+            <option key={a.id} value={a.id} disabled={!!a.tenant_id || a.status === 'occupied'}>
               {a.number}{a.status === 'occupied' ? ' (bezet)' : ''}{a.rent_amount ? ` — ${a.currency} ${a.rent_amount}` : ''}
             </option>
           ))}

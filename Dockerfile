@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend-build
+FROM node:20-alpine AS frontend-build
 
 WORKDIR /src/frontend
 COPY frontend/package.json ./
@@ -10,6 +10,7 @@ ARG REACT_APP_APP_URL=
 ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
 ENV REACT_APP_MARKETING_HOST=${REACT_APP_MARKETING_HOST}
 ENV REACT_APP_APP_URL=${REACT_APP_APP_URL}
+ENV NODE_OPTIONS=--openssl-legacy-provider
 RUN npm run build
 
 FROM python:3.11-slim AS app

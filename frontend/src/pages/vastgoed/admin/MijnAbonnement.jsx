@@ -16,6 +16,12 @@ const fmt = (n, c = 'SRD') => {
 };
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const isOpen = (i) => !['paid', 'superseded', 'cancelled', 'void'].includes(i.status);
+const intervalLabel = (interval) => ({
+  quarter: 'kwartaal',
+  year: 'jaar',
+  lifetime: 'eenmalig',
+  once: 'eenmalig',
+}[interval] || 'maand');
 const METHOD_LABEL = { creditcard: 'Creditcard', ideal: 'iDEAL', bank: 'Bank', stripe: 'Stripe', contant: 'Contant' };
 const STATUS_LABEL = { trial: 'Proefperiode', active: 'Actief', expired: 'Verlopen', cancelled: 'Opgezegd' };
 const CARD = 'bg-white rounded-2xl border border-orange-100';
@@ -57,7 +63,7 @@ function KpiStrip({ me, openInvoices, openTotal, lastPayment }) {
     : me.status === 'active' ? `Vernieuwt ${fmtDate(me.renews_at)}`
       : expired ? 'Betaling vereist' : fmtDate(me.cancelled_at);
   const items = [
-    { icon: Crown, label: 'Huidig pakket', value: me.plan?.name || '—', hint: `${fmt(me.monthly_amount, me.currency)} / maand`, tone: 'orange', testid: 'my-sub-kpi-plan' },
+    { icon: Crown, label: 'Huidig pakket', value: me.plan?.name || '—', hint: `${fmt(me.monthly_amount, me.currency)} / ${me.plan?.interval === 'quarter' ? 'kwartaal' : me.plan?.interval === 'year' ? 'jaar' : me.plan?.interval === 'lifetime' ? 'eenmalig' : 'maand'}`, tone: 'orange', testid: 'my-sub-kpi-plan' },
     { icon: expired ? AlertTriangle : me.status === 'trial' ? Clock : CheckCircle2, label: 'Status', value: STATUS_LABEL[me.status] || me.status,
       hint: statusHint, tone: expired ? 'red' : me.status === 'active' ? 'green' : 'orange', testid: 'my-sub-kpi-status' },
     { icon: Receipt, label: 'Openstaand', value: fmt(openTotal, me.currency),
@@ -98,7 +104,7 @@ function PayButtons({ invoiceId, onPay, size = 'lg' }) {
   );
 }
 
-function PayBanner({ me, openInvoices, stripeOn, onPayMany }) {
+function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay }) {
   const [sel, setSel] = useState(() => new Set(openInvoices.map((i) => i.id)));
   const key = openInvoices.map((i) => i.id).join(',');
   useEffect(() => { setSel(new Set(openInvoices.map((i) => i.id))); }, [key]);
@@ -155,11 +161,24 @@ function PayBanner({ me, openInvoices, stripeOn, onPayMany }) {
           <p className="text-[11px] font-semibold text-slate-500">Totaal te betalen ({chosen.length})</p>
           <p className="text-xl font-black text-slate-900 tracking-tight tabular-nums" data-testid="saas-pay-amount">{fmt(total, cur)}</p>
         </div>
-        {stripeOn ? (
-          <div className={chosen.length ? '' : 'opacity-40 pointer-events-none'}>
-            <PayButtons onPay={(_, m) => onPayMany(chosen.map((i) => i.id), m)} />
-          </div>
-        ) : <p className="text-xs text-slate-500">Betaal via het tabblad Bankoverschrijving.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          {stripeOn && (
+            <div className={chosen.length ? '' : 'opacity-40 pointer-events-none'}>
+              <PayButtons onPay={(_, m) => onPayMany(chosen.map((i) => i.id), m)} />
+            </div>
+          )}
+          {bankOn && (
+            <button type="button" onClick={() => onBankPay(chosen[0].id)} disabled={chosen.length !== 1}
+              data-testid="saas-pay-bank-btn"
+              className="h-11 px-4 rounded-xl border-2 border-slate-200 hover:border-[#FF5C00] hover:bg-orange-50 text-slate-800 font-bold text-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+              <Landmark className="w-4 h-4" /> Bankoverschrijving
+            </button>
+          )}
+        </div>
+        {bankOn && chosen.length !== 1 && (
+          <p className="text-[11px] text-slate-500">Selecteer precies één factuur voor betaling via bankoverschrijving.</p>
+        )}
+        {!stripeOn && !bankOn && <p className="text-xs text-slate-500">Neem contact op met SuriRent om uw factuur te betalen.</p>}
       </div>
     </div>
   );
@@ -202,7 +221,7 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
   );
 }
 
-function InvoicesPanel({ invoices, stripeOn, onPay }) {
+function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
   if (invoices.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen facturen.</p>;
   return (
     <div data-testid="my-invoices-list">
@@ -213,20 +232,34 @@ function InvoicesPanel({ invoices, stripeOn, onPay }) {
         {invoices.map((inv) => {
           const paid = inv.status === 'paid';
           const open = isOpen(inv);
+          const balanceDue = inv.balance_due ?? Math.max(Number(inv.amount || 0) - Number(inv.paid_amount || 0), 0);
           return (
             <div key={inv.id} data-testid={`my-invoice-${inv.id}`}
               className="px-5 py-3.5 grid grid-cols-[1fr_auto] md:grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-x-4 gap-y-1 items-center hover:bg-orange-50/40 transition-colors">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-slate-900">{fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}</p>
+                {inv.due_date && <p className="text-[11px] font-semibold text-orange-600">Uiterlijk betalen: {fmtDate(inv.due_date)}</p>}
                 <p className="text-[11px] text-slate-400 font-mono">#{(inv.invoice_number || inv.id.slice(0, 8)).toUpperCase()}</p>
               </div>
               <p className="hidden md:block text-sm text-slate-600 capitalize">{inv.plan}</p>
-              <p className="text-sm font-black text-slate-900 text-right tabular-nums">{fmt(inv.amount, inv.currency)}</p>
+              <div className="text-right">
+                <p className="text-sm font-black text-slate-900 tabular-nums">{fmt(inv.amount, inv.currency)}</p>
+                {balanceDue > 0 && balanceDue < Number(inv.amount || 0)
+                  && <p className="text-[11px] font-semibold text-slate-500">Open: {fmt(balanceDue, inv.currency)}</p>}
+              </div>
               <div className="md:block">
-                <StatusPill tone={paid ? 'green' : open ? 'orange' : 'slate'}>{paid ? 'Betaald' : open ? 'Open' : 'Vervallen'}</StatusPill>
+                <StatusPill tone={paid ? 'green' : open ? 'orange' : 'slate'}>
+                  {paid ? 'Betaald' : open && balanceDue < Number(inv.amount || 0) ? 'Gedeeltelijk betaald' : open ? 'Open' : 'Vervallen'}
+                </StatusPill>
               </div>
               <div className="md:w-[190px] flex md:justify-end justify-end">
-                {stripeOn && open ? <PayButtons invoiceId={inv.id} onPay={onPay} size="sm" />
+                {open && (stripeOn || bankOn) ? <div className="flex flex-wrap justify-end gap-1">
+                  {stripeOn && <PayButtons invoiceId={inv.id} onPay={onPay} size="sm" />}
+                  {bankOn && <button type="button" onClick={() => onBankPay(inv.id)} data-testid={`my-invoice-bank-${inv.id}`}
+                    className="h-8 px-2.5 rounded-lg text-[11px] border border-slate-200 hover:border-[#FF5C00] text-slate-700 font-bold inline-flex items-center gap-1">
+                    <Landmark className="w-3.5 h-3.5" /> Bank
+                  </button>}
+                </div>
                   : <span className="text-[11px] text-slate-400">{paid ? `Betaald ${fmtDate(inv.paid_at)}` : ''}</span>}
               </div>
             </div>
@@ -267,7 +300,7 @@ function PlanCard({ plan, currentPlanId, onSelect, busy }) {
       {isCurrent && <span className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FF5C00] text-white">Huidig</span>}
       <p className="text-base font-black text-slate-900">{plan.name}</p>
       <p className="text-xs text-slate-500 mt-0.5 pr-14">{plan.description}</p>
-      <p className="text-2xl font-black text-slate-900 mt-4 tracking-tight">{fmt(plan.amount, plan.currency)}<span className="text-xs font-semibold text-slate-400 ml-1">/maand</span></p>
+      <p className="text-2xl font-black text-slate-900 mt-4 tracking-tight">{fmt(plan.amount, plan.currency)}<span className="text-xs font-semibold text-slate-400 ml-1">/ {intervalLabel(plan.interval)}</span></p>
       <ul className="mt-3 space-y-1.5 flex-1">
         {(plan.features || []).map((f) => (
           <li key={f} className="flex items-start gap-2 text-[13px] text-slate-600"><CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />{f}</li>
@@ -288,7 +321,9 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
   const fileInput = useRef(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
-  if (!invoice) return <p className="text-xs text-slate-400">Wacht op een nieuwe factuur om bewijs te kunnen uploaden.</p>;
+  const hasOpenInstallments = (invoice?.payment_plans || []).some((plan) =>
+    (plan.schedule || []).some((term) => term.status !== 'paid' && Number(term.paid_amount || 0) < Number(term.amount || 0)),
+  );
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -299,7 +334,7 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
     try {
       const fd = new FormData();
       fd.append('file', f);
-      fd.append('invoice_id', invoice.id);
+      if (invoice?.id) fd.append('invoice_id', invoice.id);
       const { data } = await api.post('/billing/me/bank-confirm', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setResult(data);
       if (data.status === 'paid') onSuccess?.();
@@ -312,7 +347,13 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
         <ScanLine className="w-4 h-4 text-[#FF5C00]" />
         <p className="text-sm font-black text-slate-900">Betaalbewijs uploaden</p>
       </div>
-      <p className="text-xs text-slate-500 mb-4 leading-relaxed">Wij controleren automatisch bedrag, datum en omschrijving. Bij een match wordt uw abonnement direct geactiveerd.</p>
+      <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+        {invoice
+          ? hasOpenInstallments
+            ? 'Upload het betaalbewijs van de eerstvolgende termijn of van het volledige openstaande saldo. Wij controleren bedrag, datum en omschrijving automatisch.'
+            : 'Wij controleren automatisch bedrag, datum en omschrijving. Bij een match wordt uw betaling verwerkt.'
+          : 'Na je bankoverschrijving maken we bij het uploaden automatisch de eerste factuur aan. Bij een match wordt je abonnement direct geactiveerd.'}
+      </p>
       <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={onFile} className="hidden" data-testid="saas-bank-proof-input" />
       {!result && (
         <button onClick={() => fileInput.current?.click()} disabled={busy} data-testid="saas-bank-proof-upload-btn"
@@ -324,7 +365,9 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
         <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 flex items-start gap-2" data-testid="saas-bank-proof-result-paid">
           <FileCheck2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
           <div className="text-xs text-emerald-900 font-bold leading-snug">
-            Betaling automatisch goedgekeurd. Uw abonnement is direct geactiveerd!
+            {result.invoice_paid
+              ? 'Betaling automatisch goedgekeurd. De factuur is voldaan.'
+              : 'Termijnbetaling automatisch goedgekeurd. Het resterende saldo blijft op dezelfde factuur staan.'}
             <p className="font-normal text-emerald-700 mt-1">Herkend: {result.ocr?.currency || ''} {result.ocr?.amount?.toFixed(2) || '?'}{result.ocr?.date_iso && ` · ${result.ocr.date_iso}`}</p>
           </div>
         </div>
@@ -359,9 +402,18 @@ function KV({ label, value, mono, onCopy, copied, wrap }) {
   );
 }
 
-function BankPanel({ details, invoice, company, onSuccess, onErr }) {
+function BankPanel({ details, invoice, amount, currency, company, onSuccess, onErr }) {
   const [copied, setCopied] = useState('');
+  const nextInstallment = (invoice?.payment_plans || [])
+    .flatMap((plan) => (plan.schedule || []).map((term) => ({ plan, term })))
+    .filter(({ term }) => term.status !== 'paid' && Number(term.amount || 0) > Number(term.paid_amount || 0))
+    .sort((a, b) => (a.term.due_date || '').localeCompare(b.term.due_date || '') || a.term.seq - b.term.seq)[0];
   const refText = `ABONNEMENT — ${company} — ${invoice ? new Date(invoice.created_at).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }) : 'huidige maand'}`;
+  const paymentAmount = invoice
+    ? fmt(nextInstallment
+      ? Number(nextInstallment.term.amount) - Number(nextInstallment.term.paid_amount || 0)
+      : invoice.balance_due ?? Math.max(Number(invoice.amount || 0) - Number(invoice.paid_amount || 0), 0), invoice.currency)
+    : fmt(amount, currency);
   const copy = (label, value) => { navigator.clipboard.writeText(value || ''); setCopied(label); setTimeout(() => setCopied(''), 1500); };
   return (
     <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6 [&>*]:min-w-0" data-testid="saas-bank-box">
@@ -374,7 +426,11 @@ function BankPanel({ details, invoice, company, onSuccess, onErr }) {
         <KV label="Tenaamstelling" value={details.account_name} onCopy={() => copy('account_name', details.account_name)} copied={copied === 'account_name'} />
         <KV label="Rekeningnummer" value={details.account_number} mono onCopy={() => copy('account_number', details.account_number)} copied={copied === 'account_number'} />
         {details.swift && <KV label="SWIFT" value={details.swift} mono onCopy={() => copy('swift', details.swift)} copied={copied === 'swift'} />}
-        {invoice && <KV label="Bedrag" value={fmt(invoice.amount, invoice.currency)} mono />}
+        {paymentAmount && <KV label={nextInstallment ? `Termijn ${nextInstallment.term.seq}/${nextInstallment.plan.installments}` : 'Bedrag'} value={paymentAmount} mono />}
+        {(nextInstallment?.term.due_date || invoice?.due_date) && (
+          <KV label={nextInstallment ? 'Termijn vervalt op' : 'Uiterlijk betalen op'}
+            value={fmtDate(nextInstallment?.term.due_date || invoice.due_date)} />
+        )}
         <KV label="Omschrijving" value={refText} mono wrap onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
         {(details.whatsapp || details.support_email) && (
           <p className="text-[11px] text-slate-500 mt-3">
@@ -407,12 +463,23 @@ export default function MijnAbonnement() {
   const location = useLocation();
 
   useEffect(() => {
+    if (new URLSearchParams(location.search).get('tab') === 'bank') {
+      setTab('bank');
+    }
+  }, [location.search]);
+
+  useEffect(() => {
     api.get('/saas-stripe/public-config').then(({ data }) => setStripeOn(!!writeSeed('/saas-stripe/public-config', data?.enabled ? 1 : 0))).catch(() => setStripeOn(false));
   }, []);
 
   const goPay = (invoiceId, method) => {
     const back = encodeURIComponent(location.pathname + location.hash);
     navigate(`/saas/checkout/${invoiceId || 'open'}?method=${method}&back=${back}`);
+  };
+
+  const goBankPay = (invoiceId) => {
+    const back = encodeURIComponent(location.pathname + location.hash);
+    navigate(`/saas/bank-checkout/${invoiceId}?back=${back}`);
   };
 
   const payMany = (ids, method, save) => {
@@ -441,7 +508,7 @@ export default function MijnAbonnement() {
 
   const changePlan = async (plan) => {
     const word = plan.amount > (me?.monthly_amount || 0) ? 'opwaarderen' : 'downgraden';
-    if (!window.confirm(`Pakket ${word} naar ${plan.name} (${fmt(plan.amount, plan.currency)}/maand)?`)) return;
+    if (!window.confirm(`Pakket ${word} naar ${plan.name} (${fmt(plan.amount, plan.currency)} / ${intervalLabel(plan.interval)})?`)) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       const { data } = await api.put('/billing/me/plan', { plan: plan.id });
@@ -471,7 +538,8 @@ export default function MijnAbonnement() {
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
       <KpiStrip me={me} openInvoices={openInvoices} openTotal={openTotal} lastPayment={payments[0]} />
-      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} onPayMany={payMany} />
+      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} bankOn={showBank}
+        onPayMany={payMany} onBankPay={goBankPay} />
       <AutopayCard autopay={autopay} stripeOn={stripeOn} hasOpen={sortedOpen.length > 0} busy={apBusy}
         onToggle={(v) => apCall(() => api.put('/billing/me/autopay', { enabled: v }))}
         onRemove={() => { if (window.confirm('Opgeslagen kaart verwijderen en automatisch betalen uitzetten?')) apCall(() => api.delete('/billing/me/autopay')); }}
@@ -485,7 +553,8 @@ export default function MijnAbonnement() {
       </div>
 
       <div className={`${CARD} overflow-hidden`} data-testid={`my-sub-panel-${tab}`}>
-        {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} onPay={goPay} />}
+        {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}
+          onPay={goPay} onBankPay={goBankPay} />}
         {tab === 'payments' && <PaymentsPanel payments={payments} />}
         {tab === 'plans' && (
           <div className="p-5">
@@ -496,7 +565,7 @@ export default function MijnAbonnement() {
           </div>
         )}
         {tab === 'bank' && showBank && (
-          <BankPanel details={bank} invoice={oldestOpen} company={me.company_name || 'UW BEDRIJF'}
+          <BankPanel details={bank} invoice={oldestOpen} amount={me.monthly_amount} currency={me.currency} company={me.company_name || 'UW BEDRIJF'}
             onSuccess={() => { setMsg('Betaling automatisch goedgekeurd — abonnement is geactiveerd!'); load(); }} onErr={setErr} />
         )}
       </div>

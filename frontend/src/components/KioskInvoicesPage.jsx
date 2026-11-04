@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, Wallet, AlertTriangle, CalendarDays,
+  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, FileSignature, Wallet, AlertTriangle, CalendarDays,
   Banknote, MessageCircle, Share2, Trash2, CheckCircle2, ChevronRight, X,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../lib/api';
@@ -8,8 +8,8 @@ import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpe
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
+import { TenantPhoto } from './KioskFx';
 
-const CARD = 'bg-white rounded-3xl shadow-[0_10px_30px_-10px_rgba(120,40,0,0.45)] flex flex-col min-h-0 overflow-hidden';
 const TABS = [
   { v: 'all', label: 'Alle', key: 'allCount' },
   { v: 'open', label: 'Achterstand', key: 'openCount', dot: 'bg-red-500' },
@@ -28,11 +28,11 @@ const openPay = (tenantId) => window.dispatchEvent(new CustomEvent('kiosk-open-t
 
 function Stat({ Icon, label, value, tone, testId }) {
   return (
-    <div className="flex-1 min-w-0 rounded-2xl bg-slate-50 px-4 py-3 flex items-center gap-3">
-      <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tone}`}><Icon className="w-5 h-5" /></span>
+    <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-3 sm:px-4 flex items-center gap-2 sm:gap-3">
+      <span className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 ${tone}`}><Icon className="w-4 h-4 sm:w-5 sm:h-5" /></span>
       <span className="min-w-0">
-        <span className="block text-[11px] font-bold uppercase tracking-widest text-slate-400 truncate">{label}</span>
-        <span className="block text-xl xl:text-2xl font-black text-slate-900 truncate" data-testid={testId}>{value}</span>
+        <span className="block text-[9px] sm:text-[11px] font-bold uppercase tracking-wide sm:tracking-widest text-slate-400 truncate">{label}</span>
+        <span className="block text-xs sm:text-lg xl:text-2xl font-black text-slate-900 truncate" data-testid={testId}>{value}</span>
       </span>
     </div>
   );
@@ -48,6 +48,7 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
       <button type="button" onClick={() => onOpen(g)} className="text-left pl-5 pr-4 pt-4 pb-3 flex-1 flex flex-col justify-start hover:bg-orange-50/40 transition-colors"
         data-testid={`kiosk-inv-open-${g.tenant_id}`}>
         <div className="flex items-start gap-2">
+          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
           <div className="min-w-0 flex-1">
             <p className="text-lg font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
             <p className="text-sm font-bold text-slate-700 truncate">{g.tenant_name}</p>
@@ -172,7 +173,20 @@ export default function KioskInvoicesPage({ onBack }) {
     reloadCredits();
   }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
-  useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => {
+    api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => {
+    const onChange = () => { load(); loadTenants(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load, loadTenants]);
 
   const groups = useMemo(() => {
     if (!data) return [];
@@ -200,56 +214,75 @@ export default function KioskInvoicesPage({ onBack }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col md:flex-row gap-3 sm:gap-4" style={{ padding: '1.5vh 1.5vw 0' }} data-testid="kiosk-admin-page-facturen">
-      <div className={`${CARD} flex-1`} data-testid="kiosk-inv-list">
-        {sel ? <TenantDetail g={sel} onBack={() => setSelId(null)} onRemind={setReminding} onDelete={del}
-          credit={creditOf(credits, sel.tenant_id, sel.currency)} tenant={tenants.find((t) => t.id === sel.tenant_id)}
-          onChanged={load} onMsg={setMsg} /> : (
-          <>
-            <div className="flex gap-3 px-5 pt-5">
-              <Stat Icon={Wallet} label="Openstaand" value={money(s.totalOpenAmount || 0, s.currency)} tone="bg-red-50 text-red-600" testId="kiosk-inv-stat-open" />
-              <Stat Icon={AlertTriangle} label="Met achterstand" value={`${s.openCount || 0} van ${s.allCount || 0}`} tone="bg-amber-50 text-amber-600" testId="kiosk-inv-stat-late" />
-              <Stat Icon={CalendarDays} label={`Verwacht ${month}`} value={money(s.thisMonthExpected || 0, s.currency)} tone="bg-emerald-50 text-emerald-600" testId="kiosk-inv-stat-month" />
-            </div>
-            <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-              {TABS.map((t) => (
-                <button key={t.v} type="button" onClick={() => setTab(t.v)} data-testid={`kiosk-inv-tab-${t.v}`}
-                  className={`h-11 px-4 rounded-full text-sm font-black inline-flex items-center gap-2 transition-colors ${tab === t.v ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                  {t.dot && <span className={`w-2 h-2 rounded-full ${t.dot}`} />}{t.label} <span className="opacity-60">{s[t.key] ?? 0}</span>
-                </button>
-              ))}
-              <label className="ml-auto flex items-center gap-2 h-11 w-full max-w-xs rounded-full bg-slate-100 px-4">
-                <Search className="w-4 h-4 text-slate-400" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek huurder of appt…" data-testid="kiosk-inv-search"
-                  className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
-                {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="w-4 h-4 text-slate-400" /></button>}
-              </label>
-            </div>
-            <div className="px-5 pb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5">
-              {!data && <Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
-                {groups.map((g) => <TenantTile key={g.tenant_id} g={g} credit={creditOf(credits, g.tenant_id, g.currency)} onOpen={(x) => setSelId(x.tenant_id)} onRemind={setReminding} />)}
+    <div className="h-full min-h-0 bg-[#F4F5F7] p-3 sm:p-5" data-testid="kiosk-admin-page-facturen">
+      <div className="kiosk-admin-skin mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_-14px_rgba(15,23,42,0.25)] ring-1 ring-slate-100">
+        <header className="flex-none border-b border-slate-100 px-4 py-4 sm:px-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]">
+                  <FileSignature className="h-6 w-6" />
+                </span>
+                <div className="min-w-0">
+                  <h1 className="truncate text-xl font-black text-slate-900 sm:text-2xl">Facturen</h1>
+                  <p className="truncate text-xs font-medium text-slate-500 sm:text-sm">Facturen en betalingen beheren</p>
+                </div>
               </div>
-              {data && groups.length === 0 && <p className="text-center text-slate-500 font-semibold py-16" data-testid="kiosk-inv-empty">Geen facturen gevonden</p>}
+              <button onClick={onBack} data-testid="kiosk-admin-page-back"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-[#FF5C00]">
+                <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Terug naar kiosk</span><span className="sm:hidden">Terug</span>
+              </button>
             </div>
-          </>
-        )}
-      </div>
-      <div className={`${CARD} md:w-[320px] shrink-0 p-4 sm:p-5 gap-3 mb-3`} data-testid="kiosk-inv-actions">
-        <button onClick={onBack} data-testid="kiosk-admin-page-back"
-          className="h-12 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold inline-flex items-center justify-center gap-2 transition-colors">
-          <ArrowLeft className="w-5 h-5" /> Terug naar kiosk
-        </button>
-        <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-          className="h-16 rounded-2xl bg-white border-2 border-[#FF5C00] text-[#FF5C00] text-lg font-black inline-flex items-center justify-center gap-2 hover:bg-orange-50 disabled:opacity-60 transition-colors">
-          {busy ? <Loader2 className="w-6 h-6 animate-spin" /> : <CalendarPlus className="w-6 h-6" />} Genereer {month}
-        </button>
-        <button type="button" onClick={() => setCreating(true)} data-testid="kiosk-inv-new"
-          className="h-16 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white text-lg font-black inline-flex items-center justify-center gap-2 shadow-[0_12px_28px_-10px_rgba(255,92,0,0.7)] transition-colors">
-          <FilePlus2 className="w-6 h-6" /> Nieuwe factuur
-        </button>
-        {msg && <p data-testid="kiosk-inv-msg" className={`text-sm font-bold rounded-xl px-4 py-3 ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
+            <div className="grid grid-cols-2 gap-2 md:flex">
+              <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-xs font-black text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:px-4 sm:text-sm">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Genereer {month}
+              </button>
+              <button type="button" onClick={() => setCreating(true)} data-testid="kiosk-inv-new"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-xs font-black text-white shadow-sm transition-colors hover:bg-[#E05200] sm:px-4 sm:text-sm">
+                <FilePlus2 className="h-4 w-4" /> Nieuwe factuur
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="flex flex-1 min-h-0 flex-col p-3 sm:p-5" data-testid="kiosk-inv-list">
+          {msg && <p role="status" data-testid="kiosk-inv-msg" className={`mb-3 flex-none rounded-xl px-4 py-3 text-sm font-bold ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
+          {sel ? <TenantDetail g={sel} onBack={() => setSelId(null)} onRemind={setReminding} onDelete={del}
+            credit={creditOf(credits, sel.tenant_id, sel.currency)} tenant={tenants.find((t) => t.id === sel.tenant_id)}
+            onChanged={load} onMsg={setMsg} /> : (
+            <div className="flex h-full min-h-0 flex-col gap-3 sm:gap-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <Stat Icon={Wallet} label="Openstaand" value={money(s.totalOpenAmount || 0, s.currency)} tone="bg-red-50 text-red-600" testId="kiosk-inv-stat-open" />
+                <Stat Icon={AlertTriangle} label="Achterstand" value={`${s.openCount || 0} van ${s.allCount || 0}`} tone="bg-amber-50 text-amber-600" testId="kiosk-inv-stat-late" />
+                <Stat Icon={CalendarDays} label={`Verwacht ${month}`} value={money(s.thisMonthExpected || 0, s.currency)} tone="bg-emerald-50 text-emerald-600" testId="kiosk-inv-stat-month" />
+              </div>
+              <div className="grid flex-none gap-3 lg:grid-cols-[auto_minmax(240px,1fr)] lg:items-center">
+                <div className="flex min-w-0 gap-2 overflow-x-auto pb-0.5">
+                  {TABS.map((t) => (
+                    <button key={t.v} type="button" onClick={() => setTab(t.v)} data-testid={`kiosk-inv-tab-${t.v}`}
+                      className={`inline-flex h-10 min-w-max items-center gap-2 rounded-xl px-3 text-xs font-black transition-colors sm:px-4 sm:text-sm ${tab === t.v ? 'bg-[#FF5C00] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00]'}`}>
+                      {t.dot && <span className={`h-2 w-2 rounded-full ${t.dot}`} />}{t.label} <span className="opacity-75">{s[t.key] ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+                <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition-colors focus-within:border-orange-300 focus-within:ring-2 focus-within:ring-orange-100">
+                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
+                  {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="h-4 w-4 text-slate-400" /></button>}
+                </label>
+              </div>
+              <div className="flex-none"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 p-2 sm:p-3">
+                {!data && <Loader2 className="my-16 mx-auto h-8 w-8 animate-spin text-[#FF5C00]" />}
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                  {groups.map((g) => <TenantTile key={g.tenant_id} g={g} credit={creditOf(credits, g.tenant_id, g.currency)} onOpen={(x) => setSelId(x.tenant_id)} onRemind={setReminding} />)}
+                </div>
+                {data && groups.length === 0 && <p className="py-16 text-center font-semibold text-slate-500" data-testid="kiosk-inv-empty">Geen facturen gevonden</p>}
+              </div>
+            </div>
+          )}
+        </main>
       </div>
       {creating && <InvoiceForm tenants={tenants} onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
       {reminding && <ReminderModal group={reminding} onClose={() => setReminding(null)} onSent={() => setReminding(null)} />}

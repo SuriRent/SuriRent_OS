@@ -14,9 +14,16 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+let getRequestSequence = 0;
+
 // Attach bearer token if present (fallback to cookie auth)
 api.interceptors.request.use((config) => {
   config._t0 = performance.now(); // voor trage-verbinding detectie
+  if ((config.method || 'get').toLowerCase() === 'get') {
+    // Live app-data moet altijd opnieuw bij de backend worden gevalideerd,
+    // niet uit de browser- of service-worker-cache komen.
+    config.params = { ...(config.params || {}), nocache: `${Date.now()}-${++getRequestSequence}` };
+  }
   const adminToken = localStorage.getItem('admin_token');
   const kioskToken = localStorage.getItem('kiosk_token');
   const tenantToken = localStorage.getItem('tenant_token');

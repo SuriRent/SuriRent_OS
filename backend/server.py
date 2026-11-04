@@ -15,21 +15,24 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
 from pymongo.errors import DuplicateKeyError
+from gridfs.errors import NoFile
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from contextlib import asynccontextmanager
 import io
 import base64
 import secrets
 import hashlib
 import asyncio
+import math
 import json
 import time
+import calendar
 import logging as _logging
 
 from pdf_gen import (
@@ -44,6 +47,7 @@ from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
     ALLOWED_FEATURE_ICONS,
 )
+from billing_access import billing_access_state
 
 # =====================================================================
 # Config
@@ -53,6 +57,7 @@ DB_NAME = os.environ["DB_NAME"]
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+landing_video_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="landing_video_blobs")
 
 # Pure auth-helpers zijn verplaatst naar auth_utils.py. We re-exporten
 # ze hier zodat bestaande route-code (en externe imports) blijven werken
@@ -65,11 +70,83 @@ from auth_utils import (  # noqa: E402
     _pin_throttle_check, _pin_throttle_fail, _pin_throttle_clear,
     _client_ip, extract_token,
 )
+from saas_invoicing import (
+    append_company_invoice_charge,
+    apply_saas_plan_payment,
+    consolidate_all_company_invoices,
+    consolidate_company_invoices,
+    remove_unpaid_invoice_charge,
+    update_invoice_paid_amount,
+)
+from saas_billing_calendar import (
+    plan_period_end as _plan_period_end,
+    plan_period_start as _plan_period_start,
+    saas_invoice_amount as _saas_invoice_amount,
+    saas_invoice_cycle_fields as _saas_invoice_cycle_fields,
+    saas_invoice_due_date as _saas_invoice_due_date,
+    saas_next_renewal as _saas_next_renewal,
+)
 
 
 # =====================================================================
 # Auth Dependencies
 # =====================================================================
+def _billing_restriction_detail(access: dict) -> dict:
+    return {
+        "code": "billing_restricted",
+        "status": access["status"],
+        "message": "De proefperiode en respijtperiode zijn verlopen. Activeer een abonnement om beheerfuncties te hervatten.",
+        "restricted_at": access["restricted_at"],
+    }
+
+
+def _billing_request_is_allowed(request: Request) -> bool:
+    path = request.url.path
+    method = request.method.upper()
+    if path.startswith("/api/billing/"):
+        return True
+    if path == "/api/auth/me" and method == "GET":
+        return True
+    if path == "/api/companies/me/profile" and method in {"GET", "PUT"}:
+        return True
+    if path == "/api/companies/me/backup" and method == "GET":
+        return True
+    if path == "/api/companies/me/cancel-subscription" and method == "POST":
+        return True
+    return False
+
+
+async def _company_billing_access(company_id: str) -> dict:
+    company = await db.companies.find_one(
+        {"id": company_id},
+        {"_id": 0, "billing_status": 1, "trial_ends_at": 1, "expired_at": 1, "plan": 1},
+    ) or {}
+    access = billing_access_state(company)
+    if access["access_restricted"] and company.get("plan"):
+        plan = await _plan_for_company(company["plan"], company)
+        if float(plan.get("amount") or 0) <= 0:
+            access["status"] = "active"
+            access["access_restricted"] = False
+    return access
+
+
+async def _enforce_user_billing_access(user: dict, request: Request) -> dict:
+    if user.get("role") == "superadmin" or user.get("original_user_id"):
+        return user
+    company_id = user.get("active_company_id") or user.get("company_id")
+    if not company_id:
+        return user
+
+    access = await _company_billing_access(company_id)
+    user["_billing_status"] = access["status"]
+    user["_billing_access_restricted"] = access["access_restricted"]
+    user["_billing_grace_days_left"] = access["grace_days_left"]
+    user["_billing_restricted_at"] = access["restricted_at"]
+    if access["access_restricted"] and not _billing_request_is_allowed(request):
+        raise HTTPException(status_code=402, detail=_billing_restriction_detail(access))
+    return user
+
+
 async def get_current_user(request: Request) -> dict:
     # === Emergent Google Auth pad ===
     # Als `session_token` cookie aanwezig is (Emergent Google login), zoek
@@ -95,9 +172,16 @@ async def get_current_user(request: Request) -> dict:
                     gu.setdefault("id", gu.get("user_id"))
                     gu.setdefault("role", "admin")
                     gu["active_company_id"] = gu.get("company_id")
-                    return gu
+                    return await _enforce_user_billing_access(gu, request)
 
-    token = extract_token(request, "access_token")
+    # EventSource cannot send Authorization headers. On the admin SSE route,
+    # the frontend supplies its current bearer token as ?token=...; prefer it
+    # over a possibly stale httpOnly cookie, matching normal API requests.
+    token = (
+        request.query_params.get("token")
+        if request.url.path == "/api/admin/events"
+        else None
+    ) or extract_token(request, "access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
     try:
@@ -113,6 +197,8 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
     if user.get("disabled") or user.get("role") == "kiosk":
         raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
+    if payload.get("staff"):
+        user["staff"] = True
     # Impersonation context carried via JWT payload
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
@@ -151,30 +237,7 @@ async def get_current_user(request: Request) -> dict:
     except Exception:
         pass  # presence-tracking mag nooit de request laten falen
 
-    # BILLING NOTIFICATION — we HARD-BLOCKEN NIET meer.
-    # Klanten mogen de app blijven gebruiken ook als hun proefperiode is
-    # verlopen of hun abonnement past_due/cancelled is. Ze zien alleen een
-    # in-app banner (TrialBanner) met een oproep om te activeren. Deze keuze
-    # is expliciet gemaakt door de eigenaar — omzet-optimalisatie via
-    # vriendelijke UX i.p.v. dwingen.
-    if user.get("role") != "superadmin" and not user.get("original_user_id"):
-        cid = user.get("company_id")
-        if cid:
-            c = await db.companies.find_one(
-                {"id": cid}, {"_id": 0, "billing_status": 1, "trial_ends_at": 1},
-            )
-            if c:
-                bs = (c.get("billing_status") or "active").lower()
-                # Update trial → expired in memory (voor logging/telemetrie).
-                if bs == "trial" and c.get("trial_ends_at"):
-                    try:
-                        end = datetime.fromisoformat(c["trial_ends_at"].replace("Z", "+00:00"))
-                        if end < datetime.now(timezone.utc):
-                            bs = "expired"
-                    except Exception:
-                        pass
-                user["_billing_status"] = bs  # beschikbaar voor endpoints die dit willen weten
-    return user
+    return await _enforce_user_billing_access(user, request)
 
 
 
@@ -232,7 +295,27 @@ async def get_kiosk_session(request: Request) -> dict:
     if not payload.get("company_id"):
         # Zonder bedrijf geen kiosk-sessie: anders zouden lookups niet per bedrijf gescheiden zijn.
         raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
+    access = await _company_billing_access(payload["company_id"])
+    if access["access_restricted"] and not _kiosk_billing_request_is_allowed(request):
+        raise HTTPException(status_code=402, detail=_billing_restriction_detail(access))
     return {"company_id": payload.get("company_id"), "type": "kiosk"}
+
+
+def _kiosk_billing_request_is_allowed(request: Request) -> bool:
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return True
+    path = request.url.path
+    if path == "/api/kiosk/nfc-lookup":
+        return True
+    if path in {"/api/kiosk/payments", "/api/kiosk/stripe/intent"}:
+        return True
+    if re.fullmatch(r"/api/kiosk/payment-plans/[^/]+/installments/[^/]+/pay", path):
+        return True
+    if re.fullmatch(r"/api/kiosk/payments/[^/]+/(email|whatsapp)", path):
+        return True
+    if re.fullmatch(r"/api/kiosk/print-log/by-payment/[^/]+/printed", path):
+        return True
+    return False
 
 
 def kiosk_scope(session: dict) -> dict:
@@ -265,6 +348,22 @@ TENANT_SCOPED_COLLECTIONS = [
     "employees", "salaries", "deposits", "maintenance", "kasgeld",
     "push_subs", "locations",
 ]
+
+# Extra collections die in een volledige backup (v2) meegaan: instellingen,
+# kiosk-koppelingen, betalingsregelingen, stroom, notities, boetes, ID-foto's
+# en logo's (landing_assets) en bankafschriften. Sleutel = unieke veldnaam.
+BACKUP_EXTRA_COLLECTIONS = {
+    "company_settings": "company_id", "company_landings": "id",
+    "payment_plans": "id", "payment_plan_installments": "id", "payment_plan_reminders": "id",
+    "tenant_notes": "id", "fines": "id", "power_devices": "id", "power_log": "id",
+    "kiosk_pins": "company_id", "kiosk_printers": "id", "kiosk_id_owners": "kiosk_id",
+    "kiosk_emp_state": "emp_key", "kiosk_stripe_payments": "id", "kiosk_print_log": "id",
+    "bank_statements": "id", "landing_assets": "id", "audit_log": "id",
+    "notifications": "id", "fcm_tokens": "id", "sent_invoice_reminders": "invoice_id",
+    "kiosk_devices_seen": "key",
+}
+BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_billing_date",
+                       "trial_started_at", "trial_ends_at", "pending_invoice_id"}
 
 
 @asynccontextmanager
@@ -331,6 +430,13 @@ async def lifespan(app: FastAPI):
     await db.landing_assets.create_index("company_id")
     await db.landing_assets.create_index([("company_id", 1), ("scope", 1)])
     await db.subscription_invoices.create_index([("status", 1), ("period_end", 1)])
+    consolidated = await consolidate_all_company_invoices(db)
+    if consolidated:
+        print(f"[startup] consolidated SaaS invoices for {consolidated} companies")
+    await db.subscription_invoices.create_index(
+        "company_id", unique=True, partialFilterExpression={"master_invoice": True},
+        name="one_master_saas_invoice_per_company",
+    )
     await db.subscription_payments.create_index("company_id")
     await db.subscription_payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.landing_assets.create_index("id", unique=True)
@@ -540,6 +646,7 @@ async def lifespan(app: FastAPI):
         import asyncio as _aio4
         _aio4.create_task(_installment_reminder_loop())
         _aio4.create_task(_upcoming_invoice_reminder_loop())
+        _aio4.create_task(_power_enforce_loop())
 
     # Eenmalig/idempotent: facturen van reeds gearchiveerde huurders archiveren.
     try:
@@ -603,16 +710,6 @@ async def _daily_billing_checks_loop():
                 _log.info(f"[billing-cron] expired {len(expired)} companies @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[billing-cron] cycle failed: {e}")
-            # Trial-warning cyclus: 1x per dag, verstuurt e-mail 3 dagen
-            # voor het einde van elke trial. Idempotent via
-            # `sent_trial_warnings` marker-collectie.
-            try:
-                from routes.saas_ops import check_trial_warnings as _ctw
-                sent = await _ctw()
-                if sent:
-                    _log.info(f"[trial-warn] emailed {len(sent)} companies @ {datetime.now(timezone.utc).isoformat()}")
-            except Exception as e:
-                _log.warning(f"[trial-warn] cycle failed: {e}")
             # SaaS auto-invoice cyclus: 1x per dag, genereert nieuwe
             # maand-factuur voor elk actief bedrijf waar `subscription_renews_at`
             # verlopen is en er nog geen open factuur bestaat.
@@ -669,18 +766,18 @@ async def _send_trial_reminders():
         except Exception:
             continue
         delta = end - now_utc()
-        days_left = int(delta.total_seconds() // 86400)
+        days_left = math.ceil(delta.total_seconds() / 86400)
         # Choose the threshold reached
         threshold = None
         if delta.total_seconds() <= 0:
             threshold = "expired"
-        elif days_left <= 0:
+        elif days_left <= 1:
             threshold = "1d"
-        elif days_left <= 2:
+        elif days_left <= 3:
             threshold = "3d"
-        elif days_left <= 6:
+        elif days_left <= 7:
             threshold = "7d"
-        if threshold is None:
+        if threshold is None or threshold == "expired":
             continue
         sent = c.get("reminders_sent", []) or []
         if threshold in sent:
@@ -689,7 +786,7 @@ async def _send_trial_reminders():
         if threshold == "expired":
             subject = "Uw proefperiode is verlopen — activeer nu"
             headline = "Uw proefperiode is verlopen"
-            body_msg = "Activeer direct uw abonnement om ononderbroken toegang te behouden."
+            body_msg = "Uw bedrijfsomgeving blijft nog 7 dagen volledig beschikbaar. Daarna worden beheerfuncties tijdelijk beperkt; de huurderkiosk en betalingen blijven beschikbaar."
             cta_color = "#EF4444"
         else:
             human = {"7d": "7 dagen", "3d": "3 dagen", "1d": "morgen"}[threshold]
@@ -703,7 +800,7 @@ async def _send_trial_reminders():
             <p>{body_msg}</p>
             <table class="kv">
               <tr><td>Pakket</td><td>{plan['name']}</td></tr>
-              <tr><td>Bedrag</td><td>{plan['currency']} {int(plan['amount']):,}/maand</td></tr>
+              <tr><td>Bedrag</td><td>{plan['currency']} {int(plan['amount']):,} / {_plan_interval_label(plan)}</td></tr>
               <tr><td>Verloopdatum</td><td>{end.strftime("%d %b %Y")}</td></tr>
             </table>
             <p style="margin-top:14px;"><a href="{app_url}/admin" style="display:inline-block;background:{cta_color};color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:700;">Open dashboard om te betalen</a></p>
@@ -839,6 +936,30 @@ async def _overdue_push_loop():
         await _aio.sleep(15 * 60)
 
 
+async def _power_notify_tenant(cid: str, tenant_id: str, text: str) -> None:
+    """Bericht (WhatsApp, anders SMS) naar de huurder over de stroom; faalt stil."""
+    try:
+        t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "phone": 1})
+        cfg = await get_company_section(cid, "twilio")
+        if t and t.get("phone") and cfg.get("enabled"):
+            await _twilio_send(cfg, "whatsapp" if cfg.get("whatsapp_number") else "sms", t["phone"], text)
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] huurder-bericht mislukt: {e}")
+
+
+async def _power_enforce_loop():
+    """Elke 10 minuten: stroom aankondigen/afsluiten bij achterstand en weer aanzetten na betaling."""
+    import asyncio as _aio
+    from routes import power as _power
+    await _aio.sleep(60)
+    while True:
+        try:
+            await _power.enforce_all(_company_overdue_tenants)
+        except Exception as e:  # noqa: BLE001
+            print(f"[power] loop error: {e}")
+        await _aio.sleep(10 * 60)
+
+
 app = FastAPI(title="Vastgoed Kiosk API", lifespan=lifespan)
 
 # COMPRESSIE — Brotli EN Gzip. Starlette kiest per request automatisch de
@@ -935,6 +1056,10 @@ async def _live_sync_broadcast(request: Request, call_next):
                 payload = _pyjwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALG])
             except Exception:
                 return response
+            if payload.get("type") == "tenant":
+                token_kind = "tenant"
+            elif payload.get("type") == "kiosk":
+                token_kind = "kiosk"
             cid = payload.get("company_id")
             if not cid and token_kind == "tenant":
                 # Tenant JWT bevat alleen sub=tenant_id → lookup company_id
@@ -1072,12 +1197,19 @@ async def register(body: RegisterIn, request: Request, response: Response):
     existing = await db.users.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="E-mailadres is al in gebruik")
+    personal_pin = (body.personal_pin or "").strip()
+    if personal_pin and (not personal_pin.isdigit() or len(personal_pin) != 4):
+        raise HTTPException(status_code=400, detail="Persoonlijke PIN moet uit precies 4 cijfers bestaan")
 
     company_id = None
     company_payload = None
 
     # Self-serve onboarding: when company_name is provided, create a new tenant.
     if (body.company_name or "").strip():
+        await _seed_plan_catalog()
+        selected_plan = await _fetch_plan_by_id(body.plan or "starter")
+        if not selected_plan or selected_plan.get("active") is False:
+            raise HTTPException(status_code=400, detail="Gekozen abonnement is niet beschikbaar")
         # Slug moet expliciet worden opgegeven — geen auto-generatie meer op
         # basis van bedrijfsnaam. Frontend valideert al maar backend valideert
         # opnieuw zodat een direct-API-call niet omzeild kan worden.
@@ -1106,7 +1238,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                 detail=f"Slug '{slug}' is al in gebruik. Kies een andere naam.",
             )
         now = now_utc()
-        trial_end = now + timedelta(days=14)
+        starts_trial = float(selected_plan.get("amount") or 0) > 0
         # Explicit country choice overrides phone-based detection
         if body.country == "NL":
             country, currency = "NL", "EUR"
@@ -1119,9 +1251,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
             "name": body.company_name.strip(),
             "slug": slug,
             "plan": body.plan or "starter",  # selected package
-            "billing_status": "trial",       # trial | active | past_due | cancelled
-            "trial_started_at": iso(now),
-            "trial_ends_at": iso(trial_end),
+            "billing_status": "trial" if starts_trial else "active",
             "telefoon": (body.telefoon or "").strip(),
             "address": (body.address or "").strip(),
             "owner_email": email,
@@ -1129,6 +1259,9 @@ async def register(body: RegisterIn, request: Request, response: Response):
             "currency": currency,
             "created_at": iso(now),
         }
+        if starts_trial:
+            c["trial_started_at"] = iso(now)
+            c["trial_ends_at"] = iso(now + timedelta(days=14))
         await db.companies.insert_one(c)
         company_id = c["id"]
         company_payload = {k: c[k] for k in ("id", "slug", "name", "plan")}
@@ -1140,6 +1273,10 @@ async def register(body: RegisterIn, request: Request, response: Response):
             company_id = default["id"]
             company_payload = {k: default[k] for k in ("id", "slug", "name", "plan")}
 
+    if personal_pin and company_id:
+        await _check_employee_pin_unique(company_id, personal_pin)
+
+    registered_at = iso(now_utc())
     user_doc = {
         "id": new_id(),
         "email": email,
@@ -1147,8 +1284,12 @@ async def register(body: RegisterIn, request: Request, response: Response):
         "role": "admin",
         "company_id": company_id,
         "password_hash": hash_password(body.password),
-        "created_at": iso(now_utc()),
+        "created_at": registered_at,
+        "last_login_at": registered_at,
     }
+    if personal_pin:
+        user_doc["personal_pin_hash"] = hash_password(personal_pin)
+        user_doc["personal_pin_set_at"] = registered_at
     await db.users.insert_one(user_doc)
     token = create_token({
         "sub": user_doc["id"], "email": email, "type": "access",
@@ -1190,7 +1331,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                     contact_name=body.name,
                     email=email,
                     plan_name=plan_info["name"],
-                    plan_price_text=f"{plan_info['currency']} {int(plan_info['amount']):,}/maand".replace(",", "."),
+                    plan_price_text=f"{plan_info['currency']} {int(plan_info['amount']):,} / {_plan_interval_label(plan_info)}".replace(",", "."),
                     login_url=login_query_url,
                     subdomain_url=None,
                     kiosk_pin=None,
@@ -1217,7 +1358,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
                 <h1 style="font-size:16px;margin-top:18px;">Uw pakket</h1>
                 <table class="kv">
                   <tr><td>Pakket</td><td>{plan_info['name']}</td></tr>
-                  <tr><td>Prijs</td><td>{plan_info['currency']} {int(plan_info['amount']):,}/maand</td></tr>
+                  <tr><td>Prijs</td><td>{plan_info['currency']} {int(plan_info['amount']):,} / {_plan_interval_label(plan_info)}</td></tr>
                   <tr><td>Proefperiode</td><td>14 dagen gratis</td></tr>
                 </table>
 
@@ -1251,7 +1392,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
 
     return {
         "token": token,
-        "user": {k: user_doc[k] for k in ("id", "email", "name", "role", "company_id", "created_at")},
+        "user": {k: user_doc[k] for k in ("id", "email", "name", "role", "company_id", "created_at", "last_login_at")},
         "company": company_payload,
     }
 
@@ -1614,7 +1755,8 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
         c = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
         ktoken = create_token({"sub": "kiosk", "type": "kiosk", "company_id": cid}, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, ktoken, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        return {"kiosk": True, "token": ktoken, "company": c,
+        staff = await _staff_admin_token(cid, response) or {}
+        return {"kiosk": True, "token": ktoken, "company": c, "admin_token": staff.get("admin_token"),
                 "employee": {"id": emp.get("id"), "name": emp.get("name") or u.get("name", ""), "pin": pin},
                 "user": {"email": u["email"], "name": u.get("name", ""), "role": "kiosk"}}
     token = create_token({
@@ -1667,9 +1809,14 @@ async def demo_login(response: Response):
         "sub": user["id"], "email": DEMO_EMAIL, "type": "access",
         "company_id": company["id"], "role": "admin",
     }, ACCESS_MIN)
+    kiosk_token = create_token({
+        "sub": "kiosk", "type": "kiosk", "company_id": company["id"],
+    }, KIOSK_TOKEN_MIN)
     _set_access_cookie(response, token)
+    _set_access_cookie(response, kiosk_token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
     return {
         "token": token,
+        "kiosk_token": kiosk_token,
         "email": DEMO_EMAIL,
         "password": DEMO_PASSWORD,
         "company": {k: company.get(k) for k in ("id", "slug", "name")},
@@ -2243,6 +2390,11 @@ async def _fetch_plan_by_id(plan_id: str) -> Optional[dict]:
     return None
 
 
+def _plan_interval_label(plan: Optional[dict]) -> str:
+    interval = str((plan or {}).get("interval") or "month").lower()
+    return {"quarter": "kwartaal", "year": "jaar", "lifetime": "eenmalig", "once": "eenmalig"}.get(interval, "maand")
+
+
 def now_utc_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -2268,11 +2420,11 @@ async def list_plans(phone: Optional[str] = None, currency: Optional[str] = None
 
 # Superadmin CRUD voor plan_catalog -----------------------------------
 class PlanCreate(BaseModel):
-    id: str
-    name: str
-    amount: float
-    currency: str = "SRD"
-    interval: str = "month"
+    id: str = Field(..., min_length=2, max_length=50, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    name: str = Field(..., min_length=1, max_length=100)
+    amount: float = Field(..., ge=0)
+    currency: Literal["SRD", "USD", "EUR"] = "SRD"
+    interval: Literal["month", "quarter", "year", "lifetime"] = "month"
     description: str = ""
     features: list[str] = []
     limits: dict = {}
@@ -2282,9 +2434,9 @@ class PlanCreate(BaseModel):
 
 class PlanUpdate(BaseModel):
     name: Optional[str] = None
-    amount: Optional[float] = None
-    currency: Optional[str] = None
-    interval: Optional[str] = None
+    amount: Optional[float] = Field(None, ge=0)
+    currency: Optional[Literal["SRD", "USD", "EUR"]] = None
+    interval: Optional[Literal["month", "quarter", "year", "lifetime"]] = None
     description: Optional[str] = None
     features: Optional[list[str]] = None
     limits: Optional[dict] = None
@@ -2456,7 +2608,11 @@ async def billing_me(user=Depends(get_current_user)):
     c = await db.companies.find_one({"id": cid}, {"_id": 0}) or {}
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
-    status = c.get("billing_status", "active")
+    access = billing_access_state(c)
+    if float(plan.get("amount") or 0) <= 0:
+        access["status"] = "active"
+        access["access_restricted"] = False
+    status = access["status"]
     days_left = None
     trial_ends = c.get("trial_ends_at")
     if trial_ends:
@@ -2466,9 +2622,6 @@ async def billing_me(user=Depends(get_current_user)):
             days_left = max(0, int(delta.total_seconds() // 86400) + (1 if delta.total_seconds() % 86400 > 0 else 0))
         except Exception:
             days_left = None
-    if status == "trial" and days_left is not None and days_left <= 0:
-        status = "expired"
-
     pending_plan_id = c.get("pending_plan")
     pending_plan = (await _plan_for_company(pending_plan_id, c)) if pending_plan_id else None
     pending_invoice = None
@@ -2478,6 +2631,10 @@ async def billing_me(user=Depends(get_current_user)):
         )
     return {
         "status": status,
+        "access_restricted": access["access_restricted"],
+        "grace_period_days": access["grace_period_days"],
+        "grace_days_left": access["grace_days_left"],
+        "restricted_at": access["restricted_at"],
         "plan_id": plan_id,
         "plan": plan,
         "trial_started_at": c.get("trial_started_at"),
@@ -2523,6 +2680,21 @@ class ChangePlanIn(BaseModel):
     plan: str
 
 
+async def _remove_pending_plan_charge(company: dict) -> None:
+    invoice_id = company.get("pending_invoice_id")
+    charge_key = company.get("pending_charge_key")
+    if invoice_id and charge_key:
+        try:
+            await remove_unpaid_invoice_charge(db, invoice_id, charge_key)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+    if invoice_id:
+        await db.companies.update_one(
+            {"id": company["id"]},
+            {"$unset": {"pending_invoice_id": "", "pending_charge_key": "", "pending_plan": ""}},
+        )
+
+
 @api.put("/billing/me/plan")
 async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
     """Customer-driven plan upgrade/downgrade.
@@ -2545,18 +2717,33 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Onbekend pakket '{new_plan}'")
     if target_doc.get("active") is False:
         raise HTTPException(status_code=400, detail="Dit pakket is niet meer beschikbaar")
+    if new_plan == c.get("pending_plan") and c.get("pending_invoice_id"):
+        existing_pending = await db.subscription_invoices.find_one(
+            {"id": c["pending_invoice_id"], "company_id": cid}, {"_id": 0},
+        )
+        if existing_pending:
+            return {
+                "ok": True, "plan": old, "pending_plan": new_plan,
+                "invoice": existing_pending, "effective": "after_payment",
+                "message": "Deze pakketwijziging wacht al op betaling.",
+            }
     if new_plan == old and not c.get("pending_plan"):
         return {"ok": True, "plan": new_plan, "effective": "already_active"}
+    if new_plan == old and c.get("pending_plan"):
+        await _remove_pending_plan_charge(c)
+        return {"ok": True, "plan": new_plan, "effective": "already_active",
+                "message": "De openstaande pakketwijziging is geannuleerd."}
 
     new_price = await _plan_for_company(new_plan, c)
     now = now_utc()
 
     # Gratis plan → direct activeren zonder factuur.
     if float(new_price.get("amount") or 0) <= 0:
+        await _remove_pending_plan_charge(c)
         await db.companies.update_one({"id": cid}, {
             "$set": {"plan": new_plan, "billing_status": "active",
                      "plan_change_requested_at": iso(now)},
-            "$unset": {"pending_plan": "", "pending_invoice_id": ""},
+            "$unset": {"pending_plan": "", "pending_invoice_id": "", "pending_charge_key": "", "subscription_renews_at": ""},
         })
         await db.audit_log.insert_one({
             "id": new_id(), "type": "plan_change_free_immediate",
@@ -2567,27 +2754,49 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
                 "message": f"Uw abonnement is omgezet naar {new_price.get('name') or new_plan}."}
 
     # Create an open invoice for the new plan (customer must pay this to activate)
+    period_start = _plan_period_start(target_doc, now)
+    period_end = _plan_period_end(target_doc, period_start)
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": new_plan,
-        "amount": new_price["amount"],
+        "amount": _saas_invoice_amount(target_doc, new_price["amount"], period_start, period_end),
         "currency": new_price["currency"],
         "status": "open",
         "kind": "plan_change",
         "from_plan": old,
-        "period_start": iso(now),
-        "period_end": iso(now + timedelta(days=30)),
+        "period_start": iso(period_start),
+        "period_end": iso(period_end) if period_end else None,
+        "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user.get("email"),
+        **_saas_invoice_cycle_fields(target_doc),
     }
-    await db.subscription_invoices.insert_one(inv)
-    inv.pop("_id", None)
+    charge_key = f"plan-change:{new_plan}:{now.date().isoformat()}"
+    if c.get("pending_plan") and c.get("pending_invoice_id"):
+        await _remove_pending_plan_charge(c)
+    try:
+        inv, created = await append_company_invoice_charge(db, inv, charge_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if not created:
+        await db.companies.update_one({"id": cid}, {"$set": {
+            "pending_plan": new_plan,
+            "pending_invoice_id": inv["id"],
+            "pending_charge_key": charge_key,
+            "plan_change_requested_at": iso(now),
+        }})
+        return {
+            "ok": True, "plan": old, "pending_plan": new_plan,
+            "invoice": inv, "effective": "after_payment",
+            "message": "Deze pakketwijziging staat al op de factuur.",
+        }
 
     await db.companies.update_one({"id": cid}, {"$set": {
         "pending_plan": new_plan,
         "pending_invoice_id": inv["id"],
+        "pending_charge_key": charge_key,
         "plan_change_requested_at": iso(now),
     }})
     await db.audit_log.insert_one({
@@ -2607,7 +2816,20 @@ async def my_invoices(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         return []
-    docs = await db.subscription_invoices.find({"company_id": cid}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    docs = await db.subscription_invoices.find(
+        {"company_id": cid, "merged_into_invoice_id": {"$exists": False},
+         "status": {"$nin": ["merged", "superseded"]}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    invoice_ids = [invoice["id"] for invoice in docs]
+    plans = await db.saas_payment_plans.find(
+        {"invoice_id": {"$in": invoice_ids}}, {"_id": 0},
+    ).to_list(100)
+    plans_by_invoice: dict[str, list[dict]] = {}
+    for plan in plans:
+        plans_by_invoice.setdefault(plan["invoice_id"], []).append(plan)
+    for invoice in docs:
+        invoice["payment_plans"] = plans_by_invoice.get(invoice["id"], [])
     return docs
 
 
@@ -2811,32 +3033,61 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     (so a customer in trial / expired state can pay even before any invoice was issued).
     Invoice is denominated in the company's display currency (SRD for SR, EUR for NL)."""
     cid = c["id"]
-    inv = await db.subscription_invoices.find_one(
-        {"company_id": cid, "status": {"$nin": ["paid", "archived"]}},
-        {"_id": 0}, sort=[("created_at", -1)],
-    )
-    if inv:
+    try:
+        inv = await consolidate_company_invoices(db, cid)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if inv and inv.get("status") in {"open", "overdue"}:
         return inv
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
     now = now_utc()
+    period_start = c.get("subscription_renews_at") or iso(now)
+    try:
+        period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
+    except ValueError:
+        period_start_dt = now
+        period_start = iso(now)
+    period_start_dt = _plan_period_start(plan, period_start_dt)
+    period_start = iso(period_start_dt)
+    period_end = _plan_period_end(plan, period_start_dt)
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": plan_id,
-        "amount": plan["amount"],
+        "amount": _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end),
         "currency": plan["currency"],
         "status": "open",
         "kind": "subscription",
-        "period_start": iso(now),
-        "period_end": iso(now + timedelta(days=30)),
+        "period_start": period_start,
+        "period_end": iso(period_end) if period_end else None,
+        "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
+        **_saas_invoice_cycle_fields(plan),
     }
-    await db.subscription_invoices.insert_one(inv)
-    inv.pop("_id", None)
+    try:
+        inv, _ = await append_company_invoice_charge(
+            db, inv, f"subscription:{str(period_start)[:10]}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return inv
+
+
+@api.post("/billing/me/bank-invoice")
+async def billing_me_bank_invoice(user=Depends(get_current_user)):
+    """Create or return the current company's open invoice for bank checkout."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    company = await db.companies.find_one({"id": cid}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if _company_display_currency(company) != "SRD":
+        raise HTTPException(status_code=400, detail="Bankoverschrijving is alleen beschikbaar voor facturen in SRD")
+    return await _ensure_open_invoice_for_company(company, user.get("email", ""))
 
 
 @api.post("/billing/me/checkout")
@@ -2855,6 +3106,7 @@ async def _record_saas_payment_manual(
     *, invoice: dict, company: dict, amount: float, currency: str,
     method: str, reference: str, statement_id: Optional[str],
     ocr_meta: Optional[dict], auto_approved: bool, approved_by: str,
+    plan_id: Optional[str] = None, installment_seq: Optional[int] = None,
 ) -> dict:
     """Helper voor handmatige (bankoverschrijving) SaaS-betalingen. Maakt
     `saas_payment_requests` + `subscription_payments` aan en activeert het
@@ -2873,6 +3125,8 @@ async def _record_saas_payment_manual(
         "provider_id": f"manual:{pr_id[:8]}",
         "amount": amount,
         "currency": currency,
+        "plan_id": plan_id,
+        "installment_seq": installment_seq,
         "status": "paid" if auto_approved else "pending_approval",
         "bank_statement_id": statement_id,
         "ocr": ocr_meta or {},
@@ -2885,11 +3139,15 @@ async def _record_saas_payment_manual(
     if not auto_approved:
         # OCR mismatch — superadmin moet handmatig goedkeuren.
         return {"status": "pending_approval", "invoice_id": invoice["id"], "request_id": pr_id, "ocr": ocr_meta or {}}
-    # Mark invoice paid
-    await db.subscription_invoices.update_one(
-        {"id": invoice["id"]},
-        {"$set": {"status": "paid", "paid_at": paid_at, "payment_method": method}},
-    )
+    updated_invoice = await update_invoice_paid_amount(db, invoice["id"], amount)
+    if not updated_invoice:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    await apply_saas_plan_payment(db, invoice["id"], amount, plan_id, installment_seq)
+    if updated_invoice.get("status") == "paid":
+        await db.subscription_invoices.update_one(
+            {"id": invoice["id"]},
+            {"$set": {"paid_at": paid_at, "payment_method": method}},
+        )
     # Subscription payment record
     pay = {
         "id": new_id(),
@@ -2898,6 +3156,8 @@ async def _record_saas_payment_manual(
         "company_name": company.get("name", ""),
         "amount": amount,
         "currency": currency,
+        "plan_id": plan_id,
+        "installment_seq": installment_seq,
         "method": method,
         "reference": reference,
         "note": "Auto-goedgekeurd na OCR-controle van bankafschrift" if auto_approved else "",
@@ -2908,9 +3168,18 @@ async def _record_saas_payment_manual(
         "bank_statement_id": statement_id,
     }
     await db.subscription_payments.insert_one(pay)
-    await _activate_company_after_saas_payment(company["id"], plan_in_payment=invoice.get("plan"))
-    await _send_saas_payment_email(company, amount, currency, method, invoice["id"])
-    return {"status": "paid", "invoice_id": invoice["id"], "request_id": pr_id, "ocr": ocr_meta or {}}
+    if updated_invoice.get("status") == "paid":
+        await _activate_company_after_saas_payment(
+            company["id"], plan_in_payment=invoice.get("plan"), invoice=updated_invoice,
+        )
+        await _send_saas_payment_email(company, amount, currency, method, invoice["id"])
+    return {
+        "status": "paid",
+        "invoice_id": invoice["id"],
+        "invoice_paid": updated_invoice.get("status") == "paid",
+        "request_id": pr_id,
+        "ocr": ocr_meta or {},
+    }
 
 
 @api.post("/billing/me/bank-confirm")
@@ -2949,10 +3218,47 @@ async def billing_me_bank_confirm(
         )
         if not inv:
             raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+        if inv.get("merged_into_invoice_id"):
+            inv = await db.subscription_invoices.find_one(
+                {"id": inv["merged_into_invoice_id"], "company_id": cid}, {"_id": 0},
+            )
+            if not inv:
+                raise HTTPException(status_code=404, detail="Hoofdfactuur niet gevonden")
         if inv.get("status") == "paid":
             raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
     else:
         inv = await _ensure_open_invoice_for_company(c, user.get("email", ""))
+
+    invoice_balance = float(
+        inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0))
+    )
+    installment_plans = await db.saas_payment_plans.find(
+        {"invoice_id": inv["id"], "schedule": {"$exists": True}}, {"_id": 0},
+    ).sort("created_at", 1).to_list(100)
+    installment_plan = None
+    next_installment = None
+    for candidate in installment_plans:
+        candidate_term = next(
+            (
+                term for term in sorted(
+                    candidate.get("schedule", []),
+                    key=lambda item: (item.get("due_date") or "", item.get("seq") or 0),
+                )
+                if term.get("status") != "paid"
+                and float(term.get("amount") or 0) > float(term.get("paid_amount") or 0)
+            ),
+            None,
+        )
+        if candidate_term:
+            installment_plan = candidate
+            next_installment = candidate_term
+            break
+    payment_amount = (
+        round(float(next_installment["amount"]) - float(next_installment.get("paid_amount") or 0), 2)
+        if next_installment else invoice_balance
+    )
+    installment_plan_id = installment_plan.get("id") if next_installment and installment_plan else None
+    installment_seq = next_installment.get("seq") if next_installment else None
 
     # Sla statement op
     asset_id = new_id()
@@ -2977,9 +3283,23 @@ async def billing_me_bank_confirm(
         ocr = await _ocr_bank_statement(asset_id)
         ok, reasons = _ocr_match_ok(
             ocr,
-            expected_amount=float(inv.get("amount") or 0),
+            expected_amount=payment_amount,
             expected_currency=inv.get("currency") or "SRD",
         )
+        if not ok and next_installment:
+            full_balance_ok, full_balance_reasons = _ocr_match_ok(
+                ocr,
+                expected_amount=invoice_balance,
+                expected_currency=inv.get("currency") or "SRD",
+            )
+            if full_balance_ok:
+                ok = True
+                reasons = []
+                payment_amount = invoice_balance
+                installment_plan_id = None
+                installment_seq = None
+            else:
+                reasons = full_balance_reasons
         ocr_meta = {
             "amount": ocr.get("amount"),
             "currency": ocr.get("currency"),
@@ -3000,7 +3320,7 @@ async def billing_me_bank_confirm(
     result = await _record_saas_payment_manual(
         invoice=inv,
         company=c,
-        amount=float(inv.get("amount") or 0),
+        amount=payment_amount,
         currency=inv.get("currency") or "SRD",
         method="bank",
         reference=f"ABONNEMENT — {c.get('name', '')} — {inv.get('id', '')[:8]}",
@@ -3008,6 +3328,8 @@ async def billing_me_bank_confirm(
         ocr_meta=ocr_meta,
         auto_approved=auto_approved,
         approved_by="auto-ocr" if auto_approved else (user.get("email") or "self"),
+        plan_id=installment_plan_id,
+        installment_seq=installment_seq,
     )
     if not auto_approved and mismatch_reasons:
         result["mismatch_reasons"] = mismatch_reasons
@@ -3016,24 +3338,43 @@ async def billing_me_bank_confirm(
 
 
 
-async def _activate_company_after_saas_payment(company_id: str, plan_in_payment: Optional[str] = None):
+async def _activate_company_after_saas_payment(
+    company_id: str,
+    plan_in_payment: Optional[str] = None,
+    invoice: Optional[dict] = None,
+):
     """Shared post-payment routine: bumps company to active + applies pending plan."""
     c = await db.companies.find_one({"id": company_id}, {"_id": 0}) or {}
     now = now_utc()
+    pending = c.get("pending_plan")
+    apply_pending = bool(
+        pending and pending != c.get("plan")
+        and (not plan_in_payment or plan_in_payment == pending)
+    )
+    target_plan = pending if apply_pending else (plan_in_payment or c.get("plan"))
+    plan = await _fetch_plan_by_id(target_plan) if target_plan else None
+    renews_at = _saas_next_renewal(plan, invoice, now)
     update = {
         "billing_status": "active",
         "subscription_started_at": c.get("subscription_started_at") or iso(now),
-        "subscription_renews_at": iso(now + timedelta(days=30)),
     }
-    pending = c.get("pending_plan")
-    if pending and pending != c.get("plan"):
+    unset = {"expired_at": ""}
+    if renews_at:
+        update["subscription_renews_at"] = iso(renews_at)
+    else:
+        unset["subscription_renews_at"] = ""
+    if apply_pending:
         update["plan"] = pending
         update["pending_plan"] = None
         update["pending_invoice_id"] = None
+        update["pending_charge_key"] = None
         update["plan_changed_at"] = iso(now)
     elif plan_in_payment and plan_in_payment != c.get("plan"):
         update["plan"] = plan_in_payment
-    await db.companies.update_one({"id": company_id}, {"$set": update})
+    update_doc = {"$set": update}
+    if unset:
+        update_doc["$unset"] = unset
+    await db.companies.update_one({"id": company_id}, update_doc)
 
 
 async def _send_saas_payment_email(company: dict, amount: float, currency: str, method: str, invoice_id: str):
@@ -3044,7 +3385,8 @@ async def _send_saas_payment_email(company: dict, amount: float, currency: str, 
         saas = await _saas_settings_doc()
         smtp = saas.get("smtp") or {}
         app_url = (saas.get("branding") or {}).get("app_url") or _app_base_url()
-        plan_label = PLAN_PRICES.get(company.get("plan", "starter"), {}).get("name", "Starter")
+        plan = await _fetch_plan_by_id(company.get("plan", "starter"))
+        plan_label = (plan or {}).get("name", "Starter")
         content = f"""
             <h1>Betaling ontvangen — bedankt!</h1>
             <p>Wij hebben uw betaling van <strong>{currency} {float(amount):,.2f}</strong> ontvangen via {method}.</p>
@@ -3085,11 +3427,12 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
         {"id": pr["id"]},
         {"$set": {"status": "paid", "paid_at": paid_at, "gateway_meta": gateway_meta}},
     )
-    # Mark invoice paid
-    if inv.get("status") != "paid":
+    updated_invoice = await update_invoice_paid_amount(db, inv["id"], float(pr.get("amount") or 0))
+    await apply_saas_plan_payment(db, inv["id"], float(pr.get("amount") or 0))
+    if updated_invoice and updated_invoice.get("status") == "paid":
         await db.subscription_invoices.update_one(
             {"id": inv["id"]},
-            {"$set": {"status": "paid", "paid_at": paid_at, "payment_method": pr["provider"]}},
+            {"$set": {"paid_at": paid_at, "payment_method": pr["provider"]}},
         )
     # Create subscription_payment record
     pay = {
@@ -3109,10 +3452,11 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
         "eur_per_srd": pr.get("eur_per_srd"),
     }
     await db.subscription_payments.insert_one(pay)
-    # Activate company
-    await _activate_company_after_saas_payment(pr["company_id"], plan_in_payment=inv.get("plan"))
-    # Confirmation email (best-effort)
-    await _send_saas_payment_email(company, pr["amount"], pr["currency"], pr["provider"], inv["id"])
+    if updated_invoice and updated_invoice.get("status") == "paid":
+        await _activate_company_after_saas_payment(
+            pr["company_id"], plan_in_payment=inv.get("plan"), invoice=updated_invoice,
+        )
+        await _send_saas_payment_email(company, pr["amount"], pr["currency"], pr["provider"], inv["id"])
     pr.update({"status": "paid", "paid_at": paid_at})
     return pr
 
@@ -3126,6 +3470,7 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
 # Landing-page CMS (superadmin live editor)
 # =====================================================================
 MAX_LANDING_ASSET_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
+MAX_LANDING_VIDEO_BYTES = 100 * 1024 * 1024
 
 
 def _to_webp_bytes(raw: bytes, content_type: str) -> tuple[bytes, str]:
@@ -3282,26 +3627,59 @@ async def discard_landing_draft(user=Depends(require_role("superadmin"))):
 @api.post("/superadmin/landing/upload")
 async def upload_landing_asset(file: UploadFile = File(...),
                                 user=Depends(require_role("superadmin"))):
-    """Upload an image (max 5 MB). Returns {url, id} where url is
-    /api/landing/asset/{id} and can be saved into any image_url field."""
-    raw = await file.read()
-    if len(raw) > MAX_LANDING_ASSET_BYTES:
-        raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB.")
-    ctype = (file.content_type or "").lower()
-    if not ctype.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Alleen afbeeldingen toegestaan.")
-    raw, ctype = _to_webp_bytes(raw, ctype)
+    """Upload a landing image or supported hero video and return its public asset URL."""
+    ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    is_video = ctype in ("video/mp4", "video/webm")
+    if not ctype.startswith("image/") and not is_video:
+        raise HTTPException(status_code=400, detail="Kies een afbeelding, MP4- of WebM-video.")
+    max_bytes = MAX_LANDING_VIDEO_BYTES if is_video else MAX_LANDING_ASSET_BYTES
     asset_id = new_id()
-    await db.landing_assets.insert_one({
+    filename = file.filename or f"asset-{asset_id}"
+    asset = {
         "id": asset_id,
-        "filename": file.filename or f"asset-{asset_id}",
+        "filename": filename,
         "content_type": ctype,
-        "data_b64": base64.b64encode(raw).decode("ascii"),
-        "size": len(raw),
+        "kind": "video" if is_video else "image",
         "uploaded_by": user.get("email"),
         "uploaded_at": iso(now_utc()),
-    })
-    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}"}
+    }
+    if ctype.startswith("image/"):
+        raw = await file.read(max_bytes + 1)
+        if len(raw) > MAX_LANDING_ASSET_BYTES:
+            raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
+        # Preserve the uploaded bytes so screenshots and fine text are not
+        # softened by lossy WebP conversion. The 5 MB source limit also keeps
+        # the Base64-encoded MongoDB document within its size limit.
+        asset["content_type"] = ctype
+        asset["size"] = len(raw)
+        asset["data_b64"] = base64.b64encode(raw).decode("ascii")
+    else:
+        header = await file.read(16)
+        is_mp4 = ctype == "video/mp4" and b"ftyp" in header[4:16]
+        is_webm = ctype == "video/webm" and header.startswith(b"\x1a\x45\xdf\xa3")
+        if not (is_mp4 or is_webm):
+            raise HTTPException(status_code=400, detail="Het videobestand is ongeldig of heeft een niet-ondersteund formaat.")
+        grid_in = landing_video_bucket.open_upload_stream(
+            filename, metadata={"content_type": ctype, "asset_id": asset_id},
+        )
+        size = 0
+        try:
+            chunk = header
+            while chunk:
+                size += len(chunk)
+                if size > max_bytes:
+                    raise HTTPException(status_code=413, detail="Video groter dan 100 MB.")
+                await grid_in.write(chunk)
+                chunk = await file.read(1024 * 1024)
+            await grid_in.close()
+        except Exception:
+            if not grid_in.closed:
+                await grid_in.abort()
+            raise
+        asset["size"] = size
+        asset["gridfs_id"] = grid_in._id
+    await db.landing_assets.insert_one(asset)
+    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}", "content_type": ctype}
 
 
 @api.post("/superadmin/landing/migrate-webp")
@@ -3314,7 +3692,10 @@ async def migrate_landing_assets_to_webp(user=Depends(require_role("superadmin")
     upgrade nog originele bytes hebben. Deze endpoint kan de user 1x
     triggeren vanuit de Superadmin → Landing editor."""
     stats = {"total": 0, "converted": 0, "skipped_webp": 0, "failed": 0, "bytes_before": 0, "bytes_after": 0}
-    cursor = db.landing_assets.find({}, {"id": 1, "content_type": 1, "data_b64": 1, "size": 1})
+    cursor = db.landing_assets.find(
+        {"kind": {"$ne": "video"}},
+        {"id": 1, "content_type": 1, "data_b64": 1, "size": 1},
+    )
     async for doc in cursor:
         stats["total"] += 1
         ctype = (doc.get("content_type") or "").lower()
@@ -3378,6 +3759,69 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
     doc = await db.landing_assets.find_one({"id": asset_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Asset niet gevonden")
+    if doc.get("gridfs_id"):
+        try:
+            grid_out = await landing_video_bucket.open_download_stream(doc["gridfs_id"])
+        except NoFile as exc:
+            raise HTTPException(status_code=404, detail="Video niet gevonden") from exc
+        total_size = grid_out.length
+        start = 0
+        end = total_size - 1
+        range_header = request.headers.get("range")
+        status_code = 200
+        if range_header:
+            try:
+                unit, range_spec = range_header.split("=", 1)
+                if unit.strip().lower() != "bytes" or "," in range_spec:
+                    raise ValueError("Unsupported byte range")
+                start_text, end_text = range_spec.split("-", 1)
+                if not start_text:
+                    suffix_size = int(end_text)
+                    if suffix_size <= 0:
+                        raise ValueError("Invalid suffix range")
+                    start = max(total_size - suffix_size, 0)
+                else:
+                    start = int(start_text)
+                end = min(int(end_text), total_size - 1) if end_text else total_size - 1
+                if start < 0 or start >= total_size or start > end:
+                    raise ValueError("Unsatisfiable byte range")
+            except ValueError as exc:
+                grid_out.close()
+                raise HTTPException(
+                    status_code=416,
+                    detail="Ongeldig videobereik",
+                    headers={"Content-Range": f"bytes */{total_size}"},
+                ) from exc
+            grid_out.seek(start)
+            status_code = 206
+
+        async def stream_video():
+            remaining = end - start + 1
+            try:
+                while remaining:
+                    chunk = await grid_out.read(min(256 * 1024, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+            finally:
+                grid_out.close()
+
+        headers = {
+            "Content-Length": str(end - start + 1),
+            "Accept-Ranges": "bytes",
+            "ETag": etag,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if status_code == 206:
+            headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+        return StreamingResponse(
+            stream_video(),
+            media_type=doc.get("content_type", "video/mp4"),
+            status_code=status_code,
+            headers=headers,
+        )
     try:
         data = base64.b64decode(doc["data_b64"])
     except Exception:
@@ -3386,7 +3830,7 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
     ctype = doc.get("content_type", "image/png")
     # Thumbnail: gecached in het doc na eerste generatie. Downscale via PIL
     # naar max 400px lange zijde, JPEG kwaliteit 78 — goed voor lijst-cards.
-    if thumb:
+    if thumb and ctype.startswith("image/"):
         cached = doc.get("thumb_b64")
         cached_ct = doc.get("thumb_content_type")
         if cached and cached_ct:
@@ -3434,6 +3878,7 @@ async def get_landing_asset(asset_id: str, request: Request, thumb: int = 0):
         headers={
             "ETag": etag,
             "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
@@ -3720,6 +4165,22 @@ async def superadmin_list_clients(user=Depends(get_current_user)):
     return clients
 
 
+@api.get("/superadmin/employees")
+async def superadmin_list_employees(user=Depends(get_current_user)):
+    """Lijst interne platformbeheerders zonder klantgebruikers mee te nemen."""
+    if user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Alleen superadmin")
+    employees = await db.users.find(
+        {"role": "superadmin"},
+        {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1,
+         "created_at": 1, "last_login_at": 1, "is_active": 1},
+    ).to_list(500)
+    employees.sort(key=lambda employee: (
+        employee.get("last_login_at") or employee.get("created_at") or ""
+    ), reverse=True)
+    return employees
+
+
 @api.get("/superadmin/companies/{cid}/landing")
 async def get_company_landing_super(cid: str, mode: Literal["draft", "published"] = "draft",
                                       user=Depends(require_role("superadmin"))):
@@ -3843,6 +4304,58 @@ class EnterpriseLeadIn(BaseModel):
     locations: Optional[int] = None
     employees: Optional[int] = None
     message: Optional[str] = ""
+
+
+class ContactMessageIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(default="", max_length=40)
+    message: str = Field(min_length=1, max_length=3000)
+
+
+@api.post("/public/contact")
+async def submit_contact_message(body: ContactMessageIn):
+    """Public contact form; stores the message and notifies platform admins."""
+    name = body.name.strip()
+    message = body.message.strip()
+    if not name or not message:
+        raise HTTPException(status_code=400, detail="Naam en bericht zijn verplicht")
+
+    doc = {
+        "id": new_id(),
+        "name": name,
+        "email": str(body.email).strip().lower()[:160],
+        "phone": (body.phone or "").strip(),
+        "message": message,
+        "status": "new",
+        "created_at": iso(now_utc()),
+    }
+    await db.contact_messages.insert_one(doc)
+
+    try:
+        from html import escape
+        from email_service import send_platform_email, wrap_template
+
+        html = wrap_template(
+            "<h1>Nieuw contactbericht</h1>"
+            f"<p><strong>Naam:</strong> {escape(doc['name'])}</p>"
+            f"<p><strong>E-mail:</strong> {escape(doc['email'])}</p>"
+            f"<p><strong>Telefoon:</strong> {escape(doc['phone'] or '—')}</p>"
+            f"<p style='white-space:pre-wrap'>{escape(doc['message'])}</p>",
+            footer="SuriRent · Website contact",
+        )
+        admins = await db.users.find({"role": "superadmin"}, {"_id": 0, "email": 1}).to_list(20)
+        for admin in admins:
+            if admin.get("email"):
+                await send_platform_email(
+                    to=admin["email"],
+                    subject=f"Nieuw contactbericht — {doc['name'][:80]}",
+                    body_html=html,
+                )
+    except Exception as error:
+        print(f"[website-contact] mail warn: {error}")
+
+    return {"ok": True, "message_id": doc["id"]}
 
 
 @api.post("/public/enterprise-lead")
@@ -4248,24 +4761,33 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
     has_bank = bool((c.get("bank_account_sr") or "").strip()) or \
         bool((c.get("bank_account_nl") or "").strip())
 
+    location_count = await db.locations.count_documents({"company_id": cid})
     apt_count = await db.apartments.count_documents({"company_id": cid})
     tenant_count = await db.tenants.count_documents({"company_id": cid})
+    linked_tenant_count = await db.tenants.count_documents({
+        "company_id": cid,
+        "apartment_id": {"$exists": True, "$nin": [None, ""]},
+    })
 
     steps = [
         {"id": "profile", "label": "Bedrijfsgegevens", "done": bool(has_name and has_contact)},
-        {"id": "bank", "label": "Bankrekening", "done": has_bank},
+        {"id": "locations", "label": "Eerste locatie", "done": location_count > 0},
         {"id": "apartment", "label": "Eerste appartement", "done": apt_count > 0},
-        {"id": "tenant", "label": "Eerste huurder", "done": tenant_count > 0},
+        {"id": "tenant", "label": "Eerste huurder", "done": linked_tenant_count > 0},
+        {"id": "bank", "label": "Bankrekening", "done": has_bank},
     ]
     completed = sum(1 for s in steps if s["done"])
+    required_ids = {"profile", "locations", "apartment", "tenant"}
     return {
         "complete": completed == len(steps),
+        "required_complete": all(s["done"] for s in steps if s["id"] in required_ids),
         "completed": completed,
         "total": len(steps),
         "percent": round(completed / len(steps) * 100),
         "steps": steps,
         "next_step": next((s["id"] for s in steps if not s["done"]), None),
-        "counts": {"apartments": apt_count, "tenants": tenant_count},
+        "counts": {"locations": location_count, "apartments": apt_count, "tenants": tenant_count,
+                   "linked_tenants": linked_tenant_count},
     }
 
 
@@ -4664,25 +5186,21 @@ class CompanyOut(CompanyIn):
     billing_status: Optional[str] = None
     trial_started_at: Optional[str] = None
     trial_ends_at: Optional[str] = None
+    subscription_renews_at: Optional[str] = None
     days_left: Optional[int] = None
     owner_email: Optional[str] = None
     telefoon: Optional[str] = None
     monthly_amount: Optional[float] = None
     currency: Optional[str] = None
+    plan_interval: Optional[str] = None
     stats: Optional[dict] = None
 
 
 async def _billing_summary(c: dict) -> dict:
     plan_id = c.get("plan", "starter")
-    # DB catalog first zodat door superadmin toegevoegde pakketten (bv.
-    # 'lifetime') een correcte amount/currency krijgen ipv terug te vallen
-    # op starter en verwarrende SRD 3000 te tonen.
-    doc = await _fetch_plan_by_id(plan_id)
-    if doc:
-        plan = {"amount": float(doc.get("amount") or 0), "currency": (doc.get("currency") or "SRD").upper()}
-    else:
-        plan = PLAN_PRICES.get(plan_id, PLAN_PRICES.get("starter", {"amount": 0, "currency": "SRD"}))
-    status = c.get("billing_status") or ("trial" if c.get("trial_ends_at") else "active")
+    plan = await _plan_for_company(plan_id, c)
+    access = billing_access_state(c)
+    status = access["status"]
     days_left = None
     trial_ends = c.get("trial_ends_at")
     if trial_ends:
@@ -4692,18 +5210,22 @@ async def _billing_summary(c: dict) -> dict:
             days_left = max(0, int(delta.total_seconds() // 86400) + (1 if delta.total_seconds() % 86400 > 0 else 0))
         except Exception:
             days_left = None
-    if status == "trial" and days_left is not None and days_left <= 0:
-        status = "expired"
     # Gratis pakketten (bv. Lifetime, SRD 0) → altijd "active" ongeacht of de
     # trial-datum verlopen is. Anders zou de admin foutieve "verlopen" banner
     # zien terwijl er niets te betalen is.
     if float(plan.get("amount") or 0) <= 0:
         status = "active"
+        access["access_restricted"] = False
     return {
         "billing_status": status,
+        "access_restricted": access["access_restricted"],
+        "grace_period_days": access["grace_period_days"],
+        "grace_days_left": access["grace_days_left"],
+        "restricted_at": access["restricted_at"],
         "days_left": days_left,
         "monthly_amount": plan.get("amount"),
         "currency": plan.get("currency", "SRD"),
+        "plan_interval": plan.get("interval", "month"),
     }
 
 
@@ -4776,30 +5298,77 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    plan_id = c.get("plan", "starter")
-    plan = PLAN_PRICES.get(plan_id, PLAN_PRICES["starter"])
+    plan_id = c.get("pending_plan") or c.get("plan", "starter")
+    plan = await _fetch_plan_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
     now = now_utc()
-    period_end = now + timedelta(days=30)
-    inv = {
-        "id": new_id(),
-        "company_id": cid,
-        "company_name": c.get("name", ""),
-        "plan": plan_id,
-        "amount": plan["amount"],
-        "currency": plan["currency"],
-        "status": "paid",
-        "period_start": iso(now),
-        "period_end": iso(period_end),
-        "paid_at": iso(now),
-        "created_at": iso(now),
-        "created_by": user.get("email"),
-    }
-    await db.subscription_invoices.insert_one(inv)
-    await db.companies.update_one({"id": cid}, {"$set": {
-        "billing_status": "active", "subscription_started_at": iso(now),
-        "subscription_renews_at": iso(period_end),
-    }})
-    inv.pop("_id", None)
+    price = await _plan_for_company(plan_id, c)
+    amount = float(price.get("amount") or 0)
+    currency = (price.get("currency") or "SRD").upper()
+    period_start = _plan_period_start(plan, now)
+    period_end = _plan_period_end(plan, period_start)
+    amount = _saas_invoice_amount(plan, amount, period_start, period_end)
+    inv = None
+    pending_invoice_id = c.get("pending_invoice_id")
+    if pending_invoice_id:
+        inv = await db.subscription_invoices.find_one(
+            {"id": pending_invoice_id, "company_id": cid}, {"_id": 0},
+        )
+        if inv and c.get("pending_plan") and inv.get("plan") != c.get("pending_plan"):
+            raise HTTPException(status_code=409, detail="De openstaande factuur hoort niet bij het gekozen pakket")
+        if inv and inv.get("status") == "paid":
+            await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id, invoice=inv)
+            return {"ok": True, "invoice": inv}
+        if inv and inv.get("status") not in {"open", "overdue"}:
+            inv = None
+    if inv:
+        plan_id = inv.get("plan") or plan_id
+        amount = float(inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)))
+        currency = (inv.get("currency") or currency).upper()
+    if amount > 0:
+        if not inv:
+            inv = {
+                "id": new_id(),
+                "company_id": cid,
+                "company_name": c.get("name", ""),
+                "plan": plan_id,
+                "amount": amount,
+                "currency": currency,
+                "status": "open",
+                "kind": "subscription",
+                "period_start": iso(period_start),
+                "period_end": iso(period_end) if period_end else None,
+                "due_date": _saas_invoice_due_date(now),
+                "created_at": iso(now),
+                "created_by": user.get("email"),
+                "manual": True,
+                **_saas_invoice_cycle_fields(plan),
+            }
+            try:
+                inv, _ = await append_company_invoice_charge(
+                    db, inv, f"activation:{now.date().isoformat()}",
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
+        await _record_saas_payment_manual(
+            invoice=inv,
+            company=c,
+            amount=amount,
+            currency=currency,
+            method="manual",
+            reference="Handmatig geactiveerd door superadmin",
+            statement_id=None,
+            ocr_meta={},
+            auto_approved=True,
+            approved_by=user.get("email") or "superadmin",
+        )
+        inv["status"] = "paid"
+        inv["paid_at"] = iso(now)
+        inv["payment_method"] = "manual"
+    else:
+        await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id, invoice=inv)
+        inv = None
     return {"ok": True, "invoice": inv}
 
 
@@ -4945,7 +5514,11 @@ async def export_company_backup(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
-    if user.get("role") != "superadmin" and not user.get("original_user_id"):
+    if (
+        user.get("role") != "superadmin"
+        and not user.get("original_user_id")
+        and not user.get("_billing_access_restricted")
+    ):
         await _require_plan_feature(cid, "allow_backup", "Backup & Herstel")
 
     company = await db.companies.find_one({"id": cid}, {"_id": 0})
@@ -4953,11 +5526,11 @@ async def export_company_backup(user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
 
     backup = {
-        "format_version": 1,
+        "format_version": 2,
         "exported_at": now_utc_iso(),
         "company_id": cid,
         "company": company,
-        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0, "password_hash": 0, "personal_pin_hash": 0})],
+        "users": [u async for u in db.users.find({"company_id": cid}, {"_id": 0})],
         "collections": {},
     }
     for coll in TENANT_SCOPED_COLLECTIONS:
@@ -4965,6 +5538,31 @@ async def export_company_backup(user=Depends(get_current_user)):
         async for d in db[coll].find({"company_id": cid}, {"_id": 0}):
             docs.append(d)
         backup["collections"][coll] = docs
+    plan_ids = [p["id"] async for p in db.payment_plans.find({"company_id": cid}, {"_id": 0, "id": 1})]
+    user_ids = [u["id"] for u in backup["users"] if u.get("id")]
+    for coll in BACKUP_EXTRA_COLLECTIONS:
+        if coll == "company_landings":
+            query = {"id": cid}
+        elif coll == "payment_plan_installments":
+            query = {"$or": [{"company_id": cid}, {"plan_id": {"$in": plan_ids}}]}
+        elif coll in ("notifications", "fcm_tokens"):
+            query = {"$or": [{"company_id": cid}, {"user_id": {"$in": user_ids}}]}
+        else:
+            query = {"company_id": cid}
+        try:
+            backup["collections"][coll] = [d async for d in db[coll].find(query, {"_id": 0})]
+        except Exception:
+            backup["collections"][coll] = []
+
+    # Foto's (ID-kaart, pasfoto, logo) staan in landing_assets zonder company_id:
+    # haal ze op via de verwijzingen in huurders, bedrijf en overige data.
+    import re as _re
+    refs = set(_re.findall(r"/api/landing/asset/([A-Za-z0-9_-]+)",
+                           json.dumps([company, backup["collections"]], default=str)))
+    backup["collections"]["landing_assets"] = [
+        a async for a in db.landing_assets.find({"id": {"$in": list(refs)}}, {"_id": 0})
+    ] if refs else []
+    backup["summary"] = {k: len(v) for k, v in backup["collections"].items()}
 
     # Bouw een filename met datum + slug voor downloadbestand.
     slug = (company.get("slug") or cid)[:32]
@@ -4988,7 +5586,7 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     - `mode='replace'`: wist alle company-scoped data en importeert opnieuw (destructief!).
     Superadmin kan via `target_company_id` data naar een ander bedrijf migreren."""
     backup = body.backup or {}
-    if backup.get("format_version") != 1:
+    if backup.get("format_version") not in (1, 2):
         raise HTTPException(status_code=400, detail="Onbekend backup formaat")
     src_cid = backup.get("company_id")
     if not src_cid:
@@ -5009,29 +5607,35 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     summary = {"target_company_id": target_cid, "mode": body.mode, "collections": {}}
 
     # Replace-modus: wipe eerst alle tenant-scoped collections voor target.
+    # Extra collections (v2) worden alleen gewist als de backup ze ook bevat.
+    full = backup.get("format_version") == 2
     if body.mode == "replace":
-        for coll in TENANT_SCOPED_COLLECTIONS:
-            res = await db[coll].delete_many({"company_id": target_cid})
+        for coll in TENANT_SCOPED_COLLECTIONS + (list(BACKUP_EXTRA_COLLECTIONS) if full else []):
+            query = {"id": target_cid} if coll == "company_landings" else {"company_id": target_cid}
+            res = await db[coll].delete_many(query)
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
 
     # Re-import elke collection. Forceer company_id en strip _id om dup-conflicten te voorkomen.
     collections_in = backup.get("collections") or {}
     for coll, docs in collections_in.items():
-        if coll not in TENANT_SCOPED_COLLECTIONS:
+        if coll not in TENANT_SCOPED_COLLECTIONS and not (full and coll in BACKUP_EXTRA_COLLECTIONS):
             continue
+        key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
         ins = 0
         upd = 0
         for d in docs:
             d = {k: v for k, v in (d or {}).items() if k != "_id"}
-            d["company_id"] = target_cid
-            doc_id = d.get("id") or new_id()
-            d["id"] = doc_id
-            res = await db[coll].update_one(
-                {"id": doc_id, "company_id": target_cid},
-                {"$set": d},
-                upsert=True,
-            )
+            if coll == "company_landings":
+                d["id"] = target_cid
+            else:
+                d["company_id"] = target_cid
+            if key == "id":
+                d["id"] = d.get("id") or new_id()
+            if d.get(key) is None:
+                continue
+            flt = {key: d[key]} if coll in ("company_landings", "landing_assets") else {key: d[key], "company_id": target_cid}
+            res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
             if res.upserted_id is not None:
                 ins += 1
             elif res.modified_count > 0:
@@ -5039,6 +5643,28 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
         summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
         summary["collections"][coll]["inserted"] += ins
         summary["collections"][coll]["upserted"] += upd
+
+    if full:
+        # Bedrijfsinstellingen (branding, SMTP, Stripe, stroom, bon, ...) terugzetten.
+        cdoc = {k: v for k, v in (backup.get("company") or {}).items()
+                if k not in BACKUP_COMPANY_KEEP and k != "_id"}
+        if cdoc:
+            await db.companies.update_one({"id": target_cid}, {"$set": cdoc})
+            summary["company_settings_restored"] = True
+        # Gebruikers (beheerders/medewerkers incl. PIN) — nooit een e-mail van een ander bedrijf overschrijven.
+        u_ins = 0
+        for u in backup.get("users") or []:
+            u = {k: v for k, v in (u or {}).items() if k != "_id"}
+            if not u.get("id") or not u.get("email"):
+                continue
+            other = await db.users.find_one({"email": u["email"], "company_id": {"$ne": target_cid}}, {"_id": 1})
+            if other or u.get("role") == "superadmin":
+                continue
+            u["company_id"] = target_cid
+            r = await db.users.update_one({"id": u["id"]}, {"$set": u}, upsert=True)
+            if r.upserted_id is not None or r.modified_count:
+                u_ins += 1
+        summary["users_restored"] = u_ins
 
     summary["restored_at"] = now_utc_iso()
     return summary
@@ -5068,9 +5694,12 @@ def _is_online(last_seen_iso: str | None, threshold_seconds: int = 300) -> bool:
 
 class SubscriptionPaymentIn(BaseModel):
     company_id: str
-    amount: float
+    amount: float = Field(..., gt=0)
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
     method: Literal["bank", "contant", "overig"] = "bank"
+    invoice_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    installment_seq: Optional[int] = Field(None, ge=1)
     reference: Optional[str] = ""
     note: Optional[str] = ""
     paid_at: Optional[str] = None  # ISO date; defaults to now
@@ -5149,6 +5778,8 @@ async def superadmin_approve_saas_payment(pr_id: str, user=Depends(require_role(
         ocr_meta=pr.get("ocr") or {},
         auto_approved=True,  # we doen het effectief paid in dit endpoint
         approved_by=user.get("email") or "superadmin",
+        plan_id=pr.get("plan_id"),
+        installment_seq=pr.get("installment_seq"),
     )
     # Markeer het oorspronkelijke pending request ook als paid (er is een
     # nieuw paid-request via `_record_saas_payment_manual`). De originele
@@ -5184,40 +5815,128 @@ async def superadmin_reject_saas_payment(
 
 @api.post("/superadmin/subscription-payments")
 async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depends(require_role("superadmin"))):
-    """Register an incoming SaaS payment (bank transfer or Mope) and auto-activate the company."""
+    """Register a payment against an open invoice, or create a new paid period."""
     c = await db.companies.find_one({"id": body.company_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
-    plan_id = c.get("plan", "starter")
     now = now_utc()
     paid_at = body.paid_at or iso(now)
-    period_end = now + timedelta(days=30)
-
-    # Create invoice (paid) + payment record
-    inv = {
-        "id": new_id(),
-        "company_id": body.company_id,
-        "company_name": c.get("name", ""),
-        "plan": plan_id,
-        "amount": body.amount,
-        "currency": body.currency,
-        "status": "paid",
-        "period_start": iso(now),
-        "period_end": iso(period_end),
-        "paid_at": paid_at,
-        "created_at": iso(now),
-        "created_by": user.get("email"),
-        "payment_method": body.method,
-    }
-    await db.subscription_invoices.insert_one(inv)
+    invoice_id = body.invoice_id
+    if not invoice_id:
+        try:
+            current_invoice = await consolidate_company_invoices(db, body.company_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if current_invoice and current_invoice.get("status") in {"open", "overdue"}:
+            invoice_id = current_invoice["id"]
+    if invoice_id:
+        inv = await db.subscription_invoices.find_one(
+            {"id": invoice_id, "company_id": body.company_id}, {"_id": 0},
+        )
+        if not inv:
+            raise HTTPException(status_code=404, detail="Factuur niet gevonden voor dit bedrijf")
+        if inv.get("status") not in {"open", "overdue"}:
+            raise HTTPException(status_code=409, detail="Alleen een open factuur kan met deze betaling worden voldaan")
+        if c.get("pending_invoice_id") == invoice_id and c.get("pending_plan") != inv.get("plan"):
+            raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
+        pending_request = await db.saas_payment_requests.find_one(
+            {"invoice_id": invoice_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
+        )
+        if pending_request:
+            raise HTTPException(status_code=409, detail="Voor deze factuur wacht al een betaling op OCR-goedkeuring")
+        if bool(body.plan_id) != (body.installment_seq is not None):
+            raise HTTPException(status_code=400, detail="Kies zowel de betalingsregeling als het termijnnummer")
+        if body.plan_id:
+            payment_plan = await db.saas_payment_plans.find_one(
+                {"id": body.plan_id, "invoice_id": invoice_id}, {"_id": 0},
+            )
+            term = next(
+                (item for item in (payment_plan or {}).get("schedule", [])
+                 if item.get("seq") == body.installment_seq),
+                None,
+            )
+            if not term or term.get("status") == "paid":
+                raise HTTPException(status_code=409, detail="Deze termijn is niet meer open")
+            amount = round(
+                float(term.get("amount") or 0) - float(term.get("paid_amount") or 0), 2,
+            )
+            if amount <= 0:
+                raise HTTPException(status_code=409, detail="Deze termijn is niet meer open")
+        else:
+            amount = float(inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)))
+        currency = (inv.get("currency") or "SRD").upper()
+        if abs(float(body.amount) - amount) > 0.005 or body.currency != currency:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Het te registreren bedrag moet overeenkomen met de factuur: {currency} {amount:.2f}",
+            )
+        updated = await update_invoice_paid_amount(db, invoice_id, amount)
+        if not updated:
+            raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
+        await apply_saas_plan_payment(
+            db, invoice_id, amount, body.plan_id, body.installment_seq,
+        )
+        inv = updated
+        if inv.get("status") == "paid":
+            await db.subscription_invoices.update_one(
+                {"id": invoice_id},
+                {"$set": {"paid_at": paid_at, "payment_method": body.method}},
+            )
+        plan_id = (
+            c.get("pending_plan")
+            if c.get("pending_invoice_id") == invoice_id and c.get("pending_plan")
+            else (inv.get("plan") or c.get("plan", "starter"))
+        )
+    else:
+        plan_id = c.get("pending_plan") or c.get("plan", "starter")
+        plan = await _fetch_plan_by_id(plan_id)
+        if not plan:
+            raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
+        period_start = _plan_period_start(plan, now)
+        period_end = _plan_period_end(plan, period_start)
+        invoice_amount = float(body.amount)
+        try:
+            inv, created = await append_company_invoice_charge(db, {
+                "id": new_id(),
+                "company_id": body.company_id,
+                "company_name": c.get("name", ""),
+                "plan": plan_id,
+                "amount": invoice_amount,
+                "currency": body.currency,
+                "status": "open",
+                "kind": "subscription",
+                "period_start": iso(period_start),
+                "period_end": iso(period_end) if period_end else None,
+                "due_date": _saas_invoice_due_date(now),
+                "created_at": iso(now),
+                "created_by": user.get("email"),
+                **_saas_invoice_cycle_fields(plan),
+            }, f"manual-payment:{now.date().isoformat()}")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if not created:
+            raise HTTPException(status_code=409, detail="Voor deze periode is de betaling al geregistreerd")
+        amount = invoice_amount
+        updated = await update_invoice_paid_amount(db, inv["id"], amount)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+        await apply_saas_plan_payment(db, inv["id"], amount)
+        inv = updated
+        if inv.get("status") == "paid":
+            await db.subscription_invoices.update_one(
+                {"id": inv["id"]},
+                {"$set": {"paid_at": paid_at, "payment_method": body.method}},
+            )
 
     pay = {
         "id": new_id(),
         "invoice_id": inv["id"],
         "company_id": body.company_id,
         "company_name": c.get("name", ""),
-        "amount": body.amount,
-        "currency": body.currency,
+        "amount": float(amount),
+        "currency": (inv.get("currency") or "SRD").upper(),
+        "plan_id": body.plan_id,
+        "installment_seq": body.installment_seq,
         "method": body.method,
         "reference": (body.reference or "").strip(),
         "note": (body.note or "").strip(),
@@ -5227,55 +5946,21 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
     }
     await db.subscription_payments.insert_one(pay)
 
-    # If company had a pending_plan, apply it now
-    update_fields = {
-        "billing_status": "active",
-        "subscription_started_at": iso(now),
-        "subscription_renews_at": iso(period_end),
-    }
-    pending_plan = c.get("pending_plan")
-    if pending_plan and pending_plan != c.get("plan"):
-        update_fields["plan"] = pending_plan
-        update_fields["pending_plan"] = None
-        update_fields["pending_invoice_id"] = None
-        update_fields["plan_changed_at"] = iso(now)
-    await db.companies.update_one({"id": body.company_id}, {"$set": update_fields})
-
-    # Best-effort confirmation email to the company owner
-    if c.get("owner_email"):
-        try:
-            from email_service import send_email as _send_smtp, send_platform_email, wrap_template
-            saas = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0}) or {}
-            smtp = saas.get("smtp") or {}
-            app_url = (os.environ.get("APP_PUBLIC_URL") or "https://app.surirent.sr").rstrip("/")
-            plan_label = PLAN_PRICES.get(update_fields.get("plan", c.get("plan", "starter")), {}).get("name", "Starter")
-            content = f"""
-                <h1>Betaling ontvangen — bedankt!</h1>
-                <p>Wij hebben uw betaling van <strong>{body.currency} {int(body.amount):,}</strong> ontvangen via {body.method}.</p>
-                <table class="kv">
-                  <tr><td>Pakket</td><td>{plan_label}</td></tr>
-                  <tr><td>Periode</td><td>tot {(now + timedelta(days=30)).strftime("%d %b %Y")}</td></tr>
-                  <tr><td>Referentie</td><td>{body.reference or '—'}</td></tr>
-                  <tr><td>Factuur</td><td>{inv['id'][:8].upper()}</td></tr>
-                </table>
-                <p style="margin-top:14px;">U kunt direct verder werken in uw dashboard:</p>
-                <p><a href="{app_url}/admin" style="display:inline-block;background:#10B981;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:700;">Open dashboard</a></p>
-            """.replace(",", ".")
-            subject = f"Betaling ontvangen — {plan_label} actief"
-            body_html = wrap_template(content, footer=f"SuriRent · {app_url}")
-            if smtp.get("enabled") and smtp.get("host"):
-                try:
-                    await _send_smtp(smtp, to=c["owner_email"], subject=subject, body_html=body_html)
-                except Exception:
-                    await send_platform_email(to=c["owner_email"], subject=subject, body_html=body_html)
-            else:
-                await send_platform_email(to=c["owner_email"], subject=subject, body_html=body_html)
-        except Exception:
-            pass
+    if inv.get("status") == "paid":
+        await _activate_company_after_saas_payment(
+            body.company_id, plan_in_payment=plan_id, invoice=inv,
+        )
+        await _send_saas_payment_email(
+            {**c, "plan": plan_id},
+            float(pay["amount"]),
+            pay["currency"],
+            body.method,
+            inv["id"],
+        )
 
     inv.pop("_id", None)
     pay.pop("_id", None)
-    return {"ok": True, "invoice": inv, "payment": pay, "applied_plan": update_fields.get("plan")}
+    return {"ok": True, "invoice": inv, "payment": pay, "applied_plan": plan_id}
 
 
 # Impersonation — superadmin can act as a company's admin to assist support
@@ -5660,7 +6345,21 @@ async def create_company(body: CompanyIn, user=Depends(require_role("superadmin"
     existing = await db.companies.find_one({"slug": slug})
     if existing:
         raise HTTPException(status_code=400, detail="Slug is al in gebruik")
-    doc = {"id": new_id(), **body.model_dump(), "slug": slug, "created_at": iso(now_utc())}
+    plan = await _fetch_plan_by_id(body.plan)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Onbekend pakket '{body.plan}'")
+    now = now_utc()
+    starts_trial = float(plan.get("amount") or 0) > 0
+    doc = {
+        "id": new_id(),
+        **body.model_dump(),
+        "slug": slug,
+        "billing_status": "trial" if starts_trial else "active",
+        "created_at": iso(now),
+    }
+    if starts_trial:
+        doc["trial_started_at"] = iso(now)
+        doc["trial_ends_at"] = iso(now + timedelta(days=14))
     await db.companies.insert_one(doc)
     doc.pop("_id", None)
     return {**doc, "stats": {"apartments": 0, "tenants": 0, "admins": 0}}
@@ -5745,8 +6444,8 @@ async def admin_open_kiosk(
 ):
     """Laat een ingelogde admin/superadmin direct een kiosk-token verkrijgen
     voor zijn huidige actieve bedrijf — zonder dat er een PIN ingevoerd hoeft
-    te worden. Gebruikt door de 'Open Kiosk' knop in het Beheer-dashboard.
-    Het admin-token blijft behouden zodat de admin terug kan naar Beheer.
+    te worden. Gebruikt om beheerders rechtstreeks Kiosk Beheer te laten openen.
+    Het admin-token blijft behouden voor beheeracties in de kiosk.
 
     Fallback-keten voor het bepalen van het bedrijf:
       1. `company_id` uit de request body
@@ -5805,6 +6504,24 @@ async def admin_open_kiosk(
         "token": token,
         "company": {k: c.get(k) for k in ("id", "slug", "name")},
     }
+
+
+async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
+    """Beheer-token voor een kiosk-medewerker: werkt als de eigenaar van het bedrijf,
+    gemarkeerd met staff=True zodat de kiosk de Instellingen verbergt."""
+    u = await db.users.find_one(
+        {"company_id": cid, "role": {"$in": ["admin", "owner"]}, "disabled": {"$ne": True}},
+        {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1, "company_id": 1},
+        sort=[("created_at", 1)],
+    )
+    if not u:
+        return None
+    atoken = create_token({
+        "sub": u["id"], "email": u["email"], "type": "access", "staff": True,
+        "company_id": u.get("company_id"), "role": u.get("role", "admin"),
+    }, ACCESS_MIN)
+    _set_access_cookie(response, atoken)
+    return {"admin_token": atoken}
 
 
 @api.post("/auth/kiosk-pin")
@@ -5872,10 +6589,11 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             "sub": "kiosk", "type": "kiosk", "company_id": cid,
         }, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
+        staff = await _staff_admin_token(cid, response) or {}
         return {
             "token": token,
             "company": c and {k: c[k] for k in ("id", "slug", "name")},
-            "admin_token": None,
+            "admin_token": staff.get("admin_token"),
             "admin_user": None,
             "employee": {
                 "id": matched_emp["id"],
@@ -5918,7 +6636,13 @@ TENANT_TOKEN_MIN = KIOSK_TOKEN_MIN  # 1 jaar
 
 
 async def get_tenant_session(request: Request) -> dict:
-    token = extract_token(request, "tenant_token")
+    # EventSource supplies the active tenant token in the query string. Prefer
+    # it on this read-only stream if an older tenant cookie is still present.
+    token = (
+        request.query_params.get("token")
+        if request.url.path == "/api/tenant-portal/events"
+        else None
+    ) or extract_token(request, "tenant_token")
     if not token:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
     try:
@@ -5933,6 +6657,46 @@ async def get_tenant_session(request: Request) -> dict:
     if not tenant or tenant.get("status") == "archived":
         raise HTTPException(status_code=401, detail="Huurder niet gevonden")
     return tenant
+
+
+@api.get("/tenant-portal/events")
+async def tenant_portal_events(request: Request):
+    """Realtime invalidations voor alleen de eigen, ingelogde huurderportal."""
+    tenant = await get_tenant_session(request)
+    company_id = tenant.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Geen bedrijf")
+    channel = _sse_channel(company_id)
+    queue = _bus_subscribe(channel, maxsize=100)
+    relevant_prefixes = (
+        "/api/tenants", "/api/apartments", "/api/contracts",
+        "/api/payments", "/api/invoices", "/api/payment-plans",
+        "/api/maintenance", "/api/companies/me",
+    )
+
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'type': 'ready'})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    path = str(event.get("path") or "")
+                    if event.get("type") == "notification" or any(path.startswith(p) for p in relevant_prefixes):
+                        # Alleen een generieke invalidatie delen; geen gegevens of
+                        # acties van andere huurders naar de client sturen.
+                        yield f"data: {json.dumps({'type': 'change'})}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+        finally:
+            _bus_unsubscribe(channel, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class TenantLoginIn(BaseModel):
@@ -6017,6 +6781,32 @@ class TenantPinLoginIn(BaseModel):
     pin: str = Field(min_length=4, max_length=4)
     company_id: Optional[str] = None
     company_slug: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+
+@api.get("/tenant-portal/directory")
+async def tenant_portal_directory(company_id: Optional[str] = None, company_slug: Optional[str] = None):
+    """Publiek: huurders met een PIN, gesorteerd op appartement, voor de keuzelijst op de Huurder Kiosk."""
+    cid = company_id
+    if not cid and company_slug:
+        c = await db.companies.find_one({"slug": company_slug.lower()}, {"_id": 0, "id": 1})
+        cid = c["id"] if c else None
+    if not cid:
+        raise HTTPException(status_code=400, detail="Bedrijfscontext ontbreekt")
+    tenants = await db.tenants.find(
+        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
+        {"_id": 0, "id": 1,         "name": 1, "apartment_id": 1, "avatar_url": 1},
+    ).to_list(2000)
+    aids = list({t["apartment_id"] for t in tenants if t.get("apartment_id")})
+    apts = await db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1}).to_list(None) if aids else []
+    numbers = {a["id"]: a.get("number") or "" for a in apts}
+    items = [
+        {"id": t["id"], "name": t.get("name") or "", "apartment": numbers.get(t.get("apartment_id"), ""),
+         "avatar_url": t.get("avatar_url") or ""}
+        for t in tenants
+    ]
+    items.sort(key=lambda i: (i["apartment"] == "", str(i["apartment"]).lower(), i["name"].lower()))
+    return {"tenants": items}
 
 
 # =====================================================================
@@ -6266,8 +7056,11 @@ async def tenant_portal_pin_login(body: TenantPinLoginIn, request: Request, resp
         raise HTTPException(status_code=400, detail="Bedrijfscontext ontbreekt")
     throttle_key = f"tenant-pin:{_client_ip(request)}:{cid}"
     _pin_throttle_check(throttle_key)
+    tenant_query = {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}}
+    if body.tenant_id:
+        tenant_query["id"] = body.tenant_id
     cursor = db.tenants.find(
-        {"company_id": cid, "pin_hash": {"$exists": True, "$ne": None}, "status": {"$ne": "archived"}},
+        tenant_query,
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "pin_hash": 1, "company_id": 1, "apartment_id": 1},
     )
     match = None
@@ -6514,7 +7307,17 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
                     fines_total = round(fine_amt * overdue_count, 2)
     except Exception:  # noqa: BLE001
         pass
+    kov_company = await db.companies.find_one(
+        {"id": tenant.get("company_id")},
+        {"_id": 0, "contact_phone": 1, "contact_email": 1, "whatsapp_number": 1},
+    ) if tenant.get("company_id") else None
+    kov_company = kov_company or {}
     return {
+        "company": {
+            "phone": kov_company.get("contact_phone") or "",
+            "email": kov_company.get("contact_email") or "",
+            "whatsapp": kov_company.get("whatsapp_number") or kov_company.get("contact_phone") or "",
+        },
         "tenant": {"id": tenant["id"], "name": tenant["name"], "phone": tenant.get("phone"), "email": tenant.get("email")},
         "apartment": apt and {
             "id": apt["id"], "number": apt["number"], "address": apt.get("address", ""),
@@ -6529,6 +7332,66 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
         "fines_total": fines_total,
         "fines_currency": fines_currency,
     }
+
+
+@api.get("/tenant-portal/payment-methods")
+async def tenant_portal_payment_methods(tenant=Depends(get_tenant_session)):
+    """Betaalmethodes voor de huurderkiosk: PIN altijd, creditcard (QR → telefoon)
+    zodra de beheerder Stripe met kaartbetaling heeft ingeschakeld."""
+    from routes.company_stripe import _active, _cfg_doc
+    methods = [{"id": "pin", "label": "PIN", "sub": "Betaal met uw pinpas"}]
+    try:
+        a = _active((await _cfg_doc(tenant.get("company_id"))).get("stripe_config") or {})
+        if a["enabled"] and "card" in a["methods"]:
+            methods.append({"id": "creditcard", "label": "Creditcard", "sub": "Scan de QR-code met uw telefoon"})
+    except Exception as e:  # noqa: BLE001
+        print(f"[tenant-portal] stripe config lezen mislukt: {e}")
+    return {"methods": methods}
+
+
+class TenantStripeIntentIn(BaseModel):
+    amount: float
+    currency: Literal["SRD", "USD", "EUR"] = "SRD"
+
+
+@api.post("/tenant-portal/stripe/intent")
+async def tenant_portal_stripe_intent(body: TenantStripeIntentIn, tenant=Depends(get_tenant_session)):
+    from routes.company_stripe import KioskIntentIn, kiosk_stripe_intent
+    return await kiosk_stripe_intent(
+        KioskIntentIn(tenant_id=tenant["id"], amount=body.amount, currency=body.currency, method="card"),
+        {"company_id": tenant.get("company_id")},
+    )
+
+
+@api.get("/tenant-portal/stripe/status/{pi_id}")
+async def tenant_portal_stripe_status(pi_id: str, tenant=Depends(get_tenant_session)):
+    from routes.company_stripe import kiosk_stripe_status
+    tx = await db.kiosk_stripe_payments.find_one(
+        {"payment_intent_id": pi_id, "tenant_id": tenant["id"]}, {"_id": 0, "id": 1})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Niet gevonden")
+    return await kiosk_stripe_status(pi_id, {"company_id": tenant.get("company_id")})
+
+
+async def _tenant_consume_stripe(tenant: dict, pi_id: str, amount: float) -> None:
+    """Verifieer dat de Stripe-betaling van deze huurder geslaagd is en boek er
+    maximaal het betaalde bedrag van (meerdere posten mogen samen één betaling delen)."""
+    from routes.company_stripe import _refresh
+    tx = await db.kiosk_stripe_payments.find_one(
+        {"payment_intent_id": pi_id, "tenant_id": tenant["id"], "company_id": tenant.get("company_id")}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Stripe-betaling niet gevonden")
+    tx = await _refresh(tx)
+    if tx["status"] != "paid":
+        raise HTTPException(status_code=400, detail="Stripe-betaling is nog niet voltooid")
+    await db.kiosk_stripe_payments.update_one(
+        {"payment_intent_id": pi_id, "booked_amount": {"$exists": False}}, {"$set": {"booked_amount": 0.0}})
+    limit = float(tx["amount"]) + 0.01 - float(amount)
+    res = await db.kiosk_stripe_payments.find_one_and_update(
+        {"payment_intent_id": pi_id, "booked_amount": {"$lte": limit}},
+        {"$inc": {"booked_amount": float(amount)}})
+    if not res:
+        raise HTTPException(status_code=409, detail="Bedrag komt niet overeen met de Stripe-betaling")
 
 
 @api.get("/tenant-portal/payments")
@@ -6834,12 +7697,13 @@ class TenantMaintenanceIn(BaseModel):
 class TenantPaymentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None
     note: Optional[str] = ""
     invoice_id: Optional[str] = None
+    stripe_payment_intent_id: Optional[str] = None
     # Bankoverschrijving-velden (alleen relevant als method == "bank")
     bank_country: Optional[Literal["SR", "NL"]] = None
     bank_statement_id: Optional[str] = None  # asset-id van geüpload afschrift
@@ -6915,6 +7779,12 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     is_bank = body.method == "bank"
     needs_proof = is_bank
     proof_label = "Bankafschrift"
+    if body.method == "creditcard":
+        if not body.stripe_payment_intent_id:
+            raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
+        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
+    elif body.stripe_payment_intent_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
     if needs_proof:
         if not body.bank_statement_id:
             raise HTTPException(
@@ -6952,8 +7822,9 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         period_year=period_year,
         note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
+        stripe_payment_intent_id=body.stripe_payment_intent_id,
     )
-    payment_status = "pending_approval" if needs_proof else "approved"
+    payment_status = "pending_approval" if (needs_proof or body.method == "pin") else "approved"
     doc = await _create_payment_doc(
         pin, company_id=tenant.get("company_id"),
         approved_by=tenant.get("name") or "Huurder Kiosk",
@@ -6992,7 +7863,14 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     enriched = await _enrich_payment(doc)
     # Notify admins of the company about the self-service payment.
     try:
-        if needs_proof:
+        if body.method == "pin":
+            await _notify_company_admins(
+                tenant.get("company_id"),
+                f"Pinbetaling wacht op goedkeuring · {enriched.get('currency', '')} {float(enriched.get('amount', 0)):,.2f}",
+                f"{enriched.get('tenant_name') or tenant.get('name')} via Huurder Kiosk — controleer de pinbetaling",
+                {"kind": "payment_pending", "url": "/admin/payments", "payment_id": enriched.get("id"), "badge_inc": 1},
+            )
+        elif needs_proof:
             method_label = "Bankoverschrijving"
             extra = ""
             if is_bank:
@@ -7635,10 +8513,12 @@ async def _link_tenant_apartment(cid: str, tenant_id: str, apartment_id: str) ->
             year = now_utc().year
             seq = await _next_seq(f"contract_{year}")
             company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1})
+            settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
             await db.contracts.insert_one({
                 "id": new_id(), "company_id": cid, "contract_number": f"HC{year}-{seq:04d}",
                 "tenant_id": tenant_id, "apartment_id": apartment_id,
-                "start_date": iso(now_utc())[:10], "end_date": "", "payment_day": 1,
+                "start_date": iso(now_utc())[:10], "end_date": "",
+                "payment_day": _contract_payment_day((settings or {}).get("invoicing")),
                 "deposit_amount": float(apt.get("rent_amount") or 0),
                 "landlord": (company or {}).get("name") or "", "terms": "",
                 "status": "draft", "active": False, "sign_token": secrets.token_urlsafe(24),
@@ -8238,6 +9118,7 @@ async def ocr_id_card(file: UploadFile = File(...),
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
+
     ctype = (file.content_type or "image/jpeg").lower()
     suffix = ".png" if "png" in ctype else (".webp" if "webp" in ctype else ".jpg")
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
@@ -10600,7 +11481,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         await push_printers()
         while True:
             ev = await queue.get()
-            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
+            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
             elif ev.get("type") == "presence_changed":
                 await push_printers()
@@ -11008,7 +11889,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
 
     async def receive():
@@ -12083,11 +12964,7 @@ async def system_status():
     cacheable voor 30s. Components:
       • api          — FastAPI proces draait (impliciet: deze route reageert)
       • database     — MongoDB ping
-      • admin_app    — Admin Dashboard frontend bundle bereikbaar (via API ping
-                       want zelfde dyno als landing)
       • huurder_kiosk — Huurder kiosk route + tenant-portal endpoint
-      • klantenscherm — Customer display feed endpoint
-      • landing      — Marketing landing content fetch
     """
     import time
     from pymongo.errors import PyMongoError
@@ -12135,56 +13012,8 @@ async def system_status():
             overall_status = "degraded"
     components.append({
         "id": "huurder_kiosk",
-        "label": "Huurder Kiosk + Portaal",
+        "label": "Huurder Kiosk",
         "status": hk_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 4) Klantenscherm — check kasgeld feed bron
-    t0 = time.perf_counter()
-    kl_status = "operational"
-    try:
-        await asyncio.wait_for(db.kasgeld.estimated_document_count(), timeout=2.0)
-    except Exception:
-        kl_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "klantenscherm",
-        "label": "Klantenscherm",
-        "status": kl_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 5) Admin Dashboard — check companies collection
-    t0 = time.perf_counter()
-    ad_status = "operational"
-    try:
-        await asyncio.wait_for(db.companies.estimated_document_count(), timeout=2.0)
-    except Exception:
-        ad_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "admin_app",
-        "label": "Admin Dashboard",
-        "status": ad_status,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
-    })
-
-    # 6) Landing content
-    t0 = time.perf_counter()
-    landing_status = "operational"
-    try:
-        await asyncio.wait_for(db.landing_content.estimated_document_count(), timeout=2.0)
-    except Exception:
-        landing_status = "degraded"
-        if overall_status == "operational":
-            overall_status = "degraded"
-    components.append({
-        "id": "landing",
-        "label": "Marketing site",
-        "status": landing_status,
         "latency_ms": int((time.perf_counter() - t0) * 1000),
     })
 
@@ -13015,7 +13844,7 @@ class ContractIn(BaseModel):
     apartment_id: str
     start_date: str
     end_date: Optional[str] = ""
-    payment_day: int = 1
+    payment_day: Optional[int] = Field(default=None, ge=1, le=31)
     deposit_amount: float = 0
     landlord: Optional[str] = "SuriRent N.V."
     terms: Optional[str] = ""
@@ -13044,6 +13873,17 @@ class ContractOut(BaseModel):
     signed_by: Optional[str] = None
     signed_ip: Optional[str] = None
     created_at: str
+
+
+def _contract_payment_day(invoicing: dict | None) -> int:
+    """Use the configured next-month due day as the default contract payment day."""
+    invoicing = invoicing or {}
+    if invoicing.get("mode") != "due_next_month":
+        return 1
+    try:
+        return max(1, min(31, int(invoicing.get("due_day") or 10)))
+    except (TypeError, ValueError):
+        return 10
 
 
 async def _next_seq(key: str) -> int:
@@ -13090,6 +13930,10 @@ async def create_contract(body: ContractIn, user=Depends(get_current_user)):
     apt = await db.apartments.find_one({"id": body.apartment_id, **scope(user)}, {"_id": 0})
     if not apt:
         raise HTTPException(status_code=404, detail="Appartement niet gevonden")
+    payment_day = body.payment_day
+    if payment_day is None:
+        settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
+        payment_day = _contract_payment_day((settings or {}).get("invoicing"))
     year = now_utc().year
     seq = await _next_seq(f"contract_{year}")
     doc = {
@@ -13100,7 +13944,7 @@ async def create_contract(body: ContractIn, user=Depends(get_current_user)):
         "apartment_id": body.apartment_id,
         "start_date": body.start_date,
         "end_date": body.end_date or "",
-        "payment_day": body.payment_day,
+        "payment_day": payment_day,
         "deposit_amount": body.deposit_amount,
         "landlord": body.landlord or "SuriRent N.V.",
         "terms": body.terms or "",
@@ -13183,7 +14027,7 @@ class ContractPreviewIn(BaseModel):
     apartment_id: str
     start_date: Optional[str] = ""
     end_date: Optional[str] = ""
-    payment_day: Optional[int] = 1
+    payment_day: Optional[int] = Field(default=None, ge=1, le=31)
     deposit_amount: Optional[float] = 0.0
     landlord: Optional[str] = ""
     terms: Optional[str] = ""
@@ -13203,6 +14047,10 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
     a = await db.apartments.find_one({"id": body.apartment_id, **scope(user)}, {"_id": 0})
     if not a:
         raise HTTPException(status_code=404, detail="Appartement niet gevonden")
+    payment_day = body.payment_day
+    if payment_day is None:
+        settings = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "invoicing": 1})
+        payment_day = _contract_payment_day((settings or {}).get("invoicing"))
     c = {
         "id": "preview",
         "contract_number": "PREVIEW",
@@ -13210,7 +14058,7 @@ async def contract_pdf_preview(body: ContractPreviewIn, user=Depends(get_current
         "apartment_id": body.apartment_id,
         "start_date": body.start_date or "",
         "end_date": body.end_date or "",
-        "payment_day": body.payment_day or 1,
+        "payment_day": payment_day,
         "deposit_amount": float(body.deposit_amount or 0),
         "landlord": body.landlord or "",
         "terms": body.terms or "",
@@ -16717,11 +17565,22 @@ def _sse_channel(company_id: str) -> str:
 
 
 async def _sse_broadcast(company_id: str, event: dict):
-    """Publish naar de cross-replica bus. Alle SSE-loops (op elke pod)
-    ontvangen het en dispatchen naar hun lokale subscribers."""
+    """Publish alle company data-wijzigingen naar SSE en kiosk-WebSockets."""
     if not company_id:
         return
     await _bus_publish(_sse_channel(company_id), event)
+    if event.get("type") == "change":
+        path = str(event.get("path") or "")
+        if path.startswith("/api/"):
+            await _kb_publish(
+                _kiosk_admin_channel(company_id),
+                {"type": "data_changed", "path": path},
+            )
+    elif event.get("type") == "notification":
+        await _kb_publish(
+            _kiosk_admin_channel(company_id),
+            {"type": "data_changed", "path": "/api/notifications"},
+        )
 
 
 @api.get("/admin/events")
@@ -16961,7 +17820,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "receipts", "kiosk_devices", "fcm_prefs"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "deposit", "receipts", "kiosk_devices", "fcm_prefs"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:
@@ -17040,6 +17899,7 @@ async def get_settings(user=Depends(get_current_user)):
         else:
             next_run = deadline_this
         inv["mode"] = mode
+        inv["contract_payment_day"] = _contract_payment_day(inv)
         inv["next_auto_run"] = next_run.isoformat()
         inv["billing_day_of_month"] = next_run.day
         out["invoicing"] = inv
@@ -17067,6 +17927,19 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
         merged["printer_mode"] = _printer_mode(merged)
         merged["kt_v520_enabled"] = merged["printer_mode"] == "kt-v520"
         merged["paper_width"] = 80 if str(merged.get("paper_width")) == "80" else 58
+    elif section == "deposit":
+        multiplier = merged.get("rent_multiplier")
+        try:
+            multiplier_valid = (
+                not isinstance(multiplier, bool)
+                and isinstance(multiplier, (int, float))
+                and math.isfinite(float(multiplier))
+                and multiplier > 0
+            )
+        except (OverflowError, ValueError):
+            multiplier_valid = False
+        if not multiplier_valid:
+            raise HTTPException(status_code=422, detail="De borgfactor moet een getal groter dan 0 zijn")
 
     update = {
         f"{section}": merged,
@@ -18243,10 +19116,10 @@ async def _enforce_billing_expirations():
             end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
         except Exception:
             continue
-        if end < now:
+        if end <= now:
             await db.companies.update_one(
                 {"id": c["id"]},
-                {"$set": {"billing_status": "expired", "expired_at": now.isoformat()}},
+                {"$set": {"billing_status": "expired", "expired_at": end.isoformat()}},
             )
             expired.append(c)
             if c.get("owner_email"):
@@ -18256,7 +19129,8 @@ async def _enforce_billing_expirations():
                         subject="Uw proefperiode is verlopen",
                         body_html=f"<p>Beste {c.get('owner_name', 'beheerder')},</p>"
                                   f"<p>De proefperiode van uw <strong>{c.get('name')}</strong> omgeving is verlopen. "
-                                  f"Activeer uw abonnement om weer toegang te krijgen.</p>",
+                                  f"U behoudt nog 7 dagen volledige toegang. Daarna worden beheerfuncties tijdelijk beperkt; "
+                                  f"de huurderkiosk en betalingen blijven beschikbaar. Activeer uw abonnement om volledige toegang te behouden.</p>",
                     )
                 except Exception:
                     pass
@@ -18358,12 +19232,19 @@ _route_deps.iso = iso
 _route_deps.now_utc = now_utc
 _route_deps.new_id = new_id
 _route_deps.billing_summary = _billing_summary
+_route_deps.get_plan = _fetch_plan_by_id
+_route_deps.plan_period_end = _plan_period_end
+_route_deps.plan_period_start = _plan_period_start
+_route_deps.saas_invoice_amount = _saas_invoice_amount
+_route_deps.saas_invoice_cycle_fields = _saas_invoice_cycle_fields
+_route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment
 _route_deps.send_saas_payment_email = _send_saas_payment_email
 _route_deps.get_eur_per_srd = _get_eur_per_srd
 _route_deps.ensure_open_invoice = _ensure_open_invoice_for_company
 _route_deps.notify_company_admins = _notify_company_admins
+_route_deps.notify_tenant_power = _power_notify_tenant
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
@@ -18373,6 +19254,8 @@ from routes import saas_stripe as _saas_stripe_routes  # noqa: E402
 app.include_router(_saas_stripe_routes.router, prefix="/api")
 from routes import company_stripe as _company_stripe_routes  # noqa: E402
 app.include_router(_company_stripe_routes.router, prefix="/api")
+from routes import power as _power_routes  # noqa: E402
+app.include_router(_power_routes.router, prefix="/api")
 
 # AI-assistent — aparte router met eigen /api/assistant/* endpoints
 from ai_assistant import router as _assistant_router  # noqa: E402
@@ -18717,9 +19600,10 @@ async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
 
 
 class _TenantPayInstallmentIn(BaseModel):
-    method: Literal["contant", "bank"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
+    stripe_payment_intent_id: Optional[str] = None
 
 
 @app.post("/api/tenant-portal/payment-plans/{plan_id}/installments/{seq}/pay")
@@ -18734,12 +19618,16 @@ async def tenant_portal_pay_installment(
     )
     if not plan:
         raise HTTPException(status_code=404, detail="Regeling niet gevonden")
+    if body.method == "creditcard":
+        if not body.stripe_payment_intent_id or not body.amount:
+            raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
+        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
         approved_by_label=tenant.get("name") or "Huurder Kiosk",
-        status="approved",
+        status="pending_approval" if body.method == "pin" else "approved",
     )
     # Notify admins (zelfde flow als bij /tenant-portal/payments)
     try:

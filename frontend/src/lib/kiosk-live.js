@@ -1,4 +1,6 @@
 import { apkKioskId, deviceInfo } from './ktp-printer';
+import { applyLiveChanges } from './admin-events';
+import { invalidateKioskSelect } from './kiosk-cache';
 // Kiosk live-kanaal (WebSocket). Draait buiten React: alleen abonnees
 // (het statusbolletje) renderen bij een wijziging.
 const DEBOUNCE_MS = 2000;
@@ -71,6 +73,21 @@ function queuePrint() {
   printTimer = setTimeout(() => emit({ printsVersion: state.printsVersion + 1 }), DEBOUNCE_MS);
 }
 
+// Data gewijzigd (door medewerker, beheerder of huurder): kiosk-cache wissen en
+// alle schermen laten verversen. Korte debounce voorkomt een storm aan GET's.
+let changeTimer = null;
+const changePaths = new Set();
+function queueDataChanged(path) {
+  if (path) changePaths.add(path);
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(() => {
+    invalidateKioskSelect();
+    const paths = changePaths.size ? Array.from(changePaths) : ['/api/kiosk'];
+    changePaths.clear();
+    applyLiveChanges(paths);
+  }, 350);
+}
+
 function connect() {
   if (stopped || !localStorage.getItem('kiosk_token')) return;
   try { ws = new WebSocket(wsUrl()); } catch { scheduleRetry(); return; }
@@ -78,6 +95,8 @@ function connect() {
     sendJson(helloMsg());
     emit({ connected: true });
     pingTimer = setInterval(() => sendJson({ type: 'ping' }), PING_MS);
+    // Na (her)verbinden kunnen events gemist zijn → alles opnieuw ophalen.
+    queueDataChanged('/api/kiosk');
   };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
@@ -90,6 +109,8 @@ function connect() {
       queuePresence(msg);
     } else if (msg.type === 'overview_invalidate') {
       window.dispatchEvent(new CustomEvent('kiosk-overview-invalidate', { detail: { tenant_id: msg.tenant_id } }));
+    } else if (msg.type === 'data_changed') {
+      queueDataChanged(msg.path);
     } else if (msg.type === 'REMOTE_PRINT_DONE') {
       window.dispatchEvent(new CustomEvent('ktp-remote-print-done', { detail: msg }));
       if (msg.ok) queuePrint();
@@ -136,6 +157,8 @@ const onPrinted = (e) => {
 // Terug in beeld (APK/PWA uit slaap) → direct pingen of opnieuw verbinden.
 const onVisible = () => {
   if (document.visibilityState !== 'visible' || stopped) return;
+  // De verbinding kan events hebben gemist terwijl de kiosk op de achtergrond was.
+  queueDataChanged('/api/kiosk');
   if (ws?.readyState === WebSocket.OPEN) sendJson({ type: 'ping' });
   else if (!ws || ws.readyState === WebSocket.CLOSED) { clearTimeout(retryTimer); connect(); }
 };
@@ -161,7 +184,7 @@ export function stopKioskLive() {
   window.removeEventListener('kiosk-receipt-printed', onPrinted);
   document.removeEventListener('visibilitychange', onVisible);
   clearTimeout(retryTimer); clearInterval(pingTimer);
-  clearTimeout(presenceTimer); clearTimeout(printTimer); clearTimeout(emptyTimer); emptyTimer = null;
+  clearTimeout(presenceTimer); clearTimeout(printTimer); clearTimeout(emptyTimer); clearTimeout(changeTimer); emptyTimer = null; changePaths.clear();
   if (ws) { ws.onclose = null; try { ws.close(); } catch { /* noop */ } ws = null; }
   state = INITIAL;
 }

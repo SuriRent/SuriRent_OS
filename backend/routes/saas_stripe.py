@@ -16,11 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from . import _deps
+from saas_invoicing import apply_saas_plan_payment, consolidate_company_invoices
+from saas_invoicing import update_invoice_paid_amount
 
 router = APIRouter()
 
 SAAS_SETTINGS_ID = "_saas_settings"
-CLOSED_STATUSES = ["paid", "superseded", "cancelled", "void"]
+CLOSED_STATUSES = ["paid", "superseded", "merged", "cancelled", "void"]
 FALLBACK_EUR_PER_SRD = 0.025
 
 
@@ -162,9 +164,12 @@ async def _resolve_invoice(invoice_id: Optional[str], user: dict) -> dict:
         return inv
     if not cid:
         raise HTTPException(400, "Geen actief bedrijf")
-    inv = await _deps.db.subscription_invoices.find_one(
-        {"company_id": cid, "status": {"$nin": CLOSED_STATUSES}}, {"_id": 0}, sort=[("period_start", 1), ("created_at", 1)],
-    )
+    try:
+        inv = await consolidate_company_invoices(_deps.db, cid)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if inv and inv.get("status") not in {"open", "overdue"}:
+        inv = None
     if inv:
         return inv
     c = await _deps.db.companies.find_one({"id": cid}, {"_id": 0})
@@ -179,6 +184,7 @@ async def _resolve_invoices(body: "CreateIntentIn", user: dict) -> list[dict]:
     cid = _deps.company_id_of(user)
     if body.invoice_ids or body.all_open:
         q: dict = {"status": {"$nin": CLOSED_STATUSES}}
+        q["merged_into_invoice_id"] = {"$exists": False}
         if body.invoice_ids:
             q["id"] = {"$in": body.invoice_ids}
         if not is_super or body.all_open:
@@ -217,7 +223,9 @@ class CreateIntentIn(BaseModel):
 
 
 def _inv_summary(i: dict) -> dict:
-    return {"id": i["id"], "invoice_number": i.get("invoice_number"), "amount": i.get("amount"),
+    due = float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0)))
+    return {"id": i["id"], "invoice_number": i.get("invoice_number"), "amount": due,
+            "total_amount": i.get("amount"), "paid_amount": i.get("paid_amount", 0),
             "currency": i.get("currency"), "plan": i.get("plan"),
             "period_start": i.get("period_start"), "period_end": i.get("period_end")}
 
@@ -235,7 +243,11 @@ async def _record_tx(*, invs: list[dict], pi_id: str, method: str, cfg: dict, ce
         "mode": cfg["mode"],
         "amount_eur_cents": cents,
         "eur_rate": rate,
-        "original_amount": sum(float(i.get("amount") or 0) for i in invs),
+        "original_amount": sum(float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0))) for i in invs),
+        "invoice_amounts": {
+            i["id"]: float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0)))
+            for i in invs
+        },
         "original_currency": invs[0].get("currency") or "SRD",
         "status": status,
         "created_by": created_by,
@@ -248,7 +260,8 @@ async def _record_tx(*, invs: list[dict], pi_id: str, method: str, cfg: dict, ce
 async def _cents_for(invs: list[dict]) -> tuple[int, float]:
     total, rate = 0, 1.0
     for i in invs:
-        c, rate = await _to_eur_cents(float(i.get("amount") or 0), i.get("currency") or "SRD")
+        due = float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0)))
+        c, rate = await _to_eur_cents(due, i.get("currency") or "SRD")
         total += c
     return total, rate
 
@@ -282,7 +295,7 @@ async def create_intent(body: CreateIntentIn, user: dict = Depends(_deps.get_cur
 
     await _record_tx(invs=invs, pi_id=intent.id, method=body.method, cfg=cfg, cents=cents, rate=rate,
                      created_by=user.get("email"))
-    total = sum(float(i.get("amount") or 0) for i in invs)
+    total = sum(float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0))) for i in invs)
     return {
         "client_secret": intent.client_secret,
         "payment_intent_id": intent.id,
@@ -381,15 +394,27 @@ async def _mark_paid(intent_id: str) -> None:
     method_label = "ideal" if tx.get("method") == "ideal" else "creditcard"
     company = await _deps.db.companies.find_one({"id": tx.get("company_id")}, {"_id": 0}) or {}
     note = "Automatisch afgeschreven (creditcard)" if tx.get("autopay") else "Online betaald via Stripe"
+    invoice_amounts = tx.get("invoice_amounts") or {}
+    all_invoices_paid = True
     for inv in invs:
-        await _deps.db.subscription_invoices.update_one(
-            {"id": inv["id"], "status": {"$ne": "paid"}},
-            {"$set": {"status": "paid", "paid_at": now, "payment_method": method_label,
-                      "stripe_payment_intent_id": intent_id}},
-        )
+        payment_amount = float(invoice_amounts.get(
+            inv["id"],
+            tx.get("original_amount") if len(invs) == 1 else
+            inv.get("balance_due", float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)),
+        ) or 0)
+        updated_invoice = await update_invoice_paid_amount(_deps.db, inv["id"], payment_amount)
+        await apply_saas_plan_payment(_deps.db, inv["id"], payment_amount)
+        if not updated_invoice or updated_invoice.get("status") != "paid":
+            all_invoices_paid = False
+        if updated_invoice and updated_invoice.get("status") == "paid":
+            await _deps.db.subscription_invoices.update_one(
+                {"id": inv["id"]},
+                {"$set": {"paid_at": now, "payment_method": method_label,
+                          "stripe_payment_intent_id": intent_id}},
+            )
         await _deps.db.subscription_payments.insert_one({
             "id": _deps.new_id(), "company_id": tx.get("company_id"), "company_name": company.get("name", ""),
-            "invoice_id": inv["id"], "amount": float(inv.get("amount") or 0),
+            "invoice_id": inv["id"], "amount": payment_amount,
             "currency": inv.get("currency") or tx["original_currency"],
             "amount_eur_cents": tx["amount_eur_cents"] if len(invs) == 1 else None,
             "method": method_label, "reference": f"stripe:{intent_id}", "note": note,
@@ -400,7 +425,7 @@ async def _mark_paid(intent_id: str) -> None:
             await _store_card(tx, intent_id)
         except Exception as e:  # noqa: BLE001
             print(f"[autopay] kaart opslaan mislukt: {e}")
-    if tx.get("company_id"):
+    if tx.get("company_id") and all_invoices_paid:
         last_plan = (invs[-1].get("plan") if invs else None)
         await _deps.activate_company_after_payment(tx["company_id"], plan_in_payment=last_plan)
         if company:
@@ -590,6 +615,7 @@ async def client_payment_status(user: dict = Depends(_deps.require_role("superad
             "billing_status": summary.get("billing_status"),
             "monthly_amount": summary.get("monthly_amount"),
             "currency": summary.get("currency") or "SRD",
+            "plan_interval": summary.get("plan_interval") or "month",
             "last_invoice": last_inv and {
                 "id": last_inv.get("id"),
                 "number": last_inv.get("invoice_number"),
