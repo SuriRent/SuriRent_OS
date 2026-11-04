@@ -19423,6 +19423,28 @@ import json as _json
 from fastapi import Response as _FastAPIResponse
 
 _PWA_ROLE_MANIFEST: dict[str, dict] = {
+    "superadmin": {
+        "name": "SuriRent Superadmin",
+        "short_name": "Superadmin",
+        "description": "Superadmin dashboard voor het beheer van het SuriRent-platform.",
+        "start_url": "/login?view=superadmin&source=pwa",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "any",
+        "background_color": "#ECFDF5",
+        "theme_color": "#047857",
+        "lang": "nl",
+        "dir": "ltr",
+        "categories": ["business", "productivity"],
+        "id": "/?app=superadmin",
+        "prefer_related_applications": False,
+        "icons": [
+            {"src": "/kiosk-icons/superadmin-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any"},
+            {"src": "/kiosk-icons/superadmin-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
+            {"src": "/kiosk-icons/superadmin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/kiosk-icons/superadmin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+    },
     "beheer": {
         "name": "SuriRent Beheer",
         "short_name": "Beheer",
@@ -19542,6 +19564,8 @@ def _slug_aware_start_url(role: str, slug: str | None) -> str:
         return f"/{slug}/kiosk/huurder?source=pwa"
     if role == "kiosk":
         return f"/{slug}/kiosk?source=pwa"
+    if role == "superadmin":
+        return f"/{slug}/login?view=superadmin&source=pwa"
     return f"/{slug}/login?source=pwa&view=admin"
 
 

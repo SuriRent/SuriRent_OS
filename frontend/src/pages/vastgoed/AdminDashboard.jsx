@@ -4515,6 +4515,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
   const groups = groupTabs(tabs);
   const activeGroup = groups.find((group) => group.items.some((item) => item.id === tab));
   const [selectedGroup, setSelectedGroup] = useState(activeGroup?.key || groups[0]?.key);
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     if (activeGroup) setSelectedGroup(activeGroup.key);
   }, [activeGroup?.key]);
@@ -4534,46 +4535,56 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
           </div>
         </div>
         <span className="hidden sm:inline text-xs font-semibold text-slate-500 truncate max-w-36">{user?.name || user?.email}</span>
+        <button type="button" onClick={() => setMenuOpen((open) => !open)}
+          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 inline-flex items-center justify-center"
+          aria-label={menuOpen ? 'Menu sluiten' : 'Navigatiemenu openen'} aria-expanded={menuOpen}
+          aria-controls="saas-console-mobile-menu" data-testid="saas-console-mobile-menu-toggle">
+          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
         <button type="button" onClick={onLogout} data-testid="saas-console-mobile-logout"
           className="w-10 h-10 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center"
           aria-label="Uitloggen" title="Uitloggen">
           <LogOut className="w-[18px] h-[18px]" />
         </button>
       </div>
-      <nav className="flex items-center gap-1.5 overflow-x-auto px-3 py-2 border-t border-slate-100" aria-label="SaaS-categorieën">
-        {groups.map((group) => {
-          const selected = group.key === visibleGroup?.key;
-          return (
-            <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
-              data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
-              className={`shrink-0 min-h-10 px-3 rounded-lg text-xs sm:text-sm font-bold transition-colors ${
-                selected ? 'bg-[#E8F5ED] text-emerald-800' : 'text-slate-500 hover:bg-slate-50'
-              }`}>
-              {group.label}
-            </button>
-          );
-        })}
-      </nav>
-      {visibleGroup && (
-        <nav className="flex items-stretch gap-2 overflow-x-auto px-3 pb-2.5" aria-label={`${visibleGroup.label} modules`}>
-          {visibleGroup.items.map((item) => {
-            const Icon = item.icon;
-            const selected = item.id === tab;
-            const showBadge = item.id === 'notifications' && badgeCount > 0;
+      <nav id="saas-console-mobile-menu"
+        className={`border-t border-slate-100 bg-white p-3 space-y-3 ${menuOpen ? '' : 'hidden'}`}
+        aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu">
+        <div className="flex flex-wrap gap-2 pb-1">
+          {groups.map((group) => {
+            const selected = group.key === visibleGroup?.key;
             return (
-              <button key={item.id} type="button" onClick={() => onChange(item.id)}
-                data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
-                className={`relative shrink-0 min-h-10 px-3 rounded-lg border inline-flex items-center gap-2 text-xs font-bold transition-colors ${
-                  selected ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
+                data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
+                className={`shrink-0 min-h-10 px-3 rounded-lg text-xs font-bold transition-colors ${
+                  selected ? 'bg-[#E8F5ED] text-emerald-800' : 'text-slate-500 hover:bg-slate-50'
                 }`}>
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
-                {showBadge && <span className="min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black inline-flex items-center justify-center">{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                {group.label}
               </button>
             );
           })}
-        </nav>
-      )}
+        </div>
+        {visibleGroup && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {visibleGroup.items.map((item) => {
+              const Icon = item.icon;
+              const selected = item.id === tab;
+              const showBadge = item.id === 'notifications' && badgeCount > 0;
+              return (
+                <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
+                  data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
+                  className={`relative min-h-11 px-3 rounded-lg border inline-flex items-center gap-2 text-left text-sm font-bold transition-colors ${
+                    selected ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1">{item.label}</span>
+                  {showBadge && <span className={`min-w-5 h-5 px-1 rounded-full text-[10px] font-black inline-flex items-center justify-center ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </nav>
     </header>
   );
 }

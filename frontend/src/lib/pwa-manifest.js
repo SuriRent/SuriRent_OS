@@ -15,6 +15,10 @@ const ROLE_CONFIG = {
     name: 'SuriRent Beheer', shortName: 'Beheer',
     theme: '#FF5C00', icon: 'beheer',
   },
+  superadmin: {
+    name: 'SuriRent Superadmin', shortName: 'Superadmin',
+    theme: '#047857', icon: 'superadmin',
+  },
   kiosk: {
     name: 'SuriRent Kiosk', shortName: 'Kiosk',
     theme: '#2563EB', icon: 'kioskpwa',
@@ -70,10 +74,10 @@ function buildManifestUrl(role, slug) {
   return `/api/pwa/manifest?${params.toString()}`;
 }
 
-export function usePwaManifest() {
+export function usePwaManifest(roleOverride) {
   const location = useLocation();
   useEffect(() => {
-    const role = pickRole(location.pathname, location.search);
+    const role = roleOverride === 'superadmin' ? roleOverride : pickRole(location.pathname, location.search);
     const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.beheer;
     const slug = detectSlug(location.pathname);
 
@@ -127,7 +131,7 @@ export function usePwaManifest() {
     if (document.title !== cfg.shortName) {
       document.title = cfg.shortName;
     }
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, roleOverride]);
 }
 
 function setMetaContent(selector, content) {

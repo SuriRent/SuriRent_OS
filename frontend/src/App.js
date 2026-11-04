@@ -124,6 +124,12 @@ function Protected({ children }) {
   return children;
 }
 
+function PwaManifestSync() {
+  const { user } = useAuth();
+  usePwaManifest(user?.role === 'superadmin' ? 'superadmin' : undefined);
+  return null;
+}
+
 const KIOSK_ADMIN_DESTINATIONS = {
   overview: 'overzicht',
   locations: 'locaties',
@@ -410,7 +416,6 @@ function HybridRoutes() {
 
 export default function App() {
   useRegisterServiceWorker();
-  usePwaManifest();
   useSheetSwipeToDismiss();
   // Globale tik-geluiden voor elke knop + keypad + text-input. Werkt
   // op iPhone PWA, Android PWA en desktop. Gebruiker kan uitschakelen
@@ -441,6 +446,7 @@ export default function App() {
     const slug = tenant.company?.slug || '';
     return (
       <AuthProvider>
+        <PwaManifestSync />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Root op custom domain = tenant landing page */}
@@ -481,6 +487,7 @@ export default function App() {
   }
   return (
     <AuthProvider>
+      <PwaManifestSync />
       <Suspense fallback={<RouteFallback />}>
         {mode === 'marketing' && <MarketingRoutes />}
         {mode === 'app' && <AppRoutes />}
