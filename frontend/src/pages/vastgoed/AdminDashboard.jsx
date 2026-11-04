@@ -3607,7 +3607,8 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
   const fx = useContext(KioskFxCtx);
   if (fx) {
     return (
-      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} title={t.name || 'Onbekende huurder'}
+      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} tenantId={t.id} tenantPhotoUrl={t.avatar_url || t.id_photo_url}
+        title={t.name || 'Onbekende huurder'}
         sub={`Appt. ${t.apartment_number || '—'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
         amount={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
         status={t.apartment_number ? 'Huurt' : 'Geen appt.'} tone={t.apartment_number ? 'green' : 'amber'}

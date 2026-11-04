@@ -161,6 +161,7 @@ export default function Locations({ embedded = false }) {
         {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : filtered.length === 0 ? <FxEmpty text="Geen locaties gevonden." testId="loc-empty" /> : filtered.map((l) => {
           const act = (l.apartments_total || 0) > 0;
           return <FxRow key={l.id} testId={`loc-row-${l.id}`} onClick={() => setDetailId(l.id)} title={l.name} sub={l.address || '—'}
+            photoUrl={l.photo_url}
             meta={`${l.apartments_total || 0} appartementen`} amount={`${l.apartments_occupied || 0} / ${l.apartments_total || 0} bezet`}
             status={act ? 'Actief' : 'Leeg'} tone={act ? 'green' : 'slate'} />;
         })}

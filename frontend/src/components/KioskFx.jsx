@@ -25,10 +25,11 @@ function loadTenantPhotos() {
   return tenantPhotoPromise;
 }
 
-export function TenantPhoto({ tenantId, name, size = 40 }) {
+export function TenantPhoto({ tenantId, name, photoUrl, size = 40 }) {
   const [map, setMap] = useState(tenantPhotoCache || {});
   const [bad, setBad] = useState(false);
   useEffect(() => {
+    if (photoUrl) return undefined;
     let alive = true;
     const load = () => loadTenantPhotos().then((m) => { if (alive) setMap(m); });
     load();
@@ -37,9 +38,11 @@ export function TenantPhoto({ tenantId, name, size = 40 }) {
       alive = false;
       window.removeEventListener('kiosk-tenant-photos-change', load);
     };
-  }, []);
+  }, [photoUrl]);
   const info = map[tenantId] || {};
-  const src = info.photo && !/^https?:/.test(info.photo) ? `${process.env.REACT_APP_BACKEND_URL}${info.photo}` : info.photo;
+  const photo = photoUrl || info.photo;
+  const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
+  useEffect(() => { setBad(false); }, [src]);
   const ini = (name || info.name || '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return (
     <span className="shrink-0 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center text-[#FF5C00] font-black"
@@ -93,7 +96,7 @@ export function FxSearch({ value, onChange, placeholder, testId }) {
 }
 
 // Lijst-rij: naam / sub / meta links, bedrag + status rechts, chevron.
-export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId, tenantId, photoUrl }) {
+export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId, tenantId, tenantPhotoUrl, photoUrl }) {
   const Tag = actions ? 'div' : 'button';
   const extra = actions
     ? { role: onClick ? 'button' : undefined, tabIndex: onClick ? 0 : undefined, onKeyDown: (e) => { if (e.key === 'Enter' && onClick) onClick(); } }
@@ -113,7 +116,7 @@ export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, 
             onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
         </span>
       )}
-      {tenantId && <TenantPhoto tenantId={tenantId} name={typeof title === 'string' ? title : ''} size={40} />}
+      {tenantId && <TenantPhoto tenantId={tenantId} name={typeof title === 'string' ? title : ''} photoUrl={tenantPhotoUrl} size={40} />}
       <div className="min-w-0 flex-1">
         <div className="text-sm font-black text-slate-900 truncate">{title}</div>
         {sub && <div className="text-xs text-slate-500 truncate">{sub}</div>}
