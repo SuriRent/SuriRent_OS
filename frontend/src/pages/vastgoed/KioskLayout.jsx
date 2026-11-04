@@ -1770,99 +1770,88 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#FF6B1A] flex flex-col px-3 sm:px-6"
-      style={{
-        paddingTop: 'max(var(--kiosk-sat, 0px), 12px)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 96px)',
-      }}
-      data-testid="kiosk-history-modal">
-      <div className="kiosk-chrome grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 shrink-0">
-        <button onClick={onClose} data-testid="history-close"
-          className="justify-self-start inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 font-bold backdrop-blur-sm"
-          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <span className="text-center text-sm sm:text-base font-semibold text-white">Betalingsgeschiedenis</span>
-        <div className="text-right text-white">
-          <p className="text-[10px] sm:text-xs opacity-70">Appt. {apartment?.number}</p>
-        </div>
-      </div>
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
-        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+    <KioskModalShell
+      title="Betalingsgeschiedenis"
+      Icon={ClockIcon}
+      testId="history"
+      onClose={onClose}
+      wide
+      tall
+    >
+      <div data-testid="kiosk-history-modal" className="space-y-0">
+        <div className="pb-3 border-b border-slate-100 flex items-center justify-between gap-3">
           <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
             <ClockIcon className="w-4 h-4 text-orange-500" />
           </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-slate-900">Betalingen</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-slate-900">Betalingen · Appt. {apartment?.number}</h3>
             <p className="text-xs text-slate-500 truncate">
+              {tenant.name || ''}{tenant.name && items ? ' · ' : ''}
               {items ? `${items.length} betaling${items.length === 1 ? '' : 'en'}` : 'Laden…'}
             </p>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3"
-          style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
-          {err && <p className="text-red-500 text-sm py-4">{err}</p>}
-          {!items && !err && <div className="py-10 flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-orange-500" /></div>}
-          {items && items.length === 0 && (
-            <div className="py-10 text-center text-slate-400">
-              <Receipt className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              <p>Nog geen betalingen voor deze huurder.</p>
-            </div>
-          )}
-          {items && items.map((p) => (
-            <div key={p.id} data-testid={`history-row-${p.id}`} className="py-3 border-b border-slate-100 last:border-0 flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
-              <div className="flex-1 min-w-0 break-words">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-extrabold text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-100 text-orange-700">{p.category}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">{p.method}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  {new Date(p.paid_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  {' · '}{p.receipt_number}
-                  {p.period_month ? ` · Periode: ${MONTHS_NL[p.period_month - 1]} ${p.period_year}` : ''}
+        {err && <p className="text-red-500 text-sm py-4">{err}</p>}
+        {!items && !err && <div className="py-10 flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-orange-500" /></div>}
+        {items && items.length === 0 && (
+          <div className="py-10 text-center text-slate-400">
+            <Receipt className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p>Nog geen betalingen voor deze huurder.</p>
+          </div>
+        )}
+        {items && items.map((p) => (
+          <div key={p.id} data-testid={`history-row-${p.id}`} className="py-3 border-b border-slate-100 last:border-0 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+            <div className="flex-1 min-w-0 break-words">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-extrabold text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-100 text-orange-700">{p.category}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">{p.method}</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {new Date(p.paid_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' · '}{p.receipt_number}
+                {p.period_month ? ` · Periode: ${MONTHS_NL[p.period_month - 1]} ${p.period_year}` : ''}
+              </p>
+              {(p.received_by || p.approved_by) && (
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {p.received_by ? <>Ontvangen door <b className="text-slate-600">{p.received_by}</b></> : null}
+                  {p.received_by && p.approved_by ? ' · ' : ''}
+                  {p.approved_by ? <>Goedgekeurd door <b className="text-slate-600">{p.approved_by}</b></> : null}
                 </p>
-                {(p.received_by || p.approved_by) && (
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {p.received_by ? <>Ontvangen door <b className="text-slate-600">{p.received_by}</b></> : null}
-                    {p.received_by && p.approved_by ? ' · ' : ''}
-                    {p.approved_by ? <>Goedgekeurd door <b className="text-slate-600">{p.approved_by}</b></> : null}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <button data-testid={`history-whatsapp-${p.id}`}
-                    onClick={() => handleWhatsApp(p.id)}
-                    disabled={!!busy[p.id]}
-                    aria-label="WhatsApp"
-                    className="w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 disabled:opacity-60 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition-transform">
-                    {busy[p.id] === 'wa'
-                      ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" />
-                      : <MessageCircle className="w-4 h-4 sm:w-3 sm:h-3" />}
-                    <span className="hidden sm:inline">WhatsApp</span>
-                  </button>
-                  <PrintChoiceMenu paymentId={p.id} disabled={busy[p.id] === 'print'}
-                    onLocal={() => handlePrint(p.id)}
-                    onStatus={(st) => setWaState((prev) => ({ ...prev, [p.id]: st }))} />
-                </div>
-                {waState[p.id] && (
-                  <p data-testid={`history-print-status-${p.id}`}
-                    className={`text-[10px] font-semibold px-1 max-w-[140px] text-right ${
-                      waState[p.id].kind === 'ok' ? 'text-emerald-600'
-                      : waState[p.id].kind === 'err' ? 'text-red-500'
-                      : 'text-slate-500'
-                    }`}>
-                    {waState[p.id].msg}
-                  </p>
-                )}
-              </div>
+              )}
             </div>
-          ))}
-        </div>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <button data-testid={`history-whatsapp-${p.id}`}
+                  onClick={() => handleWhatsApp(p.id)}
+                  disabled={!!busy[p.id]}
+                  aria-label="WhatsApp"
+                  className="w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 disabled:opacity-60 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition-transform">
+                  {busy[p.id] === 'wa'
+                    ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" />
+                    : <MessageCircle className="w-4 h-4 sm:w-3 sm:h-3" />}
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </button>
+                <PrintChoiceMenu paymentId={p.id} disabled={busy[p.id] === 'print'}
+                  onLocal={() => handlePrint(p.id)}
+                  onStatus={(st) => setWaState((prev) => ({ ...prev, [p.id]: st }))} />
+              </div>
+              {waState[p.id] && (
+                <p data-testid={`history-print-status-${p.id}`}
+                  className={`text-[10px] font-semibold px-1 max-w-[140px] text-right ${
+                    waState[p.id].kind === 'ok' ? 'text-emerald-600'
+                    : waState[p.id].kind === 'err' ? 'text-red-500'
+                    : 'text-slate-500'
+                  }`}>
+                  {waState[p.id].msg}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </KioskModalShell>
   );
 }
 
