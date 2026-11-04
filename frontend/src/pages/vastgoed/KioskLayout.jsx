@@ -3611,6 +3611,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [detailId, setDetailId] = useState(null);
+  const [detailTab, setDetailTab] = useState('overzicht');
   const [editingApartment, setEditingApartment] = useState(null);
   const [assigningApartment, setAssigningApartment] = useState(null);
   const operator = getKioskEmployee();
@@ -3686,68 +3687,184 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
       <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
         style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-apartment-detail">
         <div className="flex-1 min-h-0 overflow-y-auto py-3">
-          <div className="mx-auto max-w-5xl space-y-2.5">
-            <button type="button" onClick={() => setDetailId(null)} data-testid="apartment-detail-back"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-bold text-slate-700 shadow-sm">
-              <ArrowLeft className="w-4 h-4" /> Terug naar appartementen
-            </button>
-            <section className="overflow-hidden rounded-2xl bg-white shadow-sm md:flex md:items-stretch">
-              {photoUrl ? (
-                <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
-                  className="h-36 w-full bg-slate-100 object-cover sm:h-44 md:h-40 md:w-64 md:shrink-0"
-                  onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-              ) : (
-                <div className="flex h-28 items-center justify-center bg-orange-50 text-[#FF5C00] sm:h-32 md:h-auto md:w-64 md:shrink-0">
-                  <Home className="h-10 w-10" />
-                </div>
-              )}
-              <div className="flex flex-1 items-center justify-between gap-4 p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
-                    <h1 className="mt-1 break-words text-2xl font-black text-slate-900 sm:text-3xl">{selectedApartment.number}</h1>
-                    <p className="mt-1 text-sm text-slate-500">{selectedApartment.address || 'Geen adres opgegeven'}</p>
-                    {selectedApartment.description && (
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{selectedApartment.description}</p>
-                    )}
+          <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
+            <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {photoUrl ? (
+                  <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
+                    className="h-14 w-14 shrink-0 rounded-2xl border border-slate-200 bg-slate-100 object-cover"
+                    onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                ) : (
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${isOccupied ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-[#FF5C00]'}`}>
+                    <Home className="h-6 w-6" />
                   </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
+                  <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                    {selectedApartment.number}
+                  </h1>
+                  <p className="truncate text-sm font-semibold text-slate-500">
+                    {selectedApartment.tenant_name || selectedApartment.address || 'Geen huurder gekoppeld'}
+                    {' · '}{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')} / maand
+                  </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                <span className={`hidden shrink-0 rounded-full px-3 py-1 text-xs font-black sm:inline-flex ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                   {isOccupied ? 'Bezet' : 'Beschikbaar'}
                 </span>
               </div>
-            </section>
-            {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
-            <section className="grid gap-2.5 md:grid-cols-3">
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huur p/m</p>
-                <p className="mt-1.5 text-lg font-black text-slate-900">{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}</p>
-              </div>
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huurder</p>
-                <p className="mt-1.5 truncate text-base font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button type="button" onClick={() => { setDetailId(null); setDetailTab('overzicht'); }} data-testid="apartment-detail-back"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                  <ArrowLeft className="h-4 w-4" /> Terug
+                </button>
+                <button type="button" onClick={() => setEditingApartment(selectedApartment)}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                  data-testid="apartment-detail-edit"><Pencil className="h-4 w-4" /> Bewerk</button>
                 {selectedApartment.tenant_id ? (
                   <button type="button" onClick={() => removeTenant(selectedApartment)}
-                    className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-                    data-testid="apartment-detail-remove-tenant">Huurder loskoppelen</button>
+                    className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
+                    data-testid="apartment-detail-remove-tenant"><UserRound className="h-4 w-4" /> Loskoppelen</button>
                 ) : (
                   <button type="button" onClick={() => setAssigningApartment(selectedApartment)}
-                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
-                    data-testid="apartment-detail-assign"><Plus className="h-4 w-4" /> Huurder toewijzen</button>
+                    className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
+                    data-testid="apartment-detail-assign"><UserPlus className="h-4 w-4" /> Huurder toewijzen</button>
                 )}
-              </div>
-              <div className="rounded-2xl bg-white p-4 shadow-sm" data-testid="apartment-detail-actions">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Documenten & acties</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setEditingApartment(selectedApartment)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200"
-                    data-testid="apartment-detail-edit"><Pencil className="h-4 w-4" /> Bewerk</button>
-                  <button type="button" onClick={() => deleteApartment(selectedApartment)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100"
-                    data-testid="apartment-detail-delete"><Trash2 className="h-4 w-4" /> Verwijder</button>
-                </div>
+                <button type="button" onClick={() => deleteApartment(selectedApartment)}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 hover:bg-red-100"
+                  data-testid="apartment-detail-delete"><Trash2 className="h-4 w-4" /> Verwijder</button>
               </div>
             </section>
+
+            {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
+
+            <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+              role="tablist" aria-label="Appartementdetails">
+              {[
+                ['overzicht', 'Overzicht'],
+                ['huurder', 'Huurder'],
+                ['woning', 'Appartement & foto'],
+              ].map(([tab, label]) => (
+                <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
+                  onClick={() => setDetailTab(tab)} data-testid={`apartment-detail-tab-${tab}`}
+                  className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                    detailTab === tab ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {detailTab === 'overzicht' && (
+              <div className="grid min-w-0 gap-3 xl:grid-cols-[1.4fr_1fr]" data-testid="apartment-detail-overview">
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-base font-black text-slate-900">Appartementgegevens</h2>
+                    <Home className="h-5 w-5 text-[#FF5C00]" />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Nummer</p>
+                      <p className="mt-1 truncate font-black text-slate-900">{selectedApartment.number}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Status</p>
+                      <p className={`mt-1 font-black ${isOccupied ? 'text-emerald-700' : 'text-slate-700'}`}>
+                        {isOccupied ? 'Bezet' : 'Beschikbaar'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3 sm:col-span-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Adres</p>
+                      <p className="mt-1 font-bold text-slate-900">{selectedApartment.address || 'Geen adres opgegeven'}</p>
+                    </div>
+                    <div className="rounded-xl bg-orange-50 p-3 sm:col-span-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Huur per maand</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">
+                        {fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-base font-black text-slate-900">Huurder</h2>
+                    <Users className="h-5 w-5 text-[#FF5C00]" />
+                  </div>
+                  {selectedApartment.tenant_name ? (
+                    <>
+                      <p className="truncate text-lg font-black text-slate-900">{selectedApartment.tenant_name}</p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {selectedApartment.tenant_phone || selectedApartment.tenant_email || 'Geen contactgegevens'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-500">Er is nog geen huurder gekoppeld.</p>
+                  )}
+                  <button type="button" onClick={() => setDetailTab('huurder')}
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-orange-50 px-4 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+                    Bekijk huurder <ChevronRight className="h-4 w-4" />
+                  </button>
+                </section>
+              </div>
+            )}
+
+            {detailTab === 'huurder' && (
+              <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="apartment-detail-tenant">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-black text-slate-900">Huurder</h2>
+                  <Users className="h-5 w-5 text-[#FF5C00]" />
+                </div>
+                {selectedApartment.tenant_name ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 font-black text-[#FF5C00]">
+                      {(selectedApartment.tenant_name || '?').split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-lg font-black text-slate-900">{selectedApartment.tenant_name}</p>
+                      <p className="truncate text-sm text-slate-500">{selectedApartment.tenant_phone || 'Geen telefoonnummer'}</p>
+                      <p className="truncate text-sm text-slate-500">{selectedApartment.tenant_email || 'Geen e-mailadres'}</p>
+                    </div>
+                    <button type="button" onClick={() => removeTenant(selectedApartment)}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-bold text-red-600 hover:bg-red-100"
+                      data-testid="apartment-detail-remove-tenant"><UserRound className="h-4 w-4" /> Huurder loskoppelen</button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-slate-50 p-5 text-center">
+                    <p className="mb-3 text-sm font-semibold text-slate-500">Er is nog geen huurder gekoppeld.</p>
+                    <button type="button" onClick={() => setAssigningApartment(selectedApartment)}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-bold text-white hover:bg-[#E05200]"
+                      data-testid="apartment-detail-assign"><UserPlus className="h-4 w-4" /> Huurder toewijzen</button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {detailTab === 'woning' && (
+              <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="apartment-detail-property">
+                <div className="mb-3">
+                  <h2 className="text-base font-black text-slate-900">Appartement & foto</h2>
+                  <p className="text-sm text-slate-500">{selectedApartment.address || 'Geen adres opgegeven'}</p>
+                </div>
+                {photoUrl ? (
+                  <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
+                    className="max-h-[42vh] min-h-48 w-full rounded-xl bg-slate-100 object-contain"
+                    onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                ) : (
+                  <div className="flex min-h-48 items-center justify-center rounded-xl bg-slate-50 text-slate-400">
+                    <div className="text-center">
+                      <Home className="mx-auto mb-2 h-10 w-10" />
+                      <p className="text-sm font-semibold">Geen foto beschikbaar</p>
+                    </div>
+                  </div>
+                )}
+                {selectedApartment.description && (
+                  <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Beschrijving</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{selectedApartment.description}</p>
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         </div>
         {editingApartment && (
@@ -3849,7 +3966,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
                   : apartment.photo_url)
                 : '';
               return (
-                <button key={apartment.id} type="button" onClick={() => setDetailId(apartment.id)}
+                <button key={apartment.id} type="button" onClick={() => { setDetailTab('overzicht'); setDetailId(apartment.id); }}
                   className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:bg-slate-50 active:bg-slate-100 sm:p-4"
                   data-testid={`apartment-row-${apartment.id}`}>
                   {photoUrl ? (
