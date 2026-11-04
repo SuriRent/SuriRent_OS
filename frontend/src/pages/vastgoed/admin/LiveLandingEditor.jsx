@@ -76,6 +76,7 @@ export default function LiveLandingEditor() {
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
   const [device, setDevice] = useState('desktop');
+  const [mobileView, setMobileView] = useState('content');
   const [hasUnpublished, setHasUnpublished] = useState(false);
   const [iframeReady, setIframeReady] = useState(false);
   const [previewPage, setPreviewPage] = useState('/');
@@ -323,9 +324,9 @@ export default function LiveLandingEditor() {
   const dev = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)] -mx-5 md:-mx-6 lg:-mx-8 -my-5 md:-my-5 lg:-my-3" data-testid="live-landing-editor">
+    <div className="flex flex-col h-[calc(100dvh-6rem)] min-h-[420px] md:h-[calc(100vh-7rem)] -mx-5 md:-mx-6 lg:-mx-8 -my-5 md:-my-5 lg:-my-3" data-testid="live-landing-editor">
       {/* Toolbar */}
-      <div className="px-4 lg:px-6 py-3 bg-white border-b border-slate-200 flex items-center gap-2 flex-wrap shrink-0">
+      <div className="px-4 lg:px-6 py-3 bg-white border-b border-slate-200 flex items-center gap-2 flex-wrap shrink-0 max-h-[34dvh] overflow-y-auto lg:max-h-none">
         <div className="flex items-center gap-2 mr-3">
           <Paintbrush className="w-5 h-5 text-orange-500" />
           <h1 className="font-extrabold text-slate-900">Landing Editor</h1>
@@ -415,6 +416,19 @@ export default function LiveLandingEditor() {
         </button>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 border-b border-slate-200 bg-white p-2 lg:hidden">
+        <button type="button" onClick={() => setMobileView('preview')}
+          aria-pressed={mobileView === 'preview'} data-testid="landing-mobile-preview"
+          className={`min-h-10 rounded-lg text-sm font-bold ${mobileView === 'preview' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
+          Voorbeeld
+        </button>
+        <button type="button" onClick={() => { setContentOpen(true); setMobileView('content'); }}
+          aria-pressed={mobileView === 'content'} data-testid="landing-mobile-edit"
+          className={`min-h-10 rounded-lg text-sm font-bold ${mobileView === 'content' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
+          Bewerken ({editableFields.length})
+        </button>
+      </div>
+
       {err && (
         <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700 flex items-center gap-2 shrink-0">
           <AlertCircle className="w-4 h-4" /> {err}
@@ -430,7 +444,7 @@ export default function LiveLandingEditor() {
           </div>
         ) : (
           <>
-            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center p-4 overflow-auto">
+            <div className={`flex-1 min-w-0 min-h-0 items-center justify-center p-2 sm:p-4 overflow-auto ${mobileView === 'preview' ? 'flex' : 'hidden'} lg:flex`}>
               <div className="bg-white rounded-xl shadow-2xl overflow-hidden mx-auto shrink-0"
                 style={{
                   width: dev.w === '100%' ? '100%' : `${dev.w}px`,
@@ -445,7 +459,7 @@ export default function LiveLandingEditor() {
               </div>
             </div>
             {contentOpen && (
-              <aside className="w-full lg:w-[360px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
+              <aside className={`w-full flex-1 lg:flex-none lg:w-[360px] lg:shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0 ${mobileView === 'content' ? 'flex' : 'hidden lg:flex'}`}>
                 <div className="p-4 border-b border-slate-100">
                   <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-500">

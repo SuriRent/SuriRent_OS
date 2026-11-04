@@ -819,6 +819,23 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
         </div>
       </div>
 
+      {viewMode === 'invoices' && (
+        <div className="mb-4">
+          <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
+            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
+            <Plus className="w-4 h-4" /> Nieuwe factuur
+          </button>
+        </div>
+      )}
+      {viewMode === 'kasgeld' && (
+        <div className="mb-4">
+          <button onClick={() => setShowKasMut(true)} data-testid="new-kas-mutation-btn"
+            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
+            <Plus className="w-4 h-4" /> Nieuwe mutatie
+          </button>
+        </div>
+      )}
+
       {viewMode === 'all' && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <StatCard icon={TrendingUp} label="MRR" value={Object.entries(overview.mrr_by_currency || { [overview.currency || 'SRD']: overview.mrr || 0 }).map(([currency, amount]) => fmt(amount, currency)).join(' · ')}
@@ -921,7 +938,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
       {tab === 'invoices' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             <FilterPills value={invFilter} onChange={setInvFilter}
               options={[
                 { v: 'all', l: 'Alles', c: scopedInvoices.length },
@@ -930,10 +947,6 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
                 { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
               ]}
               testidPrefix="saas-inv-filter" />
-            <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
-              className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm flex items-center gap-2 shadow-md shadow-orange-500/25">
-              <Plus className="w-4 h-4" /> Nieuwe factuur
-            </button>
           </div>
           <SaasInvoiceList invoices={filterInvoices(scopedInvoices, invFilter)} />
         </div>
@@ -1032,8 +1045,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
       )}
 
       {tab === 'kasgeld' && (
-        <SaasKasgeldView payments={scopedPayments} filter={kasFilter} onFilter={setKasFilter}
-          onNewMutation={() => setShowKasMut(true)} />
+        <SaasKasgeldView payments={scopedPayments} filter={kasFilter} onFilter={setKasFilter} />
       )}
 
       {selected && (
@@ -1438,7 +1450,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
   );
 }
 
-function SaasKasgeldView({ payments, filter, onFilter, onNewMutation }) {
+function SaasKasgeldView({ payments, filter, onFilter }) {
   const filtered = filter === 'all' ? payments
     : filter === 'ocr' ? payments.filter((p) => p.source === 'ocr')
     : filter === 'contant' ? payments.filter((p) => (p.method || '').toLowerCase().includes('contant'))
@@ -1480,12 +1492,6 @@ function SaasKasgeldView({ payments, filter, onFilter, onNewMutation }) {
             { v: 'manual', l: 'Handmatig', c: counts.manual },
           ]}
           testidPrefix="saas-kas-filter" />
-        {onNewMutation && (
-          <button onClick={onNewMutation} data-testid="new-kas-mutation-btn"
-            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm flex items-center gap-2 shadow-md shadow-orange-500/25">
-            <Plus className="w-4 h-4" /> Nieuwe mutatie
-          </button>
-        )}
       </div>
 
       <SaasPaymentList payments={filtered} />

@@ -461,17 +461,18 @@ export default function Companies() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Bedrijven</h1>
           <p className="text-sm text-slate-500 mt-1">Beheer bedrijven, abonnementen, toegang en klantondersteuning.</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={load} disabled={loading} data-testid="company-refresh"
-            className="h-11 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-2 disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Vernieuwen</span>
-          </button>
-          <button onClick={() => { setEditing(null); setShowForm(true); }}
-            data-testid="company-new-btn"
-            className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
-            <Plus className="w-4 h-4" /> Nieuw bedrijf
-          </button>
-        </div>
+        <button onClick={load} disabled={loading} data-testid="company-refresh"
+          className="h-11 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-2 disabled:opacity-50">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Vernieuwen</span>
+        </button>
+      </div>
+
+      <div>
+        <button onClick={() => { setEditing(null); setShowForm(true); }}
+          data-testid="company-new-btn"
+          className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" /> Nieuw bedrijf
+        </button>
       </div>
 
       {err && <div role="alert" className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
