@@ -4569,7 +4569,7 @@ function TenantInfoModal({ apartment, mode, onClose }) {
     ['Naam', t.name], ['Appartement', apt.number || apartment?.number], ['Telefoon', phone],
     ['E-mail', t.email], ['Huur', apt.rent_amount != null ? fmtMoney(Number(apt.rent_amount), apt.currency || 'SRD') : ''],
   ].filter(([, v]) => v);
-  const btn = 'h-12 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition';
+  const btn = 'w-full min-w-0 h-12 rounded-xl px-3 font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-95 transition';
   return (
     <KioskModalShell title={mode === 'contact' ? 'Contact' : 'Gegevens'} Icon={mode === 'contact' ? Smartphone : User}
       testId={`tenant-${mode}`} onClose={onClose}>
@@ -4586,17 +4586,26 @@ function TenantInfoModal({ apartment, mode, onClose }) {
         </dl>
       )}
       {data && mode === 'contact' && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm font-bold text-slate-900">{t.name}{phone ? ` · ${phone}` : ''}</p>
           {digits ? (
-            <>
-              <a href={`tel:${phone}`} className={`${btn} bg-orange-500 text-white`}>Bellen</a>
-              <a href={`https://wa.me/${digits}`} target="_blank" rel="noreferrer" className={`${btn} bg-emerald-500 text-white`}>
-                <MessageCircle className="w-4 h-4" /> WhatsApp
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <a href={`tel:${phone}`} data-testid="tenant-contact-call"
+                className={`${btn} bg-orange-500 text-white hover:bg-orange-600`}>Bellen</a>
+              <a href={`https://wa.me/${digits}`} target="_blank" rel="noreferrer" data-testid="tenant-contact-whatsapp"
+                className={`${btn} bg-emerald-500 text-white hover:bg-emerald-600`}>
+                <MessageCircle className="w-4 h-4 shrink-0" /> WhatsApp
               </a>
+              {t.email && <a href={`mailto:${t.email}`} data-testid="tenant-contact-email"
+                className={`${btn} bg-slate-100 text-slate-800 hover:bg-slate-200`}>E-mail</a>}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500">Geen telefoonnummer bekend.</p>
+              {t.email && <a href={`mailto:${t.email}`} data-testid="tenant-contact-email"
+                className={`${btn} bg-slate-100 text-slate-800 hover:bg-slate-200`}>E-mail</a>}
             </>
-          ) : <p className="text-sm text-slate-500">Geen telefoonnummer bekend.</p>}
-          {t.email && <a href={`mailto:${t.email}`} className={`${btn} bg-slate-100 text-slate-800`}>E-mail</a>}
+          )}
         </div>
       )}
     </KioskModalShell>
