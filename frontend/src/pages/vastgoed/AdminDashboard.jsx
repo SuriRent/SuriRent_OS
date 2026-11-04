@@ -3384,7 +3384,7 @@ function TenantDepositCard({ tenant }) {
   );
 }
 
-export function Tenants({ embedded = false }) {
+export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
   // SWR cache — bij tabwissel wordt de vorige data direct getoond en
   // achtergrond-revalidate hoeven we niet af te wachten.
   const [q, setQ] = useState('');
@@ -3440,7 +3440,7 @@ export function Tenants({ embedded = false }) {
     setConfirmDel(null); setDetailId(null); load();
   };
   const del = async (id) => {
-    if (embedded) { setConfirmDel(id); return; }
+    if (embedded || kioskLayout) { setConfirmDel(id); return; }
     if (!(await hostConfirm('Huurder verwijderen?'))) return;
     doDel(id);
   };
@@ -3477,6 +3477,171 @@ export function Tenants({ embedded = false }) {
     </>
   );
 
+  const filtered = items;
+  const counts = summary.counts || { all: 0, with_apt: 0, without_apt: 0 };
+  const missingAvatars = summary.missingAvatars || 0;
+  const withAvatars = summary.withAvatars || 0;
+  const runBackfill = async (force = false) => {
+    const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
+    if (!(await hostConfirm(`${label}? Dit duurt ~2s per huurder.`))) return;
+    setBackfilling(true);
+    try {
+      const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
+      window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
+      await load();
+    } catch (e) {
+      window.alert('Backfill mislukt: ' + (e?.response?.data?.detail || e.message));
+    } finally { setBackfilling(false); }
+  };
+
+  if (kioskLayout) {
+    if (detailId) {
+      const tenant = items.find((item) => item.id === detailId)
+        || (detailTenant?.id === detailId ? detailTenant : null);
+      return (
+        <div className="h-full w-full overflow-y-auto bg-[#FF5C00] px-3 py-3 sm:px-5"
+          data-testid="kiosk-tenant-detail">
+          {!tenant ? (
+            <ListSkeleton rows={3} testid="tenant-detail-loading" />
+          ) : (
+            <div className="mx-auto max-w-5xl">
+              <TenantDetail tenant={tenant}
+                onBack={() => setDetailId(null)}
+                onEdit={() => setEditing(tenant)}
+                onPin={() => setPinFor(tenant)}
+                onMoveOut={() => setMoveOut(tenant)}
+                onDelete={() => del(tenant.id)}
+                onReload={load} />
+            </div>
+          )}
+          {sharedModals}
+        </div>
+      );
+    }
+
+    const filters = [
+      { value: 'all', label: 'Alle huurders', count: counts.all },
+      { value: 'with_apt', label: 'Met appartement', count: counts.with_apt },
+      { value: 'without_apt', label: 'Zonder appartement', count: counts.without_apt },
+      { value: 'archived', label: 'Archief', count: counts.archived ?? 0 },
+    ];
+    return (
+      <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+        style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-tenants-panel">
+        <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+          <button type="button" onClick={onBack} data-testid="tenants-panel-back"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 font-bold text-white active:scale-95">
+            <ArrowLeft className="h-4 w-4" /> Terug
+          </button>
+          <p className="text-right text-xs font-semibold text-white">Huurdersbeheer</p>
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden pb-3 md:flex-row md:gap-3 md:pt-3">
+          <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-3 sm:p-5 md:order-1"
+            data-testid="kiosk-tenants-list">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle huurders</h1>
+                <p className="text-xs font-semibold text-slate-500">{summary.totalCount || 0} geregistreerd</p>
+              </div>
+              <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"
+                data-testid="kiosk-tenants-count">{counts.all} huurders</span>
+            </div>
+
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" data-testid="tenant-filter-bar">
+              {filters.map((item) => (
+                <button key={item.value} type="button" onClick={() => setFilter(item.value)}
+                  data-testid={`tenant-filter-${item.value}`}
+                  className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition ${
+                    filter === item.value ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}>
+                  {item.label} ({item.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="relative mb-3 shrink-0">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={q} onChange={(event) => setQ(event.target.value)}
+                placeholder="Zoek huurder of appartement…" data-testid="tenant-search"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-[#FF5C00]" />
+            </div>
+
+            {missingAvatars > 0 && (
+              <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 p-3"
+                data-testid="tenants-backfill-banner">
+                <UserCircle className="h-5 w-5 shrink-0 text-[#FF5C00]" />
+                <p className="min-w-0 flex-1 text-xs text-slate-700">{missingAvatars} huurder(s) missen een pasfoto.</p>
+                <button type="button" onClick={() => runBackfill(false)} disabled={backfilling}
+                  data-testid="tenants-backfill-btn"
+                  className="rounded-lg bg-[#FF5C00] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                  {backfilling ? 'Bezig…' : 'Genereer'}
+                </button>
+              </div>
+            )}
+
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-1">
+              {filter === 'archived' ? (
+                <ArchivedTenants onChanged={load} />
+              ) : !loaded ? (
+                <ListSkeleton rows={5} testid="tenants-skeleton" />
+              ) : filtered.length === 0 ? (
+                <div className="py-10 text-center" data-testid="tenants-empty">
+                  <Users className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-500">Geen huurders gevonden.</p>
+                </div>
+              ) : (
+                <>
+                  {filtered.map((tenant) => (
+                    <TenantRow key={tenant.id} t={tenant}
+                      showIdPhotoFallback
+                      onOpen={() => setDetailId(tenant.id)}
+                      onPin={() => setPinFor(tenant)}
+                      onPoster={() => openAuthedPdf(`/tenants/${tenant.id}/portal-poster.pdf`, { filename: `huurportaal-${tenant.name || tenant.id}.pdf` })}
+                      onDelete={() => del(tenant.id)} />
+                  ))}
+                  <LoadMoreSentinel active={paged.hasMore || paged.loadingMore}
+                    onVisible={paged.loadMore} testid="tenants-load-more" />
+                </>
+              )}
+            </div>
+          </section>
+
+          <aside className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-4 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            data-testid="kiosk-tenants-summary">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Huurders</h2>
+              <Users className="h-5 w-5 text-[#FF5C00]" />
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-orange-50 p-3">
+                <p className="text-xs font-bold text-slate-500">Totaal</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{summary.totalCount || 0}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-3">
+                <p className="text-xs font-bold text-slate-500">Met appartement</p>
+                <p className="mt-1 text-2xl font-black text-emerald-800">{summary.counts?.with_apt || 0}</p>
+              </div>
+            </div>
+            <div className="mb-4 rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold text-slate-500">Zonder appartement</p>
+              <p className="mt-1 text-xl font-black text-slate-900">{summary.counts?.without_apt || 0}</p>
+            </div>
+            <button type="button" onClick={() => setCreating(true)} data-testid="tenant-new-btn"
+              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200]">
+              <Plus className="h-5 w-5" /> Nieuwe huurder
+            </button>
+            <button type="button" onClick={onBack} data-testid="tenants-exit"
+              className="mt-auto hidden h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200 md:inline-flex">
+              <ArrowLeft className="h-4 w-4" /> Terug naar kiosk
+            </button>
+          </aside>
+        </div>
+        {sharedModals}
+      </div>
+    );
+  }
+
   // Detail-view — dezelfde patroon als Appartementen/PlanDetail.
   if (detailId) {
     const t = items.find((x) => x.id === detailId) || (detailTenant?.id === detailId ? detailTenant : null);
@@ -3495,22 +3660,6 @@ export function Tenants({ embedded = false }) {
     );
   }
 
-  const filtered = items;
-  const counts = summary.counts || { all: 0, with_apt: 0, without_apt: 0 };
-  const missingAvatars = summary.missingAvatars || 0;
-  const withAvatars = summary.withAvatars || 0;
-  const runBackfill = async (force = false) => {
-    const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
-    if (!(await hostConfirm(`${label}? Dit duurt ~2s per huurder.`))) return;
-    setBackfilling(true);
-    try {
-      const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
-      window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
-      await load();
-    } catch (e) {
-      window.alert('Backfill mislukt: ' + (e?.response?.data?.detail || e.message));
-    } finally { setBackfilling(false); }
-  };
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="tenants-page">
       {/* Header — inline titel + subtitel + oranje "Nieuwe huurder" knop.
@@ -3623,11 +3772,12 @@ export function Tenants({ embedded = false }) {
 // Klik op de kaart opent de detail-pagina; klikken op een actie-icoon
 // roept de bijbehorende handler aan zonder detail te openen.
 // =====================================================================
-function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
+function TenantRow({ t, onOpen, onPin, onPoster, onDelete, showIdPhotoFallback = false }) {
   const fx = useContext(KioskFxCtx);
+  const tenantPhotoUrl = t.avatar_url || (showIdPhotoFallback ? t.id_photo_url : '');
   if (fx) {
     return (
-      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} tenantId={t.id} tenantPhotoUrl={t.avatar_url || t.id_photo_url}
+      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} tenantId={t.id} tenantPhotoUrl={tenantPhotoUrl || t.id_photo_url}
         title={t.apartment_number || 'Geen appartement'}
         sub={`${t.name || 'Onbekende huurder'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
         amount={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
@@ -3646,8 +3796,8 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
       className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      {t.avatar_url ? (
-        <img src={t.avatar_url} alt={t.name || 'huurder'} loading="lazy"
+      {tenantPhotoUrl ? (
+        <img src={tenantPhotoUrl} alt={t.name || 'huurder'} loading="lazy"
           data-testid={`tenant-avatar-${t.id}`}
           className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-100 bg-slate-50" />
       ) : (

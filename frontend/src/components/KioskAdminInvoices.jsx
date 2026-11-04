@@ -30,13 +30,20 @@ export function KioskAdminPageTile({ id, onOpen }) {
   );
 }
 
-export function KioskAdminPage({ id, onBack }) {
+export function KioskAdminPage({ id, onBack, kioskLayout = false }) {
   const { Page, custom } = KIOSK_ADMIN_PAGES[id];
   // Vensters (portals) die vanaf deze pagina openen krijgen ook de kiosk-stijl.
   useEffect(() => {
     document.body.classList.add('kiosk-admin-active');
     return () => document.body.classList.remove('kiosk-admin-active');
   }, []);
+  if (kioskLayout) {
+    return (
+      <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
+        <Page kioskLayout onBack={onBack} />
+      </Suspense>
+    );
+  }
   if (custom) {
     return (
       <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>

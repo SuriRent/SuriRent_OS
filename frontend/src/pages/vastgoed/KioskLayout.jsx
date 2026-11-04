@@ -5695,6 +5695,7 @@ export default function KioskLayout() {
       setAdminPopup(null);
       if (t === 'invoices') setShowInvoicesModal(true);
       else if (t === 'kasgeld') setStep('kasgeld');
+      else if (t === 'tenants') setStep('admin:huurders');
       else if (MAP[t]) setAdminPopup(MAP[t]);
     };
     window.addEventListener('go-tab', onTab);
@@ -6132,9 +6133,9 @@ export default function KioskLayout() {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
-      else if (e.detail === 'admin:appartementen') {
+      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders') {
         setAdminPopup(null);
-        setStep('admin:appartementen');
+        setStep(e.detail);
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };
@@ -6329,7 +6330,11 @@ export default function KioskLayout() {
               onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
             />
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
+          {step === 'admin:huurders' && hasAdminAccess && (
+            <KioskAdminPage id="huurders" kioskLayout onBack={() => setStep('select')} />
+          )}
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders'
+            && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}
           {step === 'kasgeld' && (
