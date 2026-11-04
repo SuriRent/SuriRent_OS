@@ -13,7 +13,7 @@ COMPANY_SLUG = "my-awesome-rentals-bv"
 KIOSK_PIN = "4321"
 
 APT_KEYS = {
-    "id", "number", "address", "photo_url", "rent_amount", "currency", "status",
+    "id", "number", "address", "description", "photo_url", "rent_amount", "currency", "status",
     "tenant_id", "tenant_name", "tenant_avatar_url", "tenant_id_photo_url",
     "show_tenant_photo", "location_id", "pay_status",
 }

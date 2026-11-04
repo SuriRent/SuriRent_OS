@@ -3606,11 +3606,13 @@ function KasgeldPanel({ onBack }) {
   );
 }
 
-function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
+function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) {
   const [apartments, setApartments] = useState(() => readKioskSelectCache()?.apartments || []);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [detailId, setDetailId] = useState(null);
+  const [editingApartment, setEditingApartment] = useState(null);
+  const [assigningApartment, setAssigningApartment] = useState(null);
   const operator = getKioskEmployee();
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -3639,6 +3641,30 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
   }, [load]);
 
   const occupied = apartments.filter((apartment) => apartment.tenant_id || apartment.status === 'occupied').length;
+  const refreshAfterChange = () => {
+    invalidateKioskSelect();
+    onChanged?.();
+    load();
+  };
+  const removeTenant = async (apartment) => {
+    if (!window.confirm(`Huurder loskoppelen van appartement ${apartment.number}?`)) return;
+    try {
+      await api.post(`/apartments/${apartment.id}/remove-tenant`);
+      refreshAfterChange();
+    } catch (e) {
+      setErr(formatError(e));
+    }
+  };
+  const deleteApartment = async (apartment) => {
+    if (!window.confirm(`Appartement ${apartment.number} verwijderen?`)) return;
+    try {
+      await api.delete(`/apartments/${apartment.id}`);
+      setDetailId(null);
+      refreshAfterChange();
+    } catch (e) {
+      setErr(formatError(e));
+    }
+  };
   const rentsByCurrency = apartments.reduce((totals, apartment) => {
     const currency = (apartment.currency || 'SRD').toUpperCase();
     totals[currency] = (totals[currency] || 0) + Number(apartment.rent_amount || 0);
@@ -3688,6 +3714,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
                 </div>
               </div>
             </section>
+            {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
             <section className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl bg-white p-5 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huur p/m</p>
@@ -3696,10 +3723,50 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
               <div className="rounded-2xl bg-white p-5 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huurder</p>
                 <p className="mt-2 truncate text-lg font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
+                {selectedApartment.tenant_id ? (
+                  <button type="button" onClick={() => removeTenant(selectedApartment)}
+                    className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
+                    data-testid="apartment-detail-remove-tenant">Huurder loskoppelen</button>
+                ) : (
+                  <button type="button" onClick={() => setAssigningApartment(selectedApartment)}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
+                    data-testid="apartment-detail-assign"><Plus className="h-4 w-4" /> Huurder toewijzen</button>
+                )}
+              </div>
+              <div className="rounded-2xl bg-white p-5 shadow-sm" data-testid="apartment-detail-actions">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Documenten & acties</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setEditingApartment(selectedApartment)}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                    data-testid="apartment-detail-edit"><Pencil className="h-4 w-4" /> Bewerk</button>
+                  <button type="button" onClick={() => deleteApartment(selectedApartment)}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100"
+                    data-testid="apartment-detail-delete"><Trash2 className="h-4 w-4" /> Verwijder</button>
+                </div>
               </div>
             </section>
           </div>
         </div>
+        {editingApartment && (
+          <AddApartmentModal
+            initial={editingApartment}
+            onClose={() => setEditingApartment(null)}
+            onSaved={() => {
+              setEditingApartment(null);
+              refreshAfterChange();
+            }}
+          />
+        )}
+        {assigningApartment && (
+          <AssignApartmentTenantModal
+            apartment={assigningApartment}
+            onClose={() => setAssigningApartment(null)}
+            onSaved={() => {
+              setAssigningApartment(null);
+              refreshAfterChange();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -4651,17 +4718,85 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
 }
 
 // =====================================================================
-// Snelle "Nieuw appartement" modal (Kiosk quick-create).
-// Minimale velden: nummer + huur bedrag + currency (default SRD).
+// Appartement aanmaken of bewerken vanuit Kiosk Beheer.
 // =====================================================================
-function AddApartmentModal({ onClose, onSaved }) {
-  const [number, setNumber] = useState('');
-  const [rent, setRent] = useState('');
-  const [currency, setCurrency] = useState('SRD');
+function AssignApartmentTenantModal({ apartment, onClose, onSaved }) {
+  const [tenants, setTenants] = useState([]);
+  const [tenantId, setTenantId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api.get('/tenants')
+      .then(({ data }) => setTenants(Array.isArray(data) ? data : data?.items || []))
+      .catch((error) => setErr(formatError(error)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const assign = async () => {
+    if (!tenantId) return;
+    setSaving(true);
+    setErr('');
+    try {
+      await api.post(`/apartments/${apartment.id}/assign-tenant`, { tenant_id: tenantId });
+      onSaved?.();
+    } catch (error) {
+      setErr(formatError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <KioskModalShell title={`Huurder toewijzen aan ${apartment.number}`} Icon={Users}
+      testId="assign-apartment-tenant" onClose={onClose}
+      footer={(
+        <button type="button" onClick={assign} disabled={saving || loading || !tenantId}
+          data-testid="assign-apartment-tenant-save"
+          className="w-full h-12 rounded-xl bg-orange-500 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {saving ? 'Toewijzen…' : 'Huurder toewijzen'}
+        </button>
+      )}>
+      {({ accent }) => (
+        <>
+          <label className="block">
+            <span className={modalLabelCls}>Selecteer huurder</span>
+            <select value={tenantId} onChange={(event) => setTenantId(event.target.value)}
+              disabled={loading || tenants.length === 0}
+              data-testid="assign-apartment-tenant-select"
+              className={`${modalInputCls(accent)} bg-white`}>
+              <option value="">{loading ? 'Huurders laden…' : '— Kies een huurder —'}</option>
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name || 'Onbekende huurder'}{tenant.apartment_number ? ` · ${tenant.apartment_number}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!loading && tenants.length === 0 && !err && (
+            <p className="text-sm font-semibold text-slate-500">Geen huurders gevonden. Maak eerst een huurder aan.</p>
+          )}
+          {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
+        </>
+      )}
+    </KioskModalShell>
+  );
+}
+
+function AddApartmentModal({ initial = null, onClose, onSaved }) {
+  const [number, setNumber] = useState(initial?.number || '');
+  const [address, setAddress] = useState(initial?.address || '');
+  const [description, setDescription] = useState(initial?.description || '');
+  const [rent, setRent] = useState(initial?.rent_amount == null ? '' : String(initial.rent_amount));
+  const [currency, setCurrency] = useState(initial?.currency || 'SRD');
+  const [showTenantPhoto, setShowTenantPhoto] = useState(!!initial?.show_tenant_photo);
   const [locationId, setLocationId] = useState(() => {
+    if (initial?.location_id) return initial.location_id;
     try { return sessionStorage.getItem('kiosk_sel_loc') || ''; } catch { return ''; }
   });
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUrl, setPhotoUrl] = useState(initial?.photo_url || '');
   const [locations, setLocations] = useState([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -4689,22 +4824,28 @@ function AddApartmentModal({ onClose, onSaved }) {
     if (!r || r <= 0) { setErr('Huur bedrag moet groter dan 0 zijn'); return; }
     setSaving(true); setErr('');
     try {
-      const body = { number: n, rent_amount: r, currency, location_id: locationId || null, photo_url: photoUrl.trim() };
-      const res = await api.post('/apartments', body);
+      const body = {
+        number: n, address: address.trim(), description: description.trim(), rent_amount: r,
+        currency, location_id: locationId || null, photo_url: photoUrl.trim(),
+        show_tenant_photo: showTenantPhoto,
+      };
+      const res = initial?.id
+        ? await api.put(`/apartments/${initial.id}`, body)
+        : await api.post('/apartments', body);
       onSaved && onSaved(res?.data);
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
 
   return (
-    <KioskModalShell title="Nieuw appartement" Icon={Home}
+    <KioskModalShell title={initial ? 'Appartement bewerken' : 'Nieuw appartement'} Icon={Home}
       testId="add-apartment" onClose={onClose}
       footer={(
         <button onClick={save} disabled={saving || !number.trim() || !rent}
           data-testid="add-apartment-save"
           className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          {saving ? 'Opslaan…' : 'Appartement opslaan'}
+          {saving ? 'Opslaan…' : initial ? 'Wijzigingen opslaan' : 'Appartement opslaan'}
         </button>
       )}>
       {({ accent }) => (
@@ -4715,6 +4856,20 @@ function AddApartmentModal({ onClose, onSaved }) {
               autoFocus data-testid="add-apartment-number"
               placeholder="A1, HUIS 7A, …"
               className={modalInputCls(accent)} />
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Adres</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)}
+              data-testid="add-apartment-address"
+              placeholder="Straat en huisnummer"
+              className={modalInputCls(accent)} />
+          </label>
+          <label className="block">
+            <span className={modalLabelCls}>Omschrijving</span>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              data-testid="add-apartment-description"
+              rows={2}
+              className={`${modalInputCls(accent)} h-auto min-h-20 py-3`} />
           </label>
           <div className="grid grid-cols-3 gap-2">
             <label className="block col-span-2">
@@ -4750,6 +4905,12 @@ function AddApartmentModal({ onClose, onSaved }) {
           </label>
           <PhotoUpload value={photoUrl} onChange={setPhotoUrl} label="Foto van het appartement"
             height="h-36" showUrlField={false} capture="environment" testId="add-apartment-photo" />
+          <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+            <input type="checkbox" checked={showTenantPhoto} onChange={(event) => setShowTenantPhoto(event.target.checked)}
+              data-testid="add-apartment-show-tenant-photo"
+              className="h-4 w-4 accent-orange-500" />
+            Toon foto van huurder in de kiosk
+          </label>
           {err && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-3"
               data-testid="add-apartment-error">
@@ -6162,6 +6323,7 @@ export default function KioskLayout() {
               onBack={() => setStep('select')}
               onNewApartment={() => setShowAddApartment(true)}
               reloadKey={apartmentsReloadKey}
+              onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
             />
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (

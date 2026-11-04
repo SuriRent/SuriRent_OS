@@ -11070,7 +11070,7 @@ async def kiosk_list_apartments(location_id: Optional[str] = None, _session=Depe
 
 
 async def _kiosk_apartments_compute(q: dict) -> list:
-    proj = {"_id": 0, "id": 1, "number": 1, "address": 1, "photo_url": 1, "rent_amount": 1, "currency": 1,
+    proj = {"_id": 0, "id": 1, "number": 1, "address": 1, "description": 1, "photo_url": 1, "rent_amount": 1, "currency": 1,
             "status": 1, "tenant_id": 1, "show_tenant_photo": 1, "location_id": 1}
     docs = await db.apartments.find(q, proj).sort("number", 1).to_list(1000)
     tids = list({a["tenant_id"] for a in docs if a.get("tenant_id")})
@@ -11106,6 +11106,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
             "id": a["id"],
             "number": a["number"],
             "address": a.get("address", ""),
+            "description": a.get("description", ""),
             "photo_url": a.get("photo_url") or None,
             "rent_amount": a["rent_amount"],
             "currency": a["currency"],
