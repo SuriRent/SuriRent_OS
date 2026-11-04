@@ -17314,9 +17314,7 @@ async def verify_pdf_token(token: str):
 # =====================================================================
 # PWA Push Notifications
 # =====================================================================
-from push_service import send_push  # noqa: E402
-
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+from push_service import get_vapid_public_key, send_push  # noqa: E402
 
 
 async def _deep_link(d: dict) -> str:
@@ -17793,7 +17791,10 @@ class PushSubscriptionIn(BaseModel):
 
 @api.get("/push/vapid-public-key")
 async def push_vapid_key():
-    return {"public_key": VAPID_PUBLIC_KEY}
+    try:
+        return {"public_key": get_vapid_public_key()}
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=f"VAPID-configuratie is ongeldig: {exc}")
 
 
 @api.post("/push/subscribe")

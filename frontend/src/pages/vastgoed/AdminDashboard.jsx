@@ -4756,6 +4756,7 @@ export default function AdminDashboard() {
     const adminIdx = seg.indexOf('admin');
     const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
     if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
+    if (user?.role === 'superadmin') return 'saas_overview';
     // Fallback: mobile → invoices (facturen als landingpagina op verzoek
     // gebruiker feb 2026), anders overview.
     try {
@@ -4795,6 +4796,11 @@ export default function AdminDashboard() {
     const adminIdx = seg.indexOf('admin');
     if (adminIdx === -1 || !seg[adminIdx + 1]) return;
     const wanted = seg[adminIdx + 1];
+    if (user?.role === 'superadmin'
+      && (wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
+      navigate('/admin/saas_overview', { replace: true });
+      return;
+    }
     const LEGACY_TO_HUB = {
       mijn_abonnement: 'abonnement',
       mijn_landing: 'landing',
@@ -4807,7 +4813,7 @@ export default function AdminDashboard() {
     if (Object.prototype.hasOwnProperty.call(LEGACY_TO_HUB, wanted)) {
       navigate(`/admin/instellingen#${LEGACY_TO_HUB[wanted]}`, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, user?.role]);
 
   // handleSetTab — alleen navigate, GEEN setTab meer (tab is URL-derived).
   // Voorkomt de dubbele-setter render-storm die de flicker veroorzaakte.

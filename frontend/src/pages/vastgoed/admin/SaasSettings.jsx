@@ -278,7 +278,9 @@ export default function SaasSettings() {
       if (permission !== 'granted') throw new Error('Sta meldingen toe in de browserinstellingen.');
 
       const { data: vapid } = await api.get('/push/vapid-public-key');
-      if (!vapid.public_key) throw new Error('VAPID public key ontbreekt.');
+      if (!vapid.public_key) {
+        throw new Error('Push is nog niet geconfigureerd: stel VAPID_PRIVATE_KEY_B64 in bij de backendomgeving van Coolify.');
+      }
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -295,7 +297,7 @@ export default function SaasSettings() {
       const { data: status } = await api.get('/push/status');
       setPushDeviceCount(status.devices || 0);
     } catch (e) {
-      setPushDeviceError(e.message || formatError(e, 'Pushmeldingen activeren is mislukt.'));
+      setPushDeviceError(e.response?.data?.detail || e.message || formatError(e, 'Pushmeldingen activeren is mislukt.'));
     } finally { setPushDeviceBusy(false); }
   };
 
@@ -447,8 +449,8 @@ export default function SaasSettings() {
             <p className="text-xs text-red-700" role="alert" data-testid="saas-push-device-error">{pushDeviceError}</p>
           )}
           <p className="text-[11px] text-slate-400">
-            Facturen en achterstanden worden dagelijks samengevat. Activeer meldingen ook via de browser
-            of PWA-toestemming wanneer daarom wordt gevraagd.
+            Facturen en achterstanden worden dagelijks samengevat. De publieke VAPID-sleutel wordt
+            automatisch afgeleid van de privésleutel in Coolify. Geef de privésleutel nooit door aan de browser.
           </p>
         </Section>
 

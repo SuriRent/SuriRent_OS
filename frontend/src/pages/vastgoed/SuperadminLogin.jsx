@@ -19,7 +19,7 @@ export default function SuperadminLogin() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!authLoading && user?.role === 'superadmin') navigate('/admin', { replace: true });
+    if (!authLoading && user?.role === 'superadmin') navigate('/admin/saas_overview', { replace: true });
   }, [authLoading, navigate, user]);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function SuperadminLogin() {
     setError('');
     try {
       await loginSuperadminPin(value);
-      navigate('/admin', { replace: true });
+      navigate('/admin/saas_overview', { replace: true });
     } catch (err) {
       setError(formatError(err, 'Ongeldige pincode. Probeer opnieuw.'));
       setPin('');
