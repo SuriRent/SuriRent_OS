@@ -1734,36 +1734,50 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
     if (busy[paymentId]) return;
     setBusy((prev) => ({ ...prev, [paymentId]: 'wa' }));
     setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'sending', msg: 'Bezig…' } }));
+    const receipt = (items || []).find((x) => x.id === paymentId);
+    const phone = String(tenant.phone || '').replace(/\D/g, '');
+    const apiBase = (api.defaults.baseURL || `${window.location.origin}/api`).replace(/\/+$/, '');
+    const imageUrl = `${apiBase}/payments/${paymentId}/image`;
+    const shareText = `Hallo ${tenant.name || ''}, hierbij uw kwitantie ${receipt?.receipt_number || ''}` +
+      (receipt?.amount ? ` · ${fmtMoney(receipt.amount, receipt.currency)}` : '') +
+      (receipt?.period_month ? ` · Periode ${MONTHS_NL[receipt.period_month - 1]} ${receipt.period_year}` : '') +
+      '.';
+    const whatsAppUrl = phone.length >= 7
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(`${shareText}\n\nBon: ${imageUrl}`)}`
+      : imageUrl;
+    // Reserveer het tabblad binnen de klikactie; browsers kunnen pop-ups na
+    // het ophalen van de JPG blokkeren wanneer navigator.share niet lukt.
+    const fallbackTab = window.open('about:blank', '_blank');
+    const useFallback = () => {
+      if (fallbackTab && !fallbackTab.closed) fallbackTab.location.replace(whatsAppUrl);
+      else if (phone.length >= 7) openWhatsApp(phone, `${shareText}\n\nBon: ${imageUrl}`);
+      else openReceiptImage(paymentId);
+      setWaState((prev) => ({
+        ...prev,
+        [paymentId]: {
+          kind: 'ok',
+          msg: phone.length >= 7 ? 'WhatsApp geopend met bonlink' : 'Bon geopend; telefoonnummer ontbreekt',
+        },
+      }));
+    };
     try {
       const resp = await api.get(`/payments/${paymentId}/image`, { responseType: 'blob' });
       const blob = resp.data;
-      const receipt = (items || []).find((x) => x.id === paymentId);
-      const file = new File([blob], `kwitantie-${receipt?.receipt_number || paymentId}.jpg`,
+      const file = new File([blob], `bon-${receipt?.receipt_number || paymentId}.jpg`,
         { type: 'image/jpeg' });
-      const shareText = `Hallo ${tenant.name || ''}, hierbij uw kwitantie ${receipt?.receipt_number || ''}` +
-        (receipt?.amount ? ` · ${fmtMoney(receipt.amount, receipt.currency)}` : '') +
-        (receipt?.period_month ? ` · Periode ${MONTHS_NL[receipt.period_month - 1]} ${receipt.period_year}` : '') +
-        '.';
       if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text: shareText, title: 'Kwitantie' });
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Gedeeld' } }));
       } else {
-        const phone = String(tenant.phone || '').replace(/\D/g, '');
-        if (phone.length >= 7) {
-          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`,
-            '_blank', 'noopener');
-        }
-        // Ook JPG in nieuw tabblad zodat medewerker 'em kan opslaan/kopiëren.
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
-        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'WhatsApp geopend' } }));
+        useFallback();
       }
     } catch (e) {
       if (e && e.name === 'AbortError') {
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         setWaState((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
       } else {
-        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Delen mislukt' } }));
+        useFallback();
       }
     } finally {
       setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
