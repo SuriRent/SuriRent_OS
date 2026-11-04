@@ -143,6 +143,9 @@ class TestCompanies:
         c = r.json()
         _no_objectid(c)
         cid = c["id"]
+        assert c["billing_status"] == "trial"
+        assert c["trial_started_at"]
+        assert c["trial_ends_at"]
         # Update
         payload["name"] = "TEST Iso Co Updated"
         r = requests.put(f"{API}/companies/{cid}", headers=_h(super_token), json=payload, timeout=15)

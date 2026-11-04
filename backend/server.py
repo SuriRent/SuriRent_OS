@@ -6332,7 +6332,21 @@ async def create_company(body: CompanyIn, user=Depends(require_role("superadmin"
     existing = await db.companies.find_one({"slug": slug})
     if existing:
         raise HTTPException(status_code=400, detail="Slug is al in gebruik")
-    doc = {"id": new_id(), **body.model_dump(), "slug": slug, "created_at": iso(now_utc())}
+    plan = await _fetch_plan_by_id(body.plan)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Onbekend pakket '{body.plan}'")
+    now = now_utc()
+    starts_trial = float(plan.get("amount") or 0) > 0
+    doc = {
+        "id": new_id(),
+        **body.model_dump(),
+        "slug": slug,
+        "billing_status": "trial" if starts_trial else "active",
+        "created_at": iso(now),
+    }
+    if starts_trial:
+        doc["trial_started_at"] = iso(now)
+        doc["trial_ends_at"] = iso(now + timedelta(days=14))
     await db.companies.insert_one(doc)
     doc.pop("_id", None)
     return {**doc, "stats": {"apartments": 0, "tenants": 0, "admins": 0}}
