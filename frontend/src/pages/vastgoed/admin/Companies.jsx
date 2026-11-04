@@ -467,7 +467,7 @@ export default function Companies() {
         </button>
       </div>
 
-      <div>
+      <div className="flex justify-end">
         <button onClick={() => { setEditing(null); setShowForm(true); }}
           data-testid="company-new-btn"
           className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
