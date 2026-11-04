@@ -2,7 +2,6 @@
 Iteration 19 — Receipt 'Ontvangen door' (medewerker NAAM op bon)
 - POST /api/kiosk/payments?employee_id=X&employee_pin=Y must auto-populate
   received_by from kiosk_employee_name when no explicit received_by given.
-- GET /api/payments/{id}/pdf must include the medewerker name in the PDF body.
 """
 import os
 import io
@@ -97,22 +96,14 @@ class TestReceiptName:
         TestReceiptName._receipt_num = data["receipt_number"]
         TestReceiptName._emp_name = maria_employee["name"]
 
-    def test_pdf_contains_received_by_row(self, admin_token):
+    def test_bon_image_is_jpeg(self, admin_token):
         pid = getattr(TestReceiptName, "_payment_id", None)
         assert pid, "Previous test did not create a payment"
         h = {"Authorization": f"Bearer {admin_token}"}
-        r = requests.get(f"{BASE_URL}/api/payments/{pid}/pdf", headers=h, timeout=20)
+        r = requests.get(f"{BASE_URL}/api/payments/{pid}/image", headers=h, timeout=20)
         assert r.status_code == 200, r.text
-        assert r.headers.get("content-type", "").startswith("application/pdf"), r.headers
-        body = r.content
-        assert len(body) > 1000, "PDF too small"
-        # PDF text may be compressed — look for unencoded common case via parens markers used by reportlab
-        text_blob = body.decode("latin-1", errors="ignore")
-        # ReportLab usually emits glyph strings in parens. Just check both labels exist somewhere.
-        # If compressed, this may fail — fall back to size only.
-        if "FlateDecode" not in text_blob:
-            assert "Ontvangen door" in text_blob, "Label not in PDF (uncompressed)"
-            assert TestReceiptName._emp_name.split()[0] in text_blob, "Name not in PDF"
+        assert r.headers.get("content-type", "").startswith("image/jpeg"), r.headers
+        assert r.content[:2] == b"\xff\xd8"
 
     def test_explicit_received_by_overrides_employee_name(self, kiosk_token, maria_employee, apartment_with_tenant):
         h = {"Authorization": f"Bearer {kiosk_token}"}

@@ -1,4 +1,4 @@
-"""Phase 2 tests: AI chat, PWA push (no real subscribers), AES-256 PDF + QR verify."""
+"""Phase 2 tests: AI chat, PWA push, removed payment PDFs, and receipt verification."""
 import os
 import pytest
 import requests
@@ -111,8 +111,8 @@ class TestPush:
         assert isinstance(data["overdue_count"], int)
 
 
-# --------- Secure PDF + Verification ---------
-class TestSecurePDF:
+# --------- Removed payment PDFs + Verification ---------
+class TestRemovedPaymentPDFs:
     @pytest.fixture(scope="class")
     def payment_id(self):
         # Use first payment available; admin tokens needed for /api/payments
@@ -127,30 +127,13 @@ class TestSecurePDF:
             pytest.skip("No payments seeded")
         return payments[0]["id"]
 
-    def test_secure_pdf_unencrypted_with_qr(self, payment_id):
-        r = requests.get(f"{BASE_URL}/api/payments/{payment_id}/secure-pdf?encrypted=false",
-                         timeout=30)
-        assert r.status_code == 200
-        assert r.headers.get("content-type", "").startswith("application/pdf")
-        assert len(r.content) >= 30_000, f"PDF too small: {len(r.content)} bytes (expected >=30KB)"
-        assert r.content[:5] == b"%PDF-"
-
-    def test_secure_pdf_encrypted(self, payment_id):
-        r = requests.get(f"{BASE_URL}/api/payments/{payment_id}/secure-pdf?encrypted=true",
-                         timeout=30)
-        assert r.status_code == 200
-        assert r.headers.get("content-type", "").startswith("application/pdf")
-        assert r.content[:5] == b"%PDF-"
-        # Encrypted PDF contains /Encrypt object
-        assert b"/Encrypt" in r.content
+    @pytest.mark.parametrize("endpoint", ["pdf", "secure-pdf"])
+    def test_payment_pdf_downloads_removed(self, payment_id, endpoint):
+        r = requests.get(f"{BASE_URL}/api/payments/{payment_id}/{endpoint}", timeout=30)
+        assert r.status_code == 404
 
     def test_verify_valid_token(self, payment_id):
-        # Fetch the secure PDF to obtain a server-issued token via the file (cant extract easily),
-        # but we can recreate it by hitting endpoint and parsing for the verify token. Easier: rely on
-        # the make_verify_token logic by calling secure-pdf which embeds it. Instead, use server-side
-        # token by importing pdf_security would couple test; we exercise verify by simulating a flow:
-        # We grab payment info, call secure-pdf to get bytes, and extract the QR via embedded URL.
-        # Simpler: import pdf_security in-process (same backend deps available in CI? yes here).
+        # Verification remains available for tokens on previously issued receipts.
         import sys
         sys.path.insert(0, "/app/backend")
         from dotenv import load_dotenv

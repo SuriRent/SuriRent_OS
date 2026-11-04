@@ -12,7 +12,7 @@ import {
   Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
-import { KioskPdfViewer } from '../../components/KioskPdfViewer';
+import { KioskReceiptImageButton } from '../../components/KioskReceiptImageButton';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
 import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost,
@@ -1606,20 +1606,12 @@ function ConfirmRow({ label, value }) {
 }
 
 // =====================================================================
-// HISTORY — alle betalingen van de huurder met PDF-download
+// HISTORY — alle betalingen van de huurder met bon-JPG
 // =====================================================================
 function TenantHistoryView({ overview, onBack }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
-  const [pdfUrl, setPdfUrl] = useState('');
-  const [openingPdf, setOpeningPdf] = useState(false);
   const apt = overview?.apartment;
-  const closePdf = useCallback(() => setPdfUrl(''), []);
-
-  useEffect(() => {
-    if (!pdfUrl) return undefined;
-    return () => window.URL.revokeObjectURL(pdfUrl);
-  }, [pdfUrl]);
 
   const loadPayments = useCallback(() => api.get('/tenant-portal/payments')
     .then((r) => { setItems(r.data || []); setErr(''); }).catch((e) => setErr(formatError(e))), []);
@@ -1628,21 +1620,6 @@ function TenantHistoryView({ overview, onBack }) {
     window.addEventListener('surirent:tenant-live-change', loadPayments);
     return () => window.removeEventListener('surirent:tenant-live-change', loadPayments);
   }, [loadPayments]);
-
-  const openPdf = async (paymentId) => {
-    // We hebben tenant_token — gebruik blob-fetch zodat de PDF met de
-    // juiste Authorization-header wordt opgehaald.
-    setOpeningPdf(true);
-    setErr('');
-    try {
-      const r = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      setPdfUrl(window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })));
-    } catch (e) {
-      setErr(formatError(e, 'PDF openen mislukt'));
-    } finally {
-      setOpeningPdf(false);
-    }
-  };
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2 pb-3" data-testid="tk-history">
@@ -1706,23 +1683,15 @@ function TenantHistoryView({ overview, onBack }) {
                   </p>
                 )}
               </div>
-              <button onClick={() => openPdf(p.id)} disabled={openingPdf} data-testid={`tk-history-pdf-${p.id}`}
+              <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+                testId={`tk-history-image-${p.id}`}
                 className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0 disabled:opacity-50">
-                {openingPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
-                {openingPdf ? 'Laden…' : 'Afdruk'}
-              </button>
+                <Printer className="w-3 h-3" /> Bon
+              </KioskReceiptImageButton>
             </div>
           ))}
         </div>
       </div>
-      {pdfUrl && (
-        <KioskPdfViewer
-          url={pdfUrl}
-          filename="kwitantie.pdf"
-          onClose={closePdf}
-          testId="tk-history-pdf-viewer"
-        />
-      )}
     </div>
   );
 }

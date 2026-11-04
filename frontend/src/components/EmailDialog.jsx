@@ -97,10 +97,13 @@ export function SendDialog({
       }
       setWaSharing(false);
     }
-    // Fallback: wa.me deeplink met PDF-link
+    // Fallback: stuur de bonfoto-link voor betalingen; overige documenten
+    // behouden hun eigen PDF-link.
     const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
-    const pdfUrl = `${apiBase}/${documentType === 'overdue-reminder' ? 'tenants' : documentType + 's'}/${documentId}/pdf`;
-    const fullMsg = `${greeting}\n\n${intro}\n\n${pdfUrl}\n\nMet vriendelijke groet,\nSuriRent`;
+    const documentUrl = documentType === 'payment'
+      ? `${apiBase}/payments/${documentId}/image`
+      : `${apiBase}/${documentType === 'overdue-reminder' ? 'tenants' : documentType + 's'}/${documentId}/pdf`;
+    const fullMsg = `${greeting}\n\n${intro}\n\n${documentUrl}\n\nMet vriendelijke groet,\nSuriRent`;
     openWhatsApp(phone, fullMsg);
   };
 

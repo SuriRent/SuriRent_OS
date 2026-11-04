@@ -2,7 +2,7 @@
 Iteration 51 backend tests:
 - Login POST /api/auth/login now wraps bcrypt in asyncio.to_thread → verify 200/401.
 - Regression: /api/tenants, /api/apartments, /api/contracts return 200 arrays.
-- Regression: PDF endpoints /api/payments/{id}/pdf and /api/contracts/{id}/pdf return 200.
+- Regression: payment bon-image and contract PDF endpoints return 200.
 - Regression: POST /api/auth/google/callback with invalid session_id returns 401 (not 500).
 """
 import os
@@ -92,15 +92,16 @@ class TestPdfEndpoints:
         assert r.headers.get("content-type", "").startswith("application/pdf")
         assert r.content[:4] == b"%PDF"
 
-    def test_payment_pdf(self, auth_headers):
+    def test_payment_bon_image(self, auth_headers):
         # Get a payment id
         pays = requests.get(f"{BASE_URL}/api/payments", headers=auth_headers, timeout=30)
         if pays.status_code != 200 or not pays.json():
-            pytest.skip("No payments available for PDF regression")
+            pytest.skip("No payments available for bon-image regression")
         pid = pays.json()[0]["id"]
-        r = requests.get(f"{BASE_URL}/api/payments/{pid}/pdf", headers=auth_headers, timeout=60)
+        r = requests.get(f"{BASE_URL}/api/payments/{pid}/image", headers=auth_headers, timeout=60)
         assert r.status_code == 200, r.text[:400]
-        assert r.content[:4] == b"%PDF"
+        assert r.headers.get("content-type", "").startswith("image/jpeg")
+        assert r.content[:2] == b"\xff\xd8"
 
 
 # ---- Google OAuth callback regression ----

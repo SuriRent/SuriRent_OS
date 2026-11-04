@@ -667,17 +667,17 @@ class TestTenantPortal:
         assert rm.status_code == 200
 
 
-# ---------- PDF endpoints ----------
-class TestPDFEndpoints:
-    def test_payment_pdf(self, admin_a):
+# ---------- Document endpoints ----------
+class TestDocumentEndpoints:
+    def test_payment_bon_image(self, admin_a):
         ps = requests.get(f"{API}/payments", headers=_h(admin_a["token"]), timeout=15).json()
         if not ps:
-            pytest.skip("no payment to test PDF")
+            pytest.skip("no payment to test bon image")
         pid = ps[0]["id"]
-        r = requests.get(f"{API}/payments/{pid}/pdf", timeout=20)
+        r = requests.get(f"{API}/payments/{pid}/image", timeout=20)
         assert r.status_code == 200
-        assert r.headers.get("content-type", "").startswith("application/pdf")
-        assert r.content[:4] == b"%PDF"
+        assert r.headers.get("content-type", "").startswith("image/jpeg")
+        assert r.content[:2] == b"\xff\xd8"
 
     def test_contract_pdf(self, admin_a):
         cs = requests.get(f"{API}/contracts", headers=_h(admin_a["token"]), timeout=15).json()

@@ -4,7 +4,7 @@ import { hostConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
-  Plus, X, Check, Loader2, Search, FileText, Mail, ShieldCheck, ChevronRight, ChevronLeft,
+  Plus, X, Check, Loader2, Search, FileText, Mail, Image as ImageIcon, ChevronRight, ChevronLeft,
   ChevronDown, CalendarDays, Banknote, CheckCircle2, Clock,
   TrendingUp, Receipt, Wallet, Home as HomeIcon, Trash2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
@@ -13,6 +13,7 @@ import { useAdminEvents } from '../../../lib/admin-events';
 import { usePagedList, LoadMoreSentinel, useDebounced } from '../../../lib/use-paged-list';
 import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
+import { KioskReceiptImageButton } from '../../../components/KioskReceiptImageButton';
 import SignaturePad from '../../../components/SignaturePad';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 import NumPad from '../../../components/NumPad';
@@ -426,7 +427,7 @@ function PaymentRow({ p, onOpen }) {
 // grote "Terug"-pil, hoofdcard met naam + bedrag, sub-cards voor
 // betaalgegevens en gekoppelde factuur. Sub-card "Acties" onderaan.
 // =====================================================================
-function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
+function PaymentDetail({ payment, onBack, onEmail, onDelete }) {
   const p = payment;
   const [linkedInvoice, setLinkedInvoice] = useState(null);
   // Openstaande facturen van deze huurder — voor "Wijzig gekoppelde factuur"
@@ -643,22 +644,17 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
         <div className="px-4 py-3 border-b border-slate-100">
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
         </div>
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <a href={`${apiBase}/payments/${p.id}/pdf`} target="_blank" rel="noreferrer"
-            data-testid={`payment-pdf-${p.id}`}
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+            testId={`payment-image-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-bold rounded-xl text-xs sm:text-sm">
-            <FileText className="w-4 h-4" /> PDF
-          </a>
+            <ImageIcon className="w-4 h-4" /> Bon JPG
+          </KioskReceiptImageButton>
           <button onClick={() => onEmail(p)}
             data-testid={`payment-email-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-xs sm:text-sm">
             <Mail className="w-4 h-4" /> Verstuur
           </button>
-          <a href={`${apiBase}/payments/${p.id}/secure-pdf`} target="_blank" rel="noreferrer"
-            data-testid={`payment-secure-pdf-${p.id}`}
-            className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-orange-300 hover:bg-orange-50 text-[#FF5C00] font-bold rounded-xl text-xs sm:text-sm">
-            <ShieldCheck className="w-4 h-4" /> Beveiligd
-          </a>
           <button onClick={() => { onDelete(p); onBack(); }}
             data-testid={`payment-delete-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-red-300 hover:bg-red-500 hover:text-white text-red-600 font-bold rounded-xl text-xs sm:text-sm transition">
@@ -1032,7 +1028,6 @@ export default function Payments({ embedded = false }) {
     };
   }, [load]);
 
-  const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
   const stepMonth = (delta) => {
     const d = new Date(selectedYear, selectedMonth + delta, 1);
@@ -1062,7 +1057,6 @@ export default function Payments({ embedded = false }) {
           onBack={() => { setDetailPayment(null); load(); }}
           onEmail={(item) => setEmailing(item)}
           onDelete={(item) => setDeleting(item)}
-          apiBase={apiBase}
         />
         {emailing && (
           <SendDialog
@@ -1191,22 +1185,17 @@ export default function Payments({ embedded = false }) {
                         <DetailRow label="Goedgekeurd door" value={p.approved_by} />
                       )}
                       {p.note && <DetailRow label="Notitie" value={p.note} />}
-                      <div className="grid grid-cols-4 gap-1.5 pt-2">
-                        <a href={`${apiBase}/payments/${p.id}/pdf`} target="_blank" rel="noreferrer"
-                          data-testid={`mp-pdf-${p.id}`}
+                      <div className="grid grid-cols-3 gap-1.5 pt-2">
+                        <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+                          testId={`mp-image-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px]">
-                          <FileText className="w-3.5 h-3.5" /> PDF
-                        </a>
+                          <ImageIcon className="w-3.5 h-3.5" /> Bon JPG
+                        </KioskReceiptImageButton>
                         <button onClick={() => setEmailing(p)} type="button"
                           data-testid={`mp-email-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-blue-200 text-blue-700 font-bold rounded-xl text-[11px]">
                           <Mail className="w-3.5 h-3.5" /> Mail
                         </button>
-                        <a href={`${apiBase}/payments/${p.id}/secure-pdf`} target="_blank" rel="noreferrer"
-                          data-testid={`mp-secure-${p.id}`}
-                          className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-orange-200 text-[#FF5C00] font-bold rounded-xl text-[11px]">
-                          <ShieldCheck className="w-3.5 h-3.5" /> QR
-                        </a>
                         <button onClick={() => setDeleting(p)} type="button"
                           data-testid={`mp-delete-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-red-200 text-red-600 font-bold rounded-xl text-[11px]">
