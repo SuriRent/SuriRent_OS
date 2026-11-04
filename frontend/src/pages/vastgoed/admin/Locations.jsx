@@ -156,14 +156,17 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
       const location = items.find((item) => item.id === detailId);
       if (!location) return null;
       return (
-        <div className="h-full w-full overflow-y-auto bg-[#FF5C00] px-3 py-3 sm:px-5"
+        <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+          style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}
           data-testid="kiosk-location-detail">
-          <div className="mx-auto max-w-7xl">
-            <LocationDetail loc={location}
-              onBack={() => setDetailId(null)}
-              onEdit={() => setEditing(location)}
-              onDelete={() => del(location)}
-              kioskMode />
+          <div className="flex-1 min-h-0 overflow-y-auto py-3">
+            <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
+              <LocationDetail loc={location}
+                onBack={() => setDetailId(null)}
+                onEdit={() => setEditing(location)}
+                onDelete={() => del(location)}
+                kioskMode />
+            </div>
           </div>
           {sharedModals}
         </div>
