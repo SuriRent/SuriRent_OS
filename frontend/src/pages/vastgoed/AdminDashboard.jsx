@@ -3504,14 +3504,15 @@ export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
           {!tenant ? (
             <ListSkeleton rows={3} testid="tenant-detail-loading" />
           ) : (
-            <div className="mx-auto max-w-5xl">
+            <div className="mx-auto max-w-7xl">
               <TenantDetail tenant={tenant}
                 onBack={() => setDetailId(null)}
                 onEdit={() => setEditing(tenant)}
                 onPin={() => setPinFor(tenant)}
                 onMoveOut={() => setMoveOut(tenant)}
                 onDelete={() => del(tenant.id)}
-                onReload={load} />
+                onReload={load}
+                kioskMode />
             </div>
           )}
           {sharedModals}
@@ -3963,13 +3964,14 @@ function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
 // - Persoonsgegevens (geboortedatum, ID-nummer) inzichtelijk
 // - Actie-grid: Bewerk / Portal PIN / Portal Poster / Verwijder
 // =====================================================================
-function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload }) {
+function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload, kioskMode = false }) {
   const [uploading, setUploading] = useState(false);
   const [avatarGenerating, setAvatarGenerating] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
   const [cropOpen, setCropOpen] = useState(false); // Manuele crop-tool voor pasfoto
+  const [detailTab, setDetailTab] = useState('overzicht');
   // Scroll altijd naar boven bij openen — anders kan een verborgen file-
   // input (met autofocus/keyboard trigger) de pagina naar beneden scrollen
   // waardoor de gebruiker de naam niet direct ziet.
@@ -3981,6 +3983,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
   const idPhotoSrc = t.id_photo_url
     ? (t.id_photo_url.startsWith('http') ? t.id_photo_url : `${base}${t.id_photo_url}`)
     : '';
+  const detailTabs = [
+    { id: 'overzicht', label: 'Overzicht' },
+    { id: 'documenten', label: 'Documenten & foto' },
+    { id: 'toegang', label: 'Borg & toegang' },
+    { id: 'notities', label: 'Notities' },
+  ];
 
   const upload = async (file) => {
     if (!file) return;
@@ -4033,6 +4041,203 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
       window.alert('Verwijderen mislukt: ' + (e?.response?.data?.detail || e.message));
     }
   };
+
+  if (kioskMode) {
+    return (
+      <div className="flex min-h-full flex-col gap-3 pb-3" data-testid="tenant-detail-page">
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {t.avatar_url ? (
+              <img src={t.avatar_url} alt={t.name || 'huurder'}
+                data-testid="tenant-detail-avatar"
+                className="h-14 w-14 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-lg font-black text-[#FF5C00]">
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">
+                {t.apartment_number ? 'Appartement' : 'Huurder'}
+              </p>
+              <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                {t.name || 'Onbekende huurder'}
+              </h1>
+              <p className="truncate text-sm font-semibold text-slate-500">
+                {t.apartment_number || 'Geen appartement'}
+                {t.rent_amount ? ` · ${fmtMoney(t.rent_amount, t.currency)} / maand` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button onClick={onBack} data-testid="tenant-detail-back"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <ArrowLeft className="h-4 w-4" /> Terug
+            </button>
+            <button onClick={onEdit} data-testid="tenant-detail-edit"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 text-sm font-bold text-slate-700 hover:bg-slate-200">
+              <Pencil className="h-4 w-4" /> Bewerk
+            </button>
+            <button onClick={onPin} data-testid="tenant-detail-pin"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+              <KeySquare className="h-4 w-4" /> Portal PIN
+            </button>
+            <button onClick={() => setSigOpen(true)} data-testid="tenant-detail-signature"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+              <PenTool className="h-4 w-4" /> Handtekening
+            </button>
+            <button onClick={onMoveOut} data-testid="tenant-detail-move-out"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-3 text-sm font-bold text-white hover:bg-slate-900">
+              <LogOut className="h-4 w-4" /> Uitgang
+            </button>
+            <button onClick={onDelete} data-testid="tenant-detail-delete"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 hover:bg-red-100">
+              <Trash2 className="h-4 w-4" /> Verwijder
+            </button>
+          </div>
+        </section>
+
+        <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+          role="tablist" aria-label="Huurderdetails">
+          {detailTabs.map((tab) => (
+            <button key={tab.id} type="button" role="tab" aria-selected={detailTab === tab.id}
+              onClick={() => setDetailTab(tab.id)} data-testid={`tenant-detail-tab-${tab.id}`}
+              className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                detailTab === tab.id ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {detailTab === 'overzicht' && (
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[1.4fr_1fr]">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="tenant-detail-overview">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">Persoonsgegevens</h2>
+                <UserCircle className="h-5 w-5 text-[#FF5C00]" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <InfoRow label="Telefoon" value={t.phone || '—'} />
+                <InfoRow label="E-mail" value={t.email || '—'} />
+                <InfoRow label="Geboortedatum" value={t.birth_date || '—'} />
+                <InfoRow label="ID-nummer" value={t.id_number || '—'} mono />
+                <InfoRow label="Portal PIN" value={t.pin ? '••••' : 'Niet ingesteld'} />
+                <InfoRow label="Huur per maand" value={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'} />
+              </div>
+            </section>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <TenantDepositCard tenant={t} />
+              <TenantNfcCard tenant={t} onReload={onReload} />
+            </div>
+          </div>
+        )}
+
+        {detailTab === 'documenten' && (
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="tenant-detail-documents">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Identiteitsbewijs</h2>
+                <p className="text-sm text-slate-500">Paspoort of identiteitskaart · maximaal 5 MB</p>
+              </div>
+              {idPhotoSrc && (
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={generateAvatar} disabled={avatarGenerating}
+                    data-testid="tenant-auto-avatar-btn"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-sm font-bold text-emerald-700 disabled:opacity-60">
+                    {avatarGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {avatarGenerating ? 'Pasfoto zoeken…' : 'Pasfoto automatisch'}
+                  </button>
+                  <button onClick={() => setCropOpen(true)} data-testid="tenant-crop-avatar-btn"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00]">
+                    <Scissors className="h-4 w-4" /> Handmatig bijsnijden
+                  </button>
+                  <button onClick={removePhoto} disabled={uploading} data-testid="tenant-id-remove"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 disabled:opacity-60">
+                    <Trash2 className="h-4 w-4" /> Verwijderen
+                  </button>
+                </div>
+              )}
+            </div>
+            {avatarError && (
+              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                role="alert" data-testid="tenant-auto-avatar-error">{avatarError}</p>
+            )}
+            {idPhotoSrc ? (
+              <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-slate-100"
+                onClick={() => setPreview(true)} data-testid="tenant-id-preview">
+                <img loading="lazy" src={idPhotoSrc} alt="ID-kaart"
+                  className="max-h-[40vh] max-w-full cursor-pointer object-contain" />
+                <span className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-bold text-slate-700">
+                  Klik om te vergroten
+                </span>
+              </div>
+            ) : (
+              <label htmlFor="tenant-id-upload"
+                className="flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-center transition hover:border-[#FF5C00] hover:bg-orange-50"
+                data-testid="tenant-id-dropzone">
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-7 w-7 animate-spin text-[#FF5C00]" />
+                    <span className="mt-2 text-sm font-bold text-slate-600">Bezig met uploaden…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+                      <Plus className="h-6 w-6" />
+                    </span>
+                    <span className="text-sm font-black text-slate-700">ID-kaart uploaden</span>
+                    <span className="mt-1 text-xs text-slate-400">JPG of PNG · maximaal 5 MB</span>
+                  </>
+                )}
+              </label>
+            )}
+            {!idPhotoSrc && (
+              <input id="tenant-id-upload" type="file" accept="image/*" className="hidden"
+                onChange={(e) => upload(e.target.files?.[0])} data-testid="tenant-id-input" />
+            )}
+            {idPhotoSrc && (
+              <label htmlFor="tenant-id-replace"
+                className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                ID-kaart vervangen
+                <input id="tenant-id-replace" type="file" accept="image/*" className="hidden"
+                  onChange={(e) => upload(e.target.files?.[0])} data-testid="tenant-id-replace-input" />
+              </label>
+            )}
+          </section>
+        )}
+
+        {detailTab === 'toegang' && (
+          <div className="grid gap-3 xl:grid-cols-2" data-testid="tenant-detail-access">
+            <TenantDepositCard tenant={t} />
+            <TenantNfcCard tenant={t} onReload={onReload} />
+          </div>
+        )}
+
+        {detailTab === 'notities' && (
+          <AdminNotesCard tenantId={t.id} tenantName={t.name} />
+        )}
+
+        <SignatureModal tenant={t} open={sigOpen} onClose={() => setSigOpen(false)} onReload={onReload} />
+        {cropOpen && (
+          <AvatarCropModal src={idPhotoSrc} tenantId={t.id}
+            onClose={() => setCropOpen(false)}
+            onSaved={async () => { setCropOpen(false); if (onReload) await onReload(); }} />
+        )}
+        {preview && idPhotoSrc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            onClick={() => setPreview(false)} data-testid="tenant-id-fullpreview">
+            <img loading="lazy" src={idPhotoSrc} alt="ID-kaart" className="max-h-full max-w-full rounded-xl shadow-2xl" />
+            <button onClick={() => setPreview(false)}
+              className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-slate-900">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="tenant-detail-page">
