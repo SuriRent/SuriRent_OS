@@ -84,7 +84,9 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded || kioskLayout);
   // SWR cache — tabwissel toont instant vanuit cache
   const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
+  const { data: apartmentsRaw, error: apartmentsError, isLoading: apartmentsLoading } = useApiSWR('/apartments');
   const items = itemsRaw || [];
+  const apartments = apartmentsRaw || [];
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [detailId, setDetailId] = useState(null);
@@ -162,6 +164,9 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
           <div className="flex-1 min-h-0 overflow-y-auto py-3">
             <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
               <LocationDetail loc={location}
+                apartments={apartments.filter((apartment) => apartment.location_id === location.id)}
+                apartmentsLoading={apartmentsLoading}
+                apartmentsError={apartmentsError}
                 onBack={() => setDetailId(null)}
                 onEdit={() => setEditing(location)}
                 onDelete={() => del(location)}
@@ -399,7 +404,7 @@ function LocationRow({ loc, onOpen }) {
 // =====================================================================
 // LocationDetail — full detail-pagina met terug-knop.
 // =====================================================================
-function LocationDetail({ loc, onBack, onEdit, onDelete, kioskMode = false }) {
+function LocationDetail({ loc, apartments = [], apartmentsLoading = false, apartmentsError, onBack, onEdit, onDelete, kioskMode = false }) {
   const active = (loc.apartments_total || 0) > 0;
   const [detailTab, setDetailTab] = useState('overzicht');
   const bezettingsPct = loc.apartments_total > 0
@@ -448,6 +453,7 @@ function LocationDetail({ loc, onBack, onEdit, onDelete, kioskMode = false }) {
           role="tablist" aria-label="Locatiedetails">
           {[
             ['overzicht', 'Overzicht'],
+            ['appartementen', `Appartementen (${apartments.length})`],
             ['foto', 'Locatie & foto'],
           ].map(([tab, label]) => (
             <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
@@ -536,6 +542,68 @@ function LocationDetail({ loc, onBack, onEdit, onDelete, kioskMode = false }) {
                   <ImageIcon className="mx-auto mb-2 h-10 w-10" />
                   <p className="text-sm font-semibold">Geen foto beschikbaar</p>
                 </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {detailTab === 'appartementen' && (
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="loc-detail-apartments">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Appartementen op deze locatie</h2>
+                <p className="text-sm text-slate-500">{apartments.length} gekoppeld</p>
+              </div>
+              <Building2 className="h-5 w-5 text-[#FF5C00]" />
+            </div>
+            {apartmentsError ? (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                Appartementen konden niet worden geladen.
+              </p>
+            ) : apartmentsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-[#FF5C00]" /></div>
+            ) : apartments.length === 0 ? (
+              <div className="rounded-xl bg-slate-50 p-5 text-center">
+                <Building2 className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                <p className="text-sm font-semibold text-slate-500">Er zijn nog geen appartementen aan deze locatie gekoppeld.</p>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {apartments.map((apartment) => {
+                  const occupied = apartment.status === 'occupied' || !!apartment.tenant_id;
+                  const photo = apartment.photo_url
+                    ? (apartment.photo_url.includes('/api/landing/asset/')
+                      ? `${apartment.photo_url}${apartment.photo_url.includes('?') ? '&' : '?'}thumb=1`
+                      : apartment.photo_url)
+                    : '';
+                  return (
+                    <article key={apartment.id}
+                      className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      data-testid={`loc-detail-apartment-${apartment.id}`}>
+                      {photo ? (
+                        <img src={photo} alt={apartment.number || 'Appartement'}
+                          className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
+                          onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                      ) : (
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+                          <Building2 className="h-5 w-5" />
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-black text-slate-900">{apartment.number || 'Appartement'}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {apartment.tenant_name || 'Geen huurder gekoppeld'}
+                        </p>
+                        <p className="truncate text-xs font-semibold text-slate-600">
+                          {fmtMoney(apartment.rent_amount || 0, apartment.currency || 'SRD')} / maand
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                        occupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                      }`}>{occupied ? 'Bezet' : 'Vrij'}</span>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
