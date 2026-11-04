@@ -195,11 +195,10 @@ export default function OverdueBell() {
                             {initials(g.tenant_name)}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold text-slate-900 truncate">{g.tenant_name}</p>
+                            <p className="text-sm font-bold text-slate-900 truncate">{g.apartment_number || 'Geen appartement'}</p>
                             <p className="text-[11px] text-slate-500 truncate">
-                              {g.location_name && g.apartment_number
-                                ? `${g.location_name} · ${g.apartment_number}`
-                                : g.apartment_number || '—'}
+                              {g.tenant_name || 'Onbekende huurder'}
+                              {g.location_name ? ` · ${g.location_name}` : ''}
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${

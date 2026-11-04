@@ -87,7 +87,9 @@ export function TenantMoveOutModal({ tenant, onClose, onDone }) {
           <h3 className="text-xl font-black text-slate-900">Uitgang huurder</h3>
           <button onClick={onClose} data-testid="moveout-close" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-4 h-4" /></button>
         </div>
-        <p className="text-sm text-slate-500 mt-1">{tenant.name}{tenant.apartment_number ? ` — Appt. ${tenant.apartment_number}` : ''}</p>
+        <p className="text-sm text-slate-500 mt-1">
+          {tenant.apartment_number ? `Appt. ${tenant.apartment_number} — ` : 'Geen appartement — '}{tenant.name}
+        </p>
       </KeyboardSafeModal.Header>
       <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="moveout-error">{error}</div>}

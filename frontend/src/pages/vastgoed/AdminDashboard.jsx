@@ -1439,9 +1439,10 @@ function GlobalSearch({ variant = 'quick' }) {
                         <Users className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">{t.name}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate">{t.apartment_number || 'Geen appartement'}</p>
                         <p className="text-[11px] text-slate-500 truncate">
-                          {t.phone || ''}{t.phone && t.email ? ' · ' : ''}{t.email || ''}
+                          {t.name || 'Onbekende huurder'}
+                          {t.phone ? ` · ${t.phone}` : ''}{t.email ? ` · ${t.email}` : ''}
                         </p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
@@ -1566,15 +1567,13 @@ function PaymentPlansList() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <p className="text-sm font-black text-slate-900 truncate">
-                        {p.tenant_name || '—'}
-                        {p.apartment_number && (
-                          <span className="text-slate-400 font-bold"> · Appt. {p.apartment_number}</span>
-                        )}
+                        {p.apartment_number || 'Geen appartement'}
                       </p>
                       <p className="text-sm font-black text-slate-900 shrink-0">
                         {fmtMoney(p.remaining_amount, p.currency)}
                       </p>
                     </div>
+                    <p className="text-xs text-slate-500 truncate">{p.tenant_name || 'Onbekende huurder'}</p>
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className="text-slate-500 font-semibold">
                         {fmtMoney(p.paid_amount, p.currency)} / {fmtMoney(p.total_amount, p.currency)}
@@ -2368,8 +2367,8 @@ export function Apartments({ embedded = false }) {
                 <button key={t.id} onClick={() => assign(t.id)} data-testid={`assign-${t.id}`}
                   className="w-full flex items-center justify-between p-3 rounded-xl border-2 border-slate-100 hover:border-[#FF5C00] hover:bg-orange-50">
                   <div className="text-left">
-                    <p className="font-bold text-slate-900">{t.name}</p>
-                    <p className="text-xs text-slate-500">{t.apartment_number ? `Nu in ${t.apartment_number}` : 'Geen appartement'}</p>
+                    <p className="font-bold text-slate-900">{t.apartment_number || 'Geen appartement'}</p>
+                    <p className="text-xs text-slate-500">{t.name || 'Onbekende huurder'}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
@@ -3608,8 +3607,8 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
   if (fx) {
     return (
       <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} tenantId={t.id} tenantPhotoUrl={t.avatar_url || t.id_photo_url}
-        title={t.name || 'Onbekende huurder'}
-        sub={`Appt. ${t.apartment_number || '—'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
+        title={t.apartment_number || 'Geen appartement'}
+        sub={`${t.name || 'Onbekende huurder'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
         amount={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
         status={t.apartment_number ? 'Huurt' : 'Geen appt.'} tone={t.apartment_number ? 'green' : 'amber'}
         actions={<>
@@ -3886,18 +3885,10 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Huurder</p>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 truncate">{t.name}</h1>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 truncate">{t.apartment_number || 'Geen appartement'}</h1>
             <div className="flex items-center gap-2 flex-wrap mt-2">
-              {t.apartment_number ? (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                  Appt. {t.apartment_number}
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Geen appartement
-                </span>
-              )}
+              <span className="text-sm font-bold text-slate-700">{t.name || 'Onbekende huurder'}</span>
               {t.rent_amount ? (
                 <span className="text-[11px] font-bold text-slate-600">
                   {fmtMoney(t.rent_amount, t.currency)} / maand

@@ -272,8 +272,8 @@ export default function Contracts({ embedded = false }) {
         <FxSearch value={fxQ} onChange={setFxQ} placeholder="Zoek huurder, contract of appartement…" testId="contract-search" />
         {!settled ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen contracten gevonden." testId="contracts-empty" /> : rows.map((c) => {
           const signed = !!c.signed_at;
-          return <FxRow key={c.id} testId={`contract-row-${c.id}`} tenantId={c.tenant_id} title={c.tenant_name || 'Onbekende huurder'}
-            sub={[c.contract_number, `Appt. ${c.apartment_number || '—'}`].filter(Boolean).join(' · ')}
+          return <FxRow key={c.id} testId={`contract-row-${c.id}`} tenantId={c.tenant_id} title={c.apartment_number || 'Geen appartement'}
+            sub={[c.tenant_name || 'Onbekende huurder', c.contract_number].filter(Boolean).join(' · ')}
             meta={c.start_date ? `${c.start_date}${c.end_date ? ` → ${c.end_date}` : ''}` : undefined}
             status={signed ? 'Ondertekend' : 'Concept'} tone={signed ? 'green' : 'amber'}
             actions={<>
@@ -396,7 +396,7 @@ function ContractRow({ c, apiBase, onEmail, onCopyLink, onDelete }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-black text-slate-900 truncate">{c.tenant_name || 'Onbekende huurder'}</p>
+          <p className="font-black text-slate-900 truncate">{c.apartment_number || 'Geen appartement'}</p>
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
             isSigned ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
           }`}>
@@ -404,7 +404,7 @@ function ContractRow({ c, apiBase, onEmail, onCopyLink, onDelete }) {
           </span>
         </div>
         <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">
-          {c.contract_number} · Appt. {c.apartment_number || '—'}
+          {c.tenant_name || 'Onbekende huurder'} · {c.contract_number}
           {c.start_date ? ` · ${c.start_date}` : ''}{c.end_date ? ` → ${c.end_date}` : ''}
         </p>
       </div>

@@ -4949,10 +4949,9 @@ function PaymentsViewerModal({ onClose }) {
             <div key={p.id} data-testid={`payment-row-${p.id}`}
               className="rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-black text-slate-900 truncate">{p.tenant_name || '—'}</div>
+                <div className="text-sm font-black text-slate-900 truncate">{p.apartment_number || 'Geen appartement'}</div>
                 <div className="text-xs text-slate-500 truncate">
-                  {p.receipt_number || p.id?.slice(0, 8)} · {p.category || 'huur'}
-                  {p.apartment_number ? ` · Appt. ${p.apartment_number}` : ''}
+                  {p.tenant_name || 'Onbekende huurder'} · {p.receipt_number || p.id?.slice(0, 8)} · {p.category || 'huur'}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   {p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : '—'}

@@ -1339,7 +1339,9 @@ function TenantPayBank({ payload, overview, branding, onBack, onConfirm }) {
             Bankoverschrijving · {fmtMoney(payload.amount, cur)}
           </span>
         </div>
-        <p className="text-xs text-white/85 mb-3 mt-1">{tenant.name}{apt ? ` — Appt. ${apt.number}` : ''}</p>
+        <p className="text-xs text-white/85 mb-3 mt-1">
+          {apt ? `Appt. ${apt.number} — ` : 'Geen appartement — '}{tenant.name}
+        </p>
 
         {/* STAP 1 — Land selectie */}
         <div className="bg-white rounded-3xl shadow-xl p-4 sm:p-5 mb-3">

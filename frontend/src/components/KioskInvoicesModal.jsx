@@ -35,8 +35,8 @@ function TenantRow({ g, onOpen, credit }) {
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
         <div className="min-w-0">
-          <div className="text-sm font-black text-slate-900 truncate">{g.tenant_name}</div>
-          <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number || '—'}{g.location_name ? ` · ${g.location_name}` : ''}</div>
+          <div className="text-sm font-black text-slate-900 truncate">{g.apartment_number || '—'}</div>
+          <div className="text-xs text-slate-500 truncate">{g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}</div>
           <CreditBadge amount={credit} currency={g.currency} testId={`invoice-tenant-credit-${g.tenant_id}`} />
           <div className="text-[11px] text-slate-400 mt-0.5">{g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden'}</div>
         </div>
@@ -99,7 +99,7 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced, 
     return (
       <>
         <button type="button" onClick={() => setHistory(false)} data-testid="invoices-modal-history-back"
-          className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {g.tenant_name}</button>
+          className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {g.apartment_number || '—'} · {g.tenant_name}</button>
         <div className="text-sm font-black text-slate-900 uppercase tracking-widest">Betalingsgeschiedenis · {paid.length}</div>
         {paid.length === 0
           ? <div className="text-center text-slate-500 py-10 text-sm">Nog geen betalingen voor deze huurder.</div>
@@ -116,14 +116,14 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced, 
           <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="text-base font-black text-slate-900 truncate" data-testid="invoices-modal-tenant">{g.tenant_name}</div>
+              <div className="text-base font-black text-slate-900 truncate">{g.apartment_number || '—'}</div>
               <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="invoices-modal-rebalance"
                 title="Herverdeel alle openstaande tegoeden over de openstaande facturen." aria-label="Herverdeel tegoeden"
                 className="shrink-0 w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-[#FF5C00] hover:border-orange-300 inline-flex items-center justify-center transition-colors disabled:opacity-60">
                 {rebalancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               </button>
             </div>
-            <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</div>
+            <div className="text-xs text-slate-500 truncate" data-testid="invoices-modal-tenant">{g.tenant_name || 'Onbekende huurder'} · {g.location_name}</div>
             <CreditBadge amount={credit} currency={g.currency} testId="invoices-modal-credit" />
           </div>
         </div>

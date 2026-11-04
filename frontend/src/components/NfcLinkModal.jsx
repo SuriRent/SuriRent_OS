@@ -62,7 +62,7 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
           <FxStats testId="nfc-fx-stats" items={[
             ['Huurders', apts ? apts.length : '…', 'orange'],
             ['Tag', uid ? 'Gescand' : 'Wachten…', uid ? 'green' : 'amber'],
-            ['Gekozen', pick?.tenant_name || '—', 'slate']]} />
+            ['Gekozen', pick ? `${pick.number || '—'} · ${pick.tenant_name || 'Huurder'}` : '—', 'slate']]} />
           {uid ? (
             <div className="rounded-xl bg-slate-50 px-4 py-3">
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Gescande tag</div>
@@ -92,8 +92,8 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
                       <TenantPhoto tenantId={a.tenant_id} name={a.tenant_name}
                         photoUrl={a.tenant_avatar_url || a.tenant_id_photo_url} size={40} />
                       <div className="min-w-0">
-                        <div className="text-sm font-black text-slate-900 truncate">{a.tenant_name}</div>
-                        <div className="text-xs text-slate-500 truncate">Appt. {a.number}</div>
+                        <div className="text-sm font-black text-slate-900 truncate">{a.number || '—'}</div>
+                        <div className="text-xs text-slate-500 truncate">{a.tenant_name || 'Onbekende huurder'}</div>
                       </div>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">

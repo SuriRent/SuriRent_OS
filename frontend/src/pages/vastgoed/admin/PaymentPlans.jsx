@@ -100,8 +100,9 @@ export default function PaymentPlans({ embedded = false }) {
         {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
         {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div> : rows.length === 0 ? <FxEmpty text="Geen betalingsregelingen gevonden." testId="plans-empty" /> : rows.map((p) => {
           const [l, tone] = ST[p.status] || [p.status, 'slate'];
-          return <FxRow key={p.id} testId={`plan-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetail(p)} title={p.tenant_name || 'Onbekende huurder'}
-            sub={`${p.apartment_number ? `Appt. ${p.apartment_number} · ` : ''}${p.installments.length} termijnen`}
+          return <FxRow key={p.id} testId={`plan-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetail(p)}
+            title={p.apartment_number || 'Geen appartement'}
+            sub={`${p.tenant_name || 'Onbekende huurder'} · ${p.installments.length} termijnen`}
             meta={`${fmtMoney(p.paid_amount, p.currency)} van ${fmtMoney(p.total_amount, p.currency)} betaald${p.overdue_count > 0 ? ` · ${p.overdue_count} achterstallig` : ''}`}
             amount={fmtMoney(p.remaining_amount, p.currency)} status={p.overdue_count > 0 && p.status === 'active' ? `${p.overdue_count} achter` : l}
             tone={p.overdue_count > 0 && p.status === 'active' ? 'red' : tone} />;
@@ -181,7 +182,7 @@ function PlanRow({ plan, onClick }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-black text-slate-900 truncate">{plan.tenant_name || 'Onbekende huurder'}</p>
+          <p className="font-black text-slate-900 truncate">{plan.apartment_number || 'Geen appartement'}</p>
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
           {plan.overdue_count > 0 && (
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-100 text-red-700">
@@ -190,7 +191,7 @@ function PlanRow({ plan, onClick }) {
           )}
         </div>
         <p className="text-xs text-slate-500 mt-0.5">
-          {plan.installments.length} termijnen · {fmtMoney(plan.paid_amount, plan.currency)} / {fmtMoney(plan.total_amount, plan.currency)}
+          {plan.tenant_name || 'Onbekende huurder'} · {plan.installments.length} termijnen · {fmtMoney(plan.paid_amount, plan.currency)} / {fmtMoney(plan.total_amount, plan.currency)}
         </p>
         <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div className="h-full bg-[#FF5C00]" style={{ width: `${pct}%` }} />
@@ -589,8 +590,8 @@ function PlanDetail({ planId, initial, onBack, embedded = false }) {
       <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-black text-slate-900 truncate">{plan.tenant_name}</h1>
-            {plan.apartment_number && <p className="text-xs text-slate-500">Appt. {plan.apartment_number}</p>}
+            <h1 className="text-xl font-black text-slate-900 truncate">{plan.apartment_number || 'Betalingsregeling'}</h1>
+            {plan.tenant_name && <p className="text-xs text-slate-500">{plan.tenant_name}</p>}
             {plan.notes && <p className="text-sm text-slate-600 mt-2">{plan.notes}</p>}
           </div>
           <div className="text-right shrink-0">

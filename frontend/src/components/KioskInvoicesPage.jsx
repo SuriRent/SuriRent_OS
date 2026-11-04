@@ -127,8 +127,8 @@ function TenantDetail({ g, onBack, onRemind, onDelete, credit, tenant, onChanged
       <div className="mx-5 rounded-2xl bg-slate-50 p-5 flex items-center gap-4">
         <span className={`w-2 self-stretch rounded-full ${t.bar}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-2xl font-black text-slate-900 truncate" data-testid="kiosk-inv-detail-name">{g.tenant_name}</p>
-          <p className="text-sm text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</p>
+          <p className="text-2xl font-black text-slate-900 truncate" data-testid="kiosk-inv-detail-apartment">{g.apartment_number || '—'}</p>
+          <p className="text-sm text-slate-500 truncate" data-testid="kiosk-inv-detail-name">{g.tenant_name || 'Onbekende huurder'} · {g.location_name}</p>
           <span className={`inline-block mt-2 rounded-full px-3 py-1 text-xs font-bold ${t.chip}`}>{t.text}</span>
           <span className="ml-2"><CreditBadge amount={credit} currency={g.currency} testId="kiosk-inv-detail-credit" /></span>
         </div>

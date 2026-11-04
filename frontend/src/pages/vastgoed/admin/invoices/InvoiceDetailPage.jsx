@@ -185,12 +185,10 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
           <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
             <div className="flex items-start justify-between gap-3 mb-1">
               <div className="min-w-0 flex-1">
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">{g.tenant_name || 'Onbekende huurder'}</h1>
-                {g.apartment_number && (
-                  <p className="text-[11px] sm:text-xs text-slate-500 truncate">
-                    {g.location_name ? `${g.location_name} · ` : ''}Appt. {g.apartment_number}
-                  </p>
-                )}
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">{g.apartment_number || 'Geen appartement'}</h1>
+                <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                  {g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}
+                </p>
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">
                 Historie
@@ -259,12 +257,10 @@ export default function InvoiceDetailPage({ group, credits, tenants = [], onBack
       <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">{g.tenant_name || 'Onbekende huurder'}</h1>
-            {g.apartment_number && (
-              <p className="text-[11px] sm:text-xs text-slate-500 truncate">
-                {g.location_name ? `${g.location_name} · ` : ''}Appt. {g.apartment_number}
-              </p>
-            )}
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">{g.apartment_number || 'Geen appartement'}</h1>
+            <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+              {g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">Openstaand</p>

@@ -493,12 +493,10 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
       <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-black text-slate-900 truncate">{p.tenant_name || 'Onbekende huurder'}</h1>
-            {p.apartment_number && (
-              <p className="text-xs text-slate-500">
-                {p.location_name ? `${p.location_name} · ` : ''}Appt. {p.apartment_number}
-              </p>
-            )}
+            <h1 className="text-xl font-black text-slate-900 truncate">{p.apartment_number || 'Geen appartement'}</h1>
+            <p className="text-xs text-slate-500">
+              {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
+            </p>
             {p.note && <p className="text-sm text-slate-600 mt-2">{p.note}</p>}
             <div className="flex items-center gap-2 flex-wrap mt-3">
               <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
@@ -1100,16 +1098,16 @@ export default function Payments({ embedded = false }) {
           </div>
           <FxSearch value={search} onChange={setSearch} placeholder="Zoek huurder, kwitantie of appartement…" testId="payment-search" />
           {pending.map((p) => (
-            <FxRow key={p.id} testId={`pending-card-${p.id}`} tenantId={p.tenant_id} onClick={() => setApproveFor(p)} title={p.tenant_name || 'Onbekende huurder'}
-              sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+            <FxRow key={p.id} testId={`pending-card-${p.id}`} tenantId={p.tenant_id} onClick={() => setApproveFor(p)} title={p.apartment_number || 'Geen appartement'}
+              sub={`${p.tenant_name || 'Onbekende huurder'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
               meta={p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : undefined}
               amount={fmtMoney(p.amount, p.currency)} status="Te keuren" tone="amber" />
           ))}
           {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div>
             : filteredItems.length === 0 ? <FxEmpty text={totalCount === 0 ? 'Nog geen betalingen.' : 'Geen betalingen gevonden.'} testId="payments-empty" />
             : filteredItems.map((p) => (
-              <FxRow key={p.id} testId={`payment-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetailPayment(p)} title={p.tenant_name || 'Onbekende huurder'}
-                sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+              <FxRow key={p.id} testId={`payment-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetailPayment(p)} title={p.apartment_number || 'Geen appartement'}
+                sub={`${p.tenant_name || 'Onbekende huurder'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
                 meta={`${p.paid_at ? new Date(p.paid_at).toLocaleDateString('nl-NL') : ''}${p.method ? ` · ${METHOD_LABELS[p.method] || p.method}` : ''}`}
                 amount={fmtMoney(p.amount, p.currency)} status={CATEGORY_LABELS[p.category] || 'Betaald'} tone="green" />
             ))}

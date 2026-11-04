@@ -60,8 +60,8 @@ export function KioskDepositModal({ Shell, tenant, onClose, onPaid }) {
         <div className="space-y-4">
           <div className="rounded-2xl bg-orange-50 border border-orange-200 p-4" data-testid="kiosk-deposit-info">
             <p className="text-xs font-bold uppercase tracking-widest text-[#FF5C00]">Verplichte eerste stap</p>
-            <p className="text-lg font-black text-slate-900">{tenant.name}</p>
-            {tenant.apartment_number && <p className="text-sm text-slate-600">Appt. {tenant.apartment_number}</p>}
+            <p className="text-lg font-black text-slate-900">{tenant.apartment_number || 'Geen appartement'}</p>
+            <p className="text-sm text-slate-600">{tenant.name}</p>
             <p className="text-xs text-slate-600 mt-1">Het contract wordt actief en de maandfacturen starten pas na het registreren van de borg.</p>
           </div>
           <label className="block">
