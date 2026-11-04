@@ -5898,8 +5898,11 @@ export default function KioskLayout() {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
+      else if (e.detail === 'admin:appartementen') {
+        setAdminPopup(null);
+        setStep('admin:appartementen');
+      }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
-      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setStep(e.detail);
     };
     window.addEventListener('kiosk-nav', onNav);
     return () => window.removeEventListener('kiosk-nav', onNav);
