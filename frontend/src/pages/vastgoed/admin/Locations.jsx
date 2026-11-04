@@ -157,6 +157,9 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
     if (detailId) {
       const location = items.find((item) => item.id === detailId);
       if (!location) return null;
+      const locationApartments = apartments.filter((apartment) =>
+        String(apartment.location_id ?? '') === String(location.id)
+      );
       return (
         <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
           style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}
@@ -164,7 +167,7 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
           <div className="flex-1 min-h-0 overflow-y-auto py-3">
             <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
               <LocationDetail loc={location}
-                apartments={apartments.filter((apartment) => apartment.location_id === location.id)}
+                apartments={locationApartments}
                 apartmentsLoading={apartmentsLoading}
                 apartmentsError={apartmentsError}
                 onBack={() => setDetailId(null)}
@@ -565,7 +568,11 @@ function LocationDetail({ loc, apartments = [], apartmentsLoading = false, apart
             ) : apartments.length === 0 ? (
               <div className="rounded-xl bg-slate-50 p-5 text-center">
                 <Building2 className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-                <p className="text-sm font-semibold text-slate-500">Er zijn nog geen appartementen aan deze locatie gekoppeld.</p>
+                <p className="text-sm font-semibold text-slate-500">
+                  {(loc.apartments_total || 0) > 0
+                    ? `${loc.apartments_total} appartementen staan als gekoppeld geregistreerd, maar konden niet in de lijst worden gevonden.`
+                    : 'Er zijn nog geen appartementen aan deze locatie gekoppeld.'}
+                </p>
               </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
