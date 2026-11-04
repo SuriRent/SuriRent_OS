@@ -93,14 +93,26 @@ export function FxSearch({ value, onChange, placeholder, testId }) {
 }
 
 // Lijst-rij: naam / sub / meta links, bedrag + status rechts, chevron.
-export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId, tenantId }) {
+export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, actions, testId, tenantId, photoUrl }) {
   const Tag = actions ? 'div' : 'button';
   const extra = actions
     ? { role: onClick ? 'button' : undefined, tabIndex: onClick ? 0 : undefined, onKeyDown: (e) => { if (e.key === 'Enter' && onClick) onClick(); } }
     : { type: 'button' };
+  const photoPath = photoUrl?.includes('/api/landing/asset/')
+    ? `${photoUrl}${photoUrl.includes('?') ? '&' : '?'}thumb=1`
+    : photoUrl;
+  const photoSrc = photoPath
+    ? `${photoPath.startsWith('/') ? process.env.REACT_APP_BACKEND_URL || '' : ''}${photoPath}`
+    : '';
   return (
     <Tag onClick={onClick} data-testid={testId} {...extra}
       className={`w-full text-left rounded-xl border border-slate-200 ${onClick ? 'hover:border-orange-300 cursor-pointer' : ''} px-4 py-3 flex ${actions ? 'flex-wrap sm:flex-nowrap' : ''} items-center justify-between gap-x-3 gap-y-2 transition-colors bg-white`}>
+      {photoSrc && (
+        <span className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-slate-100">
+          <img src={photoSrc} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
+        </span>
+      )}
       {tenantId && <TenantPhoto tenantId={tenantId} name={typeof title === 'string' ? title : ''} size={40} />}
       <div className="min-w-0 flex-1">
         <div className="text-sm font-black text-slate-900 truncate">{title}</div>

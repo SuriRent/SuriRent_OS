@@ -2516,7 +2516,8 @@ function ApartmentRow({ a, onOpen }) {
     return (
       <FxRow testId={`apt-row-${a.id}`} onClick={onOpen} title={a.number}
         sub={a.tenant_name || 'Geen huurder'} meta={a.address || undefined}
-        amount={fmtMoney(a.rent_amount, a.currency)} status={occupied ? 'Bezet' : 'Beschikbaar'} tone={occupied ? 'green' : 'slate'} />
+        amount={fmtMoney(a.rent_amount, a.currency)} status={occupied ? 'Bezet' : 'Beschikbaar'} tone={occupied ? 'green' : 'slate'}
+        photoUrl={a.photo_url} />
     );
   }
   return (
