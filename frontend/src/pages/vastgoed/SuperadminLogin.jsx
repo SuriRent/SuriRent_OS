@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Delete, KeyRound, LayoutDashboard, Loader2 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { formatError } from '../../lib/api';
+import { setIosStatusBar } from '../../lib/ios-status-bar';
 
 const NUMPAD_LETTERS = {
   2: 'ABC', 3: 'DEF', 4: 'GHI', 5: 'JKL',
@@ -28,11 +29,17 @@ export default function SuperadminLogin() {
   useEffect(() => {
     const previousHtmlColor = document.documentElement.style.backgroundColor;
     const previousBodyColor = document.body.style.backgroundColor;
+    const themeColors = [...document.querySelectorAll('meta[name="theme-color"]')]
+      .map((meta) => meta.getAttribute('content'));
     document.documentElement.style.backgroundColor = '#F3F8F5';
     document.body.style.backgroundColor = '#F3F8F5';
+    setIosStatusBar('#F3F8F5');
     return () => {
       document.documentElement.style.backgroundColor = previousHtmlColor;
       document.body.style.backgroundColor = previousBodyColor;
+      document.querySelectorAll('meta[name="theme-color"]').forEach((meta, index) => {
+        if (themeColors[index]) meta.setAttribute('content', themeColors[index]);
+      });
     };
   }, []);
 
@@ -133,37 +140,26 @@ export default function SuperadminLogin() {
     <main ref={panelRef} tabIndex={-1} onKeyDown={onKeyboardInput}
       className="fixed inset-0 flex flex-col overflow-y-auto bg-[#F3F8F5] outline-none"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-      {/* Desktop: kiosk-style witte PIN-kaart op de superadmin-dashboardachtergrond. */}
-      <div className="hidden bg-[#F3F8F5] lg:flex lg:min-h-full lg:flex-col">
-        <header className="flex items-center gap-3 bg-[#101827] px-8 py-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white">
-            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="font-black leading-tight text-white">SuriRent Superadmin</p>
-            <p className="text-xs font-medium text-slate-300">Platformbeheer</p>
-          </div>
-        </header>
-        <div className="flex flex-1 items-center justify-center p-8">
-          <section className="w-full max-w-md rounded-3xl bg-white px-8 py-9 shadow-[0_20px_60px_rgba(15,23,42,0.12)]"
-            data-testid="superadmin-pin-desktop">
-            <div className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-700 shadow-lg shadow-emerald-700/20">
-                <KeyRound className="h-7 w-7 text-white" aria-hidden="true" />
-              </div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900" data-testid="superadmin-login-title">
-                Superadmin
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">Voer uw 4-cijferige pincode in</p>
+      {/* Desktop: white PIN card on the superadmin dashboard background. */}
+      <div className="hidden min-h-full flex-1 items-center justify-center bg-[#F3F8F5] p-8 lg:flex">
+        <section className="w-full max-w-md rounded-3xl bg-white px-8 py-9 shadow-[0_20px_60px_rgba(15,23,42,0.12)]"
+          data-testid="superadmin-pin-desktop">
+          <div className="text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-700 shadow-lg shadow-emerald-700/20">
+              <KeyRound className="h-7 w-7 text-white" aria-hidden="true" />
             </div>
-            {pinDots()}
-            {status}
-            {keypad()}
-            <p className="mt-6 border-t border-slate-100 pt-4 text-center text-xs font-medium text-slate-400">
-              Beveiligde toegang tot het SuriRent-platform
-            </p>
-          </section>
-        </div>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900" data-testid="superadmin-login-title">
+              SuriRent N.V.
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">Voer uw 4-cijferige pincode in</p>
+          </div>
+          {pinDots()}
+          {status}
+          {keypad()}
+          <p className="mt-6 border-t border-slate-100 pt-4 text-center text-xs font-medium text-slate-400">
+            Beveiligde toegang tot het SuriRent-platform
+          </p>
+        </section>
       </div>
 
       {/* Mobiel: full-screen kiosk-PIN ervaring. */}
@@ -187,7 +183,7 @@ export default function SuperadminLogin() {
             </div>
             <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[#F3F8F5] bg-emerald-500" />
           </div>
-          <p className="mt-4 text-center text-sm font-black uppercase tracking-wider text-emerald-900">SuriRent Superadmin</p>
+          <p className="mt-4 text-center text-sm font-black uppercase tracking-wider text-emerald-900">SuriRent N.V.</p>
           <p className="mt-2 text-center text-sm font-medium text-slate-600">Voer uw 4-cijferige pincode in</p>
           {pinDots(true)}
           {error && <p role="alert" data-testid="superadmin-login-error"

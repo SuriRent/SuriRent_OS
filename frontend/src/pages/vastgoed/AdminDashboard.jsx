@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useContext, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { KioskFxCtx, FxStats, FxTabs, FxSearch, FxRow, FxIconBtn, FxEmpty } from '../../components/KioskFx';
 import { hostConfirm } from '../../components/EmbedConfirm';
 import { useEmbedConfirm } from '../../components/EmbedConfirm';
@@ -4558,6 +4559,19 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
     if (activeGroup) setSelectedGroup(activeGroup.key);
   }, [activeGroup?.key]);
   const visibleGroup = groups.find((group) => group.key === selectedGroup) || activeGroup || groups[0];
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
   return (
     <header className="xl:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shadow-[0_4px_14px_-10px_rgba(15,23,42,0.2)]"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} data-testid="saas-console-mobile-nav">
@@ -4585,44 +4599,74 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
           <LogOut className="w-[18px] h-[18px]" />
         </button>
       </div>
-      <nav id="saas-console-mobile-menu"
-        className={`border-t border-slate-100 bg-white p-3 space-y-3 ${menuOpen ? '' : 'hidden'}`}
-        aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu">
-        <div className="flex flex-wrap gap-2 pb-1">
-          {groups.map((group) => {
-            const selected = group.key === visibleGroup?.key;
-            return (
-              <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
-                data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
-                className={`shrink-0 min-h-10 px-3 rounded-lg text-xs font-bold transition-colors ${
-                  selected ? 'bg-[#E8F5ED] text-emerald-800' : 'text-slate-500 hover:bg-slate-50'
-                }`}>
-                {group.label}
+      {menuOpen && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm"
+          onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
+          <nav id="saas-console-mobile-menu" role="dialog" aria-modal="true"
+            aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
+            onClick={(event) => event.stopPropagation()}
+            className="flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-emerald-100 bg-[#F3F8F5] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-emerald-100 bg-white px-4 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white">
+                  <LayoutDashboard className="h-6 w-6" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">SaaS Beheer</p>
+                  <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setMenuOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+                aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
+                <X className="h-5 w-5" />
               </button>
-            );
-          })}
-        </div>
-        {visibleGroup && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visibleGroup.items.map((item) => {
-              const Icon = item.icon;
-              const selected = item.id === tab;
-              const showBadge = item.id === 'notifications' && badgeCount > 0;
-              return (
-                <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
-                  data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
-                  className={`relative min-h-11 px-3 rounded-lg border inline-flex items-center gap-2 text-left text-sm font-bold transition-colors ${
-                    selected ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}>
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">{item.label}</span>
-                  {showBadge && <span className={`min-w-5 h-5 px-1 rounded-full text-[10px] font-black inline-flex items-center justify-center ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </nav>
+            </div>
+            <div className="min-h-0 overflow-y-auto p-4">
+              <div className="mb-4 flex flex-wrap gap-2">
+                {groups.map((group) => {
+                  const selected = group.key === visibleGroup?.key;
+                  return (
+                    <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
+                      data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
+                      className={`min-h-10 rounded-xl px-3 text-xs font-black transition-colors ${
+                        selected ? 'bg-emerald-700 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-emerald-50'
+                      }`}>
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {visibleGroup && (
+                <div className="grid grid-cols-2 gap-3">
+                  {visibleGroup.items.map((item) => {
+                    const Icon = item.icon;
+                    const selected = item.id === tab;
+                    const showBadge = item.id === 'notifications' && badgeCount > 0;
+                    return (
+                      <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
+                        data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
+                        className={`relative flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center shadow-sm transition active:scale-[0.98] ${
+                          selected ? 'border-emerald-700 bg-emerald-700 text-white shadow-emerald-900/10'
+                            : 'border-emerald-100 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50'
+                        }`}>
+                        <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                          selected ? 'bg-white/15' : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          <Icon className="h-6 w-6" />
+                        </span>
+                        <span className="text-xs font-black leading-tight">{item.label}</span>
+                        {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </nav>
+        </div>,
+        document.body
+      )}
     </header>
   );
 }
@@ -4794,8 +4838,8 @@ export default function AdminDashboard() {
       window.removeEventListener('saas-nav', saasHandler);
     };
   }, [navigate]);
-  // iPhone-PWA: statusbalk effen lichtgrijs zoals de header (zoals Expo Go).
-  useEffect(() => setIosStatusBar('#F7F8FA'), []);
+  // Match the standalone status bar to the superadmin surface only.
+  useEffect(() => setIosStatusBar(isSaasConsole ? '#F3F8F5' : '#F7F8FA'), [isSaasConsole]);
 
   // Auto-open de Setup Wizard sheet voor nieuwe bedrijven. Draait alleen
   // voor gewone admins (niet superadmin) en alleen wanneer de admin de
