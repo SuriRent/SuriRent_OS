@@ -123,7 +123,7 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
   );
 
   // Detail-view — dezelfde patroon als Appartementen/Huurders.
-  if (detailId) {
+  if (detailId && !kioskLayout) {
     const loc = items.find((x) => x.id === detailId);
     if (!loc) { setDetailId(null); return null; }
     return (
