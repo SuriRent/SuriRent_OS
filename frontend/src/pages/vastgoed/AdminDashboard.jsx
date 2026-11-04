@@ -4829,20 +4829,16 @@ export default function AdminDashboard() {
     // `/auth/logout` gaf een race — Safari navigeerde voordat de
     // Set-Cookie response was verwerkt, waardoor de auth-cookie op de
     // vervolgpagina nog geldig was → AuthProvider hield gebruiker
-    // ingelogd → redirect terug naar admin. We AWAITEN nu de server-
-    // logout (met 2.5s timeout) VOORDAT we storage clearen en navigeren.
+    // ingelogd → redirect terug naar admin. We starten de server-logout
+    // meteen, ruimen lokale gegevens op en wachten max. 1s voor navigatie.
     const wasSuperadmin = user?.role === 'superadmin';
     const wasDemo = (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
     })();
-    // Server-logout: wachten tot cookies zijn gewist (Safari fix).
-    try {
-      await Promise.race([
-        api.post('/auth/logout').catch(() => {}),
-        new Promise((res) => setTimeout(res, 2500)),
-      ]);
-    } catch { /* noop */ }
+    // Start server-logout meteen, zodat cookie-opruiming parallel loopt met
+    // lokale cleanup. Navigatie wacht daarna maximaal 1 seconde.
+    const serverLogout = api.post('/auth/logout').catch(() => {});
     // localStorage synchroon opruimen zodat volgende bezoeker geen resten ziet.
     try {
       // Sluit ook de gedeelde SSE-connectie — anders blijft die met stale
@@ -4868,6 +4864,12 @@ export default function AdminDashboard() {
       sessionStorage.removeItem('kiosk_emp_id');
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
+    } catch { /* noop */ }
+    try {
+      await Promise.race([
+        serverLogout,
+        new Promise((res) => setTimeout(res, 1000)),
+      ]);
     } catch { /* noop */ }
     // Hard nav naar /login op huidige origin. Als een echte gebruiker een
     // company-slug heeft, stuur naar `/{slug}/login` zodat de branded
