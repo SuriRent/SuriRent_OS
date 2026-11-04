@@ -3686,61 +3686,64 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
       <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
         style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-apartment-detail">
         <div className="flex-1 min-h-0 overflow-y-auto py-3">
-          <div className="mx-auto max-w-4xl space-y-3">
+          <div className="mx-auto max-w-5xl space-y-2.5">
             <button type="button" onClick={() => setDetailId(null)} data-testid="apartment-detail-back"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 font-bold text-slate-700 shadow-sm">
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-bold text-slate-700 shadow-sm">
               <ArrowLeft className="w-4 h-4" /> Terug naar appartementen
             </button>
-            <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl bg-white shadow-sm md:flex md:items-stretch">
               {photoUrl ? (
                 <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
-                  className="h-52 w-full bg-slate-100 object-cover sm:h-72"
+                  className="h-36 w-full bg-slate-100 object-cover sm:h-44 md:h-40 md:w-64 md:shrink-0"
                   onError={(event) => { event.currentTarget.style.display = 'none'; }} />
               ) : (
-                <div className="flex h-40 items-center justify-center bg-orange-50 text-[#FF5C00]">
-                  <Home className="h-12 w-12" />
+                <div className="flex h-28 items-center justify-center bg-orange-50 text-[#FF5C00] sm:h-32 md:h-auto md:w-64 md:shrink-0">
+                  <Home className="h-10 w-10" />
                 </div>
               )}
-              <div className="p-5 sm:p-6">
+              <div className="flex flex-1 items-center justify-between gap-4 p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
                     <h1 className="mt-1 break-words text-2xl font-black text-slate-900 sm:text-3xl">{selectedApartment.number}</h1>
                     <p className="mt-1 text-sm text-slate-500">{selectedApartment.address || 'Geen adres opgegeven'}</p>
+                    {selectedApartment.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{selectedApartment.description}</p>
+                    )}
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-black ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {isOccupied ? 'Bezet' : 'Beschikbaar'}
-                  </span>
                 </div>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {isOccupied ? 'Bezet' : 'Beschikbaar'}
+                </span>
               </div>
             </section>
             {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
-            <section className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <section className="grid gap-2.5 md:grid-cols-3">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huur p/m</p>
-                <p className="mt-2 text-xl font-black text-slate-900">{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}</p>
+                <p className="mt-1.5 text-lg font-black text-slate-900">{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}</p>
               </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huurder</p>
-                <p className="mt-2 truncate text-lg font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
+                <p className="mt-1.5 truncate text-base font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
                 {selectedApartment.tenant_id ? (
                   <button type="button" onClick={() => removeTenant(selectedApartment)}
-                    className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
+                    className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
                     data-testid="apartment-detail-remove-tenant">Huurder loskoppelen</button>
                 ) : (
                   <button type="button" onClick={() => setAssigningApartment(selectedApartment)}
-                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
                     data-testid="apartment-detail-assign"><Plus className="h-4 w-4" /> Huurder toewijzen</button>
                 )}
               </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm" data-testid="apartment-detail-actions">
+              <div className="rounded-2xl bg-white p-4 shadow-sm" data-testid="apartment-detail-actions">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Documenten & acties</p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setEditingApartment(selectedApartment)}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200"
                     data-testid="apartment-detail-edit"><Pencil className="h-4 w-4" /> Bewerk</button>
                   <button type="button" onClick={() => deleteApartment(selectedApartment)}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100"
                     data-testid="apartment-detail-delete"><Trash2 className="h-4 w-4" /> Verwijder</button>
                 </div>
               </div>
@@ -4839,7 +4842,7 @@ function AddApartmentModal({ initial = null, onClose, onSaved }) {
 
   return (
     <KioskModalShell title={initial ? 'Appartement bewerken' : 'Nieuw appartement'} Icon={Home}
-      testId="add-apartment" onClose={onClose}
+      testId="add-apartment" onClose={onClose} xwide={!!initial}
       footer={(
         <button onClick={save} disabled={saving || !number.trim() || !rent}
           data-testid="add-apartment-save"
