@@ -3126,7 +3126,11 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           fd.append('file', pendingIdPhoto);
           const { data: idr } = await api.post(`/tenants/${saved.id}/id-photo`, fd,
             { headers: { 'Content-Type': 'multipart/form-data' } });
-          saved = { ...saved, id_photo_url: idr?.id_photo_url || saved.id_photo_url };
+          saved = {
+            ...saved,
+            id_photo_url: idr?.id_photo_url || saved.id_photo_url,
+            avatar_url: idr?.avatar_url || null,
+          };
         } catch (e) {
           setError(`Huurder opgeslagen, maar ID-foto niet: ${formatError(e)}`);
           setLoading(false);

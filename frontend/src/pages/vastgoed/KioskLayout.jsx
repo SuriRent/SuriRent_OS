@@ -4268,7 +4268,7 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
       if (birthDate) body.birth_date = birthDate;
       if (idNumber.trim()) body.id_number = idNumber.trim();
       const r = await api.post('/tenants', body);
-      const created = r?.data;
+      let created = r?.data;
       // Upload de ID-kaart foto (indien gescand) direct na aanmaak. Fouten
       // hier blokkeren niet — huurder is al aangemaakt. `upload-id-photo`
       // triggert bovendien face-crop → tenant.avatar_url.
@@ -4276,16 +4276,32 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
         try {
           const fd = new FormData();
           fd.append('file', scannedIdFile);
-          await api.post(`/tenants/${created.id}/id-photo`, fd, {
+          const { data: photo } = await api.post(`/tenants/${created.id}/id-photo`, fd, {
             headers: { 'Content-Type': 'multipart/form-data' },
           });
+          created = {
+            ...created,
+            id_photo_url: photo?.id_photo_url || created.id_photo_url,
+            avatar_url: photo?.avatar_url || null,
+          };
         } catch (upErr) {
           console.warn('ID-foto upload gefaald (huurder wel aangemaakt):', upErr);
         }
       }
       if (created?.id && !scannedIdFile && prefill?.asset_id) {
-        await api.post(`/kiosk/tenants/${created.id}/attach-id-photo`, { asset_id: prefill.asset_id })
-          .catch((upErr) => console.warn('ID-foto koppelen gefaald (huurder wel aangemaakt):', upErr));
+        try {
+          const { data: photo } = await api.post(
+            `/kiosk/tenants/${created.id}/attach-id-photo`,
+            { asset_id: prefill.asset_id },
+          );
+          created = {
+            ...created,
+            id_photo_url: photo?.id_photo_url || created.id_photo_url,
+            avatar_url: photo?.avatar_url || null,
+          };
+        } catch (upErr) {
+          console.warn('ID-foto koppelen gefaald (huurder wel aangemaakt):', upErr);
+        }
       }
       onSaved && onSaved(created);
     } catch (e) { setErr(formatError(e)); }
