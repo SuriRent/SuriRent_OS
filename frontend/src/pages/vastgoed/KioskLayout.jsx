@@ -50,6 +50,7 @@ import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
 import { KIOSK_ADMIN_PAGES, KioskAdminPage } from '../../components/KioskAdminInvoices';
+import ImpersonationBanner from '../../components/ImpersonationBanner';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 const noop = () => {};
@@ -5862,6 +5863,7 @@ export default function KioskLayout() {
 
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
+    <ImpersonationBanner />
     <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
       <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />
       {manualOpen && <KioskManual onClose={() => setManualOpen(false)} />}
