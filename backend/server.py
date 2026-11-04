@@ -3079,6 +3079,20 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     return inv
 
 
+@api.post("/billing/me/bank-invoice")
+async def billing_me_bank_invoice(user=Depends(get_current_user)):
+    """Create or return the current company's open invoice for bank checkout."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    company = await db.companies.find_one({"id": cid}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if _company_display_currency(company) != "SRD":
+        raise HTTPException(status_code=400, detail="Bankoverschrijving is alleen beschikbaar voor facturen in SRD")
+    return await _ensure_open_invoice_for_company(company, user.get("email", ""))
+
+
 @api.post("/billing/me/checkout")
 async def billing_me_checkout():
     """Deprecated — online betaal-gateways (Mope/SumUp/Uni5Pay) zijn

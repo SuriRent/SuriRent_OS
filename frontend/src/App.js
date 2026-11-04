@@ -62,6 +62,7 @@ const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
 const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
 const SaaSStripeCheckout = lazyWithRetry(() => import('./pages/SaaSStripeCheckout'));
+const SaaSBankCheckout = lazyWithRetry(() => import('./pages/SaaSBankCheckout'));
 const KioskStripePay = lazyWithRetry(() => import('./pages/KioskStripePay'));
 
 function RouteFallback() {
@@ -84,6 +85,7 @@ function BrandedRouteTree() {
         <Route path="login" element={<LoginPage />} />
         <Route path="admin/*" element={<Protected><AdminRoute /></Protected>} />
         <Route path="saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+        <Route path="saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
         <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
         <Route path="kiosk/huurder" element={<TenantKioskLayout />} />
@@ -318,6 +320,7 @@ function AppRoutes() {
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+      <Route path="/saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
       <Route path="/betalen/:token" element={<KioskStripePay />} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
@@ -370,6 +373,7 @@ function HybridRoutes() {
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+      <Route path="/saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/assistent" element={<AssistantPage />} />

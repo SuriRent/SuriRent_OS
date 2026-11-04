@@ -104,7 +104,7 @@ function PayButtons({ invoiceId, onPay, size = 'lg' }) {
   );
 }
 
-function PayBanner({ me, openInvoices, stripeOn, onPayMany }) {
+function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay }) {
   const [sel, setSel] = useState(() => new Set(openInvoices.map((i) => i.id)));
   const key = openInvoices.map((i) => i.id).join(',');
   useEffect(() => { setSel(new Set(openInvoices.map((i) => i.id))); }, [key]);
@@ -161,11 +161,24 @@ function PayBanner({ me, openInvoices, stripeOn, onPayMany }) {
           <p className="text-[11px] font-semibold text-slate-500">Totaal te betalen ({chosen.length})</p>
           <p className="text-xl font-black text-slate-900 tracking-tight tabular-nums" data-testid="saas-pay-amount">{fmt(total, cur)}</p>
         </div>
-        {stripeOn ? (
-          <div className={chosen.length ? '' : 'opacity-40 pointer-events-none'}>
-            <PayButtons onPay={(_, m) => onPayMany(chosen.map((i) => i.id), m)} />
-          </div>
-        ) : <p className="text-xs text-slate-500">Betaal via het tabblad Bankoverschrijving.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          {stripeOn && (
+            <div className={chosen.length ? '' : 'opacity-40 pointer-events-none'}>
+              <PayButtons onPay={(_, m) => onPayMany(chosen.map((i) => i.id), m)} />
+            </div>
+          )}
+          {bankOn && (
+            <button type="button" onClick={() => onBankPay(chosen[0].id)} disabled={chosen.length !== 1}
+              data-testid="saas-pay-bank-btn"
+              className="h-11 px-4 rounded-xl border-2 border-slate-200 hover:border-[#FF5C00] hover:bg-orange-50 text-slate-800 font-bold text-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+              <Landmark className="w-4 h-4" /> Bankoverschrijving
+            </button>
+          )}
+        </div>
+        {bankOn && chosen.length !== 1 && (
+          <p className="text-[11px] text-slate-500">Selecteer precies één factuur voor betaling via bankoverschrijving.</p>
+        )}
+        {!stripeOn && !bankOn && <p className="text-xs text-slate-500">Neem contact op met SuriRent om uw factuur te betalen.</p>}
       </div>
     </div>
   );
@@ -208,7 +221,7 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
   );
 }
 
-function InvoicesPanel({ invoices, stripeOn, onPay }) {
+function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
   if (invoices.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen facturen.</p>;
   return (
     <div data-testid="my-invoices-list">
@@ -240,7 +253,13 @@ function InvoicesPanel({ invoices, stripeOn, onPay }) {
                 </StatusPill>
               </div>
               <div className="md:w-[190px] flex md:justify-end justify-end">
-                {stripeOn && open ? <PayButtons invoiceId={inv.id} onPay={onPay} size="sm" />
+                {open && (stripeOn || bankOn) ? <div className="flex flex-wrap justify-end gap-1">
+                  {stripeOn && <PayButtons invoiceId={inv.id} onPay={onPay} size="sm" />}
+                  {bankOn && <button type="button" onClick={() => onBankPay(inv.id)} data-testid={`my-invoice-bank-${inv.id}`}
+                    className="h-8 px-2.5 rounded-lg text-[11px] border border-slate-200 hover:border-[#FF5C00] text-slate-700 font-bold inline-flex items-center gap-1">
+                    <Landmark className="w-3.5 h-3.5" /> Bank
+                  </button>}
+                </div>
                   : <span className="text-[11px] text-slate-400">{paid ? `Betaald ${fmtDate(inv.paid_at)}` : ''}</span>}
               </div>
             </div>
@@ -458,6 +477,11 @@ export default function MijnAbonnement() {
     navigate(`/saas/checkout/${invoiceId || 'open'}?method=${method}&back=${back}`);
   };
 
+  const goBankPay = (invoiceId) => {
+    const back = encodeURIComponent(location.pathname + location.hash);
+    navigate(`/saas/bank-checkout/${invoiceId}?back=${back}`);
+  };
+
   const payMany = (ids, method, save) => {
     const back = encodeURIComponent(location.pathname + location.hash);
     navigate(`/saas/checkout/selectie?ids=${ids.join(',')}&method=${method}${save ? '&save=1' : ''}&back=${back}`);
@@ -514,7 +538,8 @@ export default function MijnAbonnement() {
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
       <KpiStrip me={me} openInvoices={openInvoices} openTotal={openTotal} lastPayment={payments[0]} />
-      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} onPayMany={payMany} />
+      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} bankOn={showBank}
+        onPayMany={payMany} onBankPay={goBankPay} />
       <AutopayCard autopay={autopay} stripeOn={stripeOn} hasOpen={sortedOpen.length > 0} busy={apBusy}
         onToggle={(v) => apCall(() => api.put('/billing/me/autopay', { enabled: v }))}
         onRemove={() => { if (window.confirm('Opgeslagen kaart verwijderen en automatisch betalen uitzetten?')) apCall(() => api.delete('/billing/me/autopay')); }}
@@ -528,7 +553,8 @@ export default function MijnAbonnement() {
       </div>
 
       <div className={`${CARD} overflow-hidden`} data-testid={`my-sub-panel-${tab}`}>
-        {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} onPay={goPay} />}
+        {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}
+          onPay={goPay} onBankPay={goBankPay} />}
         {tab === 'payments' && <PaymentsPanel payments={payments} />}
         {tab === 'plans' && (
           <div className="p-5">

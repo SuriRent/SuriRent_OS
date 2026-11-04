@@ -140,11 +140,11 @@ export default function TrialBanner() {
             {bank && (info.currency || 'SRD') === 'SRD' && (
               <button
                 type="button"
-                onClick={() => navigate('/admin/instellingen?tab=bank#abonnement')}
+                onClick={() => navigate('/saas/bank-checkout/open?back=%2Fadmin%2Finstellingen%23abonnement')}
                 data-testid="trial-upload-payment-proof"
                 className="w-full h-11 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm mb-3 inline-flex items-center justify-center gap-2"
               >
-                Ik heb betaald — betaalbewijs uploaden <ArrowRight className="w-4 h-4" />
+                Bankgegevens bekijken en betalen <ArrowRight className="w-4 h-4" />
               </button>
             )}
 
