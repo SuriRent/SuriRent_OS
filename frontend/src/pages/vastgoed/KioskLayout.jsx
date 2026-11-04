@@ -4986,9 +4986,9 @@ function PaymentsViewerModal({ onClose }) {
 // =====================================================================
 // Nieuw onderhoud modal
 // =====================================================================
-function AddMaintenanceModal({ onClose, onSaved }) {
+function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
   const [apartments, setApartments] = useState([]);
-  const [aptId, setAptId] = useState('');
+  const [aptId, setAptId] = useState(initialApartmentId);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -6003,6 +6003,7 @@ export default function KioskLayout() {
       )}
       {showAddMaintenance && (
         <AddMaintenanceModal
+          initialApartmentId={apartment?.id || ''}
           onClose={() => setShowAddMaintenance(false)}
           onSaved={() => setShowAddMaintenance(false)} />
       )}
