@@ -45,6 +45,7 @@ function cacheUser(user) {
 async function autoLoginWithSaved() {
   let email = null; let password = null;
   const cachedUser = readCachedUser();
+  if (cachedUser?.role === 'superadmin') return null;
   try {
     if (localStorage.getItem('auto_login_paused') === '1') return null;
     email = localStorage.getItem('saved_login_email');
@@ -52,8 +53,7 @@ async function autoLoginWithSaved() {
   } catch { return null; }
   if (!email || !password) return null;
   try {
-    const loginEndpoint = cachedUser?.role === 'superadmin' ? '/auth/superadmin/login' : '/auth/login';
-    const { data } = await api.post(loginEndpoint, { email, password });
+    const { data } = await api.post('/auth/login', { email, password });
     if (!data?.token) return null; // bv. kiosk-medewerker (PIN-stap) → handmatig
     localStorage.setItem('admin_token', data.token);
     const { data: me } = await api.get('/auth/me');
@@ -199,24 +199,8 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const loginSuperadmin = async (email, password) => {
-    const { data } = await api.post('/auth/superadmin/login', { email, password });
-    if (data?.token) localStorage.setItem('admin_token', data.token);
-    cacheUser(data.user);
-    localStorage.removeItem(ACTIVE_COMPANY_KEY);
-    setActiveCompanyIdState(null);
-    setUser(data.user);
-    setActiveCompanyMeta(null);
-    try {
-      localStorage.setItem('device_user_email', data.user.email);
-      localStorage.setItem('device_user_name', data.user.name || data.user.email.split('@')[0]);
-      localStorage.removeItem('auto_login_paused');
-    } catch { /* ignore */ }
-    return data;
-  };
-
-  const loginSuperadminPin = async (email, pin) => {
-    const { data } = await api.post('/auth/superadmin/pin-login', { email, pin });
+  const loginSuperadminPin = async (pin) => {
+    const { data } = await api.post('/auth/superadmin/pin-login', { pin });
     if (data?.user?.role !== 'superadmin' || !data?.access_token) {
       throw new Error('Dit account heeft geen superadmin-PIN ingesteld.');
     }
@@ -230,6 +214,8 @@ export function AuthProvider({ children }) {
       localStorage.setItem('device_user_email', data.user.email);
       localStorage.setItem('device_user_name', data.user.name || data.user.email.split('@')[0]);
       localStorage.removeItem('auto_login_paused');
+      localStorage.removeItem('saved_login_email');
+      localStorage.removeItem('saved_login_password');
     } catch { /* ignore */ }
     return data;
   };
@@ -288,7 +274,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, login, loginSuperadmin, loginSuperadminPin, register, logout, refresh,
+      user, loading, login, loginSuperadminPin, register, logout, refresh,
       activeCompanyId, activeCompany, setActiveCompany,
     }}>
       {children}

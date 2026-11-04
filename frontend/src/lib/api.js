@@ -56,7 +56,7 @@ api.interceptors.request.use((config) => {
 // automatisch uit de app sturen. De loginstatus blijft behouden; de pagina
 // kan de fout tonen en de gebruiker kan zelf opnieuw proberen of uitloggen.
 const PUBLIC_401_PATHS = [
-  '/auth/login', '/auth/superadmin/login', '/auth/superadmin/pin-login',
+  '/auth/login', '/auth/superadmin/pin-login',
   '/auth/personal-pin/login', '/auth/register', '/auth/kiosk-pin',
   '/tenant-portal/login', '/tenant-portal/pin-login',
 ];

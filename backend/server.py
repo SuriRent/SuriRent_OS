@@ -1464,35 +1464,6 @@ async def login(body: LoginIn, request: Request, response: Response):
     }
 
 
-@api.post("/auth/superadmin/login")
-async def superadmin_login(body: LoginIn, request: Request, response: Response):
-    email = body.email.lower().strip()
-    user = await db.users.find_one({"email": email})
-    ok = user and await asyncio.to_thread(
-        verify_password, body.password, user.get("password_hash", "")
-    )
-    if not ok:
-        raise HTTPException(status_code=401, detail="Onjuiste inloggegevens")
-    if user.get("disabled"):
-        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
-    if user.get("role") != "superadmin":
-        raise HTTPException(status_code=403, detail="Dit account heeft geen superadmin-toegang")
-
-    token = create_token({
-        "sub": user["id"], "email": email, "type": "access",
-        "company_id": user.get("company_id"), "role": "superadmin",
-    }, ACCESS_MIN)
-    await _invalidate_prior_sessions(request, response, keep="access_token")
-    _set_access_cookie(response, token)
-    return {
-        "token": token,
-        "user": {
-            "id": user["id"], "email": user["email"], "name": user.get("name", ""),
-            "role": "superadmin", "company_id": user.get("company_id"),
-        },
-    }
-
-
 @api.post("/auth/logout")
 async def logout(request: Request, response: Response):
     # Wis ALLE auth-cookies + server-side sessies. Kritiek voor gedeelde
@@ -1762,24 +1733,33 @@ class _PinLoginIn(_PydBase):
     email: str
     pin: str
 
+class _SuperadminPinLoginIn(_PydBase):
+    pin: str
+
 @api.post("/auth/superadmin/pin-login")
-async def superadmin_pin_login(body: _PinLoginIn, request: Request, response: Response):
-    """Superadmin login met e-mail en de ingestelde persoonlijke PIN."""
-    email = (body.email or "").strip().lower()
+async def superadmin_pin_login(body: _SuperadminPinLoginIn, request: Request, response: Response):
+    """Superadmin login met alleen de ingestelde persoonlijke PIN."""
     pin = (body.pin or "").strip()
-    if not email or not pin.isdigit() or len(pin) != 4:
-        raise HTTPException(status_code=400, detail="Ongeldige PIN of e-mail")
-    throttle_key = f"ppin:{_client_ip(request)}:{email}"
+    if not pin.isdigit() or len(pin) != 4:
+        raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
+    throttle_key = f"superadmin-pin:{_client_ip(request)}"
     _pin_throttle_check(throttle_key)
-    user = await db.users.find_one({"email": email, "role": "superadmin"})
-    if not user or not user.get("personal_pin_hash") or not verify_password(pin, user.get("personal_pin_hash", "")):
-        _pin_throttle_fail(throttle_key)
-        raise HTTPException(status_code=401, detail="Onbekende combinatie van e-mail en PIN")
-    if user.get("disabled"):
-        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    superadmins = await db.users.find(
+        {"role": "superadmin", "disabled": {"$ne": True},
+         "personal_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "email": 1, "name": 1, "company_id": 1, "personal_pin_hash": 1},
+    ).to_list(100)
+    matches = []
+    for candidate in superadmins:
+        if await asyncio.to_thread(verify_password, pin, candidate.get("personal_pin_hash", "")):
+            matches.append(candidate)
+    if len(matches) != 1:
+        _pin_throttle_fail(throttle_key, max_attempts=5)
+        raise HTTPException(status_code=401, detail="Ongeldige PIN")
+    user = matches[0]
     _pin_throttle_clear(throttle_key)
     token = create_token({
-        "sub": user["id"], "email": email, "type": "access",
+        "sub": user["id"], "email": user["email"], "type": "access",
         "company_id": user.get("company_id"), "role": "superadmin",
     }, ACCESS_MIN)
     await _invalidate_prior_sessions(request, response, keep="access_token")
@@ -1798,7 +1778,16 @@ async def personal_pin_setup(body: _PinSetupIn, user=Depends(get_current_user)):
     pin = (body.pin or "").strip()
     if not pin.isdigit() or len(pin) != 4:
         raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
-    if user.get("company_id") and user.get("role") != "superadmin":
+    if user.get("role") == "superadmin":
+        other_superadmins = await db.users.find(
+            {"id": {"$ne": user["id"]}, "role": "superadmin",
+             "personal_pin_hash": {"$exists": True, "$ne": None}},
+            {"_id": 0, "personal_pin_hash": 1},
+        ).to_list(100)
+        for other in other_superadmins:
+            if await asyncio.to_thread(verify_password, pin, other.get("personal_pin_hash", "")):
+                raise HTTPException(status_code=409, detail="Deze pincode is al ingesteld voor een andere superadmin")
+    elif user.get("company_id"):
         await _check_employee_pin_unique(user["company_id"], pin, exclude_eid=user.get("employee_id"),
                                          exclude_uid=user["id"])
     await db.users.update_one(
@@ -1829,7 +1818,7 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
     if u.get("disabled"):
         raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
     if u.get("role") == "superadmin":
-        raise HTTPException(status_code=403, detail="Superadmins loggen in via /superadmin/login")
+        raise HTTPException(status_code=403, detail="Superadmins gebruiken hun aparte PIN-login")
     _pin_throttle_clear(throttle_key)
     if u.get("role") == "kiosk":
         cid = u.get("company_id")
@@ -6371,7 +6360,6 @@ async def test_saas_smtp(user=Depends(require_role("superadmin"))):
 class SuperadminAccountIn(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
-    password: Optional[str] = None
 
 
 @api.get("/superadmin/account")
@@ -6384,7 +6372,6 @@ async def get_superadmin_account(user=Depends(require_role("superadmin"))):
         "email": me.get("email", ""),
         "name": me.get("name", ""),
         "role": me.get("role"),
-        "password_updated_at": me.get("password_updated_at"),
     }
 
 
@@ -6392,7 +6379,7 @@ async def get_superadmin_account(user=Depends(require_role("superadmin"))):
 async def update_superadmin_account(
     body: SuperadminAccountIn, user=Depends(require_role("superadmin"))
 ):
-    """Superadmin kan zijn/haar eigen naam, e-mail en wachtwoord wijzigen."""
+    """Superadmin kan zijn/haar eigen naam en e-mailadres wijzigen."""
     update: dict = {}
 
     if body.name is not None:
@@ -6413,14 +6400,6 @@ async def update_superadmin_account(
             raise HTTPException(status_code=400, detail="E-mailadres is al in gebruik")
         update["email"] = new_email
 
-    if body.password is not None and body.password != "":
-        if len(body.password) < 6:
-            raise HTTPException(
-                status_code=400, detail="Wachtwoord moet minstens 6 tekens bevatten",
-            )
-        update["password_hash"] = hash_password(body.password)
-        update["password_updated_at"] = iso(now_utc())
-
     if not update:
         raise HTTPException(status_code=400, detail="Geen wijzigingen ontvangen")
 
@@ -6432,7 +6411,6 @@ async def update_superadmin_account(
         "ok": True,
         "email": (me or {}).get("email"),
         "name": (me or {}).get("name"),
-        "password_updated_at": (me or {}).get("password_updated_at"),
     }
 
 

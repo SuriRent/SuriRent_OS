@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Delete, KeyRound, LayoutDashboard, Loader2 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { formatError } from '../../lib/api';
-import LoginHeader from './auth/LoginHeader';
+
+const NUMPAD_LETTERS = {
+  2: 'ABC', 3: 'DEF', 4: 'GHI', 5: 'JKL',
+  6: 'MNO', 7: 'PQRS', 8: 'TUV', 9: 'WXYZ',
+};
 
 export default function SuperadminLogin() {
   const navigate = useNavigate();
-  const { user, loading: authLoading, loginSuperadmin, loginSuperadminPin } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const panelRef = useRef(null);
+  const { user, loading: authLoading, loginSuperadminPin } = useAuth();
   const [pin, setPin] = useState('');
-  const [method, setMethod] = useState('password');
-  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,102 +21,185 @@ export default function SuperadminLogin() {
     if (!authLoading && user?.role === 'superadmin') navigate('/admin', { replace: true });
   }, [authLoading, navigate, user]);
 
-  const submit = async (event) => {
-    event.preventDefault();
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const previousHtmlColor = document.documentElement.style.backgroundColor;
+    const previousBodyColor = document.body.style.backgroundColor;
+    document.documentElement.style.backgroundColor = '#F3F8F5';
+    document.body.style.backgroundColor = '#F3F8F5';
+    return () => {
+      document.documentElement.style.backgroundColor = previousHtmlColor;
+      document.body.style.backgroundColor = previousBodyColor;
+    };
+  }, []);
+
+  const verifyPin = async (value) => {
     setSubmitting(true);
     setError('');
     try {
-      if (method === 'pin') await loginSuperadminPin(email.trim(), pin);
-      else await loginSuperadmin(email.trim(), password);
+      await loginSuperadminPin(value);
       navigate('/admin', { replace: true });
     } catch (err) {
-      setError(formatError(err, 'Inloggen mislukt. Controleer uw gegevens.'));
+      setError(formatError(err, 'Ongeldige pincode. Probeer opnieuw.'));
+      setPin('');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <main className="min-h-screen bg-[#F3F8F5] px-4 pb-8 text-slate-900 sm:px-6">
-      <div className="-mx-4 bg-[#101827] sm:-mx-6"
-        style={{ paddingTop: 'var(--kiosk-sat, env(safe-area-inset-top, 0px))' }}>
-        <LoginHeader branding={{ app_name: 'SuriRent Superadmin', tagline: 'Platformbeheer' }} />
-      </div>
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl items-center justify-center py-5">
-        <section className="w-full rounded-3xl bg-white px-6 py-8 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:px-12 sm:py-10">
-          <div className="mx-auto max-w-xl">
-            <div className="mb-5 text-center">
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-700 shadow-lg shadow-emerald-700/20">
-                <ShieldCheck className="h-7 w-7 text-white" aria-hidden="true" />
-              </div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-900" data-testid="superadmin-login-title">
-                Superadmin Login
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">Log in op het SuriRent-platformbeheer</p>
-            </div>
-            <p className="mb-6 text-center text-xs text-slate-500">
-              Geen superadmin-account? <Link to="/login?view=admin" className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline">Naar gewone login</Link>
-            </p>
+  const handleKey = (key) => {
+    if (submitting) return;
+    setError('');
+    if (key === 'DEL') {
+      setPin((current) => current.slice(0, -1));
+      return;
+    }
+    if (!/^\d$/.test(key) || pin.length >= 4) return;
+    const next = pin + key;
+    setPin(next);
+    if (next.length === 4) verifyPin(next);
+  };
 
-            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="Kies inlogmethode">
-              <button type="button" onClick={() => { setMethod('password'); setError(''); }}
-                aria-pressed={method === 'password'} data-testid="superadmin-login-password-tab"
-                className={`h-10 rounded-lg text-sm font-bold transition ${method === 'password' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                Wachtwoord
-              </button>
-              <button type="button" onClick={() => { setMethod('pin'); setError(''); }}
-                aria-pressed={method === 'pin'} data-testid="superadmin-login-pin-tab"
-                className={`h-10 rounded-lg text-sm font-bold transition ${method === 'pin' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                Pincode
-              </button>
-            </div>
+  const onKeyboardInput = (event) => {
+    if (/^\d$/.test(event.key)) {
+      event.preventDefault();
+      handleKey(event.key);
+    } else if (event.key === 'Backspace') {
+      event.preventDefault();
+      handleKey('DEL');
+    }
+  };
 
-            {error && (
-              <div role="alert" data-testid="superadmin-login-error"
-                className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {error}
-              </div>
+  const keypad = (mobile = false) => (
+    <div role="group" aria-label="Pincode toetsenbord"
+      className={`grid grid-cols-3 ${mobile ? 'mt-6 w-[min(340px,88%)]' : 'mx-auto mt-5 w-full max-w-xs'} ${
+      mobile ? 'gap-x-6 gap-y-1' : 'gap-2'
+    }`}>
+      {['1', '2', '3', '4', '5', '6', '7', '8', '9', '_empty', '0', 'DEL'].map((key) => (
+        key === '_empty' ? <div key={key} /> : (
+          <button key={key} type="button" onClick={() => handleKey(key)} disabled={submitting}
+            aria-label={key === 'DEL' ? 'Laatste cijfer verwijderen' : key}
+            data-testid={`superadmin-keypad-${key}`}
+            className={mobile
+              ? 'flex h-[clamp(54px,8vh,70px)] flex-col items-center justify-center rounded-2xl border border-emerald-200/80 bg-white/80 text-emerald-900 shadow-sm transition hover:bg-white active:scale-95 disabled:opacity-50'
+              : 'flex h-14 flex-col items-center justify-center rounded-xl border border-emerald-100 bg-slate-50 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 active:scale-95 disabled:opacity-50'}>
+            {key === 'DEL' ? (
+              <Delete className={mobile ? 'h-7 w-7 text-emerald-700' : 'h-5 w-5 text-slate-600'} />
+            ) : (
+              <>
+                <span className={`font-black leading-none ${mobile ? 'text-3xl' : 'text-2xl text-slate-900'}`}>{key}</span>
+                {NUMPAD_LETTERS[key] && (
+                  <span className={`mt-0.5 text-[9px] font-bold tracking-[0.18em] ${
+                    mobile ? 'text-emerald-700/70' : 'text-slate-400'
+                  }`}>{NUMPAD_LETTERS[key]}</span>
+                )}
+              </>
             )}
+          </button>
+        )
+      ))}
+    </div>
+  );
 
-            <form onSubmit={submit} className="space-y-4">
-              <div>
-                <label htmlFor="superadmin-email" className="mb-2 block text-sm font-bold text-slate-700">E-mailadres</label>
-                <input id="superadmin-email" data-testid="superadmin-email" type="email" autoComplete="username"
-                  required value={email} onChange={(event) => setEmail(event.target.value)}
-                  className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
-              </div>
-              {method === 'password' ? (
-                <div>
-                  <label htmlFor="superadmin-password" className="mb-2 block text-sm font-bold text-slate-700">Wachtwoord</label>
-                  <div className="relative">
-                    <input id="superadmin-password" data-testid="superadmin-password"
-                      type={showPassword ? 'text' : 'password'} autoComplete="current-password" required
-                      value={password} onChange={(event) => setPassword(event.target.value)}
-                      className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 pr-12 text-base text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
-                    <button type="button" onClick={() => setShowPassword((value) => !value)}
-                      aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
-                      className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 hover:text-slate-700">
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label htmlFor="superadmin-pin" className="mb-2 block text-sm font-bold text-slate-700">4-cijferige pincode</label>
-                  <input id="superadmin-pin" data-testid="superadmin-pin-login" type="password"
-                    inputMode="numeric" pattern="[0-9]{4}" maxLength={4} autoComplete="one-time-code" required
-                    value={pin} onChange={(event) => setPin(event.target.value)}
-                    className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-center text-2xl tracking-[0.5em] text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
-                </div>
-              )}
-              <button type="submit" disabled={submitting}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 text-lg font-black text-white shadow-lg shadow-emerald-700/20 transition hover:bg-emerald-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                {submitting ? 'Bezig met inloggen…' : method === 'pin' ? 'Inloggen met pincode' : 'Inloggen'}
-              </button>
-            </form>
+  const pinDots = (mobile = false) => (
+    <div className="mt-5 flex items-center justify-center gap-5"
+      aria-label={`${pin.length} van 4 pincodecijfers ingevoerd`}>
+      {[0, 1, 2, 3].map((index) => {
+        const color = error ? 'bg-red-400 scale-110'
+          : index < pin.length ? 'bg-emerald-700 scale-110'
+            : (mobile ? 'bg-emerald-200' : 'bg-slate-200');
+        return <span key={index} data-testid={`superadmin-pin-dot-${index}`}
+          className={`h-4 w-4 rounded-full transition-all ${color}`} />;
+      })}
+    </div>
+  );
+
+  const status = (
+    <>
+      {error && <p role="alert" data-testid="superadmin-login-error"
+        className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-center text-sm font-bold text-red-700">
+        {error}
+      </p>}
+      {submitting && <div className="mt-4 flex items-center justify-center gap-2 text-sm font-bold text-slate-600">
+        <Loader2 className="h-4 w-4 animate-spin" /> Pincode controleren…
+      </div>}
+    </>
+  );
+
+  return (
+    <main ref={panelRef} tabIndex={-1} onKeyDown={onKeyboardInput}
+      className="fixed inset-0 flex flex-col overflow-y-auto bg-[#F3F8F5] outline-none"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {/* Desktop: kiosk-style witte PIN-kaart op de superadmin-dashboardachtergrond. */}
+      <div className="hidden bg-[#F3F8F5] lg:flex lg:min-h-full lg:flex-col">
+        <header className="flex items-center gap-3 bg-[#101827] px-8 py-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white">
+            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
           </div>
-        </section>
+          <div>
+            <p className="font-black leading-tight text-white">SuriRent Superadmin</p>
+            <p className="text-xs font-medium text-slate-300">Platformbeheer</p>
+          </div>
+        </header>
+        <div className="flex flex-1 items-center justify-center p-8">
+          <section className="w-full max-w-md rounded-3xl bg-white px-8 py-9 shadow-[0_20px_60px_rgba(15,23,42,0.12)]"
+            data-testid="superadmin-pin-desktop">
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-700 shadow-lg shadow-emerald-700/20">
+                <KeyRound className="h-7 w-7 text-white" aria-hidden="true" />
+              </div>
+              <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900" data-testid="superadmin-login-title">
+                Superadmin
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">Voer uw 4-cijferige pincode in</p>
+            </div>
+            {pinDots()}
+            {status}
+            {keypad()}
+            <p className="mt-6 border-t border-slate-100 pt-4 text-center text-xs font-medium text-slate-400">
+              Beveiligde toegang tot het SuriRent-platform
+            </p>
+          </section>
+        </div>
+      </div>
+
+      {/* Mobiel: full-screen kiosk-PIN ervaring. */}
+      <div className="relative flex min-h-full flex-1 flex-col items-center overflow-hidden bg-[#F3F8F5] text-slate-900 lg:hidden"
+        data-testid="superadmin-pin-mobile">
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-emerald-200/50 blur-3xl" />
+          <div className="absolute -left-32 top-1/3 h-80 w-80 rounded-full bg-emerald-100/80 blur-3xl" />
+          <svg className="absolute inset-0 h-full w-full opacity-[0.06]" preserveAspectRatio="none" viewBox="0 0 400 800">
+            <path d="M0,200 Q200,150 400,250 L400,300 Q200,200 0,250 Z" fill="#047857" />
+            <path d="M0,360 Q200,310 400,410 L400,460 Q200,360 0,410 Z" fill="#047857" />
+          </svg>
+        </div>
+        <div className="relative z-10 flex min-h-full w-full flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-6">
+          <h1 className="text-center text-4xl font-black tracking-tight text-slate-900" data-testid="superadmin-login-title-mobile">
+            Welkom
+          </h1>
+          <div className="relative mt-5">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xl shadow-emerald-900/20">
+              <LayoutDashboard className="h-12 w-12" aria-hidden="true" />
+            </div>
+            <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[#F3F8F5] bg-emerald-500" />
+          </div>
+          <p className="mt-4 text-center text-sm font-black uppercase tracking-wider text-emerald-900">SuriRent Superadmin</p>
+          <p className="mt-2 text-center text-sm font-medium text-slate-600">Voer uw 4-cijferige pincode in</p>
+          {pinDots(true)}
+          {error && <p role="alert" data-testid="superadmin-login-error"
+            className="mt-4 rounded-full border border-red-200 bg-red-50 px-5 py-2 text-center text-xs font-bold text-red-700 shadow-sm">{error}</p>}
+          {submitting && <div className="mt-3 flex items-center gap-2 text-sm font-bold text-emerald-800">
+            <Loader2 className="h-4 w-4 animate-spin" /> Controleren…
+          </div>}
+          {keypad(true)}
+          <p className="mt-5 text-center text-xs font-medium text-slate-500">
+            Beveiligde toegang tot het SuriRent-platform
+          </p>
+        </div>
       </div>
     </main>
   );

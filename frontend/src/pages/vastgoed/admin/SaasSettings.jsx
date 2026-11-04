@@ -136,7 +136,6 @@ export default function SaasSettings() {
   const [account, setAccount] = useState(null);
   const [accName, setAccName] = useState('');
   const [accEmail, setAccEmail] = useState('');
-  const [accPassword, setAccPassword] = useState('');
   const [accSaving, setAccSaving] = useState(false);
   const [accError, setAccError] = useState('');
   const [accSuccess, setAccSuccess] = useState('');
@@ -216,20 +215,15 @@ export default function SaasSettings() {
       if (accEmail.toLowerCase() !== (account?.email || '').toLowerCase()) {
         payload.email = accEmail;
       }
-      if (accPassword) payload.password = accPassword;
       if (Object.keys(payload).length === 0) {
         setAccError('Geen wijzigingen om op te slaan.');
         setAccSaving(false);
         return;
       }
       const { data: r } = await api.put('/superadmin/account', payload);
-      setAccPassword('');
-      setAccount((prev) => ({
-        ...prev,
-        email: r.email,
-        name: r.name,
-        password_updated_at: r.password_updated_at,
-      }));
+      setAccount(r);
+      setAccEmail(r.email);
+      setAccName(r.name);
       setAccSuccess('Account-instellingen opgeslagen.');
       setTimeout(() => setAccSuccess(''), 4000);
     } catch (e) {
@@ -294,20 +288,14 @@ export default function SaasSettings() {
       <div className="grid lg:grid-cols-2 gap-4">
         <Section title="Mijn Account" icon={UserCog} accent="bg-emerald-100 text-emerald-600">
           <p className="text-xs text-slate-500 -mt-1">
-            Wijzig je eigen inlog e-mail en wachtwoord. Wijzigingen zijn direct actief.
+            Beheer je accountnaam en e-mailadres. Inloggen gaat uitsluitend met je superadmin-pincode.
           </p>
           <Field label="Naam" value={accName} placeholder="bv. Superadmin"
             onChange={setAccName} testid="acc-name" />
-          <Field label="Inlog e-mailadres" type="email" value={accEmail}
+          <Field label="Account e-mailadres" type="email" value={accEmail}
             placeholder="bv. jij@bedrijf.sr"
             onChange={setAccEmail} testid="acc-email"
-            hint="Dit is het adres waarmee je inlogt op het superadmin-portaal." />
-          <Field label="Nieuw wachtwoord" type="password" value={accPassword}
-            placeholder="Laat leeg om ongewijzigd te laten"
-            onChange={setAccPassword} testid="acc-password"
-            hint={account?.password_updated_at
-              ? `Laatst gewijzigd: ${new Date(account.password_updated_at).toLocaleString('nl-NL')}`
-              : 'Minstens 6 tekens.'} />
+            hint="Accountcontactgegevens; aanmelden op het superadmin-portaal gebeurt uitsluitend met de pincode." />
           {accError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2.5 text-xs flex items-center gap-2" data-testid="acc-error">
               <AlertCircle className="w-4 h-4 shrink-0" /> {accError}
@@ -329,7 +317,7 @@ export default function SaasSettings() {
               <p className="text-xs text-slate-500 mt-1">
                 {pinConfigured
                   ? 'Er is een pincode ingesteld. Stel hieronder een nieuwe pincode in om deze te wijzigen.'
-                  : 'Stel een 4-cijferige pincode in om voortaan ook zonder wachtwoord in te loggen.'}
+                  : 'Stel een 4-cijferige pincode in. Dit is de enige manier om in te loggen op het superadmin-portaal.'}
               </p>
             </div>
             <Field label="Nieuwe pincode" type="password" value={pin} placeholder="4 cijfers"
