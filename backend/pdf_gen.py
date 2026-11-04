@@ -3941,3 +3941,120 @@ def invoice_pdf_blue_house(invoice: dict, tenant: dict, apartment: dict, _paymen
 
     c.showPage(); c.save(); buf.seek(0)
     return buf.getvalue()
+
+
+def invoice_bon_pdf(invoice: dict, tenant: dict, apartment: dict, payments: list) -> bytes:
+    """Render a rental invoice as a compact thermal-style bon PDF."""
+    from reportlab.pdfgen import canvas
+
+    width = 58 * mm
+    pad = 4 * mm
+    content_width = width - 2 * pad
+    regular, bold = _LUX_SANS, _LUX_SANS_BOLD
+    lines = []
+
+    def add(text="", weight="regular", size=8, align="left"):
+        lines.append((str(text), weight, size, align))
+
+    def wrap(text, max_width, font, size):
+        words = str(text or "").split()
+        wrapped, current = [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and pdfmetrics.stringWidth(candidate, font, size) > max_width:
+                wrapped.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            wrapped.append(current)
+        return wrapped or [""]
+
+    def add_wrapped(text, weight="regular", size=8, align="left"):
+        font = bold if weight == "bold" else regular
+        for part in wrap(text, content_width, font, size):
+            add(part, weight, size, align)
+
+    def section():
+        add("-" * 30, "regular", 7, "center")
+
+    currency = invoice.get("currency") or apartment.get("currency") or "SRD"
+    amount = float(invoice.get("amount") or 0)
+    service = max(0.0, float(invoice.get("service_charge") or 0))
+    rent = max(0.0, amount - service) if service else amount
+    paid = invoice.get("paid_amount")
+    if paid is None:
+        paid = sum(float(payment.get("amount") or 0) for payment in (payments or []))
+    paid = min(amount, max(0.0, float(paid or 0)))
+    due = max(0.0, amount - paid)
+    period = ""
+    try:
+        if invoice.get("period_month") and invoice.get("period_year"):
+            period = f"{MONTHS_NL[int(invoice['period_month']) - 1]} {invoice['period_year']}"
+    except (IndexError, TypeError, ValueError):
+        period = ""
+    invoice_date = (_fmt_date_nl(invoice.get("invoice_date"))
+                    or _fmt_date_nl(invoice.get("created_at")) or "—")
+    due_date = (_fmt_date_nl(invoice.get("due_date"))
+                or f"15 {MONTHS_NL[(int(invoice.get('period_month') or 1) - 1) % 12]} {invoice.get('period_year') or ''}".strip())
+
+    add_wrapped(invoice.get("company_name") or "SuriRent", "bold", 11, "center")
+    for detail in (invoice.get("company_address"), invoice.get("company_phone"), invoice.get("contact_email")):
+        if detail:
+            add_wrapped(detail, "regular", 7, "center")
+    section()
+    add("HUURFACTUUR", "bold", 10, "center")
+    add_wrapped(f"Factuurnummer: {invoice.get('invoice_number') or '—'}", "bold")
+    add_wrapped(f"Factuurdatum: {invoice_date}")
+    add_wrapped(f"Vervaldatum: {due_date}")
+    section()
+    add("HUURDER", "bold")
+    add_wrapped(tenant.get("name") or "—")
+    add_wrapped(f"Appartement: {apartment.get('number') or '—'}")
+    if invoice.get("location_name"):
+        add_wrapped(f"Locatie: {invoice['location_name']}")
+    if period:
+        add_wrapped(f"Periode: {period}")
+    section()
+    add("OMSCHRIJVING", "bold")
+    rent_label = invoice.get("description") if invoice.get("is_historical") else None
+    add_wrapped(rent_label or f"Huur appartement {apartment.get('number') or ''}".strip())
+    add_wrapped(f"{_bh_fmt_money(rent, currency)}", "bold")
+    if service > 0:
+        add_wrapped("Servicekosten")
+        add_wrapped(_bh_fmt_money(service, currency), "bold")
+    section()
+    add_wrapped(f"Totaal: {_bh_fmt_money(amount, currency)}", "bold", 9)
+    if paid > 0:
+        add_wrapped(f"Reeds betaald: {_bh_fmt_money(paid, currency)}")
+    if due > 0.005:
+        add_wrapped(f"Nog te betalen: {_bh_fmt_money(due, currency)}", "bold", 9)
+        add_wrapped(f"Gelieve uiterlijk {due_date} te betalen.")
+        bank = invoice.get("bank_account_sr") or invoice.get("bank_account_nl")
+        if bank:
+            add("Betalingsgegevens", "bold")
+            add_wrapped(bank)
+        add_wrapped(f"Kenmerk: {invoice.get('invoice_number') or ''} {period}".strip())
+    else:
+        add("STATUS: VOLDAAN", "bold", 9, "center")
+    section()
+    add("Bedankt!", "bold", 8, "center")
+
+    top_pad = 7 * mm
+    bottom_pad = 7 * mm
+    height = top_pad + bottom_pad + sum((size * 1.45) for _, _, size, _ in lines)
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=(width, height), pageCompression=1)
+    pdf.setTitle(f"Factuur {invoice.get('invoice_number', '')}")
+    y = height - top_pad
+    for text, weight, size, align in lines:
+        font = bold if weight == "bold" else regular
+        pdf.setFont(font, size)
+        if align == "center":
+            pdf.drawCentredString(width / 2, y - size, text)
+        else:
+            pdf.drawString(pad, y - size, text)
+        y -= size * 1.45
+    pdf.showPage()
+    pdf.save()
+    return buf.getvalue()

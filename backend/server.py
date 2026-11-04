@@ -37,7 +37,7 @@ import logging as _logging
 
 from pdf_gen import (
     receipt_pdf_blue_house as receipt_pdf,
-    invoice_pdf_blue_house as invoice_pdf,
+    invoice_bon_pdf as invoice_pdf,
     contract_pdf, deposit_refund_pdf, payslip_pdf,
     payment_plan_pdf,
     onboarding_pdf, _make_qr_png,
