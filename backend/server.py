@@ -43,6 +43,7 @@ from pdf_gen import (
     onboarding_pdf, _make_qr_png,
     reminder_pdf_blue_house,
 )
+from invoice_payments import paid_amounts_by_invoice as _paid_amounts_by_invoice
 from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
     ALLOWED_FEATURE_ICONS,
@@ -14163,10 +14164,15 @@ async def _enrich_invoices_batch(docs: list) -> list:
         db.apartments.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "number": 1, "location_id": 1}).to_list(None),
         db.payment_plans.find({"invoice_ids": {"$in": iids}, "status": {"$in": ["active", "completed"]}},
                               {"_id": 0, "id": 1, "status": 1, "invoice_ids": 1}).to_list(None),
-        db.payments.aggregate([
-            {"$match": {"invoice_id": {"$in": missing_paid}, "status": "approved"}},
-            {"$group": {"_id": "$invoice_id", "total": {"$sum": {"$toDouble": {"$ifNull": ["$amount", 0]}}}}},
-        ]).to_list(None) if missing_paid else asyncio.sleep(0, result=[]),
+        db.payments.find({
+            "status": "approved",
+            "$or": [
+                {"invoice_id": {"$in": missing_paid}},
+                {"invoice_ids": {"$in": missing_paid}},
+                {"allocations.invoice_id": {"$in": missing_paid}},
+            ],
+        }, {"_id": 0, "amount": 1, "invoice_id": 1, "invoice_ids": 1, "allocations": 1}).to_list(None)
+        if missing_paid else asyncio.sleep(0, result=[]),
     )
     t_name = {t["id"]: t.get("name") for t in tenants}
     a_by = {a["id"]: a for a in apts}
@@ -14182,7 +14188,7 @@ async def _enrich_invoices_batch(docs: list) -> list:
     )
     l_name = {loc["id"]: loc.get("name") for loc in locs}
     inst_by = {x["_id"]: x for x in inst}
-    paid_by = {x["_id"]: round(float(x["total"]) + 1e-9, 2) for x in paid_rows}
+    paid_by = _paid_amounts_by_invoice(missing_paid, paid_rows)
     plans_by_inv: dict = {}
     for pl in plans:
         info = {"id": pl["id"], "status": pl.get("status", "active"),
@@ -14196,8 +14202,8 @@ async def _enrich_invoices_batch(docs: list) -> list:
         paid_amount = i.get("paid_amount")
         if paid_amount is None:
             paid_amount = paid_by.get(i["id"], 0.0)
-        paid_amount = round(float(paid_amount or 0), 2)
         inv_amt = round(float(i.get("amount") or 0), 2)
+        paid_amount = min(inv_amt, max(0.0, round(float(paid_amount or 0), 2)))
         out.append({**i, "tenant_name": t_name.get(i.get("tenant_id")),
                     "apartment_number": a["number"] if a else None,
                     "location_name": l_name.get(a.get("location_id")) if a else None,
@@ -15649,6 +15655,7 @@ async def invoice_pdf_endpoint(invoice_id: str):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    inv = await _enrich_invoice(inv)
     t = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0}) or {}
     a = await db.apartments.find_one({"id": inv.get("apartment_id")}, {"_id": 0}) or {}
     location_name = None
@@ -15656,16 +15663,9 @@ async def invoice_pdf_endpoint(invoice_id: str):
         loc = await db.locations.find_one({"id": a["location_id"]}, {"_id": 0, "name": 1})
         if loc:
             location_name = loc.get("name")
-    # Find related huur payments
-    payments = await db.payments.find({
-        "tenant_id": inv["tenant_id"],
-        "category": "huur",
-        "period_month": inv["period_month"],
-        "period_year": inv["period_year"],
-    }, {"_id": 0}).to_list(50)
     brand = await _company_brand_info(inv.get("company_id"))
     inv = {**inv, **brand, "location_name": location_name}
-    pdf = await asyncio.to_thread(invoice_pdf, inv, t, a, payments)
+    pdf = await asyncio.to_thread(invoice_pdf, inv, t, a, [])
     return _pdf_response(pdf, f"factuur-{inv['invoice_number']}.pdf")
 
 
@@ -15677,6 +15677,7 @@ async def invoice_image_endpoint(invoice_id: str):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    inv = await _enrich_invoice(inv)
     t = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0}) or {}
     a = await db.apartments.find_one({"id": inv.get("apartment_id")}, {"_id": 0}) or {}
     location_name = None
