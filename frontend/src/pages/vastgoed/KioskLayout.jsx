@@ -15,6 +15,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
+  BookOpen,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -32,6 +33,7 @@ import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
 import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
@@ -372,6 +374,10 @@ function KioskAdminMenu() {
   useMenuReopen('admin', setOpen);
   if (!isAdmin) return null;
   const items = [
+    {
+      id: 'manual', label: 'Handleiding', Icon: BookOpen, testid: 'kiosk-admin-menu-manual',
+      onClick: () => window.dispatchEvent(new CustomEvent('kiosk-manual-open')),
+    },
     ...Object.keys(KIOSK_ADMIN_PAGES)
       .filter((id) => id !== 'instellingen' && id !== 'overzicht')
       .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
@@ -5153,6 +5159,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
   // knopbalk gerenderd, NIET als cards.
   const tiles = [
+    { key: 'manual',       label: 'Handleiding',       Icon: BookOpen },
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
     { key: 'location',    label: 'Nieuwe locatie',    Icon: MapPin },
@@ -5263,6 +5270,7 @@ export default function KioskLayout() {
   const [nfcLink, setNfcLink] = useState(null); // {uid} → koppelscherm open
   // Modals voor snel aanmaken vanuit de Kiosk (alle beheerder-shortcuts)
   const [showAddSheet, setShowAddSheet] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [showAddApartment, setShowAddApartment] = useState(false);
   const [showAddLocation, setShowAddLocation] = useState(false);
@@ -5356,9 +5364,15 @@ export default function KioskLayout() {
       else if (key === 'scanid') setPhoneScanOpen(true);
       else if (key === 'nfc') setNfcLink({ uid: '' });
       else if (key === 'settings') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'settings' }));
+      else if (key === 'manual') setManualOpen(true);
       else if (key === 'admin') { if (localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1') window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: 'admin' })); else adminRef.current?.(); }
       else if (key === 'exit') exitRef.current?.();
     }, 100);
+  }, []);
+  useEffect(() => {
+    const openManual = () => setManualOpen(true);
+    window.addEventListener('kiosk-manual-open', openManual);
+    return () => window.removeEventListener('kiosk-manual-open', openManual);
   }, []);
 
   useEffect(() => {
@@ -5856,6 +5870,7 @@ export default function KioskLayout() {
     <KioskThemeCtx.Provider value={themeCtx}>
     <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
       <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />
+      {manualOpen && <KioskManual onClose={() => setManualOpen(false)} />}
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
           zichtbaar wanneer er daadwerkelijk een scan-resultaat is (success of
           error). De statische "tap hint" is weggehaald op verzoek. */}

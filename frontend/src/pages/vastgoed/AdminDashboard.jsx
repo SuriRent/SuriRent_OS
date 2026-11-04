@@ -16,7 +16,7 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
-  UserCircle, Sparkles, StickyNote, Scissors,
+  UserCircle, Sparkles, StickyNote, Scissors, BookOpen,
 } from 'lucide-react';
 import { TenantMoveOutModal, ArchivedTenants } from '../../components/TenantMoveOut';
 import Cropper from 'react-easy-crop';
@@ -29,6 +29,7 @@ import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import KeyboardSafeModal from '../../components/KeyboardSafeModal';
 import OnboardingModal from '../../components/OnboardingModal';
+import KioskManual from '../../components/KioskManual';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { usePagedList, LoadMoreSentinel, useDebounced } from '../../lib/use-paged-list';
 import { mutate as swrGlobalMutate } from 'swr';
@@ -962,7 +963,7 @@ function MobileTopLogo({ user, activeCompany }) {
   );
 }
 
-function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, activeCompany, badgeCount }) {
+function MobileSheet({ open, onClose, active, onChange, onLogout, onManual, user, tabs, activeCompany, badgeCount }) {
   const navigate = useBrandedNavigate();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(active === 'instellingen');
@@ -1006,7 +1007,12 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
 
         {/* QUICK-ACTIONS */}
         {user?.role !== 'superadmin' && (
-          <div className="px-5 md:px-6 pb-3">
+          <div className="grid grid-cols-2 gap-2 px-5 md:px-6 pb-3">
+            <button type="button" onClick={() => { onClose(); onManual(); }}
+              data-testid="mobile-sheet-manual"
+              className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-2xl border border-orange-200 bg-orange-50 text-[#C74600] font-bold text-sm active:scale-95 transition">
+              <BookOpen className="w-4 h-4" /> Handleiding
+            </button>
             <button
               onClick={async () => {
                 try { localStorage.setItem('pwa_preferred_role', 'kiosk'); } catch { /* noop */ }
@@ -4436,7 +4442,7 @@ function RemoteSignatureRequest({ tenant: t }) {
   );
 }
 
-function DesktopTopBar({ user, activeCompany, tab, tabs }) {
+function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
   // Moderne desktop topbar — toont de actieve tab als "page title" links
   // (vervangt de oude H1 in de content) + Live + actie-iconen rechts.
   if (user?.role === 'superadmin') return null;
@@ -4460,6 +4466,10 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
         </div>
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
+        <button type="button" onClick={onManual} data-testid="desktop-topbar-manual"
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 text-sm font-bold text-[#C74600] hover:bg-orange-50">
+          <BookOpen className="h-4 w-4" /> Handleiding
+        </button>
         <GlobalSearch variant="topbar" />
         <PendingApprovalBell />
         <SubscriptionBell />
@@ -4657,6 +4667,7 @@ export default function AdminDashboard() {
   // Activatie: setup-status laat zien dat een verplichte basisstap nog openstaat EN
   // de admin heeft de wizard nog niet bewust gesloten voor dit bedrijf.
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const navigate = useBrandedNavigate();
 
   // Proactieve prefetch — vul de SWR cache voor álle admin-tabs zodra
@@ -4885,7 +4896,7 @@ export default function AdminDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
           ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
-          : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} /></>}
+          : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
         <TrialBanner />
         <main className={`flex-1 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
@@ -4931,7 +4942,9 @@ export default function AdminDashboard() {
         onOpenMenu={() => setDrawerOpen(true)} badgeCount={badgeCount} />}
       {!isSaasConsole && <MobileSheet open={drawerOpen} onClose={() => setDrawerOpen(false)}
         active={tab} onChange={handleSetTab} onLogout={doLogout}
+        onManual={() => setManualOpen(true)}
         user={user} tabs={sheetTabs} activeCompany={activeCompany} badgeCount={badgeCount} />}
+      {manualOpen && <KioskManual onClose={() => setManualOpen(false)} />}
       <SetupWizardSheet
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
