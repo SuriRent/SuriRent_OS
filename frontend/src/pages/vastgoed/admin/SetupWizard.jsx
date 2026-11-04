@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, CheckCircle2, Home, User, ArrowRight, ArrowLeft,
   Loader2, Mail, Phone, MapPin, AlertCircle, Check, PartyPopper,
-  FileText,
+  FileText, ShieldCheck,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
   SmtpForm,
   InvoicingForm,
+  DepositForm,
 } from './Settings';
 
 const CORE_STEP_IDS = ['profile', 'locations', 'apartment', 'tenant'];
@@ -16,6 +17,7 @@ const STEPS = [
   { id: 'profile', label: 'Bedrijfsgegevens', icon: Building2 },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
+  { id: 'deposit', label: 'Borg instellingen', icon: ShieldCheck, settings: true },
   { id: 'locations', label: 'Locaties aanmaken', icon: MapPin },
   { id: 'apartment', label: 'Appartementen aanmaken', icon: Home },
   { id: 'tenant', label: 'Huurders aanmaken of koppelen', icon: User },
@@ -77,6 +79,7 @@ export default function SetupWizard({ onFinish } = {}) {
   const formStepDone = (id) => (status?.steps || []).find((s) => s.id === id)?.done;
   const stepDone = (id) => {
     if (CORE_STEP_IDS.includes(id)) return formStepDone(id);
+    if (id === 'deposit') return Number(settings?.deposit?.rent_multiplier) > 0;
     // Voor settings-secties: zichtbaar als "klaar" wanneer enabled in settings
     if (settings && settings[id]?.enabled) return true;
     return false;
@@ -317,7 +320,7 @@ export default function SetupWizard({ onFinish } = {}) {
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
           <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-            Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
+            Bedrijfsgegevens, e-mail, facturen, borg, locaties, appartementen en huurders zijn ingesteld.
           </p>
         </div>
       )}
@@ -338,6 +341,7 @@ function SettingsSectionWrapper({ step, settings, onSaved, onDirty }) {
       </div>
       {step.id === 'smtp' && <SmtpForm initial={settings.smtp} onSaved={onSaved} onDirty={onDirty} />}
       {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} onSaved={onSaved} onDirty={onDirty} />}
+      {step.id === 'deposit' && <DepositForm initial={settings.deposit} onSaved={onSaved} onDirty={onDirty} />}
       <p className="mt-3 text-xs text-slate-500">
         Sla je instellingen op met de knop in het formulier en kies daarna <strong>Volgende</strong>.
       </p>
