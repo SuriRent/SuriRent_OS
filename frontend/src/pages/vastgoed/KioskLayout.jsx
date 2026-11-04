@@ -1772,17 +1772,18 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-[#FF6B1A] flex flex-col px-3 sm:px-6"
       style={{
-        paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)',
+        paddingTop: 'max(var(--kiosk-sat, 0px), 12px)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 96px)',
       }}
       data-testid="kiosk-history-modal">
-      <div className="flex items-center justify-between flex-wrap gap-2 py-2 shrink-0">
+      <div className="kiosk-chrome grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 shrink-0">
         <button onClick={onClose} data-testid="history-close"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
+          className="justify-self-start inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 font-bold backdrop-blur-sm"
+          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
         </button>
-        <span className="text-sm sm:text-base font-semibold text-white">Betalingsgeschiedenis</span>
-        <div className="text-right text-white hidden sm:block">
+        <span className="text-center text-sm sm:text-base font-semibold text-white">Betalingsgeschiedenis</span>
+        <div className="text-right text-white">
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apartment?.number}</p>
         </div>
       </div>
