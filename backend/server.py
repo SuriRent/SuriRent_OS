@@ -32,6 +32,7 @@ import asyncio
 import math
 import json
 import time
+import calendar
 import logging as _logging
 
 from pdf_gen import (
@@ -76,6 +77,14 @@ from saas_invoicing import (
     consolidate_company_invoices,
     remove_unpaid_invoice_charge,
     update_invoice_paid_amount,
+)
+from saas_billing_calendar import (
+    plan_period_end as _plan_period_end,
+    plan_period_start as _plan_period_start,
+    saas_invoice_amount as _saas_invoice_amount,
+    saas_invoice_cycle_fields as _saas_invoice_cycle_fields,
+    saas_invoice_due_date as _saas_invoice_due_date,
+    saas_next_renewal as _saas_next_renewal,
 )
 
 
@@ -2381,26 +2390,9 @@ async def _fetch_plan_by_id(plan_id: str) -> Optional[dict]:
     return None
 
 
-def _plan_period_end(plan: Optional[dict], start: datetime) -> Optional[datetime]:
-    interval = str((plan or {}).get("interval") or "month").lower()
-    if interval in {"lifetime", "once"}:
-        return None
-    return start + timedelta(days={"quarter": 90, "year": 365}.get(interval, 30))
-
-
 def _plan_interval_label(plan: Optional[dict]) -> str:
     interval = str((plan or {}).get("interval") or "month").lower()
     return {"quarter": "kwartaal", "year": "jaar", "lifetime": "eenmalig", "once": "eenmalig"}.get(interval, "maand")
-
-
-def _saas_invoice_due_date(issued_at: Optional[datetime] = None) -> str:
-    """Vaste SaaS-vervaldatum: de eerstvolgende 10e op of na factuurdatum."""
-    issued_on = (issued_at or now_utc()).date()
-    due = issued_on.replace(day=10)
-    if issued_on > due:
-        year, month = (issued_on.year + 1, 1) if issued_on.month == 12 else (issued_on.year, issued_on.month + 1)
-        due = due.replace(year=year, month=month)
-    return due.isoformat()
 
 
 def now_utc_iso():
@@ -2762,22 +2754,24 @@ async def change_plan(body: ChangePlanIn, user=Depends(get_current_user)):
                 "message": f"Uw abonnement is omgezet naar {new_price.get('name') or new_plan}."}
 
     # Create an open invoice for the new plan (customer must pay this to activate)
-    period_end = _plan_period_end(target_doc, now)
+    period_start = _plan_period_start(target_doc, now)
+    period_end = _plan_period_end(target_doc, period_start)
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": new_plan,
-        "amount": new_price["amount"],
+        "amount": _saas_invoice_amount(target_doc, new_price["amount"], period_start, period_end),
         "currency": new_price["currency"],
         "status": "open",
         "kind": "plan_change",
         "from_plan": old,
-        "period_start": iso(now),
+        "period_start": iso(period_start),
         "period_end": iso(period_end) if period_end else None,
         "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user.get("email"),
+        **_saas_invoice_cycle_fields(target_doc),
     }
     charge_key = f"plan-change:{new_plan}:{now.date().isoformat()}"
     if c.get("pending_plan") and c.get("pending_invoice_id"):
@@ -3054,13 +3048,15 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     except ValueError:
         period_start_dt = now
         period_start = iso(now)
+    period_start_dt = _plan_period_start(plan, period_start_dt)
+    period_start = iso(period_start_dt)
     period_end = _plan_period_end(plan, period_start_dt)
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": plan_id,
-        "amount": plan["amount"],
+        "amount": _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end),
         "currency": plan["currency"],
         "status": "open",
         "kind": "subscription",
@@ -3069,6 +3065,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
+        **_saas_invoice_cycle_fields(plan),
     }
     try:
         inv, _ = await append_company_invoice_charge(
@@ -3172,7 +3169,9 @@ async def _record_saas_payment_manual(
     }
     await db.subscription_payments.insert_one(pay)
     if updated_invoice.get("status") == "paid":
-        await _activate_company_after_saas_payment(company["id"], plan_in_payment=invoice.get("plan"))
+        await _activate_company_after_saas_payment(
+            company["id"], plan_in_payment=invoice.get("plan"), invoice=updated_invoice,
+        )
         await _send_saas_payment_email(company, amount, currency, method, invoice["id"])
     return {
         "status": "paid",
@@ -3339,7 +3338,11 @@ async def billing_me_bank_confirm(
 
 
 
-async def _activate_company_after_saas_payment(company_id: str, plan_in_payment: Optional[str] = None):
+async def _activate_company_after_saas_payment(
+    company_id: str,
+    plan_in_payment: Optional[str] = None,
+    invoice: Optional[dict] = None,
+):
     """Shared post-payment routine: bumps company to active + applies pending plan."""
     c = await db.companies.find_one({"id": company_id}, {"_id": 0}) or {}
     now = now_utc()
@@ -3350,7 +3353,7 @@ async def _activate_company_after_saas_payment(company_id: str, plan_in_payment:
     )
     target_plan = pending if apply_pending else (plan_in_payment or c.get("plan"))
     plan = await _fetch_plan_by_id(target_plan) if target_plan else None
-    renews_at = _plan_period_end(plan, now)
+    renews_at = _saas_next_renewal(plan, invoice, now)
     update = {
         "billing_status": "active",
         "subscription_started_at": c.get("subscription_started_at") or iso(now),
@@ -3450,7 +3453,9 @@ async def _record_saas_payment_from_gateway(pr: dict, gateway_meta: dict) -> dic
     }
     await db.subscription_payments.insert_one(pay)
     if updated_invoice and updated_invoice.get("status") == "paid":
-        await _activate_company_after_saas_payment(pr["company_id"], plan_in_payment=inv.get("plan"))
+        await _activate_company_after_saas_payment(
+            pr["company_id"], plan_in_payment=inv.get("plan"), invoice=updated_invoice,
+        )
         await _send_saas_payment_email(company, pr["amount"], pr["currency"], pr["provider"], inv["id"])
     pr.update({"status": "paid", "paid_at": paid_at})
     return pr
@@ -5301,7 +5306,9 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
     price = await _plan_for_company(plan_id, c)
     amount = float(price.get("amount") or 0)
     currency = (price.get("currency") or "SRD").upper()
-    period_end = _plan_period_end(plan, now)
+    period_start = _plan_period_start(plan, now)
+    period_end = _plan_period_end(plan, period_start)
+    amount = _saas_invoice_amount(plan, amount, period_start, period_end)
     inv = None
     pending_invoice_id = c.get("pending_invoice_id")
     if pending_invoice_id:
@@ -5311,7 +5318,7 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
         if inv and c.get("pending_plan") and inv.get("plan") != c.get("pending_plan"):
             raise HTTPException(status_code=409, detail="De openstaande factuur hoort niet bij het gekozen pakket")
         if inv and inv.get("status") == "paid":
-            await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id)
+            await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id, invoice=inv)
             return {"ok": True, "invoice": inv}
         if inv and inv.get("status") not in {"open", "overdue"}:
             inv = None
@@ -5330,12 +5337,13 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "currency": currency,
                 "status": "open",
                 "kind": "subscription",
-                "period_start": iso(now),
+                "period_start": iso(period_start),
                 "period_end": iso(period_end) if period_end else None,
                 "due_date": _saas_invoice_due_date(now),
                 "created_at": iso(now),
                 "created_by": user.get("email"),
                 "manual": True,
+                **_saas_invoice_cycle_fields(plan),
             }
             try:
                 inv, _ = await append_company_invoice_charge(
@@ -5359,7 +5367,7 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
         inv["paid_at"] = iso(now)
         inv["payment_method"] = "manual"
     else:
-        await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id)
+        await _activate_company_after_saas_payment(cid, plan_in_payment=plan_id, invoice=inv)
         inv = None
     return {"ok": True, "invoice": inv}
 
@@ -5884,28 +5892,31 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
         plan = await _fetch_plan_by_id(plan_id)
         if not plan:
             raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
-        period_end = _plan_period_end(plan, now)
+        period_start = _plan_period_start(plan, now)
+        period_end = _plan_period_end(plan, period_start)
+        invoice_amount = float(body.amount)
         try:
             inv, created = await append_company_invoice_charge(db, {
                 "id": new_id(),
                 "company_id": body.company_id,
                 "company_name": c.get("name", ""),
                 "plan": plan_id,
-                "amount": body.amount,
+                "amount": invoice_amount,
                 "currency": body.currency,
                 "status": "open",
                 "kind": "subscription",
-                "period_start": iso(now),
+                "period_start": iso(period_start),
                 "period_end": iso(period_end) if period_end else None,
                 "due_date": _saas_invoice_due_date(now),
                 "created_at": iso(now),
                 "created_by": user.get("email"),
+                **_saas_invoice_cycle_fields(plan),
             }, f"manual-payment:{now.date().isoformat()}")
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
         if not created:
             raise HTTPException(status_code=409, detail="Voor deze periode is de betaling al geregistreerd")
-        amount = float(body.amount)
+        amount = invoice_amount
         updated = await update_invoice_paid_amount(db, inv["id"], amount)
         if not updated:
             raise HTTPException(status_code=404, detail="Factuur niet gevonden")
@@ -5936,7 +5947,9 @@ async def register_subscription_payment(body: SubscriptionPaymentIn, user=Depend
     await db.subscription_payments.insert_one(pay)
 
     if inv.get("status") == "paid":
-        await _activate_company_after_saas_payment(body.company_id, plan_in_payment=plan_id)
+        await _activate_company_after_saas_payment(
+            body.company_id, plan_in_payment=plan_id, invoice=inv,
+        )
         await _send_saas_payment_email(
             {**c, "plan": plan_id},
             float(pay["amount"]),
@@ -19221,6 +19234,9 @@ _route_deps.new_id = new_id
 _route_deps.billing_summary = _billing_summary
 _route_deps.get_plan = _fetch_plan_by_id
 _route_deps.plan_period_end = _plan_period_end
+_route_deps.plan_period_start = _plan_period_start
+_route_deps.saas_invoice_amount = _saas_invoice_amount
+_route_deps.saas_invoice_cycle_fields = _saas_invoice_cycle_fields
 _route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment

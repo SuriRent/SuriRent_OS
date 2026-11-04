@@ -311,7 +311,7 @@ class NewInvoiceIn(BaseModel):
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
     plan: Optional[str] = None                     # bv "starter", "pro"
     period_start: Optional[str] = None             # ISO; default = now
-    period_end: Optional[str] = None               # ISO; default = +30 dagen
+    period_end: Optional[str] = None               # ISO; default based on plan interval
     note: Optional[str] = ""
 
 
@@ -327,15 +327,35 @@ async def create_subscription_invoice(body: NewInvoiceIn,
     plan = await _deps.get_plan(plan_id)
     if not plan:
         raise HTTPException(status_code=400, detail=f"Onbekend pakket '{plan_id}'")
-    period_start = body.period_start or _deps.iso(now)
-    default_period_end = _deps.plan_period_end(plan, now)
-    period_end = body.period_end or (_deps.iso(default_period_end) if default_period_end else None)
+    try:
+        requested_start = (
+            datetime.fromisoformat(body.period_start.replace("Z", "+00:00"))
+            if body.period_start else now
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ongeldige startdatum voor de factuurperiode")
+    period_start_dt = _deps.plan_period_start(plan, requested_start)
+    period_start = _deps.iso(period_start_dt)
+    default_period_end = _deps.plan_period_end(plan, period_start_dt)
+    if str(plan.get("interval") or "month").lower() == "month":
+        period_end = _deps.iso(default_period_end) if default_period_end else None
+    else:
+        period_end = body.period_end or (_deps.iso(default_period_end) if default_period_end else None)
+    try:
+        period_end_dt = (
+            datetime.fromisoformat(period_end.replace("Z", "+00:00"))
+            if period_end else None
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ongeldige einddatum voor de factuurperiode")
     inv = {
         "id": _deps.new_id(),
         "company_id": body.company_id,
         "company_name": c.get("name", ""),
         "plan": plan_id,
-        "amount": float(body.amount),
+        "amount": _deps.saas_invoice_amount(
+            plan, float(body.amount), period_start_dt, period_end_dt,
+        ),
         "currency": body.currency,
         "status": "open",
         "kind": "subscription",
@@ -346,6 +366,7 @@ async def create_subscription_invoice(body: NewInvoiceIn,
         "created_by": user.get("email", "superadmin"),
         "note": body.note or "",
         "manual": True,                             # zichtbaar in UI als 'Handmatig'
+        **_deps.saas_invoice_cycle_fields(plan),
     }
     try:
         inv, created = await append_company_invoice_charge(
@@ -368,8 +389,8 @@ async def create_subscription_invoice(body: NewInvoiceIn,
 
 async def saas_auto_invoice_tick() -> list[dict]:
     """Voor elk actief bedrijf: als `subscription_renews_at` verlopen is en er
-    is nog geen open factuur voor de nieuwe periode → genereer factuur. Deze
-    fungeert als de maandelijkse SaaS-abonnementsfactuur."""
+    is nog geen open factuur voor de nieuwe periode → genereer factuur. Maandplannen
+    gebruiken kalendermaanden; kwartaal- en jaarplannen behouden hun interval."""
     db = _deps.db
     now = _deps.now_utc()
     created: list[dict] = []
@@ -392,8 +413,9 @@ async def saas_auto_invoice_tick() -> list[dict]:
         currency = str(summary.get("currency") or (plan or {}).get("currency") or "SRD").upper()
         if amount <= 0:
             continue
-        period_start = renews_at
+        period_start = _deps.plan_period_start(plan, renews_at)
         period_end = _deps.plan_period_end(plan, period_start)
+        amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
         inv = {
             "id": _deps.new_id(),
             "company_id": c["id"],
@@ -409,6 +431,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
+            **_deps.saas_invoice_cycle_fields(plan),
         }
         try:
             inv, created_charge = await append_company_invoice_charge(

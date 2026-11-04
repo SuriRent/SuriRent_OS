@@ -11,6 +11,15 @@ import { useAuth } from '../../../lib/auth';
 const fmt = (n, c = 'SRD') => `${c} ${Number(n || 0).toLocaleString('nl-NL')}`;
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const intervalLabel = (interval) => ({ month: 'maand', quarter: 'kwartaal', year: 'jaar', lifetime: 'eenmalig' }[interval] || interval || 'maand');
+const invoicePeriodEnd = (startDate, interval) => {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  if ((interval || 'month') === 'month') {
+    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  }
+  const days = { quarter: 90, year: 365 }[interval] || 30;
+  start.setUTCDate(start.getUTCDate() + days);
+  return start.toISOString().slice(0, 10);
+};
 
 const STATUS_STYLES = {
   trial: { label: 'Proefperiode', bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
@@ -312,9 +321,10 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
   const [amount, setAmount] = useState(selected?.monthly_amount || 0);
   const [currency, setCurrency] = useState(selected?.currency || 'SRD');
   const [plan, setPlan] = useState(selected?.plan || 'starter');
-  const [periodStart, setPeriodStart] = useState(new Date().toISOString().slice(0, 10));
-  const periodDays = { month: 30, quarter: 90, year: 365 }[selected?.plan_interval] || 30;
-  const [periodEnd, setPeriodEnd] = useState(new Date(Date.now() + periodDays * 86400000).toISOString().slice(0, 10));
+  const monthlyPlan = (selected?.plan_interval || 'month') === 'month';
+  const today = new Date().toISOString().slice(0, 10);
+  const [periodStart, setPeriodStart] = useState(today);
+  const [periodEnd, setPeriodEnd] = useState(invoicePeriodEnd(today, selected?.plan_interval));
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -324,8 +334,9 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
       setAmount(selected.monthly_amount || 0);
       setCurrency(selected.currency || 'SRD');
       setPlan(selected.plan || 'starter');
-      const days = { month: 30, quarter: 90, year: 365 }[selected.plan_interval] || 30;
-      setPeriodEnd(new Date(Date.now() + days * 86400000).toISOString().slice(0, 10));
+      const start = new Date().toISOString().slice(0, 10);
+      setPeriodStart(start);
+      setPeriodEnd(invoicePeriodEnd(start, selected.plan_interval));
     }
   }, [selected]);
 
@@ -369,7 +380,9 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                {monthlyPlan ? 'Maandbedrag' : 'Bedrag'}
+              </label>
               <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)}
                 data-testid="new-inv-amount"
                 className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono" />
@@ -385,15 +398,24 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Periode van</label>
-              <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)}
+              <input type="date" value={periodStart} onChange={(e) => {
+                setPeriodStart(e.target.value);
+                if (monthlyPlan) setPeriodEnd(invoicePeriodEnd(e.target.value, 'month'));
+              }}
                 className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">tot</label>
               <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
+                disabled={monthlyPlan}
+                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none disabled:bg-slate-100 disabled:text-slate-500" />
             </div>
           </div>
+          <p className="text-xs text-slate-500">
+            {monthlyPlan
+              ? 'Maandplannen volgen kalendermaanden; de eerste periode wordt naar rato berekend en de volgende start op de 1e.'
+              : 'De factuurperiode volgt het gekozen abonnementsinterval.'}
+          </p>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Notitie (optioneel)</label>
             <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
