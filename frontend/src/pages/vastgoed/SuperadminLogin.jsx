@@ -7,9 +7,11 @@ import LoginHeader from './auth/LoginHeader';
 
 export default function SuperadminLogin() {
   const navigate = useNavigate();
-  const { user, loading: authLoading, loginSuperadmin } = useAuth();
+  const { user, loading: authLoading, loginSuperadmin, loginSuperadminPin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [method, setMethod] = useState('password');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +25,8 @@ export default function SuperadminLogin() {
     setSubmitting(true);
     setError('');
     try {
-      await loginSuperadmin(email.trim(), password);
+      if (method === 'pin') await loginSuperadminPin(email.trim(), pin);
+      else await loginSuperadmin(email.trim(), password);
       navigate('/admin', { replace: true });
     } catch (err) {
       setError(formatError(err, 'Inloggen mislukt. Controleer uw gegevens.'));
@@ -54,6 +57,19 @@ export default function SuperadminLogin() {
               Geen superadmin-account? <Link to="/login?view=admin" className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline">Naar gewone login</Link>
             </p>
 
+            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="Kies inlogmethode">
+              <button type="button" onClick={() => { setMethod('password'); setError(''); }}
+                aria-pressed={method === 'password'} data-testid="superadmin-login-password-tab"
+                className={`h-10 rounded-lg text-sm font-bold transition ${method === 'password' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+                Wachtwoord
+              </button>
+              <button type="button" onClick={() => { setMethod('pin'); setError(''); }}
+                aria-pressed={method === 'pin'} data-testid="superadmin-login-pin-tab"
+                className={`h-10 rounded-lg text-sm font-bold transition ${method === 'pin' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+                Pincode
+              </button>
+            </div>
+
             {error && (
               <div role="alert" data-testid="superadmin-login-error"
                 className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -68,24 +84,34 @@ export default function SuperadminLogin() {
                   required value={email} onChange={(event) => setEmail(event.target.value)}
                   className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
               </div>
-              <div>
-                <label htmlFor="superadmin-password" className="mb-2 block text-sm font-bold text-slate-700">Wachtwoord</label>
-                <div className="relative">
-                  <input id="superadmin-password" data-testid="superadmin-password"
-                    type={showPassword ? 'text' : 'password'} autoComplete="current-password" required
-                    value={password} onChange={(event) => setPassword(event.target.value)}
-                    className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 pr-12 text-base text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
-                  <button type="button" onClick={() => setShowPassword((value) => !value)}
-                    aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
-                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 hover:text-slate-700">
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
+              {method === 'password' ? (
+                <div>
+                  <label htmlFor="superadmin-password" className="mb-2 block text-sm font-bold text-slate-700">Wachtwoord</label>
+                  <div className="relative">
+                    <input id="superadmin-password" data-testid="superadmin-password"
+                      type={showPassword ? 'text' : 'password'} autoComplete="current-password" required
+                      value={password} onChange={(event) => setPassword(event.target.value)}
+                      className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 pr-12 text-base text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
+                    <button type="button" onClick={() => setShowPassword((value) => !value)}
+                      aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+                      className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 hover:text-slate-700">
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label htmlFor="superadmin-pin" className="mb-2 block text-sm font-bold text-slate-700">4-cijferige pincode</label>
+                  <input id="superadmin-pin" data-testid="superadmin-pin-login" type="password"
+                    inputMode="numeric" pattern="[0-9]{4}" maxLength={4} autoComplete="one-time-code" required
+                    value={pin} onChange={(event) => setPin(event.target.value)}
+                    className="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-center text-2xl tracking-[0.5em] text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10" />
+                </div>
+              )}
               <button type="submit" disabled={submitting}
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 text-lg font-black text-white shadow-lg shadow-emerald-700/20 transition hover:bg-emerald-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">
                 {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                {submitting ? 'Bezig met inloggen…' : 'Inloggen'}
+                {submitting ? 'Bezig met inloggen…' : method === 'pin' ? 'Inloggen met pincode' : 'Inloggen'}
               </button>
             </form>
           </div>

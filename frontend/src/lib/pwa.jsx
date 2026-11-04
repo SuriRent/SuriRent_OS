@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X, Share, Plus } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
 /**
  * Registers the service worker on mount.
@@ -141,12 +142,15 @@ function isStandalone() {
  * - Hidden when already installed or recently dismissed.
  */
 export function InstallPrompt() {
+  const { pathname } = useLocation();
+  const isSuperadmin = pathname === '/superadmin' || pathname.startsWith('/superadmin/');
+  const dismissKey = isSuperadmin ? `${DISMISS_KEY}_superadmin` : DISMISS_KEY;
   const [deferred, setDeferred] = useState(null);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (isStandalone()) return;
-    const dismissed = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
+    const dismissed = parseInt(localStorage.getItem(dismissKey) || '0', 10);
     if (dismissed && Date.now() - dismissed < DISMISS_TTL_MS) return;
 
     const handler = (e) => {
@@ -165,11 +169,11 @@ export function InstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handler);
       if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [dismissKey]);
 
   const close = () => {
     setShow(false);
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    localStorage.setItem(dismissKey, String(Date.now()));
   };
 
   const triggerInstall = async () => {
@@ -184,27 +188,36 @@ export function InstallPrompt() {
   const ios = isIOS();
 
   return (
-    <div className="fixed left-3 right-3 bottom-3 md:left-auto md:right-6 md:bottom-6 md:max-w-sm z-[60] bg-white rounded-2xl border-2 border-[#FF5C00] shadow-[0_14px_40px_-10px_rgba(255,92,0,0.5)] p-4 animate-slide-up"
+    <div className={`fixed left-3 right-3 bottom-3 md:left-auto md:right-6 md:bottom-6 md:max-w-sm z-[60] bg-white rounded-2xl border-2 p-4 animate-slide-up ${
+      isSuperadmin
+        ? 'border-emerald-700 shadow-[0_14px_40px_-10px_rgba(4,120,87,0.4)]'
+        : 'border-[#FF5C00] shadow-[0_14px_40px_-10px_rgba(255,92,0,0.5)]'
+    }`}
       data-testid="pwa-install-prompt">
       <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5 shrink-0">
-          <img loading="lazy" src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain" />
+        <div className={`w-11 h-11 rounded-xl p-1 shrink-0 ${isSuperadmin ? 'bg-emerald-700' : 'bg-gradient-to-br from-[#FF8A3D] to-[#C74600] p-1.5'}`}>
+          <img loading="lazy" src={isSuperadmin ? '/kiosk-icons/superadmin-192.png' : '/kiosk-icons/mark-white.png'}
+            alt={isSuperadmin ? 'SuriRent Superadmin' : 'SuriRent'} className="w-full h-full object-contain rounded-lg" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-black text-slate-900 leading-tight">Installeer SuriRent</p>
+          <p className="text-sm font-black text-slate-900 leading-tight">
+            {isSuperadmin ? 'Installeer SuriRent Superadmin' : 'Installeer SuriRent'}
+          </p>
           {ios ? (
             <p className="text-xs text-slate-600 mt-1 leading-snug">
-              Tik op <Share className="inline w-3.5 h-3.5 -mt-0.5 text-[#FF5C00]" /> Delen
-              {' '}en kies <span className="font-bold">"Zet op beginscherm"</span> om SuriRent als app te gebruiken.
+              Tik op <Share className={`inline w-3.5 h-3.5 -mt-0.5 ${isSuperadmin ? 'text-emerald-700' : 'text-[#FF5C00]'}`} /> Delen
+              {' '}en kies <span className="font-bold">"Zet op beginscherm"</span> om {isSuperadmin ? 'SuriRent Superadmin' : 'SuriRent'} als app te gebruiken.
             </p>
           ) : (
             <p className="text-xs text-slate-600 mt-1 leading-snug">
-              Voeg SuriRent toe aan je startscherm voor sneller toegang — werkt ook offline.
+              Voeg {isSuperadmin ? 'SuriRent Superadmin' : 'SuriRent'} toe aan je startscherm voor sneller toegang — werkt ook offline.
             </p>
           )}
           {!ios && (
             <button onClick={triggerInstall} data-testid="pwa-install-btn"
-              className="mt-3 inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#FF5C00] hover:bg-[#E05200] text-white text-xs font-bold">
+              className={`mt-3 inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-white text-xs font-bold ${
+                isSuperadmin ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-[#FF5C00] hover:bg-[#E05200]'
+              }`}>
               <Plus className="w-3.5 h-3.5" /> Installeren
             </button>
           )}

@@ -19,12 +19,12 @@ function Section({ title, icon: Icon, children, accent }) {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, hint, mono, testid }) {
+function Field({ label, value, onChange, type = 'text', placeholder, hint, mono, testid, inputMode, maxLength }) {
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">{label}</label>
       <input type={type} value={value ?? ''} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} data-testid={testid}
+        placeholder={placeholder} data-testid={testid} inputMode={inputMode} maxLength={maxLength}
         className={`w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none ${mono ? 'font-mono text-sm' : ''}`} />
       {hint && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
     </div>
@@ -140,18 +140,26 @@ export default function SaasSettings() {
   const [accSaving, setAccSaving] = useState(false);
   const [accError, setAccError] = useState('');
   const [accSuccess, setAccSuccess] = useState('');
+  const [pinConfigured, setPinConfigured] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [pinSuccess, setPinSuccess] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: r }, { data: acc }] = await Promise.all([
+      const [{ data: r }, { data: acc }, { data: pinStatus }] = await Promise.all([
         api.get('/superadmin/settings'),
         api.get('/superadmin/account'),
+        api.get('/auth/personal-pin/status'),
       ]);
       setData(r);
       setAccount(acc);
       setAccName(acc.name || '');
       setAccEmail(acc.email || '');
+      setPinConfigured(!!pinStatus.has_pin);
     } catch (e) {
       setError(formatError(e));
     } finally { setLoading(false); }
@@ -229,6 +237,29 @@ export default function SaasSettings() {
     } finally { setAccSaving(false); }
   };
 
+  const savePin = async () => {
+    setPinError(''); setPinSuccess('');
+    if (!/^\d{4}$/.test(pin)) {
+      setPinError('De pincode moet precies 4 cijfers bevatten.');
+      return;
+    }
+    if (pin !== pinConfirm) {
+      setPinError('De pincodes komen niet overeen.');
+      return;
+    }
+    setPinSaving(true);
+    try {
+      await api.post('/auth/personal-pin/setup', { pin });
+      setPin('');
+      setPinConfirm('');
+      setPinConfigured(true);
+      setPinSuccess('Superadmin-pincode opgeslagen.');
+      setTimeout(() => setPinSuccess(''), 4000);
+    } catch (e) {
+      setPinError(formatError(e, 'Pincode kon niet worden opgeslagen.'));
+    } finally { setPinSaving(false); }
+  };
+
   if (loading || !data) {
     return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
   }
@@ -292,6 +323,36 @@ export default function SaasSettings() {
             {accSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Account opslaan
           </button>
+          <div className="border-t border-slate-100 pt-4 mt-4 space-y-3" data-testid="superadmin-pin-settings">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Inloggen met pincode</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {pinConfigured
+                  ? 'Er is een pincode ingesteld. Stel hieronder een nieuwe pincode in om deze te wijzigen.'
+                  : 'Stel een 4-cijferige pincode in om voortaan ook zonder wachtwoord in te loggen.'}
+              </p>
+            </div>
+            <Field label="Nieuwe pincode" type="password" value={pin} placeholder="4 cijfers"
+              onChange={setPin} testid="superadmin-pin" inputMode="numeric" maxLength={4}
+              hint="De pincode wordt beveiligd opgeslagen." />
+            <Field label="Pincode bevestigen" type="password" value={pinConfirm} placeholder="Herhaal de pincode"
+              onChange={setPinConfirm} testid="superadmin-pin-confirm" inputMode="numeric" maxLength={4} />
+            {pinError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2.5 text-xs flex items-center gap-2" role="alert" data-testid="superadmin-pin-error">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {pinError}
+              </div>
+            )}
+            {pinSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-2.5 text-xs flex items-center gap-2" role="status" data-testid="superadmin-pin-success">
+                <Check className="w-4 h-4 shrink-0" /> {pinSuccess}
+              </div>
+            )}
+            <button type="button" onClick={savePin} disabled={pinSaving} data-testid="superadmin-pin-save"
+              className="w-full h-11 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+              {pinSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {pinConfigured ? 'Pincode wijzigen' : 'Pincode instellen'}
+            </button>
+          </div>
         </Section>
 
         <Section title="Bankoverschrijving" icon={Landmark}>

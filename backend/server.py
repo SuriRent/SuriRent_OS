@@ -1762,15 +1762,43 @@ class _PinLoginIn(_PydBase):
     email: str
     pin: str
 
+@api.post("/auth/superadmin/pin-login")
+async def superadmin_pin_login(body: _PinLoginIn, request: Request, response: Response):
+    """Superadmin login met e-mail en de ingestelde persoonlijke PIN."""
+    email = (body.email or "").strip().lower()
+    pin = (body.pin or "").strip()
+    if not email or not pin.isdigit() or len(pin) != 4:
+        raise HTTPException(status_code=400, detail="Ongeldige PIN of e-mail")
+    throttle_key = f"ppin:{_client_ip(request)}:{email}"
+    _pin_throttle_check(throttle_key)
+    user = await db.users.find_one({"email": email, "role": "superadmin"})
+    if not user or not user.get("personal_pin_hash") or not verify_password(pin, user.get("personal_pin_hash", "")):
+        _pin_throttle_fail(throttle_key)
+        raise HTTPException(status_code=401, detail="Onbekende combinatie van e-mail en PIN")
+    if user.get("disabled"):
+        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    _pin_throttle_clear(throttle_key)
+    token = create_token({
+        "sub": user["id"], "email": email, "type": "access",
+        "company_id": user.get("company_id"), "role": "superadmin",
+    }, ACCESS_MIN)
+    await _invalidate_prior_sessions(request, response, keep="access_token")
+    _set_access_cookie(response, token)
+    return {
+        "access_token": token, "token_type": "bearer",
+        "user": {
+            "id": user["id"], "email": user["email"], "name": user.get("name", ""),
+            "role": "superadmin", "company_id": user.get("company_id"),
+        },
+    }
+
 @api.post("/auth/personal-pin/setup")
 async def personal_pin_setup(body: _PinSetupIn, user=Depends(get_current_user)):
     """Stel of update de persoonlijke 4-cijferige PIN van de huidige gebruiker."""
-    if user.get("role") == "superadmin":
-        raise HTTPException(status_code=403, detail="Superadmins gebruiken de aparte superadmin-login")
     pin = (body.pin or "").strip()
     if not pin.isdigit() or len(pin) != 4:
         raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
-    if user.get("company_id"):
+    if user.get("company_id") and user.get("role") != "superadmin":
         await _check_employee_pin_unique(user["company_id"], pin, exclude_eid=user.get("employee_id"),
                                          exclude_uid=user["id"])
     await db.users.update_one(

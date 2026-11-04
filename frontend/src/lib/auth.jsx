@@ -215,6 +215,25 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const loginSuperadminPin = async (email, pin) => {
+    const { data } = await api.post('/auth/superadmin/pin-login', { email, pin });
+    if (data?.user?.role !== 'superadmin' || !data?.access_token) {
+      throw new Error('Dit account heeft geen superadmin-PIN ingesteld.');
+    }
+    localStorage.setItem('admin_token', data.access_token);
+    cacheUser(data.user);
+    localStorage.removeItem(ACTIVE_COMPANY_KEY);
+    setActiveCompanyIdState(null);
+    setUser(data.user);
+    setActiveCompanyMeta(null);
+    try {
+      localStorage.setItem('device_user_email', data.user.email);
+      localStorage.setItem('device_user_name', data.user.name || data.user.email.split('@')[0]);
+      localStorage.removeItem('auto_login_paused');
+    } catch { /* ignore */ }
+    return data;
+  };
+
   const register = async (payload) => {
     const { data } = await api.post('/auth/register', payload);
     if (data?.token) localStorage.setItem('admin_token', data.token);
@@ -269,7 +288,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, login, loginSuperadmin, register, logout, refresh,
+      user, loading, login, loginSuperadmin, loginSuperadminPin, register, logout, refresh,
       activeCompanyId, activeCompany, setActiveCompany,
     }}>
       {children}
