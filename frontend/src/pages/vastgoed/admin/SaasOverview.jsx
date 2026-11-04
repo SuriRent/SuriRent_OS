@@ -1,19 +1,11 @@
 // Superadmin · SaaS Overzicht
-// -----------------------------------------------------------------------------
-// 1:1 spiegel van de beheerder-`Overview()` in AdminDashboard.jsx:
-//   • Luxe goud/oranje hero met Kas saldo (3 valuta-tegels · SRD/EUR/USD)
-//   • 4 KPI-tegels (Bedrijven · Klanten · Open lopende maand · Achterstand)
-//   • 4 Snelle acties-knoppen
-// Daaronder blijven de SaaS-specifieke live-widgets staan: Online bedrijven,
-// Trial verloopt bijna, Recent gezien, Danger Zone.
-// Refresht elke 15s zodat presence + KPI's actueel blijven.
+// Platformstatistieken en live bedrijfsactiviteit; refresht elke 15 seconden.
 // -----------------------------------------------------------------------------
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Crown, TrendingUp, Building2, Clock, AlertCircle, Wifi, WifiOff,
-  ScanLine, Receipt, RefreshCw, Loader2, ArrowRight, ArrowUpRight,
-  Trash2, Wallet, Users, UserPlus, FileText, Briefcase,
+  ScanLine, Receipt, RefreshCw, Loader2, ArrowRight, Trash2, FileText, Briefcase,
 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
 
@@ -126,9 +118,6 @@ export default function SaasOverview() {
   const activeCount = overviewData.active || 0;
   const trialCount = overviewData.trial || 0;
   const overdueCount = overviewData.overdue_invoices || 0;
-  const clientsTotal = hasPresence ? companies.length : '—'; // 1 admin ≈ 1 klant per bedrijf
-  const activePct = companiesTotal === 0 ? 0 : Math.round((activeCount / companiesTotal) * 100);
-
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-5" data-testid="saas-overview-page">
       <PageHeader
@@ -154,315 +143,127 @@ export default function SaasOverview() {
         </div>
       )}
 
-      {/* ===================================================================
-          MOBIEL/TABLET — 4 mini-stats card (spiegel van beheerder mobiel)
-          =================================================================== */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-3 sm:p-4" data-testid="saas-portfolio-card-mobile">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Platform in één oogopslag</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 sm:gap-y-0">
-          {[
-            { label: 'Bedrijven', value: hasOverview ? companiesTotal : '—', icon: Building2, accent: 'bg-orange-50 text-[#FF5C00]' },
-            { label: 'Actief', value: hasOverview ? activeCount : '—', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-600' },
-            { label: 'Proef', value: hasOverview ? trialCount : '—', icon: Clock, accent: 'bg-amber-50 text-amber-600' },
-            { label: 'Online', value: hasOverview ? overviewData.online_now || 0 : '—', icon: Wifi, accent: 'bg-sky-50 text-sky-600' },
-          ].map((c) => {
-            const Icon = c.icon;
-            return (
-              <div key={c.label} className="flex items-center gap-2.5 px-2 sm:px-3 min-w-0 sm:justify-center sm:flex-col sm:text-center">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full ${c.accent} flex items-center justify-center shrink-0`}>
-                  <Icon className="w-4 h-4" />
+      <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]" data-testid="saas-platform-summary">
+        <div className="relative overflow-hidden rounded-3xl border border-orange-100 bg-white p-5 shadow-sm sm:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-orange-50" />
+          <div className="relative">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]"><Crown className="h-4 w-4" /></span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">SaaS platform</span>
+            </div>
+            <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Beheer je platform</h2>
+            <p className="mt-1 max-w-xl text-sm text-slate-500">Bedrijven, abonnementen en inkomsten op één centrale plek.</p>
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { id: 'companies', label: 'Bedrijven', value: companiesTotal, icon: Building2, tone: 'text-[#FF5C00] bg-orange-50' },
+                { id: 'active', label: 'Actief', value: activeCount, icon: TrendingUp, tone: 'text-emerald-600 bg-emerald-50' },
+                { id: 'trial', label: 'Proefperiode', value: trialCount, icon: Clock, tone: 'text-amber-600 bg-amber-50' },
+                { id: 'online', label: 'Online nu', value: overviewData.online_now || 0, icon: Wifi, tone: 'text-sky-600 bg-sky-50' },
+              ].map(({ id, label, value, icon: Icon, tone }) => (
+                <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                  <span className={`mb-3 flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon className="h-4 w-4" /></span>
+                  <p className="text-2xl font-black tracking-tight text-slate-900" data-testid={`saas-platform-${id}`}>{hasOverview ? value : '—'}</p>
+                  <p className="text-xs font-semibold text-slate-500">{label}</p>
                 </div>
-                <div className="min-w-0 sm:mt-1">
-                  <p className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight" data-testid={`saas-stat-m-${c.label.toLowerCase()}`}>{c.value}</p>
-                  <p className="text-[10px] text-slate-500 font-semibold truncate">{c.label}</p>
-                </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* ===================================================================
-          DESKTOP — Luxe hero + 4 KPI's + 4 Snelle acties
-          Structuur identiek aan beheerder-Overzicht in AdminDashboard.jsx
-          =================================================================== */}
-      <div className="block min-w-0">
-        {/* ============ HERO · SaaS Kas Saldo Banking-stijl ============ */}
-        <div
-          className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-7 text-white shadow-[0_24px_60px_-24px_rgba(15,23,42,0.55)]"
-          style={{
-            background:
-              'radial-gradient(circle at 0% 0%, #2A1A0A 0%, #1A1208 35%, #0B0805 100%)',
-          }}
-          data-testid="saas-hero-cash-balance"
-        >
-          {/* Luxe achtergrondaccenten — goud glow */}
-          <div className="pointer-events-none absolute -top-32 -right-24 w-[28rem] h-[28rem] rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(255,176,99,0.32) 0%, rgba(255,92,0,0.08) 40%, transparent 70%)' }} />
-          <div className="pointer-events-none absolute -bottom-24 -left-24 w-[22rem] h-[22rem] rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(212,160,55,0.18) 0%, transparent 65%)' }} />
-          {/* Subtiele grid noise overlay */}
-          <div className="pointer-events-none absolute inset-0 opacity-[0.04]"
-            style={{
-              backgroundImage:
-                'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
-              backgroundSize: '32px 32px',
-            }} />
-
-          <div className="relative flex flex-wrap items-start justify-between gap-3 sm:gap-6 mb-4 sm:mb-6">
+        <div className="rounded-3xl bg-[#FFF7F1] p-5 sm:p-6" data-testid="saas-revenue-summary">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #F8C260 0%, #D4A037 60%, #8B6914 100%)' }}>
-                  <Crown className="w-4.5 h-4.5 text-[#1A1208]" />
-                </span>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em]"
-                  style={{ color: '#F0C97A' }}>
-                  SaaS Kas saldo
-                </p>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight"
-                style={{
-                  background: 'linear-gradient(90deg, #FFF6D6 0%, #F8C260 60%, #D4A037 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}>
-                Totaal ontvangen
-              </h2>
-              <p className="text-[11px] sm:text-xs text-white/60 font-semibold mt-1">
-                Alle betaalde abonnementen · Bron: Subscription facturen
-              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-700">Inkomsten</p>
+              <h3 className="mt-1 text-lg font-black text-slate-900">Totaal ontvangen</h3>
+              <p className="text-xs text-slate-500">Betaalde abonnementen</p>
             </div>
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
-              data-testid="saas-hero-cash-cta"
-              className="group inline-flex items-center justify-center gap-2 px-3 sm:px-4 min-h-10 rounded-xl sm:rounded-full text-[10px] sm:text-xs font-black tracking-wide sm:tracking-wider uppercase transition-all border"
-              style={{
-                background: 'linear-gradient(135deg, rgba(248,194,96,0.18) 0%, rgba(212,160,55,0.08) 100%)',
-                borderColor: 'rgba(248,194,96,0.35)',
-                color: '#F8C260',
-              }}>
-              Bekijk facturen
-              <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#FF5C00] shadow-sm transition hover:bg-orange-100"
+              aria-label="Bekijk SaaS-facturen" data-testid="saas-hero-cash-cta">
+              <ArrowRight className="h-4 w-4" />
             </button>
           </div>
-
-          {/* 3 Currency tiles — banking style */}
-          <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+          <div className="mt-5 space-y-2">
             {[
-              { cur: 'SRD', label: 'Surinaamse Dollar', symbol: 'SRD' },
+              { cur: 'SRD', label: 'Surinaamse dollar', symbol: '' },
               { cur: 'EUR', label: 'Euro', symbol: '€' },
-              { cur: 'USD', label: 'US Dollar', symbol: '$' },
-            ].map(({ cur, label, symbol }) => {
-              const v = receivedByCur[cur] || 0;
-              const positive = v >= 0;
-              return (
-                <div key={cur}
-                  className="relative rounded-xl sm:rounded-2xl p-3 sm:p-4 overflow-hidden backdrop-blur-sm min-w-0"
-                  style={{
-                    background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.015) 100%)',
-                    border: '1px solid rgba(248,194,96,0.18)',
-                  }}
-                  data-testid={`saas-hero-cash-tile-${cur.toLowerCase()}`}>
-                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black tracking-[0.18em] uppercase"
-                        style={{ color: '#F0C97A' }}>{cur}</span>
-                      <span className="hidden md:inline text-[10px] text-white/50 font-semibold truncate">{label}</span>
-                    </div>
-                    <span className="inline-flex w-6 h-6 rounded-full items-center justify-center"
-                      style={{ background: 'rgba(248,194,96,0.12)' }}>
-                      <TrendingUp className="w-3 h-3" style={{ color: positive ? '#86EFAC' : '#FCA5A5' }} />
-                    </span>
-                  </div>
-                  <p className="text-2xl sm:text-3xl font-black tracking-tight leading-none text-white break-all"
-                    data-testid={`saas-kpi-cash-${cur.toLowerCase()}`}>
-                    <span className="text-base font-bold opacity-60 mr-1">{symbol === 'SRD' ? '' : symbol}</span>
-                    {hasOverview ? Math.round(v).toLocaleString('nl-NL') : '—'}
-                  </p>
-                  <div className="mt-3 h-px w-full"
-                    style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(248,194,96,0.4) 50%, transparent 100%)' }} />
-                  <p className="text-[10px] text-white/40 font-semibold mt-1.5">Ontvangen totaal</p>
+              { cur: 'USD', label: 'Amerikaanse dollar', symbol: '$' },
+            ].map(({ cur, label, symbol }) => (
+              <div key={cur} className="flex items-center justify-between gap-3 rounded-xl border border-orange-100/80 bg-white/80 px-3 py-2.5"
+                data-testid={`saas-hero-cash-tile-${cur.toLowerCase()}`}>
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-slate-800">{cur}</p>
+                  <p className="truncate text-[10px] text-slate-500">{label}</p>
                 </div>
-              );
-            })}
+                <p className="shrink-0 text-lg font-black text-slate-900" data-testid={`saas-kpi-cash-${cur.toLowerCase()}`}>
+                  {symbol}{hasOverview ? Math.round(receivedByCur[cur] || 0).toLocaleString('nl-NL') : '—'}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* ============ KPI rij — 4 tegels ============ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-          {/* Bedrijven */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
-            <div className="flex items-start gap-3 relative">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center shrink-0 shadow-inner">
-                <Building2 className="w-5 h-5 text-[#FF5C00]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bedrijven</p>
-                <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-1" data-testid="saas-kpi-companies">
-                  {hasOverview ? companiesTotal : '—'}
-                </p>
-                <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
-                  {hasOverview ? (
-                    <>
-                      <span className="text-emerald-600">{activeCount} actief</span>
-                      {trialCount > 0 && <span className="text-slate-400"> · {trialCount} proef</span>}
-                    </>
-                  ) : 'Abonnementsstatus niet beschikbaar'}
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#F8C260] to-[#FF5C00] transition-all" style={{ width: `${activePct}%` }} />
-            </div>
-            <p className="text-[10px] text-slate-400 font-bold mt-1.5">{hasOverview ? `${activePct}% actieve abonnementen` : 'Abonnementsstatus niet beschikbaar'}</p>
-          </div>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Abonnementsstatus">
+        <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'companies' }))}
+          className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:border-orange-200 hover:shadow-md"
+          data-testid="saas-kpi-companies">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]"><Building2 className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-slate-500">Bedrijven</span>
+            <span className="block text-2xl font-black text-slate-900">{hasOverview ? companiesTotal : '—'}</span>
+            <span className="block truncate text-[11px] font-semibold text-slate-500">{hasOverview ? `${activeCount} actief · ${trialCount} proef` : 'Status niet beschikbaar'}</span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-slate-300" />
+        </button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
+          className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:border-orange-200 hover:shadow-md"
+          data-testid="saas-kpi-current-open">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-600"><Receipt className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-slate-500">Open deze maand</span>
+            <span className="block text-2xl font-black text-slate-900">{hasOverview ? currentMonthOpenCount : '—'}</span>
+            <span className="block truncate text-[11px] font-semibold text-slate-500">{!hasOverview ? 'Niet beschikbaar' : currentOpenTotal > 0 ? fmtMoney(currentOpenTotal, primaryCur) : 'Geen open bedrag'}</span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-slate-300" />
+        </button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
+          className={`flex items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:shadow-md ${overdueCount ? 'border-red-200 hover:border-red-300' : 'border-slate-100 hover:border-emerald-200'}`}
+          data-testid="saas-kpi-overdue">
+          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${overdueCount ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}><AlertCircle className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-slate-500">Achterstand</span>
+            <span className="block text-2xl font-black text-slate-900">{hasOverview ? overdueCount : '—'}</span>
+            <span className={`block truncate text-[11px] font-semibold ${overdueCount ? 'text-red-600' : 'text-emerald-600'}`}>{!hasOverview ? 'Niet beschikbaar' : overdueCount ? 'Facturen te laat' : 'Alles op tijd'}</span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-slate-300" />
+        </button>
+      </section>
 
-          {/* Klanten */}
-          <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_clients' }))}
-            data-testid="saas-kpi-clients-cta"
-            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-amber-200 transition-colors">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
-            <div className="flex items-start gap-3 relative">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center shrink-0 shadow-inner">
-                <Users className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Klanten</p>
-                <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-1" data-testid="saas-kpi-clients">
-                  {clientsTotal}
-                </p>
-                <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
-                  {hasOverview ? `${overviewData.online_now || 0} nu online` : 'Online status niet beschikbaar'}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 text-[11px] text-[#FF5C00] font-bold">Bekijk alle klanten →</p>
-          </button>
-
-          {/* Open · lopende maand */}
-          <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
-            data-testid="saas-kpi-current-open"
-            className="text-left bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-4 sm:p-5 relative overflow-hidden hover:border-orange-200 transition-colors">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-100/40 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
-            <div className="flex items-start gap-3 relative">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center shrink-0 shadow-inner">
-                <Receipt className="w-5 h-5 text-[#FF5C00]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Open · lopende maand</p>
-                <p className="text-3xl font-black text-[#FF5C00] tracking-tight leading-none mt-1">
-                  {hasOverview ? currentMonthOpenCount : '—'}
-                </p>
-                <p className="text-[11px] text-slate-500 font-semibold mt-1.5 truncate">
-                  {!hasOverview ? 'Niet beschikbaar' : currentOpenTotal > 0 ? fmtMoney(currentOpenTotal, primaryCur) : 'Nog te innen'}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 text-[11px] text-[#FF5C00] font-bold">Bekijk facturen →</p>
-          </button>
-
-          {/* Achterstand */}
-          <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
-            data-testid="saas-kpi-overdue"
-            className={`text-left rounded-2xl p-4 sm:p-5 relative overflow-hidden transition-shadow ${
-              overdueCount > 0
-                ? 'bg-gradient-to-br from-red-500 via-red-600 to-red-700 text-white border border-red-700 hover:shadow-[0_12px_28px_-8px_rgba(220,38,38,0.5)]'
-                : 'bg-white border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] hover:border-emerald-200'
-            }`}>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/10 to-transparent rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
-            <div className="flex items-start gap-3 relative">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${
-                overdueCount > 0 ? 'bg-white/20' : 'bg-gradient-to-br from-emerald-100 to-emerald-50'
-              }`}>
-                <AlertCircle className={`w-5 h-5 ${overdueCount > 0 ? 'text-white' : 'text-emerald-600'}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-[10px] font-black uppercase tracking-widest ${overdueCount > 0 ? 'text-white/80' : 'text-slate-400'}`}>
-                  Achterstand
-                </p>
-                <p className={`text-3xl font-black tracking-tight leading-none mt-1 ${overdueCount > 0 ? 'text-white' : 'text-slate-900'}`}>
-                  {hasOverview ? overdueCount : '—'}
-                </p>
-                <p className={`text-[11px] font-semibold mt-1.5 ${overdueCount > 0 ? 'text-white/90' : 'text-emerald-600'}`}>
-                  {!hasOverview ? 'Niet beschikbaar' : overdueCount > 0
-                    ? `Facturen te laat`
-                    : 'Alles op tijd ✓'}
-                </p>
-              </div>
-            </div>
-            <p className={`mt-3 text-[11px] font-bold ${overdueCount > 0 ? 'text-white' : 'text-emerald-600'}`}>
-              {!hasOverview ? 'Niet beschikbaar' : overdueCount > 0 ? 'Direct opvolgen →' : 'Geen actie nodig'}
-            </p>
-          </button>
+      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-black text-slate-900">Snel naar</h2>
+          <span className="text-[11px] font-medium text-slate-400">Veelgebruikte onderdelen</span>
         </div>
-
-        {/* ============ Snelle acties — 4 knoppen ============ */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] p-3.5">
-          <div className="flex items-center justify-between mb-2.5 px-1.5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Snelle acties</p>
-            <span className="hidden sm:inline text-[10px] text-slate-400 font-semibold">Klik om naar de sectie te springen</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-            <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
-              data-testid="saas-quick-new-invoice"
-              className="group flex items-center gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100/40 hover:from-orange-100 hover:to-orange-200/60 border border-orange-100 hover:border-orange-300 transition-all">
-              <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <FileText className="w-5 h-5 text-[#FF5C00]" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-black text-slate-900">Facturen</p>
-                <p className="text-[10px] text-slate-500 font-semibold">Abonnementen beheren</p>
-              </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { id: 'saas_invoices', title: 'Facturen', detail: 'Abonnementen en facturen', icon: FileText, tone: 'bg-orange-50 text-[#FF5C00]' },
+            { id: 'companies', title: 'Bedrijven', detail: 'Bedrijven beheren', icon: Briefcase, tone: 'bg-sky-50 text-sky-600' },
+            { id: 'saas_pending', title: `OCR (${hasOverview ? overviewData.pending_ocr || 0 : '—'})`, detail: overviewData.pending_ocr > 0 ? 'Wacht op keuring' : 'Alles goedgekeurd', icon: ScanLine, tone: 'bg-violet-50 text-violet-600' },
+          ].map(({ id, title, detail, icon: Icon, tone }) => (
+            <button key={id} onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: id }))}
+              className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-orange-200 hover:bg-orange-50/40"
+              data-testid={`saas-quick-${id}`}>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
+              <span className="min-w-0">
+                <span className="block text-sm font-black text-slate-900">{title}</span>
+                <span className="block truncate text-[11px] font-medium text-slate-500">{detail}</span>
+              </span>
+              <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-slate-300" />
             </button>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'companies' }))}
-              data-testid="saas-quick-new-company"
-              className="group flex items-center gap-3 p-3 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/40 hover:from-amber-100 hover:to-amber-200/60 border border-amber-100 hover:border-amber-300 transition-all">
-              <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Briefcase className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-black text-slate-900">Bedrijven</p>
-                <p className="text-[10px] text-slate-500 font-semibold">Nieuw bedrijf toevoegen</p>
-              </div>
-            </button>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_clients' }))}
-              data-testid="saas-quick-new-client"
-              className="group flex items-center gap-3 p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/40 hover:from-emerald-100 hover:to-emerald-200/60 border border-emerald-100 hover:border-emerald-300 transition-all">
-              <div className="w-10 h-10 rounded-lg bg-white/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <UserPlus className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-black text-slate-900">Klanten</p>
-                <p className="text-[10px] text-slate-500 font-semibold">Klantenbeheer openen</p>
-              </div>
-            </button>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_pending' }))}
-              data-testid="saas-quick-ocr"
-              className={`group flex items-center gap-3 p-3 rounded-xl transition-shadow border ${
-                overviewData.pending_ocr > 0
-                  ? 'text-white hover:shadow-[0_10px_24px_-8px_rgba(255,92,0,0.5)] border-orange-600'
-                  : 'bg-gradient-to-br from-slate-50 to-slate-100/40 hover:from-slate-100 hover:to-slate-200/60 border-slate-100 hover:border-slate-300'
-              }`}
-              style={overviewData.pending_ocr > 0 ? { background: 'linear-gradient(135deg, #FF8A3D 0%, #FF5C00 55%, #C74600 100%)' } : {}}>
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
-                overviewData.pending_ocr > 0 ? 'bg-white/20' : 'bg-white/80'
-              }`}>
-                <ScanLine className={`w-5 h-5 ${overviewData.pending_ocr > 0 ? 'text-white' : 'text-slate-700'}`} />
-              </div>
-              <div className="text-left">
-                <p className={`text-sm font-black ${overviewData.pending_ocr > 0 ? 'text-white' : 'text-slate-900'}`}>
-                  OCR ({hasOverview ? overviewData.pending_ocr || 0 : '—'})
-                </p>
-                <p className={`text-[10px] font-semibold ${overviewData.pending_ocr > 0 ? 'text-white/80' : 'text-slate-500'}`}>
-                  {overviewData.pending_ocr > 0 ? 'Wacht op keuring' : 'Alles goedgekeurd'}
-                </p>
-              </div>
-            </button>
-          </div>
+          ))}
         </div>
-      </div>
+      </section>
 
       {/* ===================================================================
           SaaS-specifieke live-widgets (blijven onder de KPI-rij staan)
