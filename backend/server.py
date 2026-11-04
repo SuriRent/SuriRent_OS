@@ -8590,8 +8590,8 @@ async def _extract_face_avatar_from_bytes(
 
     Werkwijze:
     1. Stuur de ID-kaart-bytes naar Gemini met een strak JSON-prompt dat
-       normalized bbox coords (0..1) van de face/passport-photo teruggeeft.
-    2. Parse JSON, crop met PIL (met 8% margin), maak vierkant.
+       normalized bbox coords (0..1) van de volledige pasfoto teruggeeft.
+    2. Parse JSON, crop de fotozone met PIL en maak er een vierkante avatar van.
     3. Sla op als WebP landing_asset. Retourneer de URL.
     """
     import os, io, json as _json, tempfile
@@ -8610,19 +8610,17 @@ async def _extract_face_avatar_from_bytes(
         chat = LlmChat(
             api_key=api_key,
             session_id=f"avatar-{new_id()[:8]}",
-            system_message="Je detecteert gezichten op ID-kaarten en geeft ALLEEN geldig JSON terug.",
+            system_message="Je detecteert pasfoto's op identiteitsdocumenten en geeft ALLEEN geldig JSON terug.",
         ).with_model("gemini", "gemini-2.5-flash")
         prompt = (
             "Op deze ID-kaart / paspoort / rijbewijs staat een pasfoto van de eigenaar. "
-            "Geef de bounding box (normalized 0..1) van UITSLUITEND HET GEZICHT — dat is:\n"
-            "- van de bovenkant van het HOOFDHAAR tot net onder de KIN\n"
-            "- van OOR tot OOR (of iets ruimer als het haar breed is)\n"
-            "STRIKT NIET meebrengen: de rand van de pasfoto-kader, tekst zoals namen/nummers, "
-            "de schouder-lijn onder de kin, de handtekening, of enig deel van de ID-kaart-achtergrond. "
-            "Alleen de bloot te zien HUID en HAAR van het gezicht.\n"
+            "Geef de bounding box (normalized 0..1) van DE VOLLEDIGE GEDRUKTE PASFOTO. "
+            "Dit is het rechthoekige portretvlak met hoofd en schouders, dus NIET alleen het gezicht. "
+            "Volg de binnenrand van het fotovak zo nauwkeurig mogelijk. "
+            "Neem geen kaarttekst, namen, nummers, handtekening of achtergrond buiten het fotovak mee.\n"
             'Retour uitsluitend JSON: {"x":<0..1>,"y":<0..1>,"w":<0..1>,"h":<0..1>,"found":true|false}. '
-            "x,y is de LINKERBOVENhoek van het gezicht. "
-            "Als geen gezicht zichtbaar: found=false. Geen markdown, geen uitleg."
+            "x,y is de LINKERBOVENhoek van de pasfoto. Als geen pasfoto zichtbaar is: found=false. "
+            "Geen markdown, geen uitleg."
         )
         msg = UserMessage(
             text=prompt,
@@ -8650,29 +8648,30 @@ async def _extract_face_avatar_from_bytes(
     w = max(0.01, min(1.0, float(bb.get("w", 0))))
     h = max(0.01, min(1.0, float(bb.get("h", 0))))
 
-    # PIL crop met minimale margin, vierkant rondom center van bbox.
-    # We houden het bewust STRAK zodat er geen tekst/rand van de ID-kaart
-    # meegecropt wordt. Gemini's bbox is doorgaans al iets ruim.
+    # Crop de volledige pasfoto-box en maak daarbinnen een vierkante avatar.
     try:
         img = Image.open(io.BytesIO(raw))
         img = ImageOps.exif_transpose(img)
         W, H = img.size
-        cx = (x + w / 2.0) * W
-        cy = (y + h / 2.0) * H
-        # Vierkant met zijde = max(w, h) — GEEN extra margin. Zo mogelijk
-        # zelfs 4% inwaartse crop (0.96) om zeker geen randtekst mee te
-        # nemen, maar alleen als het gezicht groter is dan 50px.
-        raw_side = max(w * W, h * H)
-        tight_factor = 0.96 if raw_side > 80 else 1.0
-        side = raw_side * tight_factor
-        left = max(0, int(cx - side / 2))
-        top = max(0, int(cy - side / 2))
-        right = min(W, int(cx + side / 2))
-        bottom = min(H, int(cy + side / 2))
+        photo_left = max(0, int(x * W))
+        photo_top = max(0, int(y * H))
+        photo_right = min(W, int((x + w) * W))
+        photo_bottom = min(H, int((y + h) * H))
+        photo_width = photo_right - photo_left
+        photo_height = photo_bottom - photo_top
+        if photo_width < 40 or photo_height < 40:
+            return None
+
+        # Keep the square inside the detected photo box, aligned slightly
+        # toward the top so the face remains in frame for portrait photos.
+        side = min(photo_width, photo_height)
+        left = photo_left + (photo_width - side) // 2
+        top = photo_top + min(int(photo_height * 0.04), photo_height - side)
+        right = left + side
+        bottom = top + side
         if right - left < 40 or bottom - top < 40:
             return None
-        # Sanity check: als bbox > 60% van hele plaatje is, heeft Gemini
-        # waarschijnlijk de hele pasfoto-doos of card meegepakt. Reject.
+        # Sanity check: reject a box that is probably the whole card.
         crop_area_ratio = ((right - left) * (bottom - top)) / (W * H)
         if crop_area_ratio > 0.6:
             print(f"[avatar] rejected: crop area ratio {crop_area_ratio:.2f} too large (likely full card)")
@@ -8742,8 +8741,11 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
         "uploaded_at": iso(now_utc()),
     })
     url = f"/api/landing/asset/{asset_id}"
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {"id_photo_url": url}})
-    # Face-crop async (best effort) — resultaat komt in tenant.avatar_url
+    await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {"id_photo_url": url}, "$unset": {"avatar_url": ""}},
+    )
+    # Portrait crop (best effort) — resultaat komt in tenant.avatar_url.
     avatar_url = None
     try:
         avatar_url = await _extract_face_avatar_from_bytes(
@@ -8754,7 +8756,7 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
                 {"id": tenant_id}, {"$set": {"avatar_url": avatar_url}},
             )
     except Exception as e:  # noqa: BLE001
-        print(f"[avatar] face extract failed for tenant {tenant_id}: {e}")
+        print(f"[avatar] portrait extract failed for tenant {tenant_id}: {e}")
     return {"id_photo_url": url, "avatar_url": avatar_url}
 
 
@@ -10953,7 +10955,10 @@ async def kiosk_attach_id_photo(tenant_id: str, body: KioskAttachIdIn, _session=
     if not t or not a:
         raise HTTPException(status_code=404, detail="Huurder of scan niet gevonden")
     url = f"/api/landing/asset/{body.asset_id}"
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {"id_photo_url": url}})
+    await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {"id_photo_url": url}, "$unset": {"avatar_url": ""}},
+    )
     avatar_url = None
     try:
         avatar_url = await _extract_face_avatar_from_bytes(
@@ -10963,7 +10968,7 @@ async def kiosk_attach_id_photo(tenant_id: str, body: KioskAttachIdIn, _session=
         if avatar_url:
             await db.tenants.update_one({"id": tenant_id}, {"$set": {"avatar_url": avatar_url}})
     except Exception as e:  # noqa: BLE001
-        print(f"[avatar] face extract failed for tenant {tenant_id}: {e}")
+        print(f"[avatar] portrait extract failed for tenant {tenant_id}: {e}")
     return {"id_photo_url": url, "avatar_url": avatar_url}
 
 
@@ -19466,6 +19471,29 @@ _PWA_ROLE_MANIFEST: dict[str, dict] = {
             {"src": "/kiosk-icons/beheer-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
             {"src": "/kiosk-icons/beheer-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
         ],
+        "shortcuts": [
+            {
+                "name": "Huurder",
+                "short_name": "Huurder",
+                "description": "Open het huurdersportaal.",
+                "url": "/kiosk/huurder?source=pwa",
+                "icons": [{"src": "/kiosk-icons/huurder-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+            {
+                "name": "SaaS",
+                "short_name": "SaaS",
+                "description": "Open het SuriRent SaaS-beheer.",
+                "url": "/login?view=admin&source=pwa",
+                "icons": [{"src": "/kiosk-icons/superadmin-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+            {
+                "name": "Kiosk",
+                "short_name": "Kiosk",
+                "description": "Open de SuriRent-kiosk.",
+                "url": "/kiosk?source=pwa",
+                "icons": [{"src": "/kiosk-icons/kioskpwa-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+        ],
     },
     "huurder": {
         "name": "SuriRent Huurder",
@@ -19601,6 +19629,9 @@ async def pwa_manifest(role: str = "beheer", slug: str | None = None):
             base["start_url"] = _slug_aware_start_url(role, slug)
             base["scope"] = f"/{slug}/"
             base["id"] = f"/{slug}/?role={role}"
+            if role == "beheer":
+                for shortcut in base.get("shortcuts", []):
+                    shortcut["url"] = f"/{slug}{shortcut['url']}"
     body = _json.dumps(base, ensure_ascii=False)
     return _FastAPIResponse(
         content=body,

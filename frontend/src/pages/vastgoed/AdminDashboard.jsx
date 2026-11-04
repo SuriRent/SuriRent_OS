@@ -3789,6 +3789,8 @@ function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
 // =====================================================================
 function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload }) {
   const [uploading, setUploading] = useState(false);
+  const [avatarGenerating, setAvatarGenerating] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
   const [cropOpen, setCropOpen] = useState(false); // Manuele crop-tool voor pasfoto
@@ -3815,17 +3817,34 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
       return;
     }
     setUploading(true);
+    setAvatarError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
-      await api.post(`/tenants/${t.id}/id-photo`, fd, {
+      const { data } = await api.post(`/tenants/${t.id}/id-photo`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      if (!data?.avatar_url) {
+        setAvatarError('ID-kaart is opgeslagen, maar de pasfoto kon niet automatisch worden gevonden. Probeer Pasfoto automatisch of Handmatig.');
+      }
       if (onReload) await onReload();
     } catch (e) {
       window.alert('Upload mislukt: ' + (e?.response?.data?.detail || e.message));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const generateAvatar = async () => {
+    setAvatarGenerating(true);
+    setAvatarError('');
+    try {
+      await api.post(`/tenants/${t.id}/generate-avatar`);
+      if (onReload) await onReload();
+    } catch (e) {
+      setAvatarError(e?.response?.data?.detail || 'Pasfoto kon niet automatisch worden gevonden. Probeer het handmatig bijsnijden.');
+    } finally {
+      setAvatarGenerating(false);
     }
   };
 
@@ -3903,10 +3922,16 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             <p className="text-sm text-slate-500 mt-0.5">Foto van paspoort of identiteitskaart · max 5 MB</p>
           </div>
           {t.id_photo_url && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={generateAvatar} disabled={avatarGenerating}
+                data-testid="tenant-auto-avatar-btn"
+                className="h-9 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1.5 disabled:opacity-60">
+                {avatarGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {avatarGenerating ? 'Pasfoto zoeken…' : 'Pasfoto automatisch'}
+              </button>
               <button onClick={() => setCropOpen(true)} data-testid="tenant-crop-avatar-btn"
                 className="h-9 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-xs flex items-center gap-1.5">
-                <Scissors className="w-3.5 h-3.5" /> Kies pasfoto
+                <Scissors className="w-3.5 h-3.5" /> Handmatig
               </button>
               <button onClick={removePhoto} data-testid="tenant-id-remove"
                 className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
@@ -3915,6 +3940,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             </div>
           )}
         </div>
+        {avatarError && (
+          <p className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"
+            role="alert" data-testid="tenant-auto-avatar-error">
+            {avatarError}
+          </p>
+        )}
 
         {idPhotoSrc ? (
           <div className="relative rounded-xl overflow-hidden bg-slate-100 cursor-pointer"
