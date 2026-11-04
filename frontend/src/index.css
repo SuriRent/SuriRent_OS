@@ -417,7 +417,7 @@ html { scroll-behavior: smooth; }
 }
 .kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]) { padding: 0.75rem 1rem; background-color: #FFFFFF; }
 .kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]):hover { border-color: #FDBA74; background-color: #FFFFFF; }
-.kiosk-fx [data-testid*="-row-"] > :first-child.shrink-0:is(.w-10, .w-11, .w-12, .w-14),
+.kiosk-fx [data-testid*="-row-"] > :first-child.shrink-0:is(.w-10, .w-11, .w-12, .w-14):not([data-apartment-photo]),
 .kiosk-fx [data-testid*="-row-"] > img:first-child { display: none; }
 .kiosk-fx [data-testid*="-row-"] :is(.text-base, .text-lg, .text-xl, .text-2xl) { font-size: 0.875rem; line-height: 1.25rem; }
 .kiosk-fx [data-testid*="-row-"] p.font-black, .kiosk-fx [data-testid*="-card-"] p.font-black { font-size: 0.875rem; }

@@ -108,7 +108,7 @@ export function FxRow({ title, sub, meta, badge, amount, status, tone, onClick, 
     <Tag onClick={onClick} data-testid={testId} {...extra}
       className={`w-full text-left rounded-xl border border-slate-200 ${onClick ? 'hover:border-orange-300 cursor-pointer' : ''} px-4 py-3 flex ${actions ? 'flex-wrap sm:flex-nowrap' : ''} items-center justify-between gap-x-3 gap-y-2 transition-colors bg-white`}>
       {photoSrc && (
-        <span className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-slate-100">
+        <span data-apartment-photo="true" className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-slate-100">
           <img src={photoSrc} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"
             onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
         </span>
