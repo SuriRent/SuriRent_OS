@@ -12,6 +12,7 @@ import {
   Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
 import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost,
@@ -1610,7 +1611,15 @@ function ConfirmRow({ label, value }) {
 function TenantHistoryView({ overview, onBack }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [openingPdf, setOpeningPdf] = useState(false);
   const apt = overview?.apartment;
+  const closePdf = useCallback(() => setPdfUrl(''), []);
+
+  useEffect(() => {
+    if (!pdfUrl) return undefined;
+    return () => window.URL.revokeObjectURL(pdfUrl);
+  }, [pdfUrl]);
 
   const loadPayments = useCallback(() => api.get('/tenant-portal/payments')
     .then((r) => { setItems(r.data || []); setErr(''); }).catch((e) => setErr(formatError(e))), []);
@@ -1623,12 +1632,16 @@ function TenantHistoryView({ overview, onBack }) {
   const openPdf = async (paymentId) => {
     // We hebben tenant_token — gebruik blob-fetch zodat de PDF met de
     // juiste Authorization-header wordt opgehaald.
+    setOpeningPdf(true);
+    setErr('');
     try {
       const r = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(r.data);
-      window.open(url, '_blank');
-      setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
-    } catch (e) { setErr(formatError(e, 'PDF download mislukt')); }
+      setPdfUrl(window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })));
+    } catch (e) {
+      setErr(formatError(e, 'PDF openen mislukt'));
+    } finally {
+      setOpeningPdf(false);
+    }
   };
 
   return (
@@ -1693,14 +1706,23 @@ function TenantHistoryView({ overview, onBack }) {
                   </p>
                 )}
               </div>
-              <button onClick={() => openPdf(p.id)} data-testid={`tk-history-pdf-${p.id}`}
-                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0">
-                <Printer className="w-3 h-3" /> Afdruk
+              <button onClick={() => openPdf(p.id)} disabled={openingPdf} data-testid={`tk-history-pdf-${p.id}`}
+                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0 disabled:opacity-50">
+                {openingPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                {openingPdf ? 'Laden…' : 'Afdruk'}
               </button>
             </div>
           ))}
         </div>
       </div>
+      {pdfUrl && (
+        <KioskPdfViewer
+          url={pdfUrl}
+          filename="kwitantie.pdf"
+          onClose={closePdf}
+          testId="tk-history-pdf-viewer"
+        />
+      )}
     </div>
   );
 }

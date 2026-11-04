@@ -30,6 +30,7 @@ import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
+import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
@@ -2687,9 +2688,27 @@ function ArrangePlanModal({ tenantId, currency, totalAmount, invoiceIds, monthsL
 function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
   const fmt = (v) => fmtMoney(v, currency);
   const per = plan.installment_amount || plan.monthly_amount || (plan.total_amount / plan.num_installments);
-  const pdfUrl = plan.pdf_url
-    ? `${process.env.REACT_APP_BACKEND_URL}${plan.pdf_url}`
-    : `${process.env.REACT_APP_BACKEND_URL}/api/kiosk/payment-plans/${plan.id}/pdf`;
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const closePdf = useCallback(() => setPdfUrl(''), []);
+  useEffect(() => {
+    if (!pdfUrl) return undefined;
+    return () => URL.revokeObjectURL(pdfUrl);
+  }, [pdfUrl]);
+  const openPdf = async () => {
+    setPdfLoading(true);
+    setPdfError('');
+    try {
+      const path = plan.pdf_url || `/kiosk/payment-plans/${plan.id}/pdf`;
+      const { data } = await api.get(path, { responseType: 'blob' });
+      setPdfUrl(URL.createObjectURL(new Blob([data], { type: 'application/pdf' })));
+    } catch (e) {
+      setPdfError(formatError(e, 'PDF openen mislukt'));
+    } finally {
+      setPdfLoading(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
       data-testid="plan-arranged-receipt">
@@ -2721,18 +2740,28 @@ function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
           </div>
         </div>
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2">
-          <a href={pdfUrl} target="_blank" rel="noreferrer"
+          <button type="button" onClick={openPdf} disabled={pdfLoading}
             data-testid="plan-arranged-pdf"
-            className="py-3 rounded-lg bg-white border-2 border-orange-300 text-orange-600 font-bold text-sm hover:bg-orange-50 flex items-center justify-center gap-2">
-            <Download className="w-4 h-4" /> PDF
-          </a>
+            className="py-3 rounded-lg bg-white border-2 border-orange-300 text-orange-600 font-bold text-sm hover:bg-orange-50 flex items-center justify-center gap-2 disabled:opacity-50">
+            {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {pdfLoading ? 'PDF laden…' : 'PDF'}
+          </button>
           <button onClick={onClose}
             data-testid="plan-arranged-close"
             className="py-3 rounded-lg bg-emerald-500 text-white font-bold text-sm hover:bg-emerald-600">
             Sluiten
           </button>
         </div>
+        {pdfError && <p role="alert" className="px-6 pb-3 text-sm text-red-600">{pdfError}</p>}
       </div>
+      {pdfUrl && (
+        <KioskPdfViewer
+          url={pdfUrl}
+          filename={`regeling-${plan.id}.pdf`}
+          onClose={closePdf}
+          testId="plan-arranged-pdf-viewer"
+        />
+      )}
     </div>
   );
 }
