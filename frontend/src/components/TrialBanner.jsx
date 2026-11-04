@@ -27,7 +27,8 @@ export default function TrialBanner() {
   const NOTIFY_STATES = ['trial', 'expired', 'past_due', 'cancelled'];
   if (!NOTIFY_STATES.includes(info.status)) return null;
 
-  const isBlocking = info.status === 'expired' || info.status === 'cancelled' || info.status === 'past_due' || (info.days_left ?? 1) <= 0;
+  const isRestricted = Boolean(info.access_restricted);
+  const isBlocking = isRestricted || info.status === 'cancelled' || info.status === 'past_due';
   const days = Math.max(0, info.days_left ?? 0);
   const billingInterval = intervalLabel(info.plan?.interval);
 
@@ -41,7 +42,9 @@ export default function TrialBanner() {
 
   const headline = (() => {
     switch (info.status) {
-      case 'expired': return 'Proefperiode verlopen — activeer om te blijven werken';
+      case 'expired': return isRestricted
+        ? 'Toegang beperkt — activeer om beheerfuncties te hervatten'
+        : `Proefperiode verlopen — nog ${info.grace_days_left} ${info.grace_days_left === 1 ? 'dag' : 'dagen'} volledige toegang`;
       case 'past_due': return 'Betaling staat open — voldoe om abonnement actief te houden';
       case 'cancelled': return 'Abonnement opgezegd — heractiveer wanneer u wilt';
       default: return `Nog ${days} ${days === 1 ? 'dag' : 'dagen'} proefperiode`;
@@ -66,7 +69,11 @@ export default function TrialBanner() {
             {headline}
           </p>
           <p className="text-[11px] sm:text-xs text-white/90 truncate">
-            {info.plan?.name} pakket · {info.currency} {Number(info.monthly_amount || 0).toLocaleString('nl-NL')} / {billingInterval} · facturen uiterlijk de 10e betalen
+            {isRestricted
+              ? 'Uw gegevens blijven bewaard. De huurderkiosk en betalingen blijven beschikbaar; exporteer uw gegevens of activeer uw abonnement.'
+              : info.status === 'expired'
+                ? 'Na de respijtperiode worden beheerfuncties tijdelijk beperkt. De huurderkiosk en betalingen blijven beschikbaar.'
+                : `${info.plan?.name} pakket · ${info.currency} ${Number(info.monthly_amount || 0).toLocaleString('nl-NL')} / ${billingInterval} · facturen uiterlijk de 10e betalen`}
           </p>
         </div>
         <button onClick={openDetails} data-testid="trial-upgrade-btn"

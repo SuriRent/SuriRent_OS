@@ -46,6 +46,7 @@ from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
     ALLOWED_FEATURE_ICONS,
 )
+from billing_access import billing_access_state
 
 # =====================================================================
 # Config
@@ -81,6 +82,62 @@ from saas_invoicing import (
 # =====================================================================
 # Auth Dependencies
 # =====================================================================
+def _billing_restriction_detail(access: dict) -> dict:
+    return {
+        "code": "billing_restricted",
+        "status": access["status"],
+        "message": "De proefperiode en respijtperiode zijn verlopen. Activeer een abonnement om beheerfuncties te hervatten.",
+        "restricted_at": access["restricted_at"],
+    }
+
+
+def _billing_request_is_allowed(request: Request) -> bool:
+    path = request.url.path
+    method = request.method.upper()
+    if path.startswith("/api/billing/"):
+        return True
+    if path == "/api/auth/me" and method == "GET":
+        return True
+    if path == "/api/companies/me/profile" and method in {"GET", "PUT"}:
+        return True
+    if path == "/api/companies/me/backup" and method == "GET":
+        return True
+    if path == "/api/companies/me/cancel-subscription" and method == "POST":
+        return True
+    return False
+
+
+async def _company_billing_access(company_id: str) -> dict:
+    company = await db.companies.find_one(
+        {"id": company_id},
+        {"_id": 0, "billing_status": 1, "trial_ends_at": 1, "expired_at": 1, "plan": 1},
+    ) or {}
+    access = billing_access_state(company)
+    if access["access_restricted"] and company.get("plan"):
+        plan = await _plan_for_company(company["plan"], company)
+        if float(plan.get("amount") or 0) <= 0:
+            access["status"] = "active"
+            access["access_restricted"] = False
+    return access
+
+
+async def _enforce_user_billing_access(user: dict, request: Request) -> dict:
+    if user.get("role") == "superadmin" or user.get("original_user_id"):
+        return user
+    company_id = user.get("active_company_id") or user.get("company_id")
+    if not company_id:
+        return user
+
+    access = await _company_billing_access(company_id)
+    user["_billing_status"] = access["status"]
+    user["_billing_access_restricted"] = access["access_restricted"]
+    user["_billing_grace_days_left"] = access["grace_days_left"]
+    user["_billing_restricted_at"] = access["restricted_at"]
+    if access["access_restricted"] and not _billing_request_is_allowed(request):
+        raise HTTPException(status_code=402, detail=_billing_restriction_detail(access))
+    return user
+
+
 async def get_current_user(request: Request) -> dict:
     # === Emergent Google Auth pad ===
     # Als `session_token` cookie aanwezig is (Emergent Google login), zoek
@@ -106,7 +163,7 @@ async def get_current_user(request: Request) -> dict:
                     gu.setdefault("id", gu.get("user_id"))
                     gu.setdefault("role", "admin")
                     gu["active_company_id"] = gu.get("company_id")
-                    return gu
+                    return await _enforce_user_billing_access(gu, request)
 
     # EventSource cannot send Authorization headers. On the admin SSE route,
     # the frontend supplies its current bearer token as ?token=...; prefer it
@@ -171,30 +228,7 @@ async def get_current_user(request: Request) -> dict:
     except Exception:
         pass  # presence-tracking mag nooit de request laten falen
 
-    # BILLING NOTIFICATION — we HARD-BLOCKEN NIET meer.
-    # Klanten mogen de app blijven gebruiken ook als hun proefperiode is
-    # verlopen of hun abonnement past_due/cancelled is. Ze zien alleen een
-    # in-app banner (TrialBanner) met een oproep om te activeren. Deze keuze
-    # is expliciet gemaakt door de eigenaar — omzet-optimalisatie via
-    # vriendelijke UX i.p.v. dwingen.
-    if user.get("role") != "superadmin" and not user.get("original_user_id"):
-        cid = user.get("company_id")
-        if cid:
-            c = await db.companies.find_one(
-                {"id": cid}, {"_id": 0, "billing_status": 1, "trial_ends_at": 1},
-            )
-            if c:
-                bs = (c.get("billing_status") or "active").lower()
-                # Update trial → expired in memory (voor logging/telemetrie).
-                if bs == "trial" and c.get("trial_ends_at"):
-                    try:
-                        end = datetime.fromisoformat(c["trial_ends_at"].replace("Z", "+00:00"))
-                        if end < datetime.now(timezone.utc):
-                            bs = "expired"
-                    except Exception:
-                        pass
-                user["_billing_status"] = bs  # beschikbaar voor endpoints die dit willen weten
-    return user
+    return await _enforce_user_billing_access(user, request)
 
 
 
@@ -252,7 +286,27 @@ async def get_kiosk_session(request: Request) -> dict:
     if not payload.get("company_id"):
         # Zonder bedrijf geen kiosk-sessie: anders zouden lookups niet per bedrijf gescheiden zijn.
         raise HTTPException(status_code=401, detail="Ongeldig kiosk token")
+    access = await _company_billing_access(payload["company_id"])
+    if access["access_restricted"] and not _kiosk_billing_request_is_allowed(request):
+        raise HTTPException(status_code=402, detail=_billing_restriction_detail(access))
     return {"company_id": payload.get("company_id"), "type": "kiosk"}
+
+
+def _kiosk_billing_request_is_allowed(request: Request) -> bool:
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return True
+    path = request.url.path
+    if path == "/api/kiosk/nfc-lookup":
+        return True
+    if path in {"/api/kiosk/payments", "/api/kiosk/stripe/intent"}:
+        return True
+    if re.fullmatch(r"/api/kiosk/payment-plans/[^/]+/installments/[^/]+/pay", path):
+        return True
+    if re.fullmatch(r"/api/kiosk/payments/[^/]+/(email|whatsapp)", path):
+        return True
+    if re.fullmatch(r"/api/kiosk/print-log/by-payment/[^/]+/printed", path):
+        return True
+    return False
 
 
 def kiosk_scope(session: dict) -> dict:
@@ -647,16 +701,6 @@ async def _daily_billing_checks_loop():
                 _log.info(f"[billing-cron] expired {len(expired)} companies @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[billing-cron] cycle failed: {e}")
-            # Trial-warning cyclus: 1x per dag, verstuurt e-mail 3 dagen
-            # voor het einde van elke trial. Idempotent via
-            # `sent_trial_warnings` marker-collectie.
-            try:
-                from routes.saas_ops import check_trial_warnings as _ctw
-                sent = await _ctw()
-                if sent:
-                    _log.info(f"[trial-warn] emailed {len(sent)} companies @ {datetime.now(timezone.utc).isoformat()}")
-            except Exception as e:
-                _log.warning(f"[trial-warn] cycle failed: {e}")
             # SaaS auto-invoice cyclus: 1x per dag, genereert nieuwe
             # maand-factuur voor elk actief bedrijf waar `subscription_renews_at`
             # verlopen is en er nog geen open factuur bestaat.
@@ -713,18 +757,18 @@ async def _send_trial_reminders():
         except Exception:
             continue
         delta = end - now_utc()
-        days_left = int(delta.total_seconds() // 86400)
+        days_left = math.ceil(delta.total_seconds() / 86400)
         # Choose the threshold reached
         threshold = None
         if delta.total_seconds() <= 0:
             threshold = "expired"
-        elif days_left <= 0:
+        elif days_left <= 1:
             threshold = "1d"
-        elif days_left <= 2:
+        elif days_left <= 3:
             threshold = "3d"
-        elif days_left <= 6:
+        elif days_left <= 7:
             threshold = "7d"
-        if threshold is None:
+        if threshold is None or threshold == "expired":
             continue
         sent = c.get("reminders_sent", []) or []
         if threshold in sent:
@@ -733,7 +777,7 @@ async def _send_trial_reminders():
         if threshold == "expired":
             subject = "Uw proefperiode is verlopen — activeer nu"
             headline = "Uw proefperiode is verlopen"
-            body_msg = "Activeer direct uw abonnement om ononderbroken toegang te behouden."
+            body_msg = "Uw bedrijfsomgeving blijft nog 7 dagen volledig beschikbaar. Daarna worden beheerfuncties tijdelijk beperkt; de huurderkiosk en betalingen blijven beschikbaar."
             cta_color = "#EF4444"
         else:
             human = {"7d": "7 dagen", "3d": "3 dagen", "1d": "morgen"}[threshold]
@@ -2572,7 +2616,11 @@ async def billing_me(user=Depends(get_current_user)):
     c = await db.companies.find_one({"id": cid}, {"_id": 0}) or {}
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
-    status = c.get("billing_status", "active")
+    access = billing_access_state(c)
+    if float(plan.get("amount") or 0) <= 0:
+        access["status"] = "active"
+        access["access_restricted"] = False
+    status = access["status"]
     days_left = None
     trial_ends = c.get("trial_ends_at")
     if trial_ends:
@@ -2582,9 +2630,6 @@ async def billing_me(user=Depends(get_current_user)):
             days_left = max(0, int(delta.total_seconds() // 86400) + (1 if delta.total_seconds() % 86400 > 0 else 0))
         except Exception:
             days_left = None
-    if status == "trial" and days_left is not None and days_left <= 0:
-        status = "expired"
-
     pending_plan_id = c.get("pending_plan")
     pending_plan = (await _plan_for_company(pending_plan_id, c)) if pending_plan_id else None
     pending_invoice = None
@@ -2594,6 +2639,10 @@ async def billing_me(user=Depends(get_current_user)):
         )
     return {
         "status": status,
+        "access_restricted": access["access_restricted"],
+        "grace_period_days": access["grace_period_days"],
+        "grace_days_left": access["grace_days_left"],
+        "restricted_at": access["restricted_at"],
         "plan_id": plan_id,
         "plan": plan,
         "trial_started_at": c.get("trial_started_at"),
@@ -3292,7 +3341,7 @@ async def _activate_company_after_saas_payment(company_id: str, plan_in_payment:
         "billing_status": "active",
         "subscription_started_at": c.get("subscription_started_at") or iso(now),
     }
-    unset = {}
+    unset = {"expired_at": ""}
     if renews_at:
         update["subscription_renews_at"] = iso(renews_at)
     else:
@@ -5131,7 +5180,8 @@ class CompanyOut(CompanyIn):
 async def _billing_summary(c: dict) -> dict:
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
-    status = c.get("billing_status") or ("trial" if c.get("trial_ends_at") else "active")
+    access = billing_access_state(c)
+    status = access["status"]
     days_left = None
     trial_ends = c.get("trial_ends_at")
     if trial_ends:
@@ -5141,15 +5191,18 @@ async def _billing_summary(c: dict) -> dict:
             days_left = max(0, int(delta.total_seconds() // 86400) + (1 if delta.total_seconds() % 86400 > 0 else 0))
         except Exception:
             days_left = None
-    if status == "trial" and days_left is not None and days_left <= 0:
-        status = "expired"
     # Gratis pakketten (bv. Lifetime, SRD 0) → altijd "active" ongeacht of de
     # trial-datum verlopen is. Anders zou de admin foutieve "verlopen" banner
     # zien terwijl er niets te betalen is.
     if float(plan.get("amount") or 0) <= 0:
         status = "active"
+        access["access_restricted"] = False
     return {
         "billing_status": status,
+        "access_restricted": access["access_restricted"],
+        "grace_period_days": access["grace_period_days"],
+        "grace_days_left": access["grace_days_left"],
+        "restricted_at": access["restricted_at"],
         "days_left": days_left,
         "monthly_amount": plan.get("amount"),
         "currency": plan.get("currency", "SRD"),
@@ -5439,7 +5492,11 @@ async def export_company_backup(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
-    if user.get("role") != "superadmin" and not user.get("original_user_id"):
+    if (
+        user.get("role") != "superadmin"
+        and not user.get("original_user_id")
+        and not user.get("_billing_access_restricted")
+    ):
         await _require_plan_feature(cid, "allow_backup", "Backup & Herstel")
 
     company = await db.companies.find_one({"id": cid}, {"_id": 0})
@@ -9020,6 +9077,7 @@ async def ocr_id_card(file: UploadFile = File(...),
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
+
     ctype = (file.content_type or "image/jpeg").lower()
     suffix = ".png" if "png" in ctype else (".webp" if "webp" in ctype else ".jpg")
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
@@ -19017,10 +19075,10 @@ async def _enforce_billing_expirations():
             end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
         except Exception:
             continue
-        if end < now:
+        if end <= now:
             await db.companies.update_one(
                 {"id": c["id"]},
-                {"$set": {"billing_status": "expired", "expired_at": now.isoformat()}},
+                {"$set": {"billing_status": "expired", "expired_at": end.isoformat()}},
             )
             expired.append(c)
             if c.get("owner_email"):
@@ -19030,7 +19088,8 @@ async def _enforce_billing_expirations():
                         subject="Uw proefperiode is verlopen",
                         body_html=f"<p>Beste {c.get('owner_name', 'beheerder')},</p>"
                                   f"<p>De proefperiode van uw <strong>{c.get('name')}</strong> omgeving is verlopen. "
-                                  f"Activeer uw abonnement om weer toegang te krijgen.</p>",
+                                  f"U behoudt nog 7 dagen volledige toegang. Daarna worden beheerfuncties tijdelijk beperkt; "
+                                  f"de huurderkiosk en betalingen blijven beschikbaar. Activeer uw abonnement om volledige toegang te behouden.</p>",
                     )
                 except Exception:
                     pass

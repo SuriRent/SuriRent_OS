@@ -169,6 +169,8 @@ async def superadmin_online_status(user: dict = Depends(_superadmin)):
             "online": _deps.is_online(last_seen),
             "active_users": recent_user_counts.get(c.get("id"), 0),
             "billing_status": s["billing_status"],
+            "access_restricted": s.get("access_restricted", False),
+            "grace_days_left": s.get("grace_days_left", 0),
             "plan": c.get("plan"),
             "trial_ends_at": c.get("trial_ends_at"),
             "monthly_amount": s.get("monthly_amount"),

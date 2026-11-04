@@ -33,6 +33,11 @@ const STATUS_PILL = {
 const STATUS_LABEL = {
   trial: 'Proef', active: 'Actief', expired: 'Verlopen', cancelled: 'Opgezegd', past_due: 'Open',
 };
+const billingLabel = (company) => {
+  if (company.access_restricted) return 'Beperkte toegang';
+  if (company.billing_status === 'expired') return `Respijt · ${company.grace_days_left ?? '—'}d`;
+  return STATUS_LABEL[company.billing_status] || company.billing_status;
+};
 
 // PageHeader — identieke opmaak als in AdminDashboard.jsx (regel 850).
 function PageHeader({ title, subtitle, action }) {
@@ -299,12 +304,12 @@ export default function SaasOverview() {
                   <p className="font-bold text-slate-900 truncate">{c.name}</p>
                   <p className="text-xs text-slate-500 font-mono truncate">/{c.slug}</p>
                   <span className={`sm:hidden inline-flex mt-1 text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
-                    {STATUS_LABEL[c.billing_status] || c.billing_status}
+                    {billingLabel(c)}
                   </span>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                   <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
-                    {STATUS_LABEL[c.billing_status] || c.billing_status}
+                    {billingLabel(c)}
                   </span>
                   {c.active_users > 0 && (
                     <span className="text-[10px] font-bold text-slate-500">{c.active_users} user{c.active_users === 1 ? '' : 's'}</span>
@@ -362,11 +367,11 @@ export default function SaasOverview() {
                 <p className="font-bold text-slate-900 truncate">{c.name}</p>
                 <p className="text-xs text-slate-500 font-mono truncate">/{c.slug}</p>
                 <span className={`sm:hidden inline-flex mt-1 text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
-                  {STATUS_LABEL[c.billing_status] || c.billing_status}
+                  {billingLabel(c)}
                 </span>
               </div>
               <span className={`hidden sm:inline-flex text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full ring-1 ring-inset ${STATUS_PILL[c.billing_status] || STATUS_PILL.active}`}>
-                {STATUS_LABEL[c.billing_status] || c.billing_status}
+                {billingLabel(c)}
               </span>
               <p className="text-[10px] sm:text-[11px] text-slate-500 shrink-0 font-mono w-20 sm:w-24 truncate text-right">{fmtRelative(c.last_seen_at)}</p>
             </div>

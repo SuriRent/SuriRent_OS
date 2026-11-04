@@ -782,7 +782,11 @@ function CompanyDetailDrawer({ company, invoices = [], onClose, onChanged }) {
               </p>
             )}
             {company.billing_status === 'expired' && (
-              <p className="text-sm text-slate-700">Proefperiode is verlopen. Markeer als actief zodra betaling is ontvangen.</p>
+              <p className="text-sm text-slate-700">
+                {company.access_restricted
+                  ? 'Respijtperiode verlopen: beheerfuncties zijn beperkt. De huurderkiosk en betalingen blijven beschikbaar; gegevens worden niet verwijderd.'
+                  : `Proefperiode verlopen: nog ${company.grace_days_left ?? '—'} dagen volledige toegang. Daarna worden beheerfuncties beperkt; de huurderkiosk en betalingen blijven beschikbaar.`}
+              </p>
             )}
           </div>
 
