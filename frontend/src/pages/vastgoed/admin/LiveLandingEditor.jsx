@@ -507,7 +507,7 @@ export default function LiveLandingEditor() {
                               )}
                             </div>
                             <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-                              De laptop- en telefoonmockups tonen standaard bewerkbare schermen. Klik op tekst in de preview of wijzig die hier; “Foto/video bekijken” toont de huidige upload.
+                              De laptop- en telefoonmockups zijn zelf opgebouwde, bewerkbare schermen. Pas de teksten aan in de preview of via de inhoudsvelden.
                             </p>
                           </div>
                         ) : field.kind === 'text' ? (

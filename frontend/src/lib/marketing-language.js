@@ -563,7 +563,6 @@ const EN_TRANSLATIONS = {
   '23 apr 2026': '23 Apr 2026',
   'Terug naar foto/video': 'Back to photo/video',
   'Mockupteksten bewerken': 'Edit mockup text',
-  'Foto/video bekijken': 'View photo/video',
   'Laptop · foto/video': 'Laptop · photo/video',
   'Telefoon · foto/video': 'Phone · photo/video',
   'Ik zie geen locatie of appartement': 'I cannot see a location or apartment',
