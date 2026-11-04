@@ -388,9 +388,7 @@ async def create_subscription_invoice(body: NewInvoiceIn,
 
 
 async def saas_auto_invoice_tick() -> list[dict]:
-    """Voor elk actief bedrijf: als `subscription_renews_at` verlopen is en er
-    is nog geen open factuur voor de nieuwe periode → genereer factuur. Maandplannen
-    gebruiken kalendermaanden; kwartaal- en jaarplannen behouden hun interval."""
+    """Invoice completed monthly service in arrears; preserve quarter/year billing intervals."""
     db = _deps.db
     now = _deps.now_utc()
     created: list[dict] = []
@@ -413,9 +411,46 @@ async def saas_auto_invoice_tick() -> list[dict]:
         currency = str(summary.get("currency") or (plan or {}).get("currency") or "SRD").upper()
         if amount <= 0:
             continue
-        period_start = _deps.plan_period_start(plan, renews_at)
-        period_end = _deps.plan_period_end(plan, period_start)
-        amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
+        if str((plan or {}).get("interval") or "month").lower() == "month":
+            period_start, period_end = _deps.monthly_billing_period(renews_at)
+            subscription_started_at = c.get("subscription_started_at")
+            if subscription_started_at:
+                try:
+                    started = datetime.fromisoformat(
+                        str(subscription_started_at).replace("Z", "+00:00"),
+                    )
+                    if started.date() > period_end.date():
+                        await db.companies.update_one(
+                            {"id": c["id"]},
+                            {"$set": {"subscription_renews_at": _deps.iso(
+                                _deps.next_monthly_invoice_date(period_end),
+                            )}},
+                        )
+                        continue
+                    if started.date() > period_start.date():
+                        period_start = _deps.plan_period_start(plan, started)
+                except (TypeError, ValueError):
+                    pass
+            amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
+            due_date = _deps.saas_due_date(period_end + timedelta(days=1))
+        else:
+            period_start = _deps.plan_period_start(plan, renews_at)
+            period_end = _deps.plan_period_end(plan, period_start)
+            due_date = _deps.saas_due_date(now)
+        try:
+            current_invoice = await consolidate_company_invoices(db, c["id"])
+        except ValueError as exc:
+            print(f"[saas-invoice] could not check existing charges for {c['id']}: {exc}")
+            continue
+        if _deps.invoice_covers_period(current_invoice, period_start, period_end):
+            if str((plan or {}).get("interval") or "month").lower() == "month":
+                await db.companies.update_one(
+                    {"id": c["id"]},
+                    {"$set": {"subscription_renews_at": _deps.iso(
+                        _deps.next_monthly_invoice_date(period_end),
+                    )}},
+                )
+            continue
         inv = {
             "id": _deps.new_id(),
             "company_id": c["id"],
@@ -427,7 +462,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "kind": "subscription",
             "period_start": _deps.iso(period_start),
             "period_end": _deps.iso(period_end) if period_end else None,
-            "due_date": _deps.saas_due_date(now),
+            "due_date": due_date,
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
@@ -440,6 +475,13 @@ async def saas_auto_invoice_tick() -> list[dict]:
         except ValueError as exc:
             print(f"[saas-invoice] could not add charge for {c['id']}: {exc}")
             continue
+        if str((plan or {}).get("interval") or "month").lower() == "month":
+            await db.companies.update_one(
+                {"id": c["id"]},
+                {"$set": {"subscription_renews_at": _deps.iso(
+                    _deps.next_monthly_invoice_date(period_end),
+                )}},
+            )
         if not created_charge:
             continue
         try:

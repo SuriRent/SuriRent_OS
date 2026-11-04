@@ -85,6 +85,9 @@ from saas_billing_calendar import (
     saas_invoice_cycle_fields as _saas_invoice_cycle_fields,
     saas_invoice_due_date as _saas_invoice_due_date,
     saas_next_renewal as _saas_next_renewal,
+    monthly_billing_period as _monthly_billing_period,
+    next_monthly_invoice_date as _next_monthly_invoice_date,
+    invoice_covers_period as _invoice_covers_period,
 )
 
 
@@ -19237,6 +19240,9 @@ _route_deps.plan_period_end = _plan_period_end
 _route_deps.plan_period_start = _plan_period_start
 _route_deps.saas_invoice_amount = _saas_invoice_amount
 _route_deps.saas_invoice_cycle_fields = _saas_invoice_cycle_fields
+_route_deps.monthly_billing_period = _monthly_billing_period
+_route_deps.next_monthly_invoice_date = _next_monthly_invoice_date
+_route_deps.invoice_covers_period = _invoice_covers_period
 _route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment
