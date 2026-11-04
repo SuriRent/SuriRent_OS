@@ -312,6 +312,7 @@
         try {
           var ROLES = {
             beheer:    { name: 'Beheer',         theme: '#F7F8FA', icon: 'beheer'    },
+            superadmin:{ name: 'Superadmin',      theme: '#F3F8F5', icon: 'superadmin' },
             kiosk:     { name: 'Kiosk',          theme: '#FFFFFF', icon: 'kioskpwa'  },
             huurder:   { name: 'Huurder',        theme: '#FFFFFF', icon: 'huurder'   },
             assistent: { name: 'SuriRent Assistent', theme: '#FFFFFF', icon: 'assistent' }
@@ -320,7 +321,8 @@
           var sub = p;
           if (p.indexOf('/c/') === 0) sub = '/' + p.split('/').slice(3).join('/');
           var role = 'beheer';
-          if (sub === '/assistent' || sub.indexOf('/assistent') === 0) role = 'assistent';
+          if (sub === '/superadmin' || sub.indexOf('/superadmin/') === 0) role = 'superadmin';
+          else if (sub === '/assistent' || sub.indexOf('/assistent') === 0) role = 'assistent';
           // BELANGRIJK: specifieke routes EERST (kiosk/klant, kiosk/huurder)
           // VOORDAT we de algemene /kiosk match doen, anders worden
           // /kiosk/huurder en /kiosk/klant verkeerd als 'kiosk' herkend.
@@ -336,6 +338,21 @@
             else role = 'beheer';
           }
           var cfg = ROLES[role];
+          document.documentElement.setAttribute('data-pwa-role', role);
+          if (role === 'superadmin') {
+            var favicon = document.getElementById('superadmin-favicon');
+            if (!favicon) {
+              favicon = document.createElement('link');
+              favicon.id = 'superadmin-favicon';
+              favicon.rel = 'icon';
+              favicon.type = 'image/svg+xml';
+              favicon.sizes = 'any';
+              document.head.appendChild(favicon);
+            }
+            favicon.href = 'data:image/svg+xml,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#047857"/><g fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="13" y="12" width="17" height="22" rx="2"/><rect x="36" y="12" width="15" height="12" rx="2"/><rect x="36" y="30" width="15" height="22" rx="2"/><rect x="13" y="42" width="17" height="10" rx="2"/></g></svg>'
+            );
+          }
           // Belangrijk: zet <title> EERSTE — iOS gebruikt dit als default in
           // "Voeg toe aan beginscherm" dialoog.
           document.title = cfg.name;
@@ -381,18 +398,15 @@
       })();
     </script>
     <script>
-      // First-paint background: voorkomt witte flits + witte strook onderaan
-      // op iOS PWA standalone. De PWA HTML-splash is ALTIJD SuriRent-oranje
-      // met wit logo + 3 pulserende dots — geen route-afhankelijke kleur
-      // meer zodat de opstart-ervaring consistent SuriRent-merk voelt.
-      //
-      // Ná splash-out neemt de body zijn eigen route-BG over via CSS
-      // (kiosk-mode / login-mode / cream default), maar dat gebeurt pas
-      // NADAT de app is gerenderd — geen flikker meer.
+      // First-paint background matches the superadmin palette on its routes;
+      // other routes retain the standard SuriRent splash.
       (function () {
         try {
-          var BRAND = '#FF5C00';
-          var CONTRAST = '#FFFFFF';
+          var isSuperadmin = document.documentElement.getAttribute('data-pwa-role') === 'superadmin';
+          var BRAND = isSuperadmin ? '#F3F8F5' : '#FF5C00';
+          var CONTRAST = isSuperadmin ? '#047857' : '#FFFFFF';
+          document.documentElement.style.setProperty('--pwa-splash-bg', BRAND);
+          document.documentElement.style.setProperty('--pwa-splash-fg', CONTRAST);
           window.__PWA_BG = BRAND;
           window.__PWA_FG = CONTRAST;
           // Body/HTML BG matcht ALLEEN tijdens splash. Zodra splash weg is
@@ -402,10 +416,18 @@
             if (document.body) document.body.style.backgroundColor = BRAND;
             var splash = document.getElementById('__pwa_splash');
             if (splash) splash.style.background = BRAND;
-            var svg = splash && splash.querySelector('svg');
-            if (svg) { svg.setAttribute('stroke', CONTRAST); }
-            var path = splash && splash.querySelector('svg path');
-            if (path) { path.setAttribute('fill', CONTRAST); path.setAttribute('fill-opacity', '0.18'); }
+            var homeIcon = splash && splash.querySelector('[data-pwa-splash-icon="home"]');
+            var saasIcon = splash && splash.querySelector('[data-pwa-splash-icon="saas"]');
+            if (homeIcon) {
+              homeIcon.style.display = isSuperadmin ? 'none' : 'block';
+              homeIcon.setAttribute('stroke', CONTRAST);
+              var homePath = homeIcon.querySelector('path');
+              if (homePath) { homePath.setAttribute('fill', CONTRAST); homePath.setAttribute('fill-opacity', '0.18'); }
+            }
+            if (saasIcon) {
+              saasIcon.style.display = isSuperadmin ? 'block' : 'none';
+              saasIcon.setAttribute('stroke', CONTRAST);
+            }
             var dots = splash ? splash.querySelectorAll('span') : [];
             for (var i = 0; i < dots.length; i++) dots[i].style.background = CONTRAST;
             var label = splash && splash.querySelector('p');
@@ -465,17 +487,23 @@
          runtime fetch. -->
     <!--__LANDING_CONTENT__-->
   </head>
-  <body style="background-color: #FF5C00;">
+  <body style="background-color: var(--pwa-splash-bg, #FF5C00);">
     <noscript>JavaScript is vereist om deze app te gebruiken.</noscript>
     <!-- Splash screen — LEEFT BUITEN #root zodat React deze niet unmount
          zodra createRoot() aanroept. Blijft zichtbaar tot App.js het via
          window.__hidePwaSplash() dismisst nadat auth + tenant-resolve
          zijn afgerond. Zo geen tussentijdse "cream + ring spinner" flikker
          meer tijdens PWA-opstart. -->
-    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FF5C00;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity 0.3s ease-out;pointer-events:none;">
+    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--pwa-splash-bg, #FF5C00);z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity 0.3s ease-out;pointer-events:none;">
       <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;animation:__pwaSplashPulse 1.4s ease-in-out infinite;">
-        <svg width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
+        <svg data-pwa-splash-icon="home" width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="var(--pwa-splash-fg, #FFFFFF)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
           <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FFFFFF" fill-opacity="0.18"/>
+        </svg>
+        <svg data-pwa-splash-icon="saas" width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="var(--pwa-splash-fg, #047857)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent Superadmin">
+          <rect x="3" y="3" width="7" height="9" rx="1" />
+          <rect x="14" y="3" width="7" height="5" rx="1" />
+          <rect x="14" y="12" width="7" height="9" rx="1" />
+          <rect x="3" y="16" width="7" height="5" rx="1" />
         </svg>
       </div>
       <div style="margin-top:24px;display:flex;gap:6px;">
@@ -483,8 +511,13 @@
         <span style="width:8px;height:8px;border-radius:50%;background:#FFFFFF;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.2s;"></span>
         <span style="width:8px;height:8px;border-radius:50%;background:#FFFFFF;animation:__pwaSplashDot 1.2s infinite ease-in-out;animation-delay:0.4s;"></span>
       </div>
-      <p style="margin-top:20px;font-size:13px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:#FFFFFF;opacity:0.9;">SuriRent</p>
+      <p style="margin-top:20px;font-size:13px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:var(--pwa-splash-fg, #FFFFFF);opacity:0.9;">SuriRent</p>
       <style>
+        html[data-pwa-role="superadmin"] #__pwa_splash [data-pwa-splash-icon="home"] { display: none !important; }
+        html[data-pwa-role="superadmin"] #__pwa_splash [data-pwa-splash-icon="saas"] { display: block !important; }
+        html:not([data-pwa-role="superadmin"]) #__pwa_splash [data-pwa-splash-icon="saas"] { display: none !important; }
+        #__pwa_splash p { color: var(--pwa-splash-fg, #FFFFFF) !important; }
+        #__pwa_splash span { background: var(--pwa-splash-fg, #FFFFFF) !important; }
         @keyframes __pwaSplashPulse {
           0%,100% { transform: scale(1); opacity: 1; }
           50%     { transform: scale(1.06); opacity: 0.85; }
