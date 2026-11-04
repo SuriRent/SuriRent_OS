@@ -3606,6 +3606,144 @@ function KasgeldPanel({ onBack }) {
   );
 }
 
+function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
+  const [apartments, setApartments] = useState(() => readKioskSelectCache()?.apartments || []);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const operator = getKioskEmployee();
+
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    setErr('');
+    try {
+      const data = await fetchKioskSelect();
+      setApartments(data.apartments || []);
+    } catch (e) {
+      setErr(formatError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load, reloadKey]);
+  useEffect(() => {
+    const onChange = () => load({ quiet: true });
+    const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
+    window.addEventListener('surirent:live-change', onChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', onChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
+
+  const occupied = apartments.filter((apartment) => apartment.tenant_id || apartment.status === 'occupied').length;
+  const rentsByCurrency = apartments.reduce((totals, apartment) => {
+    const currency = (apartment.currency || 'SRD').toUpperCase();
+    totals[currency] = (totals[currency] || 0) + Number(apartment.rent_amount || 0);
+    return totals;
+  }, {});
+  const monthlyRent = Object.entries(rentsByCurrency)
+    .map(([currency, amount]) => fmtMoney(amount, currency))
+    .join(' · ') || fmtMoney(0, 'SRD');
+
+  return (
+    <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-apartments-panel">
+      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
+        <button onClick={onBack} data-testid="apartments-panel-back"
+          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 active:scale-95 transition">
+          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
+        </button>
+        <div className="text-right text-white">
+          <p className="text-xs sm:text-sm font-semibold">{operator?.name || 'Kiosk'}</p>
+          <p className="text-[10px] sm:text-xs opacity-70">Appartementenbeheer</p>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
+        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+          data-testid="apartments-summary">
+          <div className="row-label-value items-center mb-4">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Appartementen</h2>
+            <Home className="w-5 h-5 text-[#FF5C00]" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="rounded-2xl bg-orange-50 p-4">
+              <p className="text-xs font-bold text-slate-500">Appartementen</p>
+              <p className="mt-1 text-2xl font-black text-slate-900" data-testid="apartments-total">{apartments.length}</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-4">
+              <p className="text-xs font-bold text-slate-500">Bezet</p>
+              <p className="mt-1 text-2xl font-black text-emerald-800" data-testid="apartments-occupied">{occupied}</p>
+            </div>
+          </div>
+
+          <div className="mb-5 rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-500">Huur p/m</p>
+            <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+              data-testid="apartments-monthly-rent">{monthlyRent}</p>
+          </div>
+
+          <button onClick={onNewApartment} data-testid="apartments-new-btn"
+            className="w-full h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+            <Plus className="w-5 h-5" strokeWidth={2.5} /> Nieuwe appartement
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden">
+          <div className="row-label-value items-center mb-3">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Alle appartementen</h3>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1"
+              data-testid="apartments-count-badge">{apartments.length} totaal</span>
+          </div>
+
+          {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" role="alert">{err}</div>}
+          {!err && loading && (
+            <div className="py-10 text-center" data-testid="apartments-loading">
+              <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin" />
+              <p className="text-sm text-slate-400 font-semibold mt-2">Laden…</p>
+            </div>
+          )}
+          {!err && !loading && apartments.length === 0 && (
+            <div className="py-10 text-center" data-testid="apartments-empty">
+              <Home className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-400 font-semibold">Nog geen appartementen.</p>
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1">
+            {apartments.map((apartment) => {
+              const isOccupied = !!apartment.tenant_id || apartment.status === 'occupied';
+              return (
+                <div key={apartment.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4"
+                  data-testid={`apartment-row-${apartment.id}`}>
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-[#FF5C00]'}`}>
+                    <Home className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-slate-900 truncate">Appartement {apartment.number}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {apartment.tenant_name || apartment.address || (isOccupied ? 'Bezet' : 'Beschikbaar')}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-black text-slate-900">{fmtMoney(apartment.rent_amount, apartment.currency || 'SRD')}</p>
+                    <span className={`text-[10px] font-bold ${isOccupied ? 'text-emerald-700' : 'text-slate-500'}`}>
+                      {isOccupied ? 'Bezet' : 'Beschikbaar'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
 function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
@@ -5946,7 +6084,14 @@ export default function KioskLayout() {
               onSearch={() => setSearchOpen(true)}
               onExit={exit} />
           )}
-          {step.startsWith('admin:') && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
+          {step === 'admin:appartementen' && hasAdminAccess && (
+            <KioskApartmentsPanel
+              onBack={() => setStep('select')}
+              onNewApartment={() => setShowAddApartment(true)}
+              reloadKey={apartmentsReloadKey}
+            />
+          )}
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}
           {step === 'kasgeld' && (
