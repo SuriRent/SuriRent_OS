@@ -3610,6 +3610,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
   const [apartments, setApartments] = useState(() => readKioskSelectCache()?.apartments || []);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [detailId, setDetailId] = useState(null);
   const operator = getKioskEmployee();
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -3646,6 +3647,62 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
   const monthlyRent = Object.entries(rentsByCurrency)
     .map(([currency, amount]) => fmtMoney(amount, currency))
     .join(' · ') || fmtMoney(0, 'SRD');
+  const selectedApartment = apartments.find((apartment) => apartment.id === detailId);
+
+  if (detailId && selectedApartment) {
+    const isOccupied = !!selectedApartment.tenant_id || selectedApartment.status === 'occupied';
+    const photoUrl = selectedApartment.photo_url
+      ? (selectedApartment.photo_url.includes('/api/landing/asset/')
+        ? `${selectedApartment.photo_url}${selectedApartment.photo_url.includes('?') ? '&' : '?'}thumb=1`
+        : selectedApartment.photo_url)
+      : '';
+    return (
+      <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+        style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-apartment-detail">
+        <div className="flex-1 min-h-0 overflow-y-auto py-3">
+          <div className="mx-auto max-w-4xl space-y-3">
+            <button type="button" onClick={() => setDetailId(null)} data-testid="apartment-detail-back"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 font-bold text-slate-700 shadow-sm">
+              <ArrowLeft className="w-4 h-4" /> Terug naar appartementen
+            </button>
+            <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+              {photoUrl ? (
+                <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
+                  className="h-52 w-full bg-slate-100 object-cover sm:h-72"
+                  onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <div className="flex h-40 items-center justify-center bg-orange-50 text-[#FF5C00]">
+                  <Home className="h-12 w-12" />
+                </div>
+              )}
+              <div className="p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
+                    <h1 className="mt-1 break-words text-2xl font-black text-slate-900 sm:text-3xl">{selectedApartment.number}</h1>
+                    <p className="mt-1 text-sm text-slate-500">{selectedApartment.address || 'Geen adres opgegeven'}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {isOccupied ? 'Bezet' : 'Beschikbaar'}
+                  </span>
+                </div>
+              </div>
+            </section>
+            <section className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huur p/m</p>
+                <p className="mt-2 text-xl font-black text-slate-900">{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}</p>
+              </div>
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huurder</p>
+                <p className="mt-2 truncate text-lg font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
@@ -3716,14 +3773,26 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1">
             {apartments.map((apartment) => {
               const isOccupied = !!apartment.tenant_id || apartment.status === 'occupied';
+              const photoUrl = apartment.photo_url
+                ? (apartment.photo_url.includes('/api/landing/asset/')
+                  ? `${apartment.photo_url}${apartment.photo_url.includes('?') ? '&' : '?'}thumb=1`
+                  : apartment.photo_url)
+                : '';
               return (
-                <div key={apartment.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4"
+                <button key={apartment.id} type="button" onClick={() => setDetailId(apartment.id)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:bg-slate-50 active:bg-slate-100 sm:p-4"
                   data-testid={`apartment-row-${apartment.id}`}>
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-[#FF5C00]'}`}>
-                    <Home className="w-5 h-5" />
-                  </div>
+                  {photoUrl ? (
+                    <img src={photoUrl} alt="" loading="lazy" decoding="async"
+                      className="h-11 w-11 shrink-0 rounded-xl bg-slate-100 object-cover sm:h-14 sm:w-14"
+                      onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                  ) : (
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-[#FF5C00]'}`}>
+                      <Home className="w-5 h-5" />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-slate-900 truncate">Appartement {apartment.number}</p>
+                    <p className="font-black text-slate-900 truncate">{apartment.number}</p>
                     <p className="text-xs text-slate-500 truncate">
                       {apartment.tenant_name || apartment.address || (isOccupied ? 'Bezet' : 'Beschikbaar')}
                     </p>
@@ -3734,7 +3803,8 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey }) {
                       {isOccupied ? 'Bezet' : 'Beschikbaar'}
                     </span>
                   </div>
-                </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                </button>
               );
             })}
           </div>
