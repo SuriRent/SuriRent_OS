@@ -4,7 +4,6 @@ Eerste batch (incrementele refactor van server.py):
   GET  /superadmin/overview               — KPI dashboard data
   GET  /superadmin/online-status          — per-bedrijf live presence
   GET  /superadmin/subscription-invoices  — lijst SaaS-facturen
-  POST /superadmin/subscription-invoices/{id}/mark-paid — factuur betaald
   GET  /superadmin/subscription-payments  — lijst ontvangen betalingen
 
 Vervolg-batches kunnen dezelfde patroon volgen: overige /superadmin/*
@@ -24,9 +23,7 @@ import io
 from . import _deps
 from saas_invoicing import (
     append_company_invoice_charge,
-    apply_saas_plan_payment,
     consolidate_company_invoices,
-    update_invoice_paid_amount,
 )
 
 router = APIRouter()
@@ -210,95 +207,6 @@ async def list_subscription_invoices(user: dict = Depends(_superadmin)):
     for invoice in docs:
         invoice["payment_plans"] = plans_by_invoice.get(invoice["id"], [])
     return docs
-
-
-@router.post("/superadmin/subscription-invoices/{inv_id}/mark-paid")
-async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
-    invoice = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
-    if invoice.get("merged_into_invoice_id"):
-        raise HTTPException(status_code=409, detail="Deze factuur is samengevoegd. Gebruik de hoofdfactuur.")
-    if invoice.get("status") == "superseded":
-        raise HTTPException(status_code=409, detail="Deze factuur is vervangen door een betalingsregeling")
-    if invoice.get("status") == "paid":
-        existing_payment = await _deps.db.subscription_payments.find_one({"invoice_id": inv_id}, {"_id": 0, "id": 1})
-        if not existing_payment and not invoice.get("payment_method"):
-            company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
-            payment_at = invoice.get("paid_at") or _deps.iso(_deps.now_utc())
-            payment = {
-                "id": _deps.new_id(),
-                "invoice_id": inv_id,
-                "company_id": invoice.get("company_id"),
-                "company_name": (company or {}).get("name") or invoice.get("company_name", ""),
-                "amount": float(invoice.get("amount") or 0),
-                "currency": (invoice.get("currency") or "SRD").upper(),
-                "method": invoice.get("payment_method") or "manual",
-                "reference": "Historische betaalde factuur",
-                "paid_at": payment_at,
-                "created_at": payment_at,
-                "created_by": user.get("email", "superadmin"),
-                "source": "manual",
-            }
-            await _deps.db.subscription_payments.insert_one(payment)
-            if _deps.notify_superadmins:
-                await _deps.notify_superadmins(
-                    "payments", "SaaS-betaling geregistreerd",
-                    f"{(company or {}).get('name', 'Klant')}: {payment['currency']} {payment['amount']:,.2f}.",
-                    {"kind": "saas_payment", "url": "/admin/saas_payments"},
-                )
-            if company and company.get("billing_status") != "active":
-                await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
-        return invoice
-    pending_request = await _deps.db.saas_payment_requests.find_one(
-        {"invoice_id": inv_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
-    )
-    if pending_request:
-        raise HTTPException(status_code=409, detail="Voor deze factuur wacht al een betaling op OCR-goedkeuring")
-    company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
-    if not company:
-        raise HTTPException(status_code=404, detail="Bedrijf van deze factuur niet gevonden")
-    if company.get("pending_invoice_id") == inv_id and company.get("pending_plan") != invoice.get("plan"):
-        raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
-    now = _deps.now_utc()
-    amount = float(invoice.get("balance_due", float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0)))
-    if amount <= 0:
-        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
-    res = await update_invoice_paid_amount(_deps.db, inv_id, amount)
-    if not res:
-        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
-    await apply_saas_plan_payment(_deps.db, inv_id, amount)
-    if res.get("status") == "paid":
-        await _deps.db.subscription_invoices.update_one(
-            {"id": inv_id},
-            {"$set": {"paid_at": _deps.iso(now), "payment_method": "manual"}},
-        )
-    payment = {
-        "id": _deps.new_id(),
-        "invoice_id": inv_id,
-        "company_id": company["id"],
-        "company_name": company.get("name", ""),
-        "amount": amount,
-        "currency": (invoice.get("currency") or "SRD").upper(),
-        "method": "manual",
-        "reference": "Handmatig gemarkeerd als betaald",
-        "paid_at": _deps.iso(now),
-        "created_at": _deps.iso(now),
-        "created_by": user.get("email", "superadmin"),
-        "source": "manual",
-    }
-    await _deps.db.subscription_payments.insert_one(payment)
-    if _deps.notify_superadmins:
-        await _deps.notify_superadmins(
-            "payments", "SaaS-betaling geregistreerd",
-            f"{company.get('name', 'Klant')}: {payment['currency']} {payment['amount']:,.2f}.",
-            {"kind": "saas_payment", "url": "/admin/saas_payments"},
-        )
-    await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
-    await _deps.send_saas_payment_email(
-        company, payment["amount"], payment["currency"], payment["method"], inv_id,
-    )
-    return res
 
 
 # =====================================================================

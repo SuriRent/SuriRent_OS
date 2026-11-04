@@ -9,10 +9,9 @@
 // -----------------------------------------------------------------------------
 
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Crown, Building2, CheckCircle, Clock, AlertCircle, ArrowLeft,
-  RefreshCw, Loader2, Receipt, Banknote, Plus, ArrowRight, X, Download, Mail,
+  RefreshCw, Loader2, Receipt, Banknote, Plus, X, Download, Mail,
 } from 'lucide-react';
 import { api, fmtMoney, formatError } from '../../../lib/api';
 
@@ -25,7 +24,6 @@ const STATUS_META = {
 };
 
 export default function SaasKasregister() {
-  const nav = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -161,8 +159,7 @@ export default function SaasKasregister() {
           <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="companies-grid">
             {filtered.map((c) => (
               <CompanyKioskCard key={c.id} company={c}
-                onOpenDetail={() => setDetailCid(c.id)}
-                onRegisterPayment={() => nav(`/admin/saas_payments?prefill_company=${c.id}`)} />
+                onOpenDetail={() => setDetailCid(c.id)} />
             ))}
           </div>
         )}
@@ -218,8 +215,7 @@ export default function SaasKasregister() {
 
       {/* Detail drawer */}
       {detailCid && (
-        <CompanyDetailDrawer cid={detailCid} onClose={() => setDetailCid(null)}
-          onRegisterPayment={(cid) => { setDetailCid(null); nav(`/admin/saas_payments?prefill_company=${cid}`); }} />
+        <CompanyDetailDrawer cid={detailCid} onClose={() => setDetailCid(null)} />
       )}
     </div>
   );
@@ -251,7 +247,7 @@ function StatusCard({ status, count, active, onClick }) {
 // ---------------------------------------------------------------------------
 // CompanyKioskCard — kiosk-tegel per bedrijf met status + snelle acties
 // ---------------------------------------------------------------------------
-function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
+function CompanyKioskCard({ company: c, onOpenDetail }) {
   const meta = STATUS_META[c.status] || STATUS_META.paid;
   const Icon = meta.icon;
   return (
@@ -327,11 +323,6 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
             className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50">
             <Receipt className="w-3.5 h-3.5" /> Details
           </button>
-          <button onClick={onRegisterPayment} data-testid={`register-payment-${c.id}`}
-            className="flex-1 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-black text-white flex items-center justify-center gap-1.5">
-            <Banknote className="w-3.5 h-3.5" /> Betaling
-            <ArrowRight className="w-3 h-3" />
-          </button>
         </div>
       </div>
     </div>
@@ -342,7 +333,7 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
 // CompanyDetailDrawer — Slide-in drawer met alle facturen + betaalhistorie
 // van 1 bedrijf. Elke factuur heeft PDF-download + e-mail knop.
 // ---------------------------------------------------------------------------
-function CompanyDetailDrawer({ cid, onClose, onRegisterPayment }) {
+function CompanyDetailDrawer({ cid, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -418,12 +409,6 @@ function CompanyDetailDrawer({ cid, onClose, onRegisterPayment }) {
                   </div>
                 </div>
               )}
-
-              <button onClick={() => onRegisterPayment && onRegisterPayment(cid)}
-                data-testid="drawer-register-payment"
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-black text-white transition hover:bg-orange-600">
-                <Banknote className="w-5 h-5" /> Betaling registreren
-              </button>
 
               {/* Facturen */}
               <section>
