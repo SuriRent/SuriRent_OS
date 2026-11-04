@@ -372,7 +372,7 @@ function KioskAdminMenu() {
   if (!isAdmin) return null;
   const items = [
     ...Object.keys(KIOSK_ADMIN_PAGES)
-      .filter((id) => id !== 'instellingen')
+      .filter((id) => id !== 'instellingen' && id !== 'overzicht')
       .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
       .map((id) => ({
         id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
