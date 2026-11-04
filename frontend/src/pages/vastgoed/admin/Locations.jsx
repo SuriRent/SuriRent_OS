@@ -80,8 +80,8 @@ function LocationForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Locations({ embedded = false }) {
-  const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
+export default function Locations({ embedded = false, kioskLayout = false, onBack }) {
+  const [askConfirm, confirmNode] = useEmbedConfirm(embedded || kioskLayout);
   // SWR cache — tabwissel toont instant vanuit cache
   const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
   const items = itemsRaw || [];
@@ -148,6 +148,124 @@ export default function Locations({ embedded = false }) {
     active: bySearch.filter((l) => (l.apartments_total || 0) > 0).length,
     empty: bySearch.filter((l) => (l.apartments_total || 0) === 0).length,
   };
+
+  if (kioskLayout) {
+    const totalApts = items.reduce((sum, location) => sum + (location.apartments_total || 0), 0);
+    const occupiedApts = items.reduce((sum, location) => sum + (location.apartments_occupied || 0), 0);
+    if (detailId) {
+      const location = items.find((item) => item.id === detailId);
+      if (!location) return null;
+      return (
+        <div className="h-full w-full overflow-y-auto bg-[#FF5C00] px-3 py-3 sm:px-5"
+          data-testid="kiosk-location-detail">
+          <div className="mx-auto max-w-7xl">
+            <LocationDetail loc={location}
+              onBack={() => setDetailId(null)}
+              onEdit={() => setEditing(location)}
+              onDelete={() => del(location)}
+              kioskMode />
+          </div>
+          {sharedModals}
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+        style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-locations-panel">
+        <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+          <button type="button" onClick={onBack} data-testid="locations-panel-back"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 font-bold text-white active:scale-95">
+            <ArrowLeft className="h-4 w-4" /> Terug
+          </button>
+          <p className="text-right text-xs font-semibold text-white">Locatiebeheer</p>
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden pb-3 md:flex-row md:gap-3 md:pt-3">
+          <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-3 sm:p-5 md:order-1"
+            data-testid="kiosk-locations-list">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle locaties</h1>
+                <p className="text-xs font-semibold text-slate-500">{items.length} geregistreerd</p>
+              </div>
+              <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"
+                data-testid="kiosk-locations-count">{counts.all} locaties</span>
+            </div>
+
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" data-testid="loc-filter-bar">
+              {[
+                { value: 'all', label: 'Alle locaties', count: counts.all },
+                { value: 'active', label: 'Actief', count: counts.active },
+                { value: 'empty', label: 'Leeg', count: counts.empty },
+              ].map((item) => (
+                <button key={item.value} type="button" onClick={() => setFilter(item.value)}
+                  data-testid={`loc-filter-${item.value}`}
+                  className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition ${
+                    filter === item.value ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}>
+                  {item.label} ({item.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="relative mb-3 shrink-0">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={q} onChange={(event) => setQ(event.target.value)}
+                placeholder="Zoek locatie of adres…" data-testid="loc-search"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-[#FF5C00]" />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-1">
+              {loading ? (
+                <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-[#FF5C00]" /></div>
+              ) : filtered.length === 0 ? (
+                <div className="py-10 text-center" data-testid="loc-empty">
+                  <MapPin className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-500">Geen locaties gevonden.</p>
+                </div>
+              ) : filtered.map((location) => (
+                <LocationRow key={location.id} loc={location} onOpen={() => setDetailId(location.id)} />
+              ))}
+            </div>
+          </section>
+
+          <aside className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-4 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            data-testid="kiosk-locations-summary">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Locaties</h2>
+              <MapPin className="h-5 w-5 text-[#FF5C00]" />
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-orange-50 p-3">
+                <p className="text-xs font-bold text-slate-500">Locaties</p>
+                <p className="mt-1 text-2xl font-black text-slate-900" data-testid="loc-stat-total">{items.length}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-100 p-3">
+                <p className="text-xs font-bold text-slate-500">Appartementen</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{totalApts}</p>
+              </div>
+            </div>
+            <div className="mb-4 rounded-2xl bg-emerald-50 p-3">
+              <p className="text-xs font-bold text-slate-500">Bezet</p>
+              <p className="mt-1 text-xl font-black text-emerald-800" data-testid="loc-stat-occupied">
+                {occupiedApts} <span className="text-sm font-bold text-emerald-700">van {totalApts} appartementen</span>
+              </p>
+            </div>
+            <button type="button" onClick={() => setCreating(true)} data-testid="loc-new-btn"
+              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200]">
+              <Plus className="h-5 w-5" /> Nieuwe locatie
+            </button>
+            <button type="button" onClick={onBack} data-testid="locations-exit"
+              className="mt-auto hidden h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200 md:inline-flex">
+              <ArrowLeft className="h-4 w-4" /> Terug naar kiosk
+            </button>
+          </aside>
+        </div>
+        {sharedModals}
+      </div>
+    );
+  }
 
   if (embedded) {
     const totalApts = items.reduce((s, l) => s + (l.apartments_total || 0), 0);
@@ -278,11 +396,151 @@ function LocationRow({ loc, onOpen }) {
 // =====================================================================
 // LocationDetail — full detail-pagina met terug-knop.
 // =====================================================================
-function LocationDetail({ loc, onBack, onEdit, onDelete }) {
+function LocationDetail({ loc, onBack, onEdit, onDelete, kioskMode = false }) {
   const active = (loc.apartments_total || 0) > 0;
+  const [detailTab, setDetailTab] = useState('overzicht');
   const bezettingsPct = loc.apartments_total > 0
     ? Math.round((loc.apartments_occupied / loc.apartments_total) * 100)
     : 0;
+  if (kioskMode) {
+    return (
+      <div className="flex min-h-full flex-col gap-3 pb-3" data-testid="loc-detail-page">
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {loc.photo_url ? (
+              <img src={loc.photo_url} alt={loc.name}
+                className="h-14 w-14 shrink-0 rounded-2xl border border-slate-200 bg-slate-100 object-cover"
+                onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]">
+                <MapPin className="h-6 w-6" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Locatie</p>
+              <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">{loc.name}</h1>
+              <p className="truncate text-sm font-semibold text-slate-500">{loc.address || 'Geen adres opgegeven'}</p>
+            </div>
+            <span className={`hidden shrink-0 rounded-full px-3 py-1 text-xs font-black sm:inline-flex ${
+              active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+            }`}>{active ? 'Actief' : 'Leeg'}</span>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button type="button" onClick={onBack} data-testid="loc-detail-back"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <ArrowLeft className="h-4 w-4" /> Terug
+            </button>
+            <button type="button" onClick={onEdit} data-testid="loc-detail-edit"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 text-sm font-bold text-slate-700 hover:bg-slate-200">
+              <Pencil className="h-4 w-4" /> Bewerk
+            </button>
+            <button type="button" onClick={onDelete} data-testid="loc-detail-delete"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 hover:bg-red-100">
+              <Trash2 className="h-4 w-4" /> Verwijder
+            </button>
+          </div>
+        </section>
+
+        <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+          role="tablist" aria-label="Locatiedetails">
+          {[
+            ['overzicht', 'Overzicht'],
+            ['foto', 'Locatie & foto'],
+          ].map(([tab, label]) => (
+            <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
+              onClick={() => setDetailTab(tab)} data-testid={`loc-detail-tab-${tab}`}
+              className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                detailTab === tab ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {detailTab === 'overzicht' && (
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[1.4fr_1fr]" data-testid="loc-detail-overview">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">Locatiegegevens</h2>
+                <MapPin className="h-5 w-5 text-[#FF5C00]" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Naam</p>
+                  <p className="mt-1 truncate font-black text-slate-900">{loc.name}</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Status</p>
+                  <p className={`mt-1 font-black ${active ? 'text-emerald-700' : 'text-slate-700'}`}>
+                    {active ? 'Actief' : 'Leeg'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 sm:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Adres</p>
+                  <p className="mt-1 font-bold text-slate-900">{loc.address || 'Geen adres opgegeven'}</p>
+                </div>
+              </div>
+            </section>
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">Appartementen</h2>
+                <Building2 className="h-5 w-5 text-[#FF5C00]" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-orange-50 p-3">
+                  <p className="text-xs font-bold text-slate-500">Totaal</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900" data-testid="loc-stat-total">{loc.apartments_total || 0}</p>
+                </div>
+                <div className="rounded-xl bg-emerald-50 p-3">
+                  <p className="text-xs font-bold text-slate-500">Bezet</p>
+                  <p className="mt-1 text-2xl font-black text-emerald-800" data-testid="loc-stat-occupied">
+                    {loc.apartments_occupied || 0}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-slate-500">Bezetting</p>
+                  <p className="text-sm font-black text-slate-900">{bezettingsPct}%</p>
+                </div>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#F8C260] to-[#FF5C00]"
+                    style={{ width: `${bezettingsPct}%` }} />
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {detailTab === 'foto' && (
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="loc-detail-photo">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Locatie & foto</h2>
+                <p className="text-sm text-slate-500">{loc.address || 'Geen adres opgegeven'}</p>
+              </div>
+              <button type="button" onClick={onEdit}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-orange-50 px-4 text-sm font-bold text-[#FF5C00] hover:bg-orange-100"
+                data-testid="loc-photo-edit"><Pencil className="h-4 w-4" /> Foto wijzigen</button>
+            </div>
+            {loc.photo_url ? (
+              <img src={loc.photo_url} alt={loc.name}
+                className="max-h-[42vh] min-h-48 w-full rounded-xl bg-slate-100 object-contain"
+                onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+            ) : (
+              <div className="flex min-h-48 items-center justify-center rounded-xl bg-slate-50 text-slate-400">
+                <div className="text-center">
+                  <ImageIcon className="mx-auto mb-2 h-10 w-10" />
+                  <p className="text-sm font-semibold">Geen foto beschikbaar</p>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="loc-detail-page">
       <div className="flex items-center gap-2">
