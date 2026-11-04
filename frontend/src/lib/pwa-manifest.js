@@ -16,8 +16,8 @@ const ROLE_CONFIG = {
     theme: '#FF5C00', icon: 'beheer',
   },
   superadmin: {
-    name: 'SuriRent Superadmin', shortName: 'Superadmin',
-    theme: '#047857', icon: 'superadmin',
+    name: 'SuriRent N.V. Superadmin', shortName: 'SaaS Beheer',
+    theme: '#F3F8F5', icon: 'superadmin',
   },
   kiosk: {
     name: 'SuriRent Kiosk', shortName: 'Kiosk',

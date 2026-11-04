@@ -6,7 +6,7 @@
  * - Network-first for API GETs met stale cache-fallback bij offline
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v109';
+const CACHE_VERSION = 'surirent-v110';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target
@@ -23,6 +23,11 @@ const PRECACHE = [
   '/kiosk-icons/kiosk-192.png',
   '/kiosk-icons/kiosk-512.png',
   '/kiosk-icons/kiosk-favicon.ico',
+  '/kiosk-icons/superadmin-72.png',
+  '/kiosk-icons/superadmin-144.png',
+  '/kiosk-icons/superadmin-192.png',
+  '/kiosk-icons/superadmin-512.png',
+  '/superadmin-favicon.svg',
 ];
 
 self.addEventListener('install', (event) => {
