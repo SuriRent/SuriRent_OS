@@ -48,6 +48,7 @@ export default function LoginPage() {
     return 'pin';
   })();
   const [view, setView] = useState(initialView);
+  const isKioskLogin = (searchParams.get('target') || '').toLowerCase() === 'kiosk';
   const [skipRedirect, setSkipRedirect] = useState(false);
   // Als de PIN succesvol was gaan we in "authenticating"-mode: we tonen
   // een oranje overlay met het huis-icoon + spinner totdat de navigatie
@@ -311,7 +312,8 @@ export default function LoginPage() {
   if (view === 'login') {
     return (
       <PasswordView initialMode={view} onBack={() => setView('pin')}
-        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={branding} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)}
+        branding={branding} showSuperadminLink={!isKioskLogin} />
     );
   }
 
@@ -322,7 +324,8 @@ export default function LoginPage() {
   if (!branding?.slug) {
     return (
       <PasswordView initialMode="login" onBack={() => {}}
-        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={null} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)}
+        branding={null} showSuperadminLink={!isKioskLogin} />
     );
   }
 

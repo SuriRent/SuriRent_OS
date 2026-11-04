@@ -17,7 +17,7 @@ import RegisterSuccess from './RegisterSuccess';
 import Header from './LoginHeader';
 import RegisterModal from '../../../components/RegisterModal';
 
-function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStart, branding }) {
+function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStart, branding, showSuperadminLink = true }) {
   const navigate = useBrandedNavigate();
   const { login, register } = useAuth();
   const isMobile = useIsMobile();
@@ -229,6 +229,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
           onBack={() => { try { onBack?.(); } catch { /* ignore */ } }}
           onForgot={() => setShowForgot(true)}
           branding={branding}
+          showSuperadminLink={showSuperadminLink}
         />
         {showForgot && (
           <ForgotPasswordModal initialEmail={email} onClose={() => setShowForgot(false)} />
@@ -627,7 +628,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
               nieuw bedrijf aan). Klik opent de oranje wizard (zelfde flow
               als vanaf de marketing landing page) i.p.v. het oude dense
               formulier — consistent en mobiel-first. */}
-          {!branding?.slug && (
+          {!branding?.slug && showSuperadminLink && (
             <>
               <p className="text-center text-sm text-slate-400 mt-4">
                 Nog geen account?{' '}
