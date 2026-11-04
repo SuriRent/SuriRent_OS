@@ -52,6 +52,7 @@ const TenantPublicLanding = lazyWithRetry(() => import('./pages/vastgoed/TenantP
 const PublicLandingBySlug = lazyWithRetry(() => import('./pages/vastgoed/PublicLandingBySlug'));
 const OverSuriRent = lazyWithRetry(() => import('./pages/marketing/OverSuriRent'));
 const LoginPage = lazyWithRetry(() => import('./pages/vastgoed/LoginPage'));
+const SuperadminLogin = lazyWithRetry(() => import('./pages/vastgoed/SuperadminLogin'));
 const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboard'));
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
@@ -277,6 +278,8 @@ function MarketingRoutes() {
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/over-surirent" element={<OverSuriRent />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -358,6 +361,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
@@ -411,6 +416,8 @@ function HybridRoutes() {
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
@@ -498,6 +505,8 @@ export default function App() {
                 pre-resolved slug — die zit in de path zodat useParams() nog
                 gewoon werkt in BrandedShell. We prefix intern zonder URL wijziging. */}
             <Route path="/login" element={<Navigate to={`/${slug}/login`} replace />} />
+            <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+            <Route path="/superadmin/login" element={<SuperadminLogin />} />
             <Route path="/admin/*" element={<Navigate to={`/${slug}/admin`} replace />} />
             <Route path="/kiosk" element={<Navigate to={`/${slug}/kiosk`} replace />} />
             <Route path="/kiosk/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />

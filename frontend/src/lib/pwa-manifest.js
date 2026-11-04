@@ -150,6 +150,8 @@ function setMetaContent(selector, content) {
 
 function pickRole(path = '', search = '') {
   const p = (path || '').toLowerCase();
+  if (p === '/superadmin' || p.startsWith('/superadmin/')) return 'superadmin';
+  if ((search || '').toLowerCase().includes('view=superadmin')) return 'superadmin';
   // Strip optionele `/c/<slug>` of `/<slug>` prefix vóór role-detectie.
   let sub = p;
   const parts = p.split('/').filter(Boolean);

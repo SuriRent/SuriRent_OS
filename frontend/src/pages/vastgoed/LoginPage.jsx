@@ -56,6 +56,12 @@ export default function LoginPage() {
   // pas op de volgende render cycle beschikbaar is.
   const [authenticating, setAuthenticating] = useState(false);
 
+  useEffect(() => {
+    if ((searchParams.get('view') || '').toLowerCase() === 'superadmin') {
+      window.location.replace('/superadmin/login');
+    }
+  }, [searchParams]);
+
   // ────────────────────────────────────────────────────────────────────
   // PWA Onboarding — eerste-keer welkom-scherm na PWA installatie.
   // Toont 3 keuzes (nieuw bedrijf / inloggen / huurder) als:

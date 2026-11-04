@@ -10,6 +10,7 @@ import { useAuth } from '../../../lib/auth';
 import { setPreferredRole } from '../../../lib/pwaRole';
 import { useBrandedNavigate, RESERVED_SLUGS } from '../../../lib/branded-nav';
 import { useIsMobile } from '../../../lib/use-is-mobile';
+import { Link } from 'react-router-dom';
 import { MobileEmailLogin } from '../../../components/MobileAuthShell';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import RegisterSuccess from './RegisterSuccess';
@@ -627,14 +628,19 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
               als vanaf de marketing landing page) i.p.v. het oude dense
               formulier — consistent en mobiel-first. */}
           {!branding?.slug && (
-            <p className="text-center text-sm text-slate-400 mt-4">
-              Nog geen account?{' '}
-              <button onClick={() => { setShowRegisterWizard(true); setError(''); }}
-                data-testid="auth-switch-mode"
-                className="text-[#FF5C00] font-semibold hover:underline">
-                Registreer hier
-              </button>
-            </p>
+            <>
+              <p className="text-center text-sm text-slate-400 mt-4">
+                Nog geen account?{' '}
+                <button onClick={() => { setShowRegisterWizard(true); setError(''); }}
+                  data-testid="auth-switch-mode"
+                  className="text-[#FF5C00] font-semibold hover:underline">
+                  Registreer hier
+                </button>
+              </p>
+              <p className="mt-4 text-center text-xs text-slate-400">
+                <Link to="/superadmin/login" className="font-semibold hover:text-slate-600">SuriRent Superadmin</Link>
+              </p>
+            </>
           )}
         </div>
       )}

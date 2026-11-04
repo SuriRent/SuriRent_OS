@@ -1431,6 +1431,8 @@ async def login(body: LoginIn, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Onjuiste inloggegevens")
     if user.get("disabled"):
         raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    if user.get("role") == "superadmin":
+        raise HTTPException(status_code=403, detail="Gebruik de aparte SuriRent Superadmin-inlogpagina")
     if user.get("role") == "kiosk":
         # Kiosk-medewerker: wachtwoord klopt → volgende stap is de eigen PIN.
         c = await db.companies.find_one({"id": user.get("company_id")}, {"_id": 0, "id": 1, "slug": 1, "name": 1}) or {}
@@ -1459,6 +1461,35 @@ async def login(body: LoginIn, request: Request, response: Response):
             "created_at": user["created_at"],
         },
         "company": company,
+    }
+
+
+@api.post("/auth/superadmin/login")
+async def superadmin_login(body: LoginIn, request: Request, response: Response):
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    ok = user and await asyncio.to_thread(
+        verify_password, body.password, user.get("password_hash", "")
+    )
+    if not ok:
+        raise HTTPException(status_code=401, detail="Onjuiste inloggegevens")
+    if user.get("disabled"):
+        raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    if user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Dit account heeft geen superadmin-toegang")
+
+    token = create_token({
+        "sub": user["id"], "email": email, "type": "access",
+        "company_id": user.get("company_id"), "role": "superadmin",
+    }, ACCESS_MIN)
+    await _invalidate_prior_sessions(request, response, keep="access_token")
+    _set_access_cookie(response, token)
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"], "email": user["email"], "name": user.get("name", ""),
+            "role": "superadmin", "company_id": user.get("company_id"),
+        },
     }
 
 
@@ -1734,6 +1765,8 @@ class _PinLoginIn(_PydBase):
 @api.post("/auth/personal-pin/setup")
 async def personal_pin_setup(body: _PinSetupIn, user=Depends(get_current_user)):
     """Stel of update de persoonlijke 4-cijferige PIN van de huidige gebruiker."""
+    if user.get("role") == "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmins gebruiken de aparte superadmin-login")
     pin = (body.pin or "").strip()
     if not pin.isdigit() or len(pin) != 4:
         raise HTTPException(status_code=400, detail="PIN moet uit precies 4 cijfers bestaan")
@@ -1767,6 +1800,8 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
         raise HTTPException(status_code=401, detail="Onbekende combinatie van e-mail en PIN")
     if u.get("disabled"):
         raise HTTPException(status_code=403, detail="Dit account is gedeactiveerd")
+    if u.get("role") == "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmins loggen in via /superadmin/login")
     _pin_throttle_clear(throttle_key)
     if u.get("role") == "kiosk":
         cid = u.get("company_id")
@@ -19369,7 +19404,7 @@ _PWA_ROLE_MANIFEST: dict[str, dict] = {
         "name": "SuriRent Superadmin",
         "short_name": "Superadmin",
         "description": "Superadmin dashboard voor het beheer van het SuriRent-platform.",
-        "start_url": "/login?view=superadmin&source=pwa",
+        "start_url": "/superadmin/login?source=pwa",
         "scope": "/",
         "display": "standalone",
         "orientation": "any",
@@ -19530,7 +19565,7 @@ def _slug_aware_start_url(role: str, slug: str | None) -> str:
     if role == "kiosk":
         return f"/{slug}/kiosk?source=pwa"
     if role == "superadmin":
-        return f"/{slug}/login?view=superadmin&source=pwa"
+        return "/superadmin/login?source=pwa"
     return f"/{slug}/login?source=pwa&view=admin"
 
 

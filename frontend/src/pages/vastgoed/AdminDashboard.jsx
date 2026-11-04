@@ -4831,6 +4831,7 @@ export default function AdminDashboard() {
     // vervolgpagina nog geldig was → AuthProvider hield gebruiker
     // ingelogd → redirect terug naar admin. We AWAITEN nu de server-
     // logout (met 2.5s timeout) VOORDAT we storage clearen en navigeren.
+    const wasSuperadmin = user?.role === 'superadmin';
     const wasDemo = (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
@@ -4874,8 +4875,8 @@ export default function AdminDashboard() {
     // sneller — geen redirect-hop). Extra `?loggedout=1` query zodat
     // LoginPage's AuthProvider niet per ongeluk auto-redirected op basis
     // van een cached user (Safari extra veiligheid).
-    let target = '/login?loggedout=1';
-    if (!wasDemo) {
+    let target = wasSuperadmin ? '/superadmin/login?loggedout=1' : '/login?loggedout=1';
+    if (!wasDemo && !wasSuperadmin) {
       try {
         const slug = localStorage.getItem('pwa_company_slug');
         if (slug) target = `/${slug}/login?loggedout=1`;

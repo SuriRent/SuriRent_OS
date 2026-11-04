@@ -231,14 +231,21 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart }) {
               ook op split-domain productie (app.surirent.sr → surirent.sr) werkt;
               op het app-subdomein zou `/` de LoginPage tonen i.p.v. de landing. */}
           {!branding?.slug && (
-            <p className="text-center text-white/85 text-sm font-medium pt-3">
-              Nog geen account?{' '}
-              <button type="button" onClick={() => { window.location.assign(`${publicMarketingUrl()}/?register=1`); }}
-                data-testid="mobile-login-to-register"
-                className="font-extrabold text-white underline underline-offset-2">
-                Registreer hier
-              </button>
-            </p>
+            <>
+              <p className="text-center text-white/85 text-sm font-medium pt-3">
+                Nog geen account?{' '}
+                <button type="button" onClick={() => { window.location.assign(`${publicMarketingUrl()}/?register=1`); }}
+                  data-testid="mobile-login-to-register"
+                  className="font-extrabold text-white underline underline-offset-2">
+                  Registreer hier
+                </button>
+              </p>
+              <p className="pt-3 text-center text-xs font-semibold text-white/75">
+                <a href="/superadmin/login" data-testid="mobile-superadmin-login" className="underline underline-offset-2">
+                  SuriRent Superadmin
+                </a>
+              </p>
+            </>
           )}
         </form>
       </div>
