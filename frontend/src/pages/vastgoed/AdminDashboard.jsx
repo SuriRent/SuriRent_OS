@@ -4552,13 +4552,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
   const groups = groupTabs(tabs);
-  const activeGroup = groups.find((group) => group.items.some((item) => item.id === tab));
-  const [selectedGroup, setSelectedGroup] = useState(activeGroup?.key || groups[0]?.key);
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => {
-    if (activeGroup) setSelectedGroup(activeGroup.key);
-  }, [activeGroup?.key]);
-  const visibleGroup = groups.find((group) => group.key === selectedGroup) || activeGroup || groups[0];
   useEffect(() => {
     if (!menuOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -4600,70 +4594,69 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
         </button>
       </div>
       {menuOpen && createPortal(
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[120] flex flex-col bg-emerald-700"
           onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
-          <nav id="saas-console-mobile-menu" role="dialog" aria-modal="true"
+          <div id="saas-console-mobile-menu" role="dialog" aria-modal="true"
             aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
             onClick={(event) => event.stopPropagation()}
-            className="flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-emerald-100 bg-[#F3F8F5] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-emerald-100 bg-white px-4 py-4">
+            className="flex min-h-0 flex-1 flex-col bg-emerald-700"
+            style={{
+              paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
+              paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+            }}>
+            <div className="flex shrink-0 items-center justify-between border-b border-white/15 px-4 py-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
                   <LayoutDashboard className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">SaaS Beheer</p>
-                  <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">SaaS Beheer</p>
+                  <h2 className="text-lg font-black text-white">Navigatie</h2>
                 </div>
               </div>
               <button type="button" onClick={() => setMenuOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25"
                 aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 overflow-y-auto p-4">
-              <div className="mb-4 flex flex-wrap gap-2">
-                {groups.map((group) => {
-                  const selected = group.key === visibleGroup?.key;
-                  return (
-                    <button key={group.key} type="button" onClick={() => setSelectedGroup(group.key)}
-                      data-testid={`saas-console-group-${group.key}`} aria-pressed={selected}
-                      className={`min-h-10 rounded-xl px-3 text-xs font-black transition-colors ${
-                        selected ? 'bg-emerald-700 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-emerald-50'
-                      }`}>
+            <nav aria-label="Superadmin navigatie" className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5"
+              data-testid="saas-console-mobile-menu-items">
+              <div className="mx-auto w-full max-w-3xl space-y-6">
+                {groups.map((group) => (
+                  <section key={group.key} aria-labelledby={`saas-console-mobile-group-${group.key}`}>
+                    <h3 id={`saas-console-mobile-group-${group.key}`}
+                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">
                       {group.label}
-                    </button>
-                  );
-                })}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {group.items.map((item) => {
+                        const Icon = item.icon;
+                        const selected = item.id === tab;
+                        const showBadge = item.id === 'notifications' && badgeCount > 0;
+                        return (
+                          <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
+                            data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
+                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-lg transition active:scale-[0.98] ${
+                              selected ? 'border-emerald-100 bg-emerald-50 text-emerald-950'
+                                : 'border-white/80 bg-white/95 text-slate-900 hover:bg-white'
+                            }`}>
+                            <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+                              selected ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              <Icon className="h-7 w-7" />
+                            </span>
+                            <span className="text-sm font-black leading-tight">{item.label}</span>
+                            {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
               </div>
-              {visibleGroup && (
-                <div className="grid grid-cols-2 gap-3">
-                  {visibleGroup.items.map((item) => {
-                    const Icon = item.icon;
-                    const selected = item.id === tab;
-                    const showBadge = item.id === 'notifications' && badgeCount > 0;
-                    return (
-                      <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
-                        data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
-                        className={`relative flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center shadow-sm transition active:scale-[0.98] ${
-                          selected ? 'border-emerald-700 bg-emerald-700 text-white shadow-emerald-900/10'
-                            : 'border-emerald-100 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50'
-                        }`}>
-                        <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-                          selected ? 'bg-white/15' : 'bg-emerald-50 text-emerald-700'
-                        }`}>
-                          <Icon className="h-6 w-6" />
-                        </span>
-                        <span className="text-xs font-black leading-tight">{item.label}</span>
-                        {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </nav>
+            </nav>
+          </div>
         </div>,
         document.body
       )}
