@@ -8,6 +8,7 @@ import {
   ScanLine, Receipt, RefreshCw, Loader2, ArrowRight, Trash2, FileText, Briefcase,
 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 
 const fmtRelative = (iso) => {
   if (!iso) return 'nooit ingelogd';
@@ -53,6 +54,7 @@ function PageHeader({ title, subtitle, action }) {
 }
 
 export default function SaasOverview() {
+  const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [presence, setPresence] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,7 @@ export default function SaasOverview() {
   }
 
   const overviewData = overview || {};
-  const companies = presence?.companies || [];
+  const companies = (presence?.companies || []).filter((company) => !activeCompanyId || company.id === activeCompanyId);
   const hasOverview = overview !== null;
   const hasPresence = presence !== null;
   const onlineCompanies = companies.filter((c) => c.online);
@@ -137,6 +139,12 @@ export default function SaasOverview() {
           </button>
         }
       />
+
+      {activeCompanyId && (
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" data-testid="scope-global-overview-note">
+          De platformtotalen op dit overzicht blijven alle bedrijven bevatten. De aanwezigheids- en proefperiode-overzichten tonen alleen de geselecteerde scope.
+        </p>
+      )}
 
       {err && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900" role="alert">

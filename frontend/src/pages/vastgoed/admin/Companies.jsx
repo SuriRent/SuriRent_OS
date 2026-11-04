@@ -423,7 +423,10 @@ export default function Companies() {
   };
 
   const isSuper = user?.role === 'superadmin';
-  const visibleItems = items.filter((company) => {
+  const scopedItems = activeCompanyId
+    ? items.filter((company) => company.id === activeCompanyId)
+    : items;
+  const visibleItems = scopedItems.filter((company) => {
     const term = query.trim().toLowerCase();
     const matchesQuery = !term || [
       company.name, company.slug, company.contact_email, company.owner_email, company.plan,
@@ -437,10 +440,10 @@ export default function Companies() {
     return matchesQuery && matchesFilter;
   });
   const counts = {
-    all: items.length,
-    active: items.filter((company) => company.billing_status === 'active').length,
-    trial: items.filter((company) => company.billing_status === 'trial').length,
-    attention: items.filter((company) => ['expired', 'past_due', 'cancelled'].includes(company.billing_status)).length,
+    all: scopedItems.length,
+    active: scopedItems.filter((company) => company.billing_status === 'active').length,
+    trial: scopedItems.filter((company) => company.billing_status === 'trial').length,
+    attention: scopedItems.filter((company) => ['expired', 'past_due', 'cancelled'].includes(company.billing_status)).length,
   };
 
   if (!isSuper) {
@@ -513,7 +516,7 @@ export default function Companies() {
           <p className="font-bold text-slate-700">Bedrijven konden niet worden geladen.</p>
           <button type="button" onClick={load} className="mt-4 h-10 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Opnieuw proberen</button>
         </div>
-      ) : items.length === 0 ? (
+      ) : scopedItems.length === 0 ? (
         <div className="bg-white rounded-2xl border border-orange-100 p-10 text-center">
           <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm">Nog geen bedrijven. Maak het eerste bedrijf aan.</p>

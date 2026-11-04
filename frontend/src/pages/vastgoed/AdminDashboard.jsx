@@ -158,6 +158,7 @@ function SaasPlaceholder({ title, subtitle, icon: Icon }) {
 // Zelfde card-lijst design als Beheerder Huurders/Contracten.
 // =====================================================================
 function SaasClients() {
+  const { activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | active | inactive
@@ -176,7 +177,10 @@ function SaasClients() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
-  const bySearch = items.filter((c) =>
+  const scopedItems = activeCompanyId
+    ? items.filter((client) => client.company_id === activeCompanyId)
+    : items;
+  const bySearch = scopedItems.filter((c) =>
     !q || (c.name || '').toLowerCase().includes(q.toLowerCase())
       || (c.email || '').toLowerCase().includes(q.toLowerCase())
       || (c.company_name || '').toLowerCase().includes(q.toLowerCase()));
@@ -194,7 +198,7 @@ function SaasClients() {
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-clients-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Klanten</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{items.length} admin-gebruikers over alle bedrijven op het platform.</p>
+        <p className="text-sm text-slate-500 mt-0.5">{scopedItems.length} admin-gebruikers{activeCompanyId ? ' bij dit bedrijf.' : ' over alle bedrijven op het platform.'}</p>
       </div>
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -287,6 +291,7 @@ function SaasClients() {
 // elk bedrijf status van hun SaaS-abonnement (actief/trial/verlopen).
 // =====================================================================
 function SaasContracts() {
+  const { activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -305,20 +310,23 @@ function SaasContracts() {
   }, []);
   useEffect(() => { load(); }, [load]);
   const bs = (c) => (c.billing_status || 'trial').toLowerCase();
-  const filtered = items.filter((c) => filter === 'all' || bs(c) === filter);
+  const scopedItems = activeCompanyId
+    ? items.filter((company) => company.id === activeCompanyId)
+    : items;
+  const filtered = scopedItems.filter((c) => filter === 'all' || bs(c) === filter);
   const counts = {
-    all: items.length,
-    active: items.filter((c) => bs(c) === 'active').length,
-    trial: items.filter((c) => bs(c) === 'trial').length,
-    expired: items.filter((c) => bs(c) === 'expired').length,
-    past_due: items.filter((c) => bs(c) === 'past_due').length,
-    cancelled: items.filter((c) => bs(c) === 'cancelled').length,
+    all: scopedItems.length,
+    active: scopedItems.filter((c) => bs(c) === 'active').length,
+    trial: scopedItems.filter((c) => bs(c) === 'trial').length,
+    expired: scopedItems.filter((c) => bs(c) === 'expired').length,
+    past_due: scopedItems.filter((c) => bs(c) === 'past_due').length,
+    cancelled: scopedItems.filter((c) => bs(c) === 'cancelled').length,
   };
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-contracts-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Contracten</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{items.length} abonnement-contracten op het platform.</p>
+        <p className="text-sm text-slate-500 mt-0.5">{scopedItems.length} abonnement-contracten{activeCompanyId ? ' voor dit bedrijf.' : ' op het platform.'}</p>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['past_due', 'Openstaand'], ['expired', 'Verlopen'], ['cancelled', 'Opgezegd']].map(([v, l]) => (
@@ -479,6 +487,7 @@ function SaasEmployees() {
 // verlopen trials en openstaande facturen tot een actie-lijst.
 // =====================================================================
 function SaasNotifications() {
+  const { activeCompanyId } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -493,10 +502,10 @@ function SaasNotifications() {
     const failures = [];
     if (overviewResult.status === 'fulfilled') {
       const overview = overviewResult.value.data || {};
-      if (overview.pending_ocr > 0) {
+      if (!activeCompanyId && overview.pending_ocr > 0) {
         list.push({ severity: 'amber', title: `${overview.pending_ocr} OCR-mismatches wachten op goedkeuring`, tab: 'saas_pending' });
       }
-      if (overview.overdue_invoices > 0) {
+      if (!activeCompanyId && overview.overdue_invoices > 0) {
         list.push({ severity: 'red', title: `${overview.overdue_invoices} vervallen facturen`, tab: 'saas_invoices' });
       }
     } else {
@@ -504,7 +513,10 @@ function SaasNotifications() {
     }
     if (presenceResult.status === 'fulfilled') {
       const companies = presenceResult.value.data?.companies || [];
-      const expiringTrials = companies.filter((company) => {
+      const scopedCompanies = activeCompanyId
+        ? companies.filter((company) => company.id === activeCompanyId)
+        : companies;
+      const expiringTrials = scopedCompanies.filter((company) => {
         if (company.billing_status !== 'trial' || !company.trial_ends_at) return false;
         const days = (new Date(company.trial_ends_at).getTime() - Date.now()) / 86400000;
         return days >= 0 && days <= 3;
@@ -518,7 +530,7 @@ function SaasNotifications() {
     setAlerts(list);
     setError(failures.join(' · '));
     setLoading(false);
-  }, []);
+  }, [activeCompanyId]);
   useEffect(() => { load(); }, [load]);
   const nav = (t) => window.dispatchEvent(new CustomEvent('saas-nav', { detail: t }));
   return (
@@ -4691,7 +4703,7 @@ function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
 
 export default function AdminDashboard() {
   useHidePwaSplash();
-  const { user, logout, activeCompany, refresh: refreshAuth } = useAuth();
+  const { user, logout, activeCompany, activeCompanyId, setActiveCompany, refresh: refreshAuth } = useAuth();
   const tabs = getTabsFor(user);
   const isSaasConsole = user?.role === 'superadmin';
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
@@ -4949,6 +4961,22 @@ export default function AdminDashboard() {
         <TrialBanner />
         <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
+          {isSaasConsole && activeCompanyId && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+              data-testid="active-company-scope">
+              <div className="flex min-w-0 items-center gap-2 text-sm text-emerald-900">
+                <Building2 className="h-4 w-4 shrink-0 text-emerald-700" />
+                <span className="font-bold">Bedrijfsscope actief:</span>
+                <span className="truncate">{activeCompany?.name || activeCompanyId}</span>
+                <span className="hidden text-emerald-700 sm:inline">· bedrijfslijsten zijn gefilterd; platformtotalen blijven totaal</span>
+              </div>
+              <button type="button" onClick={() => setActiveCompany(null)}
+                className="shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                data-testid="clear-company-scope">
+                Scope wissen
+              </button>
+            </div>
+          )}
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>

@@ -659,6 +659,7 @@ function Row({ label, value, mono, bold }) {
 }
 
 export default function Subscriptions({ viewMode = 'all' } = {}) {
+  const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -711,6 +712,19 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const scopedCompanies = activeCompanyId
+    ? companies.filter((company) => company.id === activeCompanyId)
+    : companies;
+  const scopedInvoices = activeCompanyId
+    ? invoices.filter((invoice) => invoice.company_id === activeCompanyId)
+    : invoices;
+  const scopedPayments = activeCompanyId
+    ? payments.filter((payment) => payment.company_id === activeCompanyId)
+    : payments;
+  const scopedPending = activeCompanyId
+    ? pending.filter((payment) => payment.company_id === activeCompanyId)
+    : pending;
 
   const approvePending = async (pr) => {
     if (!window.confirm(`OCR-betaling van ${pr.company_name} goedkeuren? Het abonnement wordt direct geactiveerd.`)) return;
@@ -765,7 +779,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
     );
   }
 
-  const filtered = companies.filter((c) => {
+  const filtered = scopedCompanies.filter((c) => {
     if (filter !== 'all' && c.billing_status !== filter) return false;
     if (search && !`${c.name} ${c.slug} ${c.owner_email || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -821,12 +835,12 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
       {showTabBar && (
         <div className="flex items-center gap-1.5 mb-4 border-b border-slate-100 overflow-x-auto">
         {[
-          { id: 'companies', label: `Bedrijven (${companies.length})`, icon: Building2 },
+          { id: 'companies', label: `Bedrijven (${scopedCompanies.length})`, icon: Building2 },
           { id: 'pending',
-            label: `OCR-goedkeuring${pending.length > 0 ? ` (${pending.length})` : ''}`,
-            icon: ScanLine, highlight: pending.length > 0 },
-          { id: 'invoices', label: `Facturen (${invoices.length})`, icon: Receipt },
-          { id: 'payments', label: `Betalingen (${payments.length})`, icon: Banknote },
+            label: `OCR-goedkeuring${scopedPending.length > 0 ? ` (${scopedPending.length})` : ''}`,
+            icon: ScanLine, highlight: scopedPending.length > 0 },
+          { id: 'invoices', label: `Facturen (${scopedInvoices.length})`, icon: Receipt },
+          { id: 'payments', label: `Betalingen (${scopedPayments.length})`, icon: Banknote },
         ].map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -837,9 +851,9 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
                   : t.highlight ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-slate-500 hover:text-slate-700'
               }`}>
               <Icon className="w-4 h-4" /> {t.label}
-              {t.id === 'pending' && pending.length > 0 && !active && (
+              {t.id === 'pending' && scopedPending.length > 0 && !active && (
                 <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold">
-                  {pending.length}
+                  {scopedPending.length}
                 </span>
               )}
             </button>
@@ -910,10 +924,10 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <FilterPills value={invFilter} onChange={setInvFilter}
               options={[
-                { v: 'all', l: 'Alles', c: invoices.length },
-                { v: 'open', l: 'Open', c: invoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
-                { v: 'paid', l: 'Betaald', c: invoices.filter((x) => x.status === 'paid').length },
-                { v: 'overdue', l: 'Vervallen', c: invoices.filter(isOverdue).length },
+                { v: 'all', l: 'Alles', c: scopedInvoices.length },
+                { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
+                { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
+                { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
               ]}
               testidPrefix="saas-inv-filter" />
             <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
@@ -921,20 +935,20 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
               <Plus className="w-4 h-4" /> Nieuwe factuur
             </button>
           </div>
-          <SaasInvoiceList invoices={filterInvoices(invoices, invFilter)} />
+          <SaasInvoiceList invoices={filterInvoices(scopedInvoices, invFilter)} />
         </div>
       )}
 
       {tab === 'pending' && (
         <div className="space-y-3" data-testid="sub-pending-list">
-          {pending.length === 0 && (
+          {scopedPending.length === 0 && (
             <div className="bg-white rounded-2xl border-2 border-dashed border-emerald-200 p-10 text-center">
               <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
               <p className="font-extrabold text-slate-700">Alles netjes!</p>
               <p className="text-sm text-slate-500 mt-1">Geen OCR-mismatches die wachten op handmatige goedkeuring.</p>
             </div>
           )}
-          {pending.map((pr) => {
+          {scopedPending.map((pr) => {
             const ocr = pr.ocr || {};
             return (
               <div key={pr.id} data-testid={`pending-row-${pr.id}`}
@@ -1002,23 +1016,23 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
         <div className="space-y-3">
           <FilterPills value={payFilter} onChange={setPayFilter}
             options={[
-              { v: 'all', l: 'Alles', c: payments.length },
-              { v: 'contant', l: 'Contant', c: payments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
-              { v: 'bank', l: 'Bank', c: payments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
-              { v: 'ocr', l: 'OCR', c: payments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
+              { v: 'all', l: 'Alles', c: scopedPayments.length },
+              { v: 'contant', l: 'Contant', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
+              { v: 'bank', l: 'Bank', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
+              { v: 'ocr', l: 'OCR', c: scopedPayments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
             ]}
             testidPrefix="saas-pay-filter" />
-          <SaasPaymentList payments={filterPayments(payments, payFilter)} />
+          <SaasPaymentList payments={filterPayments(scopedPayments, payFilter)} />
         </div>
       )}
 
       {tab === 'payment_plans' && (
-        <SaasPaymentPlansView invoices={invoices} companies={companies}
+        <SaasPaymentPlansView invoices={scopedInvoices} companies={scopedCompanies}
           onNewPlan={(invId) => { setPlanPrefillInvId(invId || null); setShowNewPlan(true); }} />
       )}
 
       {tab === 'kasgeld' && (
-        <SaasKasgeldView payments={payments} filter={kasFilter} onFilter={setKasFilter}
+        <SaasKasgeldView payments={scopedPayments} filter={kasFilter} onFilter={setKasFilter}
           onNewMutation={() => setShowKasMut(true)} />
       )}
 
@@ -1028,18 +1042,18 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
       )}
 
       {showNewInv && (
-        <NewInvoiceModal companies={companies} onClose={() => setShowNewInv(false)}
+        <NewInvoiceModal companies={scopedCompanies} onClose={() => setShowNewInv(false)}
           onSaved={() => { setShowNewInv(false); load(); }} />
       )}
 
       {showNewPlan && (
-        <NewPaymentPlanModal companies={companies} invoices={invoices} prefillInvoiceId={planPrefillInvId}
+        <NewPaymentPlanModal companies={scopedCompanies} invoices={scopedInvoices} prefillInvoiceId={planPrefillInvId}
           onClose={() => { setShowNewPlan(false); setPlanPrefillInvId(null); }}
           onSaved={() => { setShowNewPlan(false); setPlanPrefillInvId(null); load(); }} />
       )}
 
       {showKasMut && (
-        <KasMutationModal companies={companies} onClose={() => setShowKasMut(false)}
+        <KasMutationModal companies={scopedCompanies} onClose={() => setShowKasMut(false)}
           onSaved={() => { setShowKasMut(false); load(); }} />
       )}
 
@@ -1270,6 +1284,7 @@ function SaasPaymentList({ payments }) {
 }
 
 function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
+  const { activeCompanyId } = useAuth();
   const [realPlans, setRealPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [plansError, setPlansError] = useState('');
@@ -1289,7 +1304,10 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
       finally { if (alive) setLoadingPlans(false); }
     })();
     return () => { alive = false; };
-  }, [invoices, retryKey]);
+  }, [retryKey]);
+  const scopedPlans = activeCompanyId
+    ? realPlans.filter((plan) => plan.company_id === activeCompanyId)
+    : realPlans;
 
   // Bedrijven met minimaal 1 open factuur → mogelijk om te zetten naar regeling
   const openList = invoices
@@ -1321,7 +1339,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
       {/* Sectie 1 · Actieve regelingen (formeel via API) */}
       <div>
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">
-          Actieve regelingen ({realPlans.length})
+          Actieve regelingen ({scopedPlans.length})
         </p>
         {plansError && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
@@ -1335,7 +1353,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
             Laden…
           </div>
         )}
-        {!loadingPlans && !plansError && realPlans.length === 0 && (
+        {!loadingPlans && !plansError && scopedPlans.length === 0 && (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-dashed border-slate-200">
             <Calendar className="w-10 h-10 mx-auto text-slate-300 mb-2" />
             <p className="text-slate-500 font-semibold">Nog geen actieve regelingen.</p>
@@ -1343,7 +1361,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
           </div>
         )}
         <div className="space-y-2">
-          {realPlans.map((p) => {
+          {scopedPlans.map((p) => {
             const paid = p.paid || 0;
             const progress = p.total_amount > 0 ? Math.round((paid / p.total_amount) * 100) : 0;
             const openCount = (p.invoices || []).filter((i) => i.status !== 'paid').length;

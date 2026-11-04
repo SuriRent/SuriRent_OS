@@ -9,11 +9,13 @@
 // -----------------------------------------------------------------------------
 
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Crown, Building2, CheckCircle, Clock, AlertCircle, ArrowLeft,
   RefreshCw, Loader2, Receipt, Banknote, Plus, X, Download, Mail,
 } from 'lucide-react';
 import { api, fmtMoney, formatError } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 
 const STATUS_META = {
   overdue: { label: 'Achterstand', bg: 'bg-red-100', text: 'text-red-700', icon: AlertCircle, tone: 'from-red-500 to-red-700' },
@@ -24,6 +26,8 @@ const STATUS_META = {
 };
 
 export default function SaasKasregister() {
+  const nav = useNavigate();
+  const { activeCompanyId } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,9 +75,15 @@ export default function SaasKasregister() {
   }
 
   const companies = data.companies || [];
-  const filtered = statusFilter === 'all' ? companies : companies.filter((c) => c.status === statusFilter);
-  const totals = data.totals || { overdue: 0, open: 0, paid: 0 };
-  const grandTotalPerCurrency = companies.reduce((acc, c) => {
+  const scopedCompanies = activeCompanyId
+    ? companies.filter((company) => company.id === activeCompanyId)
+    : companies;
+  const filtered = statusFilter === 'all' ? scopedCompanies : scopedCompanies.filter((c) => c.status === statusFilter);
+  const totals = scopedCompanies.reduce((counts, company) => {
+    if (Object.prototype.hasOwnProperty.call(counts, company.status)) counts[company.status] += 1;
+    return counts;
+  }, { overdue: 0, open: 0, paid: 0, trial: 0, unbilled: 0 });
+  const grandTotalPerCurrency = scopedCompanies.reduce((acc, c) => {
     for (const [cur, v] of Object.entries(c.outstanding_by_currency || {})) {
       acc[cur] = (acc[cur] || 0) + v;
     }
@@ -185,7 +195,7 @@ export default function SaasKasregister() {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500">Betalingen</p>
-              <p className="text-sm font-black text-slate-900">Registreer</p>
+              <p className="text-sm font-black text-slate-900">Bekijk</p>
             </div>
           </button>
           <button onClick={() => nav('/admin/saas_kasgeld')}
