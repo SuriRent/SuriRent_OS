@@ -5814,6 +5814,7 @@ export default function KioskLayout() {
       else if (t === 'kasgeld') setStep('kasgeld');
       else if (t === 'tenants') setStep('admin:huurders');
       else if (t === 'locations') setStep('admin:locaties');
+      else if (t === 'contracts') setStep('admin:contracten');
       else if (MAP[t]) setAdminPopup(MAP[t]);
     };
     window.addEventListener('go-tab', onTab);
@@ -6251,7 +6252,7 @@ export default function KioskLayout() {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
-      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties') {
+      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten') {
         setAdminPopup(null);
         setStep(e.detail);
       }
@@ -6454,7 +6455,10 @@ export default function KioskLayout() {
           {step === 'admin:locaties' && hasAdminAccess && (
             <KioskAdminPage id="locaties" kioskLayout onBack={() => setStep('select')} />
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties'
+          {step === 'admin:contracten' && hasAdminAccess && (
+            <KioskAdminPage id="contracten" kioskLayout onBack={() => setStep('select')} />
+          )}
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}
