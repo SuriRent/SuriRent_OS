@@ -3694,14 +3694,14 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm md:flex md:items-stretch">
               {photoUrl ? (
                 <img src={photoUrl} alt={`Appartement ${selectedApartment.number}`}
-                  className="h-36 w-full bg-slate-100 object-cover sm:h-44 md:h-[22.5rem] md:w-[40%] md:shrink-0"
+                  className="h-36 w-full bg-slate-100 object-cover sm:h-44 md:h-40 md:w-64 md:shrink-0"
                   onError={(event) => { event.currentTarget.style.display = 'none'; }} />
               ) : (
-                <div className="flex h-28 items-center justify-center bg-orange-50 text-[#FF5C00] sm:h-32 md:h-[22.5rem] md:w-[40%] md:shrink-0">
-                  <Home className="h-20 w-20" />
+                <div className="flex h-28 items-center justify-center bg-orange-50 text-[#FF5C00] sm:h-32 md:h-auto md:w-64 md:shrink-0">
+                  <Home className="h-10 w-10" />
                 </div>
               )}
-              <div className="flex flex-1 items-center justify-between gap-4 p-4 sm:p-5 md:px-8 md:py-7">
+              <div className="flex flex-1 items-center justify-between gap-4 p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
@@ -3719,11 +3719,11 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
             </section>
             {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{err}</div>}
             <section className="grid gap-2.5 md:grid-cols-3">
-              <div className="rounded-2xl bg-white p-4 shadow-sm md:min-h-[15rem] md:p-6">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huur p/m</p>
                 <p className="mt-1.5 text-lg font-black text-slate-900">{fmtMoney(selectedApartment.rent_amount, selectedApartment.currency || 'SRD')}</p>
               </div>
-              <div className="rounded-2xl bg-white p-4 shadow-sm md:min-h-[15rem] md:p-6">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Huurder</p>
                 <p className="mt-1.5 truncate text-base font-black text-slate-900">{selectedApartment.tenant_name || 'Geen huurder gekoppeld'}</p>
                 {selectedApartment.tenant_id ? (
@@ -3736,7 +3736,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
                     data-testid="apartment-detail-assign"><Plus className="h-4 w-4" /> Huurder toewijzen</button>
                 )}
               </div>
-              <div className="rounded-2xl bg-white p-4 shadow-sm md:min-h-[15rem] md:p-6" data-testid="apartment-detail-actions">
+              <div className="rounded-2xl bg-white p-4 shadow-sm" data-testid="apartment-detail-actions">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Documenten & acties</p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setEditingApartment(selectedApartment)}
