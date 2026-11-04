@@ -225,8 +225,6 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
         className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
         <FilePlus2 className="w-4 h-4" /> Nieuwe factuur
       </button>
-      <button type="button" onClick={onClose} data-testid="invoices-modal-close"
-        className="col-span-2 h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Sluiten</button>
     </div>
   );
 

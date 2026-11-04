@@ -120,8 +120,6 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
             className="col-span-2 h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Nfc className="w-4 h-4" />} Koppeling opslaan
           </button>
-          <button onClick={onClose} data-testid="nfc-link-footer-close"
-            className="col-span-2 h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Sluiten</button>
         </div>
       </div>
     </div>

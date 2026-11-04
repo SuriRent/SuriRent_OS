@@ -4975,14 +4975,7 @@ function PaymentsViewerModal({ onClose }) {
 
   return (
     <KioskModalShell title="Betalingen inzien" Icon={Banknote}
-      testId="payments-viewer" onClose={onClose}
-      footer={(
-        <button onClick={onClose}
-          data-testid="payments-viewer-close-btn"
-          className="w-full h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">
-          Sluiten
-        </button>
-      )}>
+      testId="payments-viewer" onClose={onClose}>
       {() => (
         <>
           {loading && (
