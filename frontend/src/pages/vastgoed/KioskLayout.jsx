@@ -462,7 +462,7 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   );
 }
 
-function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch }) {
+function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch, onLocationSelectionChange }) {
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -527,6 +527,9 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
   const showLocationPicker = totalGroups > 1 && selectedLocationId === null;
+  useEffect(() => {
+    onLocationSelectionChange(totalGroups > 1 && selectedLocationId !== null);
+  }, [onLocationSelectionChange, selectedLocationId, totalGroups]);
 
   // Auto-skip when there's only one (or zero) groups.
   useEffect(() => {
@@ -621,18 +624,6 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
       {/* Mobile: knoppen bovenaan in 1 rij */}
       <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
-      {totalGroups > 1 && (
-        <div className="hidden md:flex px-2 pt-2">
-          <button
-            type="button"
-            onClick={() => setSelectedLocationId(null)}
-            data-testid="kiosk-back-to-locations"
-            className="inline-flex items-center gap-2 rounded-xl bg-white/90 px-4 py-2 text-sm font-bold text-slate-800 shadow hover:bg-white"
-          >
-            Terug naar locaties
-          </button>
-        </div>
-      )}
       {/* Mobile: kleine titel links, onder de knoppen */}
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
@@ -5654,6 +5645,7 @@ export default function KioskLayout() {
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
+  const [hasLocationSelection, setHasLocationSelection] = useState(false);
   const popupSetters = {
     'add-location': [showAddLocation, setShowAddLocation], 'add-apartment': [showAddApartment, setShowAddApartment],
     'add-tenant': [showAddTenant, setShowAddTenant], 'add-invoice': [showAddInvoice, setShowAddInvoice],
@@ -5682,6 +5674,10 @@ export default function KioskLayout() {
     setHistTick((t) => t + 1);
   };
   const goHist = (d) => {
+    if (d < 0 && step === 'select' && hasLocationSelection && !popupKey) {
+      window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'dashboard' }));
+      return;
+    }
     const h = hist.current;
     if (d < 0 && !stableStep && h.list[h.i]) { applyEntry(h.list[h.i]); return; }
     const e = h.list[h.i + d];
@@ -5689,7 +5685,8 @@ export default function KioskLayout() {
     h.i += d;
     applyEntry(e);
   };
-  const canBack = hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
+  const canBack = (step === 'select' && hasLocationSelection && !popupKey)
+    || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
@@ -5877,6 +5874,7 @@ export default function KioskLayout() {
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
+              onLocationSelectionChange={setHasLocationSelection}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
