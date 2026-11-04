@@ -36,6 +36,7 @@ import { usePagedList, LoadMoreSentinel, useDebounced } from '../../lib/use-page
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
 import { useAdminEvents, closeAdminEvents } from '../../lib/admin-events';
+import './superadmin-console.css';
 
 // ─────────────────────────────────────────────────────────────────────
 // LAZY-LOADED TAB COMPONENTEN
@@ -359,7 +360,7 @@ function SaasContracts() {
             const statusClasses = {
               active: { icon: 'bg-emerald-50 text-emerald-700', pill: 'bg-emerald-100 text-emerald-700' },
               trial: { icon: 'bg-amber-50 text-amber-700', pill: 'bg-amber-100 text-amber-700' },
-              past_due: { icon: 'bg-orange-50 text-orange-700', pill: 'bg-orange-100 text-orange-700' },
+              past_due: { icon: 'bg-amber-50 text-amber-700', pill: 'bg-amber-100 text-amber-700' },
               expired: { icon: 'bg-red-50 text-red-700', pill: 'bg-red-100 text-red-700' },
               cancelled: { icon: 'bg-slate-100 text-slate-600', pill: 'bg-slate-200 text-slate-700' },
             };
@@ -4487,7 +4488,7 @@ function SaasConsoleSidebar({ user, tab, tabs, onChange, onLogout, badgeCount })
       <div className="px-5 pt-5 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-[#E7F5EC] p-2 shrink-0">
-            <img src="/kiosk-icons/mark-white.png" alt="" className="w-full h-full object-contain rounded-lg bg-emerald-700 p-1" />
+            <img src="/superadmin-favicon.svg" alt="" className="w-full h-full object-contain rounded-lg" />
           </div>
           <div className="min-w-0">
             <p className="text-base font-black text-slate-900 tracking-tight">SuriRent</p>
@@ -4571,7 +4572,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} data-testid="saas-console-mobile-nav">
       <div className="min-h-[64px] flex items-center gap-3 px-3 sm:px-5">
         <div className="w-10 h-10 rounded-xl bg-[#E7F5EC] p-1.5 shrink-0">
-          <img src="/kiosk-icons/mark-white.png" alt="SuriRent" className="w-full h-full object-contain rounded-md bg-emerald-700 p-1" />
+          <img src="/superadmin-favicon.svg" alt="SuriRent" className="w-full h-full object-contain rounded-md" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">SaaS Beheer</p>
@@ -4940,7 +4941,7 @@ export default function AdminDashboard() {
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
         <TrialBanner />
-        <main className={`flex-1 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
+        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>

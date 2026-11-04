@@ -11,7 +11,7 @@ const BILLING_STATUSES = {
   trial: { label: 'Proefperiode', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   active: { label: 'Actief abonnement', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   expired: { label: 'Verlopen', className: 'bg-red-50 text-red-700 ring-red-200' },
-  past_due: { label: 'Betaling open', className: 'bg-orange-50 text-orange-700 ring-orange-200' },
+  past_due: { label: 'Betaling open', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   cancelled: { label: 'Opgezegd', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
 };
 

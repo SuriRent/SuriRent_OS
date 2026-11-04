@@ -80,6 +80,17 @@ export function usePwaManifest(roleOverride) {
     const role = roleOverride === 'superadmin' ? roleOverride : pickRole(location.pathname, location.search);
     const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.beheer;
     const slug = detectSlug(location.pathname);
+    const previousRole = document.documentElement.getAttribute('data-pwa-role');
+    document.documentElement.setAttribute('data-pwa-role', role);
+    if (role === 'superadmin') {
+      document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+        meta.setAttribute('content', cfg.theme);
+      });
+    } else if (previousRole === 'superadmin') {
+      document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+        meta.setAttribute('content', '#FFFFFF');
+      });
+    }
 
     // 1) <link rel="manifest"> — Android PWA install
     //    Slug-aware: backend `/api/pwa/manifest?role=X&slug=Y` returnt
@@ -93,14 +104,8 @@ export function usePwaManifest(roleOverride) {
     }
     link.setAttribute('href', buildManifestUrl(role, slug));
 
-    // 2) theme-color meta — Android system UI tint.
-    //    OP VERZOEK GEBRUIKER (2026-02): geen per-route theme-color meer
-    //    zodat de Android-statusbalk niet meer flikkert. Alle routes gebruiken
-    //    dezelfde donker-oranje band (#FFFFFF uit index.html). Deze regel
-    //    overschrijft dus NIET meer — pwa-manifest.js beheert nog wel de
-    //    install-time manifest (start_url/icon/naam) per rol.
-    // setMetaContent('meta[name="theme-color"]:not([media])', cfg.theme);
-    // setMetaContent('meta[name="theme-color"]', cfg.theme);
+    // Keep the installed superadmin app and its browser chrome on the same
+    // light-green surface. Other routes keep their existing shared theme color.
 
     // 3) iOS Safari title — "Toevoegen aan beginscherm" gebruikt deze
     setMetaContent('meta[name="apple-mobile-web-app-title"]', cfg.shortName);

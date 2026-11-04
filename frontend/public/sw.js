@@ -6,7 +6,7 @@
  * - Network-first for API GETs met stale cache-fallback bij offline
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v110';
+const CACHE_VERSION = 'surirent-v111';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target

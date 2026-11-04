@@ -18,7 +18,7 @@ import { api, fmtMoney, formatError } from '../../../lib/api';
 
 const STATUS_META = {
   overdue: { label: 'Achterstand', bg: 'bg-red-100', text: 'text-red-700', icon: AlertCircle, tone: 'from-red-500 to-red-700' },
-  open:    { label: 'Open',        bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, tone: 'from-amber-500 to-orange-600' },
+  open:    { label: 'Open',        bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, tone: 'from-amber-500 to-amber-600' },
   paid:    { label: 'Betaald',     bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle, tone: 'from-emerald-500 to-emerald-700' },
   trial:   { label: 'Proefperiode', bg: 'bg-sky-100', text: 'text-sky-700', icon: Clock, tone: 'from-sky-500 to-blue-700' },
   unbilled:{ label: 'Nog geen factuur', bg: 'bg-slate-100', text: 'text-slate-600', icon: Receipt, tone: 'from-slate-500 to-slate-700' },

@@ -22,7 +22,7 @@ const invoicePeriodEnd = (startDate, interval) => {
 };
 
 const STATUS_STYLES = {
-  trial: { label: 'Proefperiode', bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
+  trial: { label: 'Proefperiode', bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
   active: { label: 'Actief', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   expired: { label: 'Verlopen', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
   cancelled: { label: 'Opgezegd', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
@@ -165,14 +165,16 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="register-payment-modal">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4"
+      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg min-w-0 p-4 sm:p-8 max-h-[90vh] overflow-y-auto overscroll-contain"
+        style={{ maxHeight: 'calc(100dvh - 1rem)' }} data-testid="register-payment-modal">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
               <Banknote className="w-5 h-5 text-emerald-600" />
             </div>
-            <h3 className="text-xl font-extrabold text-slate-900">Betaling registreren</h3>
+            <h3 className="text-lg sm:text-xl font-extrabold text-slate-900">Betaling registreren</h3>
           </div>
           <button onClick={onClose} data-testid="reg-pay-close"
             className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
@@ -227,18 +229,18 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
               <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
                 disabled={!!selectedInvoice}
                 data-testid="reg-pay-amount"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono disabled:bg-slate-100" />
+                className="w-full min-w-0 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono disabled:bg-slate-100" />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Valuta</label>
               <select value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={!!selectedInvoice} data-testid="reg-pay-currency"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none bg-white disabled:bg-slate-100">
+                className="w-full min-w-0 h-11 px-2 sm:px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none bg-white disabled:bg-slate-100">
                 <option value="SRD">SRD</option>
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -258,11 +260,11 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
                 const sel = method === m.v;
                 return (
                   <button key={m.v} type="button" onClick={() => setMethod(m.v)} data-testid={`reg-pay-method-${m.v}`}
-                    className={`flex flex-col items-center gap-1 py-2 rounded-xl border-2 transition ${
+                    className={`flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-center rounded-xl border-2 transition ${
                       sel ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:border-slate-300'
                     }`}>
                     <Icon className={`w-4 h-4 ${sel ? 'text-orange-600' : 'text-slate-500'}`} />
-                    <span className={`text-xs font-bold ${sel ? 'text-orange-700' : 'text-slate-700'}`}>{m.l}</span>
+                    <span className={`text-[11px] sm:text-xs leading-tight font-bold break-words ${sel ? 'text-orange-700' : 'text-slate-700'}`}>{m.l}</span>
                   </button>
                 );
               })}
@@ -279,7 +281,7 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Datum ontvangen</label>
             <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} data-testid="reg-pay-date"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
+              className="block w-full min-w-0 max-w-full appearance-none h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
           </div>
 
           <div>
@@ -298,7 +300,7 @@ function PaymentRegistrationModal({ companies, invoices = [], defaultCompanyId, 
             : 'Bij registreren wordt een nieuwe periode toegevoegd aan de bestaande bedrijfsfactuur.'}
         </div>
 
-        <div className="flex gap-2 mt-5">
+        <div className="flex flex-col-reverse sm:flex-row gap-2 mt-5">
           <button onClick={onClose} disabled={loading}
             className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleer</button>
           <button onClick={submit} disabled={loading || !companyId || amount <= 0} data-testid="reg-pay-submit"
@@ -378,8 +380,8 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
               {companies.map((c) => (<option key={c.id} value={c.id}>{c.name} · {c.plan}</option>))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                 {monthlyPlan ? 'Maandbedrag' : 'Bedrag'}
               </label>
@@ -515,8 +517,8 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
               {companies.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Totaal bedrag</label>
               <input type="number" step="0.01" min="0" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)}
                 disabled={!!invoiceId}
@@ -657,8 +659,8 @@ function KasMutationModal({ companies, onClose, onSaved }) {
           </div>
 
           {/* Bedrag + valuta */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
               <input type="number" step="0.01" min="0" value={amount}
                 onChange={(e) => setAmount(e.target.value)} data-testid="kas-mut-amount"
