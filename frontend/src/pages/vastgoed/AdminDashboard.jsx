@@ -615,6 +615,7 @@ import SetupWizardSheet from './admin/SetupWizardSheet';
 import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
+import CompanySupportNotice from '../../components/CompanySupportNotice';
 import LiveIndicator from '../../components/LiveIndicator';
 import SubscriptionBell from '../../components/SubscriptionBell';
 import PendingApprovalBell from '../../components/PendingApprovalBell';
@@ -4958,6 +4959,7 @@ export default function AdminDashboard() {
           ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
+        {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
         <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>

@@ -51,8 +51,10 @@ import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
 import { KIOSK_ADMIN_PAGES, KioskAdminPage } from '../../components/KioskAdminInvoices';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
+import CompanySupportNotice from '../../components/CompanySupportNotice';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
+import { useAuth } from '../../lib/auth';
 const noop = () => {};
 
 prefetchKioskSelect();
@@ -5246,6 +5248,8 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
 export default function KioskLayout() {
   useHidePwaSplash();
   const navigate = useBrandedNavigate();
+  const { user } = useAuth();
+  const [supportActive, setSupportActive] = useState(false);
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
   const [step, setStep] = useState(() => {
     const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
@@ -5865,6 +5869,14 @@ export default function KioskLayout() {
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
     <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
+      {!user?.original_user_id && user?.role !== 'superadmin' && (
+        <div
+          className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
+          style={{ height: 'calc(var(--kiosk-sat) + 2.75rem)', paddingTop: 'var(--kiosk-sat)' }}
+        >
+          <CompanySupportNotice kiosk onActiveChange={setSupportActive} />
+        </div>
+      )}
       <KioskLiveStatus isAdmin={hasAdminAccess} onHome={step === 'select'} />
       {manualOpen && <KioskManual onClose={() => setManualOpen(false)} />}
       {/* NFC SCAN TOAST — alleen op het apartement-picker scherm, en alleen
@@ -5899,7 +5911,7 @@ export default function KioskLayout() {
         </div>
       )}
       {showTopHead && (
-        <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 top-0 z-10" style={{ padding: 'var(--kiosk-sat) 1.5vw 0' }}>
+        <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 z-10" style={{ top: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 0, padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
             tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
               ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
@@ -5912,7 +5924,7 @@ export default function KioskLayout() {
           initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.16, ease: 'easeOut' }}
           className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'}`}
-          style={{ paddingTop: 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
               {demoLoginError ? (

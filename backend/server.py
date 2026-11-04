@@ -223,6 +223,7 @@ async def get_current_user(request: Request) -> dict:
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
         user["impersonated_by"] = payload.get("impersonated_by")
+        user["support_session_id"] = payload.get("support_session_id")
         # While impersonating, scope to the company embedded in the token
         user["company_id"] = payload.get("company_id") or user.get("company_id")
         user["role"] = "admin"  # acts as admin of the customer
@@ -5923,14 +5924,25 @@ async def impersonate_company(cid: str, response: Response, user=Depends(require
     admin = await db.users.find_one({"company_id": cid, "role": "admin"}, {"_id": 0})
     target_user_id = (admin or user).get("id")
     target_email = (admin or user).get("email")
+    support_session_id = new_id()
+    started_at = now_utc()
+    expires_at = started_at + timedelta(minutes=IMPERSONATE_TOKEN_MIN)
     payload = {
         "sub": target_user_id, "email": target_email, "type": "access",
         "company_id": cid, "role": "admin",
         "impersonated_by": user.get("email"),
         "original_user_id": user.get("id"),
+        "support_session_id": support_session_id,
     }
     token = create_token(payload, IMPERSONATE_TOKEN_MIN)
     _set_access_cookie(response, token, minutes=IMPERSONATE_TOKEN_MIN)
+    await db.support_sessions.insert_one({
+        "id": support_session_id,
+        "company_id": cid,
+        "support_user_id": user.get("id"),
+        "started_at": iso(started_at),
+        "expires_at": iso(expires_at),
+    })
     await db.audit_log.insert_one({
         "id": new_id(), "type": "impersonate",
         "actor": user.get("email"), "company_id": cid,
@@ -5941,6 +5953,30 @@ async def impersonate_company(cid: str, response: Response, user=Depends(require
         "company": {k: c.get(k) for k in ("id", "slug", "name", "plan")},
         "expires_in_minutes": IMPERSONATE_TOKEN_MIN,
     }
+
+
+async def _company_support_status(company_id: Optional[str]) -> dict:
+    if not company_id:
+        return {"active": False}
+    sessions = await db.support_sessions.find(
+        {
+            "company_id": company_id,
+            "expires_at": {"$gt": iso(now_utc())},
+            "ended_at": {"$exists": False},
+        },
+        {"_id": 0, "started_at": 1},
+    ).sort("started_at", -1).limit(1).to_list(length=1)
+    return {"active": bool(sessions)}
+
+
+@api.get("/companies/me/support-status")
+async def company_support_status(user=Depends(require_role("admin", "boekhouder"))):
+    return await _company_support_status(company_id_of(user))
+
+
+@api.get("/kiosk/support-status")
+async def kiosk_support_status(session=Depends(get_kiosk_session)):
+    return await _company_support_status(session.get("company_id"))
 
 
 @api.post("/auth/stop-impersonating")
@@ -5957,6 +5993,15 @@ async def stop_impersonating(response: Response, user=Depends(get_current_user))
         "company_id": super_user.get("company_id"), "role": "superadmin",
     }, ACCESS_MIN)
     _set_access_cookie(response, token)
+    if user.get("support_session_id"):
+        await db.support_sessions.update_one(
+            {
+                "id": user["support_session_id"],
+                "support_user_id": original_id,
+                "ended_at": {"$exists": False},
+            },
+            {"$set": {"ended_at": iso(now_utc())}},
+        )
     return {"token": token, "user": super_user}
 
 
