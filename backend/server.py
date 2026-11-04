@@ -8583,102 +8583,56 @@ async def delete_tenant(tenant_id: str, user=Depends(get_current_user)):
 
 
 async def _extract_face_avatar_from_bytes(
-    raw: bytes, mime: str, tenant_id: str, uploaded_by: str | None = None,
+    raw: bytes, tenant_id: str, uploaded_by: str | None = None,
 ) -> str | None:
-    """Detecteer met Gemini 2.5 Flash de pasfoto op de ID-kaart, crop hem
-    en sla op als nieuw landing_asset. Retourneert de URL of None bij falen.
-
-    Werkwijze:
-    1. Stuur de ID-kaart-bytes naar Gemini met een strak JSON-prompt dat
-       normalized bbox coords (0..1) van de volledige pasfoto teruggeeft.
-    2. Parse JSON, crop de fotozone met PIL en maak er een vierkante avatar van.
-    3. Sla op als WebP landing_asset. Retourneer de URL.
-    """
-    import os, io, json as _json, tempfile
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    """Detecteer lokaal het gezicht op een ID-kaart zonder externe AI-key."""
+    import io
+    import cv2
+    import numpy as np
     from PIL import Image, ImageOps
 
-    api_key = os.getenv("EMERGENT_LLM_KEY")
-    if not api_key:
-        return None
-
-    # Suffix voor Gemini's file-based input
-    suffix = ".png" if "png" in mime else (".webp" if "webp" in mime else ".jpg")
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    try:
-        tmp.write(raw); tmp.close()
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"avatar-{new_id()[:8]}",
-            system_message="Je detecteert pasfoto's op identiteitsdocumenten en geeft ALLEEN geldig JSON terug.",
-        ).with_model("gemini", "gemini-2.5-flash")
-        prompt = (
-            "Op deze ID-kaart / paspoort / rijbewijs staat een pasfoto van de eigenaar. "
-            "Geef de bounding box (normalized 0..1) van DE VOLLEDIGE GEDRUKTE PASFOTO. "
-            "Dit is het rechthoekige portretvlak met hoofd en schouders, dus NIET alleen het gezicht. "
-            "Volg de binnenrand van het fotovak zo nauwkeurig mogelijk. "
-            "Neem geen kaarttekst, namen, nummers, handtekening of achtergrond buiten het fotovak mee.\n"
-            'Retour uitsluitend JSON: {"x":<0..1>,"y":<0..1>,"w":<0..1>,"h":<0..1>,"found":true|false}. '
-            "x,y is de LINKERBOVENhoek van de pasfoto. Als geen pasfoto zichtbaar is: found=false. "
-            "Geen markdown, geen uitleg."
-        )
-        msg = UserMessage(
-            text=prompt,
-            file_contents=[FileContentWithMimeType(file_path=tmp.name, mime_type=mime)],
-        )
-        raw_text = await chat.send_message(msg)
-    finally:
-        try: os.unlink(tmp.name)
-        except Exception: pass
-
-    txt = (raw_text or "").strip()
-    if txt.startswith("```"):
-        parts = txt.split("```")
-        txt = parts[1] if len(parts) > 1 else txt
-        if txt.startswith("json"):
-            txt = txt[4:]
-    try:
-        bb = _json.loads(txt.strip())
-    except Exception:
-        return None
-    if not bb.get("found", False):
-        return None
-    x = max(0.0, min(1.0, float(bb.get("x", 0))))
-    y = max(0.0, min(1.0, float(bb.get("y", 0))))
-    w = max(0.01, min(1.0, float(bb.get("w", 0))))
-    h = max(0.01, min(1.0, float(bb.get("h", 0))))
-
-    # Crop de volledige pasfoto-box en maak daarbinnen een vierkante avatar.
     try:
         img = Image.open(io.BytesIO(raw))
         img = ImageOps.exif_transpose(img)
+        img = img.convert("RGB")
         W, H = img.size
-        photo_left = max(0, int(x * W))
-        photo_top = max(0, int(y * H))
-        photo_right = min(W, int((x + w) * W))
-        photo_bottom = min(H, int((y + h) * H))
-        photo_width = photo_right - photo_left
-        photo_height = photo_bottom - photo_top
-        if photo_width < 40 or photo_height < 40:
+        scale = min(1.0, 1600 / max(W, H))
+        detect_img = img if scale == 1.0 else img.resize(
+            (max(1, int(W * scale)), max(1, int(H * scale))),
+            Image.Resampling.LANCZOS,
+        )
+        gray = cv2.cvtColor(np.asarray(detect_img), cv2.COLOR_RGB2GRAY)
+        gray = cv2.equalizeHist(gray)
+        detector = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml",
+        )
+        if detector.empty():
+            raise RuntimeError("OpenCV-gezichtsmodel kon niet worden geladen.")
+        faces = detector.detectMultiScale(
+            gray, scaleFactor=1.05, minNeighbors=4, minSize=(28, 28),
+            flags=cv2.CASCADE_SCALE_IMAGE,
+        )
+        if len(faces) == 0:
             return None
-
-        # Keep the square inside the detected photo box, aligned slightly
-        # toward the top so the face remains in frame for portrait photos.
-        side = min(photo_width, photo_height)
-        left = photo_left + (photo_width - side) // 2
-        top = photo_top + min(int(photo_height * 0.04), photo_height - side)
-        right = left + side
-        bottom = top + side
-        if right - left < 40 or bottom - top < 40:
+        fx, fy, fw, fh = max(faces, key=lambda face: face[2] * face[3])
+        inv_scale = 1 / scale
+        fx, fy, fw, fh = (int(round(v * inv_scale)) for v in (fx, fy, fw, fh))
+        if fw < 24 or fh < 24:
             return None
-        # Sanity check: reject a box that is probably the whole card.
-        crop_area_ratio = ((right - left) * (bottom - top)) / (W * H)
-        if crop_area_ratio > 0.6:
-            print(f"[avatar] rejected: crop area ratio {crop_area_ratio:.2f} too large (likely full card)")
+        # Add room around hair and chin while avoiding nearby card text.
+        side = int(round(max(fw, fh) * 1.55))
+        center_x = fx + fw / 2
+        center_y = fy + fh * 0.58
+        left = int(round(center_x - side / 2))
+        top = int(round(center_y - side / 2))
+        left = max(0, min(left, W - side))
+        top = max(0, min(top, H - side))
+        right, bottom = left + side, top + side
+        if side < 40 or side > min(W, H) or right > W or bottom > H:
             return None
-        crop = img.crop((left, top, right, bottom)).convert("RGB")
+        crop = img.crop((left, top, right, bottom))
         # Kwaliteit-first: bewaar native resolutie of upscale naar min 512px.
-        # Klein ID-kaart-crop = wazig; PIL LANCZOS verzacht dat merkbaar.
+        # Kleine ID-kaartuitsneden worden hiermee minder wazig weergegeven.
         cw, ch = crop.size
         MIN_SIDE = 512
         MAX_SIDE = 1024   # veiligheidsplafond — anders wordt asset onnodig groot
@@ -8692,7 +8646,7 @@ async def _extract_face_avatar_from_bytes(
         crop.save(out, format="WEBP", quality=95, method=6)
         avatar_bytes = out.getvalue()
     except Exception as e:
-        print(f"[avatar] PIL crop failed: {e}")
+        print(f"[avatar] local face detection/crop failed: {e}")
         return None
 
     asset_id = new_id()
@@ -8714,11 +8668,10 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
     """Upload ID-kaart foto voor een huurder. Slaat op als landing_asset en
     bewaart de URL op `tenant.id_photo_url` (multi-tenant safe via scope).
 
-    Direct na de upload probeert `_extract_face_avatar_from_asset` de
-    pasfoto uit de ID-kaart te croppen (Gemini vision → PIL) en op te slaan
-    als `tenant.avatar_url`, zodat huurderslijsten de foto tonen i.p.v.
-    initialen. Faalt de extractie stil (bv. Gemini-timeout), dan blijft de
-    huurder gewoon initialen tonen — geen blocker.
+    Direct na de upload probeert lokale gezichtsdetectie de pasfoto uit de
+    ID-kaart te croppen en als `tenant.avatar_url` op te slaan, zodat
+    huurderslijsten de foto tonen in plaats van initialen. Als er geen gezicht
+    wordt gevonden, blijft de huurder gewoon initialen tonen.
     """
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
     if not t:
@@ -8749,7 +8702,7 @@ async def upload_tenant_id_photo(tenant_id: str, file: UploadFile = File(...),
     avatar_url = None
     try:
         avatar_url = await _extract_face_avatar_from_bytes(
-            raw, ctype, tenant_id, uploaded_by=user.get("email"),
+            raw, tenant_id, uploaded_by=user.get("email"),
         )
         if avatar_url:
             await db.tenants.update_one(
@@ -8780,9 +8733,8 @@ async def generate_tenant_avatar(tenant_id: str, user=Depends(get_current_user))
         raw = base64.b64decode(asset["data_b64"])
     except Exception:
         raise HTTPException(status_code=500, detail="ID-foto asset corrupt.")
-    mime = asset.get("content_type") or "image/webp"
     avatar_url = await _extract_face_avatar_from_bytes(
-        raw, mime, tenant_id, uploaded_by=user.get("email"),
+        raw, tenant_id, uploaded_by=user.get("email"),
     )
     if not avatar_url:
         raise HTTPException(status_code=422, detail="Kon geen pasfoto detecteren op deze ID-kaart.")
@@ -8852,8 +8804,7 @@ async def backfill_tenant_avatars(force: bool = False, user=Depends(get_current_
             asset = await db.landing_assets.find_one({"id": asset_id}, {"_id": 0})
             if not asset: failed += 1; continue
             raw = base64.b64decode(asset["data_b64"])
-            mime = asset.get("content_type") or "image/webp"
-            avatar_url = await _extract_face_avatar_from_bytes(raw, mime, t["id"], uploaded_by=user.get("email"))
+            avatar_url = await _extract_face_avatar_from_bytes(raw, t["id"], uploaded_by=user.get("email"))
             if avatar_url:
                 await db.tenants.update_one({"id": t["id"]}, {"$set": {"avatar_url": avatar_url}})
                 done += 1
@@ -10962,7 +10913,7 @@ async def kiosk_attach_id_photo(tenant_id: str, body: KioskAttachIdIn, _session=
     avatar_url = None
     try:
         avatar_url = await _extract_face_avatar_from_bytes(
-            base64.b64decode(a["data_b64"]), a.get("content_type") or "image/webp", tenant_id,
+            base64.b64decode(a["data_b64"]), tenant_id,
             uploaded_by=a.get("uploaded_by"),
         )
         if avatar_url:
