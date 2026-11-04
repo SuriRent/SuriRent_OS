@@ -723,6 +723,7 @@ function CompanyDetailDrawer({ company, invoices = [], onClose, onChanged }) {
       const { data } = await api.post(`/superadmin/companies/${company.id}/impersonate`);
       if (data?.token) localStorage.setItem('admin_token', data.token);
       if (data?.company) localStorage.setItem('active_company', JSON.stringify(data.company));
+      try { sessionStorage.setItem('superadmin_impersonation', JSON.stringify({ returnPath: '/admin/subscriptions' })); } catch { /* non-blocking */ }
       // Hard reload to guarantee a clean component tree for the impersonated context
       window.location.href = '/admin';
     } catch (e) { setErr(formatError(e)); setBusy(false); }

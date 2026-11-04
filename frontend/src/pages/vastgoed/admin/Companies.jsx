@@ -411,6 +411,7 @@ export default function Companies() {
     try {
       const { data } = await api.post(`/superadmin/companies/${company.id}/impersonate`);
       if (!data?.token) throw new Error('De support-sessie kon niet worden gestart.');
+      try { sessionStorage.setItem('superadmin_impersonation', JSON.stringify({ returnPath: '/admin/companies' })); } catch { /* non-blocking */ }
       localStorage.setItem('admin_token', data.token);
       localStorage.removeItem('active_company_id');
       window.location.assign('/admin');
