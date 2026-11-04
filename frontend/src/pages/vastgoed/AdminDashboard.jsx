@@ -639,16 +639,16 @@ const SUPER_TABS = [
   { id: 'saas_clients', label: 'Klanten', icon: Users },
   { id: 'plans', label: 'Pakketten', icon: Package },
   { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
-  { id: 'saas_payments', label: 'SaaS Betalingen', icon: Banknote },
-  { id: 'saas_invoices', label: 'SaaS Facturen', icon: Receipt },
-  { id: 'saas_payment_plans', label: 'SaaS Betalingsregelingen', icon: Calendar },
-  { id: 'saas_kasgeld', label: 'SaaS Kasgeld', icon: Wallet },
+  { id: 'saas_payments', label: 'Betalingen', icon: Banknote },
+  { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
+  { id: 'saas_payment_plans', label: 'Betalingsregelingen', icon: Calendar },
+  { id: 'saas_kasgeld', label: 'Kasgeld', icon: Wallet },
   { id: 'saas_client_payments', label: 'Klant-betaalstatus', icon: CreditCard },
   { id: 'saas_employees', label: 'Werknemers', icon: Users },
   { id: 'saas_notifications', label: 'Notificaties', icon: Bell },
   { id: 'saas_pending', label: 'OCR-goedkeuring', icon: ScanLine },
   { id: 'landing_editor', label: 'Landing Editor', icon: Paintbrush },
-  { id: 'saas_settings', label: 'SaaS Instellingen', icon: SettingsIcon },
+  { id: 'saas_settings', label: 'Instellingen', icon: SettingsIcon },
   { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
 ];
 
@@ -793,7 +793,7 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
             <span className={isSaasConsole ? 'text-white' : 'text-slate-900'}>{nameA}</span><span className="text-[#FF5C00]">{nameB}</span>
           </p>
           <p className={`text-[9px] font-bold tracking-[0.22em] uppercase ${isSaasConsole ? 'text-orange-300' : 'text-slate-500'}`}>
-            {isSaasConsole ? 'SaaS Console' : 'Beheer Suite'}
+            {isSaasConsole ? 'Beheer' : 'Beheer Suite'}
           </p>
         </div>
       </div>
@@ -4492,16 +4492,16 @@ function SaasConsoleSidebar({ user, tab, tabs, onChange, onLogout, badgeCount })
           </div>
           <div className="min-w-0">
             <p className="text-base font-black text-slate-900 tracking-tight">SuriRent</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">SaaS Beheer</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
           </div>
         </div>
         <div className="mt-5 flex items-center gap-2 rounded-xl bg-[#F2F8F4] px-3 py-2.5">
           <Building2 className="w-4 h-4 text-emerald-700" />
-          <span className="text-xs font-bold text-slate-700">SaaS-platformbeheer</span>
+          <span className="text-xs font-bold text-slate-700">Beheer</span>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="SaaS beheer navigatie">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Beheernavigatie">
         {groups.map((group) => (
           <section key={group.key}>
             <h2 className="px-3 mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.label}</h2>
@@ -4575,7 +4575,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
           <img src="/superadmin-favicon.svg" alt="SuriRent" className="w-full h-full object-contain rounded-md" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">SaaS Beheer</p>
+          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">Beheer</p>
           <div className="flex items-center gap-2 min-w-0">
             <CurrentIcon className="w-4 h-4 shrink-0 text-emerald-700" />
             <h1 className="text-base sm:text-lg font-black text-slate-900 truncate" data-testid="saas-console-mobile-page-title">{current?.label || 'Overzicht'}</h1>
@@ -4611,7 +4611,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                   <LayoutDashboard className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">SaaS Beheer</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
                   <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
                 </div>
               </div>

@@ -452,7 +452,7 @@ export default function LiveLandingEditor() {
                     Velden van deze pagina. Nieuwe tekst, afbeeldingen, video’s en links verschijnen hier automatisch zodra ze de bewerkbare marketingcomponenten gebruiken.
                   </p>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                    Pakketnamen, prijzen en limieten komen uit SaaS Pakketten, zodat de marketingprijzen gelijk blijven aan de facturatie.
+                    Pakketnamen, prijzen en limieten komen uit Pakketten, zodat de marketingprijzen gelijk blijven aan de facturatie.
                   </p>
                   <p className="mt-1 text-[10px] font-semibold text-slate-400 truncate" title={previewPage}>{previewPage}</p>
                 </div>

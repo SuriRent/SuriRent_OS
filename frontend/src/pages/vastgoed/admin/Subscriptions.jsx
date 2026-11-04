@@ -717,7 +717,7 @@ function KasMutationModal({ companies, onClose, onSaved }) {
         {err && <p className="text-sm text-red-600 mt-3" data-testid="kas-mut-error">{err}</p>}
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mt-4 text-xs text-slate-600">
-          Deze boeking verschijnt direct in het SaaS-kasboek en beïnvloedt het saldo per valuta. Alle mutaties zijn traceerbaar via uw superadmin-email.
+          Deze boeking verschijnt direct in het kasboek en beïnvloedt het saldo per valuta. Alle mutaties zijn traceerbaar via uw superadmin-email.
         </div>
 
         <div className="flex gap-2 mt-5">
@@ -746,7 +746,7 @@ function CompanyDetailDrawer({ company, invoices = [], onClose, onChanged }) {
   const status = STATUS_STYLES[company.billing_status] || STATUS_STYLES.active;
 
   const impersonate = async () => {
-    if (!window.confirm(`Inloggen als beheerder van "${company.name}"? U verlaat het SaaS dashboard en kunt diens omgeving zien.`)) return;
+    if (!window.confirm(`Inloggen als beheerder van "${company.name}"? U verlaat het dashboard en kunt diens omgeving zien.`)) return;
     setBusy(true); setErr('');
     try {
       const { data } = await api.post(`/superadmin/companies/${company.id}/impersonate`);
@@ -929,7 +929,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
         api.get('/superadmin/saas-pending-approvals'),
       ]);
       const setters = [setOverview, setCompanies, setInvoices, setPayments, setPending];
-      const labels = ['SaaS-overzicht', 'bedrijven', 'facturen', 'betalingen', 'OCR-goedkeuringen'];
+      const labels = ['overzicht', 'bedrijven', 'facturen', 'betalingen', 'OCR-goedkeuringen'];
       const failures = [];
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -1019,7 +1019,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
   if (!overview) {
     return (
       <div className="max-w-3xl mx-auto mt-10 rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="font-bold text-red-800">{loadError || 'SaaS-overzicht kon niet worden geladen.'}</p>
+        <p className="font-bold text-red-800">{loadError || 'Overzicht kon niet worden geladen.'}</p>
         <button onClick={load} disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 font-bold text-white disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Opnieuw proberen
         </button>
@@ -1048,20 +1048,20 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
               {viewMode === 'companies' ? 'Bedrijven'
                 : viewMode === 'pending' ? 'OCR-goedkeuring'
-                : viewMode === 'invoices' ? 'SaaS Facturen'
-                : viewMode === 'payments' ? 'SaaS Betalingen'
-                : viewMode === 'payment_plans' ? 'SaaS Betalingsregelingen'
-                : viewMode === 'kasgeld' ? 'SaaS Kasgeld'
-                : 'SaaS Beheer'}
+                : viewMode === 'invoices' ? 'Facturen'
+                : viewMode === 'payments' ? 'Betalingen'
+                : viewMode === 'payment_plans' ? 'Betalingsregelingen'
+                : viewMode === 'kasgeld' ? 'Kasgeld'
+                : 'Beheer'}
             </h1>
           </div>
           <p className="text-sm text-slate-500">
             {viewMode === 'companies' ? 'Alle klanten met hun abonnementsstatus en plan.'
-              : viewMode === 'pending' ? 'Handmatig goedkeuren van OCR-mismatches bij SaaS-betalingen.'
+              : viewMode === 'pending' ? 'Handmatig goedkeuren van OCR-mismatches bij betalingen.'
               : viewMode === 'invoices' ? 'Facturen die SuriRent N.V. uitstuurt aan klanten.'
               : viewMode === 'payments' ? 'Ontvangen betalingen van klanten — handmatig of via OCR.'
-              : viewMode === 'payment_plans' ? 'Bedrijven die hun SaaS abonnement in termijnen betalen.'
-              : viewMode === 'kasgeld' ? 'Volledig kasboek van alle ontvangen SaaS-betalingen — cash flow overzicht.'
+              : viewMode === 'payment_plans' ? 'Bedrijven die hun abonnement in termijnen betalen.'
+              : viewMode === 'kasgeld' ? 'Volledig kasboek van alle ontvangen betalingen — cash flow overzicht.'
               : 'Alle bedrijven, abonnementen, facturen en betalingen op één plek.'}
           </p>
         </div>

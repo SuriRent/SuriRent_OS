@@ -126,7 +126,7 @@ export default function SaasOverview() {
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-5" data-testid="saas-overview-page">
       <PageHeader
-        title="SaaS Overzicht"
+        title="Overzicht"
         subtitle="Snelle blik op uw platform · bedrijven, abonnementen en inkomsten"
         action={
           <button onClick={load} disabled={refreshing} data-testid="saas-overview-refresh"
@@ -154,7 +154,7 @@ export default function SaasOverview() {
           <div className="relative">
             <div className="mb-4 flex items-center gap-2">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]"><Crown className="h-4 w-4" /></span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">SaaS platform</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">Platform</span>
             </div>
             <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Beheer je platform</h2>
             <p className="mt-1 max-w-xl text-sm text-slate-500">Bedrijven, abonnementen en inkomsten op één centrale plek.</p>
@@ -184,7 +184,7 @@ export default function SaasOverview() {
             </div>
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#FF5C00] shadow-sm transition hover:bg-orange-100"
-              aria-label="Bekijk SaaS-facturen" data-testid="saas-hero-cash-cta">
+              aria-label="Bekijk facturen" data-testid="saas-hero-cash-cta">
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

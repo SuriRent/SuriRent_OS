@@ -316,8 +316,8 @@ export default function SaasSettings() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">SaaS Instellingen</h1>
-          <p className="text-sm text-slate-500 mt-1">Banking, e-mail en platform-branding voor het hele SaaS systeem.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Instellingen</h1>
+          <p className="text-sm text-slate-500 mt-1">Bankgegevens, e-mail en platformbranding.</p>
         </div>
         <button onClick={save} disabled={saving} data-testid="saas-save"
           className="px-5 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-orange-500/25">
@@ -414,7 +414,7 @@ export default function SaasSettings() {
 
         <Section title="Superadmin pushmeldingen" icon={Bell} accent="bg-emerald-100 text-emerald-600">
           <p className="text-xs text-slate-500">
-            Kies welke SaaS-gebeurtenissen een pushmelding sturen. Meldingen komen alleen op apparaten
+            Kies van welke gebeurtenissen je een pushmelding ontvangt. Meldingen komen alleen op apparaten
             waarop je hieronder push hebt ingeschakeld.
           </p>
           <Toggle label="Pushmeldingen in- of uitschakelen"
@@ -424,8 +424,8 @@ export default function SaasSettings() {
             testid="saas-push-enabled" />
           {[
             ['new_customers', 'Nieuwe klantregistraties'],
-            ['payments', 'Ontvangen SaaS-betalingen'],
-            ['open_invoices', 'Openstaande SaaS-facturen'],
+            ['payments', 'Ontvangen betalingen'],
+            ['open_invoices', 'Openstaande facturen'],
             ['arrears', 'Vervallen facturen en achterstanden'],
             ['trials_expired', 'Verlopen proefperiodes'],
           ].map(([key, label]) => (

@@ -298,7 +298,7 @@ export default function PlansAdmin() {
     <div className="space-y-6" data-testid="plans-admin-page">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">SaaS Pakketten</h2>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pakketten</h2>
           <p className="text-sm text-slate-500 mt-1">
             Bepaal welke abonnementen klanten kunnen kiezen, met prijzen en features.
             Wijzigingen verschijnen direct op de marketing landing page.

@@ -95,7 +95,7 @@ export default function SaasKasregister() {
               <Crown className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF5C00]">SaaS financiën</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF5C00]">Financiën</p>
               <h1 className="text-lg font-black tracking-tight text-slate-900 sm:text-xl">Kasregister per bedrijf</h1>
             </div>
           </div>
