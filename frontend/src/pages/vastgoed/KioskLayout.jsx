@@ -3292,7 +3292,7 @@ function KasgeldPanel() {
   const [err, setErr] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const { isAdmin } = useContext(KioskThemeCtx);
+  const { isAdmin, theme } = useContext(KioskThemeCtx);
   const role = useAdminRole(isAdmin);
   const canManage = role === 'admin' || role === 'superadmin';
   const [sourceFilter, setSourceFilter] = useState('all');
@@ -3387,7 +3387,7 @@ function KasgeldPanel() {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className="h-full w-full bg-[#F4F5F7] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+    <div className={`h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
       style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
       {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
@@ -3976,14 +3976,54 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
   );
 }
 
-const KASGELD_CATEGORIES = [['overig', 'Overig'], ['huur', 'Huur'], ['onderhoud', 'Onderhoud'], ['schoonmaak', 'Schoonmaak'],
-  ['salaris', 'Salaris'], ['kantoor', 'Kantoor'], ['brandstof', 'Brandstof'], ['storting', 'Storting'], ['opname', 'Opname']];
+const KASGELD_CATEGORIES = {
+  in: [
+    { group: 'Inkomsten', options: [
+      ['huur', 'Huuropbrengsten (standaard huur)'],
+      ['borg', 'Borg / waarborgsom'],
+      ['nutsvoorzieningen_doorbelast', 'Nutsvoorzieningen doorbelast aan huurder'],
+      ['boetes_administratiekosten', 'Laat-betaalboetes / administratiekosten'],
+      ['overige_inkomsten_borginhouding', 'Overige inkomsten / borginhouding / incidentele verhuur'],
+    ] },
+  ],
+  out: [
+    { group: 'Onderhoud & reparaties (vastgoed)', options: [
+      ['onderhoud_loodgieterswerk', 'Loodgieterswerk'],
+      ['onderhoud_elektriciteit', 'Elektra en reparaties'],
+      ['onderhoud_airco', 'Airco-onderhoud'],
+      ['onderhoud_schilderwerk', 'Schilderwerk en kleine bouwkundige aanpassingen'],
+    ] },
+    { group: 'Nutsvoorzieningen (algemeen / leegstand)', options: [
+      ['nutsvoorzieningen_algemeen', 'EBS / SWM gemeenschappelijke ruimtes of leegstand'],
+      ['internet_wifi', 'Internet / Wi-Fi'],
+    ] },
+    { group: 'Schoonmaak & verbruiksartikelen', options: [
+      ['schoonmaak_verbruiksartikelen', 'Schoonmaakmiddelen en verbruiksartikelen'],
+      ['terreinonderhoud', 'Glazenwasser / terreinonderhoud'],
+    ] },
+    { group: 'Beheers- & administratiekosten', options: [
+      ['bankkosten', 'Bankkosten'],
+      ['kantoorbenodigdheden', 'Kantoorbenodigdheden en kasrollen'],
+    ] },
+    { group: 'Belastingen & vergunningen', options: [
+      ['belastingen_vergunningen', 'Huurwaarde-/grondbelasting en vergunningen'],
+    ] },
+    { group: 'Onvoorzien', options: [
+      ['onvoorzien_diversen', 'Onvoorzien / diversen'],
+    ] },
+  ],
+};
+const kasgeldCategoryOptions = (type) => KASGELD_CATEGORIES[type].flatMap(({ options }) => options);
 const kasInput = 'w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white';
 
 function KasgeldEditModal({ entry, onClose, onSaved }) {
+  const editCategories = kasgeldCategoryOptions(entry.type);
+  const initialCategory = editCategories.some(([value]) => value === entry.category)
+    ? entry.category
+    : editCategories[0][0];
   const [f, setF] = useState({
     type: entry.type, amount: String(entry.amount ?? ''), currency: entry.currency || 'SRD',
-    description: entry.description || '', category: entry.category || 'overig',
+    description: entry.description || '', category: initialCategory,
     entry_date: (entry.entry_date || entry.created_at || '').slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
@@ -4010,9 +4050,11 @@ function KasgeldEditModal({ entry, onClose, onSaved }) {
     <KioskModalShell title="Mutatie bewerken" Icon={Pencil} testId="kasgeld-edit" onClose={onClose} footer={footer}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
-          {[['in', 'Inkomend'], ['out', 'Uitgaand']].map(([v, l]) => (
-            <button key={v} type="button" onClick={() => setF({ ...f, type: v })} data-testid={`kasgeld-edit-type-${v}`}
-              className={`h-11 rounded-xl font-black text-sm border-2 ${f.type === v ? (v === 'in' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-red-500 bg-red-50 text-red-700') : 'border-slate-200 text-slate-500'}`}>{l}</button>
+          {[['in', 'Inkomsten', ArrowUpRight], ['out', 'Uitgaven', ArrowDownLeft]].map(([v, l, Icon]) => (
+            <button key={v} type="button" onClick={() => setF({ ...f, type: v, category: kasgeldCategoryOptions(v)[0][0] })} data-testid={`kasgeld-edit-type-${v}`}
+              className={`h-12 rounded-xl font-black text-sm inline-flex items-center justify-center gap-2 border-2 ${f.type === v ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+              <Icon className="w-5 h-5" /> {l}
+            </button>
           ))}
         </div>
         <div className="grid grid-cols-[1fr_7rem] gap-2">
@@ -4024,7 +4066,11 @@ function KasgeldEditModal({ entry, onClose, onSaved }) {
         <input value={f.description} onChange={set('description')} data-testid="kasgeld-edit-desc" placeholder="Omschrijving" className={kasInput} />
         <div className="grid grid-cols-2 gap-2">
           <select value={f.category} onChange={set('category')} data-testid="kasgeld-edit-cat" className={kasInput}>
-            {KASGELD_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {KASGELD_CATEGORIES[f.type].map(({ group, options }) => (
+              <optgroup key={group} label={group}>
+                {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </optgroup>
+            ))}
           </select>
           <input type="date" value={f.entry_date} onChange={set('entry_date')} data-testid="kasgeld-edit-date" className={kasInput} />
         </div>
@@ -4090,7 +4136,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('SRD');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('overig');
+  const [category, setCategory] = useState(kasgeldCategoryOptions('in')[0][0]);
   const [entryDate, setEntryDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -4158,6 +4204,10 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   const amountBorder = amount
     ? (type === 'in' ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : 'border-red-400 text-red-700 bg-red-50')
     : (type === 'in' ? 'border-emerald-200 text-emerald-700 bg-emerald-50/70' : 'border-red-200 text-red-700 bg-red-50/70');
+  const changeType = (nextType) => {
+    setType(nextType);
+    setCategory(kasgeldCategoryOptions(nextType)[0][0]);
+  };
 
   return createPortal((
     <div
@@ -4215,13 +4265,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
             </div>
 
             <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
-              <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
+              <button onClick={() => changeType('in')} data-testid="kasgeld-type-in"
                 className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
                 <ArrowUpRight className="w-5 h-5" /> Inkomsten
               </button>
-              <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
+              <button onClick={() => changeType('out')} data-testid="kasgeld-type-out"
                 className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
-                <ArrowDownLeft className="w-5 h-5" /> Uitgaand
+                <ArrowDownLeft className="w-5 h-5" /> Uitgaven
               </button>
             </div>
 
@@ -4269,12 +4319,11 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
                 className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
-                <option value="overig">Overig</option>
-                <option value="onderhoud">Onderhoud</option>
-                <option value="schoonmaak">Schoonmaak</option>
-                <option value="salaris">Salaris</option>
-                <option value="kantoor">Kantoor</option>
-                <option value="brandstof">Brandstof</option>
+                {KASGELD_CATEGORIES[type].map(({ group, options }) => (
+                  <optgroup key={group} label={group}>
+                    {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </label>
 
