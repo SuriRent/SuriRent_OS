@@ -120,7 +120,7 @@ function SwitchDialog({ dev, onClose, onChanged, orangeMode = false }) {
   };
   return (
     <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4" onClick={onClose} data-testid="power-dialog">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center relative" onClick={(e) => e.stopPropagation()}>
+      <div className="kiosk-standard-form bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center relative" onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={onClose} aria-label="Sluiten" className="absolute right-4 top-4 w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
           <X className="w-5 h-5 text-slate-600" />
         </button>
@@ -167,7 +167,7 @@ export function ApartmentPower({ apartmentId, onClose, orangeMode = false }) {
   if (dev) return <SwitchDialog dev={dev} onClose={onClose} onChanged={() => {}} orangeMode={orangeMode} />;
   return (
     <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+      <div className="kiosk-standard-form bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
         <Zap className="w-10 h-10 text-slate-300 mx-auto mb-2" />
         <p className="font-black text-slate-900">{err || 'Geen schakelaar gekoppeld aan dit appartement'}</p>
         <button type="button" onClick={onClose} className="mt-4 h-11 px-6 rounded-xl bg-slate-100 font-bold text-sm">Sluiten</button>

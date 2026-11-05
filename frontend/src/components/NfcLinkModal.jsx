@@ -49,7 +49,7 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
   return createPortal((
     <div className="keyboard-opaque-backdrop fixed inset-0 z-[140] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md flex flex-col sm:items-center sm:justify-center sm:p-4" data-testid="nfc-link-modal"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={sheetRef} className="absolute inset-x-0 top-0 w-full h-full sm:static sm:inset-auto sm:h-auto sm:max-w-[42rem] sm:max-h-[90dvh] bg-white sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden">
+      <div ref={sheetRef} className="kiosk-standard-form absolute inset-x-0 top-0 w-full h-full sm:static sm:inset-auto sm:h-auto sm:max-w-[42rem] sm:max-h-[90dvh] bg-white sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden">
         <div className="flex-none flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat, 0px), 16px)' }}>
           <div className="flex min-w-0 items-center gap-3">

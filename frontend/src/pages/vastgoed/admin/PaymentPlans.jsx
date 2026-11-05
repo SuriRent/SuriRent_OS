@@ -445,7 +445,7 @@ function CreatePlanSheet({ onClose, onCreated }) {
   }, [customMode]);
 
   return (
-    <div className={hosted ? 'absolute inset-0 z-[60] bg-white !m-0' : 'fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4'}
+    <div className={hosted ? 'kiosk-standard-form absolute inset-0 z-[60] bg-white !m-0' : 'fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4'}
       data-testid="create-plan-sheet" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
         className={hosted ? 'w-full h-full bg-white overflow-y-auto' : 'w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto'}

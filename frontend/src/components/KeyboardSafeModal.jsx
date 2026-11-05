@@ -23,6 +23,11 @@ export const ModalHostContext = createContext(null);
 
 export default function KeyboardSafeModal({ onClose, testId, children, className = '', maxWidthClass = 'sm:max-w-md' }) {
   const host = useContext(ModalHostContext);
+  const kioskForm = Boolean(host || (typeof document !== 'undefined' && (
+    document.body.classList.contains('kiosk-mode')
+    || document.body.classList.contains('kiosk-admin-active')
+    || document.body.classList.contains('kiosk-popup-active')
+  )));
   const sheetRef = useRef(null);
   useVisualViewportPosition(sheetRef);
   const bodyStyleRef = useRef({});
@@ -54,14 +59,14 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
 
   if (host) {
     return createPortal((
-      <div className={`ksm-root absolute inset-0 z-[60] bg-white flex flex-col overflow-hidden ${className}`} data-testid={testId || 'ksm-modal'}>
+      <div className={`ksm-root ${kioskForm ? 'kiosk-form' : ''} absolute inset-0 z-[60] bg-white flex flex-col overflow-hidden ${className}`} data-testid={testId || 'ksm-modal'}>
         {children}
       </div>
     ), host);
   }
   return createPortal((
     <div
-      className={`ksm-root keyboard-opaque-backdrop fixed inset-0 z-[9999] overflow-hidden bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
+      className={`ksm-root ${kioskForm ? 'kiosk-form' : ''} keyboard-opaque-backdrop fixed inset-0 z-[9999] overflow-hidden bg-white sm:bg-slate-900/40 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4 ${className}`}
       onClick={onClose}
       data-testid={testId || 'ksm-modal'}>
       <div

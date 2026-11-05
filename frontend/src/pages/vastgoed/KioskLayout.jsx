@@ -5037,14 +5037,14 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={modalRef} onClick={(e) => e.stopPropagation()}
-        className={`absolute inset-x-0 top-0 w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden sm:static sm:inset-auto`}
+        className={`kiosk-standard-form absolute inset-x-0 top-0 w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden sm:static sm:inset-auto`}
         data-testid={`${testId}-form`}>
         <ModalHostContext.Provider value={tall ? host : null}>
-        <div className="kiosk-modal-head flex-none flex items-center justify-between gap-2 px-4 pb-3 bg-white border-b border-slate-100 sm:gap-3 sm:px-5 sm:pb-4"
+        <div className="kiosk-modal-head flex-none flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
           <div className="flex min-w-0 items-center gap-3">
-            <div className="w-10 h-10 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-orange-100 flex items-center justify-center">
-              <Icon className="w-5 h-5 sm:w-7 sm:h-7 text-orange-600" strokeWidth={2.5} />
+            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+              <Icon className="w-7 h-7 text-orange-600" strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
               <h3 className="text-xl font-black leading-tight text-slate-900"
@@ -5053,20 +5053,20 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
             </div>
           </div>
           <button onClick={onClose} data-testid={`${testId}-close`}
-            className="w-10 h-10 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-            <X className="w-5 h-5 sm:w-7 sm:h-7 text-slate-700" strokeWidth={2.5} />
+            className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-7 h-7 text-slate-700" strokeWidth={2.5} />
           </button>
         </div>
         <div ref={tall ? setHost : undefined} data-kiosk-host={tall ? '' : undefined} style={tall ? { transform: 'translateZ(0)' } : undefined} className="relative flex-1 min-h-0 flex flex-col">
         {/* Body — witte scrollbare content. `overscroll-contain` voorkomt
             dat de scroll doorlekt naar de underlying page op iOS. */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 bg-white sm:px-5 sm:py-4 sm:space-y-4"
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4 bg-white"
           style={{ WebkitOverflowScrolling: 'touch' }}
           data-testid={`${testId}-body`}>
           {typeof children === 'function' ? children({ accent: 'focus:border-orange-500' }) : children}
         </div>
         {footer && (
-          <div className="kiosk-modal-footer flex-none border-t border-slate-100 px-4 py-2 bg-white sm:px-5 sm:py-3"
+          <div className="kiosk-modal-footer flex-none border-t border-slate-100 px-5 py-3 bg-white"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {footer}
           </div>

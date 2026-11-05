@@ -845,3 +845,41 @@ html { scroll-behavior: smooth; }
 .kiosk-fx > div > :is(.mb-4, .mb-6) { margin-bottom: 0; }
 .kiosk-fx .bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl):is(.p-5, .p-6) { padding: 0.75rem 1rem; }
 .kiosk-fx > div > .hidden:first-child + *, .kiosk-fx > div > .hidden:first-child + .hidden + * { margin-top: 0 !important; }
+
+/* Kioskformulieren volgen dezelfde ruime bediening als Nieuwe kasmutatie. */
+.kiosk-form { font-size: 16px; }
+.kiosk-form .ksm-header { padding-left: 1.25rem; padding-right: 1.25rem; padding-bottom: 1rem; }
+.kiosk-form .ksm-header button {
+  width: 3.5rem; height: 3.5rem; min-width: 3.5rem; min-height: 3.5rem;
+  border-radius: 1rem; background: #F1F5F9;
+}
+.kiosk-form .ksm-header button svg { width: 1.75rem; height: 1.75rem; }
+.kiosk-form .ksm-header h3 { font-size: 1.25rem; line-height: 1.5rem; }
+.kiosk-form .ksm-body { padding: 1rem 1.25rem; }
+.kiosk-form .ksm-body :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  min-height: 3.5rem; height: 3.5rem; border-radius: 1rem; border-width: 2px;
+  padding-left: 1rem; padding-right: 1rem; font-size: 1rem;
+}
+.kiosk-form .ksm-body textarea { min-height: 5rem; height: auto; padding-top: 0.75rem; }
+.kiosk-form .ksm-body button { min-height: 3rem; }
+.kiosk-form .ksm-body button[class*="bg-[#FF5C00]"],
+.kiosk-form .ksm-body button[class*="bg-orange-500"] { min-height: 3.5rem; font-size: 1rem; font-weight: 900; }
+.kiosk-form .ksm-footer { padding: 0.75rem 1.25rem; }
+.kiosk-form .ksm-footer > button { min-height: 3.5rem; height: auto; border-radius: 1rem; font-size: 1rem; }
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  min-height: 3.5rem; height: 3.5rem; border-radius: 1rem; border-width: 2px;
+  padding-left: 1rem; padding-right: 1rem; font-size: 1rem;
+}
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form textarea { min-height: 5rem; height: auto; }
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button { min-height: 3rem; }
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button[class*="bg-[#FF5C00]"],
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button[class*="bg-orange-500"] {
+  min-height: 3.5rem; font-size: 1rem; font-weight: 900;
+}
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-head button {
+  width: 3.5rem; height: 3.5rem; min-height: 3.5rem;
+}
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-head button svg { width: 1.75rem; height: 1.75rem; }
+body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-footer > button {
+  min-height: 3.5rem; height: auto; border-radius: 1rem; font-size: 1rem;
+}
