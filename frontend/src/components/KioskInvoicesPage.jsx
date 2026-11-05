@@ -46,12 +46,12 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
   const t = toneOf(g);
   const per = g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden';
   return (
-    <div className="w-full rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:bg-slate-50"
+    <div className="w-full rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm transition hover:bg-slate-50 sm:p-4"
       data-testid={`kiosk-inv-tile-${g.tenant_id}`}>
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={() => onOpen(g)} className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      <div className="flex items-center gap-2 sm:gap-3">
+        <button type="button" onClick={() => onOpen(g)} className="flex min-w-0 flex-1 items-center gap-2 text-left sm:gap-3"
           data-testid={`kiosk-inv-open-${g.tenant_id}`}>
-          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
+          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={40} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <p className="truncate font-black text-slate-900">{g.apartment_number || 'Geen appartement'}</p>
@@ -67,23 +67,23 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
           <p className={`text-[10px] font-bold ${t.amt}`}>{t.text}</p>
         </div>
         {g.dueCount > 0 && (
-          <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+          <div className="flex shrink-0 flex-row gap-1">
             <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
               aria-label="Betalen" title="Betalen"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00] transition-colors hover:bg-orange-100">
-              <Banknote className="h-4 w-4" />
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00] transition-colors hover:bg-orange-100 sm:h-8 sm:w-8">
+              <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
             <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
               aria-label="Herinnering" title="Herinnering"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100">
-              <MessageCircle className="h-4 w-4" />
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 sm:h-8 sm:w-8">
+              <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           </div>
         )}
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 sm:hidden">
-        <span className={`text-[10px] font-bold ${t.amt}`}>{t.text}</span>
-        <span className={`text-right text-sm font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
+      <div className="mt-1 flex items-center justify-between gap-2 sm:hidden">
+        <span className={`text-[9px] font-bold ${t.amt}`}>{t.text}</span>
+        <span className={`text-right text-xs font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
       </div>
     </div>
   );
@@ -477,39 +477,41 @@ export default function KioskInvoicesPage({ onBack }) {
           </section>
         ) : (
           <>
-            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-4 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-3 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
               data-testid="kiosk-inv-summary">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
+              <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
+                <h1 className="text-lg font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
                 <FileSignature className="h-5 w-5 text-[#FF5C00]" />
               </div>
-              <div className="rounded-2xl bg-red-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">Totaal openstaand</p>
-                <p className="mt-1 break-words text-xl sm:text-2xl font-black text-red-600 tabular-nums"
+              <div className="rounded-2xl bg-red-50 p-3 sm:p-4">
+                <p className="text-xs font-semibold text-slate-500 sm:text-sm">Totaal openstaand</p>
+                <p className="mt-1 break-words text-lg font-black text-red-600 tabular-nums sm:text-2xl"
                   data-testid="kiosk-inv-stat-open">{money(s.totalOpenAmount || 0, s.currency)}</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div className="rounded-2xl bg-amber-50 p-4">
-                  <p className="text-xs font-bold text-amber-700">Achterstand</p>
-                  <p className="mt-1 text-2xl font-black text-amber-800" data-testid="kiosk-inv-stat-late">
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
+                <div className="rounded-2xl bg-amber-50 p-3 sm:p-4">
+                  <p className="text-[11px] font-bold text-amber-700 sm:text-xs">Achterstand</p>
+                  <p className="mt-1 text-xl font-black text-amber-800 sm:text-2xl" data-testid="kiosk-inv-stat-late">
                     {s.openCount || 0} <span className="text-sm font-bold text-slate-500">/ {s.allCount || 0}</span>
                   </p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 p-4">
-                  <p className="text-xs font-bold text-slate-500">Verwacht {month}</p>
-                  <p className="mt-1 break-words text-lg font-black text-emerald-700 tabular-nums"
+                <div className="rounded-2xl bg-emerald-50 p-3 sm:p-4">
+                  <p className="text-[11px] font-bold text-slate-500 sm:text-xs">Verwacht {month}</p>
+                  <p className="mt-1 break-words text-base font-black text-emerald-700 tabular-nums sm:text-lg"
                     data-testid="kiosk-inv-stat-month">{money(s.thisMonthExpected || 0, s.currency)}</p>
                 </div>
               </div>
-              <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-                className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Genereer {month}
-              </button>
-              <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
-                data-testid="kiosk-inv-new"
-                className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200]">
-                <FilePlus2 className="h-4 w-4" /> Nieuwe factuur
-              </button>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-1">
+                <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
+                  className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-orange-200 bg-orange-50 px-1.5 text-[11px] font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:px-3 sm:text-sm">
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" /> : <CalendarPlus className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />} Genereer {month}
+                </button>
+                <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
+                  data-testid="kiosk-inv-new"
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#FF5C00] px-1.5 text-[11px] font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200] sm:h-12 sm:gap-2 sm:rounded-2xl sm:px-3 sm:text-sm">
+                  <FilePlus2 className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /> Nieuwe factuur
+                </button>
+              </div>
               {onBack && (
                 <button type="button" onClick={onBack} data-testid="kiosk-inv-back-desktop"
                   className="mt-2 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 md:inline-flex">
