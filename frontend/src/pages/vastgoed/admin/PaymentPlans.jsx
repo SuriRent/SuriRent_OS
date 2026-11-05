@@ -623,6 +623,7 @@ function CreatePlanSheet({ onClose, onCreated }) {
 function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = false }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const [plan, setPlan] = useState(initial || null);
+  const [detailTab, setDetailTab] = useState('overzicht');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [linkedInvoices, setLinkedInvoices] = useState([]);
@@ -647,6 +648,7 @@ function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = f
   }, [planId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setDetailTab('overzicht'); }, [planId]);
 
   // Live-refresh: wanneer een betaling/factuur elders wordt geregistreerd
   // (bijv. via Facturen-pagina op een ander tabblad OF door dezelfde
@@ -692,55 +694,119 @@ function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = f
   if (!plan) return <div className="py-10 text-center"><Loader2 className="w-7 h-7 animate-spin text-orange-500 mx-auto" /></div>;
 
   const pct = plan.total_amount > 0 ? Math.round((plan.paid_amount / plan.total_amount) * 100) : 0;
+  const totalAmount = plan.overpayment_adjustment
+    ? Number(plan.paid_amount || 0) + Number(plan.remaining_amount || 0)
+    : Number(plan.total_amount || 0);
+  const statusLabel = plan.status === 'active' ? 'Actief'
+    : plan.status === 'completed' ? 'Voltooid'
+      : plan.status === 'cancelled' ? 'Geannuleerd' : plan.status;
 
   return (
     <div className={kioskLayout ? 'flex min-h-full flex-col gap-3 pb-3' : `space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`}
       data-testid="plan-detail-page">
       {confirmNode}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} data-testid="plan-detail-back"
-          className={`flex items-center gap-1.5 font-bold rounded-xl px-3 py-2 text-sm ${
-            kioskLayout ? 'min-h-11 text-slate-700 bg-white hover:bg-slate-50 border border-slate-200' : 'text-slate-700 bg-white hover:bg-slate-50 border border-slate-200'
-          }`}>
-          <ArrowLeft className="w-4 h-4" /> Terug naar regelingen
-        </button>
-      </div>
-
-      <div className={kioskLayout
-        ? 'grid grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-start gap-3'
-        : 'space-y-4'}>
-      <div className="space-y-3">
-      <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-black text-slate-900 truncate">{plan.apartment_number || 'Betalingsregeling'}</h1>
-            {plan.tenant_name && <p className="text-xs text-slate-500">{plan.tenant_name}</p>}
-            {plan.notes && <p className="text-sm text-slate-600 mt-2">{plan.notes}</p>}
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Resterend</p>
-            <p className="text-2xl font-black text-slate-900">{fmtMoney(plan.remaining_amount, plan.currency)}</p>
-            <p className="text-[11px] text-slate-500">
-              van {fmtMoney(
-                plan.overpayment_adjustment
-                  ? (Number(plan.paid_amount || 0) + Number(plan.remaining_amount || 0))
-                  : plan.total_amount,
-                plan.currency,
+      {kioskLayout ? (
+        <>
+          <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Betalingsregeling</p>
+                <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                  {plan.apartment_number || 'Regeling'}
+                </h1>
+                <p className="truncate text-sm font-semibold text-slate-500">
+                  {plan.tenant_name || 'Onbekende huurder'} · {fmtMoney(plan.remaining_amount, plan.currency)} resterend
+                </p>
+              </div>
+              <span className={`hidden shrink-0 rounded-full px-3 py-1 text-xs font-black sm:inline-flex ${
+                plan.status === 'active' ? 'bg-orange-100 text-[#FF5C00]'
+                  : plan.status === 'completed' ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-slate-100 text-slate-600'
+              }`}>{statusLabel}</span>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button onClick={onBack} data-testid="plan-detail-back"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <ArrowLeft className="h-4 w-4" /> Terug
+              </button>
+              {plan.status === 'active' && (
+                <button onClick={cancelPlan} disabled={busy} data-testid="plan-cancel-btn"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 hover:bg-red-100 disabled:opacity-50">
+                  <X className="h-4 w-4" /> Annuleren
+                </button>
               )}
-            </p>
+            </div>
+          </section>
+
+          {err && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" data-testid="plan-detail-error">{err}</div>}
+
+          <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+            role="tablist" aria-label="Betalingsregelingdetails">
+            {[
+              ['overzicht', 'Overzicht'],
+              ...(linkedInvoices.length > 0 ? [['facturen', 'Facturen']] : []),
+              ['termijnen', 'Termijnen'],
+            ].map(([tab, label]) => (
+              <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
+                onClick={() => setDetailTab(tab)} data-testid={`plan-detail-tab-${tab}`}
+                className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                  detailTab === tab ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}>
+                {label}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="text-[11px] text-slate-500 mt-1">{pct}% afbetaald</p>
-      </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <button onClick={onBack} data-testid="plan-detail-back"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <ArrowLeft className="w-4 h-4" /> Terug
+            </button>
+          </div>
+          {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="plan-detail-error">{err}</div>}
+        </>
+      )}
 
-      {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="plan-detail-error">{err}</div>}
-      </div>
+      {(!kioskLayout || detailTab === 'overzicht') && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="plan-detail-overview">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-black text-slate-900">Regelingsoverzicht</h2>
+            <Calendar className="h-5 w-5 text-[#FF5C00]" />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Totaal</p>
+              <p className="mt-1 font-black text-slate-900">{fmtMoney(totalAmount, plan.currency)}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Betaald</p>
+              <p className="mt-1 font-black text-emerald-700">{fmtMoney(plan.paid_amount, plan.currency)}</p>
+            </div>
+            <div className="rounded-xl bg-orange-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Resterend</p>
+              <p className="mt-1 font-black text-slate-900">{fmtMoney(plan.remaining_amount, plan.currency)}</p>
+            </div>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">{pct}% afbetaald</p>
+        </section>
+      )}
 
-      <div className="space-y-3">
-      {linkedInvoices.length > 0 && (
+      {(!kioskLayout || detailTab === 'overzicht') && plan.notes && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-black text-slate-900">Notitie</h2>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{plan.notes}</p>
+        </section>
+      )}
+
+      {(!kioskLayout || detailTab === 'facturen') && linkedInvoices.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="plan-linked-invoices">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Gekoppelde facturen</h2>
@@ -790,10 +856,11 @@ function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = f
         </div>
       )}
 
+      {(!kioskLayout || detailTab === 'termijnen') && (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Termijnen</h2>
-          {plan.status === 'active' && (
+          {!kioskLayout && plan.status === 'active' && (
             <button onClick={cancelPlan} disabled={busy} data-testid="plan-cancel-btn"
               className="text-xs font-bold text-red-600 hover:text-red-700">Annuleren</button>
           )}
@@ -843,8 +910,7 @@ function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = f
           })}
         </div>
       </div>
-      </div>
-      </div>
+      )}
     </div>
   );
 }
