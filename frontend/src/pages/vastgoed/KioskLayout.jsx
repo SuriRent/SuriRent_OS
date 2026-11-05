@@ -3826,14 +3826,14 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+        <div className="kiosk-admin-summary bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
           data-testid="apartments-summary">
-          <div className="row-label-value items-center mb-2 sm:mb-4">
+          <div className="kiosk-admin-summary-heading row-label-value items-center mb-2 sm:mb-4">
             <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Appartementen</h2>
             <Home className="w-4 h-4 sm:w-5 sm:h-5 text-[#FF5C00]" />
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 mb-2 sm:gap-3 sm:mb-4">
+          <div className="kiosk-admin-summary-stats grid grid-cols-2 gap-1.5 mb-2 sm:gap-3 sm:mb-4">
             <div className="rounded-2xl bg-orange-50 p-2 sm:p-4">
               <p className="text-[10px] sm:text-xs font-bold text-slate-500">Appartementen</p>
               <p className="mt-0.5 sm:mt-1 text-lg sm:text-2xl font-black text-slate-900" data-testid="apartments-total">{apartments.length}</p>
@@ -3842,21 +3842,20 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
               <p className="text-[10px] sm:text-xs font-bold text-slate-500">Bezet</p>
               <p className="mt-0.5 sm:mt-1 text-lg sm:text-2xl font-black text-emerald-800" data-testid="apartments-occupied">{occupied}</p>
             </div>
-          </div>
-
-          <div className="mb-2 sm:mb-5 rounded-2xl bg-slate-50 p-2 sm:p-4">
-            <p className="text-[11px] sm:text-sm font-semibold text-slate-500">Huur p/m</p>
-            <p className="mt-0.5 sm:mt-1 break-words text-base sm:text-2xl font-black text-slate-900 tabular-nums"
-              data-testid="apartments-monthly-rent">{monthlyRent}</p>
+            <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+              <p className="text-[11px] sm:text-sm font-semibold text-slate-500">Huur p/m</p>
+              <p className="mt-0.5 sm:mt-1 break-words text-base sm:text-2xl font-black text-slate-900 tabular-nums"
+                data-testid="apartments-monthly-rent">{monthlyRent}</p>
+            </div>
           </div>
 
           <button onClick={onNewApartment} data-testid="apartments-new-btn"
-            className="w-full h-10 sm:h-14 rounded-xl sm:rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs sm:text-base inline-flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+            className="kiosk-admin-summary-action w-full h-10 sm:h-14 rounded-xl sm:rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs sm:text-base inline-flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
             <Plus className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} /> Nieuwe appartement
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden">
+        <div className="kiosk-admin-list bg-white rounded-2xl flex-1 min-h-0 md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden">
           <div className="row-label-value items-center mb-3">
             <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Alle appartementen</h3>
             <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1"

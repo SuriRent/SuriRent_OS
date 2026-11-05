@@ -3538,7 +3538,7 @@ export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden pb-3 md:flex-row md:gap-3 md:pt-3">
-          <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2.5 sm:p-5 md:order-1"
+          <section className="kiosk-admin-list order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2.5 sm:p-5 md:order-1"
             data-testid="kiosk-tenants-list">
             <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:gap-3">
               <div className="min-w-0">
@@ -3608,13 +3608,13 @@ export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
             </div>
           </section>
 
-          <aside className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+          <aside className="kiosk-admin-summary order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
             data-testid="kiosk-tenants-summary">
-            <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
+            <div className="kiosk-admin-summary-heading mb-2 flex items-center justify-between gap-3 sm:mb-4">
               <h2 className="text-base font-black tracking-tight text-slate-900 sm:text-2xl">Huurders</h2>
               <Users className="h-4 w-4 text-[#FF5C00] sm:h-5 sm:w-5" />
             </div>
-            <div className="mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:gap-2">
+            <div className="kiosk-admin-summary-stats mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:gap-2">
               <div className="rounded-2xl bg-orange-50 p-2 sm:p-3">
                 <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Totaal</p>
                 <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl">{summary.totalCount || 0}</p>
@@ -3623,13 +3623,13 @@ export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
                 <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Met appartement</p>
                 <p className="mt-0.5 text-lg font-black text-emerald-800 sm:mt-1 sm:text-2xl">{summary.counts?.with_apt || 0}</p>
               </div>
-            </div>
-            <div className="mb-2 rounded-2xl bg-slate-50 p-2 sm:mb-4 sm:p-3">
-              <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Zonder appartement</p>
-              <p className="mt-0.5 text-base font-black text-slate-900 sm:mt-1 sm:text-xl">{summary.counts?.without_apt || 0}</p>
+              <div className="rounded-2xl bg-slate-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Zonder appartement</p>
+                <p className="mt-0.5 text-base font-black text-slate-900 sm:mt-1 sm:text-xl">{summary.counts?.without_apt || 0}</p>
+              </div>
             </div>
             <button type="button" onClick={() => setCreating(true)} data-testid="tenant-new-btn"
-              className="mb-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200] sm:mb-3 sm:h-12 sm:gap-2 sm:rounded-2xl sm:text-sm">
+              className="kiosk-admin-summary-action mb-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200] sm:mb-3 sm:h-12 sm:gap-2 sm:rounded-2xl sm:text-sm">
               <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Nieuwe huurder
             </button>
             <button type="button" onClick={onBack} data-testid="tenants-exit"
