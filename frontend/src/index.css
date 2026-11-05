@@ -105,14 +105,13 @@ html.apk-ktp { --kiosk-sat: 0px; }
    are not affected. Used by Kiosk + Admin to keep the bottom content out
    of the iOS home-indicator on installed PWAs. */
 @media (max-width: 767px) {
-  :root { font-size: clamp(14px, 4vw, 16px); }
   body { min-width: 320px; }
   #root { min-height: 100dvh; }
   #root :where(input, select, textarea, button) { max-width: 100%; }
   #root :where(img, video, canvas, iframe) { max-width: 100%; }
   #root :where(pre, table) { max-width: 100%; }
   #root :where(pre, table) { overflow-x: auto; }
-  html.ios-device #root :where(input, select, textarea) { font-size: max(16px, 1em); }
+  html.ios-device #root :where(input, select, textarea) { font-size: 16px; }
   .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .mobile-safe-top { padding-top: env(safe-area-inset-top, 0px); }
   html.apk-ktp .kiosk-fullscreen .mobile-safe-top { padding-top: 0px; }
@@ -287,6 +286,19 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) select { min-height: 2.75rem; font-size: 0.875rem; }
   :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) [role="tab"],
   :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) [data-testid*="tab"] { font-size: 0.8125rem; }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) .text-xs { font-size: 0.75rem; line-height: 1rem; }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) .text-\[10px\],
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) .text-\[11px\] { font-size: 0.6875rem; }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) button { min-height: 2.75rem; }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) button[class*="bg-[#FF5C00]"],
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) button[class*="bg-orange-500"] {
+    min-height: 3rem; padding-left: 0.875rem; padding-right: 0.875rem; font-size: 0.875rem;
+  }
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) input:not([type="checkbox"]):not([type="radio"]),
+  :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root, body.kiosk-popup-active .ksm-root) select {
+    min-height: 3rem; font-size: 1rem; border-radius: 0.75rem;
+  }
   .kiosk-admin-summary {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -494,6 +506,31 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
 .kiosk-popup-active .kiosk-fx .bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl):is(.p-5, .p-6) { padding: 1rem 1.25rem; }
 .kiosk-popup-active .kiosk-fx > div > .hidden:first-child + *,
 .kiosk-popup-active .kiosk-fx > div > .hidden:first-child + .hidden + * { margin-top: 0 !important; }
+@media (max-width: 767px) {
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-modal-footer > button {
+    min-height: 3rem; border-radius: 0.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-modal-footer > button[class*="bg-[#FF5C00]"],
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-modal-footer > button[class*="bg-orange-500"] {
+    min-height: 3rem; font-size: 1rem;
+  }
+  .kiosk-popup-active .kiosk-fx { font-size: 14px; }
+  .kiosk-popup-active .kiosk-fx h1 { font-size: 1.125rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx :is(h2, h3) { font-size: 1rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx :is(.text-2xl, .text-3xl) { font-size: 1.125rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx .text-xl { font-size: 1rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]) { padding: 0.75rem; }
+  .kiosk-popup-active .kiosk-fx :is([data-testid*="-row-"], [data-testid*="-card-"]) :is(button, a):is(.w-8, .w-9) {
+    width: 2.5rem; height: 2.5rem;
+  }
+  .kiosk-popup-active .kiosk-fx [data-testid$="-filter-bar"] { gap: 0.375rem; }
+  .kiosk-popup-active .kiosk-fx [data-testid$="-filter-bar"] > button {
+    min-height: 2.5rem; padding-left: 0.75rem; padding-right: 0.75rem; font-size: 0.75rem;
+  }
+  .kiosk-popup-active .kiosk-fx button[class*="bg-[#FF5C00]"]:not([data-testid$="-filter-bar"] > button) {
+    min-height: 3rem; font-size: 0.875rem;
+  }
+}
 /* Snel toevoegen sheet in witte modus. */
 .kiosk-add-sheet-overlay {
   height: 100vh;
