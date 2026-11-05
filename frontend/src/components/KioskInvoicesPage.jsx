@@ -46,41 +46,45 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
   const t = toneOf(g);
   const per = g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden';
   return (
-    <div className="relative bg-white rounded-2xl ring-1 ring-slate-100 shadow-[0_6px_18px_-10px_rgba(120,40,0,0.35)] overflow-hidden flex flex-col"
+    <div className="w-full rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:bg-slate-50"
       data-testid={`kiosk-inv-tile-${g.tenant_id}`}>
-      <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${t.bar}`} />
-      <button type="button" onClick={() => onOpen(g)} className="text-left pl-5 pr-4 pt-4 pb-3 flex-1 flex flex-col justify-start hover:bg-orange-50/40 transition-colors"
-        data-testid={`kiosk-inv-open-${g.tenant_id}`}>
-        <div className="flex items-start gap-2">
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => onOpen(g)} className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          data-testid={`kiosk-inv-open-${g.tenant_id}`}>
           <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
           <div className="min-w-0 flex-1">
-            <p className="text-lg font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
-            <p className="text-sm font-bold text-slate-700 truncate">{g.tenant_name}</p>
-            <p className="text-xs text-slate-400 truncate">{g.location_name}</p>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <p className="truncate font-black text-slate-900">{g.apartment_number || 'Geen appartement'}</p>
+              {g.tenant_name && <span className="max-w-[220px] truncate rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{g.tenant_name}</span>}
+            </div>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{g.location_name || ' '}</p>
             <CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />
           </div>
-          <ChevronRight className="w-5 h-5 text-slate-300 shrink-0 mt-1" />
+        </button>
+        <div className="hidden shrink-0 text-right sm:block">
+          <p className={`whitespace-nowrap text-base font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</p>
+          <p className="text-[10px] text-slate-400">{per}</p>
+          <p className={`text-[10px] font-bold ${t.amt}`}>{t.text}</p>
         </div>
-        <div className="mt-3 flex items-end justify-between gap-2">
-          <span className={`rounded-full px-3 py-1 text-xs font-bold ${t.chip}`}>{t.text}</span>
-          <span className="text-right">
-            <span className={`block text-xl font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
-            <span className="block text-[11px] text-slate-400">{per}</span>
-          </span>
-        </div>
-      </button>
-      {g.dueCount > 0 && (
-        <div className="grid grid-cols-2 border-t border-slate-100">
-          <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
-            className="h-12 inline-flex items-center justify-center gap-2 font-black text-[#FF5C00] hover:bg-orange-50 transition-colors">
-            <Banknote className="w-5 h-5" /> Betalen
-          </button>
-          <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
-            className="h-12 inline-flex items-center justify-center gap-2 font-black text-emerald-700 hover:bg-emerald-50 border-l border-slate-100 transition-colors">
-            <MessageCircle className="w-5 h-5" /> Herinnering
-          </button>
-        </div>
-      )}
+        {g.dueCount > 0 && (
+          <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+            <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
+              aria-label="Betalen" title="Betalen"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00] transition-colors hover:bg-orange-100">
+              <Banknote className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
+              aria-label="Herinnering" title="Herinnering"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100">
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 sm:hidden">
+        <span className={`text-[10px] font-bold ${t.amt}`}>{t.text}</span>
+        <span className={`text-right text-sm font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
+      </div>
     </div>
   );
 }
@@ -207,16 +211,17 @@ function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoic
     }
   };
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="kiosk-inv-detail">
+    <div className="flex min-h-full flex-col gap-3 pb-3" data-testid="kiosk-inv-detail">
       <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={56} />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Facturen</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Huurder · Facturen</p>
             <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl"
-              data-testid="kiosk-inv-detail-apartment">{g.apartment_number || '—'}</h1>
+              data-testid="kiosk-inv-detail-apartment">{tenant?.name || g.tenant_name || 'Onbekende huurder'}</h1>
             <p className="truncate text-sm font-semibold text-slate-500" data-testid="kiosk-inv-detail-name">
-              {g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}
+              {g.apartment_number || 'Geen appartement'}{g.location_name ? ` · ${g.location_name}` : ''}
+              {tenant?.rent_amount ? ` · ${money(tenant.rent_amount, tenant.currency || g.currency)} / maand` : ''}
             </p>
           </div>
           <span className={`hidden shrink-0 rounded-full px-3 py-1 text-xs font-black sm:inline-flex ${t.chip}`}>{t.text}</span>
@@ -460,21 +465,23 @@ export default function KioskInvoicesPage({ onBack }) {
               }} />
           </section>
         ) : sel ? (
-          <section className="min-h-0 flex-1 flex flex-col overflow-hidden" data-testid="kiosk-inv-detail-panel">
-            <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onRemind={setReminding}
-              onDelete={del} onPayInvoice={(inv, group) => setQuickPay({ inv, group })}
-              onNewInvoice={() => { setCreateTenantId(sel.tenant_id); setCreating(true); }}
-              onRebalanced={load} credit={creditOf(credits, sel.tenant_id, sel.currency)}
-              tenant={tenants.find((tenantItem) => tenantItem.id === sel.tenant_id)}
-              onChanged={load} onMsg={setMsg} />
+          <section className="min-h-0 flex-1 overflow-y-auto" data-testid="kiosk-inv-detail-panel">
+            <div className="mx-auto w-full max-w-7xl">
+              <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onRemind={setReminding}
+                onDelete={del} onPayInvoice={(inv, group) => setQuickPay({ inv, group })}
+                onNewInvoice={() => { setCreateTenantId(sel.tenant_id); setCreating(true); }}
+                onRebalanced={load} credit={creditOf(credits, sel.tenant_id, sel.currency)}
+                tenant={tenants.find((tenantItem) => tenantItem.id === sel.tenant_id)}
+                onChanged={load} onMsg={setMsg} />
+            </div>
           </section>
         ) : (
           <>
-            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-4 sm:p-5 shrink-0 md:shrink md:overflow-y-auto"
+            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-4 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
               data-testid="kiosk-inv-summary">
-              <div className="row-label-value items-center mb-4">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Factuuroverzicht</h1>
-                <FileSignature className="w-5 h-5 text-[#FF5C00]" />
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
+                <FileSignature className="h-5 w-5 text-[#FF5C00]" />
               </div>
               <div className="rounded-2xl bg-red-50 p-4">
                 <p className="text-sm font-semibold text-slate-500">Totaal openstaand</p>
@@ -495,12 +502,12 @@ export default function KioskInvoicesPage({ onBack }) {
                 </div>
               </div>
               <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-                className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-sm font-black text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60">
+                className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Genereer {month}
               </button>
               <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
                 data-testid="kiosk-inv-new"
-                className="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-[#E05200]">
+                className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200]">
                 <FilePlus2 className="h-4 w-4" /> Nieuwe factuur
               </button>
               {onBack && (
@@ -513,29 +520,32 @@ export default function KioskInvoicesPage({ onBack }) {
               {!data && !error && <Loader2 className="mx-auto my-5 h-6 w-6 animate-spin text-[#FF5C00]" />}
             </section>
 
-            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+            <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-3 sm:p-5 md:order-1"
               data-testid="kiosk-inv-recent">
-              <div className="row-label-value items-center mb-3">
-                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Facturen per huurder</h2>
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">{groups.length} huurders</span>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle huurders</h2>
+                  <p className="text-xs font-semibold text-slate-500">Facturen per huurder</p>
+                </div>
+                <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{groups.length} huurders</span>
               </div>
-              <div className="flex gap-1.5 mb-3 overflow-x-auto" role="tablist" aria-label="Factuurstatus">
+              <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Factuurstatus">
                 {TABS.map((filter) => (
                   <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}
                     onClick={() => setTab(filter.v)} data-testid={`kiosk-inv-tab-${filter.v}`}
-                    className={`shrink-0 h-9 px-3 rounded-full text-xs font-bold transition-colors ${
+                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
                       tab === filter.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}>
                     {filter.label} ({s[filter.key] ?? 0})
                   </button>
                 ))}
               </div>
-              <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 mb-3">
-                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              <label className="relative mb-3 block shrink-0">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input value={q} onChange={(event) => setQ(event.target.value)}
                   placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"
-                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
-                {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="h-4 w-4 text-slate-400" /></button>}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm font-medium outline-none focus:border-[#FF5C00]" />
+                {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen" className="absolute right-3 top-1/2 -translate-y-1/2"><X className="h-4 w-4 text-slate-400" /></button>}
               </label>
               <div className="mb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
               <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
