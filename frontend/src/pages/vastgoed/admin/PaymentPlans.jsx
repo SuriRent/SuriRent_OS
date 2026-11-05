@@ -147,30 +147,30 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-          <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+          <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
             data-testid="plans-summary">
-            <div className="row-label-value items-center mb-4">
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Betalingsregelingen</h2>
-              <Calendar className="w-5 h-5 text-[#FF5C00]" />
+            <div className="row-label-value items-center mb-2 sm:mb-4">
+              <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Betalingsregelingen</h2>
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-[#FF5C00]" />
             </div>
-            <div className="rounded-2xl bg-orange-50 p-4">
-              <p className="text-sm font-semibold text-slate-500">Totaal resterend</p>
-              <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+            <div className="rounded-2xl bg-orange-50 p-2.5 sm:p-4">
+              <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal resterend</p>
+              <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
                 data-testid="plans-remaining-total">{fmtMoney(remaining, plans[0]?.currency)}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Regelingen</p>
-                <p className="mt-1 text-2xl font-black text-slate-900" data-testid="plans-count">{plans.length}</p>
+            <div className="grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+              <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Regelingen</p>
+                <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="plans-count">{plans.length}</p>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-4">
-                <p className="text-xs font-bold text-amber-700">Achterstallig</p>
-                <p className="mt-1 text-2xl font-black text-amber-800" data-testid="plans-overdue-count">{overdue}</p>
+              <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstallig</p>
+                <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="plans-overdue-count">{overdue}</p>
               </div>
             </div>
             <button onClick={() => setCreating(true)} data-testid="plan-new-btn"
-              className="mt-4 w-full min-h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
-              <Plus className="w-5 h-5" /> Nieuwe regeling
+              className="mt-2 w-full min-h-10 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs inline-flex items-center justify-center gap-1.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition sm:mt-4 sm:min-h-14 sm:rounded-2xl sm:gap-2 sm:text-base">
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Nieuwe regeling
             </button>
             {onBack && (
               <button type="button" onClick={onBack} data-testid="plans-panel-back-desktop"
@@ -180,31 +180,31 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
             )}
           </section>
 
-          <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+          <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
             data-testid="plans-recent">
-            <div className="row-label-value items-center mb-3">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Regelingen</h3>
+            <div className="row-label-value items-center mb-2 sm:mb-3">
+              <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">Regelingen</h3>
               <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">
                 {rows.length} regelingen
               </span>
             </div>
-            <div className="flex gap-1.5 mb-3 overflow-x-auto" data-testid="plan-filter-bar">
+            <div className="flex gap-1.5 mb-2 overflow-x-auto sm:mb-3" data-testid="plan-filter-bar">
               {[
                 { v: 'active', l: 'Actief' }, { v: 'completed', l: 'Voltooid' },
                 { v: 'cancelled', l: 'Geannuleerd' }, { v: 'all', l: 'Alles' },
               ].map((f) => (
                 <button key={f.v} type="button" onClick={() => setStatusFilter(f.v)}
                   data-testid={`plan-filter-${f.v}`}
-                  className={`shrink-0 h-8 px-3 rounded-full text-xs font-bold transition-colors ${
+                  className={`shrink-0 h-7 px-2.5 rounded-full text-[11px] font-bold transition-colors sm:h-8 sm:px-3 sm:text-xs ${
                     statusFilter === f.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}>{f.l}</button>
               ))}
             </div>
-            <div className="relative mb-3">
+            <div className="relative mb-2 sm:mb-3">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input value={fxQ} onChange={(e) => setFxQ(e.target.value)}
                 placeholder="Zoek huurder of appartement…" data-testid="plan-search"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
+                className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-xs outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
             </div>
             {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 mb-2 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
             {loading ? (
@@ -217,7 +217,7 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
                 <p className="text-sm font-semibold text-slate-500">Geen betalingsregelingen gevonden.</p>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
+              <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 pb-14 sm:space-y-2 md:pb-0">
                 {rows.map((p) => <PlanRow key={p.id} plan={p} onClick={() => setDetail(p)} />)}
               </div>
             )}
@@ -292,9 +292,9 @@ function PlanRow({ plan, onClick }) {
   }[plan.status] || { l: plan.status, cls: 'bg-slate-100 text-slate-600' };
   return (
     <button onClick={onClick} data-testid={`plan-row-${plan.id}`}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100">
-      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
-        <Calendar className="w-5 h-5" />
+      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100">
+      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
+        <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -309,12 +309,12 @@ function PlanRow({ plan, onClick }) {
         <p className="text-xs text-slate-500 mt-0.5">
           {plan.tenant_name || 'Onbekende huurder'} · {plan.installments.length} termijnen · {fmtMoney(plan.paid_amount, plan.currency)} / {fmtMoney(plan.total_amount, plan.currency)}
         </p>
-        <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="mt-1.5 sm:mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div className="h-full bg-[#FF5C00]" style={{ width: `${pct}%` }} />
         </div>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-base font-black text-slate-900">{fmtMoney(plan.remaining_amount, plan.currency)}</p>
+        <p className="text-xs sm:text-base font-black text-slate-900">{fmtMoney(plan.remaining_amount, plan.currency)}</p>
         <p className="text-[10px] text-slate-400">resterend</p>
       </div>
     </button>

@@ -3906,33 +3906,33 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
           data-testid="apartments-summary">
-          <div className="row-label-value items-center mb-4">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Appartementen</h2>
-            <Home className="w-5 h-5 text-[#FF5C00]" />
+          <div className="row-label-value items-center mb-2 sm:mb-4">
+            <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Appartementen</h2>
+            <Home className="w-4 h-4 sm:w-5 sm:h-5 text-[#FF5C00]" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="rounded-2xl bg-orange-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Appartementen</p>
-              <p className="mt-1 text-2xl font-black text-slate-900" data-testid="apartments-total">{apartments.length}</p>
+          <div className="grid grid-cols-2 gap-1.5 mb-2 sm:gap-3 sm:mb-4">
+            <div className="rounded-2xl bg-orange-50 p-2 sm:p-4">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500">Appartementen</p>
+              <p className="mt-0.5 sm:mt-1 text-lg sm:text-2xl font-black text-slate-900" data-testid="apartments-total">{apartments.length}</p>
             </div>
-            <div className="rounded-2xl bg-emerald-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Bezet</p>
-              <p className="mt-1 text-2xl font-black text-emerald-800" data-testid="apartments-occupied">{occupied}</p>
+            <div className="rounded-2xl bg-emerald-50 p-2 sm:p-4">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500">Bezet</p>
+              <p className="mt-0.5 sm:mt-1 text-lg sm:text-2xl font-black text-emerald-800" data-testid="apartments-occupied">{occupied}</p>
             </div>
           </div>
 
-          <div className="mb-5 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-500">Huur p/m</p>
-            <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+          <div className="mb-2 sm:mb-5 rounded-2xl bg-slate-50 p-2 sm:p-4">
+            <p className="text-[11px] sm:text-sm font-semibold text-slate-500">Huur p/m</p>
+            <p className="mt-0.5 sm:mt-1 break-words text-base sm:text-2xl font-black text-slate-900 tabular-nums"
               data-testid="apartments-monthly-rent">{monthlyRent}</p>
           </div>
 
           <button onClick={onNewApartment} data-testid="apartments-new-btn"
-            className="w-full h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
-            <Plus className="w-5 h-5" strokeWidth={2.5} /> Nieuwe appartement
+            className="w-full h-10 sm:h-14 rounded-xl sm:rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs sm:text-base inline-flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} /> Nieuwe appartement
           </button>
         </div>
 
@@ -3957,7 +3957,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pb-14 -mx-1 px-1 sm:space-y-2 md:pb-0">
             {apartments.map((apartment) => {
               const isOccupied = !!apartment.tenant_id || apartment.status === 'occupied';
               const photoUrl = apartment.photo_url
@@ -3967,15 +3967,15 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
                 : '';
               return (
                 <button key={apartment.id} type="button" onClick={() => { setDetailTab('overzicht'); setDetailId(apartment.id); }}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:bg-slate-50 active:bg-slate-100 sm:p-4"
+                  className="flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 text-left transition hover:bg-slate-50 active:bg-slate-100 sm:gap-3 sm:p-4"
                   data-testid={`apartment-row-${apartment.id}`}>
                   {photoUrl ? (
                     <img src={photoUrl} alt="" loading="lazy" decoding="async"
-                      className="h-11 w-11 shrink-0 rounded-xl bg-slate-100 object-cover sm:h-14 sm:w-14"
+                      className="h-9 w-9 shrink-0 rounded-xl bg-slate-100 object-cover sm:h-14 sm:w-14"
                       onError={(event) => { event.currentTarget.style.display = 'none'; }} />
                   ) : (
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-[#FF5C00]'}`}>
-                      <Home className="w-5 h-5" />
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 ${isOccupied ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-[#FF5C00]'}`}>
+                      <Home className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -3985,7 +3985,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-black text-slate-900">{fmtMoney(apartment.rent_amount, apartment.currency || 'SRD')}</p>
+                    <p className="text-xs font-black text-slate-900 sm:text-sm">{fmtMoney(apartment.rent_amount, apartment.currency || 'SRD')}</p>
                     <span className={`text-[10px] font-bold ${isOccupied ? 'text-emerald-700' : 'text-slate-500'}`}>
                       {isOccupied ? 'Bezet' : 'Beschikbaar'}
                     </span>
@@ -6604,13 +6604,13 @@ export default function KioskLayout() {
       {/* Mobile "+" FAB — kiosk-medewerker opent dezelfde quick-add bottom-
           sheet die normaal via de desktop-balk bereikbaar is (Huurder, Appt.,
           Locatie, Contract, Factuur, Betalingen, Onderhoud). Zichtbaar
-          op mobiel in het apartment-select scherm en Facturen. Vorige
+          op mobiel in het selectiescherm en de beheerpagina's. Vorige
           iOS-PWA viewport-drift bug is opgelost door de FAB via createPortal
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {(step === 'select' || step === 'admin:facturen') && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {(step === 'select' || step === 'admin:facturen') && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {['select', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
+      {['select', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"

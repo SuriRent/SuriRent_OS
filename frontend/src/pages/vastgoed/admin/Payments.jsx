@@ -382,9 +382,9 @@ function PaymentRow({ p, onOpen }) {
     <div onClick={() => onOpen(p)} data-testid={`payment-row-${p.id}`}
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p); }}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
-        <Receipt className="w-5 h-5" />
+      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100 cursor-pointer transition">
+      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
+        <Receipt className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -409,7 +409,7 @@ function PaymentRow({ p, onOpen }) {
         </p>
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
-        <p className="text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
+        <p className="text-sm sm:text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
           {p.currency} {fmtAmountWhole(p.amount)}
         </p>
         {p.period_month && (
@@ -1159,11 +1159,11 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
               data-testid="payments-summary">
-              <div className="row-label-value items-center mb-4">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Betalingen</h2>
-                <Banknote className="w-5 h-5 text-[#FF5C00]" />
+              <div className="row-label-value items-center mb-2 sm:mb-4">
+                <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Betalingen</h2>
+                <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-[#FF5C00]" />
               </div>
 
               <MonthStepper year={selectedYear} month={selectedMonth}
@@ -1171,30 +1171,30 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                 isCurrent={isCurrentMonth}
                 count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
 
-              <div className="mt-4 rounded-2xl bg-orange-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">Totaal deze maand</p>
-                <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+              <div className="mt-2 rounded-2xl bg-orange-50 p-2.5 sm:mt-4 sm:p-4">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal deze maand</p>
+                <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
                   data-testid="payments-month-total">{fmtMoney(summary.monthSum || 0, currency)}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-bold text-slate-500">Betalingen</p>
-                  <p className="mt-1 text-2xl font-black text-slate-900" data-testid="payments-month-count">
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+                <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Betalingen</p>
+                  <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="payments-month-count">
                     {summary.monthCount || 0}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-amber-50 p-4">
-                  <p className="text-xs font-bold text-amber-700">Te keuren</p>
-                  <p className="mt-1 text-2xl font-black text-amber-800" data-testid="payments-pending-count">
+                <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Te keuren</p>
+                  <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="payments-pending-count">
                     {pending.length}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-3 rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-500">Vandaag</p>
-                <p className="mt-1 text-lg font-black text-slate-900 tabular-nums">
+              <div className="mt-1.5 rounded-2xl bg-slate-50 p-2 sm:mt-3 sm:p-4">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Vandaag</p>
+                <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-lg">
                   {fmtMoney(todaySum, currency)}
                 </p>
               </div>
@@ -1207,21 +1207,21 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
               )}
             </section>
 
-            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
               data-testid="payments-recent">
-              <div className="row-label-value items-center mb-3">
-                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Recente betalingen</h3>
+              <div className="row-label-value items-center mb-2 sm:mb-3">
+                <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">Recente betalingen</h3>
                 <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">
                   {totalCount} kwitanties
                 </span>
               </div>
 
-              <div className="relative mb-3">
+              <div className="relative mb-2 sm:mb-3">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="Zoek huurder, kwitantie of appartement…"
                   data-testid="payment-search"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-xs outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
               </div>
 
               {pending.length > 0 && (
@@ -1250,7 +1250,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                   </p>
                 </div>
               ) : (
-                <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
+                <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 pb-14 sm:space-y-2 md:pb-0">
                   {filteredItems.map((p) => (
                     <PaymentRow key={p.id} p={p} onOpen={setDetailPayment} />
                   ))}

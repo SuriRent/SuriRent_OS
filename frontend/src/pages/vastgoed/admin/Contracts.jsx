@@ -296,9 +296,9 @@ export default function Contracts({ embedded = false, kioskLayout = false, onBac
           <p className="text-right text-xs font-semibold text-white">Contractbeheer</p>
         </div>
         <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden pb-3 md:flex-row md:gap-3 md:pt-3">
-          <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-3 sm:p-5 md:order-1"
+          <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2.5 sm:p-5 md:order-1"
             data-testid="kiosk-contracts-list">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:gap-3">
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle contracten</h1>
                 <p className="text-xs font-semibold text-slate-500">{counts.all} geregistreerd</p>
@@ -314,7 +314,7 @@ export default function Contracts({ embedded = false, kioskLayout = false, onBac
                 </button>
               </div>
             )}
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" data-testid="contract-filter-bar">
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" data-testid="contract-filter-bar">
               {[
                 { value: 'all', label: 'Alle contracten', count: counts.all },
                 { value: 'signed', label: 'Ondertekend', count: counts.signed },
@@ -322,20 +322,20 @@ export default function Contracts({ embedded = false, kioskLayout = false, onBac
               ].map((item) => (
                 <button key={item.value} type="button" onClick={() => setFilter(item.value)}
                   data-testid={`contract-filter-${item.value}`}
-                  className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition ${
+                  className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-bold transition sm:px-3 sm:py-2 sm:text-xs ${
                     filter === item.value ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}>
                   {item.label} ({item.count})
                 </button>
               ))}
             </div>
-            <div className="relative mb-3 shrink-0">
+            <div className="relative mb-2 shrink-0 sm:mb-3">
               <FileText className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input value={fxQ} onChange={(event) => setFxQ(event.target.value)}
                 placeholder="Zoek huurder, contract of appartement…" data-testid="contract-search"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-[#FF5C00]" />
+                className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs font-medium outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-1.5 pb-14 pr-1 sm:space-y-2 md:pb-0">
               {!settled ? (
                 <ListSkeleton rows={5} testid="contracts-skeleton" />
               ) : rows.length === 0 ? (
@@ -353,29 +353,29 @@ export default function Contracts({ embedded = false, kioskLayout = false, onBac
               ))}
             </div>
           </section>
-          <aside className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-4 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+          <aside className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
             data-testid="kiosk-contracts-summary">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Contracten</h2>
-              <FileText className="h-5 w-5 text-[#FF5C00]" />
+            <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
+              <h2 className="text-base font-black tracking-tight text-slate-900 sm:text-2xl">Contracten</h2>
+              <FileText className="h-4 w-4 text-[#FF5C00] sm:h-5 sm:w-5" />
             </div>
-            <div className="mb-3 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-orange-50 p-3">
-                <p className="text-xs font-bold text-slate-500">Totaal</p>
-                <p className="mt-1 text-2xl font-black text-slate-900">{counts.all}</p>
+            <div className="mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:gap-2">
+              <div className="rounded-2xl bg-orange-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Totaal</p>
+                <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl">{counts.all}</p>
               </div>
-              <div className="rounded-2xl bg-emerald-50 p-3">
-                <p className="text-xs font-bold text-slate-500">Ondertekend</p>
-                <p className="mt-1 text-2xl font-black text-emerald-800">{counts.signed}</p>
+              <div className="rounded-2xl bg-emerald-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Ondertekend</p>
+                <p className="mt-0.5 text-lg font-black text-emerald-800 sm:mt-1 sm:text-2xl">{counts.signed}</p>
               </div>
             </div>
-            <div className="mb-4 rounded-2xl bg-amber-50 p-3">
-              <p className="text-xs font-bold text-slate-500">Concept</p>
-              <p className="mt-1 text-xl font-black text-amber-800">{counts.draft}</p>
+            <div className="mb-2 rounded-2xl bg-amber-50 p-2 sm:mb-4 sm:p-3">
+              <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Concept</p>
+              <p className="mt-0.5 text-base font-black text-amber-800 sm:mt-1 sm:text-xl">{counts.draft}</p>
             </div>
             <button type="button" onClick={() => setCreating(true)} data-testid="contract-new-btn"
-              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200]">
-              <Plus className="h-5 w-5" /> Nieuw contract
+              className="mb-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200] sm:mb-3 sm:h-12 sm:gap-2 sm:rounded-2xl sm:text-sm">
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Nieuw contract
             </button>
             <button type="button" onClick={onBack} data-testid="contracts-exit"
               className="mt-auto hidden h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200 md:inline-flex">
@@ -593,14 +593,14 @@ function KioskContractRow({ contract, onOpen, onPdf, onEmail, onCopyLink, onDele
     handler();
   };
   return (
-    <article className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:bg-slate-50 sm:p-4"
+    <article className="flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 text-left transition hover:bg-slate-50 sm:gap-3 sm:p-4"
       data-testid={`contract-row-${contract.id}`}>
       <button type="button" onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+        className="flex min-w-0 flex-1 items-center gap-2 text-left sm:gap-3">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${
           signed ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-[#FF5C00]'
         }`}>
-          {signed ? <BadgeCheck className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+          {signed ? <BadgeCheck className="h-4 w-4 sm:h-5 sm:w-5" /> : <FileText className="h-4 w-4 sm:h-5 sm:w-5" />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
@@ -620,25 +620,25 @@ function KioskContractRow({ contract, onOpen, onPdf, onEmail, onCopyLink, onDele
       <div className="flex shrink-0 items-center gap-1">
         <button type="button" onClick={stop(onPdf)} data-testid={`contract-pdf-${contract.id}`}
           aria-label="PDF openen" title="PDF openen"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">
-          <FileText className="h-4 w-4" />
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 sm:h-10 sm:w-10 sm:rounded-xl">
+          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </button>
         <button type="button" onClick={stop(onEmail)} data-testid={`contract-email-${contract.id}`}
           aria-label="Verstuur via e-mail" title="Verstuur via e-mail"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100">
-          <Mail className="h-4 w-4" />
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 sm:h-10 sm:w-10 sm:rounded-xl">
+          <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </button>
         {!signed && (
           <button type="button" onClick={stop(onCopyLink)} data-testid={`contract-link-${contract.id}`}
             aria-label="Ondertekenlink kopiëren" title="Ondertekenlink kopiëren"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00] hover:bg-orange-100">
-            <Copy className="h-4 w-4" />
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00] hover:bg-orange-100 sm:h-10 sm:w-10 sm:rounded-xl">
+            <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         )}
         <button type="button" onClick={stop(onDelete)} data-testid={`contract-delete-${contract.id}`}
           aria-label="Contract verwijderen" title="Verwijderen"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100">
-          <Trash2 className="h-4 w-4" />
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 sm:h-10 sm:w-10 sm:rounded-xl">
+          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </button>
       </div>
     </article>
