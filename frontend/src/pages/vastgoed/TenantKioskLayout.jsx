@@ -19,6 +19,7 @@ import {
   readCachedBranding, applyBranding, resolveLogoUrl,
 } from '../../lib/branding';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import useKeyboardOpen from '../../lib/use-keyboard-open';
 import { startTenantLive, stopTenantLive } from '../../lib/tenant-live';
 
 const TENANT_TOKEN_KEY = 'tenant_token';
@@ -575,7 +576,7 @@ function ForgotPinSheet({ branding, onClose, onSent }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
       data-testid="tk-forgot-sheet" onClick={onClose}>
       <motion.div
         initial={{ y: 400, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 400 }}
@@ -1969,7 +1970,8 @@ function TenantBarBtn({ dir, onClick, disabled }) {
   );
 }
 
-function TenantBottomBar({ items, onBack, onNext, canBack, canNext }) {
+function TenantBottomBar({ items, onBack, onNext, canBack, canNext, keyboardOpen }) {
+  if (keyboardOpen) return null;
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[110] border-t bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -2002,6 +2004,7 @@ const TK_NEXT = { dashboard: 'pay' };
 // =====================================================================
 export default function TenantKioskLayout() {
   useHidePwaSplash();
+  const keyboardOpen = useKeyboardOpen();
   const [searchParams] = useSearchParams();
   const aptId = searchParams.get('apt');
   const tenantIdParam = searchParams.get('t');
@@ -2212,6 +2215,7 @@ export default function TenantKioskLayout() {
           </AnimatePresence>
         </div>
         <TenantBottomBar
+          keyboardOpen={keyboardOpen}
           canBack={nfcOn} canNext={!nfcOn}
           onBack={() => setLoginMode('pin')} onNext={() => setLoginMode('nfc')}
           items={[
@@ -2298,6 +2302,7 @@ export default function TenantKioskLayout() {
         </AnimatePresence>
       </div>
       <TenantBottomBar
+        keyboardOpen={keyboardOpen}
         canBack={!!TK_BACK[view]} canNext={!!TK_NEXT[view]}
         onBack={() => setView(TK_BACK[view])} onNext={() => setView(TK_NEXT[view])}
         items={[

@@ -43,6 +43,7 @@ import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
+import useKeyboardOpen from '../../lib/use-keyboard-open';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMenu';
 import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
@@ -88,21 +89,36 @@ function useVisualViewport() {
   }));
   useEffect(() => {
     const vp = typeof window !== 'undefined' ? window.visualViewport : null;
-    if (!vp) return undefined;
+    let frame = 0;
     const update = () => {
-      setVV({ height: vp.height, top: vp.offsetTop || 0, layoutH: window.innerHeight });
+      frame = 0;
+      const next = {
+        height: Math.round(vp ? vp.height : window.innerHeight),
+        top: Math.round(vp ? vp.offsetTop || 0 : 0),
+        layoutH: Math.round(window.innerHeight),
+      };
+      setVV((current) => current.height === next.height && current.top === next.top && current.layoutH === next.layoutH
+        ? current : next);
       // Reset window-scroll → voorkomt dat iOS de layout viewport omhoog
       // scrollt om een focus-input onder het toetsenbord te onthullen.
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
-    update();
-    vp.addEventListener('resize', update);
-    vp.addEventListener('scroll', update);
-    window.addEventListener('resize', update);
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    scheduleUpdate();
+    if (vp) {
+      vp.addEventListener('resize', scheduleUpdate);
+      vp.addEventListener('scroll', scheduleUpdate);
+    }
+    window.addEventListener('resize', scheduleUpdate);
     return () => {
-      vp.removeEventListener('resize', update);
-      vp.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
+      if (vp) {
+        vp.removeEventListener('resize', scheduleUpdate);
+        vp.removeEventListener('scroll', scheduleUpdate);
+      }
+      window.removeEventListener('resize', scheduleUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
   return vv;
@@ -158,7 +174,7 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 //   • position: fixed
 //   • bottom: 0
 //   • padding-bottom: env(safe-area-inset-bottom)   → iOS home-indicator
-//   • z-[110]                                       → boven alle modals
+//   • z-[110]                                       → onder fullscreen modals
 //
 // BEWUST GEEN:
 //   • position: absolute
@@ -173,39 +189,6 @@ function MobileHeaderButtons({ onAdmin, onExit, onKasgeld }) {
 // viewport werkt en niet t.o.v. .kiosk-fullscreen (dat op iOS PWA een
 // eigen stacking/containing block creëert).
 // =====================================================================
-// Hook: detecteert of het software-keyboard open is via visualViewport.
-// Op iOS PWA verandert `visualViewport.height` met > 150px wanneer het
-// keyboard opent → return true, anders false. Wordt gebruikt om de FAB
-// te verbergen tijdens typen (voorkomt dat hij mee-schuift met de
-// layout-viewport die iOS Safari krimpt bij `interactive-widget=
-// resizes-content`).
-function useKeyboardOpen() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
-    if (!vv) return undefined;
-    // Bewaar de grootst gemeten `visualViewport.height` als baseline
-    // (zonder keyboard). Zodra de huidige height > 150px kleiner is dan
-    // die baseline, beschouwen we het keyboard als geopend. Deze
-    // methode is robuuster dan `window.innerHeight - vv.height` want
-    // `innerHeight` kan op iOS Safari zelf ook variëren (adresbalk
-    // toggle) en zou dan foutieve keyboard-open triggers geven.
-    let baseline = vv.height;
-    const check = () => {
-      if (vv.height > baseline) baseline = vv.height;
-      setOpen(baseline - vv.height > 150);
-    };
-    vv.addEventListener('resize', check);
-    vv.addEventListener('scroll', check);
-    check();
-    return () => {
-      vv.removeEventListener('resize', check);
-      vv.removeEventListener('scroll', check);
-    };
-  }, []);
-  return open;
-}
-
 function MobileAddFab({ onOpen }) {
   const kbOpen = useKeyboardOpen();
   // Verberg de balk zodra het keyboard open is — anders schuift hij mee
@@ -954,7 +937,7 @@ function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currenc
         <Mic className="w-3.5 h-3.5" /> Spraak
       </button>
       {open && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => !busy && setOpen(false)}>
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
@@ -1120,7 +1103,7 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
   };
 
   return createPortal((
-    <div onClick={onClose} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4">
+    <div onClick={onClose} className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4">
       <div onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-lg sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[85vh] overflow-hidden"
         data-testid="notes-modal">
@@ -4310,7 +4293,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   return createPortal((
     <div ref={overlayRef}
       onClick={saved ? onSaved : onClose}
-      className="fixed z-[100] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
+      className="fixed z-[120] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
       style={{
         // Fallback vóór useEffect draait — daarna neemt JS het over
         top: 0, left: 0, width: '100vw', height: '100dvh',
@@ -4389,7 +4372,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
               geen flicker. De onderste ruimte (leeg) wordt weggeschoven
               door het toetsenbord.
           */
-          <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3"
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-5 py-4 gap-3"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
@@ -4438,7 +4421,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
             {/* Opslaan-knop DIRECT onder de velden i.p.v. footer, zodat hij
                 zichtbaar blijft als het iOS-toetsenbord opent. */}
             <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-              className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
+              className="w-full h-12 shrink-0 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
               {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
             </button>
 
@@ -5646,7 +5629,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   }, [onClose]);
   return createPortal((
     <div
-      className={`fixed left-0 right-0 z-[100] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
+      className={`fixed left-0 right-0 z-[120] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
       style={mobileStyle}
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
@@ -5720,6 +5703,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
 // =====================================================================
 export default function KioskLayout() {
   useHidePwaSplash();
+  const keyboardOpen = useKeyboardOpen();
   const navigate = useBrandedNavigate();
   const { user } = useAuth();
   const [supportActive, setSupportActive] = useState(false);
@@ -6600,8 +6584,8 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !keyboardOpen && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
+      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
@@ -6645,9 +6629,8 @@ export default function KioskLayout() {
         </>
       ), document.body)}
 
-      {/* Desktop bottom bar — via createPortal in document.body geplaatst met
-          fixed + z-[110] zodat de balk ALTIJD zichtbaar en klikbaar blijft,
-          ook bovenop een geopende modal (modals gebruiken z-[100]). */}
+      {/* Desktop bottom bar — via createPortal in document.body geplaatst.
+          Fullscreen modals use a higher layer so their controls stay clear. */}
       {showDesktopBar && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>

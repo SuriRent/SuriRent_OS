@@ -38,20 +38,34 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
   // krimpt/verplaatst als toetsenbord opent of iOS pinch-zoomt.
   useLayoutEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    let frame = 0;
     const sync = () => {
-      setVh(vv.height);
-      setVTop(vv.offsetTop || 0);
-      setLayoutH(window.innerHeight);
+      frame = 0;
+      const height = Math.round(vv ? vv.height : window.innerHeight);
+      const top = Math.round(vv ? vv.offsetTop || 0 : 0);
+      const layoutHeight = Math.round(window.innerHeight);
+      setVh(height);
+      setVTop(top);
+      setLayoutH(layoutHeight);
       // Reset window scroll — voorkomt dat iOS de layout viewport omhoog schuift.
       if (window.scrollY !== 0) window.scrollTo(0, 0);
     };
-    sync();
-    vv.addEventListener('resize', sync);
-    vv.addEventListener('scroll', sync);
+    const scheduleSync = () => {
+      if (!frame) frame = window.requestAnimationFrame(sync);
+    };
+    scheduleSync();
+    if (vv) {
+      vv.addEventListener('resize', scheduleSync);
+      vv.addEventListener('scroll', scheduleSync);
+    }
+    window.addEventListener('resize', scheduleSync);
     return () => {
-      vv.removeEventListener('resize', sync);
-      vv.removeEventListener('scroll', sync);
+      if (vv) {
+        vv.removeEventListener('resize', scheduleSync);
+        vv.removeEventListener('scroll', scheduleSync);
+      }
+      window.removeEventListener('resize', scheduleSync);
+      if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
 
