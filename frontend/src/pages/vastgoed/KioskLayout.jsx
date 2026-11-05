@@ -201,7 +201,7 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
     <div className="fixed inset-0 z-[120] flex md:items-center md:justify-center md:p-6 md:bg-black/40 md:backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose} data-testid={`${testId}-overlay`}>
       <div onClick={(e) => e.stopPropagation()} role="menu" data-testid={testId}
-        className={`w-full h-full md:h-auto md:max-h-[85dvh] ${wide ? 'md:max-w-5xl' : 'md:max-w-4xl'} md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}>
+        className={`w-full h-full md:h-auto md:max-h-[85dvh] ${wide ? 'md:max-w-5xl' : 'md:max-w-4xl'} md:rounded-3xl md:overflow-hidden bg-orange-500 md:bg-white flex flex-col md:shadow-2xl animate-in md:zoom-in-95 duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : theme === 'green' ? 'kiosk-sheet-green' : ''}`}>
         <div className="flex-none flex items-center justify-between px-4 md:px-6 md:border-b md:border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2">
@@ -349,11 +349,13 @@ function HeaderLive() {
 function ThemeToggle({ testId, className = '' }) {
   const { theme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
+  const green = theme === 'green';
+  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid={testId}
-      aria-label={white ? 'Oranje modus' : 'Witte modus'} title={white ? 'Oranje modus' : 'Witte modus'}
-      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${white ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-white/15 text-white hover:bg-white/25'} ${className}`}>
-      {white ? <Palette className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+      aria-label={nextTheme} title={nextTheme}
+      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${white ? 'bg-orange-500 text-white hover:bg-orange-600' : green ? 'bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-white/15 text-white hover:bg-white/25'} ${className}`}>
+      {white ? <Palette className="w-5 h-5" /> : green ? <Sun className="w-5 h-5" /> : <Palette className="w-5 h-5" />}
     </button>
   );
 }
@@ -3387,7 +3389,7 @@ function KasgeldPanel() {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className={`h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
+    <div className={`h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : theme === 'green' ? 'bg-[#F2F8F4]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
       style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
       {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
@@ -4955,11 +4957,11 @@ function useBodyScrollLock() {
   }, []);
 }
 
-function KioskHistBtn({ dir, disabled, onClick, white }) {
+function KioskHistBtn({ dir, disabled, onClick, white, green = false }) {
   const Ico = dir === 'back' ? ChevronLeft : ChevronRight;
   return (
     <button type="button" onClick={onClick} disabled={disabled} data-testid={`kiosk-bar-${dir}`} aria-label={dir === 'back' ? 'Vorig scherm' : 'Volgend scherm'}
-      className={`shrink-0 w-16 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 transition-[background-color,opacity] duration-150 disabled:opacity-35 disabled:cursor-default ${white ? 'text-[#FF5C00] bg-orange-50 enabled:hover:bg-orange-100' : 'text-[#F26A12] bg-white enabled:hover:bg-orange-50'}`}>
+      className={`shrink-0 w-16 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 transition-[background-color,opacity] duration-150 disabled:opacity-35 disabled:cursor-default ${green ? 'text-[#087A55] bg-emerald-50 enabled:hover:bg-emerald-100' : white ? 'text-[#FF5C00] bg-orange-50 enabled:hover:bg-orange-100' : 'text-[#F26A12] bg-white enabled:hover:bg-orange-50'}`}>
       <Ico className="w-7 h-7" strokeWidth={2.4} />
       <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight">{dir === 'back' ? 'Terug' : 'Volgende'}</span>
     </button>
@@ -5032,7 +5034,7 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
   const { theme } = useContext(KioskThemeCtx);
   return createPortal((
     <div
-      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : theme === 'green' ? 'kiosk-modal-green' : ''}`}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={modalRef} onClick={(e) => e.stopPropagation()}
@@ -5484,11 +5486,14 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 function SheetThemeButton() {
   const { theme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
+  const green = theme === 'green';
+  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
-      className="mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
-      {white ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
-      {white ? 'Oranje modus' : 'Witte modus'}
+      aria-label={nextTheme}
+      className={`mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white backdrop-blur-sm'}`}>
+      {white || green ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
+      {nextTheme}
     </button>
   );
 }
@@ -5517,7 +5522,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   }, [onClose]);
   return createPortal((
     <div
-      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] bg-orange-500 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] bg-orange-500 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : theme === 'green' ? 'kiosk-sheet-green' : ''}`}
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
@@ -5759,30 +5764,37 @@ export default function KioskLayout() {
   // omdat de vaste witte FAB-menubalk onderaan staat — zo krijgen we nooit
   // een oranje strook onder de FAB bij iOS PWA viewport-drift.
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
-  const [kioskTheme, setKioskTheme] = useState(() => localStorage.getItem('kiosk_theme') || 'orange');
+  const [kioskTheme, setKioskTheme] = useState(() => {
+    const stored = localStorage.getItem('kiosk_theme');
+    return ['orange', 'white', 'green'].includes(stored) ? stored : 'orange';
+  });
   useEffect(() => {
-    const apply = (t) => { if (t === 'white' || t === 'orange') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
     return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'white' ? 'orange' : 'white';
+    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'green' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isWhite = kioskTheme === 'white';
+  const isGreen = kioskTheme === 'green';
+  const isOrange = kioskTheme === 'orange';
   useEffect(() => {
-    const bg = isWhite ? '#FFFFFF' : '#FF5C00';
+    const bg = isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
     document.documentElement.style.backgroundColor = bg;
     document.body.style.backgroundColor = bg;
     document.body.classList.toggle('kiosk-white-body', isWhite);
+    document.body.classList.toggle('kiosk-green-active', isGreen);
     setIosStatusBar(bg);
-  }, [isWhite]);
+  }, [isWhite, isGreen]);
   useEffect(() => {
-    const BODY_BG = localStorage.getItem('kiosk_theme') === 'white' ? '#FFFFFF' : '#FF5C00';
+    const savedTheme = localStorage.getItem('kiosk_theme');
+    const BODY_BG = savedTheme === 'white' ? '#FFFFFF' : savedTheme === 'green' ? '#F2F8F4' : '#FF5C00';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -5793,6 +5805,7 @@ export default function KioskLayout() {
     return () => {
       setIosStatusBar('#F7F8FA');
       document.body.classList.remove('kiosk-mode');
+      document.body.classList.remove('kiosk-white-body', 'kiosk-green-active');
       document.documentElement.style.backgroundColor = prevHtmlBg;
       document.body.style.backgroundColor = prevBodyBg;
     };
@@ -6232,7 +6245,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -6347,7 +6360,7 @@ export default function KioskLayout() {
           )}
           {step === 'stroom' && hasAdminAccess && (
             <div className="h-full overflow-y-auto bg-orange-500 kiosk-admin-skin" data-testid="kiosk-stroom">
-              <PowerControl kiosk orangeMode={!isWhite} />
+              <PowerControl kiosk orangeMode={isOrange} />
             </div>
           )}
           {step === 'overview' && apartment && (
@@ -6481,36 +6494,36 @@ export default function KioskLayout() {
             onClick={() => setShowAddSheet(true)}
             data-testid="kiosk-mobile-fab"
             aria-label="Snelle acties"
-            className={`md:hidden min-[390px]:hidden fixed right-4 z-[109] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition ${isWhite ? 'bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}
+            className={`md:hidden min-[390px]:hidden fixed right-4 z-[109] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition ${isGreen ? 'bg-[#00845D] text-white shadow-[0_12px_28px_-8px_rgba(0,132,93,0.4)]' : isWhite ? 'bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}
             style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
           >
             <Plus className="w-7 h-7" strokeWidth={2.8} />
           </button>
           {/* Grote telefoons (≥390px): onderste menubalk met + in het midden. */}
           <nav data-testid="kiosk-mobile-bottom-bar"
-            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
             <button type="button" onClick={goBack} disabled={!canBack} data-testid="kiosk-mobile-bar-back"
-              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isGreen || isWhite ? 'text-slate-700' : 'text-white'}`}>
               <ChevronLeft className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Terug</span>
             </button>
             <button type="button" onClick={() => setPhoneScanOpen(true)} data-testid="kiosk-mobile-bar-scanid"
-              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isGreen || isWhite ? 'text-slate-700' : 'text-white'}`}>
               <ScanLine className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Scan ID</span>
             </button>
             <button type="button" onClick={() => setShowAddSheet(true)} data-testid="kiosk-mobile-bar-plus" aria-label="Snelle acties"
-              className={`-mt-5 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ${isWhite ? 'ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'ring-[#FF6B1A] bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}>
+              className={`-mt-5 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ${isGreen ? 'ring-white bg-[#00845D] text-white shadow-[0_12px_28px_-8px_rgba(0,132,93,0.4)]' : isWhite ? 'ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]' : 'ring-[#FF6B1A] bg-white text-[#FF5C00] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.45)]'}`}>
               <Plus className="w-7 h-7" strokeWidth={2.8} />
             </button>
             <button type="button" onClick={() => setStep('kasgeld')} data-testid="kiosk-mobile-bar-kasgeld"
-              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-transform ${isGreen || isWhite ? 'text-slate-700' : 'text-white'}`}>
               <Database className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Kasgeld</span>
             </button>
             <button type="button" onClick={() => goHist(1)} disabled={!canFwd} data-testid="kiosk-mobile-bar-next"
-              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isWhite ? 'text-slate-700' : 'text-white'}`}>
+              className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isGreen || isWhite ? 'text-slate-700' : 'text-white'}`}>
               <ChevronRight className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Volgende</span>
             </button>
@@ -6521,10 +6534,10 @@ export default function KioskLayout() {
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
       {showDesktopBar && createPortal((
-        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
-            <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} />
+            <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} green={isGreen} />
             {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
@@ -6539,13 +6552,13 @@ export default function KioskLayout() {
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <button key={id} type="button" onClick={onClick} data-testid={testid}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isGreen ? 'bg-[#00845D] text-white shadow-md' : isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isGreen ? 'text-slate-600 bg-[#F1F8F4] hover:bg-emerald-50 hover:text-emerald-800' : isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
               );
             })}
-            <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} />
+            <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} green={isGreen} />
           </div>
         </nav>
       ), document.body)}
@@ -6553,7 +6566,7 @@ export default function KioskLayout() {
         <TenantInfoModal apartment={apartment} mode={tenantModal} onClose={() => setTenantModal(null)} />
       )}
       {tenantModal === 'power' && apartment && (
-        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} orangeMode={!isWhite} />
+        <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} orangeMode={isOrange} />
       )}
     </div>
     </KioskThemeCtx.Provider>

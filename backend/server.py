@@ -10937,7 +10937,7 @@ async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
 
 
 class KioskThemeIn(BaseModel):
-    theme: Literal["orange", "white"]
+    theme: Literal["orange", "white", "green"]
 
 
 @api.get("/kiosk/theme")
