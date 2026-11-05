@@ -327,6 +327,27 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
 .kiosk-popup-active .kiosk-fx > div > .hidden:first-child + *,
 .kiosk-popup-active .kiosk-fx > div > .hidden:first-child + .hidden + * { margin-top: 0 !important; }
 /* Snel toevoegen sheet in witte modus. */
+.kiosk-add-sheet-overlay {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.kiosk-add-sheet-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.kiosk-add-sheet-footer {
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 -8px 18px -18px rgba(15, 23, 42, 0.4);
+}
+.kiosk-sheet-green .kiosk-add-sheet-footer { border-top-color: #D5E8DA; }
 .kiosk-sheet-white.bg-orange-500 { background-color: #F4F5F7; }
 .kiosk-sheet-white .text-white { color: #0F172A; }
 .kiosk-sheet-white svg.text-white { color: #FF5C00; }

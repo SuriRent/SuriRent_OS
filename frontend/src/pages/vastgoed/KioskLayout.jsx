@@ -5491,7 +5491,7 @@ function SheetThemeButton() {
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
-      className={`mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white backdrop-blur-sm'}`}>
+      className={`mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
       {white || green ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
       {nextTheme}
     </button>
@@ -5522,28 +5522,25 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   }, [onClose]);
   return createPortal((
     <div
-      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] bg-orange-500 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : theme === 'green' ? 'kiosk-sheet-green' : ''}`}
+      className={`keyboard-opaque-backdrop kiosk-add-sheet-overlay fixed inset-0 z-[120] bg-orange-500 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : theme === 'green' ? 'kiosk-sheet-green' : ''}`}
       data-testid="kiosk-add-sheet-overlay">
-      {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
         style={{
           paddingTop: 'max(var(--kiosk-sat), 16px)',
           paddingBottom: 12,
         }}>
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
             <Plus className="w-6 h-6 text-white" strokeWidth={3} />
           </div>
           <h3 className="text-xl font-black text-white" data-testid="kiosk-add-sheet-title">Snel toevoegen</h3>
         </div>
         <button onClick={onClose} data-testid="kiosk-add-sheet-close"
-          className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition">
+          className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center active:bg-white/30 transition">
           <X className="w-6 h-6 text-white" strokeWidth={2.5} />
         </button>
       </div>
-      {/* Body — 2-koloms grid van witte tegels met oranje icon */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}>
+      <div className="kiosk-add-sheet-scroll px-4 pt-1">
         <div className="grid grid-cols-2 gap-3">
           {tiles.map((t) => (
             <button key={t.key} onClick={() => onPick(t.key)}
@@ -5556,24 +5553,23 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Kiosk-niveau actieknoppen — compacte pill-knoppen onderaan de
-            sheet, NIET als kaarten zoals de aanmaak-tegels hierboven. Dit
-            matcht de visuele hiërarchie van de oude top-balk waar deze
-            drie items al compact weergegeven stonden. */}
-        <div className="mt-4 grid grid-cols-3 gap-2" data-testid="kiosk-sheet-actions">
+      <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+        <div className="grid grid-cols-3 gap-2" data-testid="kiosk-sheet-actions">
           <button onClick={() => onPick('kasgeld')} data-testid="kiosk-tile-kasgeld"
             className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
             <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
           </button>
           {hasAdminAccess && !isStaffSession() ? (
             <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings"
-              className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
+              className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
               <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Instellingen
             </button>
           ) : <span />}
           <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white backdrop-blur-sm shadow-sm active:scale-95 transition">
+            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
             <LogOut className="w-4 h-4" strokeWidth={2.5} /> Uit
           </button>
         </div>
