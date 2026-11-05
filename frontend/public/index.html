@@ -2,6 +2,18 @@
 <html lang="nl">
   <head>
     <script>
+      // Markeer het browserplatform vroeg zodat globale CSS platformverschillen
+      // kan opvangen zonder op specifieke telefoonmodellen te vertrouwen.
+      (function () {
+        var ua = navigator.userAgent || '';
+        var root = document.documentElement;
+        if (/android/i.test(ua)) root.classList.add('android-device');
+        if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+          root.classList.add('ios-device');
+        }
+      })();
+    </script>
+    <script>
       // Android-APK: window.SURIRENT_KTP === true → class 'apk-ktp' op <html>
       // (APK zet zelf statusbalk-padding; kiosk-CSS zet safe-area-inset-top dan op 0px).
       (function () {

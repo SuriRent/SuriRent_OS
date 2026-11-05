@@ -105,6 +105,14 @@ html.apk-ktp { --kiosk-sat: 0px; }
    are not affected. Used by Kiosk + Admin to keep the bottom content out
    of the iOS home-indicator on installed PWAs. */
 @media (max-width: 767px) {
+  :root { font-size: clamp(14px, 4vw, 16px); }
+  body { min-width: 320px; }
+  #root { min-height: 100dvh; }
+  #root :where(input, select, textarea, button) { max-width: 100%; }
+  #root :where(img, video, canvas, iframe) { max-width: 100%; }
+  #root :where(pre, table) { max-width: 100%; }
+  #root :where(pre, table) { overflow-x: auto; }
+  html.ios-device #root :where(input, select, textarea) { font-size: max(16px, 1em); }
   .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .mobile-safe-top { padding-top: env(safe-area-inset-top, 0px); }
   html.apk-ktp .kiosk-fullscreen .mobile-safe-top { padding-top: 0px; }
