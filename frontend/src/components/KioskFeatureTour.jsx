@@ -198,7 +198,7 @@ const TOUR_STEPS = [
     title: 'Facturen',
     description: 'Bekijk en beheer huur- en andere facturen. Gebruik de zoek- en filtermogelijkheden om een factuur of huurder terug te vinden.',
     route: { type: 'page', id: 'facturen' },
-    target: 'invoices-modal-title',
+    target: 'kiosk-admin-page-facturen',
   },
   {
     title: 'Onderhoud',

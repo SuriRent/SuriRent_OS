@@ -5802,7 +5802,7 @@ export default function KioskLayout() {
     window.addEventListener('kiosk-deposit-open', h);
     return () => window.removeEventListener('kiosk-deposit-open', h);
   }, []);
-  // Links in embedded beheer-pagina's (go-tab) openen de juiste kiosk-popup.
+  // Links in embedded beheerpagina's openen het bijbehorende kiosk-scherm.
   useEffect(() => {
     const MAP = { tenants: 'huurders', payments: 'betalingen', apartments: 'appartementen', locations: 'locaties',
       contracts: 'contracten', payment_plans: 'regelingen', deposits: 'borg', maintenance: 'onderhoud',
@@ -5810,7 +5810,7 @@ export default function KioskLayout() {
     const onTab = (e) => {
       const t = typeof e.detail === 'string' ? e.detail : e.detail?.tab;
       setAdminPopup(null);
-      if (t === 'invoices') setShowInvoicesModal(true);
+      if (t === 'invoices') { setShowInvoicesModal(false); setStep('admin:facturen'); }
       else if (t === 'kasgeld') setStep('kasgeld');
       else if (t === 'tenants') setStep('admin:huurders');
       else if (t === 'locations') setStep('admin:locaties');
@@ -6252,7 +6252,11 @@ export default function KioskLayout() {
   const showTopHead = step !== 'check' && step !== 'select';
   useEffect(() => {
     const onNav = (e) => {
-      if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
+      if (e.detail === 'admin:facturen') {
+        setShowInvoicesModal(false);
+        setAdminPopup(null);
+        setStep('admin:facturen');
+      }
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
       else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:regelingen') {
         setAdminPopup(null);
@@ -6288,7 +6292,7 @@ export default function KioskLayout() {
         setAdminPopup(`inst-${route.id}`);
       } else if (route.type === 'page') {
         setStep('select');
-        if (route.id === 'facturen') setShowInvoicesModal(true);
+        if (route.id === 'facturen') setStep('admin:facturen');
         else if (route.id === 'regelingen') setStep('admin:regelingen');
         else setAdminPopup(route.id);
       } else if (route.type === 'nfc') {
@@ -6467,7 +6471,10 @@ export default function KioskLayout() {
           {step === 'admin:regelingen' && hasAdminAccess && (
             <KioskAdminPage id="regelingen" kioskLayout onBack={() => setStep('select')} />
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen'
+          {step === 'admin:facturen' && hasAdminAccess && (
+            <KioskAdminPage id="facturen" kioskLayout onBack={() => setStep('select')} />
+          )}
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}

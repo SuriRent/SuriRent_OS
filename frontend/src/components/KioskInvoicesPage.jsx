@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, FileSignature, Wallet, AlertTriangle, CalendarDays,
-  Banknote, MessageCircle, Share2, Trash2, CheckCircle2, ChevronRight, X,
+  ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, FileSignature, Wallet,
+  Banknote, MessageCircle, Share2, Trash2, CheckCircle2, ChevronRight, X, History, RefreshCw,
 } from 'lucide-react';
 import { api, formatError, MONTHS_NL } from '../lib/api';
+import { hostConfirm } from './EmbedConfirm';
 import { openWhatsApp } from '../lib/external-link';
 import { fmtAmount, groupByTenant } from '../pages/vastgoed/admin/invoices/helpers';
 import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
+import QuickPayModal from '../pages/vastgoed/admin/invoices/QuickPayModal';
+import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySection';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
 import { TenantPhoto } from './KioskFx';
@@ -141,7 +144,7 @@ async function shareInvoice(inv, tenant, onMsg) {
   }
 }
 
-function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) {
+function InvoiceLine({ inv, open, onPayInvoice, onDelete, credit, tenant, onChanged, onMsg }) {
   const rest = Number(inv.remaining_amount != null ? inv.remaining_amount : inv.amount || 0);
   const late = open && inv.bucket !== 'current' && inv.bucket !== 'future';
   return (
@@ -154,6 +157,13 @@ function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) 
       {open
         ? <span className={`text-lg font-black ${late ? 'text-red-600' : 'text-orange-600'}`}>{money(rest, inv.currency)}</span>
         : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1"><CheckCircle2 className="w-4 h-4" /> Betaald</span>}
+      {open && (
+        <button type="button" onClick={() => onPayInvoice(inv)} aria-label="Factuur betalen" title="Factuur betalen"
+          data-testid={`kiosk-inv-pay-one-${inv.id}`}
+          className="w-11 h-11 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] flex items-center justify-center transition-colors">
+          <Banknote className="w-5 h-5" />
+        </button>
+      )}
       <InvoiceExtraActions inv={inv} open={open} credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />
       <button type="button" onClick={() => shareInvoice(inv, tenant, onMsg)} aria-label="Delen" data-testid={`kiosk-inv-share-${inv.id}`}
         className="w-11 h-11 rounded-xl bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors"><Share2 className="w-5 h-5" /></button>
@@ -165,41 +175,175 @@ function InvoiceLine({ inv, open, onDelete, credit, tenant, onChanged, onMsg }) 
   );
 }
 
-function TenantDetail({ g, onBack, onRemind, onDelete, credit, tenant, onChanged, onMsg }) {
+function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoice, onRebalanced, credit, tenant, onChanged, onMsg }) {
+  const [detailTab, setDetailTab] = useState('overzicht');
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceMsg, setRebalanceMsg] = useState('');
   const t = toneOf(g);
   const rows = [...g.all].reverse();
+  const paid = rows.filter((inv) => inv.status === 'paid');
+  const rebalance = async () => {
+    if (rebalancing) return;
+    setRebalancing(true);
+    setRebalanceMsg('');
+    try {
+      const { data: result } = await api.post(`/tenants/${g.tenant_id}/rebalance-credits`);
+      const applied = Number(result.applied || 0);
+      const before = Number(result.credit_before || 0);
+      const after = Number(result.credit_after || 0);
+      if (applied > 0) {
+        const count = (result.invoices_updated || []).length;
+        setRebalanceMsg(`${money(applied, g.currency)} verrekend over ${count} factu${count === 1 ? 'ur' : 'ren'}`);
+        onRebalanced();
+      } else if (before === 0 && after === 0) {
+        setRebalanceMsg('Geen openstaand tegoed gevonden — alles klopt al.');
+      } else {
+        setRebalanceMsg(`${money(after, g.currency)} tegoed staat nog open (geen passende factuur).`);
+      }
+    } catch (error) {
+      setRebalanceMsg(formatError(error) || 'Herverdeling mislukt');
+    } finally {
+      setRebalancing(false);
+    }
+  };
   return (
-    <div className="flex-1 min-h-0 flex flex-col" data-testid="kiosk-inv-detail">
-      <div className="flex items-center gap-3 px-5 pt-4 pb-3">
-        <button type="button" onClick={onBack} data-testid="kiosk-inv-detail-back"
-          className="h-11 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold inline-flex items-center gap-2"><ArrowLeft className="w-5 h-5" /> Alle huurders</button>
-      </div>
-      <div className="mx-5 rounded-2xl bg-slate-50 p-5 flex items-center gap-4">
-        <span className={`w-2 self-stretch rounded-full ${t.bar}`} />
-        <div className="flex-1 min-w-0">
-          <p className="text-2xl font-black text-slate-900 truncate" data-testid="kiosk-inv-detail-apartment">{g.apartment_number || '—'}</p>
-          <p className="text-sm text-slate-500 truncate" data-testid="kiosk-inv-detail-name">{g.tenant_name || 'Onbekende huurder'} · {g.location_name}</p>
-          <span className={`inline-block mt-2 rounded-full px-3 py-1 text-xs font-bold ${t.chip}`}>{t.text}</span>
-          <span className="ml-2"><CreditBadge amount={credit} currency={g.currency} testId="kiosk-inv-detail-credit" /></span>
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="kiosk-inv-detail">
+      <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={56} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Facturen</p>
+            <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl"
+              data-testid="kiosk-inv-detail-apartment">{g.apartment_number || '—'}</h1>
+            <p className="truncate text-sm font-semibold text-slate-500" data-testid="kiosk-inv-detail-name">
+              {g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}
+            </p>
+          </div>
+          <span className={`hidden shrink-0 rounded-full px-3 py-1 text-xs font-black sm:inline-flex ${t.chip}`}>{t.text}</span>
         </div>
-        <div className="text-right">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Openstaand</p>
-          <p className={`text-3xl font-black ${t.amt}`} data-testid="kiosk-inv-detail-total">{money(g.totalDue, g.currency)}</p>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button type="button" onClick={onBack} data-testid="kiosk-inv-detail-back"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            <ArrowLeft className="h-4 w-4" /> Terug
+          </button>
+          <button type="button" onClick={onNewInvoice} data-testid="kiosk-inv-detail-new"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+            <FilePlus2 className="h-4 w-4" /> Factuur
+          </button>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Openstaand</span>
+          <span className={`text-lg font-black ${t.amt}`} data-testid="kiosk-inv-detail-total">{money(g.totalDue, g.currency)}</span>
+          <CreditBadge amount={credit} currency={g.currency} testId="kiosk-inv-detail-credit" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {g.dueCount > 0 && (
+            <>
+              <button type="button" onClick={() => openPay(g.tenant_id)} data-testid="kiosk-inv-detail-pay"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-bold text-white hover:bg-[#E05200]">
+                <Banknote className="h-4 w-4" /> Betalen
+              </button>
+              <button type="button" onClick={() => onRemind(g)} data-testid="kiosk-inv-detail-remind"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+                <MessageCircle className="h-4 w-4" /> Herinnering
+              </button>
+            </>
+          )}
+          <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="kiosk-inv-detail-rebalance"
+            title="Herverdeel alle openstaande tegoeden over openstaande facturen"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60">
+            {rebalancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Tegoed herverdelen
+          </button>
         </div>
       </div>
-      {g.dueCount > 0 && (
-        <div className="grid grid-cols-2 gap-3 px-5 pt-3">
-          <button type="button" onClick={() => openPay(g.tenant_id)} data-testid="kiosk-inv-detail-pay"
-            className="h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white text-lg font-black inline-flex items-center justify-center gap-2 transition-colors"><Banknote className="w-5 h-5" /> Betalen</button>
-          <button type="button" onClick={() => onRemind(g)} data-testid="kiosk-inv-detail-remind"
-            className="h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-black inline-flex items-center justify-center gap-2 transition-colors"><MessageCircle className="w-5 h-5" /> Herinnering</button>
+      {rebalanceMsg && <p className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700" data-testid="kiosk-inv-detail-rebalance-msg">{rebalanceMsg}</p>}
+
+      <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+        role="tablist" aria-label="Factuurdetails">
+        {[
+          ['overzicht', 'Overzicht'],
+          ['facturen', `Facturen (${rows.length})`],
+          ['geschiedenis', `Betalingsgeschiedenis (${paid.length})`],
+        ].map(([tabKey, label]) => (
+          <button key={tabKey} type="button" role="tab" aria-selected={detailTab === tabKey}
+            onClick={() => setDetailTab(tabKey)} data-testid={`kiosk-inv-detail-tab-${tabKey}`}
+            className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+              detailTab === tabKey ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            }`}>{label}</button>
+        ))}
+      </div>
+
+      {detailTab === 'overzicht' && (
+        <div className="grid min-h-0 gap-3 xl:grid-cols-[1.4fr_1fr]" data-testid="kiosk-inv-detail-overview">
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-black text-slate-900">Factuuroverzicht</h2>
+              <FileSignature className="h-5 w-5 text-[#FF5C00]" />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl bg-red-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Openstaand</p>
+                <p className="mt-1 text-lg font-black text-red-600">{money(g.totalDue, g.currency)}</p>
+              </div>
+              <div className="rounded-xl bg-orange-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Open facturen</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{g.open.length}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Totaal facturen</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{rows.length}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Tegoed</p>
+                <p className="mt-1 text-lg font-black text-emerald-700">{money(credit, g.currency)}</p>
+              </div>
+            </div>
+          </section>
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-black text-slate-900">Huurder</h2>
+              <Wallet className="h-5 w-5 text-[#FF5C00]" />
+            </div>
+            <p className="truncate text-lg font-black text-slate-900">{g.tenant_name || 'Onbekende huurder'}</p>
+            <p className="mt-1 truncate text-sm text-slate-500">{tenant?.phone || 'Geen telefoonnummer'}</p>
+            <p className="truncate text-sm text-slate-500">{tenant?.email || 'Geen e-mailadres'}</p>
+            {g.dueCount > 0 && (
+              <button type="button" onClick={() => setDetailTab('facturen')}
+                className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-orange-50 px-4 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+                Bekijk facturen <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </section>
         </div>
       )}
-      <p className="px-5 pt-4 pb-1 text-xs font-black uppercase tracking-widest text-slate-400">Facturen ({rows.length})</p>
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 divide-y divide-slate-100">
-        {rows.map((inv) => <InvoiceLine key={inv.id} inv={inv} open={g.open.includes(inv)} onDelete={onDelete}
-          credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />)}
-      </div>
+
+      {detailTab === 'facturen' && (
+        <section className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-100 bg-white px-4 shadow-sm"
+          data-testid="kiosk-inv-detail-invoices">
+          <div className="divide-y divide-slate-100">
+            {rows.map((inv) => <InvoiceLine key={inv.id} inv={inv} open={g.open.includes(inv)}
+              onPayInvoice={(invoice) => onPayInvoice(invoice, g)} onDelete={onDelete}
+              credit={credit} tenant={tenant} onChanged={onChanged} onMsg={onMsg} />)}
+          </div>
+          {rows.length === 0 && <p className="py-12 text-center text-sm font-semibold text-slate-500">Geen facturen gevonden.</p>}
+        </section>
+      )}
+
+      {detailTab === 'geschiedenis' && (
+        <section className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+          data-testid="kiosk-inv-detail-history">
+          <div className="mb-3 flex items-center gap-2">
+            <History className="h-5 w-5 text-[#FF5C00]" />
+            <h2 className="text-base font-black text-slate-900">Betalingsgeschiedenis</h2>
+          </div>
+          {paid.length
+            ? <PaidHistorySection paidInvoices={paid} currency={g.currency} testidPrefix={`kiosk-history-${g.tenant_id}`} />
+            : <p className="py-8 text-center text-sm font-semibold text-slate-500">Nog geen betalingen voor deze huurder.</p>}
+        </section>
+      )}
     </div>
   );
 }
@@ -214,12 +358,16 @@ export default function KioskInvoicesPage({ onBack }) {
   const [creating, setCreating] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [reminding, setReminding] = useState(null);
+  const [quickPay, setQuickPay] = useState(null);
+  const [createTenantId, setCreateTenantId] = useState('');
+  const [error, setError] = useState('');
   const [severity, setSeverity] = useState('all');
   const [credits, reloadCredits] = useTenantCredits();
 
   const load = useCallback(() => {
     api.get('/invoices/grouped', { params: { tab, severity, q: q.trim(), offset: 0, limit: 500 } })
-      .then(({ data: d }) => setData(d)).catch(() => setData({ invoices: [], tenant_ids: [] }));
+      .then(({ data: d }) => { setData(d); setError(''); })
+      .catch((e) => setError(formatError(e, 'Facturen konden niet worden geladen.')));
     reloadCredits();
   }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
@@ -250,7 +398,7 @@ export default function KioskInvoicesPage({ onBack }) {
   const generate = async () => {
     const t = new Date();
     if (!window.confirm(`Maandfacturen voor ${month} ${t.getFullYear()} aanmaken voor alle bezette appartementen?`)) return;
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setError('');
     try {
       const { data: d } = await api.post('/invoices/generate-month', { period_month: t.getMonth() + 1, period_year: t.getFullYear() });
       setMsg({ ok: true, text: `${d.created} aangemaakt, ${d.skipped} overgeslagen` });
@@ -259,82 +407,157 @@ export default function KioskInvoicesPage({ onBack }) {
     finally { setBusy(false); }
   };
   const del = async (inv) => {
-    if (!window.confirm(`Factuur ${inv.invoice_number} verwijderen?`)) return;
-    try { await api.delete(`/invoices/${inv.id}`); load(); } catch (e) { setMsg({ ok: false, text: formatError(e) }); }
+    if (!(await hostConfirm(`Factuur ${inv.invoice_number} verwijderen?`))) return;
+    try {
+      await api.delete(`/invoices/${inv.id}`);
+      setMsg({ ok: true, text: `Factuur ${inv.invoice_number} verwijderd` });
+      load();
+    } catch (e) { setMsg({ ok: false, text: formatError(e) }); }
   };
 
   return (
-    <div className="h-full min-h-0 bg-[#F4F5F7] p-3 sm:p-5" data-testid="kiosk-admin-page-facturen">
-      <div className="kiosk-admin-skin mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_-14px_rgba(15,23,42,0.25)] ring-1 ring-slate-100">
-        <header className="flex-none border-b border-slate-100 px-4 py-4 sm:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]">
-                  <FileSignature className="h-6 w-6" />
-                </span>
-                <div className="min-w-0">
-                  <h1 className="truncate text-xl font-black text-slate-900 sm:text-2xl">Facturen</h1>
-                  <p className="truncate text-xs font-medium text-slate-500 sm:text-sm">Facturen en betalingen beheren</p>
-                </div>
-              </div>
-              <button onClick={onBack} data-testid="kiosk-admin-page-back"
-                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-[#FF5C00]">
-                <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Terug naar kiosk</span><span className="sm:hidden">Terug</span>
+    <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-admin-page-facturen">
+      <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+        {onBack ? (
+          <button onClick={onBack} data-testid="kiosk-admin-page-back"
+            className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 active:scale-95 transition">
+            <ArrowLeft className="w-4 h-4" /> <span className="text-xs">Terug</span>
+          </button>
+        ) : <span />}
+        <div className="text-right text-white">
+          <p className="text-sm font-semibold">Facturen</p>
+          <p className="text-[10px] opacity-70">Facturenbeheer</p>
+        </div>
+      </div>
+
+      {msg && <div role="status" data-testid="kiosk-inv-msg"
+        className={`mx-1 mt-1 flex flex-none items-center justify-between gap-3 rounded-xl px-4 py-2 text-sm font-bold sm:mx-2 ${
+          msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+        }`}>
+        <span>{msg.text}</span>
+        <button type="button" onClick={() => setMsg(null)} aria-label="Melding sluiten"><X className="h-4 w-4" /></button>
+      </div>}
+
+      <main className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden"
+        data-testid="kiosk-inv-list">
+        {creating ? (
+          <section className="min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 sm:p-6" data-testid="kiosk-inv-create">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h1 className="text-lg font-black text-slate-900">Nieuwe factuur</h1>
+              <button type="button" onClick={() => { setCreating(false); setCreateTenantId(''); }} data-testid="kiosk-inv-create-cancel"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200">
+                <ArrowLeft className="h-4 w-4" /> Terug
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:flex">
+            <InvoiceForm inline tenants={tenants} initialTenantId={createTenantId}
+              onCancel={() => { setCreating(false); setCreateTenantId(''); }}
+              onSaved={(invoice) => {
+                setCreating(false);
+                setCreateTenantId('');
+                setMsg({ ok: true, text: `Factuur ${invoice?.invoice_number || ''} aangemaakt` });
+                load();
+              }} />
+          </section>
+        ) : sel ? (
+          <section className="min-h-0 flex-1 flex flex-col overflow-hidden" data-testid="kiosk-inv-detail-panel">
+            <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onRemind={setReminding}
+              onDelete={del} onPayInvoice={(inv, group) => setQuickPay({ inv, group })}
+              onNewInvoice={() => { setCreateTenantId(sel.tenant_id); setCreating(true); }}
+              onRebalanced={load} credit={creditOf(credits, sel.tenant_id, sel.currency)}
+              tenant={tenants.find((tenantItem) => tenantItem.id === sel.tenant_id)}
+              onChanged={load} onMsg={setMsg} />
+          </section>
+        ) : (
+          <>
+            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-4 sm:p-5 shrink-0 md:shrink md:overflow-y-auto"
+              data-testid="kiosk-inv-summary">
+              <div className="row-label-value items-center mb-4">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Factuuroverzicht</h1>
+                <FileSignature className="w-5 h-5 text-[#FF5C00]" />
+              </div>
+              <div className="rounded-2xl bg-red-50 p-4">
+                <p className="text-sm font-semibold text-slate-500">Totaal openstaand</p>
+                <p className="mt-1 break-words text-xl sm:text-2xl font-black text-red-600 tabular-nums"
+                  data-testid="kiosk-inv-stat-open">{money(s.totalOpenAmount || 0, s.currency)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="rounded-2xl bg-amber-50 p-4">
+                  <p className="text-xs font-bold text-amber-700">Achterstand</p>
+                  <p className="mt-1 text-2xl font-black text-amber-800" data-testid="kiosk-inv-stat-late">
+                    {s.openCount || 0} <span className="text-sm font-bold text-slate-500">/ {s.allCount || 0}</span>
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">Verwacht {month}</p>
+                  <p className="mt-1 break-words text-lg font-black text-emerald-700 tabular-nums"
+                    data-testid="kiosk-inv-stat-month">{money(s.thisMonthExpected || 0, s.currency)}</p>
+                </div>
+              </div>
               <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-xs font-black text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:px-4 sm:text-sm">
+                className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 text-sm font-black text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Genereer {month}
               </button>
-              <button type="button" onClick={() => setCreating(true)} data-testid="kiosk-inv-new"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-xs font-black text-white shadow-sm transition-colors hover:bg-[#E05200] sm:px-4 sm:text-sm">
+              <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
+                data-testid="kiosk-inv-new"
+                className="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-sm font-black text-white shadow-sm transition-colors hover:bg-[#E05200]">
                 <FilePlus2 className="h-4 w-4" /> Nieuwe factuur
               </button>
-            </div>
-          </div>
-        </header>
-        <main className="flex flex-1 min-h-0 flex-col p-3 sm:p-5" data-testid="kiosk-inv-list">
-          {msg && <p role="status" data-testid="kiosk-inv-msg" className={`mb-3 flex-none rounded-xl px-4 py-3 text-sm font-bold ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
-          {sel ? <TenantDetail g={sel} onBack={() => setSelId(null)} onRemind={setReminding} onDelete={del}
-            credit={creditOf(credits, sel.tenant_id, sel.currency)} tenant={tenants.find((t) => t.id === sel.tenant_id)}
-            onChanged={load} onMsg={setMsg} /> : (
-            <div className="flex h-full min-h-0 flex-col gap-3 sm:gap-4">
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <Stat Icon={Wallet} label="Openstaand" value={money(s.totalOpenAmount || 0, s.currency)} tone="bg-red-50 text-red-600" testId="kiosk-inv-stat-open" />
-                <Stat Icon={AlertTriangle} label="Achterstand" value={`${s.openCount || 0} van ${s.allCount || 0}`} tone="bg-amber-50 text-amber-600" testId="kiosk-inv-stat-late" />
-                <Stat Icon={CalendarDays} label={`Verwacht ${month}`} value={money(s.thisMonthExpected || 0, s.currency)} tone="bg-emerald-50 text-emerald-600" testId="kiosk-inv-stat-month" />
+              {onBack && (
+                <button type="button" onClick={onBack} data-testid="kiosk-inv-back-desktop"
+                  className="mt-2 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 md:inline-flex">
+                  <ArrowLeft className="h-4 w-4" /> Terug
+                </button>
+              )}
+              {error && <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" data-testid="kiosk-inv-error">{error}</div>}
+              {!data && !error && <Loader2 className="mx-auto my-5 h-6 w-6 animate-spin text-[#FF5C00]" />}
+            </section>
+
+            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+              data-testid="kiosk-inv-recent">
+              <div className="row-label-value items-center mb-3">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Facturen per huurder</h2>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">{groups.length} huurders</span>
               </div>
-              <div className="grid flex-none gap-3 lg:grid-cols-[auto_minmax(240px,1fr)] lg:items-center">
-                <div className="flex min-w-0 gap-2 overflow-x-auto pb-0.5">
-                  {TABS.map((t) => (
-                    <button key={t.v} type="button" onClick={() => setTab(t.v)} data-testid={`kiosk-inv-tab-${t.v}`}
-                      className={`inline-flex h-10 min-w-max items-center gap-2 rounded-xl px-3 text-xs font-black transition-colors sm:px-4 sm:text-sm ${tab === t.v ? 'bg-[#FF5C00] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00]'}`}>
-                      {t.dot && <span className={`h-2 w-2 rounded-full ${t.dot}`} />}{t.label} <span className="opacity-75">{s[t.key] ?? 0}</span>
-                    </button>
-                  ))}
-                </div>
-                <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition-colors focus-within:border-orange-300 focus-within:ring-2 focus-within:ring-orange-100">
-                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"
-                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
-                  {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="h-4 w-4 text-slate-400" /></button>}
-                </label>
+              <div className="flex gap-1.5 mb-3 overflow-x-auto" role="tablist" aria-label="Factuurstatus">
+                {TABS.map((filter) => (
+                  <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}
+                    onClick={() => setTab(filter.v)} data-testid={`kiosk-inv-tab-${filter.v}`}
+                    className={`shrink-0 h-9 px-3 rounded-full text-xs font-bold transition-colors ${
+                      tab === filter.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}>
+                    {filter.label} ({s[filter.key] ?? 0})
+                  </button>
+                ))}
               </div>
-              <div className="flex-none"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
-              <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 p-2 sm:p-3">
-                {!data && <Loader2 className="my-16 mx-auto h-8 w-8 animate-spin text-[#FF5C00]" />}
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                  {groups.map((g) => <TenantTile key={g.tenant_id} g={g} credit={creditOf(credits, g.tenant_id, g.currency)} onOpen={(x) => setSelId(x.tenant_id)} onRemind={setReminding} />)}
-                </div>
-                {data && groups.length === 0 && <p className="py-16 text-center font-semibold text-slate-500" data-testid="kiosk-inv-empty">Geen facturen gevonden</p>}
+              <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 mb-3">
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                <input value={q} onChange={(event) => setQ(event.target.value)}
+                  placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
+                {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="h-4 w-4 text-slate-400" /></button>}
+              </label>
+              <div className="mb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
+              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
+                {error && data && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+                {!data && !error && <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" />}
+                {groups.map((group) => (
+                  <TenantTile key={group.tenant_id} g={group} credit={creditOf(credits, group.tenant_id, group.currency)}
+                    onOpen={(value) => setSelId(value.tenant_id)} onRemind={setReminding} />
+                ))}
+                {data && !error && groups.length === 0 && (
+                  <p className="rounded-2xl bg-slate-50 py-12 text-center text-sm font-semibold text-slate-500" data-testid="kiosk-inv-empty">
+                    Geen facturen gevonden.
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-        </main>
-      </div>
-      {creating && <InvoiceForm tenants={tenants} onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
+            </section>
+          </>
+        )}
+      </main>
+      {quickPay && <QuickPayModal invoice={quickPay.inv} tenantName={quickPay.group.tenant_name}
+        tenantPhone={quickPay.group.tenant_phone || ''} otherOpenInvoices={quickPay.group.open.filter((inv) => inv.id !== quickPay.inv.id)}
+        onClose={() => setQuickPay(null)} onSuccess={() => { setQuickPay(null); load(); }} />}
       {reminding && <ReminderModal group={reminding} onClose={() => setReminding(null)} onSent={() => setReminding(null)} />}
     </div>
   );
