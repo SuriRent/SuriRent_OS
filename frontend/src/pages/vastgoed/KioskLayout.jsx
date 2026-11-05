@@ -44,6 +44,7 @@ import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
+import useVisualViewportPosition from '../../lib/use-visual-viewport-position';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
 import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMenu';
 import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
@@ -74,56 +75,6 @@ function useKioskLiveRefresh(refresh) {
     };
   }, []);
 }
-
-// Hook: tracked `visualViewport` (iOS/Android). Retourneert de huidige
-// hoogte + offsetTop van de VISUELE viewport (het gebied dat niet door
-// het toetsenbord wordt bedekt). Modals die deze waardes als `top` +
-// `height` gebruiken krimpen automatisch mee met een openend keyboard
-// zonder dat iOS de hele pagina omhoog scrollt om de focus-input in
-// zicht te brengen.
-function useVisualViewport() {
-  const [vv, setVV] = useState(() => ({
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
-    top: 0,
-    layoutH: typeof window !== 'undefined' ? window.innerHeight : 0,
-  }));
-  useEffect(() => {
-    const vp = typeof window !== 'undefined' ? window.visualViewport : null;
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      const next = {
-        height: Math.round(vp ? vp.height : window.innerHeight),
-        top: Math.round(vp ? vp.offsetTop || 0 : 0),
-        layoutH: Math.round(window.innerHeight),
-      };
-      setVV((current) => current.height === next.height && current.top === next.top && current.layoutH === next.layoutH
-        ? current : next);
-      // Reset window-scroll → voorkomt dat iOS de layout viewport omhoog
-      // scrollt om een focus-input onder het toetsenbord te onthullen.
-      if (window.scrollY !== 0) window.scrollTo(0, 0);
-    };
-    const scheduleUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(update);
-    };
-    scheduleUpdate();
-    if (vp) {
-      vp.addEventListener('resize', scheduleUpdate);
-      vp.addEventListener('scroll', scheduleUpdate);
-    }
-    window.addEventListener('resize', scheduleUpdate);
-    return () => {
-      if (vp) {
-        vp.removeEventListener('resize', scheduleUpdate);
-        vp.removeEventListener('scroll', scheduleUpdate);
-      }
-      window.removeEventListener('resize', scheduleUpdate);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, []);
-  return vv;
-}
-
 
 const variants = {
   enter: { opacity: 0, x: 60 },
@@ -4144,32 +4095,11 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
-  const overlayRef = useRef(null);
+  const sheetRef = useRef(null);
   const descInputRef = useRef(null);
+  useVisualViewportPosition(sheetRef);
 
-  // ===== iOS-safe modal positioning =====
-  // Probleem: op iPhone Safari schuift bij openen van het toetsenbord de
-  // hele pagina omhoog (iOS' "scroll input into view" gedrag). Bij een
-  // `position:fixed inset-0` modal betekent dit dat de top van de modal
-  // BOVEN de statusbalk uit-schuift → content overlapt met de tijd/notch.
-  //
-  // Oplossing = 2 dingen combineren:
-  //   1. Body scroll lock met scroll-restore → iOS heeft niks meer om
-  //      omhoog te scrollen dus de fixed modal blijft op zijn plek.
-  //   2. visualViewport tracking → als iOS toch alsnog de layout aanpast
-  //      (bv. na een oriëntatie-wissel met keyboard open), volgen we mee.
-  //
-  // Android heeft dit probleem niet omdat Chrome's `interactive-widget=
-  // resizes-content` gewoon de layout viewport schrimpt zonder scroll.
   useEffect(() => {
-    const el = overlayRef.current;
-    if (!el) return undefined;
-    const vv = window.visualViewport;
-
-    // ---- Stap 1: scroll-lock zonder layout-jitter ----
-    // Alleen `overflow: hidden` op html+body — geen body.position=fixed
-    // meer omdat dat op iOS PWA een layout-jump veroorzaakt bij sluiten
-    // (de menubalk verspringt dan naar boven).
     const body = document.body;
     const html = document.documentElement;
     const saved = {
@@ -4181,59 +4111,6 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
     body.style.overscrollBehavior = 'contain';
     html.style.overflow = 'hidden';
 
-    // ---- Stap 2: modal hoogte + positie op visualViewport ----
-    // Modal STRECHT altijd van top:0 tot bottom:0 (volledig scherm) zodat
-    // je NOOIT de donkere overlay of oranje Kiosk-background door de
-    // safe-area randen ziet. De safe-area padding zit op de INNER-modal
-    // (header/footer) — het WITTE oppervlak reikt tot de schermbodem en
-    // -bovenkant.
-    // Met keyboard: expliciete height = zichtbare viewport zodat de
-    // Opslaan-knop boven het keyboard blijft.
-    // Hysteresis om flicker te voorkomen: pas terug naar "gesloten" pas
-    // als het verschil <60px is (opent bij >120px). Zonder deze buffer
-    // schommelt iOS soms rond de drempel tijdens de keyboard-animatie.
-    let lastKbdState = false;
-    const apply = () => {
-      const winH = window.innerHeight;
-      const vvH = vv ? vv.height : winH;
-      const diff = vv ? (winH - vvH) : 0;
-      let kbdOpen = lastKbdState;
-      if (!lastKbdState && diff > 120) kbdOpen = true;
-      else if (lastKbdState && diff < 60) kbdOpen = false;
-      lastKbdState = kbdOpen;
-      if (kbdOpen) {
-        el.style.bottom = 'auto';
-        el.style.height = `${vvH}px`;
-        el.style.top = `${vv.offsetTop}px`;
-        el.style.left = `${vv.offsetLeft}px`;
-        el.style.width = `${vv.width}px`;
-      } else {
-        el.style.top = '0px';
-        el.style.bottom = '0px';
-        el.style.height = 'auto';
-        el.style.left = '0px';
-        el.style.width = '100%';
-      }
-    };
-    apply();
-    const applyRAF = () => requestAnimationFrame(apply);
-    if (vv) {
-      vv.addEventListener('resize', applyRAF);
-      vv.addEventListener('scroll', applyRAF);
-    }
-    window.addEventListener('resize', applyRAF);
-    window.addEventListener('orientationchange', applyRAF);
-    // Focus/blur events triggeren opnieuw omdat iOS het keyboard-effect
-    // niet direct via `resize` doorgeeft.
-    const onFocusIn = () => { setTimeout(apply, 50); setTimeout(apply, 300); };
-    const onFocusOut = () => { setTimeout(apply, 50); setTimeout(apply, 300); };
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-
-    // Extra vangnet: als iOS ondanks body-lock TOCH nog de window probeert
-    // te scrollen (soms bij snelle input-focus events), duwen we 'em direct
-    // terug naar 0. Zonder deze safety-net kan de modal na een halve
-    // seconde alsnog over de statusbalk uitschuiven.
     const onWindowScroll = () => {
       if (window.scrollY !== 0 || window.pageYOffset !== 0) {
         window.scrollTo(0, 0);
@@ -4246,14 +4123,6 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
       body.style.overflow = saved.bodyOverflow;
       body.style.overscrollBehavior = saved.bodyOverscroll;
       html.style.overflow = saved.htmlOverflow;
-      if (vv) {
-        vv.removeEventListener('resize', applyRAF);
-        vv.removeEventListener('scroll', applyRAF);
-      }
-      window.removeEventListener('resize', applyRAF);
-      window.removeEventListener('orientationchange', applyRAF);
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
       window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
@@ -4291,15 +4160,11 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
     : 'border-slate-200 text-slate-300 bg-slate-50';
 
   return createPortal((
-    <div ref={overlayRef}
+    <div
       onClick={saved ? onSaved : onClose}
-      className="fixed z-[120] bg-black/60 backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
-      style={{
-        // Fallback vóór useEffect draait — daarna neemt JS het over
-        top: 0, left: 0, width: '100vw', height: '100dvh',
-      }}
+      className="keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/60 sm:backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
       data-testid="kasgeld-overlay">
-      <div onClick={(e) => e.stopPropagation()}
+      <div ref={sheetRef} onClick={(e) => e.stopPropagation()}
         className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
         data-testid="kasgeld-form">
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
@@ -5111,34 +4976,16 @@ function TenantInfoModal({ apartment, mode, onClose }) {
 
 function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
   const [host, setHost] = useState(null);
-  // Track visualViewport zodat de modal automatisch mee-krimpt met het
-  // toetsenbord op iOS/Android. Zonder deze tracking scrollt iOS de
-  // hele pagina omhoog om een focus-input onder het keyboard vandaan
-  // te halen → header verdwijnt uit beeld en form voelt onstabiel.
-  // Met visualViewport-sized modal blijft alles op zijn plek — alleen
-  // de scrollbare body verkort, header en footer zichtbaar boven het
-  // keyboard.
-  const vv = useVisualViewport();
+  const modalRef = useRef(null);
+  useVisualViewportPosition(modalRef);
   const { theme } = useContext(KioskThemeCtx);
-  // Op mobiel: forceer top/height op basis van visualViewport (blijft
-  // altijd binnen zichtbaar gebied). Op desktop (sm+) valt CSS terug op
-  // `inset-0` + centreren via classes. Extra `paddingBottom` reserveert
-  // ruimte voor de vaste 60px + safe-area FAB balk zodat modal-content
-  // (footer/save-knop) niet achter de FAB verdwijnt.
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-  const mobileStyle = isMobile ? {
-    top: `${vv.top}px`,
-    height: `${vv.height}px`,
-    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-  } : {};
   return createPortal((
     <div
-      className={`fixed left-0 right-0 z-[115] bg-white sm:bg-black/50 sm:backdrop-blur-md sm:inset-0 flex flex-col sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
-      style={mobileStyle}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : ''}`}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div onClick={(e) => e.stopPropagation()} 
-        className={`w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden`}
+      <div ref={modalRef} onClick={(e) => e.stopPropagation()}
+        className={`absolute inset-x-0 top-0 w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden sm:static sm:inset-auto`}
         data-testid={`${testId}-form`}>
         <ModalHostContext.Provider value={tall ? host : null}>
         {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
@@ -5594,19 +5441,7 @@ function SheetThemeButton() {
 }
 
 function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
-  // visualViewport-tracking → sheet krimpt mee met keyboard (hoewel dit
-  // sheet zelf geen inputs heeft, blijft consistentie belangrijk voor
-  // toekomstige uitbreidingen en zorgt het dat de sheet nooit onder de
-  // FAB doorschuift). Geen body-scroll-lock — die veroorzaakt een
-  // "sprong" op iOS wat lijkt op een menubalk die omhoog schuift.
-  const vv = useVisualViewport();
   const { theme } = useContext(KioskThemeCtx);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-  const mobileStyle = isMobile ? {
-    top: `${vv.top}px`,
-    height: `${vv.height}px`,
-    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-  } : {};
   // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
   // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
   // knopbalk gerenderd, NIET als cards.
@@ -5629,8 +5464,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   }, [onClose]);
   return createPortal((
     <div
-      className={`fixed left-0 right-0 z-[120] bg-orange-500 sm:inset-0 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
-      style={mobileStyle}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] bg-orange-500 flex flex-col animate-in fade-in duration-150 ${theme === 'white' ? 'kiosk-sheet-white' : ''}`}
       data-testid="kiosk-add-sheet-overlay">
       {/* Header — matcht Kiosk-huisstijl (oranje bg, wit) */}
       <div className="flex-none flex items-center justify-between px-4"
