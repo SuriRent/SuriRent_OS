@@ -531,7 +531,7 @@ export default function KioskInvoicesPage({ onBack }) {
                 </div>
                 <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{groups.length} huurders</span>
               </div>
-              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" role="tablist" aria-label="Factuurstatus">
+              <div className="mb-2 hidden gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:flex sm:gap-2 sm:pb-1" role="tablist" aria-label="Factuurstatus">
                 {TABS.map((filter) => (
                   <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}
                     onClick={() => setTab(filter.v)} data-testid={`kiosk-inv-tab-${filter.v}`}
@@ -550,7 +550,7 @@ export default function KioskInvoicesPage({ onBack }) {
                 {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen" className="absolute right-3 top-1/2 -translate-y-1/2"><X className="h-4 w-4 text-slate-400" /></button>}
               </label>
               <div className="mb-2 sm:mb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
-              <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 sm:space-y-2">
+              <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 pb-14 sm:space-y-2 md:pb-0">
                 {error && data && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
                 {!data && !error && <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" />}
                 {groups.map((group) => (

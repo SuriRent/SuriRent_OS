@@ -6603,14 +6603,14 @@ export default function KioskLayout() {
 
       {/* Mobile "+" FAB — kiosk-medewerker opent dezelfde quick-add bottom-
           sheet die normaal via de desktop-balk bereikbaar is (Huurder, Appt.,
-          Locatie, Contract, Factuur, Betalingen, Onderhoud). Alleen zichtbaar
-          op mobiel (`md:hidden`) en op het apartment-select scherm. Vorige
+          Locatie, Contract, Factuur, Betalingen, Onderhoud). Zichtbaar
+          op mobiel in het apartment-select scherm en Facturen. Vorige
           iOS-PWA viewport-drift bug is opgelost door de FAB via createPortal
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {step === 'select' && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {step === 'select' && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {(step === 'select' || step === 'admin:facturen') && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
+      {(step === 'select' || step === 'admin:facturen') && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
