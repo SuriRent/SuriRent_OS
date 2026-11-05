@@ -3351,14 +3351,13 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel({ onBack }) {
+function KasgeldPanel() {
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const operator = getKioskEmployee();
   const { isAdmin } = useContext(KioskThemeCtx);
   const role = useAdminRole(isAdmin);
   const canManage = role === 'admin' || role === 'superadmin';
@@ -3456,61 +3455,46 @@ function KasgeldPanel({ onBack }) {
   return (
     <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
       style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
-      {/* Oranje header — Terug links, operator-context rechts (zelfde patroon
-          als TenantOverview "Financieel overzicht") */}
-      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2 shrink-0">
-        <button onClick={onBack} data-testid="kasgeld-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 active:scale-95 transition">
-          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <div className="text-right text-white">
-          <p className="text-xs sm:text-sm font-semibold" data-testid="kasgeld-operator-name">
-            {operator?.name || 'Kiosk'}
-          </p>
-          <p className="text-[10px] sm:text-xs opacity-70">Kasgeldbeheer</p>
-        </div>
-      </div>
-
       {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
-        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
-          <div className="row-label-value items-center mb-4">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
+        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
+          <div className="row-label-value items-center mb-2 sm:mb-4">
+            <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl px-2.5 py-2">
                 <Calendar className="w-3.5 h-3.5" /> Maand
               </span>
               <button onClick={() => setShowMonthPicker(true)} data-testid="kasgeld-month-picker"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-2.5 py-2 hover:border-slate-300 active:scale-95 transition">
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-2 py-1.5 hover:border-slate-300 active:scale-95 transition sm:gap-1.5 sm:px-2.5 sm:py-2 sm:text-xs">
                 <span className="capitalize">{selectedLabel}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Totaal saldo — orange tile + big SRD amount */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
-              <Wallet className="w-7 h-7" strokeWidth={2.2} />
+          <div className="flex items-center gap-2 mb-2 sm:gap-4 sm:mb-4">
+            <div className="w-9 h-9 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
+              <Wallet className="w-5 h-5 sm:w-7 sm:h-7" strokeWidth={2.2} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-slate-500">Totaal kasgeld</p>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-tight truncate" data-testid="kasgeld-total-srd">
+              <p className="text-[11px] sm:text-sm font-semibold text-slate-500">Totaal kasgeld</p>
+              <p className="text-lg sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-tight truncate" data-testid="kasgeld-total-srd">
                 {fmtMoney(srdBalance, 'SRD')}
               </p>
             </div>
           </div>
 
           {/* 3-currency grid */}
-          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-5" data-testid="kasgeld-currency-grid">
+          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-2 sm:mb-5" data-testid="kasgeld-currency-grid">
             {['SRD', 'USD', 'EUR'].map((cur) => (
-              <div key={cur} className="px-2 py-3 text-center min-w-0" data-testid={`kasgeld-bal-${cur}`}>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{cur}</p>
-                <p className="text-sm sm:text-base font-black text-slate-900 mt-0.5 tabular-nums leading-tight truncate">
+              <div key={cur} className="px-1 py-1.5 sm:px-2 sm:py-3 text-center min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+                <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">{cur}</p>
+                <p className="text-xs sm:text-base font-black text-slate-900 mt-0.5 tabular-nums leading-tight truncate">
                   {Number(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
@@ -3518,8 +3502,8 @@ function KasgeldPanel({ onBack }) {
           </div>
 
           <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-            className="w-full h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
-            <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
+            className="w-full h-10 sm:h-14 rounded-xl sm:rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs sm:text-base inline-flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+            <Wallet className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} /> Nieuwe mutatie
           </button>
         </div>
 
@@ -3557,7 +3541,7 @@ function KasgeldPanel({ onBack }) {
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1 pb-14 md:pb-0">
             {monthGroups.map((g) => {
               const isOpen = expandedMonths.has(g.key);
               const isSelected = g.key === selectedMonth;
@@ -6233,7 +6217,14 @@ export default function KioskLayout() {
     h.i += d;
     applyEntry(e);
   };
-  const canBack = (step === 'select' && hasLocationSelection && !popupKey)
+  const goBack = () => {
+    if (step === 'kasgeld') {
+      setStep('select');
+      return;
+    }
+    goHist(-1);
+  };
+  const canBack = step === 'kasgeld' || (step === 'select' && hasLocationSelection && !popupKey)
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
@@ -6479,7 +6470,7 @@ export default function KioskLayout() {
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}
           {step === 'kasgeld' && (
-            <KasgeldPanel onBack={() => setStep('select')} />
+            <KasgeldPanel />
           )}
           {step === 'stroom' && hasAdminAccess && (
             <div className="h-full overflow-y-auto bg-orange-500" data-testid="kiosk-stroom">
@@ -6609,8 +6600,8 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {['select', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {['select', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
+      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
@@ -6626,7 +6617,7 @@ export default function KioskLayout() {
           <nav data-testid="kiosk-mobile-bottom-bar"
             className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
-            <button type="button" onClick={() => goHist(-1)} disabled={!canBack} data-testid="kiosk-mobile-bar-back"
+            <button type="button" onClick={goBack} disabled={!canBack} data-testid="kiosk-mobile-bar-back"
               className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isWhite ? 'text-slate-700' : 'text-white'}`}>
               <ChevronLeft className="w-6 h-6" strokeWidth={2.4} />
               <span className="text-xs font-bold leading-none">Terug</span>
