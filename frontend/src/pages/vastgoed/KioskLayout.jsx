@@ -5785,6 +5785,14 @@ export default function KioskLayout() {
     return ['orange', 'white', 'green'].includes(stored) ? stored : 'orange';
   });
   useEffect(() => {
+    const root = document.documentElement;
+    const isAndroid = /Android/i.test(navigator.userAgent || '');
+    if (isAndroid) root.classList.add('kiosk-android-device');
+    return () => {
+      if (isAndroid) root.classList.remove('kiosk-android-device');
+    };
+  }, []);
+  useEffect(() => {
     const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);

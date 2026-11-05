@@ -1230,12 +1230,12 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     line-height: 1.2;
   }
 
-  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
+  html.kiosk-android-device :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
   }
 
-  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] {
+  html.kiosk-android-device :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] {
     min-width: 0;
     min-height: 6rem;
     padding: 0.75rem 0.5rem;
@@ -1243,13 +1243,13 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     border-radius: 1rem;
   }
 
-  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:first-child {
+  html.kiosk-android-device :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:first-child {
     width: 2.75rem;
     height: 2.75rem;
     border-radius: 0.875rem;
   }
 
-  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:last-child {
+  html.kiosk-android-device :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:last-child {
     max-width: 100%;
     font-size: 0.8125rem;
     line-height: 1.125rem;
@@ -1357,7 +1357,7 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 }
 
 @media (min-width: 421px) and (max-width: 767px) {
-  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
+  html.kiosk-android-device :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
