@@ -4976,7 +4976,7 @@ function TenantInfoModal({ apartment, mode, onClose }) {
   );
 }
 
-function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
+function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
   const [host, setHost] = useState(null);
   const modalRef = useRef(null);
   useVisualViewportPosition(modalRef);
@@ -4990,19 +4990,21 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
         className={`absolute inset-x-0 top-0 w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden sm:static sm:inset-auto`}
         data-testid={`${testId}-form`}>
         <ModalHostContext.Provider value={tall ? host : null}>
-        {/* Header — oranje op mobiel (Kiosk-huisstijl), wit op desktop */}
-        <div className="kiosk-modal-head flex-none flex items-center justify-between px-4 sm:px-5 pb-3 sm:pb-3 bg-orange-500 sm:bg-white border-b border-orange-600 sm:border-slate-100"
+        <div className="kiosk-modal-head flex-none flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-orange-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center">
-              <Icon className="w-5 h-5 text-white sm:text-orange-600" />
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+              <Icon className="w-7 h-7 text-orange-600" strokeWidth={2.5} />
             </div>
-            <h3 className="text-lg font-black text-white sm:text-slate-900"
-              data-testid={`${testId}-title`}>{title}</h3>
+            <div className="min-w-0">
+              <h3 className="text-xl font-black leading-tight text-slate-900"
+                data-testid={`${testId}-title`}>{title}</h3>
+              <p className="mt-1 text-sm leading-tight text-slate-500">{subtitle}</p>
+            </div>
           </div>
           <button onClick={onClose} data-testid={`${testId}-close`}
-            className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl sm:rounded-lg bg-white/20 sm:bg-transparent sm:hover:bg-slate-100 backdrop-blur-sm sm:backdrop-blur-none flex items-center justify-center active:bg-white/30">
-            <X className="w-6 h-6 sm:w-5 sm:h-5 text-white sm:text-slate-500" strokeWidth={2.5} />
+            className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-7 h-7 text-slate-700" strokeWidth={2.5} />
           </button>
         </div>
         <div ref={tall ? setHost : undefined} data-kiosk-host={tall ? '' : undefined} style={tall ? { transform: 'translateZ(0)' } : undefined} className="relative flex-1 min-h-0 flex flex-col">
@@ -5014,7 +5016,7 @@ function KioskModalShell({ title, Icon, testId, onClose, children, footer, wide 
           {typeof children === 'function' ? children({ accent: 'focus:border-orange-500' }) : children}
         </div>
         {footer && (
-          <div className="flex-none border-t border-slate-100 px-5 py-3 bg-white"
+          <div className="kiosk-modal-footer flex-none border-t border-slate-100 px-5 py-3 bg-white"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {footer}
           </div>
@@ -6260,12 +6262,14 @@ export default function KioskLayout() {
               onExit={exit} />
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (
-            <KioskApartmentsPanel
-              onBack={() => setStep('select')}
-              onNewApartment={() => setShowAddApartment(true)}
-              reloadKey={apartmentsReloadKey}
-              onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
-            />
+            <div className="h-full min-h-0 kiosk-admin-skin">
+              <KioskApartmentsPanel
+                onBack={() => setStep('select')}
+                onNewApartment={() => setShowAddApartment(true)}
+                reloadKey={apartmentsReloadKey}
+                onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
+              />
+            </div>
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
             <KioskAdminPage id="huurders" kioskLayout onBack={() => setStep('select')} />
@@ -6293,7 +6297,7 @@ export default function KioskLayout() {
             <KasgeldPanel />
           )}
           {step === 'stroom' && hasAdminAccess && (
-            <div className="h-full overflow-y-auto bg-orange-500" data-testid="kiosk-stroom">
+            <div className="h-full overflow-y-auto bg-orange-500 kiosk-admin-skin" data-testid="kiosk-stroom">
               <PowerControl kiosk orangeMode={!isWhite} />
             </div>
           )}

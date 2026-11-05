@@ -79,7 +79,7 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
 KeyboardSafeModal.Header = function KsmHeader({ children, className = '' }) {
   return (
     <div
-      className={`shrink-0 px-6 sm:px-8 pb-3 bg-white ${className}`}
+      className={`ksm-header shrink-0 px-5 sm:px-8 pb-4 border-b border-slate-100 bg-white ${className}`}
       style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
       {children}
     </div>
@@ -90,7 +90,7 @@ KeyboardSafeModal.Header = function KsmHeader({ children, className = '' }) {
  *  dan viewport (of wanneer toetsenbord opent). */
 KeyboardSafeModal.Body = function KsmBody({ children, className = '' }) {
   return (
-    <div className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 sm:px-8 pb-3 ${className}`}>
+    <div className={`ksm-body flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-8 py-4 ${className}`}>
       {children}
     </div>
   );
@@ -100,7 +100,7 @@ KeyboardSafeModal.Body = function KsmBody({ children, className = '' }) {
 KeyboardSafeModal.Footer = function KsmFooter({ children, className = '' }) {
   return (
     <div
-      className={`shrink-0 border-t border-slate-100 bg-white px-6 sm:px-8 py-3 ${className}`}
+      className={`ksm-footer shrink-0 border-t border-slate-100 bg-white px-5 sm:px-8 py-3 ${className}`}
       style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
       {children}
     </div>

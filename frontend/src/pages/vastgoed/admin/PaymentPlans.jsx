@@ -3,7 +3,7 @@ import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/K
 import { ModalHostContext } from '../../../components/KeyboardSafeModal';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
-import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText, Search } from 'lucide-react';
+import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText, Search, CalendarClock } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { playApproveConfirm, playSwoosh, playErrorBuzz } from '../../../lib/tap-sounds';
 import { useSWRConfig } from 'swr';
@@ -448,11 +448,21 @@ function CreatePlanSheet({ onClose, onCreated }) {
       <div onClick={(e) => e.stopPropagation()}
         className={hosted ? 'w-full h-full bg-white overflow-y-auto' : 'w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto'}
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}>
-        <div className="p-6">
-          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4 sm:hidden" />
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-black text-slate-900">Nieuwe betalingsregeling</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+        <div className="p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+                <CalendarClock className="w-7 h-7 text-orange-600" strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-black leading-tight text-slate-900">Nieuwe betalingsregeling</h2>
+                <p className="mt-1 text-sm leading-tight text-slate-500">Kies de facturen en stel termijnen in</p>
+              </div>
+            </div>
+            <button onClick={onClose} aria-label="Sluiten"
+              className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+              <X className="w-7 h-7 text-slate-700" />
+            </button>
           </div>
 
           {/* Huurder selectie */}

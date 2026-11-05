@@ -15,7 +15,7 @@ const NEW = {
   werknemers: { label: 'Nieuw toevoegen', event: 'kiosk-emp-new' },
 };
 
-// Beheer-pagina's als popup in exact dezelfde opmaak als Facturen.
+// Beheer-pagina's als popup met gedeelde kiosk-styling.
 export function KioskAdminPopup({ id, Shell, onClose }) {
   const inst = id.startsWith('inst-') ? INSTELLINGEN_SECTIONS.find((x) => x.id === id.slice(5)) : null;
   const { Page, label, Icon } = inst

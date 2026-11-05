@@ -40,7 +40,9 @@ export function KioskAdminPage({ id, onBack, kioskLayout = false }) {
   if (kioskLayout) {
     return (
       <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
-        <Page kioskLayout onBack={onBack} />
+        <div className="h-full min-h-0 kiosk-admin-skin">
+          <Page kioskLayout onBack={onBack} />
+        </div>
       </Suspense>
     );
   }
