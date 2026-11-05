@@ -883,3 +883,94 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-footer > button {
   min-height: 3.5rem; height: auto; border-radius: 1rem; font-size: 1rem;
 }
+
+/* Compacte mobiele bediening zoals de Kasgeld-weergave. */
+@media (max-width: 767px) {
+  .kiosk-admin-skin { font-size: 14px; }
+  .kiosk-admin-skin h1 { font-size: 1.125rem !important; line-height: 1.5rem !important; }
+  .kiosk-admin-skin :is(h2, h3) { font-size: 1rem; line-height: 1.375rem; }
+  .kiosk-admin-skin button { min-height: 2.25rem; }
+  .kiosk-admin-skin button[class*="bg-[#FF5C00]"],
+  .kiosk-admin-skin button[class*="bg-orange-500"] {
+    min-height: 2.75rem; padding-left: 0.75rem; padding-right: 0.75rem;
+    border-radius: 0.75rem; font-size: 0.875rem; box-shadow: none;
+  }
+  .kiosk-admin-skin input:not([type="checkbox"]):not([type="radio"]),
+  .kiosk-admin-skin select { min-height: 2.75rem; font-size: 0.875rem; border-radius: 0.75rem; }
+  .kiosk-admin-skin [data-testid$="-filter-bar"] > button {
+    min-height: 2.25rem; padding: 0.375rem 0.625rem; font-size: 0.75rem;
+  }
+
+  .kiosk-popup-active .kiosk-fx { font-size: 14px; }
+  .kiosk-popup-active .kiosk-fx h1 { font-size: 1.125rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx :is(h2, h3) { font-size: 1rem; line-height: 1.375rem; }
+  .kiosk-popup-active .kiosk-fx :is(.text-xl, .text-2xl, .text-3xl) { font-size: 1rem; line-height: 1.5rem; }
+  .kiosk-popup-active .kiosk-fx [data-testid$="-filter-bar"] > button {
+    min-height: 2.25rem; padding-left: 0.625rem; padding-right: 0.625rem; font-size: 0.75rem;
+  }
+  .kiosk-popup-active .kiosk-fx button[class*="bg-[#FF5C00]"]:not([data-testid$="-filter-bar"] > button) {
+    min-height: 2.75rem; font-size: 0.875rem; box-shadow: none;
+  }
+  .kiosk-popup-active .kiosk-fx .bg-white:is([data-testid*="-row-"], [data-testid*="-card-"]) { padding: 0.625rem 0.75rem; }
+  .kiosk-popup-active .kiosk-fx [data-testid*="-row-"] :is(.text-base, .text-lg, .text-xl, .text-2xl),
+  .kiosk-popup-active .kiosk-fx [data-testid*="-row-"] p.font-black,
+  .kiosk-popup-active .kiosk-fx [data-testid*="-card-"] p.font-black { font-size: 0.875rem; line-height: 1.25rem; }
+  .kiosk-popup-active .kiosk-fx :is([data-testid*="-row-"], [data-testid*="-card-"]) :is(button, a):is(.w-8, .w-9) {
+    width: 2.25rem; height: 2.25rem;
+  }
+
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-header { padding: 0.75rem 1rem; }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-header h3 {
+    font-size: 1rem; line-height: 1.375rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-header button {
+    width: 2.5rem; height: 2.5rem; min-width: 2.5rem; min-height: 2.5rem; border-radius: 0.75rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-header button svg {
+    width: 1.25rem; height: 1.25rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body { padding: 0.75rem 1rem; }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-height: 2.75rem; height: 2.75rem; border-radius: 0.75rem; padding-left: 0.75rem; padding-right: 0.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body textarea { min-height: 4rem; height: auto; }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body button { min-height: 2.5rem; }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body button[class*="bg-[#FF5C00]"],
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-body button[class*="bg-orange-500"] {
+    min-height: 2.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-footer { padding: 0.625rem 1rem; }
+  body:is(.kiosk-mode, .kiosk-admin-active, .kiosk-popup-active) .kiosk-form .ksm-footer > button {
+    min-height: 2.75rem; border-radius: 0.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-height: 2.75rem; height: 2.75rem; border-radius: 0.75rem;
+    padding-left: 0.75rem; padding-right: 0.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form textarea { min-height: 4rem; height: auto; }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button { min-height: 2.5rem; }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button[class*="bg-[#FF5C00]"],
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form button[class*="bg-orange-500"] {
+    min-height: 2.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-head button {
+    width: 2.5rem; height: 2.5rem; min-height: 2.5rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-head button svg {
+    width: 1.25rem; height: 1.25rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-form .kiosk-modal-footer > button {
+    min-height: 2.75rem; border-radius: 0.75rem; font-size: 0.875rem;
+  }
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-modal-footer > button[class*="bg-[#FF5C00]"],
+  body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-modal-footer > button[class*="bg-orange-500"] {
+    min-height: 2.75rem; font-size: 0.875rem;
+  }
+  body.kiosk-popup-active [data-testid="create-plan-sheet"] input:not([type="checkbox"]):not([type="radio"]),
+  body.kiosk-popup-active [data-testid="create-plan-sheet"] select,
+  body.kiosk-popup-active [data-testid="create-plan-sheet"] textarea,
+  body.kiosk-popup-active [data-testid="create-plan-sheet"] [data-testid^="plan-inv-"],
+  body.kiosk-popup-active [data-testid="create-plan-sheet"] [data-testid="plan-create-submit"] {
+    min-height: 2.75rem; border-radius: 0.75rem; font-size: 0.875rem;
+  }
+}
