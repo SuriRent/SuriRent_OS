@@ -147,29 +147,31 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-          <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+          <section className="kiosk-admin-summary bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
             data-testid="plans-summary">
-            <div className="row-label-value items-center mb-2 sm:mb-4">
+            <div className="kiosk-admin-summary-heading row-label-value items-center mb-2 sm:mb-4">
               <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Betalingsregelingen</h2>
               <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-[#FF5C00]" />
             </div>
-            <div className="rounded-2xl bg-orange-50 p-2.5 sm:p-4">
-              <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal resterend</p>
-              <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
-                data-testid="plans-remaining-total">{fmtMoney(remaining, plans[0]?.currency)}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
-              <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
-                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Regelingen</p>
-                <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="plans-count">{plans.length}</p>
+            <div className="kiosk-plans-stats">
+              <div className="rounded-2xl bg-orange-50 p-2.5 sm:p-4">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal resterend</p>
+                <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
+                  data-testid="plans-remaining-total">{fmtMoney(remaining, plans[0]?.currency)}</p>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
-                <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstallig</p>
-                <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="plans-overdue-count">{overdue}</p>
+              <div className="kiosk-plans-secondary-stats grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+                <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Regelingen</p>
+                  <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="plans-count">{plans.length}</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstallig</p>
+                  <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="plans-overdue-count">{overdue}</p>
+                </div>
               </div>
             </div>
             <button onClick={() => setCreating(true)} data-testid="plan-new-btn"
-              className="mt-2 w-full min-h-10 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs inline-flex items-center justify-center gap-1.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition sm:mt-4 sm:min-h-14 sm:rounded-2xl sm:gap-2 sm:text-base">
+              className="kiosk-admin-summary-action mt-2 w-full min-h-10 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-xs inline-flex items-center justify-center gap-1.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition sm:mt-4 sm:min-h-14 sm:rounded-2xl sm:gap-2 sm:text-base">
               <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Nieuwe regeling
             </button>
             {onBack && (
@@ -180,7 +182,7 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
             )}
           </section>
 
-          <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
+          <section className="kiosk-admin-list flex-1 min-h-0 bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
             data-testid="plans-recent">
             <div className="row-label-value items-center mb-2 sm:mb-3">
               <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">Regelingen</h3>

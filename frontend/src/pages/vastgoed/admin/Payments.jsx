@@ -1159,9 +1159,9 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
-            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+            <section className="kiosk-admin-summary bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
               data-testid="payments-summary">
-              <div className="row-label-value items-center mb-2 sm:mb-4">
+              <div className="kiosk-admin-summary-heading row-label-value items-center mb-2 sm:mb-4">
                 <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Betalingen</h2>
                 <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-[#FF5C00]" />
               </div>
@@ -1171,32 +1171,32 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                 isCurrent={isCurrentMonth}
                 count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
 
-              <div className="mt-2 rounded-2xl bg-orange-50 p-2.5 sm:mt-4 sm:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal deze maand</p>
-                <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
-                  data-testid="payments-month-total">{fmtMoney(summary.monthSum || 0, currency)}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+              <div className="kiosk-payments-stats">
+                <div className="rounded-2xl bg-orange-50 p-2.5 sm:p-4">
+                  <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal deze maand</p>
+                  <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
+                    data-testid="payments-month-total">{fmtMoney(summary.monthSum || 0, currency)}</p>
+                </div>
+                <div className="kiosk-payments-secondary-stats grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Betalingen</p>
+                    <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="payments-month-count">
+                      {summary.monthCount || 0}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Te keuren</p>
+                    <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="payments-pending-count">
+                      {pending.length}
+                    </p>
+                  </div>
+                </div>
                 <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
-                  <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Betalingen</p>
-                  <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="payments-month-count">
-                    {summary.monthCount || 0}
+                  <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Vandaag</p>
+                  <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-lg">
+                    {fmtMoney(todaySum, currency)}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
-                  <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Te keuren</p>
-                  <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="payments-pending-count">
-                    {pending.length}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-1.5 rounded-2xl bg-slate-50 p-2 sm:mt-3 sm:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Vandaag</p>
-                <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-lg">
-                  {fmtMoney(todaySum, currency)}
-                </p>
               </div>
 
               {onBack && (
@@ -1207,7 +1207,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
               )}
             </section>
 
-            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
+            <section className="kiosk-admin-list flex-1 min-h-0 bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
               data-testid="payments-recent">
               <div className="row-label-value items-center mb-2 sm:mb-3">
                 <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">Recente betalingen</h3>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { FileSignature, Loader2, ArrowLeft, CreditCard, Users, MapPin, Home, FileText, CalendarClock, Wrench, UserCog, Bell, ShieldCheck, LayoutDashboard, Settings, Zap } from 'lucide-react';
 
 // Volledige beheer-pagina's die in de kiosk (hamburgermenu) geopend kunnen worden.
@@ -32,10 +32,16 @@ export function KioskAdminPageTile({ id, onOpen }) {
 
 export function KioskAdminPage({ id, onBack, kioskLayout = false }) {
   const { Page, custom } = KIOSK_ADMIN_PAGES[id];
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   // Vensters (portals) die vanaf deze pagina openen krijgen ook de kiosk-stijl.
   useEffect(() => {
     document.body.classList.add('kiosk-admin-active');
     return () => document.body.classList.remove('kiosk-admin-active');
+  }, []);
+  useEffect(() => {
+    const updateIsMobile = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', updateIsMobile);
+    return () => window.removeEventListener('resize', updateIsMobile);
   }, []);
   if (kioskLayout) {
     return (
@@ -62,7 +68,7 @@ export function KioskAdminPage({ id, onBack, kioskLayout = false }) {
           <ArrowLeft className="w-5 h-5" /> Terug
         </button>
         <Suspense fallback={<Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}>
-          <Page embedded={id === 'instellingen'} />
+          <Page embedded={id === 'instellingen' || (isMobile && ['onderhoud', 'werknemers', 'borg'].includes(id))} />
         </Suspense>
       </div>
       </div>

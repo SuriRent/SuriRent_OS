@@ -477,38 +477,40 @@ export default function KioskInvoicesPage({ onBack }) {
           </section>
         ) : (
           <>
-            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            <section className="kiosk-admin-summary order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
               data-testid="kiosk-inv-summary">
-              <div className="mb-1 flex items-center justify-between gap-3 sm:mb-4">
+              <div className="kiosk-admin-summary-heading mb-1 flex items-center justify-between gap-3 sm:mb-4">
                 <h1 className="text-base font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
                 <FileSignature className="h-4 w-4 text-[#FF5C00] sm:h-5 sm:w-5" />
               </div>
-              <div className="rounded-2xl bg-red-50 p-2.5 sm:p-4">
-                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal openstaand</p>
-                <p className="mt-0.5 break-words text-base font-black text-red-600 tabular-nums sm:mt-1 sm:text-2xl"
-                  data-testid="kiosk-inv-stat-open">{money(s.totalOpenAmount || 0, s.currency)}</p>
-              </div>
-              <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-3">
-                <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
-                  <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstand</p>
-                  <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="kiosk-inv-stat-late">
-                    {s.openCount || 0} <span className="text-sm font-bold text-slate-500">/ {s.allCount || 0}</span>
-                  </p>
+              <div className="kiosk-invoice-stats">
+                <div className="rounded-2xl bg-red-50 p-2.5 sm:p-4">
+                  <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal openstaand</p>
+                  <p className="mt-0.5 break-words text-base font-black text-red-600 tabular-nums sm:mt-1 sm:text-2xl"
+                    data-testid="kiosk-inv-stat-open">{money(s.totalOpenAmount || 0, s.currency)}</p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 p-2 sm:p-4">
-                  <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Verwacht {month}</p>
-                  <p className="mt-0.5 break-words text-sm font-black text-emerald-700 tabular-nums sm:mt-1 sm:text-lg"
-                    data-testid="kiosk-inv-stat-month">{money(s.thisMonthExpected || 0, s.currency)}</p>
+                <div className="kiosk-invoice-secondary-stats mt-1.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-3">
+                  <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstand</p>
+                    <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="kiosk-inv-stat-late">
+                      {s.openCount || 0} <span className="text-sm font-bold text-slate-500">/ {s.allCount || 0}</span>
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-emerald-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Verwacht {month}</p>
+                    <p className="mt-0.5 break-words text-sm font-black text-emerald-700 tabular-nums sm:mt-1 sm:text-lg"
+                      data-testid="kiosk-inv-stat-month">{money(s.thisMonthExpected || 0, s.currency)}</p>
+                  </div>
                 </div>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-1 sm:gap-2">
+              <div className="kiosk-admin-summary-actions mt-2 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-1 sm:gap-2">
                 <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-                  className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-1 text-[10px] font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:rounded-xl sm:px-3 sm:text-sm">
+                  className="kiosk-admin-summary-action inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-1 text-[10px] font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:rounded-xl sm:px-3 sm:text-sm">
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" /> : <CalendarPlus className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />} Genereer {month}
                 </button>
                 <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
                   data-testid="kiosk-inv-new"
-                  className="inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-lg bg-[#FF5C00] px-1 text-[10px] font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200] sm:h-12 sm:gap-2 sm:rounded-2xl sm:px-3 sm:text-sm">
+                  className="kiosk-admin-summary-action inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-lg bg-[#FF5C00] px-1 text-[10px] font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200] sm:h-12 sm:gap-2 sm:rounded-2xl sm:px-3 sm:text-sm">
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /> Nieuwe factuur
                 </button>
               </div>
@@ -522,7 +524,7 @@ export default function KioskInvoicesPage({ onBack }) {
               {!data && !error && <Loader2 className="mx-auto my-5 h-6 w-6 animate-spin text-[#FF5C00]" />}
             </section>
 
-            <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2 sm:p-5 md:order-1"
+            <section className="kiosk-admin-list order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2 sm:p-5 md:order-1"
               data-testid="kiosk-inv-recent">
               <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:gap-3">
                 <div className="min-w-0">

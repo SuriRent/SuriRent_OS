@@ -300,6 +300,43 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   .kiosk-admin-summary-stats > div > p:last-child { font-size: 0.9375rem; line-height: 1.25rem; }
   .kiosk-admin-summary-stats [data-testid="apartments-monthly-rent"] { font-size: 0.6875rem; line-height: 1rem; }
   .kiosk-admin-summary-action { min-height: 2.75rem; height: auto; margin: 0; }
+  .kiosk-payments-stats, .kiosk-plans-stats, .kiosk-invoice-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+  }
+  .kiosk-payments-stats > div:first-child,
+  .kiosk-plans-stats > div:first-child,
+  .kiosk-invoice-stats > div:first-child { grid-column: 1 / -1; }
+  .kiosk-payments-secondary-stats, .kiosk-plans-secondary-stats, .kiosk-invoice-secondary-stats { display: contents; }
+  .kiosk-payments-stats > div, .kiosk-plans-stats > div, .kiosk-invoice-stats > div {
+    min-width: 0; padding: 0.5rem; border-radius: 0.75rem;
+  }
+  .kiosk-payments-stats > div > p:first-child,
+  .kiosk-plans-stats > div > p:first-child,
+  .kiosk-invoice-stats > div > p:first-child {
+    overflow: hidden; font-size: 0.625rem; line-height: 0.875rem; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .kiosk-payments-stats > div > p:last-child,
+  .kiosk-plans-stats > div > p:last-child,
+  .kiosk-invoice-stats > div > p:last-child { font-size: 0.9375rem; line-height: 1.25rem; }
+  .kiosk-admin-summary-actions { gap: 0.375rem; margin-top: 0.5rem; }
+  .kiosk-admin-summary-actions .kiosk-admin-summary-action {
+    min-height: 2.5rem; padding-left: 0.375rem; padding-right: 0.375rem; font-size: 0.6875rem;
+  }
+  .kiosk-admin-summary [data-testid="month-stepper"] > div p:last-child { display: none; }
+  .kiosk-payments-secondary-stats > div,
+  .kiosk-plans-secondary-stats > div,
+  .kiosk-invoice-secondary-stats > div { min-width: 0; padding: 0.5rem; border-radius: 0.75rem; }
+  .kiosk-payments-secondary-stats > div > p:first-child,
+  .kiosk-plans-secondary-stats > div > p:first-child,
+  .kiosk-invoice-secondary-stats > div > p:first-child {
+    overflow: hidden; font-size: 0.625rem; line-height: 0.875rem; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .kiosk-payments-secondary-stats > div > p:last-child,
+  .kiosk-plans-secondary-stats > div > p:last-child,
+  .kiosk-invoice-secondary-stats > div > p:last-child { font-size: 0.9375rem; line-height: 1.25rem; }
   .kiosk-admin-list { padding: 0.625rem; }
   .kiosk-admin-list h1 { font-size: 1.125rem; line-height: 1.5rem; }
   .kiosk-admin-list [data-testid$="-filter-bar"] { gap: 0.375rem; margin-bottom: 0.375rem; }
@@ -315,6 +352,23 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   .kiosk-admin-list [data-testid^="apartment-row-"] { min-height: 3.75rem; padding: 0.375rem 0.5rem; }
   .kiosk-admin-list [data-testid^="apartment-row-"] > img,
   .kiosk-admin-list [data-testid^="apartment-row-"] > div:first-child { width: 2.25rem; height: 2.25rem; }
+  .kiosk-admin-skin [data-testid$="-filter-bar"] { gap: 0.375rem; }
+  .kiosk-admin-skin [data-testid$="-filter-bar"] > button { min-height: 2.25rem; padding: 0.375rem 0.625rem; }
+  .kiosk-admin-skin [data-testid="maint-fx-stats"] > div,
+  .kiosk-admin-skin [data-testid="emp-fx-stats"] > div,
+  .kiosk-admin-skin [data-testid="dep-fx-stats"] > div { padding: 0.5rem; }
+  .kiosk-admin-skin [data-testid^="maint-card-"],
+  .kiosk-admin-skin [data-testid^="emp-card-"],
+  .kiosk-admin-skin [data-testid^="sal-row-"],
+  .kiosk-admin-skin [data-testid^="dep-row-"] { gap: 0.375rem; padding: 0.5rem 0.625rem; }
+  .kiosk-admin-skin [data-testid^="maint-card-"] > div:last-child button,
+  .kiosk-admin-skin [data-testid^="emp-card-"] > div:last-child button,
+  .kiosk-admin-skin [data-testid^="sal-row-"] > div:last-child button {
+    width: 2rem; height: 2rem; min-height: 2rem; padding: 0;
+  }
+  .kiosk-admin-skin [data-testid^="maint-card-"] > div:last-child button svg,
+  .kiosk-admin-skin [data-testid^="emp-card-"] > div:last-child button svg,
+  .kiosk-admin-skin [data-testid^="sal-row-"] > div:last-child button svg { width: 1rem; height: 1rem; }
 }
 /* Kiosk Beheer-popups use the same generous surfaces and controls as the cash form. */
 .kiosk-popup-active .kiosk-fx { font-size: 16px; }
