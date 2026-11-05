@@ -12,7 +12,7 @@ import QuickPayModal from '../pages/vastgoed/admin/invoices/QuickPayModal';
 import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySection';
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
-import { TenantPhoto } from './KioskFx';
+import { FxRow, FxTabs, FxSearch, FxStats, TenantPhoto } from './KioskFx';
 
 const TABS = [
   { v: 'all', label: 'Alle', key: 'allCount' },
@@ -22,10 +22,10 @@ const TABS = [
 
 // Kleur + tekst per huurder-status.
 function toneOf(g) {
-  if (g.overdueCount >= 2) return { bar: 'bg-red-500', chip: 'bg-red-50 text-red-700', amt: 'text-red-600', text: `${g.overdueCount} maanden achter` };
-  if (g.overdueCount === 1) return { bar: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700', amt: 'text-amber-600', text: '1 maand achter' };
-  if (g.currentCount > 0) return { bar: 'bg-orange-400', chip: 'bg-orange-50 text-orange-700', amt: 'text-orange-600', text: 'Deze maand open' };
-  return { bar: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700', amt: 'text-emerald-600', text: 'Alles betaald' };
+  if (g.overdueCount >= 2) return { bar: 'bg-red-500', chip: 'bg-red-50 text-red-700', amt: 'text-red-600', text: `${g.overdueCount} maanden achter`, tone: 'red' };
+  if (g.overdueCount === 1) return { bar: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700', amt: 'text-amber-600', text: '1 maand achter', tone: 'amber' };
+  if (g.currentCount > 0) return { bar: 'bg-orange-400', chip: 'bg-orange-50 text-orange-700', amt: 'text-orange-600', text: 'Deze maand open', tone: 'orange' };
+  return { bar: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700', amt: 'text-emerald-600', text: 'Alles betaald', tone: 'green' };
 }
 const money = (v, c) => `${c || 'SRD'} ${fmtAmount(v, c)}`;
 const openPay = (tenantId) => window.dispatchEvent(new CustomEvent('kiosk-open-tenant', { detail: { tenant_id: tenantId } }));
@@ -45,6 +45,35 @@ function Stat({ Icon, label, value, tone, testId }) {
 function TenantTile({ g, onOpen, onRemind, credit }) {
   const t = toneOf(g);
   const per = g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden';
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const updateIsMobile = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', updateIsMobile);
+    return () => window.removeEventListener('resize', updateIsMobile);
+  }, []);
+  if (isMobile) {
+    return (
+      <FxRow testId={`kiosk-inv-tile-${g.tenant_id}`} tenantId={g.tenant_id}
+          title={g.apartment_number || 'Geen appartement'} sub={g.tenant_name || g.location_name || ' '}
+          meta={`${g.location_name || ''}${g.location_name && per ? ' · ' : ''}${per}`}
+          badge={<CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />}
+          amount={money(g.totalDue, g.currency)} status={t.text} tone={t.tone} onClick={() => onOpen(g)}
+          actions={g.dueCount > 0 ? (
+            <>
+              <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
+                aria-label="Betalen" title="Betalen"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00]">
+                <Banknote className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
+                aria-label="Herinnering" title="Herinnering"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                <MessageCircle className="h-4 w-4" />
+              </button>
+            </>
+          ) : undefined} />
+    );
+  }
   return (
     <div className="w-full rounded-2xl border border-slate-100 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:p-4"
       data-testid={`kiosk-inv-tile-${g.tenant_id}`}>
@@ -533,6 +562,13 @@ export default function KioskInvoicesPage({ onBack }) {
                 </div>
                 <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{groups.length} huurders</span>
               </div>
+              <div className="mb-2 md:hidden">
+                <FxStats testId="kiosk-inv-mobile-stats" items={[
+                  ['Openstaand', money(s.totalOpenAmount || 0, s.currency), 'red'],
+                  ['Achterstand', s.openCount || 0, 'amber'],
+                  ['Verwacht', money(s.thisMonthExpected || 0, s.currency), 'green'],
+                ]} />
+              </div>
               <div className="kiosk-admin-mobile-actions mb-2 grid grid-cols-2 gap-2">
                 <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate-mobile"
                   className="items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-2 py-2.5 text-center text-xs font-bold text-[#FF5C00] disabled:opacity-60">
@@ -544,7 +580,12 @@ export default function KioskInvoicesPage({ onBack }) {
                   <FilePlus2 className="h-4 w-4 shrink-0" /> Nieuwe factuur
                 </button>
               </div>
-              <div className="mb-2 hidden gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:flex sm:gap-2 sm:pb-1" role="tablist" aria-label="Factuurstatus">
+              <div className="mb-2 md:hidden">
+                <FxTabs testPrefix="kiosk-inv-mobile" value={tab} onChange={setTab} tabs={TABS.map((filter) => ({
+                  v: filter.v, label: filter.label, count: s[filter.key] ?? 0,
+                }))} />
+              </div>
+              <div className="mb-2 hidden gap-1.5 overflow-x-auto pb-0.5 md:mb-3 md:flex md:gap-2 md:pb-1" role="tablist" aria-label="Factuurstatus">
                 {TABS.map((filter) => (
                   <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}
                     onClick={() => setTab(filter.v)} data-testid={`kiosk-inv-tab-${filter.v}`}
@@ -555,7 +596,10 @@ export default function KioskInvoicesPage({ onBack }) {
                   </button>
                 ))}
               </div>
-              <label className="relative mb-2 block shrink-0 sm:mb-3">
+              <div className="mb-2 md:hidden">
+                <FxSearch value={q} onChange={setQ} placeholder="Zoek huurder of appartement…" testId="kiosk-inv-search-mobile" />
+              </div>
+              <label className="relative mb-2 hidden shrink-0 sm:mb-3 md:block">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input value={q} onChange={(event) => setQ(event.target.value)}
                   placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"

@@ -5613,6 +5613,12 @@ export default function KioskLayout() {
   const keyboardOpen = useKeyboardOpen();
   const navigate = useBrandedNavigate();
   const { user } = useAuth();
+  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const updateViewport = () => setIsMobileViewport(window.innerWidth < 768);
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
   const [supportActive, setSupportActive] = useState(false);
   // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
   const [step, setStep] = useState(() => {
@@ -6423,14 +6429,18 @@ export default function KioskLayout() {
               onExit={exit} />
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (
-            <div className="h-full min-h-0 kiosk-admin-skin">
-              <KioskApartmentsPanel
-                onBack={goBack}
-                onNewApartment={() => setShowAddApartment(true)}
-                reloadKey={apartmentsReloadKey}
-                onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
-              />
-            </div>
+            isMobileViewport
+              ? <KioskAdminPage id="appartementen" kioskLayout onBack={goBack} />
+              : (
+                <div className="h-full min-h-0 kiosk-admin-skin">
+                  <KioskApartmentsPanel
+                    onBack={goBack}
+                    onNewApartment={() => setShowAddApartment(true)}
+                    reloadKey={apartmentsReloadKey}
+                    onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
+                  />
+                </div>
+              )
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
             <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
