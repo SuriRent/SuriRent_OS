@@ -186,7 +186,7 @@ export default function SetupWizard({ onFinish } = {}) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
+    <div className="w-full max-w-screen-2xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
       {/* Step pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2" data-testid="wizard-steps">
         {STEPS.map((s, i) => {

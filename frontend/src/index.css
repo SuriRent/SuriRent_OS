@@ -234,6 +234,16 @@ body.kiosk-green-active button[class*="bg-orange-600"] { background-color: #0084
 body.kiosk-green-active [class*="text-[#FF5C00]"],
 body.kiosk-green-active [class*="text-orange-500"],
 body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; }
+/* The active kiosk root theme is authoritative if the body theme class lags. */
+.kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
+.kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap,
+.kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] { background-color: #FF6B1A !important; }
+.kiosk-fullscreen[data-theme="orange"] button[class*="bg-[#FF5C00]"],
+.kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-500"],
+.kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-600"] { background-color: #FF5C00 !important; }
+.kiosk-fullscreen[data-theme="orange"] [class*="text-[#FF5C00]"],
+.kiosk-fullscreen[data-theme="orange"] [class*="text-orange-500"],
+.kiosk-fullscreen[data-theme="orange"] [class*="text-orange-600"] { color: #FF5C00 !important; }
 /* Beheer-pagina's in de kiosk: aanraakvriendelijke kiosk-stijl (groter, oranje accenten). */
 :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) { font-size: 16px; }
 body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root h2,
