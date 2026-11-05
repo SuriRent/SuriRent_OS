@@ -3,7 +3,7 @@ import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/K
 import { ModalHostContext } from '../../../components/KeyboardSafeModal';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
-import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText } from 'lucide-react';
+import { Loader2, Plus, X, ArrowLeft, Check, Calendar, AlertCircle, CheckCircle2, XCircle, Clock, Trash2, FileText, Search } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { playApproveConfirm, playSwoosh, playErrorBuzz } from '../../../lib/tap-sounds';
 import { useSWRConfig } from 'swr';
@@ -18,7 +18,7 @@ const cachedGet = (cache, key) => {
   return hit ? Promise.resolve({ data: hit }) : api.get(key);
 };
 
-export default function PaymentPlans({ embedded = false }) {
+export default function PaymentPlans({ embedded = false, kioskLayout = false, onBack }) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState(null); // plan in detail-view
@@ -79,6 +79,19 @@ export default function PaymentPlans({ embedded = false }) {
   }, []);
 
   if (detail) {
+    if (kioskLayout) {
+      return (
+        <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+          style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-plan-detail">
+          <div className="flex-1 min-h-0 overflow-y-auto py-3">
+            <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
+              <PlanDetail kioskLayout planId={detail.id} initial={detail}
+                onBack={() => { setDetail(null); load(); }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
     return <PlanDetail embedded={embedded} planId={detail.id} initial={detail} onBack={() => { setDetail(null); load(); }} />;
   }
 
@@ -107,6 +120,109 @@ export default function PaymentPlans({ embedded = false }) {
             amount={fmtMoney(p.remaining_amount, p.currency)} status={p.overdue_count > 0 && p.status === 'active' ? `${p.overdue_count} achter` : l}
             tone={p.overdue_count > 0 && p.status === 'active' ? 'red' : tone} />;
         })}
+        {creating && <CreatePlanSheet onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); setDetail(p); load(); }} />}
+      </div>
+    );
+  }
+
+  if (kioskLayout) {
+    const n = fxQ.trim().toLowerCase();
+    const rows = plans.filter((p) => !n || `${p.tenant_name || ''} ${p.apartment_number || ''}`.toLowerCase().includes(n));
+    const remaining = plans.reduce((sum, p) => sum + Number(p.remaining_amount || 0), 0);
+    const overdue = plans.reduce((sum, p) => sum + Number(p.overdue_count || 0), 0);
+    return (
+      <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+        style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-payment-plans">
+        <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+          {onBack ? (
+            <button onClick={onBack} data-testid="plans-panel-back"
+              className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 active:scale-95 transition">
+              <ArrowLeft className="w-4 h-4" /> <span className="text-xs">Terug</span>
+            </button>
+          ) : <span />}
+          <div className="text-right text-white">
+            <p className="text-sm font-semibold">Betalingsregelingen</p>
+            <p className="text-[10px] opacity-70">Regelingenbeheer</p>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
+          <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+            data-testid="plans-summary">
+            <div className="row-label-value items-center mb-4">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Betalingsregelingen</h2>
+              <Calendar className="w-5 h-5 text-[#FF5C00]" />
+            </div>
+            <div className="rounded-2xl bg-orange-50 p-4">
+              <p className="text-sm font-semibold text-slate-500">Totaal resterend</p>
+              <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+                data-testid="plans-remaining-total">{fmtMoney(remaining, plans[0]?.currency)}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Regelingen</p>
+                <p className="mt-1 text-2xl font-black text-slate-900" data-testid="plans-count">{plans.length}</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-4">
+                <p className="text-xs font-bold text-amber-700">Achterstallig</p>
+                <p className="mt-1 text-2xl font-black text-amber-800" data-testid="plans-overdue-count">{overdue}</p>
+              </div>
+            </div>
+            <button onClick={() => setCreating(true)} data-testid="plan-new-btn"
+              className="mt-4 w-full min-h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] active:scale-[0.98] transition">
+              <Plus className="w-5 h-5" /> Nieuwe regeling
+            </button>
+            {onBack && (
+              <button type="button" onClick={onBack} data-testid="plans-panel-back-desktop"
+                className="mt-3 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 md:inline-flex">
+                <ArrowLeft className="h-4 w-4" /> Terug
+              </button>
+            )}
+          </section>
+
+          <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+            data-testid="plans-recent">
+            <div className="row-label-value items-center mb-3">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Regelingen</h3>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">
+                {rows.length} regelingen
+              </span>
+            </div>
+            <div className="flex gap-1.5 mb-3 overflow-x-auto" data-testid="plan-filter-bar">
+              {[
+                { v: 'active', l: 'Actief' }, { v: 'completed', l: 'Voltooid' },
+                { v: 'cancelled', l: 'Geannuleerd' }, { v: 'all', l: 'Alles' },
+              ].map((f) => (
+                <button key={f.v} type="button" onClick={() => setStatusFilter(f.v)}
+                  data-testid={`plan-filter-${f.v}`}
+                  className={`shrink-0 h-8 px-3 rounded-full text-xs font-bold transition-colors ${
+                    statusFilter === f.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}>{f.l}</button>
+              ))}
+            </div>
+            <div className="relative mb-3">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input value={fxQ} onChange={(e) => setFxQ(e.target.value)}
+                placeholder="Zoek huurder of appartement…" data-testid="plan-search"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
+            </div>
+            {err && <div className="rounded-xl text-sm font-semibold px-4 py-3 mb-2 bg-red-50 border border-red-200 text-red-700" data-testid="plan-error">{err}</div>}
+            {loading ? (
+              <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-10 text-center">
+                <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#FF5C00]" />
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-8 text-center" data-testid="plans-empty">
+                <Calendar className="mx-auto mb-2 h-9 w-9 text-orange-300" />
+                <p className="text-sm font-semibold text-slate-500">Geen betalingsregelingen gevonden.</p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
+                {rows.map((p) => <PlanRow key={p.id} plan={p} onClick={() => setDetail(p)} />)}
+              </div>
+            )}
+          </section>
+        </div>
         {creating && <CreatePlanSheet onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); setDetail(p); load(); }} />}
       </div>
     );
@@ -504,7 +620,7 @@ function CreatePlanSheet({ onClose, onCreated }) {
 // =====================================================================
 // Plan detail — installments + pay-button per termijn + cancel
 // =====================================================================
-function PlanDetail({ planId, initial, onBack, embedded = false }) {
+function PlanDetail({ planId, initial, onBack, embedded = false, kioskLayout = false }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const [plan, setPlan] = useState(initial || null);
   const [err, setErr] = useState('');
@@ -578,15 +694,22 @@ function PlanDetail({ planId, initial, onBack, embedded = false }) {
   const pct = plan.total_amount > 0 ? Math.round((plan.paid_amount / plan.total_amount) * 100) : 0;
 
   return (
-    <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="plan-detail-page">
+    <div className={kioskLayout ? 'flex min-h-full flex-col gap-3 pb-3' : `space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`}
+      data-testid="plan-detail-page">
       {confirmNode}
       <div className="flex items-center gap-2">
         <button onClick={onBack} data-testid="plan-detail-back"
-          className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-          <ArrowLeft className="w-4 h-4" /> Terug
+          className={`flex items-center gap-1.5 font-bold rounded-xl px-3 py-2 text-sm ${
+            kioskLayout ? 'min-h-11 text-slate-700 bg-white hover:bg-slate-50 border border-slate-200' : 'text-slate-700 bg-white hover:bg-slate-50 border border-slate-200'
+          }`}>
+          <ArrowLeft className="w-4 h-4" /> Terug naar regelingen
         </button>
       </div>
 
+      <div className={kioskLayout
+        ? 'grid grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-start gap-3'
+        : 'space-y-4'}>
+      <div className="space-y-3">
       <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -614,7 +737,9 @@ function PlanDetail({ planId, initial, onBack, embedded = false }) {
       </div>
 
       {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="plan-detail-error">{err}</div>}
+      </div>
 
+      <div className="space-y-3">
       {linkedInvoices.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="plan-linked-invoices">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -717,6 +842,8 @@ function PlanDetail({ planId, initial, onBack, embedded = false }) {
             );
           })}
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );

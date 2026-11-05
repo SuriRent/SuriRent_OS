@@ -6462,7 +6462,10 @@ export default function KioskLayout() {
           {step === 'admin:betalingen' && hasAdminAccess && (
             <KioskAdminPage id="betalingen" kioskLayout onBack={() => setStep('select')} />
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen'
+          {step === 'admin:regelingen' && hasAdminAccess && (
+            <KioskAdminPage id="regelingen" kioskLayout onBack={() => setStep('select')} />
+          )}
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
           )}
