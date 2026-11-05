@@ -58,30 +58,28 @@ export function KioskAdminPage({ id, onBack, kioskLayout = false }) {
     if (isMobile && !custom) {
       const startEvent = KIOSK_ADMIN_NEW_EVENTS[id];
       return (
-        <div className="h-full min-h-0 bg-[#F4F5F7] flex flex-col" data-testid={`kiosk-admin-page-${id}`}>
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6">
-            <div className="kiosk-admin-skin mx-auto w-full max-w-[1500px] bg-white rounded-3xl shadow-[0_10px_30px_-14px_rgba(15,23,42,0.25)] ring-1 ring-slate-100 px-5 sm:px-8 pt-5 pb-8">
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <button type="button" onClick={onBack} data-testid="kiosk-admin-page-back"
-                  className="inline-flex items-center gap-2 text-[#FF5C00] font-bold bg-orange-50 hover:bg-orange-100 rounded-xl px-4 transition-colors">
-                  <ArrowLeft className="w-5 h-5" /> Terug
+        <div className="kiosk-admin-skin flex h-full min-h-0 w-full flex-col bg-white" data-testid={`kiosk-admin-page-${id}`}>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <button type="button" onClick={onBack} data-testid="kiosk-admin-page-back"
+              className="inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 font-bold text-[#FF5C00] transition-colors hover:bg-orange-100">
+              <ArrowLeft className="h-5 w-5" /> Terug
+            </button>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-base font-black text-slate-900">{KIOSK_ADMIN_PAGES[id].label}</h1>
+              {startEvent && (
+                <button type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent(startEvent))}
+                  data-testid={`kiosk-admin-page-new-${id}`}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#FF5C00] px-3 py-2 text-xs font-black text-white">
+                  <span className="text-base leading-none">+</span> Nieuw
                 </button>
-                <div className="flex min-w-0 items-center gap-2">
-                  <h1 className="truncate text-base font-black text-slate-900">{KIOSK_ADMIN_PAGES[id].label}</h1>
-                  {startEvent && (
-                    <button type="button"
-                      onClick={() => window.dispatchEvent(new CustomEvent(startEvent))}
-                      data-testid={`kiosk-admin-page-new-${id}`}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#FF5C00] px-3 py-2 text-xs font-black text-white">
-                      <span className="text-base leading-none">+</span> Nieuw
-                    </button>
-                  )}
-                </div>
-              </div>
-              <Suspense fallback={<Loader2 className="w-8 h-8 text-[#FF5C00] animate-spin mx-auto my-16" />}>
-                <Page embedded />
-              </Suspense>
+              )}
             </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <Suspense fallback={<Loader2 className="mx-auto my-16 h-8 w-8 animate-spin text-[#FF5C00]" />}>
+              <Page embedded />
+            </Suspense>
           </div>
         </div>
       );

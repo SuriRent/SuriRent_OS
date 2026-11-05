@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react';
 
-export default function useVisualViewportPosition(ref) {
+export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
@@ -12,7 +12,7 @@ export default function useVisualViewportPosition(ref) {
       frame = 0;
       if (!element.isConnected) return;
 
-      if (window.matchMedia('(min-width: 640px)').matches) {
+      if (window.matchMedia(`(min-width: ${mobileBreakpoint}px)`).matches) {
         element.style.position = '';
         element.style.top = '';
         element.style.left = '';
@@ -51,5 +51,5 @@ export default function useVisualViewportPosition(ref) {
       window.removeEventListener('orientationchange', scheduleUpdate);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [ref]);
+  }, [ref, mobileBreakpoint]);
 }

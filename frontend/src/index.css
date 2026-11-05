@@ -1022,7 +1022,15 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
   }
 }
 @media (max-width: 767px) {
-  [data-testid="kiosk-admin-page-facturen"] .kiosk-chrome { display: none !important; }
+  [data-testid="kiosk-admin-page-facturen"] {
+    padding: 0 !important;
+  }
+  [data-testid="kiosk-admin-page-facturen"] > [data-testid="kiosk-inv-list"] {
+    gap: 0 !important; padding-bottom: 0 !important;
+  }
+  [data-testid="kiosk-admin-page-facturen"] > [data-testid="kiosk-inv-list"] > section {
+    border-radius: 0 !important;
+  }
 
   :is(
     [data-testid="kiosk-locations-panel"],

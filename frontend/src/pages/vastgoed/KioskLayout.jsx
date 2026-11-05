@@ -5046,18 +5046,26 @@ function TenantInfoModal({ apartment, mode, onClose }) {
   );
 }
 
-function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false }) {
+function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false, fullscreenMobile = false }) {
   const [host, setHost] = useState(null);
   const modalRef = useRef(null);
-  useVisualViewportPosition(modalRef);
+  useVisualViewportPosition(modalRef, fullscreenMobile ? 768 : 640);
   const { theme } = useContext(KioskThemeCtx);
+  useEffect(() => {
+    if (!fullscreenMobile) return undefined;
+    const statusBarColor = theme === 'green' ? '#F2F8F4' : theme === 'white' ? '#FFFFFF' : '#FF5C00';
+    setIosStatusBar('#FFFFFF');
+    return () => setIosStatusBar(statusBarColor);
+  }, [fullscreenMobile, theme]);
   return createPortal((
     <div
-      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 ${theme === 'white' ? 'kiosk-modal-white' : theme === 'green' ? 'kiosk-modal-green' : ''}`}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white ${fullscreenMobile ? 'md:bg-black/50 md:backdrop-blur-md md:flex md:items-center md:justify-center md:p-4' : 'sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4'} ${theme === 'white' ? 'kiosk-modal-white' : theme === 'green' ? 'kiosk-modal-green' : ''}`}
       data-testid={`${testId}-overlay`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={modalRef} onClick={(e) => e.stopPropagation()}
-        className={`kiosk-standard-form absolute inset-x-0 top-0 w-full h-full ${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] bg-white sm:rounded-2xl flex flex-col overflow-hidden sm:static sm:inset-auto`}
+        className={`kiosk-standard-form absolute inset-x-0 top-0 w-full h-full ${fullscreenMobile
+          ? `${tall ? 'md:h-[88dvh]' : 'md:h-auto'} ${xwide ? 'md:max-w-[42rem] lg:max-w-5xl' : wide ? 'md:max-w-[42rem]' : 'md:max-w-md'} md:max-h-[90dvh] md:rounded-2xl md:static md:inset-auto`
+          : `${tall ? 'sm:h-[88dvh]' : 'sm:h-auto'} ${xwide ? 'sm:max-w-[42rem] lg:max-w-5xl' : wide ? 'sm:max-w-[42rem]' : 'sm:max-w-md'} sm:max-h-[90dvh] sm:rounded-2xl sm:static sm:inset-auto`} bg-white flex flex-col overflow-hidden`}
         data-testid={`${testId}-form`}>
         <ModalHostContext.Provider value={tall ? host : null}>
         <div className="kiosk-modal-head flex-none flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
@@ -6209,11 +6217,7 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const showMobileKioskBar = [
-    'select', 'kasgeld', 'stroom', 'admin:locaties', 'admin:appartementen', 'admin:huurders',
-    'admin:contracten', 'admin:betalingen', 'admin:regelingen', 'admin:facturen',
-    'admin:onderhoud', 'admin:werknemers', 'admin:borg',
-  ].includes(step);
+  const showMobileKioskBar = !step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -6226,7 +6230,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select';
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') {
