@@ -5815,6 +5815,7 @@ export default function KioskLayout() {
       else if (t === 'tenants') setStep('admin:huurders');
       else if (t === 'locations') setStep('admin:locaties');
       else if (t === 'contracts') setStep('admin:contracten');
+      else if (t === 'payments') setStep('admin:betalingen');
       else if (MAP[t]) setAdminPopup(MAP[t]);
     };
     window.addEventListener('go-tab', onTab);
@@ -6252,7 +6253,7 @@ export default function KioskLayout() {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') setShowInvoicesModal(true);
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
-      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten') {
+      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen') {
         setAdminPopup(null);
         setStep(e.detail);
       }
