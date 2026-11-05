@@ -1145,38 +1145,25 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
       {kioskLayout ? (
         <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
           style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-payments-panel">
-          <div className="flex-1 min-h-0 overflow-y-auto py-3">
-            <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
-              <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Beheer</p>
-                  <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Betalingen</h1>
-                  <p className="text-sm font-semibold text-slate-500">
-                    {totalCount} kwitantie{totalCount !== 1 ? 's' : ''}
-                    {todaySum > 0 ? ` · Vandaag ${currency} ${fmtAmountWhole(todaySum)}` : ''}
-                  </p>
-                </div>
-                {onBack && (
-                  <button type="button" onClick={onBack} data-testid="payments-panel-back"
-                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                    <ArrowLeft className="h-4 w-4" /> Terug
-                  </button>
-                )}
-              </section>
+          <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+            {onBack ? (
+              <button onClick={onBack} data-testid="payments-panel-back"
+                className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 active:scale-95 transition">
+                <ArrowLeft className="w-4 h-4" /> <span className="text-xs">Terug</span>
+              </button>
+            ) : <span />}
+            <div className="text-right text-white">
+              <p className="text-sm font-semibold">Betalingen</p>
+              <p className="text-[10px] opacity-70">Betalingsoverzicht</p>
+            </div>
+          </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">Totaal deze maand</p>
-                  <p className="mt-1 text-lg font-black text-emerald-700">{fmtMoney(summary.monthSum || 0, currency)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">Betalingen deze maand</p>
-                  <p className="mt-1 text-lg font-black text-slate-900">{summary.monthCount || 0}</p>
-                </div>
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
-                  <p className="text-xs font-bold text-amber-700">Wacht op goedkeuring</p>
-                  <p className="mt-1 text-lg font-black text-amber-800">{pending.length}</p>
-                </div>
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
+            <section className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+              data-testid="payments-summary">
+              <div className="row-label-value items-center mb-4">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Betalingen</h2>
+                <Banknote className="w-5 h-5 text-[#FF5C00]" />
               </div>
 
               <MonthStepper year={selectedYear} month={selectedMonth}
@@ -1184,21 +1171,66 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                 isCurrent={isCurrentMonth}
                 count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
 
-              <div className="relative">
+              <div className="mt-4 rounded-2xl bg-orange-50 p-4">
+                <p className="text-sm font-semibold text-slate-500">Totaal deze maand</p>
+                <p className="mt-1 break-words text-xl sm:text-2xl font-black text-slate-900 tabular-nums"
+                  data-testid="payments-month-total">{fmtMoney(summary.monthSum || 0, currency)}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">Betalingen</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900" data-testid="payments-month-count">
+                    {summary.monthCount || 0}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-4">
+                  <p className="text-xs font-bold text-amber-700">Te keuren</p>
+                  <p className="mt-1 text-2xl font-black text-amber-800" data-testid="payments-pending-count">
+                    {pending.length}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-500">Vandaag</p>
+                <p className="mt-1 text-lg font-black text-slate-900 tabular-nums">
+                  {fmtMoney(todaySum, currency)}
+                </p>
+              </div>
+
+              {onBack && (
+                <button type="button" onClick={onBack} data-testid="payments-panel-back-desktop"
+                  className="mt-4 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 md:inline-flex">
+                  <ArrowLeft className="h-4 w-4" /> Terug
+                </button>
+              )}
+            </section>
+
+            <section className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden"
+              data-testid="payments-recent">
+              <div className="row-label-value items-center mb-3">
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Recente betalingen</h3>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">
+                  {totalCount} kwitanties
+                </span>
+              </div>
+
+              <div className="relative mb-3">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="Zoek huurder, kwitantie of appartement…"
                   data-testid="payment-search"
-                  className="h-12 w-full rounded-2xl border border-slate-100 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
               </div>
 
               {pending.length > 0 && (
-                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3 shadow-sm"
+                <section className="mb-3 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 p-3"
                   data-testid="pending-section-desktop">
                   <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-amber-700">
                     <Clock className="h-4 w-4" /> Wacht op goedkeuring · {pending.length}
                   </div>
-                  <div className="space-y-2">
+                  <div className="max-h-52 space-y-2 overflow-y-auto">
                     {pending.map((p) => (
                       <PendingPaymentCard key={p.id} p={p} onApprove={() => setApproveFor(p)} />
                     ))}
@@ -1207,18 +1239,18 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
               )}
 
               {loading ? (
-                <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center">
+                <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-10 text-center">
                   <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#FF5C00]" />
                 </div>
               ) : filteredItems.length === 0 ? (
-                <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center" data-testid="payments-empty">
+                <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-8 text-center" data-testid="payments-empty">
                   <Receipt className="mx-auto mb-2 h-9 w-9 text-orange-300" />
                   <p className="text-sm font-semibold text-slate-500">
                     {totalCount === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze maand of zoekopdracht.'}
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
                   {filteredItems.map((p) => (
                     <PaymentRow key={p.id} p={p} onOpen={setDetailPayment} />
                   ))}
@@ -1226,7 +1258,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                     onVisible={paged.loadMore} testid="payments-load-more" />
                 </div>
               )}
-            </div>
+            </section>
           </div>
         </div>
       ) : embedded ? (
