@@ -1993,12 +1993,6 @@ function TenantBottomBar({ items, onBack, onNext, canBack, canNext, keyboardOpen
   );
 }
 
-const TK_BACK = {
-  pay: 'dashboard', 'pay-method': 'pay', 'pay-bank': 'pay-method',
-  history: 'dashboard', maintenance: 'dashboard', me: 'dashboard', contact: 'dashboard',
-};
-const TK_NEXT = { dashboard: 'pay' };
-
 // =====================================================================
 // CONTAINER
 // =====================================================================
@@ -2010,6 +2004,8 @@ export default function TenantKioskLayout() {
   const tenantIdParam = searchParams.get('t');
   const [authed, setAuthed] = useState(() => !!localStorage.getItem(TENANT_TOKEN_KEY));
   const [view, setView] = useState('dashboard');
+  const viewHistory = useRef({ entries: ['dashboard'], index: 0 });
+  const [, setViewHistoryTick] = useState(0);
   const [loginMode, setLoginMode] = useState('pin');
   const [payload, setPayload] = useState(null);  // payment-flow draft = useState(null);  // payment-flow draft
   const [overview, setOverview] = useState(null);
@@ -2017,6 +2013,45 @@ export default function TenantKioskLayout() {
   const [prefill, setPrefill] = useState(null);
   const [tenantSetup, setTenantSetup] = useState(null); // { tenant_id, name, has_pin }
   const [branding, setBranding] = useState(() => readCachedBranding());
+  const navigateView = (nextView, { reset = false, replace = false } = {}) => {
+    const history = viewHistory.current;
+    if (reset) {
+      history.entries = [nextView];
+      history.index = 0;
+    } else {
+      history.entries = history.entries.slice(0, history.index + 1);
+      if (replace && history.entries.length) history.entries[history.index] = nextView;
+      else if (history.entries[history.entries.length - 1] !== nextView) history.entries.push(nextView);
+      history.index = history.entries.length - 1;
+    }
+    setView(nextView);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewBack = () => {
+    const history = viewHistory.current;
+    if (history.index > 0) {
+      history.index -= 1;
+      setView(history.entries[history.index]);
+    } else if (view !== 'dashboard') {
+      history.entries = ['dashboard', view];
+      history.index = 0;
+      setView('dashboard');
+    }
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewNext = () => {
+    const history = viewHistory.current;
+    if (history.index >= history.entries.length - 1) return;
+    history.index += 1;
+    setView(history.entries[history.index]);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  useEffect(() => {
+    if (authed) return;
+    viewHistory.current = { entries: ['dashboard'], index: 0 };
+    setView('dashboard');
+    setViewHistoryTick((tick) => tick + 1);
+  }, [authed]);
 
   // 1) Branding laden — primary color toepassen voor de hele kiosk-achtergrond
   const [needsCompanyPick, setNeedsCompanyPick] = useState(false);
@@ -2124,7 +2159,7 @@ export default function TenantKioskLayout() {
     api.post('/tenant-portal/logout').catch(() => {});
     localStorage.removeItem(TENANT_TOKEN_KEY);
     setAuthed(false);
-    setView('dashboard');
+    navigateView('dashboard', { reset: true });
   };
 
   // Branded background — gebruik primary color als orange-fallback.
@@ -2255,63 +2290,67 @@ export default function TenantKioskLayout() {
             className="w-full flex flex-col md:h-full">
             {view === 'dashboard' && (
               <DashboardView overview={overview}
-                onAction={setView}
-                onHistory={() => setView('history')} />
+                onAction={navigateView}
+                onHistory={() => navigateView('history')} />
             )}
             {view === 'pay' && (
               <TenantPaySelect overview={overview}
-                onBack={() => setView('dashboard')}
-                onConfirm={(p) => { setPayload(p); setView('pay-method'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-method'); }} />
             )}
             {view === 'pay-method' && payload && (
               <TenantPayMethod payload={payload} overview={overview}
-                onBack={() => setView('pay')}
+                onBack={goViewBack}
                 onConfirm={(p) => {
                   setPayload(p);
-                  if (p.method === 'bank') setView('pay-bank');
-                  else setView('pay-confirm');
+                  if (p.method === 'bank') navigateView('pay-bank');
+                  else navigateView('pay-confirm');
                 }} />
             )}
             {view === 'pay-bank' && payload && (
               <TenantPayBank payload={payload} overview={overview} branding={branding}
-                onBack={() => setView('pay-method')}
-                onConfirm={(p) => { setPayload(p); setView('pay-confirm'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-confirm'); }} />
             )}
             {view === 'pay-confirm' && payload && (
               <TenantPayConfirm payload={payload} overview={overview}
-                onBack={() => {
-                  if (payload.method === 'bank') setView('pay-bank');
-                  else setView('pay-method');
-                }}
-                onPaid={() => { setView('paid'); setPayload(null); loadOverview(); }} />
+                onBack={goViewBack}
+                onPaid={() => {
+                  viewHistory.current = { entries: ['dashboard', 'paid'], index: 1 };
+                  setView('paid');
+                  setViewHistoryTick((tick) => tick + 1);
+                  setPayload(null);
+                  loadOverview();
+                }} />
             )}
-            {view === 'paid' && <PaidView onContinue={() => setView('dashboard')} />}
+            {view === 'paid' && <PaidView onContinue={() => navigateView('dashboard', { reset: true })} />}
             {view === 'history' && (
-              <TenantHistoryView overview={overview} onBack={() => setView('dashboard')} />
+              <TenantHistoryView overview={overview} onBack={goViewBack} />
             )}
             {view === 'maintenance' && (
-              <MaintenanceView onBack={() => setView('dashboard')}
-                onDone={() => setView('dashboard')} />
+              <MaintenanceView onBack={goViewBack}
+                onDone={goViewBack} />
             )}
-            {view === 'me' && <MeView overview={overview} onBack={() => setView('dashboard')} />}
+            {view === 'me' && <MeView overview={overview} onBack={goViewBack} />}
             {view === 'contact' && (
               <ContactView overview={overview} branding={branding}
-                onBack={() => setView('dashboard')} />
+                onBack={goViewBack} />
             )}
           </motion.div>
         </AnimatePresence>
       </div>
       <TenantBottomBar
         keyboardOpen={keyboardOpen}
-        canBack={!!TK_BACK[view]} canNext={!!TK_NEXT[view]}
-        onBack={() => setView(TK_BACK[view])} onNext={() => setView(TK_NEXT[view])}
+        canBack={viewHistory.current.index > 0 || view !== 'dashboard'}
+        canNext={viewHistory.current.index < viewHistory.current.entries.length - 1}
+        onBack={goViewBack} onNext={goViewNext}
         items={[
-          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => setView('dashboard') },
-          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => setView('pay') },
-          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => setView('history') },
-          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => setView('maintenance') },
-          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => setView('me') },
-          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => setView('contact') },
+          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => navigateView('dashboard') },
+          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => navigateView('pay') },
+          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => navigateView('history') },
+          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => navigateView('maintenance') },
+          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => navigateView('me') },
+          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => navigateView('contact') },
         ]} />
     </div>
   );

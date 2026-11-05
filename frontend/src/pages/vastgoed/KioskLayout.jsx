@@ -238,10 +238,14 @@ function KioskMenuPanel({ title, Icon, items, onClose, testId, wide = false }) {
 
 // Onthoud vanuit welk menu een popup is geopend, zodat sluiten terugkeert naar dat menu.
 let menuOrigin = null;
-const navAdmin = (id, origin) => { menuOrigin = origin; window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${id}` })); };
+const navAdmin = (id, origin, returnTo = null) => {
+  menuOrigin = origin ? { menu: origin, returnTo } : null;
+  window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${id}` }));
+};
 const returnToMenu = () => {
-  const o = menuOrigin; menuOrigin = null;
-  if (o) window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: o }));
+  const origin = menuOrigin;
+  menuOrigin = null;
+  if (origin?.menu) window.dispatchEvent(new CustomEvent('kiosk-open-menu', { detail: origin.menu }));
 };
 function useMenuReopen(name, setOpen) {
   useEffect(() => {
@@ -303,7 +307,7 @@ function KioskSettingsMenu() {
   );
 }
 
-function KioskAdminMenu() {
+function KioskAdminMenu({ returnTo }) {
   const { isAdmin } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
@@ -321,9 +325,13 @@ function KioskAdminMenu() {
       .map((id) => ({
         id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
         testid: `kiosk-admin-menu-${id}`,
-        onClick: () => navAdmin(id, 'admin'),
+        onClick: () => navAdmin(id, 'admin', returnTo),
       })),
-    ...ADMIN_MENU_ITEMS.map((m) => ({ ...m, testid: `kiosk-admin-menu-${m.id}` })),
+    ...ADMIN_MENU_ITEMS.map((m) => ({
+      ...m,
+      testid: `kiosk-admin-menu-${m.id}`,
+      ...(m.id === 'nfc' ? { onClick: () => navAdmin('nfc', 'admin', returnTo) } : {}),
+    })),
     ...(role === 'admin' ? [{
       id: 'tour', label: 'Rondleiding starten', Icon: Sparkles, testid: 'kiosk-admin-menu-tour',
       onClick: () => window.dispatchEvent(new CustomEvent('kiosk-tour-start')),
@@ -365,13 +373,20 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
-function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin, onSearch, tenant, title = 'Kies uw appartement' }) {
+function DesktopKioskHeader({
+  currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch,
+  currentApartment, tenant, title = 'Kies uw appartement',
+}) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   return (
     <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
-      <KioskAdminMenu />
+      <KioskAdminMenu returnTo={{
+        step: currentStep || 'select',
+        location: currentLocationId || null,
+        apartment: currentApartment || null,
+      }} />
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 md:flex-none md:shrink-0">
         <Home className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" strokeWidth={2.2} />
         <span className="text-xl md:text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
@@ -408,16 +423,15 @@ function DesktopKioskHeader({ currentLocation, totalGroups, onLocations, onAdmin
   );
 }
 
-function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch, onLocationSelectionChange }) {
+function ApartmentSelect({
+  onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
+  selectedLocationId, onLocationSelectionChange,
+}) {
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
   const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
-  const [selectedLocationId, setSelectedLocationIdState] = useState(() => sessionStorage.getItem('kiosk_sel_loc') || null);
-  const setSelectedLocationId = (v) => {
-    setSelectedLocationIdState(v);
-    try { if (v) sessionStorage.setItem('kiosk_sel_loc', v); else sessionStorage.removeItem('kiosk_sel_loc'); } catch { /* noop */ }
-  };
+  const setSelectedLocationId = onLocationSelectionChange;
   useEffect(() => {
     const onNav = (e) => { if (e.detail === 'dashboard') setSelectedLocationId(null); };
     window.addEventListener('kiosk-nav', onNav);
@@ -474,8 +488,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
   const showLocationPicker = totalGroups > 1 && selectedLocationId === null;
   useEffect(() => {
-    onLocationSelectionChange(totalGroups > 1 && selectedLocationId !== null);
-  }, [onLocationSelectionChange, selectedLocationId, totalGroups]);
+    onLocationSelectionChange(selectedLocationId);
+  }, [onLocationSelectionChange, selectedLocationId]);
 
   // Auto-skip when there's only one (or zero) groups.
   useEffect(() => {
@@ -515,7 +529,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
         {/* Mobile: knoppen bovenaan in 1 rij (matcht ontwerp) */}
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
-        <DesktopKioskHeader title="Kies een locatie" totalGroups={1} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
+        <DesktopKioskHeader title="Kies een locatie" currentStep="select" totalGroups={1}
+          onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
         <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center justify-between gap-2">
           <span className="text-xl font-black text-white tracking-tight">Kies een locatie</span>
         </div>
@@ -572,7 +587,8 @@ function ApartmentSelect({ onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onS
       <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
       {/* Mobile: kleine titel links, onder de knoppen */}
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
-      <DesktopKioskHeader currentLocation={currentLocation} totalGroups={totalGroups}
+      <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
+        currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
       <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0">
         {totalGroups > 1 && (
@@ -3397,8 +3413,8 @@ function KasgeldPanel() {
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
-        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-4 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
-          <div className="row-label-value items-center mb-3 sm:mb-4">
+        <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-3 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
+          <div className="row-label-value items-center mb-2.5 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">Kasgeld</h2>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl px-2.5 py-2">
@@ -3413,8 +3429,8 @@ function KasgeldPanel() {
           </div>
 
           {/* Totaal saldo — orange tile + big SRD amount */}
-          <div className="flex items-center gap-3 mb-3 sm:gap-4 sm:mb-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-2.5 mb-2.5 sm:gap-4 sm:mb-4">
+            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-orange-100 text-[#FF5C00] flex items-center justify-center shrink-0">
               <Wallet className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={2.2} />
             </div>
             <div className="min-w-0 flex-1">
@@ -3426,9 +3442,9 @@ function KasgeldPanel() {
           </div>
 
           {/* 3-currency grid */}
-          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-3 sm:mb-5" data-testid="kasgeld-currency-grid">
+          <div className="grid grid-cols-3 bg-slate-50 rounded-2xl divide-x divide-slate-200 mb-2.5 sm:mb-5" data-testid="kasgeld-currency-grid">
             {['SRD', 'USD', 'EUR'].map((cur) => (
-              <div key={cur} className="px-1.5 py-2.5 sm:px-2 sm:py-3 text-center min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+              <div key={cur} className="px-1.5 py-2 sm:px-2 sm:py-3 text-center min-w-0" data-testid={`kasgeld-bal-${cur}`}>
                 <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">{cur}</p>
                 <p className="text-sm sm:text-base font-black text-slate-900 mt-0.5 tabular-nums leading-tight truncate">
                   {Number(balances[cur] || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -3438,7 +3454,7 @@ function KasgeldPanel() {
           </div>
 
           <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-            className="w-full h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
+            className="w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
             <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
           </button>
         </div>
@@ -5668,6 +5684,7 @@ export default function KioskLayout() {
       employees: 'werknemers', notifications: 'notificaties', instellingen: 'instellingen', settings: 'instellingen', overview: 'overzicht' };
     const onTab = (e) => {
       const t = typeof e.detail === 'string' ? e.detail : e.detail?.tab;
+      menuOrigin = null;
       setAdminPopup(null);
       if (t === 'invoices') { setShowInvoicesModal(false); setStep('admin:facturen'); }
       else if (t === 'kasgeld') setStep('kasgeld');
@@ -6060,7 +6077,15 @@ export default function KioskLayout() {
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
-  const [hasLocationSelection, setHasLocationSelection] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState(() => {
+    try { return sessionStorage.getItem('kiosk_sel_loc') || null; } catch { return null; }
+  });
+  useEffect(() => {
+    try {
+      if (selectedLocationId) sessionStorage.setItem('kiosk_sel_loc', selectedLocationId);
+      else sessionStorage.removeItem('kiosk_sel_loc');
+    } catch { /* noop */ }
+  }, [selectedLocationId]);
   const popupSetters = {
     'add-location': [showAddLocation, setShowAddLocation], 'add-apartment': [showAddApartment, setShowAddApartment],
     'add-tenant': [showAddTenant, setShowAddTenant], 'add-invoice': [showAddInvoice, setShowAddInvoice],
@@ -6072,27 +6097,75 @@ export default function KioskLayout() {
     setAdminPopup(null);
   };
   const stableStep = step === 'select' || step === 'overview' || step === 'kasgeld' || step === 'stroom' || step.startsWith('admin:');
-  const sameEntry = (e) => e && e.step === step && e.apartment?.id === apartment?.id && e.popup === popupKey;
+  useEffect(() => {
+    if (!step.startsWith('admin:') && menuOrigin?.menu === 'admin') menuOrigin = null;
+  }, [step]);
+  const sameEntry = (e) => e && e.step === step && e.apartment?.id === apartment?.id
+    && e.popup === popupKey && e.location === selectedLocationId;
   useEffect(() => {
     const h = hist.current;
     if (!stableStep || sameEntry(h.list[h.i])) return;
     // Venster gesloten → zelfde als één stap terug (geen dubbele entry).
     if (sameEntry(h.list[h.i - 1])) { h.i -= 1; setHistTick((t) => t + 1); return; }
-    h.list = [...h.list.slice(0, h.i + 1), { step, apartment, popup: popupKey }];
+    h.list = [...h.list.slice(0, h.i + 1), { step, apartment, popup: popupKey, location: selectedLocationId }];
     h.i = h.list.length - 1;
     setHistTick((t) => t + 1);
-  }, [step, apartment, popupKey]);
+  }, [step, apartment, popupKey, selectedLocationId]);
   const applyEntry = (e) => {
     setApartment(e.apartment); setStep(e.step);
+    setSelectedLocationId(e.location ?? null);
     Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k));
     setAdminPopup(e.popup && !popupSetters[e.popup] ? e.popup : null);
     setHistTick((t) => t + 1);
   };
+  const returnFromAdminPage = () => {
+    if (!step.startsWith('admin:') || menuOrigin?.menu !== 'admin') return false;
+    const h = hist.current;
+    const current = sameEntry(h.list[h.i]) ? h.list[h.i]
+      : { step, apartment, popup: popupKey, location: selectedLocationId };
+    let menuIndex = -1;
+    for (let index = h.i - 1; index >= 0; index -= 1) {
+      const entry = h.list[index];
+      if (entry.step === menuOrigin.returnTo?.step
+        && entry.location === menuOrigin.returnTo?.location
+        && entry.apartment?.id === menuOrigin.returnTo?.apartment?.id
+        && !entry.popup) {
+        menuIndex = index;
+        break;
+      }
+    }
+    const menuEntry = menuIndex >= 0
+      ? h.list[menuIndex]
+      : { ...menuOrigin.returnTo, popup: null };
+    h.list = [
+      ...(menuIndex >= 0 ? h.list.slice(0, menuIndex) : []),
+      menuEntry,
+      current,
+    ];
+    h.i = h.list.length - 2;
+    applyEntry(menuEntry);
+    returnToMenu();
+    return true;
+  };
   const goHist = (d) => {
-    if (d < 0 && step === 'select' && hasLocationSelection && !popupKey) {
-      window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: 'dashboard' }));
+    if (d < 0 && returnFromAdminPage()) return;
+    if (d < 0 && step === 'select' && selectedLocationId && !popupKey) {
+      const h = hist.current;
+      const previous = h.list[h.i - 1];
+      if (previous?.step === 'select' && previous.location == null && !previous.popup) {
+        h.i -= 1;
+        applyEntry(previous);
+      } else {
+        const current = sameEntry(h.list[h.i]) ? h.list[h.i]
+          : { step, apartment, popup: popupKey, location: selectedLocationId };
+        const picker = { ...current, location: null };
+        h.list = [...h.list.slice(0, h.i), picker, current];
+        h.i = h.list.length - 2;
+        applyEntry(picker);
+      }
       return;
     }
+    if (d > 0) window.dispatchEvent(new CustomEvent('kiosk-close-menu'));
     const h = hist.current;
     if (d < 0 && !stableStep && h.list[h.i]) { applyEntry(h.list[h.i]); return; }
     const e = h.list[h.i + d];
@@ -6101,18 +6174,24 @@ export default function KioskLayout() {
     applyEntry(e);
   };
   const goBack = () => {
-    if (step === 'kasgeld') {
-      setStep('select');
+    if (returnFromAdminPage()) return;
+    if (hist.current.i > 0 || (!stableStep && hist.current.i >= 0)
+      || (step === 'select' && selectedLocationId && !popupKey)) {
+      goHist(-1);
       return;
     }
-    if ((step === 'stroom' || step.startsWith('admin:')) && hist.current.i <= 0) {
-      setStep('select');
-      return;
+    if (step !== 'select' && hist.current.i <= 0) {
+      const h = hist.current;
+      const current = sameEntry(h.list[h.i]) ? h.list[h.i]
+        : { step, apartment, popup: popupKey, location: selectedLocationId };
+      const menuEntry = { step: 'select', apartment: null, popup: null, location: selectedLocationId };
+      h.list = [menuEntry, current];
+      h.i = 0;
+      applyEntry(menuEntry);
     }
-    goHist(-1);
   };
   const canBack = step === 'kasgeld' || step === 'stroom' || step.startsWith('admin:')
-    || (step === 'select' && hasLocationSelection && !popupKey)
+    || (step === 'select' && selectedLocationId && !popupKey)
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
@@ -6298,7 +6377,9 @@ export default function KioskLayout() {
       )}
       {showTopHead && (
         <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 z-10" style={{ top: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 0, padding: 'var(--kiosk-sat) 1.5vw 0' }}>
-          <DesktopKioskHeader title={STEP_TITLES[step]} totalGroups={1} onAdmin={adminMode}
+          <DesktopKioskHeader title={STEP_TITLES[step]} currentStep={step}
+            currentLocationId={selectedLocationId} currentApartment={apartment}
+            totalGroups={1} onAdmin={adminMode}
             tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
               ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
               : null}
@@ -6324,7 +6405,8 @@ export default function KioskLayout() {
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
-              onLocationSelectionChange={setHasLocationSelection}
+              selectedLocationId={selectedLocationId}
+              onLocationSelectionChange={setSelectedLocationId}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
@@ -6335,7 +6417,7 @@ export default function KioskLayout() {
           {step === 'admin:appartementen' && hasAdminAccess && (
             <div className="h-full min-h-0 kiosk-admin-skin">
               <KioskApartmentsPanel
-                onBack={() => setStep('select')}
+                onBack={goBack}
                 onNewApartment={() => setShowAddApartment(true)}
                 reloadKey={apartmentsReloadKey}
                 onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
@@ -6343,26 +6425,26 @@ export default function KioskLayout() {
             </div>
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
-            <KioskAdminPage id="huurders" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
-            <KioskAdminPage id="locaties" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
-            <KioskAdminPage id="contracten" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:betalingen' && hasAdminAccess && (
-            <KioskAdminPage id="betalingen" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:regelingen' && hasAdminAccess && (
-            <KioskAdminPage id="regelingen" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
-            <KioskAdminPage id="facturen" kioskLayout onBack={() => setStep('select')} />
+            <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
-            <KioskAdminPage id={step.slice(6)} onBack={() => setStep('select')} />
+            <KioskAdminPage id={step.slice(6)} onBack={goBack} />
           )}
           {step === 'kasgeld' && (
             <KasgeldPanel />
@@ -6546,7 +6628,7 @@ export default function KioskLayout() {
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
-            <KioskHistBtn dir="back" disabled={!canBack} onClick={() => goHist(-1)} white={isWhite} green={isGreen} />
+            <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />
             {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
