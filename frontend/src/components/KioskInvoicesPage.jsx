@@ -49,35 +49,31 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
     <div className="relative bg-white rounded-2xl ring-1 ring-slate-100 shadow-[0_6px_18px_-10px_rgba(120,40,0,0.35)] overflow-hidden flex flex-col"
       data-testid={`kiosk-inv-tile-${g.tenant_id}`}>
       <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${t.bar}`} />
-      <button type="button" onClick={() => onOpen(g)} className="text-left pl-5 pr-4 pt-4 pb-3 flex-1 flex flex-col justify-start hover:bg-orange-50/40 transition-colors"
+      <button type="button" onClick={() => onOpen(g)} className="w-full text-left pl-5 pr-3 py-3 flex items-center gap-3 hover:bg-orange-50/40 transition-colors"
         data-testid={`kiosk-inv-open-${g.tenant_id}`}>
-        <div className="flex items-start gap-2">
-          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
-          <div className="min-w-0 flex-1">
-            <p className="text-lg font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
-            <p className="text-sm font-bold text-slate-700 truncate">{g.tenant_name}</p>
-            <p className="text-xs text-slate-400 truncate">{g.location_name}</p>
-            <CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />
-          </div>
-          <ChevronRight className="w-5 h-5 text-slate-300 shrink-0 mt-1" />
+        <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-slate-900 uppercase tracking-tight truncate">{g.apartment_number || '—'}</p>
+          <p className="text-xs font-semibold text-slate-700 truncate">{g.tenant_name}</p>
+          <p className="text-[11px] text-slate-400 truncate">{g.location_name}</p>
+          <CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />
         </div>
-        <div className="mt-3 flex items-end justify-between gap-2">
-          <span className={`rounded-full px-3 py-1 text-xs font-bold ${t.chip}`}>{t.text}</span>
-          <span className="text-right">
-            <span className={`block text-xl font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
-            <span className="block text-[11px] text-slate-400">{per}</span>
-          </span>
+        <div className="shrink-0 text-right">
+          <p className={`text-base sm:text-lg font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</p>
+          <p className="text-[10px] text-slate-400">{per}</p>
+          <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${t.chip}`}>{t.text}</span>
         </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
       </button>
       {g.dueCount > 0 && (
         <div className="grid grid-cols-2 border-t border-slate-100">
           <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
-            className="h-12 inline-flex items-center justify-center gap-2 font-black text-[#FF5C00] hover:bg-orange-50 transition-colors">
-            <Banknote className="w-5 h-5" /> Betalen
+            className="h-10 inline-flex items-center justify-center gap-2 text-sm font-black text-[#FF5C00] hover:bg-orange-50 transition-colors">
+            <Banknote className="w-4 h-4" /> Betalen
           </button>
           <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
-            className="h-12 inline-flex items-center justify-center gap-2 font-black text-emerald-700 hover:bg-emerald-50 border-l border-slate-100 transition-colors">
-            <MessageCircle className="w-5 h-5" /> Herinnering
+            className="h-10 inline-flex items-center justify-center gap-2 text-sm font-black text-emerald-700 hover:bg-emerald-50 border-l border-slate-100 transition-colors">
+            <MessageCircle className="w-4 h-4" /> Herinnering
           </button>
         </div>
       )}
@@ -439,7 +435,7 @@ export default function KioskInvoicesPage({ onBack }) {
         <button type="button" onClick={() => setMsg(null)} aria-label="Melding sluiten"><X className="h-4 w-4" /></button>
       </div>}
 
-      <main className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden"
+      <main className="mx-auto w-full max-w-7xl flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden"
         data-testid="kiosk-inv-list">
         {creating ? (
           <section className="min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 sm:p-6" data-testid="kiosk-inv-create">
