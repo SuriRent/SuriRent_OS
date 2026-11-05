@@ -192,7 +192,7 @@ const TOUR_STEPS = [
     title: 'Betalingsregelingen',
     description: 'Volg afspraken waarbij een huurder een openstaand bedrag in termijnen betaalt. Bekijk de voortgang en de volgende vervaldatum.',
     route: { type: 'page', id: 'regelingen' },
-    target: 'kiosk-popup-regelingen-title',
+    target: 'kiosk-payment-plans',
   },
   {
     title: 'Facturen',
