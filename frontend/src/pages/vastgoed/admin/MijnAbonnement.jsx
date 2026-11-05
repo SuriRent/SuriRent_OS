@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
-  CheckCircle2, AlertCircle, ArrowUp, ArrowDown, Loader2, Landmark, Banknote, Copy, Check, Crown,
-  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert, AlertTriangle, Clock,
+  CheckCircle2, AlertCircle, ArrowUp, ArrowDown, Loader2, Landmark, Banknote, Copy, Check,
+  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
-import { Tab, KpiCard } from './invoices/kpi';
+import { Tab } from './invoices/kpi';
 
 const fmt = (n, c = 'SRD') => {
   const cur = (c || 'SRD').toUpperCase();
@@ -23,7 +23,6 @@ const intervalLabel = (interval) => ({
   once: 'eenmalig',
 }[interval] || 'maand');
 const METHOD_LABEL = { creditcard: 'Creditcard', ideal: 'iDEAL', bank: 'Bank', stripe: 'Stripe', contant: 'Contant' };
-const STATUS_LABEL = { trial: 'Proefperiode', active: 'Actief', expired: 'Verlopen', cancelled: 'Opgezegd' };
 const CARD = 'bg-white rounded-2xl border border-orange-100';
 
 function StatusPill({ tone, children }) {
@@ -37,51 +36,6 @@ function StatusPill({ tone, children }) {
     <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-md ${t}`}>
       <i className="w-1.5 h-1.5 rounded-full" />{children}
     </span>
-  );
-}
-
-const KPI_TONE = {
-  orange: 'bg-orange-100 text-orange-500', green: 'bg-emerald-100 text-emerald-500', red: 'bg-red-100 text-red-500',
-};
-
-function MiniKpi({ icon: Icon, label, value, hint, tone, testid }) {
-  return (
-    <div className="bg-white p-3.5 min-w-0" data-testid={`${testid}-m`}>
-      <div className="flex items-center gap-2">
-        <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${KPI_TONE[tone]}`}><Icon className="w-3.5 h-3.5" /></span>
-        <p className="text-[11px] font-semibold text-slate-500 truncate">{label}</p>
-      </div>
-      <p className="text-base font-black text-slate-900 tracking-tight mt-2 truncate">{value}</p>
-      {hint && <p className={`text-[11px] font-bold mt-0.5 truncate ${tone === 'red' ? 'text-red-500' : 'text-slate-400'}`}>{hint}</p>}
-    </div>
-  );
-}
-
-function KpiStrip({ me, openInvoices, openTotal, lastPayment }) {
-  const expired = me.status === 'expired';
-  const statusHint = me.status === 'trial' ? `Nog ${me.days_left ?? '—'} dagen · t/m ${fmtDate(me.trial_ends_at)}`
-    : me.status === 'active' ? `Vernieuwt ${fmtDate(me.renews_at)}`
-      : expired ? 'Betaling vereist' : fmtDate(me.cancelled_at);
-  const items = [
-    { icon: Crown, label: 'Huidig pakket', value: me.plan?.name || '—', hint: `${fmt(me.monthly_amount, me.currency)} / ${me.plan?.interval === 'quarter' ? 'kwartaal' : me.plan?.interval === 'year' ? 'jaar' : me.plan?.interval === 'lifetime' ? 'eenmalig' : 'maand'}`, tone: 'orange', testid: 'my-sub-kpi-plan' },
-    { icon: expired ? AlertTriangle : me.status === 'trial' ? Clock : CheckCircle2, label: 'Status', value: STATUS_LABEL[me.status] || me.status,
-      hint: statusHint, tone: expired ? 'red' : me.status === 'active' ? 'green' : 'orange', testid: 'my-sub-kpi-status' },
-    { icon: Receipt, label: 'Openstaand', value: fmt(openTotal, me.currency),
-      hint: openInvoices.length ? `${openInvoices.length} factu${openInvoices.length === 1 ? 'ur' : 'ren'} open` : 'Alles betaald',
-      tone: openTotal > 0 ? 'red' : 'green', testid: 'my-sub-kpi-open' },
-    { icon: Banknote, label: 'Laatste betaling', value: lastPayment ? fmtDate(lastPayment.paid_at) : 'Nog geen',
-      hint: lastPayment ? `${fmt(lastPayment.amount, lastPayment.currency)} · ${METHOD_LABEL[lastPayment.method] || lastPayment.method}` : '',
-      tone: 'green', testid: 'my-sub-kpi-last' },
-  ];
-  return (
-    <div data-testid="my-sub-status">
-      <div className="md:hidden grid grid-cols-2 gap-px bg-orange-100 rounded-2xl border border-orange-100 overflow-hidden">
-        {items.map((k) => <MiniKpi key={k.testid} {...k} />)}
-      </div>
-      <div className="hidden md:grid grid-cols-2 xl:grid-cols-4 gap-px bg-orange-100 rounded-2xl border border-orange-100 overflow-hidden [&_.capitalize]:normal-case">
-        {items.map((k) => <div key={k.testid} className="bg-white"><KpiCard {...k} icon={k.icon === Receipt ? 'alert' : k.icon} /></div>)}
-      </div>
-    </div>
   );
 }
 
@@ -529,28 +483,40 @@ export default function MijnAbonnement() {
   const openInvoices = invoices.filter(isOpen);
   const sortedOpen = [...openInvoices].sort((a, b) => String(a.period_start || a.created_at).localeCompare(String(b.period_start || b.created_at)));
   const oldestOpen = sortedOpen[0];
-  const openTotal = openInvoices.reduce((s, i) => s + Number(i.amount || 0), 0);
   const showBank = !!bank && (me.currency || 'SRD') === 'SRD';
 
   return (
-    <div className="space-y-4" data-testid="mijn-abonnement">
+    <div className="space-y-6" data-testid="mijn-abonnement">
       {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="my-sub-error">{err}</div>}
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
-      <KpiStrip me={me} openInvoices={openInvoices} openTotal={openTotal} lastPayment={payments[0]} />
-      <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} bankOn={showBank}
-        onPayMany={payMany} onBankPay={goBankPay} />
-      <AutopayCard autopay={autopay} stripeOn={stripeOn} hasOpen={sortedOpen.length > 0} busy={apBusy}
-        onToggle={(v) => apCall(() => api.put('/billing/me/autopay', { enabled: v }))}
-        onRemove={() => { if (window.confirm('Opgeslagen kaart verwijderen en automatisch betalen uitzetten?')) apCall(() => api.delete('/billing/me/autopay')); }}
-        onSetup={() => payMany(sortedOpen.map((i) => i.id), 'card', true)} />
+      <header className="border-b border-slate-200 pb-4">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#FF6A1A]">Facturering</p>
+        <h2 className="mt-1 text-xl sm:text-2xl font-black tracking-tight text-slate-900">Mijn abonnement</h2>
+        <p className="mt-1 text-sm text-slate-500">Beheer betalingen, facturen en je pakket op één plek.</p>
+      </header>
 
-      <div className={`${CARD} px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0`} data-testid="my-sub-tabs">
+      <section aria-label="Betalingen en facturen" className={`grid grid-cols-1 gap-4 [&>*]:min-w-0 ${stripeOn ? 'xl:grid-cols-5' : ''}`}>
+        <div className={stripeOn ? 'xl:col-span-3' : ''}>
+          <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} bankOn={showBank}
+            onPayMany={payMany} onBankPay={goBankPay} />
+        </div>
+        {stripeOn && (
+          <div className="xl:col-span-2">
+            <AutopayCard autopay={autopay} stripeOn={stripeOn} hasOpen={sortedOpen.length > 0} busy={apBusy}
+              onToggle={(v) => apCall(() => api.put('/billing/me/autopay', { enabled: v }))}
+              onRemove={() => { if (window.confirm('Opgeslagen kaart verwijderen en automatisch betalen uitzetten?')) apCall(() => api.delete('/billing/me/autopay')); }}
+              onSetup={() => payMany(sortedOpen.map((i) => i.id), 'card', true)} />
+          </div>
+        )}
+      </section>
+
+      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-1 sm:gap-3 overflow-x-auto border-b border-slate-200 no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0" data-testid="my-sub-tabs">
         <Tab v="invoices" tab={tab} setTab={setTab} label={`Facturen (${invoices.length})`} dot={openInvoices.length ? 'red' : undefined} testid="my-sub-tab-invoices" />
         <Tab v="payments" tab={tab} setTab={setTab} label={`Betalingen (${payments.length})`} dot="green" testid="my-sub-tab-payments" />
         <Tab v="plans" tab={tab} setTab={setTab} label="Pakket wijzigen" testid="my-sub-tab-plans" />
         {showBank && <Tab v="bank" tab={tab} setTab={setTab} label="Bankoverschrijving" testid="my-sub-tab-bank" />}
-      </div>
+      </nav>
 
       <div className={`${CARD} overflow-hidden`} data-testid={`my-sub-panel-${tab}`}>
         {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}

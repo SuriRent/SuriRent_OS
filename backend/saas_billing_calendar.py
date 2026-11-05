@@ -37,19 +37,56 @@ def saas_invoice_amount(plan: Optional[dict], amount: float, period_start: datet
 
 def saas_invoice_cycle_fields(plan: Optional[dict]) -> dict:
     interval = str((plan or {}).get("interval") or "month").lower()
-    return {"billing_cycle": "calendar_month"} if interval == "month" else {}
+    return {"billing_cycle": "calendar_month_arrears"} if interval == "month" else {}
+
+
+def monthly_billing_period(issue_at: datetime) -> tuple[datetime, datetime]:
+    """Return the completed calendar month immediately before an invoice date."""
+    if issue_at.tzinfo is None:
+        issue_at = issue_at.replace(tzinfo=timezone.utc)
+    current_month = issue_at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    period_end = current_month - timedelta(days=1)
+    period_start = period_end.replace(day=1)
+    return period_start, period_end
+
+
+def next_monthly_invoice_date(period_end: datetime) -> datetime:
+    """Monthly arrears are invoiced on the first day after the next service month."""
+    month_index = period_end.year * 12 + period_end.month - 1 + 2
+    year, month = divmod(month_index, 12)
+    return period_end.replace(
+        year=year, month=month + 1, day=1, hour=0, minute=0, second=0, microsecond=0,
+    )
+
+
+def invoice_covers_period(invoice: Optional[dict], period_start: datetime,
+                          period_end: datetime) -> bool:
+    if not invoice:
+        return False
+    entries = invoice.get("charge_history") or [invoice]
+    for entry in entries:
+        if entry.get("kind") not in {"subscription", "plan_change"}:
+            continue
+        try:
+            start = datetime.fromisoformat(str(entry["period_start"]).replace("Z", "+00:00"))
+            end = datetime.fromisoformat(str(entry["period_end"]).replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if start.date() <= period_end.date() and end.date() >= period_start.date():
+            return True
+    return False
 
 
 def saas_next_renewal(plan: Optional[dict], invoice: Optional[dict],
                       now: datetime) -> Optional[datetime]:
     interval = str((plan or {}).get("interval") or "month").lower()
-    if interval == "month" and (invoice or {}).get("billing_cycle") == "calendar_month":
+    if interval == "month":
         period_end = (invoice or {}).get("period_end")
         try:
             end = datetime.fromisoformat(str(period_end).replace("Z", "+00:00"))
             if end.tzinfo is None:
                 end = end.replace(tzinfo=timezone.utc)
-            return end.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            return next_monthly_invoice_date(end)
         except (TypeError, ValueError):
             pass
     period_end = plan_period_end(plan, now)

@@ -46,13 +46,20 @@ def test_kiosk_pin_login():
     assert body.get("token") or body.get("kiosk_token") or body.get("ok")
 
 
-# --- Superadmin login ---
-def test_superadmin_login():
+# --- Superadmin PIN-only login ---
+def test_superadmin_login_is_pin_only():
     r = requests.post(f"{BASE}/auth/login", json={
         "email": SUPER_EMAIL, "password": SUPER_PASSWORD
     })
-    assert r.status_code == 200, r.text
-    assert r.json().get("token")
+    assert r.status_code == 403, r.text
+
+    password_login = requests.post(f"{BASE}/auth/superadmin/login", json={
+        "email": SUPER_EMAIL, "password": SUPER_PASSWORD
+    })
+    assert password_login.status_code == 404, password_login.text
+
+    invalid_pin = requests.post(f"{BASE}/auth/superadmin/pin-login", json={"pin": "12"})
+    assert invalid_pin.status_code == 400, invalid_pin.text
 
 
 # --- Public landing by slug ---

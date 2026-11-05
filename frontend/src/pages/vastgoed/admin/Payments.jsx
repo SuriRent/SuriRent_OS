@@ -4,7 +4,7 @@ import { hostConfirm } from '../../../components/EmbedConfirm';
 import { useDeepLink } from '../../../lib/deep-link';
 import { closeApprovalNotification } from '../../../lib/approval-notify-sync';
 import {
-  Plus, X, Check, Loader2, Search, FileText, Mail, ShieldCheck, ChevronRight, ChevronLeft,
+  X, Check, Loader2, Search, FileText, Mail, Image as ImageIcon, ChevronRight, ChevronLeft,
   ChevronDown, CalendarDays, Banknote, CheckCircle2, Clock,
   TrendingUp, Receipt, Wallet, Home as HomeIcon, Trash2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
@@ -13,6 +13,7 @@ import { useAdminEvents } from '../../../lib/admin-events';
 import { usePagedList, LoadMoreSentinel, useDebounced } from '../../../lib/use-paged-list';
 import { useApiSWR } from '../../../lib/swr';
 import { SendDialog } from '../../../components/EmailDialog';
+import { KioskReceiptImageButton } from '../../../components/KioskReceiptImageButton';
 import SignaturePad from '../../../components/SignaturePad';
 import KeyboardSafeModal from '../../../components/KeyboardSafeModal';
 import NumPad from '../../../components/NumPad';
@@ -381,9 +382,9 @@ function PaymentRow({ p, onOpen }) {
     <div onClick={() => onOpen(p)} data-testid={`payment-row-${p.id}`}
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p); }}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
-        <Receipt className="w-5 h-5" />
+      className="kiosk-finance-row w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100 cursor-pointer transition">
+      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
+        <Receipt className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -407,8 +408,8 @@ function PaymentRow({ p, onOpen }) {
           <span> · {dateShort}</span>
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
-        <p className="text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
+      <div className="kiosk-finance-row-value text-right shrink-0 flex flex-col items-end gap-0.5">
+        <p className="text-sm sm:text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
           {p.currency} {fmtAmountWhole(p.amount)}
         </p>
         {p.period_month && (
@@ -426,8 +427,9 @@ function PaymentRow({ p, onOpen }) {
 // grote "Terug"-pil, hoofdcard met naam + bedrag, sub-cards voor
 // betaalgegevens en gekoppelde factuur. Sub-card "Acties" onderaan.
 // =====================================================================
-function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
+function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }) {
   const p = payment;
+  const [detailTab, setDetailTab] = useState('overzicht');
   const [linkedInvoice, setLinkedInvoice] = useState(null);
   // Openstaande facturen van deze huurder — voor "Wijzig gekoppelde factuur"
   const [tenantInvoices, setTenantInvoices] = useState([]);
@@ -480,58 +482,114 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
   })();
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid={`payment-detail-page-${p.id}`}>
-      {/* TERUG-PIL — zelfde stijl als in PlanDetail */}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} data-testid="payment-detail-back"
-          className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-          <ArrowLeft className="w-4 h-4" /> Terug
-        </button>
-      </div>
-
-      {/* HOOFDCARD — naam + subtitle links, bedrag + label rechts */}
-      <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-black text-slate-900 truncate">{p.tenant_name || 'Onbekende huurder'}</h1>
-            {p.apartment_number && (
-              <p className="text-xs text-slate-500">
-                {p.location_name ? `${p.location_name} · ` : ''}Appt. {p.apartment_number}
-              </p>
-            )}
-            {p.note && <p className="text-sm text-slate-600 mt-2">{p.note}</p>}
-            <div className="flex items-center gap-2 flex-wrap mt-3">
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
-                {CATEGORY_LABELS[p.category] || p.category}
-              </span>
-              <MethodPill method={p.method} />
+    <div className={kioskMode ? 'flex min-h-full flex-col gap-3 pb-3' : 'space-y-4 pb-24 sm:pb-6'}
+      data-testid={`payment-detail-page-${p.id}`}>
+      {kioskMode ? (
+        <>
+          <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]">
+                <Receipt className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">
+                  Betaling{p.receipt_number ? ` · ${p.receipt_number}` : ''}
+                </p>
+                <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                  {p.apartment_number || 'Geen appartement'}
+                </h1>
+                <p className="truncate text-sm font-semibold text-slate-500">
+                  {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
+                </p>
+              </div>
+              <div className="hidden shrink-0 text-right sm:block">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Bedrag</p>
+                <p className="text-xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${statusBadge.cls}`}>{statusBadge.l}</span>
+              <button onClick={onBack} data-testid="payment-detail-back"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <ArrowLeft className="h-4 w-4" /> Terug
+              </button>
+            </div>
+          </section>
+          <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+            role="tablist" aria-label="Betalingsdetails">
+            {[
+              ['overzicht', 'Overzicht'],
+              ...(p.invoice_id ? [['factuur', 'Factuur']] : []),
+              ['acties', 'Kwitantie en acties'],
+            ].map(([tab, label]) => (
+              <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
+                onClick={() => setDetailTab(tab)} data-testid={`payment-detail-tab-${tab}`}
+                className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                  detailTab === tab ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {detailTab === 'overzicht' && p.note && (
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Notitie</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{p.note}</p>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <button onClick={onBack} data-testid="payment-detail-back"
+              className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Terug
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-xl font-black text-slate-900 truncate">{p.apartment_number || 'Geen appartement'}</h1>
+                <p className="text-xs text-slate-500">
+                  {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
+                </p>
+                {p.note && <p className="text-sm text-slate-600 mt-2">{p.note}</p>}
+                <div className="flex items-center gap-2 flex-wrap mt-3">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
+                    {CATEGORY_LABELS[p.category] || p.category}
+                  </span>
+                  <MethodPill method={p.method} />
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Betaald</p>
+                <p className="text-2xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
+                <p className="text-[11px] text-slate-500">op {date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Betaald</p>
-            <p className="text-2xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
-            <p className="text-[11px] text-slate-500">op {date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* SUB-CARD: BETAALGEGEVENS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {(!kioskMode || detailTab === 'overzicht') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Betaalgegevens</h2>
+          <h2 className="text-base font-black text-slate-900">Betaalgegevens</h2>
         </div>
         <div className="p-4 space-y-1.5 text-sm">
           <DetailRow label="Kwitantienummer" value={<span className="font-mono font-bold text-slate-900">{p.receipt_number}</span>} />
           <DetailRow label="Datum" value={date.toLocaleString('nl-NL')} />
+          <DetailRow label="Bedrag" value={fmtMoney(p.amount, p.currency)} />
           <DetailRow label="Methode" value={METHOD_LABELS[p.method] || p.method} />
+          <DetailRow label="Categorie" value={CATEGORY_LABELS[p.category] || p.category || '—'} />
           {p.period_month && <DetailRow label="Periode" value={`${MONTHS_NL[p.period_month - 1]} ${p.period_year}`} />}
           {p.approved_by && <DetailRow label="Goedgekeurd door" value={p.approved_by} />}
         </div>
-      </div>
+      </div>}
 
       {/* SUB-CARD: GEKOPPELDE FACTUUR (indien aanwezig) */}
-      {p.invoice_id && (
+      {(!kioskMode || detailTab === 'factuur') && p.invoice_id && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="payment-linked-invoice">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Gekoppelde factuur</h2>
@@ -641,33 +699,28 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, apiBase }) {
       )}
 
       {/* SUB-CARD: ACTIES */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {(!kioskMode || detailTab === 'acties') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
+          <h2 className="text-base font-black text-slate-900">Kwitantie en acties</h2>
         </div>
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <a href={`${apiBase}/payments/${p.id}/pdf`} target="_blank" rel="noreferrer"
-            data-testid={`payment-pdf-${p.id}`}
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+            testId={`payment-image-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-bold rounded-xl text-xs sm:text-sm">
-            <FileText className="w-4 h-4" /> PDF
-          </a>
+            <ImageIcon className="w-4 h-4" /> Bon JPG
+          </KioskReceiptImageButton>
           <button onClick={() => onEmail(p)}
             data-testid={`payment-email-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-xs sm:text-sm">
             <Mail className="w-4 h-4" /> Verstuur
           </button>
-          <a href={`${apiBase}/payments/${p.id}/secure-pdf`} target="_blank" rel="noreferrer"
-            data-testid={`payment-secure-pdf-${p.id}`}
-            className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-orange-300 hover:bg-orange-50 text-[#FF5C00] font-bold rounded-xl text-xs sm:text-sm">
-            <ShieldCheck className="w-4 h-4" /> Beveiligd
-          </a>
           <button onClick={() => { onDelete(p); onBack(); }}
             data-testid={`payment-delete-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-red-300 hover:bg-red-500 hover:text-white text-red-600 font-bold rounded-xl text-xs sm:text-sm transition">
             <Trash2 className="w-4 h-4" /> Verwijder
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -896,7 +949,7 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // =====================================================================
 // Main page
 // =====================================================================
-export default function Payments({ embedded = false }) {
+export default function Payments({ embedded = false, kioskLayout = false, onBack }) {
   // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
   const today = useMemo(() => new Date(), []);
   // Maand-picker — default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
@@ -1034,7 +1087,6 @@ export default function Payments({ embedded = false }) {
     };
   }, [load]);
 
-  const apiBase = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
   const stepMonth = (delta) => {
     const d = new Date(selectedYear, selectedMonth + delta, 1);
@@ -1058,14 +1110,21 @@ export default function Payments({ embedded = false }) {
   // if-branch zodat ze ook geopend kunnen worden vanuit de detail-view.
   if (detailPayment) {
     return (
-      <>
-        <PaymentDetail
-          payment={detailPayment}
-          onBack={() => { setDetailPayment(null); load(); }}
-          onEmail={(item) => setEmailing(item)}
-          onDelete={(item) => setDeleting(item)}
-          apiBase={apiBase}
-        />
+      <div className={kioskLayout
+        ? 'h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0'
+        : ''} style={kioskLayout ? { paddingLeft: '1.5vw', paddingRight: '1.5vw' } : undefined}
+        data-testid={kioskLayout ? 'kiosk-payment-detail' : undefined}>
+        <div className={kioskLayout ? 'flex-1 min-h-0 overflow-y-auto py-3' : ''}>
+          <div className={kioskLayout ? 'mx-auto flex min-h-full max-w-7xl flex-col gap-3' : ''}>
+            <PaymentDetail
+              payment={detailPayment}
+              kioskMode={kioskLayout}
+              onBack={() => { setDetailPayment(null); load(); }}
+              onEmail={(item) => setEmailing(item)}
+              onDelete={(item) => setDeleting(item)}
+            />
+          </div>
+        </div>
         {emailing && (
           <SendDialog
             documentType="payment"
@@ -1077,13 +1136,139 @@ export default function Payments({ embedded = false }) {
             tenantName={emailing.tenant_name}
             onClose={() => setEmailing(null)} />
         )}
-      </>
+      </div>
     );
   }
 
   return (
-    <div data-testid="payments-page" className={embedded ? 'space-y-4' : ''}>
-      {embedded ? (
+    <div data-testid="payments-page" className={kioskLayout ? 'h-full w-full' : embedded ? 'space-y-4' : ''}>
+      {kioskLayout ? (
+        <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+          style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-payments-panel">
+          <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+            {onBack ? (
+              <button onClick={onBack} data-testid="payments-panel-back"
+                className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 active:scale-95 transition">
+                <ArrowLeft className="w-4 h-4" /> <span className="text-xs">Terug</span>
+              </button>
+            ) : <span />}
+            <div className="text-right text-white">
+              <p className="text-sm font-semibold">Betalingen</p>
+              <p className="text-[10px] opacity-70">Betalingsoverzicht</p>
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
+            <section className="kiosk-admin-summary bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-2.5 sm:p-6 shrink-0 md:shrink md:overflow-y-auto"
+              data-testid="payments-summary">
+              <div className="kiosk-admin-summary-heading row-label-value items-center mb-2 sm:mb-4">
+                <h2 className="text-base sm:text-2xl font-black text-slate-900 tracking-tight">Betalingen</h2>
+                <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-[#FF5C00]" />
+              </div>
+
+              <MonthStepper year={selectedYear} month={selectedMonth}
+                onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
+                isCurrent={isCurrentMonth}
+                count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
+
+              <div className="kiosk-payments-stats">
+                <div className="rounded-2xl bg-orange-50 p-2.5 sm:p-4">
+                  <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal deze maand</p>
+                  <p className="mt-0.5 break-words text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-2xl"
+                    data-testid="payments-month-total">{fmtMoney(summary.monthSum || 0, currency)}</p>
+                </div>
+                <div className="kiosk-payments-secondary-stats grid grid-cols-2 gap-1.5 mt-1.5 sm:mt-3 sm:gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Betalingen</p>
+                    <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl" data-testid="payments-month-count">
+                      {summary.monthCount || 0}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                    <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Te keuren</p>
+                    <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="payments-pending-count">
+                      {pending.length}
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-2 sm:p-4">
+                  <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Vandaag</p>
+                  <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums sm:mt-1 sm:text-lg">
+                    {fmtMoney(todaySum, currency)}
+                  </p>
+                </div>
+              </div>
+
+              {onBack && (
+                <button type="button" onClick={onBack} data-testid="payments-panel-back-desktop"
+                  className="mt-4 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 md:inline-flex">
+                  <ArrowLeft className="h-4 w-4" /> Terug
+                </button>
+              )}
+            </section>
+
+            <section className="kiosk-admin-list flex-1 min-h-0 bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-2.5 sm:p-5 min-w-0 overflow-hidden"
+              data-testid="payments-recent">
+              <div className="row-label-value items-center mb-2 sm:mb-3">
+                <h3 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">Recente betalingen</h3>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1">
+                  {totalCount} kwitanties
+                </span>
+              </div>
+
+              <div className="kiosk-admin-mobile-control mb-2">
+                <MonthStepper year={selectedYear} month={selectedMonth}
+                  onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
+                  isCurrent={isCurrentMonth}
+                  count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} compact />
+              </div>
+
+              <div className="relative mb-2 sm:mb-3">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Zoek huurder, kwitantie of appartement…"
+                  data-testid="payment-search"
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-xs outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
+              </div>
+
+              {pending.length > 0 && (
+                <section className="mb-3 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 p-3"
+                  data-testid="pending-section-desktop">
+                  <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-amber-700">
+                    <Clock className="h-4 w-4" /> Wacht op goedkeuring · {pending.length}
+                  </div>
+                  <div className="max-h-52 space-y-2 overflow-y-auto">
+                    {pending.map((p) => (
+                      <PendingPaymentCard key={p.id} p={p} onApprove={() => setApproveFor(p)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {loading ? (
+                <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-10 text-center">
+                  <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#FF5C00]" />
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="flex-1 rounded-2xl border border-slate-100 bg-white p-8 text-center" data-testid="payments-empty">
+                  <Receipt className="mx-auto mb-2 h-9 w-9 text-orange-300" />
+                  <p className="text-sm font-semibold text-slate-500">
+                    {totalCount === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze maand of zoekopdracht.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 pb-14 sm:space-y-2 md:pb-0">
+                  {filteredItems.map((p) => (
+                    <PaymentRow key={p.id} p={p} onOpen={setDetailPayment} />
+                  ))}
+                  <LoadMoreSentinel active={paged.hasMore || paged.loadingMore}
+                    onVisible={paged.loadMore} testid="payments-load-more" />
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      ) : embedded ? (
         <>
           <FxStats testId="payment-fx-stats" items={[
             ['Totaal maand', fmtMoney(summary.monthSum || 0, currency), 'green'],
@@ -1100,16 +1285,16 @@ export default function Payments({ embedded = false }) {
           </div>
           <FxSearch value={search} onChange={setSearch} placeholder="Zoek huurder, kwitantie of appartement…" testId="payment-search" />
           {pending.map((p) => (
-            <FxRow key={p.id} testId={`pending-card-${p.id}`} tenantId={p.tenant_id} onClick={() => setApproveFor(p)} title={p.tenant_name || 'Onbekende huurder'}
-              sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+            <FxRow key={p.id} testId={`pending-card-${p.id}`} tenantId={p.tenant_id} onClick={() => setApproveFor(p)} title={p.apartment_number || 'Geen appartement'}
+              sub={`${p.tenant_name || 'Onbekende huurder'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
               meta={p.paid_at ? new Date(p.paid_at).toLocaleString('nl-NL') : undefined}
               amount={fmtMoney(p.amount, p.currency)} status="Te keuren" tone="amber" />
           ))}
           {loading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#FF5C00] animate-spin" /></div>
             : filteredItems.length === 0 ? <FxEmpty text={totalCount === 0 ? 'Nog geen betalingen.' : 'Geen betalingen gevonden.'} testId="payments-empty" />
             : filteredItems.map((p) => (
-              <FxRow key={p.id} testId={`payment-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetailPayment(p)} title={p.tenant_name || 'Onbekende huurder'}
-                sub={`Appt. ${p.apartment_number || '—'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
+              <FxRow key={p.id} testId={`payment-row-${p.id}`} tenantId={p.tenant_id} onClick={() => setDetailPayment(p)} title={p.apartment_number || 'Geen appartement'}
+                sub={`${p.tenant_name || 'Onbekende huurder'}${p.receipt_number ? ` · ${p.receipt_number}` : ''}`}
                 meta={`${p.paid_at ? new Date(p.paid_at).toLocaleDateString('nl-NL') : ''}${p.method ? ` · ${METHOD_LABELS[p.method] || p.method}` : ''}`}
                 amount={fmtMoney(p.amount, p.currency)} status={CATEGORY_LABELS[p.category] || 'Betaald'} tone="green" />
             ))}
@@ -1128,10 +1313,6 @@ export default function Payments({ embedded = false }) {
               {todaySum > 0 ? ` · Vandaag ${currency} ${fmtAmountWhole(todaySum)}` : ''}
             </p>
           </div>
-          <button onClick={() => setCreating(true)} data-testid="mp-new-btn" type="button"
-            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] shrink-0">
-            <Plus className="w-4 h-4" /> Nieuwe
-          </button>
         </div>
 
         {tab === 'month' && (
@@ -1193,22 +1374,17 @@ export default function Payments({ embedded = false }) {
                         <DetailRow label="Goedgekeurd door" value={p.approved_by} />
                       )}
                       {p.note && <DetailRow label="Notitie" value={p.note} />}
-                      <div className="grid grid-cols-4 gap-1.5 pt-2">
-                        <a href={`${apiBase}/payments/${p.id}/pdf`} target="_blank" rel="noreferrer"
-                          data-testid={`mp-pdf-${p.id}`}
+                      <div className="grid grid-cols-3 gap-1.5 pt-2">
+                        <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+                          testId={`mp-image-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px]">
-                          <FileText className="w-3.5 h-3.5" /> PDF
-                        </a>
+                          <ImageIcon className="w-3.5 h-3.5" /> Bon JPG
+                        </KioskReceiptImageButton>
                         <button onClick={() => setEmailing(p)} type="button"
                           data-testid={`mp-email-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-blue-200 text-blue-700 font-bold rounded-xl text-[11px]">
                           <Mail className="w-3.5 h-3.5" /> Mail
                         </button>
-                        <a href={`${apiBase}/payments/${p.id}/secure-pdf`} target="_blank" rel="noreferrer"
-                          data-testid={`mp-secure-${p.id}`}
-                          className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-orange-200 text-[#FF5C00] font-bold rounded-xl text-[11px]">
-                          <ShieldCheck className="w-3.5 h-3.5" /> QR
-                        </a>
                         <button onClick={() => setDeleting(p)} type="button"
                           data-testid={`mp-delete-${p.id}`}
                           className="inline-flex items-center justify-center gap-1 px-1.5 py-2 bg-white border border-red-200 text-red-600 font-bold rounded-xl text-[11px]">
@@ -1238,15 +1414,9 @@ export default function Payments({ embedded = false }) {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight truncate">Betalingen</h1>
           <p className="text-sm text-slate-500 mt-0.5 truncate">
-            {totalCount} kwitantie{totalCount === 1 ? '' : 's'} geregistreerd — beoordeel pending en registreer nieuwe betalingen.
+            {totalCount} kwitantie{totalCount === 1 ? '' : 's'} geregistreerd — beoordeel betalingen die op goedkeuring wachten.
           </p>
         </div>
-        <button onClick={() => setCreating(true)} data-testid="payment-new-btn"
-          className="shrink-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold rounded-2xl text-sm shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)]">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nieuwe betaling</span>
-          <span className="sm:hidden">Nieuw</span>
-        </button>
       </div>
 
       {/* KPI-kaarten op desktop bewust verwijderd op verzoek — pagina blijft

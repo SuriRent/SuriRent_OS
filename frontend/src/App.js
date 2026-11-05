@@ -52,6 +52,7 @@ const TenantPublicLanding = lazyWithRetry(() => import('./pages/vastgoed/TenantP
 const PublicLandingBySlug = lazyWithRetry(() => import('./pages/vastgoed/PublicLandingBySlug'));
 const OverSuriRent = lazyWithRetry(() => import('./pages/marketing/OverSuriRent'));
 const LoginPage = lazyWithRetry(() => import('./pages/vastgoed/LoginPage'));
+const SuperadminLogin = lazyWithRetry(() => import('./pages/vastgoed/SuperadminLogin'));
 const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboard'));
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
@@ -71,6 +72,51 @@ function RouteFallback() {
   // flikker. Dus tijdens deze korte suspense-window renderen we NIETS
   // (de PWA splash blijft eronder zichtbaar).
   return <div className="min-h-screen" style={{ background: 'transparent' }} />;
+}
+
+function AuthSessionNotice() {
+  const location = useLocation();
+  const isAdminRoute = !isMarketingHost()
+    && location.pathname.split('/').filter(Boolean).includes('admin');
+  const [checking, setChecking] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    if (!isAdminRoute) {
+      setVisible(false);
+      setMessage('');
+    }
+    const show = () => {
+      if (isAdminRoute) setVisible(true);
+    };
+    window.addEventListener('surirent:auth-error', show);
+    return () => window.removeEventListener('surirent:auth-error', show);
+  }, [isAdminRoute]);
+
+  const checkSession = async () => {
+    setChecking(true);
+    setMessage('');
+    try {
+      await api.get('/auth/me');
+      window.location.reload();
+    } catch {
+      setMessage('De gegevens zijn nog niet beschikbaar. Je sessie blijft behouden; probeer het opnieuw zodra de verbinding werkt.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  if (!visible || !isAdminRoute) return null;
+  return (
+    <div role="alert" data-testid="auth-session-notice"
+      className="fixed inset-x-3 top-3 z-[1000] mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-xl">
+      <span>{message || 'Gegevens konden niet worden geladen. Je blijft ingelogd; probeer opnieuw of log zelf uit.'}</span>
+      <button type="button" onClick={checkSession} disabled={checking} data-testid="auth-session-check"
+        className="shrink-0 rounded-xl bg-[#FF5C00] px-4 py-2 font-bold text-white disabled:opacity-60">
+        {checking ? 'Opnieuw proberen…' : 'Opnieuw proberen'}
+      </button>
+    </div>
+  );
 }
 
 /* Per-company branded routes (path-based). Mounted under both AppRoutes and
@@ -122,6 +168,12 @@ function Protected({ children }) {
     return <Navigate to={target} replace />;
   }
   return children;
+}
+
+function PwaManifestSync() {
+  const { user } = useAuth();
+  usePwaManifest(user?.role === 'superadmin' ? 'superadmin' : undefined);
+  return null;
 }
 
 const KIOSK_ADMIN_DESTINATIONS = {
@@ -235,6 +287,8 @@ function MarketingRoutes() {
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/over-surirent" element={<OverSuriRent />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -316,6 +370,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
@@ -369,6 +425,8 @@ function HybridRoutes() {
       <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
       <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
@@ -410,7 +468,6 @@ function HybridRoutes() {
 
 export default function App() {
   useRegisterServiceWorker();
-  usePwaManifest();
   useSheetSwipeToDismiss();
   // Globale tik-geluiden voor elke knop + keypad + text-input. Werkt
   // op iPhone PWA, Android PWA en desktop. Gebruiker kan uitschakelen
@@ -441,6 +498,8 @@ export default function App() {
     const slug = tenant.company?.slug || '';
     return (
       <AuthProvider>
+        <PwaManifestSync />
+        <AuthSessionNotice />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Root op custom domain = tenant landing page */}
@@ -455,6 +514,8 @@ export default function App() {
                 pre-resolved slug — die zit in de path zodat useParams() nog
                 gewoon werkt in BrandedShell. We prefix intern zonder URL wijziging. */}
             <Route path="/login" element={<Navigate to={`/${slug}/login`} replace />} />
+            <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+            <Route path="/superadmin/login" element={<SuperadminLogin />} />
             <Route path="/admin/*" element={<Navigate to={`/${slug}/admin`} replace />} />
             <Route path="/kiosk" element={<Navigate to={`/${slug}/kiosk`} replace />} />
             <Route path="/kiosk/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
@@ -481,6 +542,8 @@ export default function App() {
   }
   return (
     <AuthProvider>
+      <PwaManifestSync />
+      <AuthSessionNotice />
       <Suspense fallback={<RouteFallback />}>
         {mode === 'marketing' && <MarketingRoutes />}
         {mode === 'app' && <AppRoutes />}

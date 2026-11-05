@@ -189,8 +189,8 @@ export default function Deposits({ embedded = false }) {
         <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-xl font-black text-slate-900 truncate">{detail.tenant_name || 'Borg'}</h1>
-              {detail.apartment_number && <p className="text-xs text-slate-500">Appt. {detail.apartment_number}</p>}
+              <h1 className="text-xl font-black text-slate-900 truncate">{detail.apartment_number || 'Borg'}</h1>
+              {detail.tenant_name && <p className="text-xs text-slate-500">{detail.tenant_name}</p>}
               {detail.note && <p className="text-sm text-slate-600 mt-2">{detail.note}</p>}
               <div className="flex items-center gap-2 flex-wrap mt-3">
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${(DEPOSIT_STATUS[detail.status] || DEPOSIT_STATUS.held).cls}`}
@@ -218,12 +218,12 @@ export default function Deposits({ embedded = false }) {
           </div>
           <div className="p-4 space-y-1.5 text-sm">
             <div className="row-label-value">
-              <span className="text-slate-500">Huurder</span>
-              <span className="text-slate-900 font-semibold">{detail.tenant_name || '—'}</span>
-            </div>
-            <div className="row-label-value">
               <span className="text-slate-500">Appartement</span>
               <span className="text-slate-900 font-semibold">{detail.apartment_number || '—'}</span>
+            </div>
+            <div className="row-label-value">
+              <span className="text-slate-500">Huurder</span>
+              <span className="text-slate-900 font-semibold">{detail.tenant_name || '—'}</span>
             </div>
             <div className="row-label-value">
               <span className="text-slate-500">Valuta</span>
@@ -300,8 +300,8 @@ export default function Deposits({ embedded = false }) {
               const st = DEPOSIT_STATUS[d.status] || DEPOSIT_STATUS.held;
               const meta = d.status !== 'held' && d.amount_due > 0 ? `Nog te betalen: ${fmtMoney(d.amount_due, d.currency)}`
                 : d.status !== 'held' && d.refund_amount != null ? `Terugbetaald: ${fmtMoney(d.refund_amount, d.currency)}` : d.receipt_no || undefined;
-              return <FxRow key={d.id} testId={`dep-row-${d.id}`} tenantId={d.tenant_id} onClick={() => setDetail(d)} title={d.tenant_name}
-                sub={d.apartment_number ? `Appt. ${d.apartment_number}` : 'Geen appartement'} meta={meta}
+              return <FxRow key={d.id} testId={`dep-row-${d.id}`} tenantId={d.tenant_id} onClick={() => setDetail(d)}
+                title={d.apartment_number || 'Geen appartement'} sub={d.tenant_name || 'Onbekende huurder'} meta={meta}
                 amount={fmtMoney(d.amount, d.currency)} status={st.label} tone={TONE[d.status] || 'orange'} />;
             })}
           </>
@@ -338,13 +338,13 @@ export default function Deposits({ embedded = false }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-black text-slate-900 truncate">{d.tenant_name}</p>
+                      <p className="font-black text-slate-900 truncate">{d.apartment_number || 'Geen appartement'}</p>
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusCls}`}>
                         {statusLabel}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 truncate">
-                      {d.apartment_number ? `Appt. ${d.apartment_number}` : 'Geen appartement'}
+                      {d.tenant_name || 'Onbekende huurder'}
                       {!isHeld && d.amount_due > 0 && (
                         <span className="text-red-600 font-semibold"> · nog te betalen: {fmtMoney(d.amount_due, d.currency)}</span>
                       )}

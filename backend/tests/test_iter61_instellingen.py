@@ -91,4 +91,4 @@ def test_create_intent_picks_oldest_open(demo_headers):
 
 def test_superadmin_login():
     r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": "super@surirent.sr", "password": "super1234"})
-    assert r.status_code == 200
+    assert r.status_code == 403

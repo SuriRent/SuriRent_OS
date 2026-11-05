@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, CreditCard, Building2, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 
 const STATUS_COLORS = {
   active: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -22,6 +23,7 @@ const STATUS_LABELS = {
 };
 
 export default function SaasClientPayments() {
+  const { activeCompanyId } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -42,6 +44,9 @@ export default function SaasClientPayments() {
 
   const fmt = (a, c) => `${c || 'SRD'} ${Number(a || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const scopedRows = activeCompanyId
+    ? rows.filter((row) => row.company_id === activeCompanyId)
+    : rows;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -68,14 +73,14 @@ export default function SaasClientPayments() {
         </div>
       )}
 
-      {!loading && !err && rows.length === 0 && (
+      {!loading && !err && scopedRows.length === 0 && (
         <div className="py-12 text-center text-slate-400">
           <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p>Nog geen klanten.</p>
         </div>
       )}
 
-      {!loading && rows.length > 0 && (
+      {!loading && scopedRows.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden" data-testid="payments-table">
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
@@ -91,7 +96,7 @@ export default function SaasClientPayments() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => (
+                {scopedRows.map((r) => (
                   <tr key={r.company_id} data-testid={`payment-row-${r.company_id}`}>
                     <td className="px-4 py-3">
                       <p className="font-bold text-slate-900">{r.name}</p>
@@ -136,7 +141,7 @@ export default function SaasClientPayments() {
           </div>
           {/* Mobile cards */}
           <div className="md:hidden divide-y divide-slate-100">
-            {rows.map((r) => (
+            {scopedRows.map((r) => (
               <div key={r.company_id} className="p-4" data-testid={`payment-card-${r.company_id}`}>
                 <div className="row-label-value mb-2">
                   <p className="font-black text-slate-900">{r.name}</p>

@@ -47,8 +47,8 @@ function ReceiptRow({ log, onPrint, onApprove, onRemove, onRemotePrinted, busy, 
         </span>
         <Receipt className="md:hidden w-5 h-5 text-[#FF5C00] shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-slate-900 text-sm sm:text-base break-words">{p.tenant_name || 'Huurder'}</p>
-          <p className="text-xs text-slate-400 font-medium break-all">{p.receipt_number}</p>
+          <p className="font-bold text-slate-900 text-sm sm:text-base break-words">{p.apartment_number || 'Geen appartement'}</p>
+          <p className="text-xs text-slate-400 font-medium break-all">{p.tenant_name || 'Huurder'} · {p.receipt_number}</p>
           <p className="text-xs text-slate-500 mt-0.5">{log.employee_printed ? 'Geprint' : 'Betaald'} om {fmtTime(log.printed_at)}</p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
             {pending && <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-bold"><Clock className="w-3 h-3" /> Wacht op goedkeuring</span>}

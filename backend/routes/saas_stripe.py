@@ -420,6 +420,12 @@ async def _mark_paid(intent_id: str) -> None:
             "method": method_label, "reference": f"stripe:{intent_id}", "note": note,
             "paid_at": now, "created_at": now, "created_by": "stripe", "stripe_payment_intent_id": intent_id,
         })
+    if _deps.notify_superadmins and invs:
+        await _deps.notify_superadmins(
+            "payments", "SaaS-betaling ontvangen",
+            f"{company.get('name', 'Klant')}: {tx['original_currency']} {tx['original_amount']:,.2f}.",
+            {"kind": "saas_payment", "url": "/admin/saas_payments"},
+        )
     if tx.get("save_card") and tx.get("method") == "card":
         try:
             await _store_card(tx, intent_id)

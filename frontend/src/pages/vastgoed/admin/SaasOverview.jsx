@@ -8,6 +8,7 @@ import {
   ScanLine, Receipt, RefreshCw, Loader2, ArrowRight, Trash2, FileText, Briefcase,
 } from 'lucide-react';
 import { api, formatError, fmtMoney } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 
 const fmtRelative = (iso) => {
   if (!iso) return 'nooit ingelogd';
@@ -24,7 +25,7 @@ const fmtRelative = (iso) => {
 };
 
 const STATUS_PILL = {
-  trial: 'bg-orange-50 text-orange-700 ring-orange-200',
+  trial: 'bg-sky-50 text-sky-700 ring-sky-200',
   active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   expired: 'bg-red-50 text-red-700 ring-red-200',
   cancelled: 'bg-slate-100 text-slate-600 ring-slate-200',
@@ -53,6 +54,7 @@ function PageHeader({ title, subtitle, action }) {
 }
 
 export default function SaasOverview() {
+  const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [presence, setPresence] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,7 @@ export default function SaasOverview() {
   }
 
   const overviewData = overview || {};
-  const companies = presence?.companies || [];
+  const companies = (presence?.companies || []).filter((company) => !activeCompanyId || company.id === activeCompanyId);
   const hasOverview = overview !== null;
   const hasPresence = presence !== null;
   const onlineCompanies = companies.filter((c) => c.online);
@@ -126,7 +128,7 @@ export default function SaasOverview() {
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-5" data-testid="saas-overview-page">
       <PageHeader
-        title="SaaS Overzicht"
+        title="Overzicht"
         subtitle="Snelle blik op uw platform · bedrijven, abonnementen en inkomsten"
         action={
           <button onClick={load} disabled={refreshing} data-testid="saas-overview-refresh"
@@ -137,6 +139,12 @@ export default function SaasOverview() {
           </button>
         }
       />
+
+      {activeCompanyId && (
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" data-testid="scope-global-overview-note">
+          De platformtotalen op dit overzicht blijven alle bedrijven bevatten. De aanwezigheids- en proefperiode-overzichten tonen alleen de geselecteerde scope.
+        </p>
+      )}
 
       {err && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900" role="alert">
@@ -154,7 +162,7 @@ export default function SaasOverview() {
           <div className="relative">
             <div className="mb-4 flex items-center gap-2">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]"><Crown className="h-4 w-4" /></span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">SaaS platform</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">Platform</span>
             </div>
             <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Beheer je platform</h2>
             <p className="mt-1 max-w-xl text-sm text-slate-500">Bedrijven, abonnementen en inkomsten op één centrale plek.</p>
@@ -184,7 +192,7 @@ export default function SaasOverview() {
             </div>
             <button onClick={() => window.dispatchEvent(new CustomEvent('saas-nav', { detail: 'saas_invoices' }))}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#FF5C00] shadow-sm transition hover:bg-orange-100"
-              aria-label="Bekijk SaaS-facturen" data-testid="saas-hero-cash-cta">
+              aria-label="Bekijk facturen" data-testid="saas-hero-cash-cta">
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

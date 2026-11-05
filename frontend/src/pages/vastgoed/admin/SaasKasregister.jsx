@@ -12,13 +12,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Crown, Building2, CheckCircle, Clock, AlertCircle, ArrowLeft,
-  RefreshCw, Loader2, Receipt, Banknote, Plus, ArrowRight, X, Download, Mail,
+  RefreshCw, Loader2, Receipt, Banknote, Plus, X, Download, Mail,
 } from 'lucide-react';
 import { api, fmtMoney, formatError } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 
 const STATUS_META = {
   overdue: { label: 'Achterstand', bg: 'bg-red-100', text: 'text-red-700', icon: AlertCircle, tone: 'from-red-500 to-red-700' },
-  open:    { label: 'Open',        bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, tone: 'from-amber-500 to-orange-600' },
+  open:    { label: 'Open',        bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, tone: 'from-amber-500 to-amber-600' },
   paid:    { label: 'Betaald',     bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle, tone: 'from-emerald-500 to-emerald-700' },
   trial:   { label: 'Proefperiode', bg: 'bg-sky-100', text: 'text-sky-700', icon: Clock, tone: 'from-sky-500 to-blue-700' },
   unbilled:{ label: 'Nog geen factuur', bg: 'bg-slate-100', text: 'text-slate-600', icon: Receipt, tone: 'from-slate-500 to-slate-700' },
@@ -26,6 +27,7 @@ const STATUS_META = {
 
 export default function SaasKasregister() {
   const nav = useNavigate();
+  const { activeCompanyId } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,9 +75,15 @@ export default function SaasKasregister() {
   }
 
   const companies = data.companies || [];
-  const filtered = statusFilter === 'all' ? companies : companies.filter((c) => c.status === statusFilter);
-  const totals = data.totals || { overdue: 0, open: 0, paid: 0 };
-  const grandTotalPerCurrency = companies.reduce((acc, c) => {
+  const scopedCompanies = activeCompanyId
+    ? companies.filter((company) => company.id === activeCompanyId)
+    : companies;
+  const filtered = statusFilter === 'all' ? scopedCompanies : scopedCompanies.filter((c) => c.status === statusFilter);
+  const totals = scopedCompanies.reduce((counts, company) => {
+    if (Object.prototype.hasOwnProperty.call(counts, company.status)) counts[company.status] += 1;
+    return counts;
+  }, { overdue: 0, open: 0, paid: 0, trial: 0, unbilled: 0 });
+  const grandTotalPerCurrency = scopedCompanies.reduce((acc, c) => {
     for (const [cur, v] of Object.entries(c.outstanding_by_currency || {})) {
       acc[cur] = (acc[cur] || 0) + v;
     }
@@ -95,7 +103,7 @@ export default function SaasKasregister() {
               <Crown className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF5C00]">SaaS financiën</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF5C00]">Financiën</p>
               <h1 className="text-lg font-black tracking-tight text-slate-900 sm:text-xl">Kasregister per bedrijf</h1>
             </div>
           </div>
@@ -161,8 +169,7 @@ export default function SaasKasregister() {
           <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="companies-grid">
             {filtered.map((c) => (
               <CompanyKioskCard key={c.id} company={c}
-                onOpenDetail={() => setDetailCid(c.id)}
-                onRegisterPayment={() => nav(`/admin/saas_payments?prefill_company=${c.id}`)} />
+                onOpenDetail={() => setDetailCid(c.id)} />
             ))}
           </div>
         )}
@@ -188,7 +195,7 @@ export default function SaasKasregister() {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500">Betalingen</p>
-              <p className="text-sm font-black text-slate-900">Registreer</p>
+              <p className="text-sm font-black text-slate-900">Bekijk</p>
             </div>
           </button>
           <button onClick={() => nav('/admin/saas_kasgeld')}
@@ -218,8 +225,7 @@ export default function SaasKasregister() {
 
       {/* Detail drawer */}
       {detailCid && (
-        <CompanyDetailDrawer cid={detailCid} onClose={() => setDetailCid(null)}
-          onRegisterPayment={(cid) => { setDetailCid(null); nav(`/admin/saas_payments?prefill_company=${cid}`); }} />
+        <CompanyDetailDrawer cid={detailCid} onClose={() => setDetailCid(null)} />
       )}
     </div>
   );
@@ -251,7 +257,7 @@ function StatusCard({ status, count, active, onClick }) {
 // ---------------------------------------------------------------------------
 // CompanyKioskCard — kiosk-tegel per bedrijf met status + snelle acties
 // ---------------------------------------------------------------------------
-function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
+function CompanyKioskCard({ company: c, onOpenDetail }) {
   const meta = STATUS_META[c.status] || STATUS_META.paid;
   const Icon = meta.icon;
   return (
@@ -327,11 +333,6 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
             className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50">
             <Receipt className="w-3.5 h-3.5" /> Details
           </button>
-          <button onClick={onRegisterPayment} data-testid={`register-payment-${c.id}`}
-            className="flex-1 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-black text-white flex items-center justify-center gap-1.5">
-            <Banknote className="w-3.5 h-3.5" /> Betaling
-            <ArrowRight className="w-3 h-3" />
-          </button>
         </div>
       </div>
     </div>
@@ -342,7 +343,7 @@ function CompanyKioskCard({ company: c, onOpenDetail, onRegisterPayment }) {
 // CompanyDetailDrawer — Slide-in drawer met alle facturen + betaalhistorie
 // van 1 bedrijf. Elke factuur heeft PDF-download + e-mail knop.
 // ---------------------------------------------------------------------------
-function CompanyDetailDrawer({ cid, onClose, onRegisterPayment }) {
+function CompanyDetailDrawer({ cid, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -418,12 +419,6 @@ function CompanyDetailDrawer({ cid, onClose, onRegisterPayment }) {
                   </div>
                 </div>
               )}
-
-              <button onClick={() => onRegisterPayment && onRegisterPayment(cid)}
-                data-testid="drawer-register-payment"
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-black text-white transition hover:bg-orange-600">
-                <Banknote className="w-5 h-5" /> Betaling registreren
-              </button>
 
               {/* Facturen */}
               <section>

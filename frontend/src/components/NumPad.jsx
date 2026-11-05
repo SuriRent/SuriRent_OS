@@ -14,8 +14,9 @@ import { Delete } from 'lucide-react';
  *  - allowDecimal: standaard true, zet false voor whole-numbers-only
  *  - maxDecimals: max aantal decimalen na de punt (default 2)
  *  - testIdPrefix: prefix voor data-testid attributen
+ *  - buttonClassName: optionele extra classes voor de toetsen
  */
-export default function NumPad({ value = '', onChange, allowDecimal = true, maxDecimals = 2, testIdPrefix = 'npad' }) {
+export default function NumPad({ value = '', onChange, allowDecimal = true, maxDecimals = 2, testIdPrefix = 'npad', buttonClassName = '' }) {
   const press = (ch) => {
     const cur = String(value || '');
     if (ch === '⌫') {
@@ -63,7 +64,7 @@ export default function NumPad({ value = '', onChange, allowDecimal = true, maxD
                 : isSpecial
                   ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
                   : 'bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 shadow-sm'
-            }`}>
+            } ${buttonClassName}`}>
             {isBackspace ? <Delete className="w-6 h-6" /> : k}
           </button>
         );

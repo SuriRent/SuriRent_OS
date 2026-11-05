@@ -1,0 +1,131 @@
+html[data-pwa-role="superadmin"],
+html[data-pwa-role="superadmin"] body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+[data-testid="saas-console-mobile-menu-overlay"],
+[data-testid="saas-console-mobile-menu"] {
+  background-color: #e8f5ed;
+}
+
+[data-testid="saas-console-shell"],
+[data-testid="saas-console-shell"] > div,
+[data-testid="saas-console-shell"] main,
+[data-testid="saas-console-shell"] main > div {
+  min-width: 0;
+}
+
+[data-testid="saas-console-shell"] main,
+[data-testid="saas-console-shell"] main > div {
+  max-width: 100%;
+}
+
+[data-testid="saas-console-shell"] main > div > div,
+[data-testid="saas-console-shell"] main :where(input, select, textarea, table) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-testid="saas-console-shell"] table {
+  max-width: 100%;
+}
+
+html[data-pwa-role="superadmin"] .bg-\[\#FF5C00\],
+html[data-pwa-role="superadmin"] .bg-\[\#E05200\],
+html[data-pwa-role="superadmin"] .bg-\[\#FF8A3D\],
+html[data-pwa-role="superadmin"] .bg-orange-500 {
+  background-color: #047857 !important;
+}
+
+html[data-pwa-role="superadmin"] .hover\:bg-\[\#E05200\]:hover,
+html[data-pwa-role="superadmin"] .hover\:bg-orange-600:hover,
+html[data-pwa-role="superadmin"] .bg-orange-600 {
+  background-color: #065f46 !important;
+}
+
+html[data-pwa-role="superadmin"] .bg-orange-50 {
+  background-color: #f0fdf4 !important;
+}
+
+html[data-pwa-role="superadmin"] .bg-orange-100 {
+  background-color: #dcfce7 !important;
+}
+
+html[data-pwa-role="superadmin"] .bg-\[\#FFF7F1\],
+html[data-pwa-role="superadmin"] .bg-orange-50\/40,
+html[data-pwa-role="superadmin"] .hover\:bg-orange-50\/40:hover {
+  background-color: #f0fdf4 !important;
+}
+
+html[data-pwa-role="superadmin"] .border-orange-100\/80 {
+  border-color: #a7f3d0 !important;
+}
+
+html[data-pwa-role="superadmin"] .text-\[\#FF5C00\],
+html[data-pwa-role="superadmin"] .text-\[\#C74600\],
+html[data-pwa-role="superadmin"] .text-\[\#FF8A3D\],
+html[data-pwa-role="superadmin"] .text-orange-500,
+html[data-pwa-role="superadmin"] .text-orange-300,
+html[data-pwa-role="superadmin"] .text-orange-400,
+html[data-pwa-role="superadmin"] .text-orange-600,
+html[data-pwa-role="superadmin"] .text-orange-700,
+html[data-pwa-role="superadmin"] .text-orange-800 {
+  color: #047857 !important;
+}
+
+html[data-pwa-role="superadmin"] .border-orange-100,
+html[data-pwa-role="superadmin"] .border-orange-200,
+html[data-pwa-role="superadmin"] .border-orange-300,
+html[data-pwa-role="superadmin"] .border-orange-400,
+html[data-pwa-role="superadmin"] .border-orange-500,
+html[data-pwa-role="superadmin"] .hover\:border-orange-200:hover,
+html[data-pwa-role="superadmin"] .hover\:border-orange-300:hover,
+html[data-pwa-role="superadmin"] .hover\:border-orange-400:hover {
+  border-color: #a7f3d0 !important;
+}
+
+html[data-pwa-role="superadmin"] .focus\:border-orange-500:focus {
+  border-color: #047857 !important;
+}
+
+html[data-pwa-role="superadmin"] .ring-orange-100,
+html[data-pwa-role="superadmin"] .ring-orange-200,
+html[data-pwa-role="superadmin"] .ring-orange-300 {
+  --tw-ring-color: #d1fae5 !important;
+}
+
+html[data-pwa-role="superadmin"] .accent-orange-500 {
+  accent-color: #047857 !important;
+}
+
+html[data-pwa-role="superadmin"] .from-\[\#FF8A3D\].to-\[\#FF5C00\],
+html[data-pwa-role="superadmin"] .from-orange-400.to-orange-600 {
+  --tw-gradient-from: #10b981 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: #047857 var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+@media (max-width: 639px) {
+  html[data-pwa-role="superadmin"] [data-superadmin-fullscreen-dialog] {
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
+  html[data-pwa-role="superadmin"] [data-superadmin-fullscreen-dialog] > :not(.absolute) {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-top: max(env(safe-area-inset-top, 0px), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+    overscroll-behavior: contain;
+  }
+}

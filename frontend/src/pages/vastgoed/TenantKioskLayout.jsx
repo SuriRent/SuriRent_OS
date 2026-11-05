@@ -12,12 +12,14 @@ import {
   Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { KioskReceiptImageButton } from '../../components/KioskReceiptImageButton';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
 import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost,
   readCachedBranding, applyBranding, resolveLogoUrl,
 } from '../../lib/branding';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import useKeyboardOpen from '../../lib/use-keyboard-open';
 import { startTenantLive, stopTenantLive } from '../../lib/tenant-live';
 
 const TENANT_TOKEN_KEY = 'tenant_token';
@@ -574,7 +576,7 @@ function ForgotPinSheet({ branding, onClose, onSent }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
       data-testid="tk-forgot-sheet" onClick={onClose}>
       <motion.div
         initial={{ y: 400, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 400 }}
@@ -1339,7 +1341,9 @@ function TenantPayBank({ payload, overview, branding, onBack, onConfirm }) {
             Bankoverschrijving · {fmtMoney(payload.amount, cur)}
           </span>
         </div>
-        <p className="text-xs text-white/85 mb-3 mt-1">{tenant.name}{apt ? ` — Appt. ${apt.number}` : ''}</p>
+        <p className="text-xs text-white/85 mb-3 mt-1">
+          {apt ? `Appt. ${apt.number} — ` : 'Geen appartement — '}{tenant.name}
+        </p>
 
         {/* STAP 1 — Land selectie */}
         <div className="bg-white rounded-3xl shadow-xl p-4 sm:p-5 mb-3">
@@ -1603,7 +1607,7 @@ function ConfirmRow({ label, value }) {
 }
 
 // =====================================================================
-// HISTORY — alle betalingen van de huurder met PDF-download
+// HISTORY — alle betalingen van de huurder met bon-JPG
 // =====================================================================
 function TenantHistoryView({ overview, onBack }) {
   const [items, setItems] = useState(null);
@@ -1617,17 +1621,6 @@ function TenantHistoryView({ overview, onBack }) {
     window.addEventListener('surirent:tenant-live-change', loadPayments);
     return () => window.removeEventListener('surirent:tenant-live-change', loadPayments);
   }, [loadPayments]);
-
-  const openPdf = async (paymentId) => {
-    // We hebben tenant_token — gebruik blob-fetch zodat de PDF met de
-    // juiste Authorization-header wordt opgehaald.
-    try {
-      const r = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(r.data);
-      window.open(url, '_blank');
-      setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
-    } catch (e) { setErr(formatError(e, 'PDF download mislukt')); }
-  };
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2 pb-3" data-testid="tk-history">
@@ -1691,10 +1684,11 @@ function TenantHistoryView({ overview, onBack }) {
                   </p>
                 )}
               </div>
-              <button onClick={() => openPdf(p.id)} data-testid={`tk-history-pdf-${p.id}`}
-                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0">
-                <Printer className="w-3 h-3" /> Afdruk
-              </button>
+              <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+                testId={`tk-history-image-${p.id}`}
+                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0 disabled:opacity-50">
+                <Printer className="w-3 h-3" /> Bon
+              </KioskReceiptImageButton>
             </div>
           ))}
         </div>
@@ -1976,7 +1970,8 @@ function TenantBarBtn({ dir, onClick, disabled }) {
   );
 }
 
-function TenantBottomBar({ items, onBack, onNext, canBack, canNext }) {
+function TenantBottomBar({ items, onBack, onNext, canBack, canNext, keyboardOpen }) {
+  if (keyboardOpen) return null;
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[110] border-t bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -1998,22 +1993,19 @@ function TenantBottomBar({ items, onBack, onNext, canBack, canNext }) {
   );
 }
 
-const TK_BACK = {
-  pay: 'dashboard', 'pay-method': 'pay', 'pay-bank': 'pay-method',
-  history: 'dashboard', maintenance: 'dashboard', me: 'dashboard', contact: 'dashboard',
-};
-const TK_NEXT = { dashboard: 'pay' };
-
 // =====================================================================
 // CONTAINER
 // =====================================================================
 export default function TenantKioskLayout() {
   useHidePwaSplash();
+  const keyboardOpen = useKeyboardOpen();
   const [searchParams] = useSearchParams();
   const aptId = searchParams.get('apt');
   const tenantIdParam = searchParams.get('t');
   const [authed, setAuthed] = useState(() => !!localStorage.getItem(TENANT_TOKEN_KEY));
   const [view, setView] = useState('dashboard');
+  const viewHistory = useRef({ entries: ['dashboard'], index: 0 });
+  const [, setViewHistoryTick] = useState(0);
   const [loginMode, setLoginMode] = useState('pin');
   const [payload, setPayload] = useState(null);  // payment-flow draft = useState(null);  // payment-flow draft
   const [overview, setOverview] = useState(null);
@@ -2021,6 +2013,45 @@ export default function TenantKioskLayout() {
   const [prefill, setPrefill] = useState(null);
   const [tenantSetup, setTenantSetup] = useState(null); // { tenant_id, name, has_pin }
   const [branding, setBranding] = useState(() => readCachedBranding());
+  const navigateView = (nextView, { reset = false, replace = false } = {}) => {
+    const history = viewHistory.current;
+    if (reset) {
+      history.entries = [nextView];
+      history.index = 0;
+    } else {
+      history.entries = history.entries.slice(0, history.index + 1);
+      if (replace && history.entries.length) history.entries[history.index] = nextView;
+      else if (history.entries[history.entries.length - 1] !== nextView) history.entries.push(nextView);
+      history.index = history.entries.length - 1;
+    }
+    setView(nextView);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewBack = () => {
+    const history = viewHistory.current;
+    if (history.index > 0) {
+      history.index -= 1;
+      setView(history.entries[history.index]);
+    } else if (view !== 'dashboard') {
+      history.entries = ['dashboard', view];
+      history.index = 0;
+      setView('dashboard');
+    }
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewNext = () => {
+    const history = viewHistory.current;
+    if (history.index >= history.entries.length - 1) return;
+    history.index += 1;
+    setView(history.entries[history.index]);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  useEffect(() => {
+    if (authed) return;
+    viewHistory.current = { entries: ['dashboard'], index: 0 };
+    setView('dashboard');
+    setViewHistoryTick((tick) => tick + 1);
+  }, [authed]);
 
   // 1) Branding laden — primary color toepassen voor de hele kiosk-achtergrond
   const [needsCompanyPick, setNeedsCompanyPick] = useState(false);
@@ -2128,7 +2159,7 @@ export default function TenantKioskLayout() {
     api.post('/tenant-portal/logout').catch(() => {});
     localStorage.removeItem(TENANT_TOKEN_KEY);
     setAuthed(false);
-    setView('dashboard');
+    navigateView('dashboard', { reset: true });
   };
 
   // Branded background — gebruik primary color als orange-fallback.
@@ -2219,6 +2250,7 @@ export default function TenantKioskLayout() {
           </AnimatePresence>
         </div>
         <TenantBottomBar
+          keyboardOpen={keyboardOpen}
           canBack={nfcOn} canNext={!nfcOn}
           onBack={() => setLoginMode('pin')} onNext={() => setLoginMode('nfc')}
           items={[
@@ -2258,62 +2290,67 @@ export default function TenantKioskLayout() {
             className="w-full flex flex-col md:h-full">
             {view === 'dashboard' && (
               <DashboardView overview={overview}
-                onAction={setView}
-                onHistory={() => setView('history')} />
+                onAction={navigateView}
+                onHistory={() => navigateView('history')} />
             )}
             {view === 'pay' && (
               <TenantPaySelect overview={overview}
-                onBack={() => setView('dashboard')}
-                onConfirm={(p) => { setPayload(p); setView('pay-method'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-method'); }} />
             )}
             {view === 'pay-method' && payload && (
               <TenantPayMethod payload={payload} overview={overview}
-                onBack={() => setView('pay')}
+                onBack={goViewBack}
                 onConfirm={(p) => {
                   setPayload(p);
-                  if (p.method === 'bank') setView('pay-bank');
-                  else setView('pay-confirm');
+                  if (p.method === 'bank') navigateView('pay-bank');
+                  else navigateView('pay-confirm');
                 }} />
             )}
             {view === 'pay-bank' && payload && (
               <TenantPayBank payload={payload} overview={overview} branding={branding}
-                onBack={() => setView('pay-method')}
-                onConfirm={(p) => { setPayload(p); setView('pay-confirm'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-confirm'); }} />
             )}
             {view === 'pay-confirm' && payload && (
               <TenantPayConfirm payload={payload} overview={overview}
-                onBack={() => {
-                  if (payload.method === 'bank') setView('pay-bank');
-                  else setView('pay-method');
-                }}
-                onPaid={() => { setView('paid'); setPayload(null); loadOverview(); }} />
+                onBack={goViewBack}
+                onPaid={() => {
+                  viewHistory.current = { entries: ['dashboard', 'paid'], index: 1 };
+                  setView('paid');
+                  setViewHistoryTick((tick) => tick + 1);
+                  setPayload(null);
+                  loadOverview();
+                }} />
             )}
-            {view === 'paid' && <PaidView onContinue={() => setView('dashboard')} />}
+            {view === 'paid' && <PaidView onContinue={() => navigateView('dashboard', { reset: true })} />}
             {view === 'history' && (
-              <TenantHistoryView overview={overview} onBack={() => setView('dashboard')} />
+              <TenantHistoryView overview={overview} onBack={goViewBack} />
             )}
             {view === 'maintenance' && (
-              <MaintenanceView onBack={() => setView('dashboard')}
-                onDone={() => setView('dashboard')} />
+              <MaintenanceView onBack={goViewBack}
+                onDone={goViewBack} />
             )}
-            {view === 'me' && <MeView overview={overview} onBack={() => setView('dashboard')} />}
+            {view === 'me' && <MeView overview={overview} onBack={goViewBack} />}
             {view === 'contact' && (
               <ContactView overview={overview} branding={branding}
-                onBack={() => setView('dashboard')} />
+                onBack={goViewBack} />
             )}
           </motion.div>
         </AnimatePresence>
       </div>
       <TenantBottomBar
-        canBack={!!TK_BACK[view]} canNext={!!TK_NEXT[view]}
-        onBack={() => setView(TK_BACK[view])} onNext={() => setView(TK_NEXT[view])}
+        keyboardOpen={keyboardOpen}
+        canBack={viewHistory.current.index > 0 || view !== 'dashboard'}
+        canNext={viewHistory.current.index < viewHistory.current.entries.length - 1}
+        onBack={goViewBack} onNext={goViewNext}
         items={[
-          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => setView('dashboard') },
-          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => setView('pay') },
-          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => setView('history') },
-          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => setView('maintenance') },
-          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => setView('me') },
-          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => setView('contact') },
+          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => navigateView('dashboard') },
+          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => navigateView('pay') },
+          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => navigateView('history') },
+          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => navigateView('maintenance') },
+          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => navigateView('me') },
+          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => navigateView('contact') },
         ]} />
     </div>
   );

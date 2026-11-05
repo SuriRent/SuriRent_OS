@@ -52,14 +52,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response-interceptor: bij 401 op een protected endpoint → verwijder de
-// stale token zodat de PWA niet vastloopt in een redirect-loop (zoals
-// op iOS PWA na een verlopen admin_token). De hard-redirect doen we
-// ALLEEN voor admin-routes; tenant + kiosk + customer pagina's hebben
-// hun eigen lokale login-UI en moeten niet naar /login?stale=1 worden
-// gestuurd (dat is de ADMIN-login route).
+// Auth-fouten mogen een actieve adminsessie niet wissen of de gebruiker
+// automatisch uit de app sturen. De loginstatus blijft behouden; de pagina
+// kan de fout tonen en de gebruiker kan zelf opnieuw proberen of uitloggen.
 const PUBLIC_401_PATHS = [
-  '/auth/login', '/auth/register', '/auth/kiosk-pin',
+  '/auth/login', '/auth/superadmin/pin-login',
+  '/auth/personal-pin/login', '/auth/register', '/auth/kiosk-pin',
   '/tenant-portal/login', '/tenant-portal/pin-login',
 ];
 // Meet duur van gewone GET-calls (geen blobs) voor de "Trage verbinding"-melding.
@@ -95,55 +93,14 @@ api.interceptors.response.use(
           || path.includes('/kiosk/klant')
           || path.startsWith('/huurder');
         const isKioskContext = url.startsWith('/kiosk/') || path === '/kiosk' || path.startsWith('/kiosk/');
-        try {
-          if (isTenantContext) {
-            // Alleen een 401 van een huurder-endpoint betekent een ongeldige huurder-sessie.
-            if (!url.startsWith('/tenant-portal/')) return Promise.reject(err);
-            localStorage.removeItem('tenant_token');
-            try {
-              sessionStorage.removeItem('tenant_session');
-            } catch { /* ignore */ }
-          } else if (isKioskContext) {
-            // Alleen uitloggen bij een écht ongeldige kiosk-sessie — niet bij
-            // b.v. een foute medewerker-PIN (ook 401). Kiosk logt nooit vanzelf uit.
-            const detail = String(err.response?.data?.detail || '');
-            if (!/kiosk niet ontgrendeld|ongeldig kiosk token/i.test(detail)) return Promise.reject(err);
-            localStorage.removeItem('kiosk_token');
-            try {
-              sessionStorage.removeItem('kiosk_emp_id');
-              sessionStorage.removeItem('kiosk_emp_name');
-              sessionStorage.removeItem('kiosk_emp_pin');
-            } catch { /* ignore */ }
-          } else {
-            // Admin context — token verlopen of foutief.
-            localStorage.removeItem('admin_token');
-          }
-        } catch { /* ignore */ }
-        // Hard redirect ALLEEN voor admin-pagina's (/admin/* of /<slug>/admin/*)
-        // en alleen wanneer we niet al op /login of een tenant/kiosk route zitten.
-        // Tenant/kiosk/customer pagina's tonen zelf hun lokale login-UI.
-        try {
-          const segs = path.split('/').filter(Boolean);
-          // Detecteer branded slug + admin route binnen die slug.
-          // Sync met RESERVED_SLUGS in lib/branded-nav.js.
-          const RESERVED = new Set(['login','betalen','admin','kiosk','huurder','onderteken','c','vastgoed','api','health','static','manifest','sw','favicon','assets','qr-link','qr','tenant','tenants','company','companies','superadmin']);
-          let isAdminRoute = false;
-          let brandedSlug = '';
-          if (segs[0] === 'admin') {
-            isAdminRoute = true;
-          } else if (segs[0] && !RESERVED.has(segs[0]) && segs[1] === 'admin') {
-            isAdminRoute = true;
-            brandedSlug = segs[0];
-          } else if (segs[0] === 'c' && segs[1] && segs[2] === 'admin') {
-            isAdminRoute = true;
-            brandedSlug = segs[1];
-          }
-          const onLogin = path === '/login' || path.endsWith('/login');
-          if (isAdminRoute && !onLogin) {
-            const loginPath = brandedSlug ? `/${brandedSlug}/login?stale=1` : '/login?stale=1';
-            window.location.assign(loginPath);
-          }
-        } catch { /* ignore */ }
+        const detail = String(err.response?.data?.detail || '').toLowerCase();
+        const isAuthFailure = !detail || [
+          'niet ingelogd', 'token verlopen', 'ongeldig token',
+          'ongeldig token type', 'gebruiker niet gevonden',
+        ].some((message) => detail.includes(message));
+        if (isAuthFailure && !isTenantContext && !isKioskContext) {
+          try { window.dispatchEvent(new CustomEvent('surirent:auth-error')); } catch { /* noop */ }
+        }
       }
     }
     return Promise.reject(err);

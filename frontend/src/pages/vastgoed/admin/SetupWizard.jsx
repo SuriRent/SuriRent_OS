@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, CheckCircle2, Home, User, ArrowRight, ArrowLeft,
-  Loader2, Mail, Phone, MapPin, Sparkles, AlertCircle, Check, PartyPopper,
-  FileText,
+  Loader2, Mail, Phone, MapPin, AlertCircle, Check, PartyPopper,
+  FileText, ShieldCheck,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import {
   SmtpForm,
   InvoicingForm,
+  DepositForm,
 } from './Settings';
 
 const CORE_STEP_IDS = ['profile', 'locations', 'apartment', 'tenant'];
@@ -16,6 +17,7 @@ const STEPS = [
   { id: 'profile', label: 'Bedrijfsgegevens', icon: Building2 },
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, settings: true },
   { id: 'invoicing', label: 'Facturen automatisering', icon: FileText, settings: true },
+  { id: 'deposit', label: 'Borg instellingen', icon: ShieldCheck, settings: true },
   { id: 'locations', label: 'Locaties aanmaken', icon: MapPin },
   { id: 'apartment', label: 'Appartementen aanmaken', icon: Home },
   { id: 'tenant', label: 'Huurders aanmaken of koppelen', icon: User },
@@ -77,15 +79,14 @@ export default function SetupWizard({ onFinish } = {}) {
   const formStepDone = (id) => (status?.steps || []).find((s) => s.id === id)?.done;
   const stepDone = (id) => {
     if (CORE_STEP_IDS.includes(id)) return formStepDone(id);
+    if (id === 'deposit') return Number(settings?.deposit?.rent_multiplier) > 0;
     // Voor settings-secties: zichtbaar als "klaar" wanneer enabled in settings
     if (settings && settings[id]?.enabled) return true;
     return false;
   };
 
   const requiredIds = CORE_STEP_IDS;
-  const completed = requiredIds.filter((id) => stepDone(id)).length;
-  const total = requiredIds.length;
-  const allDone = completed === total && stepDone('tenant');
+  const allDone = requiredIds.every((id) => stepDone(id)) && stepDone('tenant');
 
   const saveProfile = async () => {
     setSaving(true); setErr('');
@@ -185,32 +186,7 @@ export default function SetupWizard({ onFinish } = {}) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#0B1B3F] via-[#17325E] to-[#C74600] text-white rounded-3xl p-5 sm:p-7 shadow-lg relative overflow-hidden">
-        <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full border-[24px] border-white/[0.06]" />
-        <div className="absolute -bottom-16 -left-8 w-40 h-40 rounded-full bg-[#FF8A3D]/15" />
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-4 h-4 text-[#FFB276]" />
-            <p className="text-[11px] uppercase tracking-[0.18em] font-black text-white/75">Aan de slag</p>
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-black mb-1 tracking-tight">
-            {allDone ? 'Je Kiosk is klaar' : 'Richt je Kiosk stap voor stap in'}
-          </h2>
-          <p className="text-sm text-white/80 mb-4">
-            Stap <strong>{idx + 1} van {STEPS.length}</strong> · {currentStep.label}
-          </p>
-          <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-            <div className="h-full bg-[#FF8A3D] rounded-full transition-all duration-500"
-              style={{ width: `${Math.round(((idx + 1) / STEPS.length) * 100)}%` }} />
-          </div>
-          <p className="text-[11px] text-white/75 mt-2">
-            Basis ingericht: <strong className="text-white">{completed} van {total}</strong>
-          </p>
-        </div>
-      </div>
-
+    <div className="w-full max-w-screen-2xl mx-auto space-y-4 md:space-y-5" data-testid="setup-wizard">
       {/* Step pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2" data-testid="wizard-steps">
         {STEPS.map((s, i) => {
@@ -344,7 +320,7 @@ export default function SetupWizard({ onFinish } = {}) {
           <PartyPopper className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
           <h3 className="text-lg font-extrabold text-emerald-800 mb-1">Setup compleet!</h3>
           <p className="text-sm text-emerald-700">
-            Bedrijfsgegevens, e-mail, facturen, locaties, appartementen en huurders zijn ingesteld.
+            Bedrijfsgegevens, e-mail, facturen, borg, locaties, appartementen en huurders zijn ingesteld.
           </p>
         </div>
       )}
@@ -365,6 +341,7 @@ function SettingsSectionWrapper({ step, settings, onSaved, onDirty }) {
       </div>
       {step.id === 'smtp' && <SmtpForm initial={settings.smtp} onSaved={onSaved} onDirty={onDirty} />}
       {step.id === 'invoicing' && <InvoicingForm initial={settings.invoicing} onSaved={onSaved} onDirty={onDirty} />}
+      {step.id === 'deposit' && <DepositForm initial={settings.deposit} onSaved={onSaved} onDirty={onDirty} />}
       <p className="mt-3 text-xs text-slate-500">
         Sla je instellingen op met de knop in het formulier en kies daarna <strong>Volgende</strong>.
       </p>

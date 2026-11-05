@@ -1,5 +1,5 @@
 """Phase 1 backend tests: contracts (+ signing), invoices (+ generate-month), employees,
-salaries, deposits (+ refund), maintenance, kasgeld, payment PDF receipt.
+salaries, deposits (+ refund), maintenance, kasgeld, and payment bon image.
 """
 import os
 import re
@@ -255,17 +255,17 @@ class TestKasgeld:
         session.delete(f"{API}/kasgeld/{oe_id}", headers=admin_headers)
 
 
-# -------------------- PAYMENT PDF --------------------
-class TestPaymentPDF:
-    def test_payment_pdf_public(self, session, admin_headers, seeded_apt_tenant):
+# -------------------- PAYMENT BON IMAGE --------------------
+class TestPaymentBonImage:
+    def test_payment_bon_image_public(self, session, admin_headers, seeded_apt_tenant):
         body = {"tenant_id": seeded_apt_tenant["tenant_id"],
                 "apartment_id": seeded_apt_tenant["apt_id"],
                 "amount": 100.0, "currency": "SRD", "method": "contant", "category": "huur"}
         r = session.post(f"{API}/payments", json=body, headers=admin_headers)
         assert r.status_code == 200
         pid = r.json()["id"]
-        # PDF (public - no auth)
-        r = requests.get(f"{API}/payments/{pid}/pdf")
+        # Bonfoto (public - no auth)
+        r = requests.get(f"{API}/payments/{pid}/image")
         assert r.status_code == 200
-        assert r.headers["content-type"].startswith("application/pdf")
-        assert len(r.content) > 500
+        assert r.headers["content-type"].startswith("image/jpeg")
+        assert r.content[:2] == b"\xff\xd8"

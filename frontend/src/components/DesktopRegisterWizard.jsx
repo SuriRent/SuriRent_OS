@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, MapPin, Info, Loader2, Eye, EyeOff, Check, Globe, X, ChevronDown, Download,
-  Home as HomeIcon, CreditCard, FileText, Tablet, ShieldCheck, Cloud, Headphones, User, Phone, Mail, Lock, Package, ClipboardCheck, KeyRound,
+  Home as HomeIcon, CreditCard, FileText, Tablet, User, Phone, Mail, Lock, Package, ClipboardCheck, KeyRound,
 } from 'lucide-react';
 import { useRegisterWizard } from './MobileAuthShell';
 import PasswordStrength from './PasswordStrength';
@@ -33,7 +33,6 @@ const T = {
     free: 'VRIJ', taken: 'BEZET', chosen: 'U koos', welcomeAt: 'Welkom bij', tagline: 'De complete huurbeheer oplossing voor vastgoed in Suriname.',
     feats: ['Beheer huurders en contracten', 'Automatiseer huurbetalingen & kwitanties', 'Genereer loonstroken en boekhouding', 'Selfservice kiosk terminal en PWA app'],
     script: ['Slimmer beheren.', 'Makkelijker verhuren.'], brandSub: ['Verhuur', 'Beheer', 'Financiën'], rights: 'Alle rechten voorbehouden.',
-    trust: [['Veilig en betrouwbaar', 'Jouw gegevens zijn goed beschermd'], ['Altijd en overal', 'Toegang via web en mobiel'], ['Nederlandse support', 'Wij staan voor je klaar']],
     successT: 'Welkom!', successS: 'Je eigen vastgoed-omgeving is aangemaakt en klaar voor gebruik. 14 dagen gratis proberen.', toDash: 'Naar mijn dashboard',
     countries: { SR: 'Suriname', NL: 'Nederland' },
   },
@@ -58,7 +57,6 @@ const T = {
     free: 'AVAILABLE', taken: 'TAKEN', chosen: 'You chose', welcomeAt: 'Welcome to', tagline: 'The complete rental management solution for real estate in Suriname.',
     feats: ['Manage tenants and contracts', 'Automate rent payments & receipts', 'Generate payslips and accounting', 'Self-service kiosk terminal and PWA app'],
     script: ['Smarter managing.', 'Easier renting.'], brandSub: ['Rental', 'Management', 'Finance'], rights: 'All rights reserved.',
-    trust: [['Safe and reliable', 'Your data is well protected'], ['Always and everywhere', 'Access via web and mobile'], ['Local support', 'We are here for you']],
     successT: 'Welcome!', successS: 'Your own real-estate environment has been created and is ready to use. 14-day free trial.', toDash: 'Go to my dashboard',
     countries: { SR: 'Suriname', NL: 'Netherlands' },
   },
@@ -441,17 +439,6 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
             </div>
           )}
 
-          <div className="mt-8 [@media(max-height:820px)]:hidden grid grid-cols-3 max-w-[920px] mx-auto w-full" data-testid="register-trust">
-            {t.trust.map(([a, b], i) => {
-              const I = [ShieldCheck, Cloud, Headphones][i];
-              return (
-                <div key={a} className={`flex items-center gap-4 px-6 ${i ? 'border-l border-slate-300' : ''}`}>
-                  <I className="w-10 h-10 shrink-0" style={{ color: NAVY }} strokeWidth={1.7} />
-                  <div><div className="text-[13px] font-bold" style={{ color: NAVY }}>{a}</div><div className="text-[12px] text-slate-500">{b}</div></div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </main>
     </div>

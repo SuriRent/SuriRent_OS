@@ -11,7 +11,7 @@ const BILLING_STATUSES = {
   trial: { label: 'Proefperiode', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   active: { label: 'Actief abonnement', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   expired: { label: 'Verlopen', className: 'bg-red-50 text-red-700 ring-red-200' },
-  past_due: { label: 'Betaling open', className: 'bg-orange-50 text-orange-700 ring-orange-200' },
+  past_due: { label: 'Betaling open', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   cancelled: { label: 'Opgezegd', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
 };
 
@@ -237,7 +237,8 @@ function CompanyForm({ initial, onCancel, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto" data-testid="company-form-modal">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4 modal-sheet-auto"
+      data-testid="company-form-modal" data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
           <h2 className="text-xl font-black text-slate-900">{isEdit ? 'Bedrijf bewerken' : 'Nieuw bedrijf'}</h2>
@@ -422,7 +423,10 @@ export default function Companies() {
   };
 
   const isSuper = user?.role === 'superadmin';
-  const visibleItems = items.filter((company) => {
+  const scopedItems = activeCompanyId
+    ? items.filter((company) => company.id === activeCompanyId)
+    : items;
+  const visibleItems = scopedItems.filter((company) => {
     const term = query.trim().toLowerCase();
     const matchesQuery = !term || [
       company.name, company.slug, company.contact_email, company.owner_email, company.plan,
@@ -436,10 +440,10 @@ export default function Companies() {
     return matchesQuery && matchesFilter;
   });
   const counts = {
-    all: items.length,
-    active: items.filter((company) => company.billing_status === 'active').length,
-    trial: items.filter((company) => company.billing_status === 'trial').length,
-    attention: items.filter((company) => ['expired', 'past_due', 'cancelled'].includes(company.billing_status)).length,
+    all: scopedItems.length,
+    active: scopedItems.filter((company) => company.billing_status === 'active').length,
+    trial: scopedItems.filter((company) => company.billing_status === 'trial').length,
+    attention: scopedItems.filter((company) => ['expired', 'past_due', 'cancelled'].includes(company.billing_status)).length,
   };
 
   if (!isSuper) {
@@ -457,17 +461,18 @@ export default function Companies() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Bedrijven</h1>
           <p className="text-sm text-slate-500 mt-1">Beheer bedrijven, abonnementen, toegang en klantondersteuning.</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={load} disabled={loading} data-testid="company-refresh"
-            className="h-11 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-2 disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Vernieuwen</span>
-          </button>
-          <button onClick={() => { setEditing(null); setShowForm(true); }}
-            data-testid="company-new-btn"
-            className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
-            <Plus className="w-4 h-4" /> Nieuw bedrijf
-          </button>
-        </div>
+        <button onClick={load} disabled={loading} data-testid="company-refresh"
+          className="h-11 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-2 disabled:opacity-50">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Vernieuwen</span>
+        </button>
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={() => { setEditing(null); setShowForm(true); }}
+          data-testid="company-new-btn"
+          className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
+          <Plus className="w-4 h-4" /> Nieuw bedrijf
+        </button>
       </div>
 
       {err && <div role="alert" className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
@@ -512,7 +517,7 @@ export default function Companies() {
           <p className="font-bold text-slate-700">Bedrijven konden niet worden geladen.</p>
           <button type="button" onClick={load} className="mt-4 h-10 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Opnieuw proberen</button>
         </div>
-      ) : items.length === 0 ? (
+      ) : scopedItems.length === 0 ? (
         <div className="bg-white rounded-2xl border border-orange-100 p-10 text-center">
           <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm">Nog geen bedrijven. Maak het eerste bedrijf aan.</p>

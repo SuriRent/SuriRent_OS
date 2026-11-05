@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { FileText, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { fmtAmountWhole } from './helpers';
+import { KioskReceiptImageButton } from '../../../../components/KioskReceiptImageButton';
 
 // =====================================================================
 // PaidHistorySection — herbruikbaar overzicht van reeds betaalde maanden
@@ -170,7 +171,7 @@ export default function PaidHistorySection({ paidInvoices, currency, testidPrefi
 // PaidInvoiceRow — één rij in de betalingsgeschiedenis.
 // Layout is IDENTIEK aan de openstaande factuur-rij op InvoiceDetailPage:
 //   - Regel 1: emerald icoon (Check) + maand+jaar + factuurnr + bedrag rechts
-//   - Regel 2: badges (Betaald · methode · datum) + PDF-download knop rechts
+//   - Regel 2: badges (Betaald · methode · datum) + bon-JPG knop rechts
 // Zo oogt de detailspagina één geheel en herkent de admin instant welke
 // rij hij aanraakt.
 // =====================================================================
@@ -202,7 +203,7 @@ function PaidInvoiceRow({ inv, testid }) {
           <p className="text-[10px] text-emerald-600">betaald</p>
         </div>
       </div>
-      {/* Regel 2: badges + PDF-download */}
+      {/* Regel 2: badges + bon-JPG voor de gekoppelde betaling */}
       <div className="mt-2 flex items-center justify-between gap-2 pl-12">
         <div className="flex items-center gap-1 flex-wrap min-w-0">
           <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap bg-emerald-100 text-emerald-700">
@@ -224,16 +225,16 @@ function PaidInvoiceRow({ inv, testid }) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <a href={`${process.env.REACT_APP_BACKEND_URL}/api/invoices/${inv.id}/pdf`}
-            target="_blank" rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            data-testid={`${testid}-pdf`}
-            title="Download factuur PDF"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition active:scale-95">
-            <FileText className="w-3.5 h-3.5" />
-          </a>
-        </div>
+        {inv.payment_id && (
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <KioskReceiptImageButton paymentId={inv.payment_id}
+              filename={`bon-${inv.receipt_number || inv.payment_id}.jpg`}
+              testId={`${testid}-bon`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition active:scale-95">
+              <FileText className="w-3.5 h-3.5" />
+            </KioskReceiptImageButton>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Save, Trash2, X, Loader2, Package, Check } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
-function LimitsEditor({ value, onChange, primary = '#FF5C00' }) {
+function LimitsEditor({ value, onChange, primary = '#047857' }) {
   // value = { max_apartments, max_tenants, max_locations, max_employees,
   //           allow_kiosk, allow_ocr, allow_shelly, allow_branding, allow_backup }
   const v = value || {};
@@ -32,7 +32,7 @@ function LimitsEditor({ value, onChange, primary = '#FF5C00' }) {
   ];
   return (
     <div className="space-y-3 bg-slate-50 rounded-xl p-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {numericFields.map((f) => (
           <div key={f.key}>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">{f.label}</label>
@@ -65,7 +65,7 @@ function LimitsEditor({ value, onChange, primary = '#FF5C00' }) {
   );
 }
 
-function FeaturesEditor({ value, onChange, primary = '#FF5C00' }) {
+function FeaturesEditor({ value, onChange, primary = '#047857' }) {
   const items = Array.isArray(value) ? value : [];
   const update = (idx, v) => {
     const next = [...items];
@@ -165,15 +165,15 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-[2fr,1fr,1fr] gap-3">
-          <div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Prijs</label>
             <input type="number" step="0.01" value={draft.amount ?? 0}
               onChange={(e) => update('amount', parseFloat(e.target.value) || 0)}
               data-testid={`plan-amount-input-${plan.id}`}
               className="w-full h-10 px-3 rounded-lg border-2 border-slate-200 focus:border-orange-500 outline-none font-mono" />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Valuta</label>
             <select value={draft.currency || 'SRD'} onChange={(e) => update('currency', e.target.value)}
               data-testid={`plan-currency-input-${plan.id}`}
@@ -183,7 +183,7 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
               <option value="USD">USD</option>
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Interval</label>
             <select value={draft.interval || 'month'} onChange={(e) => update('interval', e.target.value)}
               data-testid={`plan-interval-input-${plan.id}`}
@@ -298,7 +298,7 @@ export default function PlansAdmin() {
     <div className="space-y-6" data-testid="plans-admin-page">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">SaaS Pakketten</h2>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pakketten</h2>
           <p className="text-sm text-slate-500 mt-1">
             Bepaal welke abonnementen klanten kunnen kiezen, met prijzen en features.
             Wijzigingen verschijnen direct op de marketing landing page.

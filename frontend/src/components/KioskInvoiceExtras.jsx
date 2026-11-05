@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileDown, Loader2, Mail, Wallet } from 'lucide-react';
+import { FileDown, Image as ImageIcon, Loader2, Mail, Wallet } from 'lucide-react';
 import { api, formatError } from '../lib/api';
 import { fmtAmount } from '../pages/vastgoed/admin/invoices/helpers';
 import { SendDialog } from './EmailDialog';
+import { KioskPdfViewer } from './KioskPdfViewer';
+import { KioskReceiptImageButton } from './KioskReceiptImageButton';
 
 export const SEVERITY_OPTS = [
   { v: 'all', label: 'Alle' },
@@ -47,10 +49,30 @@ export function CreditBadge({ amount, currency, testId }) {
 
 const BTN = 'w-10 h-10 rounded-lg bg-slate-100 hover:bg-orange-50 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors shrink-0 disabled:opacity-50';
 
-// PDF, mailen en tegoed toepassen per factuur.
+// Factuurdocument of betaalbon, mailen en tegoed toepassen per factuur.
 export function InvoiceExtraActions({ inv, open, credit, tenant, onChanged, onMsg }) {
   const [sending, setSending] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const closePdf = useCallback(() => setPdfUrl(''), []);
+  useEffect(() => {
+    if (!pdfUrl) return undefined;
+    return () => URL.revokeObjectURL(pdfUrl);
+  }, [pdfUrl]);
+  const openPdf = async () => {
+    setPdfLoading(true);
+    setPdfError('');
+    try {
+      const { data } = await api.get(`/invoices/${inv.id}/pdf`, { responseType: 'blob' });
+      setPdfUrl(URL.createObjectURL(new Blob([data], { type: 'application/pdf' })));
+    } catch (e) {
+      setPdfError(formatError(e, 'PDF openen mislukt'));
+    } finally {
+      setPdfLoading(false);
+    }
+  };
   const apply = async () => {
     setApplying(true);
     try {
@@ -67,10 +89,21 @@ export function InvoiceExtraActions({ inv, open, credit, tenant, onChanged, onMs
           {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
         </button>
       )}
-      <a href={`${process.env.REACT_APP_BACKEND_URL}/api/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer"
-        aria-label="PDF downloaden" title="PDF downloaden" data-testid={`inv-pdf-${inv.id}`} className={BTN}>
-        <FileDown className="w-4 h-4" />
-      </a>
+      {inv.status === 'paid' ? (
+        inv.payment_id ? (
+          <KioskReceiptImageButton paymentId={inv.payment_id}
+            filename={`bon-${inv.receipt_number || inv.payment_id}.jpg`}
+            testId={`inv-bon-${inv.id}`} className={BTN}>
+            <ImageIcon className="w-4 h-4" />
+          </KioskReceiptImageButton>
+        ) : null
+      ) : (
+        <button type="button" onClick={openPdf} disabled={pdfLoading} aria-label="PDF bekijken" title="PDF bekijken"
+          data-testid={`inv-pdf-${inv.id}`} className={`${BTN} disabled:opacity-50`}>
+          {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+        </button>
+      )}
+      {pdfError && <span role="alert" className="text-xs font-semibold text-red-600">{pdfError}</span>}
       <button type="button" onClick={() => setSending(true)} aria-label="Mailen" title="Factuur mailen"
         data-testid={`inv-mail-${inv.id}`} className={BTN}>
         <Mail className="w-4 h-4" />
@@ -80,6 +113,10 @@ export function InvoiceExtraActions({ inv, open, credit, tenant, onChanged, onMs
           title={`Factuur ${inv.invoice_number} versturen`} tenantEmail={tenant?.email || ''}
           tenantPhone={tenant?.phone || ''} tenantName={tenant?.name || ''}
           onClose={() => setSending(false)} onSent={() => setSending(false)} />
+      )}
+      {pdfUrl && (
+        <KioskPdfViewer url={pdfUrl} filename={`factuur-${inv.invoice_number || inv.id}.pdf`}
+          onClose={closePdf} testId={`inv-pdf-viewer-${inv.id}`} />
       )}
     </>
   );

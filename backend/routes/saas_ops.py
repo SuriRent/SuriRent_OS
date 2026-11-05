@@ -103,6 +103,12 @@ async def register_kas_mutation(body: KasMutationIn,
         "source": "manual",
     }
     await _deps.db.subscription_payments.insert_one(pay)
+    if _deps.notify_superadmins and body.amount > 0:
+        await _deps.notify_superadmins(
+            "payments", "SaaS-betaling ontvangen",
+            f"{company_name or 'Klant'}: {body.currency} {body.amount:,.2f}.",
+            {"kind": "saas_payment", "url": "/admin/saas_payments"},
+        )
     pay.pop("_id", None)
     return {"ok": True, "payment": pay}
 

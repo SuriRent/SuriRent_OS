@@ -4,7 +4,6 @@ Eerste batch (incrementele refactor van server.py):
   GET  /superadmin/overview               — KPI dashboard data
   GET  /superadmin/online-status          — per-bedrijf live presence
   GET  /superadmin/subscription-invoices  — lijst SaaS-facturen
-  POST /superadmin/subscription-invoices/{id}/mark-paid — factuur betaald
   GET  /superadmin/subscription-payments  — lijst ontvangen betalingen
 
 Vervolg-batches kunnen dezelfde patroon volgen: overige /superadmin/*
@@ -24,9 +23,7 @@ import io
 from . import _deps
 from saas_invoicing import (
     append_company_invoice_charge,
-    apply_saas_plan_payment,
     consolidate_company_invoices,
-    update_invoice_paid_amount,
 )
 
 router = APIRouter()
@@ -212,83 +209,6 @@ async def list_subscription_invoices(user: dict = Depends(_superadmin)):
     return docs
 
 
-@router.post("/superadmin/subscription-invoices/{inv_id}/mark-paid")
-async def mark_invoice_paid(inv_id: str, user: dict = Depends(_superadmin)):
-    invoice = await _deps.db.subscription_invoices.find_one({"id": inv_id}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
-    if invoice.get("merged_into_invoice_id"):
-        raise HTTPException(status_code=409, detail="Deze factuur is samengevoegd. Gebruik de hoofdfactuur.")
-    if invoice.get("status") == "superseded":
-        raise HTTPException(status_code=409, detail="Deze factuur is vervangen door een betalingsregeling")
-    if invoice.get("status") == "paid":
-        existing_payment = await _deps.db.subscription_payments.find_one({"invoice_id": inv_id}, {"_id": 0, "id": 1})
-        if not existing_payment and not invoice.get("payment_method"):
-            company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
-            payment_at = invoice.get("paid_at") or _deps.iso(_deps.now_utc())
-            payment = {
-                "id": _deps.new_id(),
-                "invoice_id": inv_id,
-                "company_id": invoice.get("company_id"),
-                "company_name": (company or {}).get("name") or invoice.get("company_name", ""),
-                "amount": float(invoice.get("amount") or 0),
-                "currency": (invoice.get("currency") or "SRD").upper(),
-                "method": invoice.get("payment_method") or "manual",
-                "reference": "Historische betaalde factuur",
-                "paid_at": payment_at,
-                "created_at": payment_at,
-                "created_by": user.get("email", "superadmin"),
-                "source": "manual",
-            }
-            await _deps.db.subscription_payments.insert_one(payment)
-            if company and company.get("billing_status") != "active":
-                await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
-        return invoice
-    pending_request = await _deps.db.saas_payment_requests.find_one(
-        {"invoice_id": inv_id, "status": "pending_approval"}, {"_id": 0, "id": 1},
-    )
-    if pending_request:
-        raise HTTPException(status_code=409, detail="Voor deze factuur wacht al een betaling op OCR-goedkeuring")
-    company = await _deps.db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
-    if not company:
-        raise HTTPException(status_code=404, detail="Bedrijf van deze factuur niet gevonden")
-    if company.get("pending_invoice_id") == inv_id and company.get("pending_plan") != invoice.get("plan"):
-        raise HTTPException(status_code=409, detail="Factuur en aangevraagd pakket komen niet overeen")
-    now = _deps.now_utc()
-    amount = float(invoice.get("balance_due", float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0)))
-    if amount <= 0:
-        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
-    res = await update_invoice_paid_amount(_deps.db, inv_id, amount)
-    if not res:
-        raise HTTPException(status_code=409, detail="Factuurstatus is gewijzigd; vernieuw het overzicht")
-    await apply_saas_plan_payment(_deps.db, inv_id, amount)
-    if res.get("status") == "paid":
-        await _deps.db.subscription_invoices.update_one(
-            {"id": inv_id},
-            {"$set": {"paid_at": _deps.iso(now), "payment_method": "manual"}},
-        )
-    payment = {
-        "id": _deps.new_id(),
-        "invoice_id": inv_id,
-        "company_id": company["id"],
-        "company_name": company.get("name", ""),
-        "amount": amount,
-        "currency": (invoice.get("currency") or "SRD").upper(),
-        "method": "manual",
-        "reference": "Handmatig gemarkeerd als betaald",
-        "paid_at": _deps.iso(now),
-        "created_at": _deps.iso(now),
-        "created_by": user.get("email", "superadmin"),
-        "source": "manual",
-    }
-    await _deps.db.subscription_payments.insert_one(payment)
-    await _deps.activate_company_after_payment(company["id"], plan_in_payment=invoice.get("plan"))
-    await _deps.send_saas_payment_email(
-        company, payment["amount"], payment["currency"], payment["method"], inv_id,
-    )
-    return res
-
-
 # =====================================================================
 # Subscription payments — lijst
 # =====================================================================
@@ -388,9 +308,7 @@ async def create_subscription_invoice(body: NewInvoiceIn,
 
 
 async def saas_auto_invoice_tick() -> list[dict]:
-    """Voor elk actief bedrijf: als `subscription_renews_at` verlopen is en er
-    is nog geen open factuur voor de nieuwe periode → genereer factuur. Maandplannen
-    gebruiken kalendermaanden; kwartaal- en jaarplannen behouden hun interval."""
+    """Invoice completed monthly service in arrears; preserve quarter/year billing intervals."""
     db = _deps.db
     now = _deps.now_utc()
     created: list[dict] = []
@@ -413,9 +331,46 @@ async def saas_auto_invoice_tick() -> list[dict]:
         currency = str(summary.get("currency") or (plan or {}).get("currency") or "SRD").upper()
         if amount <= 0:
             continue
-        period_start = _deps.plan_period_start(plan, renews_at)
-        period_end = _deps.plan_period_end(plan, period_start)
-        amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
+        if str((plan or {}).get("interval") or "month").lower() == "month":
+            period_start, period_end = _deps.monthly_billing_period(renews_at)
+            subscription_started_at = c.get("subscription_started_at")
+            if subscription_started_at:
+                try:
+                    started = datetime.fromisoformat(
+                        str(subscription_started_at).replace("Z", "+00:00"),
+                    )
+                    if started.date() > period_end.date():
+                        await db.companies.update_one(
+                            {"id": c["id"]},
+                            {"$set": {"subscription_renews_at": _deps.iso(
+                                _deps.next_monthly_invoice_date(period_end),
+                            )}},
+                        )
+                        continue
+                    if started.date() > period_start.date():
+                        period_start = _deps.plan_period_start(plan, started)
+                except (TypeError, ValueError):
+                    pass
+            amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
+            due_date = _deps.saas_due_date(period_end + timedelta(days=1))
+        else:
+            period_start = _deps.plan_period_start(plan, renews_at)
+            period_end = _deps.plan_period_end(plan, period_start)
+            due_date = _deps.saas_due_date(now)
+        try:
+            current_invoice = await consolidate_company_invoices(db, c["id"])
+        except ValueError as exc:
+            print(f"[saas-invoice] could not check existing charges for {c['id']}: {exc}")
+            continue
+        if _deps.invoice_covers_period(current_invoice, period_start, period_end):
+            if str((plan or {}).get("interval") or "month").lower() == "month":
+                await db.companies.update_one(
+                    {"id": c["id"]},
+                    {"$set": {"subscription_renews_at": _deps.iso(
+                        _deps.next_monthly_invoice_date(period_end),
+                    )}},
+                )
+            continue
         inv = {
             "id": _deps.new_id(),
             "company_id": c["id"],
@@ -427,7 +382,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "kind": "subscription",
             "period_start": _deps.iso(period_start),
             "period_end": _deps.iso(period_end) if period_end else None,
-            "due_date": _deps.saas_due_date(now),
+            "due_date": due_date,
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
@@ -440,6 +395,13 @@ async def saas_auto_invoice_tick() -> list[dict]:
         except ValueError as exc:
             print(f"[saas-invoice] could not add charge for {c['id']}: {exc}")
             continue
+        if str((plan or {}).get("interval") or "month").lower() == "month":
+            await db.companies.update_one(
+                {"id": c["id"]},
+                {"$set": {"subscription_renews_at": _deps.iso(
+                    _deps.next_monthly_invoice_date(period_end),
+                )}},
+            )
         if not created_charge:
             continue
         try:

@@ -18,7 +18,7 @@ from fastapi import HTTPException, Request
 # ---------- Config ----------
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
-SESSION_MIN = 60 * 24 * 365  # 1 jaar — sessies verlopen niet automatisch
+SESSION_MIN = None  # Beheersessies verlopen alleen na handmatig uitloggen.
 ACCESS_MIN = SESSION_MIN
 KIOSK_TOKEN_MIN = SESSION_MIN
 
@@ -36,13 +36,18 @@ def verify_password(pw: str, hashed: str) -> bool:
 
 
 # ---------- JWT ----------
-def create_token(payload: dict, minutes: int) -> str:
-    data = {**payload, "exp": datetime.now(timezone.utc) + timedelta(minutes=minutes)}
+def create_token(payload: dict, minutes: Optional[int]) -> str:
+    data = dict(payload)
+    if minutes is not None:
+        data["exp"] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     return jwt.encode(data, JWT_SECRET, algorithm=JWT_ALG)
 
 
-def decode_token(token: str) -> dict:
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+def decode_token(token: str, *, verify_exp: bool = True) -> dict:
+    return jwt.decode(
+        token, JWT_SECRET, algorithms=[JWT_ALG],
+        options={"verify_exp": verify_exp},
+    )
 
 
 # ---------- Time helpers ----------
