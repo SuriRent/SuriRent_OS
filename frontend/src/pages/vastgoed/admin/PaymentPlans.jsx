@@ -294,7 +294,7 @@ function PlanRow({ plan, onClick }) {
   }[plan.status] || { l: plan.status, cls: 'bg-slate-100 text-slate-600' };
   return (
     <button onClick={onClick} data-testid={`plan-row-${plan.id}`}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100">
+      className="kiosk-finance-row w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100">
       <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
         <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
@@ -315,7 +315,7 @@ function PlanRow({ plan, onClick }) {
           <div className="h-full bg-[#FF5C00]" style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <div className="text-right shrink-0">
+      <div className="kiosk-finance-row-value text-right shrink-0">
         <p className="text-xs sm:text-base font-black text-slate-900">{fmtMoney(plan.remaining_amount, plan.currency)}</p>
         <p className="text-[10px] text-slate-400">resterend</p>
       </div>

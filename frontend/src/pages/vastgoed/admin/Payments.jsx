@@ -382,7 +382,7 @@ function PaymentRow({ p, onOpen }) {
     <div onClick={() => onOpen(p)} data-testid={`payment-row-${p.id}`}
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p); }}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100 cursor-pointer transition">
+      className="kiosk-finance-row w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100 cursor-pointer transition">
       <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0">
         <Receipt className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
@@ -408,7 +408,7 @@ function PaymentRow({ p, onOpen }) {
           <span> · {dateShort}</span>
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+      <div className="kiosk-finance-row-value text-right shrink-0 flex flex-col items-end gap-0.5">
         <p className="text-sm sm:text-base font-black text-slate-900 whitespace-nowrap" data-testid={`payment-amount-${p.id}`}>
           {p.currency} {fmtAmountWhole(p.amount)}
         </p>

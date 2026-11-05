@@ -370,6 +370,63 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   .kiosk-admin-skin [data-testid^="emp-card-"] > div:last-child button svg,
   .kiosk-admin-skin [data-testid^="sal-row-"] > div:last-child button svg { width: 1rem; height: 1rem; }
 }
+@media (max-width: 420px) {
+  .kiosk-cash-row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.625rem;
+  }
+  .kiosk-cash-row-values {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+    align-items: flex-end;
+  }
+  .kiosk-cash-row-amount {
+    max-width: 100%;
+    font-size: clamp(0.75rem, 3.8vw, 0.875rem);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+  .kiosk-admin-skin .kiosk-finance-row {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.625rem;
+  }
+  .kiosk-admin-skin .kiosk-finance-row > :first-child { grid-column: 1; grid-row: 1; }
+  .kiosk-admin-skin .kiosk-finance-row > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  .kiosk-admin-skin .kiosk-finance-row-value {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    text-align: right;
+  }
+  .kiosk-admin-skin .kiosk-finance-row-value > p { white-space: normal; overflow-wrap: anywhere; }
+  .kiosk-admin-skin .kiosk-fx-row {
+    flex-wrap: wrap;
+    gap: 0.375rem 0.5rem;
+    padding: 0.625rem;
+  }
+  .kiosk-admin-skin .kiosk-fx-row-content { flex: 1 1 calc(100% - 3rem); }
+  .kiosk-admin-skin .kiosk-fx-row-value {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    padding-right: 0.25rem;
+  }
+  .kiosk-admin-skin .kiosk-fx-row > [data-apartment-photo],
+  .kiosk-admin-skin .kiosk-fx-row > [data-testid^="tenant-photo"] { max-width: 2.5rem; }
+  .kiosk-admin-skin .kiosk-contract-row { flex-wrap: wrap; }
+  .kiosk-admin-skin .kiosk-contract-row > button:first-child { flex: 1 1 100%; }
+  .kiosk-admin-skin .kiosk-contract-row > div:last-child { width: 100%; justify-content: flex-end; }
+}
 /* Kiosk Beheer-popups use the same generous surfaces and controls as the cash form. */
 .kiosk-popup-active .kiosk-fx { font-size: 16px; }
 .kiosk-popup-active .kiosk-fx h1 { font-size: 1.5rem; line-height: 2rem; font-weight: 900; color: #0F172A; letter-spacing: -0.02em; }

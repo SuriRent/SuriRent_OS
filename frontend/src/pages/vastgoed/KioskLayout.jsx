@@ -3929,7 +3929,7 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
   const creator = (item.created_by_name || '').trim();
   return (
-    <div className="flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
+    <div className="kiosk-cash-row flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
         isIn ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'
       }`}>
@@ -3951,8 +3951,8 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
           )}
         </p>
       </div>
-      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
-      <p className={`text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
+      <div className="kiosk-cash-row-values flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
+      <p className={`kiosk-cash-row-amount text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
         item.excluded_from_balance ? 'text-slate-400' : isIn ? 'text-emerald-600' : 'text-red-500'
       }`} data-testid={`kasgeld-row-amount-${item.id}`} title={item.excluded_from_balance ? 'Verrekend met borg — telt niet mee in kassaldo' : undefined}>
         {isIn ? '+' : '−'}{item.currency} {Number(item.amount || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

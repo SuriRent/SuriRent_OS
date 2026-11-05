@@ -593,7 +593,7 @@ function KioskContractRow({ contract, onOpen, onPdf, onEmail, onCopyLink, onDele
     handler();
   };
   return (
-    <article className="flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 text-left transition hover:bg-slate-50 sm:gap-3 sm:p-4"
+    <article className="kiosk-contract-row flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 text-left transition hover:bg-slate-50 sm:gap-3 sm:p-4"
       data-testid={`contract-row-${contract.id}`}>
       <button type="button" onClick={onOpen}
         className="flex min-w-0 flex-1 items-center gap-2 text-left sm:gap-3">
