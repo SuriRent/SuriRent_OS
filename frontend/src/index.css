@@ -404,15 +404,17 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
     align-items: flex-end;
   }
   .kiosk-cash-row-amount {
-    max-width: 100%;
-    font-size: clamp(0.75rem, 3.8vw, 0.875rem);
-    white-space: normal;
-    overflow-wrap: anywhere;
+    max-width: 42%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.6875rem, 3.5vw, 0.875rem);
+    white-space: nowrap;
     text-align: right;
   }
   .kiosk-admin-skin .kiosk-finance-row {
     display: grid;
-    grid-template-columns: 2.25rem minmax(0, 1fr) max-content;
+    grid-template-columns: 2.25rem minmax(0, 1fr) minmax(4rem, 32%);
     gap: 0.5rem;
     padding: 0.625rem;
   }
@@ -422,7 +424,8 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
     grid-column: 3;
     grid-row: 1;
     width: auto;
-    min-width: max-content;
+    min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -432,6 +435,8 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   }
   .kiosk-admin-skin .kiosk-finance-row-value > p {
     max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
     overflow-wrap: normal;
     font-size: clamp(0.75rem, 3.5vw, 0.875rem);
@@ -448,6 +453,9 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
     padding-right: 0;
   }
   .kiosk-admin-skin .kiosk-fx-row-value > div > div:first-child {
+    max-width: 32vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: clamp(0.75rem, 3.5vw, 0.875rem);
     line-height: 1.15;
     white-space: nowrap;
@@ -1222,12 +1230,12 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     line-height: 1.2;
   }
 
-  [role="menu"] > div:last-child > div {
+  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
   }
 
-  [role="menu"] [role="menuitem"] {
+  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] {
     min-width: 0;
     min-height: 6rem;
     padding: 0.75rem 0.5rem;
@@ -1235,17 +1243,20 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     border-radius: 1rem;
   }
 
-  [role="menu"] [role="menuitem"] > span:first-child {
+  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:first-child {
     width: 2.75rem;
     height: 2.75rem;
     border-radius: 0.875rem;
   }
 
-  [role="menu"] [role="menuitem"] > span:last-child {
+  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) [role="menuitem"] > span:last-child {
     max-width: 100%;
     font-size: 0.8125rem;
     line-height: 1.125rem;
-    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
 
   :is(
@@ -1277,7 +1288,8 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     gap: 0.3rem;
     font-size: 0.75rem !important;
     line-height: 1rem;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   :is(
@@ -1291,13 +1303,61 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
   }
 
   [data-testid="kiosk-inv-detail-total"] {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: clamp(0.875rem, 3.8vw, 1rem);
+    font-size: clamp(0.75rem, 3.8vw, 1rem);
+  }
+
+  .kiosk-fullscreen :is(p, span, h1, h2, h3, label) {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .kiosk-fullscreen :is([data-testid="kasgeld-total-srd"], [data-testid^="kasgeld-bal-"] p:last-child),
+  [data-testid="kasgeld-amount-display"] > span:last-child,
+  [data-testid="kasgeld-receipt-amount"],
+  [data-testid="deposit-receipt-amount"],
+  [data-testid="pay-amount-display"],
+  [data-testid="tk-pay-amount-display"],
+  [data-testid="tk-method-amount"],
+  [data-testid="tk-confirm-amount"],
+  [data-testid="tk-balance"],
+  [data-testid="tk-total-due"],
+  [data-testid="bank-transfer-amount"] {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(0.875rem, 4vw, 1.5rem) !important;
+  }
+
+  [data-testid="kasgeld-amount-display"],
+  [data-testid="kasgeld-amount-display"] > div,
+  [data-testid="kasgeld-amount-display"] > span:last-child {
+    min-width: 0;
+  }
+
+  [data-testid="tk-dashboard"] [data-testid^="tk-fin-"] > p {
+    flex: 0 1 42%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-size: clamp(0.6875rem, 3.2vw, 0.875rem);
+  }
+
+  [data-testid="tk-dashboard"] [data-testid="tk-total-due"] {
+    max-width: 65%;
   }
 }
 
 @media (min-width: 421px) and (max-width: 767px) {
-  [role="menu"] > div:last-child > div {
+  :is([data-testid="kiosk-admin-menu"], [data-testid="kiosk-settings-menu"]) > div:last-child > div {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
