@@ -533,6 +533,17 @@ export default function KioskInvoicesPage({ onBack }) {
                 </div>
                 <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{groups.length} huurders</span>
               </div>
+              <div className="kiosk-admin-mobile-actions mb-2 grid grid-cols-2 gap-2">
+                <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate-mobile"
+                  className="items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-2 py-2.5 text-center text-xs font-bold text-[#FF5C00] disabled:opacity-60">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4 shrink-0" />} Genereer {month}
+                </button>
+                <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
+                  data-testid="kiosk-inv-new-mobile"
+                  className="items-center justify-center gap-1.5 rounded-xl bg-[#FF5C00] px-2 py-2.5 text-center text-xs font-black text-white">
+                  <FilePlus2 className="h-4 w-4 shrink-0" /> Nieuwe factuur
+                </button>
+              </div>
               <div className="mb-2 hidden gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:flex sm:gap-2 sm:pb-1" role="tablist" aria-label="Factuurstatus">
                 {TABS.map((filter) => (
                   <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}

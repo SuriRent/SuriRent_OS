@@ -204,6 +204,11 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
                 data-testid="kiosk-locations-count">{counts.all} locaties</span>
             </div>
 
+            <button type="button" onClick={() => setCreating(true)} data-testid="loc-new-btn-mobile"
+              className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+              <Plus className="h-4 w-4" /> Nieuwe locatie
+            </button>
+
             <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" data-testid="loc-filter-bar">
               {[
                 { value: 'all', label: 'Alle locaties', count: counts.all },

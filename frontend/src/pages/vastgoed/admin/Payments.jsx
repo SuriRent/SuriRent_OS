@@ -1216,6 +1216,13 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                 </span>
               </div>
 
+              <div className="kiosk-admin-mobile-control mb-2">
+                <MonthStepper year={selectedYear} month={selectedMonth}
+                  onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
+                  isCurrent={isCurrentMonth}
+                  count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} compact />
+              </div>
+
               <div className="relative mb-2 sm:mb-3">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}

@@ -190,6 +190,10 @@ export default function PaymentPlans({ embedded = false, kioskLayout = false, on
                 {rows.length} regelingen
               </span>
             </div>
+            <button type="button" onClick={() => setCreating(true)} data-testid="plan-new-btn-mobile"
+              className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+              <Plus className="h-4 w-4" /> Nieuwe regeling
+            </button>
             <div className="flex gap-1.5 mb-2 overflow-x-auto sm:mb-3" data-testid="plan-filter-bar">
               {[
                 { v: 'active', l: 'Actief' }, { v: 'completed', l: 'Voltooid' },

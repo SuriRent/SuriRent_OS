@@ -3549,6 +3549,11 @@ export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
                 data-testid="kiosk-tenants-count">{counts.all} huurders</span>
             </div>
 
+            <button type="button" onClick={() => setCreating(true)} data-testid="tenant-new-btn-mobile"
+              className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+              <Plus className="h-4 w-4" /> Nieuwe huurder
+            </button>
+
             <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" data-testid="tenant-filter-bar">
               {filters.map((item) => (
                 <button key={item.value} type="button" onClick={() => setFilter(item.value)}

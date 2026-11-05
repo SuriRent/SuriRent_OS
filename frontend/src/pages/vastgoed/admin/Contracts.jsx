@@ -306,6 +306,10 @@ export default function Contracts({ embedded = false, kioskLayout = false, onBac
               <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"
                 data-testid="kiosk-contracts-count">{counts.all} contracten</span>
             </div>
+            <button type="button" onClick={() => setCreating(true)} data-testid="contract-new-btn-mobile"
+              className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+              <Plus className="h-4 w-4" /> Nieuw contract
+            </button>
             {loadErrors.length > 0 && (
               <div role="alert" className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <span>Contractgegevens konden niet volledig worden geladen: {formatError(loadErrors[0])}</span>

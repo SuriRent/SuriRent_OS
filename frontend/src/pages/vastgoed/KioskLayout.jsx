@@ -3861,6 +3861,10 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
             <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-xl px-2.5 py-1"
               data-testid="apartments-count-badge">{apartments.length} totaal</span>
           </div>
+          <button type="button" onClick={onNewApartment} data-testid="apartments-new-btn-mobile"
+            className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+            <Plus className="h-4 w-4" strokeWidth={2.5} /> Nieuwe appartement
+          </button>
 
           {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" role="alert">{err}</div>}
           {!err && loading && (

@@ -884,6 +884,10 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 
 /* Compacte mobiele bediening zoals de Kasgeld-weergave. */
 @media (max-width: 767px) {
+  .kiosk-admin-mobile-action,
+  .kiosk-admin-mobile-actions,
+  .kiosk-admin-mobile-control { display: none; }
+
   .kiosk-admin-skin .kiosk-chrome > p,
   .kiosk-admin-skin .kiosk-chrome > .text-right { display: none !important; }
 
@@ -986,6 +990,166 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
   body.kiosk-popup-active [data-testid="create-plan-sheet"] [data-testid^="plan-inv-"],
   body.kiosk-popup-active [data-testid="create-plan-sheet"] [data-testid="plan-create-submit"] {
     min-height: 2.75rem; border-radius: 0.75rem; font-size: 0.875rem;
+  }
+}
+@media (max-width: 767px) {
+  [data-testid="kiosk-admin-page-facturen"] .kiosk-chrome { display: none !important; }
+
+  :is(
+    [data-testid="kiosk-locations-panel"],
+    [data-testid="kiosk-tenants-panel"],
+    [data-testid="kiosk-contracts-panel"],
+    [data-testid="kiosk-apartments-panel"],
+    [data-testid="kiosk-payments-panel"],
+    [data-testid="kiosk-payment-plans"],
+    [data-testid="kiosk-admin-page-facturen"]
+  ) .kiosk-admin-summary { display: none !important; }
+
+  :is(
+    [data-testid="kiosk-locations-panel"],
+    [data-testid="kiosk-tenants-panel"],
+    [data-testid="kiosk-contracts-panel"],
+    [data-testid="kiosk-apartments-panel"],
+    [data-testid="kiosk-payments-panel"],
+    [data-testid="kiosk-payment-plans"],
+    [data-testid="kiosk-admin-page-facturen"]
+  ) .kiosk-admin-list {
+    order: 0 !important; flex: 1 1 0% !important; width: 100%; min-width: 0; min-height: 0;
+  }
+
+  .kiosk-admin-mobile-action,
+  .kiosk-admin-mobile-actions { display: flex; }
+  .kiosk-admin-mobile-actions { display: grid; }
+  .kiosk-admin-mobile-action { min-height: 2.75rem; font-size: 0.875rem; }
+
+  .kiosk-admin-mobile-control { display: block; }
+  .kiosk-admin-mobile-control [data-testid="month-stepper"] { padding: 0.25rem 0.5rem; border-radius: 0.75rem; }
+  .kiosk-admin-mobile-control [data-testid="month-stepper"] button { width: 2.25rem; height: 2.25rem; }
+  .kiosk-admin-mobile-control [data-testid="month-stepper"] p:first-child { display: none; }
+  .kiosk-admin-mobile-control [data-testid="month-stepper"] p:last-child { font-size: 0.875rem !important; }
+
+  [data-testid="kiosk-admin-page-facturen"] .kiosk-admin-list { padding: 0.75rem; }
+  [data-testid="kiosk-admin-page-facturen"] .kiosk-admin-mobile-actions > button {
+    display: flex; min-width: 0; min-height: 2.75rem; font-size: 0.75rem; line-height: 1rem;
+  }
+}
+@media (max-width: 767px) {
+  :is(.kiosk-admin-skin, [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) {
+    gap: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) > section:first-child {
+    gap: 0.5rem !important;
+    padding: 0.75rem !important;
+    border-radius: 1rem;
+  }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) :is(section, [role="tablist"], [data-testid="plan-linked-invoices"]) {
+    border-radius: 1rem;
+  }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) .p-4 { padding: 0.75rem !important; }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) .p-3 { padding: 0.625rem !important; }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) .gap-3 { gap: 0.5rem !important; }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) > section:first-child :is(img, div[class*="h-14"][class*="w-14"]) {
+    width: 3rem !important; height: 3rem !important; border-radius: 0.875rem;
+  }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"],
+      [data-testid="kiosk-apartment-detail"] > div > div
+    ) :is(button, a):not([role="tab"]) {
+    min-height: 2.5rem !important; height: auto !important; padding-top: 0.5rem; padding-bottom: 0.5rem;
+  }
+
+  :is(.kiosk-admin-skin, [data-testid="kiosk-apartment-detail"], [data-testid="kiosk-payment-detail"], [data-testid="kiosk-inv-detail-panel"])
+    :is(
+      [data-testid="loc-detail-page"],
+      [data-testid="tenant-detail-page"],
+      [data-testid="contract-detail-page"],
+      [data-testid="plan-detail-page"],
+      [data-testid^="payment-detail-page-"],
+      [data-testid="kiosk-inv-detail"]
+    ) [role="tab"] {
+    min-height: 2.25rem !important; padding: 0.375rem 0.75rem !important;
+  }
+
+  [data-testid="kiosk-inv-detail-panel"] [data-testid^="kiosk-inv-line-"] { gap: 0.5rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  [data-testid="kiosk-inv-detail-panel"] [data-testid^="kiosk-inv-line-"] :is(button, a) {
+    width: 2.5rem; height: 2.5rem; min-height: 2.5rem !important; padding: 0;
   }
 }
 @media (min-width: 390px) and (max-width: 767px) {
