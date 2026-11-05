@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Sun, Palette, Menu as MenuIcon, ScanLine,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
-  Check, Loader2, Home, X, Wallet, FileText, AlertCircle,
+  Check, Loader2, Home, X, Wallet, FileText, AlertCircle, Coins,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
@@ -4157,7 +4157,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
 
   const amountBorder = amount
     ? (type === 'in' ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : 'border-red-400 text-red-700 bg-red-50')
-    : 'border-slate-200 text-slate-300 bg-slate-50';
+    : (type === 'in' ? 'border-emerald-200 text-emerald-700 bg-emerald-50/70' : 'border-red-200 text-red-700 bg-red-50/70');
 
   return createPortal((
     <div
@@ -4170,21 +4170,29 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
             titel toch onder de notch/statusbalk zit. */}
-        <div className="flex-none flex items-center justify-between px-5 pb-3 border-b border-slate-100"
+        <div className="flex-none flex items-center justify-between gap-3 px-5 pb-4 border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-3">
             {step === 'details' && !saved && (
               <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
-                className="w-9 h-9 -ml-2 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-                <ChevronLeft className="w-5 h-5 text-slate-500" />
+                className="w-10 h-10 shrink-0 -ml-2 rounded-xl bg-slate-100 flex items-center justify-center">
+                <ChevronLeft className="w-5 h-5 text-slate-700" />
               </button>
             )}
-            <h3 className="text-lg font-black text-slate-900">
-              {saved ? 'Kasgeld bon' : step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
-            </h3>
+            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+              <Wallet className="w-8 h-8 text-orange-600" strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-xl font-black leading-tight text-slate-900">
+                {saved ? 'Kasgeld bon' : step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
+              </h3>
+              <p className="mt-1 text-sm leading-tight text-slate-500">
+                {step === 'amount' && !saved ? 'Voer het bedrag in en kies de valuta' : step === 'details' && !saved ? 'Voeg een omschrijving en categorie toe' : 'Overzicht van de kasmutatie'}
+              </p>
+            </div>
           </div>
-          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-            <X className="w-5 h-5 text-slate-500" />
+          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-7 h-7 text-slate-700" />
           </button>
         </div>
 
@@ -4193,77 +4201,74 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
             <KasgeldReceiptScreen entry={saved} onDone={onSaved} />
           </div>
         ) : step === 'amount' ? (
-          /* ============ STEP 1: Type + Currency + Bedrag (NumPad) ============
-              De sticky footer hieronder handelt de FAB-clearance af — body
-              zelf hoeft dus geen extra padding-bottom. */
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3"
+          /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
             style={{ WebkitOverflowScrolling: 'touch' }}>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
-                className={`h-11 rounded-xl font-black text-sm ${type === 'in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                Inkomend
-              </button>
-              <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
-                className={`h-11 rounded-xl font-black text-sm ${type === 'out' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                Uitgaand
-              </button>
-            </div>
-
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
                 <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-                  className={`h-11 rounded-xl font-black text-sm ${currency === c ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  className={`h-14 rounded-2xl border font-black text-base inline-flex items-center justify-center gap-2 ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                  <span className="text-xl" aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
                   {c}
                 </button>
               ))}
             </div>
 
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Bedrag</span>
-              <div data-testid="kasgeld-amount-display"
-                className={`w-full h-14 px-4 rounded-xl border-2 flex items-center justify-end text-2xl font-black tabular-nums ${amountBorder}`}>
-                {currency} {amount || '0'}
-              </div>
+            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
+              <button onClick={() => setType('in')} data-testid="kasgeld-type-in"
+                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
+                <ArrowDownLeft className="w-5 h-5" /> Inkomsten
+              </button>
+              <button onClick={() => setType('out')} data-testid="kasgeld-type-out"
+                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
+                <ArrowUpRight className="w-5 h-5" /> Uitgaand
+              </button>
             </div>
-            <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad" />
+
+            <div data-testid="kasgeld-amount-display"
+              className={`w-full min-h-[76px] px-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
+              <div className="flex items-center gap-3">
+                <Coins className="w-8 h-8 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider">Bedrag</span>
+              </div>
+              <span className="text-3xl sm:text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
+            </div>
+
+            <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad"
+              buttonClassName="!h-16 !rounded-2xl !text-3xl" />
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
           </div>
         ) : (
-          /* ============ STEP 2: Omschrijving + Categorie ============
-              Layout: inputs bovenaan (direct onder header), Opslaan direct
-              onder de velden. Zo blijven ALLE bedienelementen zichtbaar
-              zodra het iOS-toetsenbord opent — geen re-positioning nodig,
-              geen flicker. De onderste ruimte (leeg) wordt weggeschoven
-              door het toetsenbord.
-          */
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-5 py-4 gap-3"
+          /* ============ STEP 2: Omschrijving + Categorie ============ */
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-5 py-4 gap-4"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
-            <div className={`w-full rounded-xl px-4 py-2.5 flex items-center justify-between ${type === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-              <span className="text-[10px] font-black uppercase tracking-widest">
-                {type === 'in' ? 'Inkomend' : 'Uitgaand'} · {currency}
-              </span>
-              <span className="text-xl font-black tabular-nums">{amount || '0'}</span>
+            <div className={`w-full min-h-[76px] rounded-2xl border-2 px-4 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              <div className="flex items-center gap-3">
+                <Coins className="w-8 h-8 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider">{type === 'in' ? 'Inkomsten' : 'Uitgaand'}</span>
+              </div>
+              <span className="text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
             </div>
 
             <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Omschrijving *</span>
+              <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Omschrijving *</span>
               <input ref={descInputRef}
                 value={description} onChange={(e) => setDescription(e.target.value)}
                 data-testid="kasgeld-input-desc"
                 placeholder="Bijv. schoonmaakspullen"
                 autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                 enterKeyHint="next"
-                className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base" />
+                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base" />
             </label>
 
             <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Categorie</span>
+              <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Categorie</span>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
-                className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
+                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
                 <option value="overig">Overig</option>
                 <option value="onderhoud">Onderhoud</option>
                 <option value="schoonmaak">Schoonmaak</option>
@@ -4275,38 +4280,35 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
 
             {canBackdate && (
               <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Boekdatum</span>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className="w-full h-12 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white" />
+                  className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white" />
               </label>
             )}
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
 
-            {/* Opslaan-knop DIRECT onder de velden i.p.v. footer, zodat hij
-                zichtbaar blijft als het iOS-toetsenbord opent. */}
-            <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-              className="w-full h-12 shrink-0 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Opslaan…</> : 'Opslaan'}
-            </button>
-
-            {/* Flex-grow spacer die inklapt onder de keyboard. Geen visible
-                content zodat de layout niet flikkert bij open/close. */}
-            <div className="flex-1" aria-hidden="true" />
           </div>
         )}
 
-        {/* Sticky footer — alleen zichtbaar in step 1. In step 2 zit de
-            Opslaan-knop tussen de velden zelf (zie hierboven) zodat hij
-            boven het toetsenbord blijft. */}
-        {step === 'amount' && (
+        {!saved && (
           <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-            <button onClick={goNext} data-testid="kasgeld-next-btn"
-              disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
-              className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50">
-              Volgende <ChevronRight className="w-4 h-4" />
-            </button>
+            {step === 'amount' ? (
+              <button onClick={goNext} data-testid="kasgeld-next-btn"
+                disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
+                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-4 shadow-lg shadow-orange-200 disabled:opacity-50">
+                <CheckCircle className="w-7 h-7" />
+                <span className="h-8 w-px bg-white/40" />
+                Volgende
+                <ArrowRight className="w-7 h-7" />
+              </button>
+            ) : (
+              <button onClick={save} disabled={saving} data-testid="kasgeld-save"
+                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-3 shadow-lg shadow-orange-200 disabled:opacity-50">
+                {saving ? <><Loader2 className="w-5 h-5 animate-spin" /> Opslaan…</> : <><CheckCircle className="w-6 h-6" /> Opslaan</>}
+              </button>
+            )}
           </div>
         )}
       </div>
