@@ -1155,4 +1155,57 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 @media (min-width: 390px) and (max-width: 767px) {
   .kiosk-admin-skin .kiosk-chrome,
   .kiosk-admin-skin [data-testid$="-detail-back"] { display: none !important; }
+
+  .kiosk-fullscreen .kiosk-content-scroll.kiosk-mobile-has-bar,
+  .kiosk-fullscreen [data-testid^="kiosk-admin-page-"] > div:first-child,
+  .kiosk-fullscreen [data-testid="kiosk-inv-detail-panel"] {
+    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+@media (max-width: 420px) {
+  .kiosk-fullscreen [role="tablist"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .kiosk-fullscreen [role="tablist"] [role="tab"] {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    padding: 0.5rem 0.375rem !important;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .kiosk-fullscreen [data-testid$="filter-bar"],
+  .kiosk-fullscreen [data-testid="kasgeld-source-filter"] {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .kiosk-fullscreen [data-testid$="filter-bar"] > button,
+  .kiosk-fullscreen [data-testid="kasgeld-source-filter"] > button {
+    height: auto;
+    min-height: 2.5rem;
+    flex: 1 1 7rem;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .kiosk-fullscreen [data-testid$="-tabs"] {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .kiosk-fullscreen [data-testid$="-tabs"] > button {
+    min-width: 0;
+    flex: 1 1 6.5rem;
+    white-space: normal;
+  }
+
 }

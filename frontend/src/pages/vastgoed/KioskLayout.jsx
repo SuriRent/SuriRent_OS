@@ -6390,7 +6390,7 @@ export default function KioskLayout() {
         <motion.div key={step} variants={variants}
           initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.16, ease: 'easeOut' }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
