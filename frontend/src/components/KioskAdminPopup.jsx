@@ -11,7 +11,6 @@ const NEW = {
   regelingen: { label: 'Nieuwe regeling', event: 'kiosk-plan-new' },
   locaties: { label: 'Nieuwe locatie', event: 'kiosk-loc-new' },
   appartementen: { label: 'Nieuw appartement', event: 'kiosk-apt-new' },
-  betalingen: { label: 'Nieuwe betaling', event: 'quick-pay-open' },
   huurders: { label: 'Nieuwe huurder', event: 'kiosk-tenant-new' },
   werknemers: { label: 'Nieuw toevoegen', event: 'kiosk-emp-new' },
 };

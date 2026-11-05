@@ -13217,6 +13217,7 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out["printer"] = "kt-v520" if force_ktp else cfg["printer"]
     out["paper_width"] = 58 if out["printer"] == "kt-v520" else cfg["paper_width"]
     cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
+    out["cols"] = cols
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
     return out
 
