@@ -427,8 +427,9 @@ function PaymentRow({ p, onOpen }) {
 // grote "Terug"-pil, hoofdcard met naam + bedrag, sub-cards voor
 // betaalgegevens en gekoppelde factuur. Sub-card "Acties" onderaan.
 // =====================================================================
-function PaymentDetail({ payment, onBack, onEmail, onDelete }) {
+function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }) {
   const p = payment;
+  const [detailTab, setDetailTab] = useState('overzicht');
   const [linkedInvoice, setLinkedInvoice] = useState(null);
   // Openstaande facturen van deze huurder — voor "Wijzig gekoppelde factuur"
   const [tenantInvoices, setTenantInvoices] = useState([]);
@@ -481,56 +482,114 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete }) {
   })();
 
   return (
-    <div className="space-y-4 pb-24 sm:pb-6" data-testid={`payment-detail-page-${p.id}`}>
-      {/* TERUG-PIL — zelfde stijl als in PlanDetail */}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} data-testid="payment-detail-back"
-          className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
-          <ArrowLeft className="w-4 h-4" /> Terug
-        </button>
-      </div>
-
-      {/* HOOFDCARD — naam + subtitle links, bedrag + label rechts */}
-      <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-black text-slate-900 truncate">{p.apartment_number || 'Geen appartement'}</h1>
-            <p className="text-xs text-slate-500">
-              {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
-            </p>
-            {p.note && <p className="text-sm text-slate-600 mt-2">{p.note}</p>}
-            <div className="flex items-center gap-2 flex-wrap mt-3">
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
-                {CATEGORY_LABELS[p.category] || p.category}
-              </span>
-              <MethodPill method={p.method} />
+    <div className={kioskMode ? 'flex min-h-full flex-col gap-3 pb-3' : 'space-y-4 pb-24 sm:pb-6'}
+      data-testid={`payment-detail-page-${p.id}`}>
+      {kioskMode ? (
+        <>
+          <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]">
+                <Receipt className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">
+                  Betaling{p.receipt_number ? ` · ${p.receipt_number}` : ''}
+                </p>
+                <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                  {p.apartment_number || 'Geen appartement'}
+                </h1>
+                <p className="truncate text-sm font-semibold text-slate-500">
+                  {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
+                </p>
+              </div>
+              <div className="hidden shrink-0 text-right sm:block">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Bedrag</p>
+                <p className="text-xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${statusBadge.cls}`}>{statusBadge.l}</span>
+              <button onClick={onBack} data-testid="payment-detail-back"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <ArrowLeft className="h-4 w-4" /> Terug
+              </button>
+            </div>
+          </section>
+          <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+            role="tablist" aria-label="Betalingsdetails">
+            {[
+              ['overzicht', 'Overzicht'],
+              ...(p.invoice_id ? [['factuur', 'Factuur']] : []),
+              ['acties', 'Kwitantie en acties'],
+            ].map(([tab, label]) => (
+              <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
+                onClick={() => setDetailTab(tab)} data-testid={`payment-detail-tab-${tab}`}
+                className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                  detailTab === tab ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {detailTab === 'overzicht' && p.note && (
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Notitie</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{p.note}</p>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <button onClick={onBack} data-testid="payment-detail-back"
+              className="flex items-center gap-1.5 text-slate-700 font-bold bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Terug
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-xl font-black text-slate-900 truncate">{p.apartment_number || 'Geen appartement'}</h1>
+                <p className="text-xs text-slate-500">
+                  {p.tenant_name || 'Onbekende huurder'}{p.location_name ? ` · ${p.location_name}` : ''}
+                </p>
+                {p.note && <p className="text-sm text-slate-600 mt-2">{p.note}</p>}
+                <div className="flex items-center gap-2 flex-wrap mt-3">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${statusBadge.cls}`}>{statusBadge.l}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-50 text-[#FF5C00]">
+                    {CATEGORY_LABELS[p.category] || p.category}
+                  </span>
+                  <MethodPill method={p.method} />
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Betaald</p>
+                <p className="text-2xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
+                <p className="text-[11px] text-slate-500">op {date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Betaald</p>
-            <p className="text-2xl font-black text-slate-900">{fmtMoney(p.amount, p.currency)}</p>
-            <p className="text-[11px] text-slate-500">op {date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* SUB-CARD: BETAALGEGEVENS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {(!kioskMode || detailTab === 'overzicht') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Betaalgegevens</h2>
+          <h2 className="text-base font-black text-slate-900">Betaalgegevens</h2>
         </div>
         <div className="p-4 space-y-1.5 text-sm">
           <DetailRow label="Kwitantienummer" value={<span className="font-mono font-bold text-slate-900">{p.receipt_number}</span>} />
           <DetailRow label="Datum" value={date.toLocaleString('nl-NL')} />
+          <DetailRow label="Bedrag" value={fmtMoney(p.amount, p.currency)} />
           <DetailRow label="Methode" value={METHOD_LABELS[p.method] || p.method} />
+          <DetailRow label="Categorie" value={CATEGORY_LABELS[p.category] || p.category || '—'} />
           {p.period_month && <DetailRow label="Periode" value={`${MONTHS_NL[p.period_month - 1]} ${p.period_year}`} />}
           {p.approved_by && <DetailRow label="Goedgekeurd door" value={p.approved_by} />}
         </div>
-      </div>
+      </div>}
 
       {/* SUB-CARD: GEKOPPELDE FACTUUR (indien aanwezig) */}
-      {p.invoice_id && (
+      {(!kioskMode || detailTab === 'factuur') && p.invoice_id && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" data-testid="payment-linked-invoice">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Gekoppelde factuur</h2>
@@ -640,11 +699,11 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete }) {
       )}
 
       {/* SUB-CARD: ACTIES */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {(!kioskMode || detailTab === 'acties') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Acties</h2>
+          <h2 className="text-base font-black text-slate-900">Kwitantie en acties</h2>
         </div>
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
             testId={`payment-image-${p.id}`}
             className="inline-flex items-center justify-center gap-2 px-2 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-bold rounded-xl text-xs sm:text-sm">
@@ -661,7 +720,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete }) {
             <Trash2 className="w-4 h-4" /> Verwijder
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -890,7 +949,7 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // =====================================================================
 // Main page
 // =====================================================================
-export default function Payments({ embedded = false }) {
+export default function Payments({ embedded = false, kioskLayout = false, onBack }) {
   // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
   const today = useMemo(() => new Date(), []);
   // Maand-picker — default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
@@ -1051,13 +1110,21 @@ export default function Payments({ embedded = false }) {
   // if-branch zodat ze ook geopend kunnen worden vanuit de detail-view.
   if (detailPayment) {
     return (
-      <>
-        <PaymentDetail
-          payment={detailPayment}
-          onBack={() => { setDetailPayment(null); load(); }}
-          onEmail={(item) => setEmailing(item)}
-          onDelete={(item) => setDeleting(item)}
-        />
+      <div className={kioskLayout
+        ? 'h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0'
+        : ''} style={kioskLayout ? { paddingLeft: '1.5vw', paddingRight: '1.5vw' } : undefined}
+        data-testid={kioskLayout ? 'kiosk-payment-detail' : undefined}>
+        <div className={kioskLayout ? 'flex-1 min-h-0 overflow-y-auto py-3' : ''}>
+          <div className={kioskLayout ? 'mx-auto flex min-h-full max-w-7xl flex-col gap-3' : ''}>
+            <PaymentDetail
+              payment={detailPayment}
+              kioskMode={kioskLayout}
+              onBack={() => { setDetailPayment(null); load(); }}
+              onEmail={(item) => setEmailing(item)}
+              onDelete={(item) => setDeleting(item)}
+            />
+          </div>
+        </div>
         {emailing && (
           <SendDialog
             documentType="payment"
@@ -1069,13 +1136,104 @@ export default function Payments({ embedded = false }) {
             tenantName={emailing.tenant_name}
             onClose={() => setEmailing(null)} />
         )}
-      </>
+      </div>
     );
   }
 
   return (
-    <div data-testid="payments-page" className={embedded ? 'space-y-4' : ''}>
-      {embedded ? (
+    <div data-testid="payments-page" className={kioskLayout ? 'h-full w-full' : embedded ? 'space-y-4' : ''}>
+      {kioskLayout ? (
+        <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+          style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-payments-panel">
+          <div className="flex-1 min-h-0 overflow-y-auto py-3">
+            <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-3">
+              <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">Beheer</p>
+                  <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Betalingen</h1>
+                  <p className="text-sm font-semibold text-slate-500">
+                    {totalCount} kwitantie{totalCount !== 1 ? 's' : ''}
+                    {todaySum > 0 ? ` · Vandaag ${currency} ${fmtAmountWhole(todaySum)}` : ''}
+                  </p>
+                </div>
+                <button onClick={() => setCreating(true)} data-testid="payment-new-btn" type="button"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-bold text-white hover:bg-[#E05200]">
+                  <Plus className="h-4 w-4" /> Nieuwe betaling
+                </button>
+                {onBack && (
+                  <button type="button" onClick={onBack} data-testid="payments-panel-back"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    <ArrowLeft className="h-4 w-4" /> Terug
+                  </button>
+                )}
+              </section>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Totaal deze maand</p>
+                  <p className="mt-1 text-lg font-black text-emerald-700">{fmtMoney(summary.monthSum || 0, currency)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Betalingen deze maand</p>
+                  <p className="mt-1 text-lg font-black text-slate-900">{summary.monthCount || 0}</p>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+                  <p className="text-xs font-bold text-amber-700">Wacht op goedkeuring</p>
+                  <p className="mt-1 text-lg font-black text-amber-800">{pending.length}</p>
+                </div>
+              </div>
+
+              <MonthStepper year={selectedYear} month={selectedMonth}
+                onPrev={() => stepMonth(-1)} onNext={() => stepMonth(1)}
+                isCurrent={isCurrentMonth}
+                count={summary.monthCount || 0} sum={summary.monthSum || 0} currency={currency} />
+
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Zoek huurder, kwitantie of appartement…"
+                  data-testid="payment-search"
+                  className="h-12 w-full rounded-2xl border border-slate-100 bg-white pl-11 pr-4 text-sm outline-none focus:border-[#FF5C00]" />
+              </div>
+
+              {pending.length > 0 && (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3 shadow-sm"
+                  data-testid="pending-section-desktop">
+                  <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black uppercase tracking-widest text-amber-700">
+                    <Clock className="h-4 w-4" /> Wacht op goedkeuring · {pending.length}
+                  </div>
+                  <div className="space-y-2">
+                    {pending.map((p) => (
+                      <PendingPaymentCard key={p.id} p={p} onApprove={() => setApproveFor(p)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {loading ? (
+                <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center">
+                  <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#FF5C00]" />
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center" data-testid="payments-empty">
+                  <Receipt className="mx-auto mb-2 h-9 w-9 text-orange-300" />
+                  <p className="text-sm font-semibold text-slate-500">
+                    {totalCount === 0 ? 'Nog geen betalingen.' : 'Geen resultaten voor deze maand of zoekopdracht.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredItems.map((p) => (
+                    <PaymentRow key={p.id} p={p} onOpen={setDetailPayment} />
+                  ))}
+                  <LoadMoreSentinel active={paged.hasMore || paged.loadingMore}
+                    onVisible={paged.loadMore} testid="payments-load-more" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : embedded ? (
         <>
           <FxStats testId="payment-fx-stats" items={[
             ['Totaal maand', fmtMoney(summary.monthSum || 0, currency), 'green'],
