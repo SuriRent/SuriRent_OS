@@ -6101,12 +6101,22 @@ export default function KioskLayout() {
       setStep('select');
       return;
     }
+    if ((step === 'stroom' || step.startsWith('admin:')) && hist.current.i <= 0) {
+      setStep('select');
+      return;
+    }
     goHist(-1);
   };
-  const canBack = step === 'kasgeld' || (step === 'select' && hasLocationSelection && !popupKey)
+  const canBack = step === 'kasgeld' || step === 'stroom' || step.startsWith('admin:')
+    || (step === 'select' && hasLocationSelection && !popupKey)
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
+  const showMobileKioskBar = [
+    'select', 'kasgeld', 'stroom', 'admin:locaties', 'admin:appartementen', 'admin:huurders',
+    'admin:contracten', 'admin:betalingen', 'admin:regelingen', 'admin:facturen',
+    'admin:onderhoud', 'admin:werknemers', 'admin:borg',
+  ].includes(step);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -6481,8 +6491,8 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !keyboardOpen && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {['select', 'kasgeld', 'admin:facturen', 'admin:locaties', 'admin:appartementen', 'admin:huurders', 'admin:contracten', 'admin:betalingen', 'admin:regelingen'].includes(step) && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {showMobileKioskBar && !keyboardOpen && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
+      {showMobileKioskBar && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
