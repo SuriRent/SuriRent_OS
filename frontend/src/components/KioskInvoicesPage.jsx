@@ -46,18 +46,18 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
   const t = toneOf(g);
   const per = g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden';
   return (
-    <div className="w-full rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm transition hover:bg-slate-50 sm:p-4"
+    <div className="w-full rounded-2xl border border-slate-100 bg-white p-2 shadow-sm transition hover:bg-slate-50 sm:p-4"
       data-testid={`kiosk-inv-tile-${g.tenant_id}`}>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <button type="button" onClick={() => onOpen(g)} className="flex min-w-0 flex-1 items-center gap-2 text-left sm:gap-3"
+      <div className="flex items-center gap-1.5 sm:gap-3">
+        <button type="button" onClick={() => onOpen(g)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left sm:gap-3"
           data-testid={`kiosk-inv-open-${g.tenant_id}`}>
-          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={40} />
+          <span className="scale-90 sm:scale-100"><TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={40} /></span>
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
               <p className="truncate font-black text-slate-900">{g.apartment_number || 'Geen appartement'}</p>
-              {g.tenant_name && <span className="max-w-[220px] truncate rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{g.tenant_name}</span>}
+              {g.tenant_name && <span className="max-w-[180px] truncate rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 sm:px-2 sm:text-[10px]">{g.tenant_name}</span>}
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{g.location_name || ' '}</p>
+            <p className="truncate text-[10px] leading-tight text-slate-500 sm:mt-0.5 sm:text-xs">{g.location_name || ' '}</p>
             <CreditBadge amount={credit} currency={g.currency} testId={`kiosk-inv-credit-${g.tenant_id}`} />
           </div>
         </button>
@@ -70,18 +70,18 @@ function TenantTile({ g, onOpen, onRemind, credit }) {
           <div className="flex shrink-0 flex-row gap-1">
             <button type="button" onClick={() => openPay(g.tenant_id)} data-testid={`kiosk-inv-pay-${g.tenant_id}`}
               aria-label="Betalen" title="Betalen"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00] transition-colors hover:bg-orange-100 sm:h-8 sm:w-8">
-              <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-orange-50 text-[#FF5C00] transition-colors hover:bg-orange-100 sm:h-8 sm:w-8 sm:rounded-lg">
+              <Banknote className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
             <button type="button" onClick={() => onRemind(g)} data-testid={`kiosk-inv-remind-${g.tenant_id}`}
               aria-label="Herinnering" title="Herinnering"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 sm:h-8 sm:w-8">
-              <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 sm:h-8 sm:w-8 sm:rounded-lg">
+              <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
           </div>
         )}
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2 sm:hidden">
+      <div className="mt-0.5 flex items-center justify-between gap-2 sm:hidden">
         <span className={`text-[9px] font-bold ${t.amt}`}>{t.text}</span>
         <span className={`text-right text-xs font-black ${t.amt}`}>{money(g.totalDue, g.currency)}</span>
       </div>
@@ -477,38 +477,38 @@ export default function KioskInvoicesPage({ onBack }) {
           </section>
         ) : (
           <>
-            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-3 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            <section className="order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
               data-testid="kiosk-inv-summary">
-              <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
-                <h1 className="text-lg font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
-                <FileSignature className="h-5 w-5 text-[#FF5C00]" />
+              <div className="mb-1 flex items-center justify-between gap-3 sm:mb-4">
+                <h1 className="text-base font-black tracking-tight text-slate-900 sm:text-2xl">Facturen</h1>
+                <FileSignature className="h-4 w-4 text-[#FF5C00] sm:h-5 sm:w-5" />
               </div>
-              <div className="rounded-2xl bg-red-50 p-3 sm:p-4">
-                <p className="text-xs font-semibold text-slate-500 sm:text-sm">Totaal openstaand</p>
-                <p className="mt-1 break-words text-lg font-black text-red-600 tabular-nums sm:text-2xl"
+              <div className="rounded-2xl bg-red-50 p-2.5 sm:p-4">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-sm">Totaal openstaand</p>
+                <p className="mt-0.5 break-words text-base font-black text-red-600 tabular-nums sm:mt-1 sm:text-2xl"
                   data-testid="kiosk-inv-stat-open">{money(s.totalOpenAmount || 0, s.currency)}</p>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
-                <div className="rounded-2xl bg-amber-50 p-3 sm:p-4">
-                  <p className="text-[11px] font-bold text-amber-700 sm:text-xs">Achterstand</p>
-                  <p className="mt-1 text-xl font-black text-amber-800 sm:text-2xl" data-testid="kiosk-inv-stat-late">
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-3">
+                <div className="rounded-2xl bg-amber-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-amber-700 sm:text-xs">Achterstand</p>
+                  <p className="mt-0.5 text-lg font-black text-amber-800 sm:mt-1 sm:text-2xl" data-testid="kiosk-inv-stat-late">
                     {s.openCount || 0} <span className="text-sm font-bold text-slate-500">/ {s.allCount || 0}</span>
                   </p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 p-3 sm:p-4">
-                  <p className="text-[11px] font-bold text-slate-500 sm:text-xs">Verwacht {month}</p>
-                  <p className="mt-1 break-words text-base font-black text-emerald-700 tabular-nums sm:text-lg"
+                <div className="rounded-2xl bg-emerald-50 p-2 sm:p-4">
+                  <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Verwacht {month}</p>
+                  <p className="mt-0.5 break-words text-sm font-black text-emerald-700 tabular-nums sm:mt-1 sm:text-lg"
                     data-testid="kiosk-inv-stat-month">{money(s.thisMonthExpected || 0, s.currency)}</p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-1">
+              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-1 sm:gap-2">
                 <button type="button" onClick={generate} disabled={busy} data-testid="kiosk-inv-generate"
-                  className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-orange-200 bg-orange-50 px-1.5 text-[11px] font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:px-3 sm:text-sm">
+                  className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-1 text-[10px] font-bold text-[#FF5C00] transition-colors hover:bg-orange-100 disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:rounded-xl sm:px-3 sm:text-sm">
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" /> : <CalendarPlus className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />} Genereer {month}
                 </button>
                 <button type="button" onClick={() => { setCreateTenantId(''); setCreating(true); }}
                   data-testid="kiosk-inv-new"
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#FF5C00] px-1.5 text-[11px] font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200] sm:h-12 sm:gap-2 sm:rounded-2xl sm:px-3 sm:text-sm">
+                  className="inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-lg bg-[#FF5C00] px-1 text-[10px] font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] transition-colors hover:bg-[#E05200] sm:h-12 sm:gap-2 sm:rounded-2xl sm:px-3 sm:text-sm">
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" /> Nieuwe factuur
                 </button>
               </div>
@@ -522,35 +522,35 @@ export default function KioskInvoicesPage({ onBack }) {
               {!data && !error && <Loader2 className="mx-auto my-5 h-6 w-6 animate-spin text-[#FF5C00]" />}
             </section>
 
-            <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-3 sm:p-5 md:order-1"
+            <section className="order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2 sm:p-5 md:order-1"
               data-testid="kiosk-inv-recent">
-              <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:gap-3">
                 <div className="min-w-0">
                   <h2 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle huurders</h2>
                   <p className="text-xs font-semibold text-slate-500">Facturen per huurder</p>
                 </div>
                 <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">{groups.length} huurders</span>
               </div>
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Factuurstatus">
+              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" role="tablist" aria-label="Factuurstatus">
                 {TABS.map((filter) => (
                   <button key={filter.v} type="button" role="tab" aria-selected={tab === filter.v}
                     onClick={() => setTab(filter.v)} data-testid={`kiosk-inv-tab-${filter.v}`}
-                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 sm:py-2 sm:text-xs ${
                       tab === filter.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}>
                     {filter.label} ({s[filter.key] ?? 0})
                   </button>
                 ))}
               </div>
-              <label className="relative mb-3 block shrink-0">
+              <label className="relative mb-2 block shrink-0 sm:mb-3">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input value={q} onChange={(event) => setQ(event.target.value)}
                   placeholder="Zoek huurder of appartement…" data-testid="kiosk-inv-search"
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm font-medium outline-none focus:border-[#FF5C00]" />
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-xs font-medium outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
                 {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen" className="absolute right-3 top-1/2 -translate-y-1/2"><X className="h-4 w-4 text-slate-400" /></button>}
               </label>
-              <div className="mb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
-              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto -mx-1 px-1">
+              <div className="mb-2 sm:mb-3"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
+              <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto -mx-1 px-1 sm:space-y-2">
                 {error && data && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
                 {!data && !error && <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" />}
                 {groups.map((group) => (
