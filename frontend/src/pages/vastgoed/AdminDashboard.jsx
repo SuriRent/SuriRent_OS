@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useContext, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { KioskFxCtx, FxStats, FxTabs, FxSearch, FxRow, FxIconBtn, FxEmpty } from '../../components/KioskFx';
 import { hostConfirm } from '../../components/EmbedConfirm';
 import { useEmbedConfirm } from '../../components/EmbedConfirm';
@@ -16,7 +17,7 @@ import {
   ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
-  UserCircle, Sparkles, StickyNote, Scissors,
+  UserCircle, Sparkles, StickyNote, Scissors, BookOpen,
 } from 'lucide-react';
 import { TenantMoveOutModal, ArchivedTenants } from '../../components/TenantMoveOut';
 import Cropper from 'react-easy-crop';
@@ -29,11 +30,13 @@ import { EmailDialog, SendDialog } from '../../components/EmailDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import KeyboardSafeModal from '../../components/KeyboardSafeModal';
 import OnboardingModal from '../../components/OnboardingModal';
+import KioskManual from '../../components/KioskManual';
 import { useApiSWR, usePrefetchAdmin } from '../../lib/swr';
 import { usePagedList, LoadMoreSentinel, useDebounced } from '../../lib/use-paged-list';
 import { mutate as swrGlobalMutate } from 'swr';
 import { useLivePulse } from '../../lib/live-pulse';
 import { useAdminEvents, closeAdminEvents } from '../../lib/admin-events';
+import './superadmin-console.css';
 
 // ─────────────────────────────────────────────────────────────────────
 // LAZY-LOADED TAB COMPONENTEN
@@ -55,6 +58,7 @@ const loadMaintenance = () => import('./admin/Maintenance');
 const loadKasgeld = () => import('./admin/Kasgeld');
 const loadNotifications = () => import('./admin/Notifications');
 const loadPaymentPlans = () => import('./admin/PaymentPlans');
+const loadPower = () => import('./admin/PowerControl');
 const loadCompanies = () => import('./admin/Companies');
 const Contracts = lazy(loadContracts);
 const Invoices = lazy(loadInvoices);
@@ -65,6 +69,7 @@ const Maintenance = lazy(loadMaintenance);
 const Kasgeld = lazy(loadKasgeld);
 const Notifications = lazy(loadNotifications);
 const PaymentPlans = lazy(loadPaymentPlans);
+const PowerAdmin = lazy(loadPower);
 const Companies = lazy(loadCompanies);
 
 const ADMIN_TAB_LOADERS = [
@@ -153,18 +158,29 @@ function SaasPlaceholder({ title, subtitle, icon: Icon }) {
 // Zelfde card-lijst design als Beheerder Huurders/Contracten.
 // =====================================================================
 function SaasClients() {
+  const { activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all'); // all | active | inactive
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    api.get('/superadmin/clients')
-      .then((r) => { if (alive) { setItems(r.data || []); setLoading(false); } })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/superadmin/clients');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  const bySearch = items.filter((c) =>
+  useEffect(() => { load(); }, [load]);
+  const scopedItems = activeCompanyId
+    ? items.filter((client) => client.company_id === activeCompanyId)
+    : items;
+  const bySearch = scopedItems.filter((c) =>
     !q || (c.name || '').toLowerCase().includes(q.toLowerCase())
       || (c.email || '').toLowerCase().includes(q.toLowerCase())
       || (c.company_name || '').toLowerCase().includes(q.toLowerCase()));
@@ -182,7 +198,7 @@ function SaasClients() {
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-clients-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Klanten</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{items.length} admin-gebruikers over alle bedrijven op het platform.</p>
+        <p className="text-sm text-slate-500 mt-0.5">{scopedItems.length} admin-gebruikers{activeCompanyId ? ' bij dit bedrijf.' : ' over alle bedrijven op het platform.'}</p>
       </div>
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -206,9 +222,22 @@ function SaasClients() {
         ))}
       </div>
 
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Loader2 className="w-8 h-8 mx-auto text-slate-300 animate-spin" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Users className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Klanten konden niet worden geladen.</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
@@ -262,25 +291,45 @@ function SaasClients() {
 // elk bedrijf status van hun SaaS-abonnement (actief/trial/verlopen).
 // =====================================================================
 function SaasContracts() {
+  const { activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
-  useEffect(() => { api.get('/superadmin/companies').then((r) => setItems(r.data || [])).catch(() => {}); }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/companies');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
   const bs = (c) => (c.billing_status || 'trial').toLowerCase();
-  const filtered = items.filter((c) => filter === 'all' ? true : bs(c) === filter);
+  const scopedItems = activeCompanyId
+    ? items.filter((company) => company.id === activeCompanyId)
+    : items;
+  const filtered = scopedItems.filter((c) => filter === 'all' || bs(c) === filter);
   const counts = {
-    all: items.length,
-    active: items.filter((c) => bs(c) === 'active').length,
-    trial: items.filter((c) => bs(c) === 'trial').length,
-    expired: items.filter((c) => bs(c) === 'expired' || bs(c) === 'cancelled').length,
+    all: scopedItems.length,
+    active: scopedItems.filter((c) => bs(c) === 'active').length,
+    trial: scopedItems.filter((c) => bs(c) === 'trial').length,
+    expired: scopedItems.filter((c) => bs(c) === 'expired').length,
+    past_due: scopedItems.filter((c) => bs(c) === 'past_due').length,
+    cancelled: scopedItems.filter((c) => bs(c) === 'cancelled').length,
   };
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-contracts-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Contracten</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{items.length} abonnement-contracten op het platform.</p>
+        <p className="text-sm text-slate-500 mt-0.5">{scopedItems.length} abonnement-contracten{activeCompanyId ? ' voor dit bedrijf.' : ' op het platform.'}</p>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['expired', 'Verlopen']].map(([v, l]) => (
+        {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['past_due', 'Openstaand'], ['expired', 'Verlopen'], ['cancelled', 'Opgezegd']].map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
             data-testid={`saas-contract-filter-${v}`}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
@@ -290,7 +339,24 @@ function SaasContracts() {
           </button>
         ))}
       </div>
-      {filtered.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <FileSignature className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Contracten konden niet worden geladen.</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <FileSignature className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen contracten in deze filter.</p>
@@ -299,27 +365,39 @@ function SaasContracts() {
         <div className="space-y-2">
           {filtered.map((c) => {
             const s = bs(c);
-            const colorMap = { active: 'emerald', trial: 'amber', expired: 'red', cancelled: 'slate' };
-            const color = colorMap[s] || 'slate';
+            const statusClasses = {
+              active: { icon: 'bg-emerald-50 text-emerald-700', pill: 'bg-emerald-100 text-emerald-700' },
+              trial: { icon: 'bg-amber-50 text-amber-700', pill: 'bg-amber-100 text-amber-700' },
+              past_due: { icon: 'bg-amber-50 text-amber-700', pill: 'bg-amber-100 text-amber-700' },
+              expired: { icon: 'bg-red-50 text-red-700', pill: 'bg-red-100 text-red-700' },
+              cancelled: { icon: 'bg-slate-100 text-slate-600', pill: 'bg-slate-200 text-slate-700' },
+            };
+            const classes = statusClasses[s] || { icon: 'bg-slate-100 text-slate-600', pill: 'bg-slate-200 text-slate-700' };
+            const renewalDate = c.subscription_renews_at || c.next_billing_at;
+            const billingDate = renewalDate
+              ? `Volgende factuur ${new Date(renewalDate).toLocaleDateString('nl-NL')}`
+              : s === 'trial' && c.trial_ends_at
+                ? `Proefperiode tot ${new Date(c.trial_ends_at).toLocaleDateString('nl-NL')}`
+                : '';
             return (
               <div key={c.id} data-testid={`saas-contract-${c.id}`}
                 className="w-full bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100">
-                <div className={`w-11 h-11 rounded-xl bg-${color}-50 text-${color}-700 flex items-center justify-center shrink-0`}>
+                <div className={`w-11 h-11 rounded-xl ${classes.icon} flex items-center justify-center shrink-0`}>
                   <FileSignature className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-black text-slate-900 truncate">{c.name}</p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-${color}-100 text-${color}-700`}>{s}</span>
-                    {c.plan_name && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700">{c.plan_name}</span>}
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${classes.pill}`}>{s.replace('_', ' ')}</span>
+                    {c.plan && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-700">{c.plan}</span>}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5 truncate">
-                    /{c.slug} · {c.contact_email || 'geen e-mail'}
-                    {c.next_billing_at ? ` · volgende factuur ${new Date(c.next_billing_at).toLocaleDateString('nl-NL')}` : ''}
+                    /{c.slug} · {c.contact_email || c.owner_email || 'geen e-mail'}
+                    {billingDate ? ` · ${billingDate}` : ''}
                   </p>
                 </div>
                 <p className="text-sm font-black text-slate-900 text-right shrink-0">
-                  {c.tenants_count ?? 0} huurders
+                  {c.stats?.tenants ?? '—'} huurders
                 </p>
               </div>
             );
@@ -335,20 +413,45 @@ function SaasContracts() {
 // =====================================================================
 function SaasEmployees() {
   const [items, setItems] = useState([]);
-  useEffect(() => {
-    // Zelfde endpoint als klanten maar filter op superadmin role
-    api.get('/superadmin/clients').then((r) => {
-      const staff = (r.data || []).filter((u) => u.role === 'superadmin' || !u.company_id);
-      setItems(staff);
-    }).catch(() => {});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/superadmin/employees');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { load(); }, [load]);
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-employees-page">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Werknemers</h1>
         <p className="text-sm text-slate-500 mt-0.5">Interne SuriRent staff met platform-toegang.</p>
       </div>
-      {items.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Users className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Werknemers konden niet worden geladen.</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Users className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Nog geen interne staff toegevoegd.</p>
@@ -384,26 +487,51 @@ function SaasEmployees() {
 // verlopen trials en openstaande facturen tot een actie-lijst.
 // =====================================================================
 function SaasNotifications() {
+  const { activeCompanyId } = useAuth();
   const [alerts, setAlerts] = useState([]);
-  useEffect(() => {
-    (async () => {
-      const list = [];
-      try {
-        const ov = await api.get('/superadmin/overview');
-        const o = ov.data || {};
-        if (o.pending_ocr > 0) {
-          list.push({ severity: 'amber', icon: 'ocr', title: `${o.pending_ocr} OCR-mismatches wachten op goedkeuring`, tab: 'saas_pending' });
-        }
-        if (o.overdue_invoices > 0) {
-          list.push({ severity: 'red', icon: 'invoice', title: `${o.overdue_invoices} vervallen facturen`, tab: 'saas_invoices' });
-        }
-        if (o.expiring_trials > 0) {
-          list.push({ severity: 'amber', icon: 'trial', title: `${o.expiring_trials} proefperiodes verlopen binnenkort`, tab: 'companies' });
-        }
-      } catch { /* stil */ }
-      setAlerts(list);
-    })();
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const [overviewResult, presenceResult] = await Promise.allSettled([
+      api.get('/superadmin/overview'),
+      api.get('/superadmin/online-status'),
+    ]);
+    const list = [];
+    const failures = [];
+    if (overviewResult.status === 'fulfilled') {
+      const overview = overviewResult.value.data || {};
+      if (!activeCompanyId && overview.pending_ocr > 0) {
+        list.push({ severity: 'amber', title: `${overview.pending_ocr} OCR-mismatches wachten op goedkeuring`, tab: 'saas_pending' });
+      }
+      if (!activeCompanyId && overview.overdue_invoices > 0) {
+        list.push({ severity: 'red', title: `${overview.overdue_invoices} vervallen facturen`, tab: 'saas_invoices' });
+      }
+    } else {
+      failures.push(`Platformmeldingen: ${formatError(overviewResult.reason)}`);
+    }
+    if (presenceResult.status === 'fulfilled') {
+      const companies = presenceResult.value.data?.companies || [];
+      const scopedCompanies = activeCompanyId
+        ? companies.filter((company) => company.id === activeCompanyId)
+        : companies;
+      const expiringTrials = scopedCompanies.filter((company) => {
+        if (company.billing_status !== 'trial' || !company.trial_ends_at) return false;
+        const days = (new Date(company.trial_ends_at).getTime() - Date.now()) / 86400000;
+        return days >= 0 && days <= 3;
+      });
+      if (expiringTrials.length > 0) {
+        list.push({ severity: 'amber', title: `${expiringTrials.length} proefperiodes verlopen binnen 3 dagen`, tab: 'companies' });
+      }
+    } else {
+      failures.push(`Proefperiodes: ${formatError(presenceResult.reason)}`);
+    }
+    setAlerts(list);
+    setError(failures.join(' · '));
+    setLoading(false);
+  }, [activeCompanyId]);
+  useEffect(() => { load(); }, [load]);
   const nav = (t) => window.dispatchEvent(new CustomEvent('saas-nav', { detail: t }));
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-notifications-page">
@@ -411,7 +539,24 @@ function SaasNotifications() {
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Notificaties</h1>
         <p className="text-sm text-slate-500 mt-0.5">{alerts.length} openstaande platform-waarschuwingen.</p>
       </div>
-      {alerts.length === 0 ? (
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold disabled:opacity-50">
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-300" />
+        </div>
+      ) : error && alerts.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm" role="status">
+          <AlertCircle className="mx-auto mb-2 h-12 w-12 text-amber-300" />
+          <p className="font-semibold text-slate-500">Meldingen konden niet volledig worden geladen.</p>
+        </div>
+      ) : alerts.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
           <Bell className="w-12 h-12 mx-auto text-emerald-300 mb-2" />
           <p className="text-slate-500 font-semibold">Alles onder controle — geen openstaande meldingen.</p>
@@ -419,12 +564,14 @@ function SaasNotifications() {
       ) : (
         <div className="space-y-2">
           {alerts.map((a, i) => {
-            const c = a.severity === 'red' ? 'red' : 'amber';
+            const classes = a.severity === 'red'
+              ? { border: 'border-red-500', icon: 'bg-red-50 text-red-700' }
+              : { border: 'border-amber-500', icon: 'bg-amber-50 text-amber-700' };
             return (
               <button key={i} onClick={() => nav(a.tab)}
                 data-testid={`saas-alert-${i}`}
-                className={`w-full text-left bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border-l-4 border-${c}-500 border-t border-r border-b border-slate-100`}>
-                <div className={`w-11 h-11 rounded-xl bg-${c}-50 text-${c}-700 flex items-center justify-center shrink-0`}>
+                className={`w-full text-left bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border-l-4 ${classes.border} border-t border-r border-b border-slate-100`}>
+                <div className={`w-11 h-11 rounded-xl ${classes.icon} flex items-center justify-center shrink-0`}>
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -468,6 +615,7 @@ import SetupWizardSheet from './admin/SetupWizardSheet';
 import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
+import CompanySupportNotice from '../../components/CompanySupportNotice';
 import LiveIndicator from '../../components/LiveIndicator';
 import SubscriptionBell from '../../components/SubscriptionBell';
 import PendingApprovalBell from '../../components/PendingApprovalBell';
@@ -492,32 +640,29 @@ const BASE_TABS = [
   { id: 'payment_plans', label: 'Betalingsregelingen', icon: Calendar },
   { id: 'deposits', label: 'Borg', icon: ShieldCheck },
   { id: 'maintenance', label: 'Onderhoud', icon: Wrench },
+  { id: 'power', label: 'Stroom', icon: Power },
   { id: 'kasgeld', label: 'Kasgeld', icon: Wallet },
   { id: 'employees', label: 'Werknemers', icon: Users },
   { id: 'notifications', label: 'Notificaties', icon: Bell },
   { id: 'instellingen', label: 'Instellingen', icon: SettingsIcon },
 ];
 const SUPER_TABS = [
-  // Hoofd
   { id: 'saas_overview', label: 'Overzicht', icon: LayoutDashboard },
   { id: 'companies', label: 'Bedrijven', icon: Briefcase },
   { id: 'saas_clients', label: 'Klanten', icon: Users },
-  { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
   { id: 'plans', label: 'Pakketten', icon: Package },
-  // Financieel
+  { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
   { id: 'saas_payments', label: 'Betalingen', icon: Banknote },
   { id: 'saas_invoices', label: 'Facturen', icon: Receipt },
   { id: 'saas_payment_plans', label: 'Betalingsregelingen', icon: Calendar },
   { id: 'saas_kasgeld', label: 'Kasgeld', icon: Wallet },
   { id: 'saas_client_payments', label: 'Klant-betaalstatus', icon: CreditCard },
-  // Operaties
-  { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
   { id: 'saas_employees', label: 'Werknemers', icon: Users },
   { id: 'saas_notifications', label: 'Notificaties', icon: Bell },
-  { id: 'landing_editor', label: 'Landing Editor', icon: Paintbrush },
   { id: 'saas_pending', label: 'OCR-goedkeuring', icon: ScanLine },
-  // Account
+  { id: 'landing_editor', label: 'Landing Editor', icon: Paintbrush },
   { id: 'saas_settings', label: 'Instellingen', icon: SettingsIcon },
+  { id: 'saas_kiosk', label: 'Kasregister', icon: Monitor },
 ];
 
 const BOEKHOUDER_TABS = ['overview', 'tenants', 'payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld', 'notifications'];
@@ -533,18 +678,20 @@ function getTabsFor(user) {
 const SIDEBAR_GROUPS = {
   hoofd: { label: 'Hoofd', ids: ['overview', 'locations', 'apartments', 'tenants', 'contracts'] },
   geld: { label: 'Financieel', ids: ['payments', 'invoices', 'payment_plans', 'deposits', 'kasgeld'] },
-  ops: { label: 'Operaties', ids: ['maintenance', 'employees', 'notifications'] },
+  ops: { label: 'Operaties', ids: ['maintenance', 'power', 'employees', 'notifications'] },
   account: { label: 'Account', ids: ['instellingen'] },
-  // SaaS Superadmin groep — nu ingedeeld in dezelfde categorieën als de
-  // Beheerder (Hoofd/Financieel/Operaties/Account) voor consistente UX.
-  saas_hoofd: { label: 'Hoofd', ids: ['saas_overview', 'companies', 'saas_clients', 'saas_contracts', 'plans'] },
-  saas_geld: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
-  saas_ops: { label: 'Operaties', ids: ['saas_kiosk', 'saas_employees', 'saas_notifications', 'landing_editor', 'saas_pending'] },
-  saas_account: { label: 'Account', ids: ['saas_settings'] },
+};
+const SAAS_SIDEBAR_GROUPS = {
+  saas_platform: { label: 'Platform & bedrijven', ids: ['saas_overview', 'companies', 'saas_clients', 'plans', 'saas_contracts'] },
+  saas_billing: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
+  saas_operations: { label: 'Beheer', ids: ['saas_employees', 'saas_notifications', 'saas_pending', 'saas_kiosk'] },
+  saas_content: { label: 'Website', ids: ['landing_editor'] },
+  saas_account: { label: 'Instellingen', ids: ['saas_settings'] },
 };
 function groupTabs(tabs) {
   const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
-  return Object.entries(SIDEBAR_GROUPS).map(([key, group]) => ({
+  const groups = byId.saas_overview ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
+  return Object.entries(groups).map(([key, group]) => ({
     key, label: group.label,
     items: group.ids.map((id) => byId[id]).filter(Boolean),
   })).filter((g) => g.items.length > 0);
@@ -592,6 +739,15 @@ function SidebarSettingsDropdown({ tab, isActive }) {
 
 function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCompany }) {
   const groups = groupTabs(tabs);
+  const canCollapseGroups = user?.role === 'superadmin';
+  const isSaasConsole = canCollapseGroups;
+  const activeGroup = groups.find((group) => group.items.some((item) => item.id === active))?.key;
+  const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(
+    groups.map((group) => [group.key, !canCollapseGroups || group.key === activeGroup]),
+  ));
+  useEffect(() => {
+    if (canCollapseGroups && activeGroup) setOpenGroups((current) => ({ ...current, [activeGroup]: true }));
+  }, [activeGroup, canCollapseGroups]);
   const pulsingTabs = useLivePulse(active);
   // Splits de bedrijfsnaam in 2 delen voor de "zwart + oranje" branding stijl.
   // Multi-woord namen: eerste woord zwart, rest oranje (bv. "GOPI APPARTEMENT'S").
@@ -626,10 +782,12 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
   }, [activeCompany?.logo_url]);
   const resolvedLogo = resolveLogoUrl(logoUrl);
   return (
-    <aside className="hidden md:flex flex-col w-56 lg:w-64 sticky top-0 h-screen bg-white border-r border-slate-100 shadow-[1px_0_3px_0_rgba(15,23,42,0.04)]"
+    <aside className={`hidden md:flex flex-col w-56 lg:w-64 sticky top-0 h-screen border-r shadow-[1px_0_3px_0_rgba(15,23,42,0.04)] ${
+      isSaasConsole ? 'bg-[#101827] border-slate-800' : 'bg-white border-slate-100'
+    }`}
       data-testid="sidebar">
       {/* HEADER — logo + bedrijfsnaam, vaste hoogte */}
-      <div className="px-5 pt-6 pb-5 flex items-center gap-3 border-b border-slate-100">
+      <div className={`px-5 pt-6 pb-5 flex items-center gap-3 border-b ${isSaasConsole ? 'border-slate-800' : 'border-slate-100'}`}>
         {resolvedLogo ? (
           <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 p-1.5 shadow-[0_8px_18px_-6px_rgba(15,23,42,0.10)] shrink-0 overflow-hidden"
             data-testid="sidebar-company-logo">
@@ -645,10 +803,10 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
         <div className="min-w-0">
           <p className="text-base font-black tracking-tight leading-tight truncate"
             data-testid="sidebar-company-name" title={fullName}>
-            <span className="text-slate-900">{nameA}</span><span className="text-[#FF5C00]">{nameB}</span>
+            <span className={isSaasConsole ? 'text-white' : 'text-slate-900'}>{nameA}</span><span className="text-[#FF5C00]">{nameB}</span>
           </p>
-          <p className="text-[9px] text-slate-500 font-bold tracking-[0.22em] uppercase">
-            {user?.role === 'superadmin' ? 'Superadmin' : 'Beheer Suite'}
+          <p className={`text-[9px] font-bold tracking-[0.22em] uppercase ${isSaasConsole ? 'text-orange-300' : 'text-slate-500'}`}>
+            {isSaasConsole ? 'Beheer' : 'Beheer Suite'}
           </p>
         </div>
       </div>
@@ -657,10 +815,22 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" data-testid="sidebar-nav">
         {groups.map((g) => (
           <div key={g.key}>
-            <p className="px-3 mb-1.5 text-[9px] font-black tracking-[0.22em] uppercase text-slate-400">
-              {g.label}
-            </p>
-            <div className="space-y-0.5">
+            {canCollapseGroups ? (
+              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [g.key]: !current[g.key] }))}
+                aria-expanded={!!openGroups[g.key]} data-testid={`sidebar-group-${g.key}`}
+                className={`w-full flex items-center justify-between px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase ${
+                  isSaasConsole ? 'text-slate-500 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'
+                }`}>
+                <span>{g.label}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${openGroups[g.key] ? '' : '-rotate-90'}`} />
+              </button>
+            ) : (
+              <div className={`px-3 py-1.5 mb-1 text-[9px] font-black tracking-[0.22em] uppercase ${isSaasConsole ? 'text-slate-500' : 'text-slate-400'}`}>
+                {g.label}
+              </div>
+            )}
+            <div className={`grid transition-[grid-template-rows] duration-200 ${openGroups[g.key] ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+              <div className="overflow-hidden space-y-0.5">
               {g.items.map((t) => {
                 const Icon = t.icon;
                 const isActive = active === t.id;
@@ -675,7 +845,9 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                     className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                       isActive
                         ? 'bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white shadow-[0_10px_22px_-8px_rgba(255,92,0,0.65)]'
-                        : 'text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] hover:translate-x-0.5'
+                        : isSaasConsole
+                          ? 'text-slate-300 hover:bg-slate-800 hover:text-white hover:translate-x-0.5'
+                          : 'text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] hover:translate-x-0.5'
                     }`}>
                     {isActive && (
                       <span aria-hidden className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full bg-white/80" />
@@ -705,25 +877,30 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                   </button>
                 );
               })}
+              </div>
             </div>
           </div>
         ))}
       </nav>
 
       {/* FOOTER — user pill + logout */}
-      <div className="border-t border-orange-100/60 px-3 py-3 bg-white/60 backdrop-blur-sm">
-        <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-xl bg-orange-50/60">
+      <div className={`border-t px-3 py-3 backdrop-blur-sm ${
+        isSaasConsole ? 'border-slate-800 bg-slate-950/60' : 'border-orange-100/60 bg-white/60'
+      }`}>
+        <div className={`flex items-center gap-2 px-3 py-2 mb-1 rounded-xl ${isSaasConsole ? 'bg-slate-900' : 'bg-orange-50/60'}`}>
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#FF8A3D] to-[#C74600] text-white text-[11px] font-black flex items-center justify-center shrink-0">
             {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-700 truncate leading-tight">{user?.name || 'Beheerder'}</p>
-            <p className="text-[10px] text-slate-500 truncate leading-tight">{user?.email}</p>
+            <p className={`text-[11px] font-bold truncate leading-tight ${isSaasConsole ? 'text-slate-100' : 'text-slate-700'}`}>{user?.name || 'Beheerder'}</p>
+            <p className={`text-[10px] truncate leading-tight ${isSaasConsole ? 'text-slate-400' : 'text-slate-500'}`}>{user?.email}</p>
           </div>
           <LiveIndicator compact />
         </div>
         <button onClick={onLogout} data-testid="logout-btn"
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            isSaasConsole ? 'text-slate-400 hover:bg-red-500/10 hover:text-red-300' : 'text-slate-500 hover:bg-red-50 hover:text-red-600'
+          }`}>
           <LogOut className="w-3.5 h-3.5" /> Uitloggen
         </button>
       </div>
@@ -801,10 +978,13 @@ function MobileTopLogo({ user, activeCompany }) {
   );
 }
 
-function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, activeCompany, badgeCount }) {
+function MobileSheet({ open, onClose, active, onChange, onLogout, onManual, user, tabs, activeCompany, badgeCount }) {
   const navigate = useBrandedNavigate();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(active === 'instellingen');
+  const groups = user?.role === 'superadmin'
+    ? groupTabs(tabs)
+    : [{ key: 'main', label: '', items: tabs }];
   if (!open) return null;
   return (
     <div className="md:hidden fixed inset-0 z-50" data-testid="mobile-sheet">
@@ -842,7 +1022,12 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
 
         {/* QUICK-ACTIONS */}
         {user?.role !== 'superadmin' && (
-          <div className="px-5 md:px-6 pb-3">
+          <div className="grid grid-cols-2 gap-2 px-5 md:px-6 pb-3">
+            <button type="button" onClick={() => { onClose(); onManual(); }}
+              data-testid="mobile-sheet-manual"
+              className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-2xl border border-orange-200 bg-orange-50 text-[#C74600] font-bold text-sm active:scale-95 transition">
+              <BookOpen className="w-4 h-4" /> Handleiding
+            </button>
             <button
               onClick={async () => {
                 try { localStorage.setItem('pwa_preferred_role', 'kiosk'); } catch { /* noop */ }
@@ -868,10 +1053,14 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
           </div>
         )}
 
-        {/* TABS — alle modules in een grid */}
+        {/* TABS — gegroepeerd zodat de superadmin-modules vindbaar blijven */}
         <div className="flex-1 overflow-y-auto px-3 md:px-5 pb-2">
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
-            {tabs.map((t) => {
+          <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.key} data-testid={`sheet-group-${group.key}`}>
+              {group.label && <h3 className="px-1 mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group.label}</h3>}
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
+            {group.items.map((t) => {
               const Icon = t.icon;
               const isActive = active === t.id;
               const showBadge = t.id === 'notifications' && badgeCount > 0;
@@ -901,6 +1090,9 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, user, tabs, ac
                 </button>
               );
             })}
+              </div>
+            </section>
+          ))}
           </div>
           {settingsOpen && (
             <div className="mt-3 rounded-2xl bg-orange-50/60 border border-orange-100 p-2 animate-fade-in" data-testid="sheet-instellingen-list">
@@ -1268,9 +1460,10 @@ function GlobalSearch({ variant = 'quick' }) {
                         <Users className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">{t.name}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate">{t.apartment_number || 'Geen appartement'}</p>
                         <p className="text-[11px] text-slate-500 truncate">
-                          {t.phone || ''}{t.phone && t.email ? ' · ' : ''}{t.email || ''}
+                          {t.name || 'Onbekende huurder'}
+                          {t.phone ? ` · ${t.phone}` : ''}{t.email ? ` · ${t.email}` : ''}
                         </p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
@@ -1395,15 +1588,13 @@ function PaymentPlansList() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <p className="text-sm font-black text-slate-900 truncate">
-                        {p.tenant_name || '—'}
-                        {p.apartment_number && (
-                          <span className="text-slate-400 font-bold"> · Appt. {p.apartment_number}</span>
-                        )}
+                        {p.apartment_number || 'Geen appartement'}
                       </p>
                       <p className="text-sm font-black text-slate-900 shrink-0">
                         {fmtMoney(p.remaining_amount, p.currency)}
                       </p>
                     </div>
+                    <p className="text-xs text-slate-500 truncate">{p.tenant_name || 'Onbekende huurder'}</p>
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className="text-slate-500 font-semibold">
                         {fmtMoney(p.paid_amount, p.currency)} / {fmtMoney(p.total_amount, p.currency)}
@@ -2102,28 +2293,6 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
             label="Foto van het appartement"
             testId="apt-photo"
           />
-
-          {/* Kiosk-weergave toggle: als aan, verschijnt de pasfoto van de
-              huurder op de appartement-picker i.p.v. het standaard-icoon.
-              Alleen zinvol als het appartement bewoond is én de huurder
-              een pasfoto/ID-foto heeft. */}
-          <label className="flex items-start gap-3 p-3 rounded-xl border-2 border-slate-200 hover:border-slate-300 cursor-pointer transition"
-            data-testid="apt-show-tenant-photo-row">
-            <input type="checkbox"
-              checked={!!data.show_tenant_photo}
-              onChange={(e) => setData({ ...data, show_tenant_photo: e.target.checked })}
-              data-testid="apt-show-tenant-photo"
-              className="mt-1 w-5 h-5 accent-orange-500 cursor-pointer" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-slate-900">
-                Toon huurder-pasfoto op Kiosk
-              </div>
-              <div className="text-xs text-slate-500 leading-snug">
-                Vervangt het standaard icoon op de "Kies appartement" pagina
-                door de pasfoto (of ID-kaart foto) van de huidige huurder.
-              </div>
-            </div>
-          </label>
         </div>
       </KeyboardSafeModal.Body>
       <KeyboardSafeModal.Footer className="flex gap-3">
@@ -2219,8 +2388,8 @@ export function Apartments({ embedded = false }) {
                 <button key={t.id} onClick={() => assign(t.id)} data-testid={`assign-${t.id}`}
                   className="w-full flex items-center justify-between p-3 rounded-xl border-2 border-slate-100 hover:border-[#FF5C00] hover:bg-orange-50">
                   <div className="text-left">
-                    <p className="font-bold text-slate-900">{t.name}</p>
-                    <p className="text-xs text-slate-500">{t.apartment_number ? `Nu in ${t.apartment_number}` : 'Geen appartement'}</p>
+                    <p className="font-bold text-slate-900">{t.apartment_number || 'Geen appartement'}</p>
+                    <p className="text-xs text-slate-500">{t.name || 'Onbekende huurder'}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
@@ -2367,7 +2536,8 @@ function ApartmentRow({ a, onOpen }) {
     return (
       <FxRow testId={`apt-row-${a.id}`} onClick={onOpen} title={a.number}
         sub={a.tenant_name || 'Geen huurder'} meta={a.address || undefined}
-        amount={fmtMoney(a.rent_amount, a.currency)} status={occupied ? 'Bezet' : 'Beschikbaar'} tone={occupied ? 'green' : 'slate'} />
+        amount={fmtMoney(a.rent_amount, a.currency)} status={occupied ? 'Bezet' : 'Beschikbaar'} tone={occupied ? 'green' : 'slate'}
+        photoUrl={a.photo_url} />
     );
   }
   return (
@@ -2977,7 +3147,11 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           fd.append('file', pendingIdPhoto);
           const { data: idr } = await api.post(`/tenants/${saved.id}/id-photo`, fd,
             { headers: { 'Content-Type': 'multipart/form-data' } });
-          saved = { ...saved, id_photo_url: idr?.id_photo_url || saved.id_photo_url };
+          saved = {
+            ...saved,
+            id_photo_url: idr?.id_photo_url || saved.id_photo_url,
+            avatar_url: idr?.avatar_url || null,
+          };
         } catch (e) {
           setError(`Huurder opgeslagen, maar ID-foto niet: ${formatError(e)}`);
           setLoading(false);
@@ -3210,7 +3384,7 @@ function TenantDepositCard({ tenant }) {
   );
 }
 
-export function Tenants({ embedded = false }) {
+export function Tenants({ embedded = false, kioskLayout = false, onBack }) {
   // SWR cache — bij tabwissel wordt de vorige data direct getoond en
   // achtergrond-revalidate hoeven we niet af te wachten.
   const [q, setQ] = useState('');
@@ -3266,7 +3440,7 @@ export function Tenants({ embedded = false }) {
     setConfirmDel(null); setDetailId(null); load();
   };
   const del = async (id) => {
-    if (embedded) { setConfirmDel(id); return; }
+    if (embedded || kioskLayout) { setConfirmDel(id); return; }
     if (!(await hostConfirm('Huurder verwijderen?'))) return;
     doDel(id);
   };
@@ -3303,6 +3477,177 @@ export function Tenants({ embedded = false }) {
     </>
   );
 
+  const filtered = items;
+  const counts = summary.counts || { all: 0, with_apt: 0, without_apt: 0 };
+  const missingAvatars = summary.missingAvatars || 0;
+  const withAvatars = summary.withAvatars || 0;
+  const runBackfill = async (force = false) => {
+    const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
+    if (!(await hostConfirm(`${label}? Dit duurt ~2s per huurder.`))) return;
+    setBackfilling(true);
+    try {
+      const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
+      window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
+      await load();
+    } catch (e) {
+      window.alert('Backfill mislukt: ' + (e?.response?.data?.detail || e.message));
+    } finally { setBackfilling(false); }
+  };
+
+  if (kioskLayout) {
+    if (detailId) {
+      const tenant = items.find((item) => item.id === detailId)
+        || (detailTenant?.id === detailId ? detailTenant : null);
+      return (
+        <div className="h-full w-full overflow-y-auto bg-[#FF5C00] px-3 py-3 sm:px-5"
+          data-testid="kiosk-tenant-detail">
+          {!tenant ? (
+            <ListSkeleton rows={3} testid="tenant-detail-loading" />
+          ) : (
+            <div className="mx-auto max-w-7xl">
+              <TenantDetail tenant={tenant}
+                onBack={() => setDetailId(null)}
+                onEdit={() => setEditing(tenant)}
+                onPin={() => setPinFor(tenant)}
+                onMoveOut={() => setMoveOut(tenant)}
+                onDelete={() => del(tenant.id)}
+                onReload={load}
+                kioskMode />
+            </div>
+          )}
+          {sharedModals}
+        </div>
+      );
+    }
+
+    const filters = [
+      { value: 'all', label: 'Alle huurders', count: counts.all },
+      { value: 'with_apt', label: 'Met appartement', count: counts.with_apt },
+      { value: 'without_apt', label: 'Zonder appartement', count: counts.without_apt },
+      { value: 'archived', label: 'Archief', count: counts.archived ?? 0 },
+    ];
+    return (
+      <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
+        style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-tenants-panel">
+        <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+          <button type="button" onClick={onBack} data-testid="tenants-panel-back"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 font-bold text-white active:scale-95">
+            <ArrowLeft className="h-4 w-4" /> Terug
+          </button>
+          <p className="text-right text-xs font-semibold text-white">Huurdersbeheer</p>
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden pb-3 md:flex-row md:gap-3 md:pt-3">
+          <section className="kiosk-admin-list order-2 flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-2.5 sm:p-5 md:order-1"
+            data-testid="kiosk-tenants-list">
+            <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3 sm:gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">Alle huurders</h1>
+                <p className="text-xs font-semibold text-slate-500">{summary.totalCount || 0} geregistreerd</p>
+              </div>
+              <span className="shrink-0 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"
+                data-testid="kiosk-tenants-count">{counts.all} huurders</span>
+            </div>
+
+            <button type="button" onClick={() => setCreating(true)} data-testid="tenant-new-btn-mobile"
+              className="kiosk-admin-mobile-action mb-2 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 py-2.5 font-black text-white">
+              <Plus className="h-4 w-4" /> Nieuwe huurder
+            </button>
+
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mb-3 sm:gap-2 sm:pb-1" data-testid="tenant-filter-bar">
+              {filters.map((item) => (
+                <button key={item.value} type="button" onClick={() => setFilter(item.value)}
+                  data-testid={`tenant-filter-${item.value}`}
+                  className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-bold transition sm:px-3 sm:py-2 sm:text-xs ${
+                    filter === item.value ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}>
+                  {item.label} ({item.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="relative mb-2 shrink-0 sm:mb-3">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={q} onChange={(event) => setQ(event.target.value)}
+                placeholder="Zoek huurder of appartement…" data-testid="tenant-search"
+                className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs font-medium outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
+            </div>
+
+            {missingAvatars > 0 && (
+              <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 p-3"
+                data-testid="tenants-backfill-banner">
+                <UserCircle className="h-5 w-5 shrink-0 text-[#FF5C00]" />
+                <p className="min-w-0 flex-1 text-xs text-slate-700">{missingAvatars} huurder(s) missen een pasfoto.</p>
+                <button type="button" onClick={() => runBackfill(false)} disabled={backfilling}
+                  data-testid="tenants-backfill-btn"
+                  className="rounded-lg bg-[#FF5C00] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                  {backfilling ? 'Bezig…' : 'Genereer'}
+                </button>
+              </div>
+            )}
+
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-1.5 pb-14 pr-1 sm:space-y-2 md:pb-0">
+              {filter === 'archived' ? (
+                <ArchivedTenants onChanged={load} />
+              ) : !loaded ? (
+                <ListSkeleton rows={5} testid="tenants-skeleton" />
+              ) : filtered.length === 0 ? (
+                <div className="py-10 text-center" data-testid="tenants-empty">
+                  <Users className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-500">Geen huurders gevonden.</p>
+                </div>
+              ) : (
+                <>
+                  {filtered.map((tenant) => (
+                    <TenantRow key={tenant.id} t={tenant}
+                      showIdPhotoFallback
+                      onOpen={() => setDetailId(tenant.id)}
+                      onPin={() => setPinFor(tenant)}
+                      onPoster={() => openAuthedPdf(`/tenants/${tenant.id}/portal-poster.pdf`, { filename: `huurportaal-${tenant.name || tenant.id}.pdf` })}
+                      onDelete={() => del(tenant.id)} />
+                  ))}
+                  <LoadMoreSentinel active={paged.hasMore || paged.loadingMore}
+                    onVisible={paged.loadMore} testid="tenants-load-more" />
+                </>
+              )}
+            </div>
+          </section>
+
+          <aside className="kiosk-admin-summary order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
+            data-testid="kiosk-tenants-summary">
+            <div className="kiosk-admin-summary-heading mb-2 flex items-center justify-between gap-3 sm:mb-4">
+              <h2 className="text-base font-black tracking-tight text-slate-900 sm:text-2xl">Huurders</h2>
+              <Users className="h-4 w-4 text-[#FF5C00] sm:h-5 sm:w-5" />
+            </div>
+            <div className="kiosk-admin-summary-stats mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:gap-2">
+              <div className="rounded-2xl bg-orange-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Totaal</p>
+                <p className="mt-0.5 text-lg font-black text-slate-900 sm:mt-1 sm:text-2xl">{summary.totalCount || 0}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Met appartement</p>
+                <p className="mt-0.5 text-lg font-black text-emerald-800 sm:mt-1 sm:text-2xl">{summary.counts?.with_apt || 0}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-2 sm:p-3">
+                <p className="text-[10px] font-bold text-slate-500 sm:text-xs">Zonder appartement</p>
+                <p className="mt-0.5 text-base font-black text-slate-900 sm:mt-1 sm:text-xl">{summary.counts?.without_apt || 0}</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => setCreating(true)} data-testid="tenant-new-btn"
+              className="kiosk-admin-summary-action mb-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_25px_-5px_rgba(255,92,0,0.5)] hover:bg-[#E05200] sm:mb-3 sm:h-12 sm:gap-2 sm:rounded-2xl sm:text-sm">
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Nieuwe huurder
+            </button>
+            <button type="button" onClick={onBack} data-testid="tenants-exit"
+              className="mt-auto hidden h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200 md:inline-flex">
+              <ArrowLeft className="h-4 w-4" /> Terug naar kiosk
+            </button>
+          </aside>
+        </div>
+        {sharedModals}
+      </div>
+    );
+  }
+
   // Detail-view — dezelfde patroon als Appartementen/PlanDetail.
   if (detailId) {
     const t = items.find((x) => x.id === detailId) || (detailTenant?.id === detailId ? detailTenant : null);
@@ -3321,22 +3666,6 @@ export function Tenants({ embedded = false }) {
     );
   }
 
-  const filtered = items;
-  const counts = summary.counts || { all: 0, with_apt: 0, without_apt: 0 };
-  const missingAvatars = summary.missingAvatars || 0;
-  const withAvatars = summary.withAvatars || 0;
-  const runBackfill = async (force = false) => {
-    const label = force ? `alle ${withAvatars} bestaande pasfoto's OPNIEUW genereren (met strakkere crop)` : `pasfoto's uit ID-kaarten voor ${missingAvatars} huurder(s) genereren`;
-    if (!(await hostConfirm(`${label}? Dit duurt ~2s per huurder.`))) return;
-    setBackfilling(true);
-    try {
-      const { data } = await api.post(`/tenants/backfill-avatars${force ? '?force=true' : ''}`);
-      window.alert(`Klaar! ${data.done} pasfoto's aangemaakt, ${data.failed} mislukt.`);
-      await load();
-    } catch (e) {
-      window.alert('Backfill mislukt: ' + (e?.response?.data?.detail || e.message));
-    } finally { setBackfilling(false); }
-  };
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="tenants-page">
       {/* Header — inline titel + subtitel + oranje "Nieuwe huurder" knop.
@@ -3449,12 +3778,14 @@ export function Tenants({ embedded = false }) {
 // Klik op de kaart opent de detail-pagina; klikken op een actie-icoon
 // roept de bijbehorende handler aan zonder detail te openen.
 // =====================================================================
-function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
+function TenantRow({ t, onOpen, onPin, onPoster, onDelete, showIdPhotoFallback = false }) {
   const fx = useContext(KioskFxCtx);
+  const tenantPhotoUrl = t.avatar_url || (showIdPhotoFallback ? t.id_photo_url : '');
   if (fx) {
     return (
-      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} title={t.name || 'Onbekende huurder'}
-        sub={`Appt. ${t.apartment_number || '—'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
+      <FxRow testId={`tenant-row-${t.id}`} onClick={onOpen} tenantId={t.id} tenantPhotoUrl={tenantPhotoUrl || t.id_photo_url}
+        title={t.apartment_number || 'Geen appartement'}
+        sub={`${t.name || 'Onbekende huurder'}${t.phone ? ` · ${t.phone}` : ''}`} meta={t.email || undefined}
         amount={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
         status={t.apartment_number ? 'Huurt' : 'Geen appt.'} tone={t.apartment_number ? 'green' : 'amber'}
         actions={<>
@@ -3470,13 +3801,13 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
     <div onClick={onOpen} data-testid={`tenant-row-${t.id}`}
       role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
-      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 cursor-pointer transition">
-      {t.avatar_url ? (
-        <img src={t.avatar_url} alt={t.name || 'huurder'} loading="lazy"
+      className="w-full text-left bg-white hover:bg-slate-50 active:bg-slate-100 rounded-2xl shadow-sm p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 border border-slate-100 cursor-pointer transition">
+      {tenantPhotoUrl ? (
+        <img src={tenantPhotoUrl} alt={t.name || 'huurder'} loading="lazy"
           data-testid={`tenant-avatar-${t.id}`}
-          className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-100 bg-slate-50" />
+          className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl object-cover shrink-0 border border-slate-100 bg-slate-50" />
       ) : (
-        <div className="w-11 h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-sm">
+        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-orange-50 text-[#FF5C00] flex items-center justify-center shrink-0 font-black text-xs sm:text-sm">
           {initials}
         </div>
       )}
@@ -3499,22 +3830,22 @@ function TenantRow({ t, onOpen, onPin, onPoster, onDelete }) {
           {t.phone || '—'}{t.email ? ` · ${t.email}` : ''}
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-        <p className="text-base font-black text-slate-900 whitespace-nowrap">
+      <div className="text-right shrink-0 flex flex-col items-end gap-1 sm:gap-1.5">
+        <p className="text-sm sm:text-base font-black text-slate-900 whitespace-nowrap">
           {t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'}
         </p>
         <div className="flex items-center gap-1">
           <button onClick={stop(onPin)} data-testid={`tenant-pin-${t.id}`}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00]" title="Portal PIN instellen">
-            <KeySquare className="w-3.5 h-3.5" />
+            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00]" title="Portal PIN instellen">
+            <KeySquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
           <button onClick={stop(onPoster)} data-testid={`tenant-poster-${t.id}`}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Print A6 huurportaal-poster">
-            <Printer className="w-3.5 h-3.5" />
+            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Print A6 huurportaal-poster">
+            <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
           <button onClick={stop(onDelete)} data-testid={`tenant-delete-${t.id}`}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-500" title="Verwijderen">
-            <Trash2 className="w-3.5 h-3.5" />
+            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-500" title="Verwijderen">
+            <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
       </div>
@@ -3638,11 +3969,14 @@ function AvatarCropModal({ src, tenantId, onClose, onSaved }) {
 // - Persoonsgegevens (geboortedatum, ID-nummer) inzichtelijk
 // - Actie-grid: Bewerk / Portal PIN / Portal Poster / Verwijder
 // =====================================================================
-function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload }) {
+function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, onReload, kioskMode = false }) {
   const [uploading, setUploading] = useState(false);
+  const [avatarGenerating, setAvatarGenerating] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
   const [preview, setPreview] = useState(false);   // full-screen preview van ID-kaart
   const [sigOpen, setSigOpen] = useState(false);   // Digitale handtekening modal
   const [cropOpen, setCropOpen] = useState(false); // Manuele crop-tool voor pasfoto
+  const [detailTab, setDetailTab] = useState('overzicht');
   // Scroll altijd naar boven bij openen — anders kan een verborgen file-
   // input (met autofocus/keyboard trigger) de pagina naar beneden scrollen
   // waardoor de gebruiker de naam niet direct ziet.
@@ -3654,6 +3988,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
   const idPhotoSrc = t.id_photo_url
     ? (t.id_photo_url.startsWith('http') ? t.id_photo_url : `${base}${t.id_photo_url}`)
     : '';
+  const detailTabs = [
+    { id: 'overzicht', label: 'Overzicht' },
+    { id: 'documenten', label: 'Documenten & foto' },
+    { id: 'toegang', label: 'Borg & toegang' },
+    { id: 'notities', label: 'Notities' },
+  ];
 
   const upload = async (file) => {
     if (!file) return;
@@ -3666,17 +4006,34 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
       return;
     }
     setUploading(true);
+    setAvatarError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
-      await api.post(`/tenants/${t.id}/id-photo`, fd, {
+      const { data } = await api.post(`/tenants/${t.id}/id-photo`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      if (!data?.avatar_url) {
+        setAvatarError('ID-kaart is opgeslagen, maar de pasfoto kon niet automatisch worden gevonden. Probeer Pasfoto automatisch of Handmatig.');
+      }
       if (onReload) await onReload();
     } catch (e) {
       window.alert('Upload mislukt: ' + (e?.response?.data?.detail || e.message));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const generateAvatar = async () => {
+    setAvatarGenerating(true);
+    setAvatarError('');
+    try {
+      await api.post(`/tenants/${t.id}/generate-avatar`);
+      if (onReload) await onReload();
+    } catch (e) {
+      setAvatarError(e?.response?.data?.detail || 'Pasfoto kon niet automatisch worden gevonden. Probeer het handmatig bijsnijden.');
+    } finally {
+      setAvatarGenerating(false);
     }
   };
 
@@ -3689,6 +4046,203 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
       window.alert('Verwijderen mislukt: ' + (e?.response?.data?.detail || e.message));
     }
   };
+
+  if (kioskMode) {
+    return (
+      <div className="flex min-h-full flex-col gap-3 pb-3" data-testid="tenant-detail-page">
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {t.avatar_url ? (
+              <img src={t.avatar_url} alt={t.name || 'huurder'}
+                data-testid="tenant-detail-avatar"
+                className="h-14 w-14 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-lg font-black text-[#FF5C00]">
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-widest text-[#FF5C00]">
+                {t.apartment_number ? 'Appartement' : 'Huurder'}
+              </p>
+              <h1 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                {t.name || 'Onbekende huurder'}
+              </h1>
+              <p className="truncate text-sm font-semibold text-slate-500">
+                {t.apartment_number || 'Geen appartement'}
+                {t.rent_amount ? ` · ${fmtMoney(t.rent_amount, t.currency)} / maand` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button onClick={onBack} data-testid="tenant-detail-back"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <ArrowLeft className="h-4 w-4" /> Terug
+            </button>
+            <button onClick={onEdit} data-testid="tenant-detail-edit"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 text-sm font-bold text-slate-700 hover:bg-slate-200">
+              <Pencil className="h-4 w-4" /> Bewerk
+            </button>
+            <button onClick={onPin} data-testid="tenant-detail-pin"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+              <KeySquare className="h-4 w-4" /> Portal PIN
+            </button>
+            <button onClick={() => setSigOpen(true)} data-testid="tenant-detail-signature"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+              <PenTool className="h-4 w-4" /> Handtekening
+            </button>
+            <button onClick={onMoveOut} data-testid="tenant-detail-move-out"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-3 text-sm font-bold text-white hover:bg-slate-900">
+              <LogOut className="h-4 w-4" /> Uitgang
+            </button>
+            <button onClick={onDelete} data-testid="tenant-detail-delete"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 hover:bg-red-100">
+              <Trash2 className="h-4 w-4" /> Verwijder
+            </button>
+          </div>
+        </section>
+
+        <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
+          role="tablist" aria-label="Huurderdetails">
+          {detailTabs.map((tab) => (
+            <button key={tab.id} type="button" role="tab" aria-selected={detailTab === tab.id}
+              onClick={() => setDetailTab(tab.id)} data-testid={`tenant-detail-tab-${tab.id}`}
+              className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition ${
+                detailTab === tab.id ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {detailTab === 'overzicht' && (
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[1.4fr_1fr]">
+            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="tenant-detail-overview">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">Persoonsgegevens</h2>
+                <UserCircle className="h-5 w-5 text-[#FF5C00]" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <InfoRow label="Telefoon" value={t.phone || '—'} />
+                <InfoRow label="E-mail" value={t.email || '—'} />
+                <InfoRow label="Geboortedatum" value={t.birth_date || '—'} />
+                <InfoRow label="ID-nummer" value={t.id_number || '—'} mono />
+                <InfoRow label="Portal PIN" value={t.pin ? '••••' : 'Niet ingesteld'} />
+                <InfoRow label="Huur per maand" value={t.rent_amount ? fmtMoney(t.rent_amount, t.currency) : '—'} />
+              </div>
+            </section>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <TenantDepositCard tenant={t} />
+              <TenantNfcCard tenant={t} onReload={onReload} />
+            </div>
+          </div>
+        )}
+
+        {detailTab === 'documenten' && (
+          <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" data-testid="tenant-detail-documents">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Identiteitsbewijs</h2>
+                <p className="text-sm text-slate-500">Paspoort of identiteitskaart · maximaal 5 MB</p>
+              </div>
+              {idPhotoSrc && (
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={generateAvatar} disabled={avatarGenerating}
+                    data-testid="tenant-auto-avatar-btn"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-sm font-bold text-emerald-700 disabled:opacity-60">
+                    {avatarGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {avatarGenerating ? 'Pasfoto zoeken…' : 'Pasfoto automatisch'}
+                  </button>
+                  <button onClick={() => setCropOpen(true)} data-testid="tenant-crop-avatar-btn"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-orange-50 px-3 text-sm font-bold text-[#FF5C00]">
+                    <Scissors className="h-4 w-4" /> Handmatig bijsnijden
+                  </button>
+                  <button onClick={removePhoto} disabled={uploading} data-testid="tenant-id-remove"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-red-600 disabled:opacity-60">
+                    <Trash2 className="h-4 w-4" /> Verwijderen
+                  </button>
+                </div>
+              )}
+            </div>
+            {avatarError && (
+              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                role="alert" data-testid="tenant-auto-avatar-error">{avatarError}</p>
+            )}
+            {idPhotoSrc ? (
+              <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-slate-100"
+                onClick={() => setPreview(true)} data-testid="tenant-id-preview">
+                <img loading="lazy" src={idPhotoSrc} alt="ID-kaart"
+                  className="max-h-[40vh] max-w-full cursor-pointer object-contain" />
+                <span className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-bold text-slate-700">
+                  Klik om te vergroten
+                </span>
+              </div>
+            ) : (
+              <label htmlFor="tenant-id-upload"
+                className="flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-center transition hover:border-[#FF5C00] hover:bg-orange-50"
+                data-testid="tenant-id-dropzone">
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-7 w-7 animate-spin text-[#FF5C00]" />
+                    <span className="mt-2 text-sm font-bold text-slate-600">Bezig met uploaden…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
+                      <Plus className="h-6 w-6" />
+                    </span>
+                    <span className="text-sm font-black text-slate-700">ID-kaart uploaden</span>
+                    <span className="mt-1 text-xs text-slate-400">JPG of PNG · maximaal 5 MB</span>
+                  </>
+                )}
+              </label>
+            )}
+            {!idPhotoSrc && (
+              <input id="tenant-id-upload" type="file" accept="image/*" className="hidden"
+                onChange={(e) => upload(e.target.files?.[0])} data-testid="tenant-id-input" />
+            )}
+            {idPhotoSrc && (
+              <label htmlFor="tenant-id-replace"
+                className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                ID-kaart vervangen
+                <input id="tenant-id-replace" type="file" accept="image/*" className="hidden"
+                  onChange={(e) => upload(e.target.files?.[0])} data-testid="tenant-id-replace-input" />
+              </label>
+            )}
+          </section>
+        )}
+
+        {detailTab === 'toegang' && (
+          <div className="grid gap-3 xl:grid-cols-2" data-testid="tenant-detail-access">
+            <TenantDepositCard tenant={t} />
+            <TenantNfcCard tenant={t} onReload={onReload} />
+          </div>
+        )}
+
+        {detailTab === 'notities' && (
+          <AdminNotesCard tenantId={t.id} tenantName={t.name} />
+        )}
+
+        <SignatureModal tenant={t} open={sigOpen} onClose={() => setSigOpen(false)} onReload={onReload} />
+        {cropOpen && (
+          <AvatarCropModal src={idPhotoSrc} tenantId={t.id}
+            onClose={() => setCropOpen(false)}
+            onSaved={async () => { setCropOpen(false); if (onReload) await onReload(); }} />
+        )}
+        {preview && idPhotoSrc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            onClick={() => setPreview(false)} data-testid="tenant-id-fullpreview">
+            <img loading="lazy" src={idPhotoSrc} alt="ID-kaart" className="max-h-full max-w-full rounded-xl shadow-2xl" />
+            <button onClick={() => setPreview(false)}
+              className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-slate-900">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="tenant-detail-page">
@@ -3712,18 +4266,10 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Huurder</p>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 truncate">{t.name}</h1>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 truncate">{t.apartment_number || 'Geen appartement'}</h1>
             <div className="flex items-center gap-2 flex-wrap mt-2">
-              {t.apartment_number ? (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                  Appt. {t.apartment_number}
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Geen appartement
-                </span>
-              )}
+              <span className="text-sm font-bold text-slate-700">{t.name || 'Onbekende huurder'}</span>
               {t.rent_amount ? (
                 <span className="text-[11px] font-bold text-slate-600">
                   {fmtMoney(t.rent_amount, t.currency)} / maand
@@ -3754,10 +4300,16 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             <p className="text-sm text-slate-500 mt-0.5">Foto van paspoort of identiteitskaart · max 5 MB</p>
           </div>
           {t.id_photo_url && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={generateAvatar} disabled={avatarGenerating}
+                data-testid="tenant-auto-avatar-btn"
+                className="h-9 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1.5 disabled:opacity-60">
+                {avatarGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {avatarGenerating ? 'Pasfoto zoeken…' : 'Pasfoto automatisch'}
+              </button>
               <button onClick={() => setCropOpen(true)} data-testid="tenant-crop-avatar-btn"
                 className="h-9 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF5C00] font-bold text-xs flex items-center gap-1.5">
-                <Scissors className="w-3.5 h-3.5" /> Kies pasfoto
+                <Scissors className="w-3.5 h-3.5" /> Handmatig
               </button>
               <button onClick={removePhoto} data-testid="tenant-id-remove"
                 className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5">
@@ -3766,6 +4318,12 @@ function TenantDetail({ tenant: t, onBack, onEdit, onPin, onMoveOut, onDelete, o
             </div>
           )}
         </div>
+        {avatarError && (
+          <p className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"
+            role="alert" data-testid="tenant-auto-avatar-error">
+            {avatarError}
+          </p>
+        )}
 
         {idPhotoSrc ? (
           <div className="relative rounded-xl overflow-hidden bg-slate-100 cursor-pointer"
@@ -4259,7 +4817,7 @@ function RemoteSignatureRequest({ tenant: t }) {
   );
 }
 
-function DesktopTopBar({ user, activeCompany, tab, tabs }) {
+function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
   // Moderne desktop topbar — toont de actieve tab als "page title" links
   // (vervangt de oude H1 in de content) + Live + actie-iconen rechts.
   if (user?.role === 'superadmin') return null;
@@ -4283,6 +4841,10 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
         </div>
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
+        <button type="button" onClick={onManual} data-testid="desktop-topbar-manual"
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 text-sm font-bold text-[#C74600] hover:bg-orange-50">
+          <BookOpen className="h-4 w-4" /> Handleiding
+        </button>
         <GlobalSearch variant="topbar" />
         <PendingApprovalBell />
         <SubscriptionBell />
@@ -4291,10 +4853,220 @@ function DesktopTopBar({ user, activeCompany, tab, tabs }) {
   );
 }
 
+function SaasConsoleSidebar({ user, tab, tabs, onChange, onLogout, badgeCount }) {
+  const groups = groupTabs(tabs);
+  return (
+    <aside className="hidden xl:flex flex-col w-[264px] shrink-0 sticky top-0 h-screen bg-white border-r border-slate-200/80"
+      data-testid="saas-console-sidebar">
+      <div className="px-5 pt-5 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-[#E7F5EC] p-2 shrink-0">
+            <img src="/superadmin-favicon.svg" alt="" className="w-full h-full object-contain rounded-lg" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-base font-black text-slate-900 tracking-tight">SuriRent</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
+          </div>
+        </div>
+        <div className="mt-5 flex items-center gap-2 rounded-xl bg-[#F2F8F4] px-3 py-2.5">
+          <Building2 className="w-4 h-4 text-emerald-700" />
+          <span className="text-xs font-bold text-slate-700">Beheer</span>
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Beheernavigatie">
+        {groups.map((group) => (
+          <section key={group.key}>
+            <h2 className="px-3 mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.label}</h2>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const selected = item.id === tab;
+                const showBadge = item.id === 'notifications' && badgeCount > 0;
+                return (
+                  <button key={item.id} type="button" onClick={() => onChange(item.id)}
+                    data-testid={`tab-${item.id}`} aria-current={selected ? 'page' : undefined}
+                    className={`relative w-full min-h-11 px-3 py-2 rounded-xl inline-flex items-center gap-3 text-left text-[13px] font-bold transition-colors ${
+                      selected ? 'bg-[#E8F5ED] text-[#087A3D]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}>
+                    {selected && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-emerald-600" />}
+                    <Icon className={`w-[18px] h-[18px] shrink-0 ${selected ? 'text-emerald-700' : 'text-slate-400'}`} strokeWidth={selected ? 2.5 : 2} />
+                    <span className="min-w-0 flex-1 text-left leading-tight">{item.label}</span>
+                    {showBadge && <span data-testid="saas-console-notification-count" className="min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black inline-flex items-center justify-center">{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                    {selected && <ChevronRight className="w-4 h-4 shrink-0 text-emerald-700" />}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </nav>
+
+      <div className="border-t border-slate-100 p-3">
+        <div className="flex items-center gap-2.5 px-2 py-2">
+          <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-black text-sm flex items-center justify-center shrink-0">
+            {(user?.name || user?.email || 'S').slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-slate-800 truncate">{user?.name || 'Superadmin'}</p>
+            <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
+          </div>
+          <button type="button" onClick={onLogout} data-testid="saas-console-logout"
+            className="w-10 h-10 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors"
+            aria-label="Uitloggen" title="Uitloggen">
+            <LogOut className="w-[18px] h-[18px]" />
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount }) {
+  const current = tabs.find((item) => item.id === tab);
+  const CurrentIcon = current?.icon || LayoutDashboard;
+  const groups = groupTabs(tabs);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+  return (
+    <header className="xl:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shadow-[0_4px_14px_-10px_rgba(15,23,42,0.2)]"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} data-testid="saas-console-mobile-nav">
+      <div className="min-h-[64px] flex items-center gap-3 px-3 sm:px-5">
+        <div className="w-10 h-10 rounded-xl bg-[#E7F5EC] p-1.5 shrink-0">
+          <img src="/superadmin-favicon.svg" alt="SuriRent" className="w-full h-full object-contain rounded-md" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">Beheer</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <CurrentIcon className="w-4 h-4 shrink-0 text-emerald-700" />
+            <h1 className="text-base sm:text-lg font-black text-slate-900 truncate" data-testid="saas-console-mobile-page-title">{current?.label || 'Overzicht'}</h1>
+          </div>
+        </div>
+        <span className="hidden sm:inline text-xs font-semibold text-slate-500 truncate max-w-36">{user?.name || user?.email}</span>
+        <button type="button" onClick={() => setMenuOpen((open) => !open)}
+          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 inline-flex items-center justify-center"
+          aria-label={menuOpen ? 'Menu sluiten' : 'Navigatiemenu openen'} aria-expanded={menuOpen}
+          aria-controls="saas-console-mobile-menu" data-testid="saas-console-mobile-menu-toggle">
+          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+        <button type="button" onClick={onLogout} data-testid="saas-console-mobile-logout"
+          className="w-10 h-10 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center"
+          aria-label="Uitloggen" title="Uitloggen">
+          <LogOut className="w-[18px] h-[18px]" />
+        </button>
+      </div>
+      {menuOpen && createPortal(
+        <div className="fixed inset-0 z-[120] flex flex-col bg-[#E8F5ED]"
+          onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
+          <div id="saas-console-mobile-menu" role="dialog" aria-modal="true"
+            aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
+            onClick={(event) => event.stopPropagation()}
+            className="flex min-h-0 flex-1 flex-col bg-[#E8F5ED]"
+            style={{
+              paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
+              paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+            }}>
+            <div className="flex shrink-0 items-center justify-between border-b border-emerald-200 px-4 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                  <LayoutDashboard className="h-6 w-6" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
+                  <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setMenuOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-800 shadow-sm hover:bg-emerald-100"
+                aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav aria-label="Superadmin navigatie" className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5"
+              data-testid="saas-console-mobile-menu-items">
+              <div className="mx-auto w-full max-w-3xl space-y-6">
+                {groups.map((group) => (
+                  <section key={group.key} aria-labelledby={`saas-console-mobile-group-${group.key}`}>
+                    <h3 id={`saas-console-mobile-group-${group.key}`}
+                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                      {group.label}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {group.items.map((item) => {
+                        const Icon = item.icon;
+                        const selected = item.id === tab;
+                        const showBadge = item.id === 'notifications' && badgeCount > 0;
+                        return (
+                          <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
+                            data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
+                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-lg transition active:scale-[0.98] ${
+                              selected ? 'border-emerald-100 bg-emerald-50 text-emerald-950'
+                                : 'border-white/80 bg-white/95 text-slate-900 hover:bg-white'
+                            }`}>
+                            <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+                              selected ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              <Icon className="h-7 w-7" />
+                            </span>
+                            <span className="text-sm font-black leading-tight">{item.label}</span>
+                            {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </nav>
+          </div>
+        </div>,
+        document.body
+      )}
+    </header>
+  );
+}
+
+function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
+  const current = tabs.find((item) => item.id === tab);
+  const CurrentIcon = current?.icon || LayoutDashboard;
+  const group = groupTabs(tabs).find((item) => item.items.some((entry) => entry.id === tab));
+  return (
+    <header className="hidden xl:flex h-[76px] shrink-0 items-center justify-between gap-4 px-7 bg-white border-b border-slate-200/80"
+      data-testid="saas-console-header">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-10 h-10 rounded-xl bg-[#E8F5ED] text-emerald-700 flex items-center justify-center shrink-0">
+          <CurrentIcon className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group?.label || 'Platform'}</p>
+          <h1 className="text-lg font-black text-slate-900 truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+        <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+        <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
+      </div>
+    </header>
+  );
+}
+
 export default function AdminDashboard() {
   useHidePwaSplash();
-  const { user, logout, activeCompany, refresh: refreshAuth } = useAuth();
+  const { user, logout, activeCompany, activeCompanyId, setActiveCompany, refresh: refreshAuth } = useAuth();
   const tabs = getTabsFor(user);
+  const isSaasConsole = user?.role === 'superadmin';
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
   // bij eerste render zodat de PWA-launch direct in de juiste tab opent.
@@ -4303,9 +5075,10 @@ export default function AdminDashboard() {
   const sheetTabs = tabs.filter((t) => t.id !== 'overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Auto-open Setup Wizard als bottom-sheet / modal voor nieuwe bedrijven.
-  // Activatie: setup-status laat zien dat <2 van de 5 stappen klaar zijn EN
+  // Activatie: setup-status laat zien dat een verplichte basisstap nog openstaat EN
   // de admin heeft de wizard nog niet bewust gesloten voor dit bedrijf.
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const navigate = useBrandedNavigate();
 
   // Proactieve prefetch — vul de SWR cache voor álle admin-tabs zodra
@@ -4356,6 +5129,7 @@ export default function AdminDashboard() {
     const adminIdx = seg.indexOf('admin');
     const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
     if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
+    if (user?.role === 'superadmin') return 'saas_overview';
     // Fallback: mobile → invoices (facturen als landingpagina op verzoek
     // gebruiker feb 2026), anders overview.
     try {
@@ -4395,6 +5169,11 @@ export default function AdminDashboard() {
     const adminIdx = seg.indexOf('admin');
     if (adminIdx === -1 || !seg[adminIdx + 1]) return;
     const wanted = seg[adminIdx + 1];
+    if (user?.role === 'superadmin'
+      && (wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
+      navigate('/admin/saas_overview', { replace: true });
+      return;
+    }
     const LEGACY_TO_HUB = {
       mijn_abonnement: 'abonnement',
       mijn_landing: 'landing',
@@ -4407,7 +5186,7 @@ export default function AdminDashboard() {
     if (Object.prototype.hasOwnProperty.call(LEGACY_TO_HUB, wanted)) {
       navigate(`/admin/instellingen#${LEGACY_TO_HUB[wanted]}`, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, user?.role]);
 
   // handleSetTab — alleen navigate, GEEN setTab meer (tab is URL-derived).
   // Voorkomt de dubbele-setter render-storm die de flicker veroorzaakte.
@@ -4432,8 +5211,8 @@ export default function AdminDashboard() {
       window.removeEventListener('saas-nav', saasHandler);
     };
   }, [navigate]);
-  // iPhone-PWA: statusbalk effen lichtgrijs zoals de header (zoals Expo Go).
-  useEffect(() => setIosStatusBar('#F7F8FA'), []);
+  // Match the standalone status bar to the superadmin surface only.
+  useEffect(() => setIosStatusBar(isSaasConsole ? '#F3F8F5' : '#F7F8FA'), [isSaasConsole]);
 
   // Auto-open de Setup Wizard sheet voor nieuwe bedrijven. Draait alleen
   // voor gewone admins (niet superadmin) en alleen wanneer de admin de
@@ -4445,14 +5224,9 @@ export default function AdminDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const dismissedKey = `setup_wizard_dismissed_${cid}`;
-        if (localStorage.getItem(dismissedKey) === '1') return;
         const { data } = await api.get('/companies/me/setup-status');
-        // Open de wizard alleen als de basis-setup nog niet (vrijwel) klaar is.
-        // 2 of meer van de 5 stappen klaar → admin heeft al actief data toegevoegd.
-        const completed = data?.completed ?? 0;
         if (cancelled) return;
-        if (completed < 2) {
+        if (data?.required_complete === false) {
           setWizardOpen(true);
         }
       } catch { /* network hiccup — laat wizard met rust */ }
@@ -4472,19 +5246,16 @@ export default function AdminDashboard() {
     // `/auth/logout` gaf een race — Safari navigeerde voordat de
     // Set-Cookie response was verwerkt, waardoor de auth-cookie op de
     // vervolgpagina nog geldig was → AuthProvider hield gebruiker
-    // ingelogd → redirect terug naar admin. We AWAITEN nu de server-
-    // logout (met 2.5s timeout) VOORDAT we storage clearen en navigeren.
+    // ingelogd → redirect terug naar admin. We starten de server-logout
+    // meteen, ruimen lokale gegevens op en wachten max. 1s voor navigatie.
+    const wasSuperadmin = user?.role === 'superadmin';
     const wasDemo = (() => {
       try { return localStorage.getItem('is_demo_session') === '1'; }
       catch { return false; }
     })();
-    // Server-logout: wachten tot cookies zijn gewist (Safari fix).
-    try {
-      await Promise.race([
-        api.post('/auth/logout').catch(() => {}),
-        new Promise((res) => setTimeout(res, 2500)),
-      ]);
-    } catch { /* noop */ }
+    // Start server-logout meteen, zodat cookie-opruiming parallel loopt met
+    // lokale cleanup. Navigatie wacht daarna maximaal 1 seconde.
+    const serverLogout = api.post('/auth/logout').catch(() => {});
     // localStorage synchroon opruimen zodat volgende bezoeker geen resten ziet.
     try {
       // Sluit ook de gedeelde SSE-connectie — anders blijft die met stale
@@ -4493,6 +5264,7 @@ export default function AdminDashboard() {
     } catch { /* noop */ }
     try {
       localStorage.removeItem('admin_token');
+      localStorage.removeItem('auth_user_cache');
       localStorage.removeItem('kiosk_token');
       localStorage.removeItem('active_company_id');
       localStorage.removeItem('pwa_preferred_role');
@@ -4510,14 +5282,20 @@ export default function AdminDashboard() {
       sessionStorage.removeItem('kiosk_emp_name');
       sessionStorage.removeItem('kiosk_emp_pin');
     } catch { /* noop */ }
+    try {
+      await Promise.race([
+        serverLogout,
+        new Promise((res) => setTimeout(res, 1000)),
+      ]);
+    } catch { /* noop */ }
     // Hard nav naar /login op huidige origin. Als een echte gebruiker een
     // company-slug heeft, stuur naar `/{slug}/login` zodat de branded
     // PIN-login direct opent (LoginPage handelt dit ook af, maar dit is
     // sneller — geen redirect-hop). Extra `?loggedout=1` query zodat
     // LoginPage's AuthProvider niet per ongeluk auto-redirected op basis
     // van een cached user (Safari extra veiligheid).
-    let target = '/login?loggedout=1';
-    if (!wasDemo) {
+    let target = wasSuperadmin ? '/superadmin/login?loggedout=1' : '/login?loggedout=1';
+    if (!wasDemo && !wasSuperadmin) {
       try {
         const slug = localStorage.getItem('pwa_company_slug');
         if (slug) target = `/${slug}/login?loggedout=1`;
@@ -4531,15 +5309,36 @@ export default function AdminDashboard() {
   // Superadmin + impersonators zien uiteraard nooit iets.
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex">
-      <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
-        user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />
+    <div className={`min-h-screen flex ${isSaasConsole ? 'bg-[#F3F8F5]' : 'bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
+      {isSaasConsole
+        ? <SaasConsoleSidebar user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} />
+        : <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
+        user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />}
       <div className="flex-1 flex flex-col min-w-0">
-        <MobileTopLogo user={user} activeCompany={activeCompany} />
-        <DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} />
+        {isSaasConsole
+          ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
+          : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
+        {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
-        <main className="flex-1 p-5 md:px-6 md:py-5 lg:px-8 lg:pt-3 pb-32 md:pb-8 w-full">
+        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
+          <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
+          {isSaasConsole && activeCompanyId && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+              data-testid="active-company-scope">
+              <div className="flex min-w-0 items-center gap-2 text-sm text-emerald-900">
+                <Building2 className="h-4 w-4 shrink-0 text-emerald-700" />
+                <span className="font-bold">Bedrijfsscope actief:</span>
+                <span className="truncate">{activeCompany?.name || activeCompanyId}</span>
+                <span className="hidden text-emerald-700 sm:inline">· bedrijfslijsten zijn gefilterd; platformtotalen blijven totaal</span>
+              </div>
+              <button type="button" onClick={() => setActiveCompany(null)}
+                className="shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                data-testid="clear-company-scope">
+                Scope wissen
+              </button>
+            </div>
+          )}
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
           <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
@@ -4568,22 +5367,25 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'payment_plans'} tabId="payment_plans" currentTab={tab}><PaymentPlans /></KeepAliveTab>
           <KeepAliveTab active={tab === 'deposits'} tabId="deposits" currentTab={tab}><Deposits /></KeepAliveTab>
           <KeepAliveTab active={tab === 'maintenance'} tabId="maintenance" currentTab={tab}><Maintenance /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'power'} tabId="power" currentTab={tab}><PowerAdmin /></KeepAliveTab>
           <KeepAliveTab active={tab === 'kasgeld'} tabId="kasgeld" currentTab={tab}><Kasgeld /></KeepAliveTab>
           <KeepAliveTab active={tab === 'employees'} tabId="employees" currentTab={tab}><Employees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'notifications'} tabId="notifications" currentTab={tab}><Notifications /></KeepAliveTab>
           <KeepAliveTab active={tab === 'instellingen'} tabId="instellingen" currentTab={tab}><InstellingenHub /></KeepAliveTab>
           </Suspense>
+          </div>
         </main>
       </div>
-      <MobileTabBar active={tab} onChange={handleSetTab} tabs={tabs} user={user}
-        onOpenMenu={() => setDrawerOpen(true)} badgeCount={badgeCount} />
-      <MobileSheet open={drawerOpen} onClose={() => setDrawerOpen(false)}
+      {!isSaasConsole && <MobileTabBar active={tab} onChange={handleSetTab} tabs={tabs} user={user}
+        onOpenMenu={() => setDrawerOpen(true)} badgeCount={badgeCount} />}
+      {!isSaasConsole && <MobileSheet open={drawerOpen} onClose={() => setDrawerOpen(false)}
         active={tab} onChange={handleSetTab} onLogout={doLogout}
-        user={user} tabs={sheetTabs} activeCompany={activeCompany} badgeCount={badgeCount} />
+        onManual={() => setManualOpen(true)}
+        user={user} tabs={sheetTabs} activeCompany={activeCompany} badgeCount={badgeCount} />}
+      {manualOpen && <KioskManual onClose={() => setManualOpen(false)} />}
       <SetupWizardSheet
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        companyId={user?.company_id}
       />
       {/* Post-Google-registratie: als het bedrijf auto-gegenereerd is
           (needs_onboarding flag op company) → verplichte "Kies uw

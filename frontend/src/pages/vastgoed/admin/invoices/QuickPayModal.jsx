@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { X, Check, Loader2, FileText, MessageCircle } from 'lucide-react';
+import { X, Check, Loader2, Image as ImageIcon, MessageCircle } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../../lib/api';
 import { openWhatsApp } from '../../../../lib/external-link';
 import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 import NumPad from '../../../../components/NumPad';
+import { KioskReceiptImageButton } from '../../../../components/KioskReceiptImageButton';
 
 // =====================================================================
 // QuickPayModal — één-klik betaling registreren vanuit de Facturen-detail
@@ -164,7 +165,7 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
   };
 
   if (receipt) {
-    // Succes-scherm met kwitantienummer en PDF-download — via KeyboardSafeModal
+    // Succes-scherm met kwitantienummer en bonfoto — via KeyboardSafeModal
     // zodat ook hier het toetsenbord-veilige patroon consistent blijft.
     return (
       <KeyboardSafeModal onClose={close} testId="quickpay-success">
@@ -219,12 +220,11 @@ export default function QuickPayModal({ invoice, tenantName, tenantPhone = '', o
         </KeyboardSafeModal.Body>
 
         <KeyboardSafeModal.Footer className="grid grid-cols-2 gap-2">
-          <a href={`${process.env.REACT_APP_BACKEND_URL}/api/payments/${receipt.id}/pdf`}
-            target="_blank" rel="noreferrer"
-            data-testid="quickpay-download-pdf"
+          <KioskReceiptImageButton paymentId={receipt.id} filename={`bon-${receipt.receipt_number || receipt.id}.jpg`}
+            testId="quickpay-download-image"
             className="h-12 rounded-xl bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold inline-flex items-center justify-center gap-2 text-sm">
-            <FileText className="w-4 h-4" /> Kwitantie PDF
-          </a>
+            <ImageIcon className="w-4 h-4" /> Bon JPG
+          </KioskReceiptImageButton>
           <button onClick={close} data-testid="quickpay-close"
             className="h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold text-sm">
             Klaar

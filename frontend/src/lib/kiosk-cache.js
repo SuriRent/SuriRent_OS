@@ -5,6 +5,7 @@ import { api } from './api';
 const LS_KEY = 'kiosk_select_cache_v1';
 let inflight = null;
 let lastFresh = null; // { at, data } — dedupe mount-fetch direct na prefetch
+let generation = 0;
 const FRESH_MS = 3000;
 
 const scopeKey = () => {
@@ -21,18 +22,23 @@ export function readKioskSelectCache() {
 export function fetchKioskSelect() {
   if (inflight) return inflight;
   if (lastFresh && Date.now() - lastFresh.at < FRESH_MS && lastFresh.data.scope === scopeKey()) return Promise.resolve(lastFresh.data);
-  inflight = Promise.all([api.get('/kiosk/apartments'), api.get('/kiosk/locations')])
+  const requestedGeneration = generation;
+  const request = Promise.all([api.get('/kiosk/apartments'), api.get('/kiosk/locations')])
     .then(([a, l]) => {
+      if (requestedGeneration !== generation) return fetchKioskSelect();
       const data = { scope: scopeKey(), apartments: a.data || [], locations: l.data || [] };
       lastFresh = { at: Date.now(), data };
       try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch { /* opslag vol */ }
       return data;
     })
-    .finally(() => { inflight = null; });
-  return inflight;
+    .finally(() => { if (inflight === request) inflight = null; });
+  inflight = request;
+  return request;
 }
 
 export function clearKioskSelectCache() {
+  generation += 1;
+  inflight = null;
   lastFresh = null;
   try { localStorage.removeItem(LS_KEY); } catch { /* noop */ }
 }
@@ -45,5 +51,5 @@ export function prefetchKioskSelect() {
 
 // Forceer een verse fetch bij de volgende mount (bv. na aanmaken appartement).
 export function invalidateKioskSelect() {
-  lastFresh = null;
+  clearKioskSelectCache();
 }

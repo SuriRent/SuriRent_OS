@@ -11,12 +11,11 @@ const NEW = {
   regelingen: { label: 'Nieuwe regeling', event: 'kiosk-plan-new' },
   locaties: { label: 'Nieuwe locatie', event: 'kiosk-loc-new' },
   appartementen: { label: 'Nieuw appartement', event: 'kiosk-apt-new' },
-  betalingen: { label: 'Nieuwe betaling', event: 'quick-pay-open' },
   huurders: { label: 'Nieuwe huurder', event: 'kiosk-tenant-new' },
   werknemers: { label: 'Nieuw toevoegen', event: 'kiosk-emp-new' },
 };
 
-// Beheer-pagina's als popup in exact dezelfde opmaak als Facturen.
+// Beheer-pagina's als popup met gedeelde kiosk-styling.
 export function KioskAdminPopup({ id, Shell, onClose }) {
   const inst = id.startsWith('inst-') ? INSTELLINGEN_SECTIONS.find((x) => x.id === id.slice(5)) : null;
   const { Page, label, Icon } = inst
@@ -28,20 +27,15 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
     document.body.classList.add(bodyCls);
     return () => document.body.classList.remove(bodyCls);
   }, [bodyCls]);
-  const footer = (
-    <div className="grid grid-cols-2 gap-2">
-      {nw && (
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(nw.event))} data-testid={`kiosk-popup-${id}-new`}
-          className="col-span-2 h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
-          <Plus className="w-4 h-4" /> {nw.label}
-        </button>
-      )}
-      <button type="button" onClick={onClose} data-testid={`kiosk-popup-${id}-footer-close`}
-        className="col-span-2 h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Sluiten</button>
-    </div>
-  );
+  const footer = nw ? (
+    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(nw.event))} data-testid={`kiosk-popup-${id}-new`}
+      className="w-full h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
+      <Plus className="w-4 h-4" /> {nw.label}
+    </button>
+  ) : null;
   return (
-    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer} wide xwide={!!inst} tall>
+    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer}
+      wide xwide tall fullscreenMobile>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
         {inst ? <Page embedded section={inst.id} /> : (
           <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4" data-testid={`kiosk-popup-${id}-content`}><Page embedded /></div></KioskFxCtx.Provider>

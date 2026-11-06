@@ -6,7 +6,7 @@
  * - Network-first for API GETs met stale cache-fallback bij offline
  * - Push notifications + click handler
  */
-const CACHE_VERSION = 'surirent-v109';
+const CACHE_VERSION = 'surirent-v112';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 // Aparte cache voor bestanden ontvangen via Web Share Target
@@ -23,6 +23,11 @@ const PRECACHE = [
   '/kiosk-icons/kiosk-192.png',
   '/kiosk-icons/kiosk-512.png',
   '/kiosk-icons/kiosk-favicon.ico',
+  '/kiosk-icons/superadmin-72.png',
+  '/kiosk-icons/superadmin-144.png',
+  '/kiosk-icons/superadmin-192.png',
+  '/kiosk-icons/superadmin-512.png',
+  '/superadmin-favicon.svg',
 ];
 
 self.addEventListener('install', (event) => {
@@ -131,12 +136,13 @@ self.addEventListener('fetch', (event) => {
   // data verder kan. We cachen alleen idempotente GET's (POST/PUT/DELETE
   // worden niet geraakt — door de `req.method !== 'GET'` check hierboven).
   //
-  // Opt-out: endpoints met `?nocache=1` of SSE (`/admin/events`) worden
+  // Opt-out: endpoints met `?nocache=...`, expliciete no-cache headers of SSE (`/admin/events`) worden
   // nooit gecacht om te voorkomen dat we live-stream events uit cache
   // halen.
   if (url.pathname.startsWith('/api/')) {
     const isSSE = url.pathname.includes('/events') || (req.headers.get('accept') || '').includes('event-stream');
-    const noCache = url.searchParams.get('nocache') === '1';
+    const noCache = url.searchParams.has('nocache')
+      || /no-cache/i.test(req.headers.get('cache-control') || '');
     if (isSSE || noCache) return;  // bypass → geen interceptie
     event.respondWith((async () => {
       const cache = await caches.open(RUNTIME_CACHE);
@@ -323,12 +329,13 @@ self.addEventListener('push', (event) => {
     try { data = event.data.json(); } catch { data.body = event.data.text(); }
   }
   const kind = (data.data && data.data.kind) || 'info';
+  const isSuperadmin = (data.data && data.data.audience) === 'superadmin';
   const inc = (data.data && data.data.badge_inc) || 1;
   const requireApproval = !!(data.data && data.data.require_approval);
   const options = {
     body: data.body || '',
-    icon: '/kiosk-icons/kiosk-192.png',
-    badge: '/kiosk-icons/kiosk-72.png',
+    icon: isSuperadmin ? '/kiosk-icons/superadmin-192.png' : '/kiosk-icons/kiosk-192.png',
+    badge: isSuperadmin ? '/kiosk-icons/superadmin-72.png' : '/kiosk-icons/kiosk-72.png',
     data: data.data || {},
     vibrate: requireApproval ? [300, 100, 300, 100, 300, 100, 500] : [200, 100, 200, 100, 300],
     actions: (data.data && data.data.action_token) ? [
@@ -452,4 +459,3 @@ self.addEventListener('message', (event) => {
     })());
   }
 });
-

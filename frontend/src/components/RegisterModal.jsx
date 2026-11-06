@@ -1,6 +1,6 @@
-// RegisterModal — desktop (>=1024px) split-layout, mobiel de oranje stap-wizard.
+// RegisterModal — desktop split-layout, mobile uses a focused step-by-step wizard.
 import { useEffect, useState } from 'react';
-import { MobileRegisterWizard } from './MobileAuthShell';
+import MobileRegisterWizard from './MobileRegisterWizard';
 import DesktopRegisterWizard from './DesktopRegisterWizard';
 
 const MQ = '(min-width: 1024px)';

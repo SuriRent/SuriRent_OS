@@ -10,6 +10,7 @@ import InvoiceForm from '../pages/vastgoed/admin/invoices/InvoiceForm';
 import QuickPayModal from '../pages/vastgoed/admin/invoices/QuickPayModal';
 import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySection';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
+import { TenantPhoto } from './KioskFx';
 
 const TABS = [
   { v: 'all', label: 'Alle', key: 'allCount' },
@@ -31,11 +32,14 @@ function TenantRow({ g, onOpen, credit }) {
   return (
     <button type="button" onClick={() => onOpen(g)} data-testid={`invoice-tenant-row-${g.tenant_id}`}
       className="w-full text-left rounded-xl border border-slate-200 hover:border-orange-300 px-4 py-3 flex items-center justify-between gap-3 transition-colors">
-      <div className="min-w-0">
-        <div className="text-sm font-black text-slate-900 truncate">{g.tenant_name}</div>
-        <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number || '—'}{g.location_name ? ` · ${g.location_name}` : ''}</div>
-        <CreditBadge amount={credit} currency={g.currency} testId={`invoice-tenant-credit-${g.tenant_id}`} />
-        <div className="text-[11px] text-slate-400 mt-0.5">{g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden'}</div>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
+        <div className="min-w-0">
+          <div className="text-sm font-black text-slate-900 truncate">{g.apartment_number || '—'}</div>
+          <div className="text-xs text-slate-500 truncate">{g.tenant_name || 'Onbekende huurder'}{g.location_name ? ` · ${g.location_name}` : ''}</div>
+          <CreditBadge amount={credit} currency={g.currency} testId={`invoice-tenant-credit-${g.tenant_id}`} />
+          <div className="text-[11px] text-slate-400 mt-0.5">{g.dueCount > 0 ? `${g.dueCount} × ${fmtAmount(g.totalDue / g.dueCount, g.currency)}` : 'Geen openstaande maanden'}</div>
+        </div>
       </div>
       <div className="text-right shrink-0 flex items-center gap-2">
         <div>
@@ -95,7 +99,7 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced, 
     return (
       <>
         <button type="button" onClick={() => setHistory(false)} data-testid="invoices-modal-history-back"
-          className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {g.tenant_name}</button>
+          className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {g.apartment_number || '—'} · {g.tenant_name}</button>
         <div className="text-sm font-black text-slate-900 uppercase tracking-widest">Betalingsgeschiedenis · {paid.length}</div>
         {paid.length === 0
           ? <div className="text-center text-slate-500 py-10 text-sm">Nog geen betalingen voor deze huurder.</div>
@@ -108,17 +112,20 @@ function TenantDetail({ g, onBack, onPay, onPayInvoice, onDelete, onRebalanced, 
       <button type="button" onClick={onBack} data-testid="invoices-modal-back"
         className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> Alle huurders</button>
       <div className="rounded-xl bg-slate-50 px-4 py-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="text-base font-black text-slate-900 truncate" data-testid="invoices-modal-tenant">{g.tenant_name}</div>
-            <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="invoices-modal-rebalance"
-              title="Herverdeel alle openstaande tegoeden over de openstaande facturen." aria-label="Herverdeel tegoeden"
-              className="shrink-0 w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-[#FF5C00] hover:border-orange-300 inline-flex items-center justify-center transition-colors disabled:opacity-60">
-              {rebalancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            </button>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={44} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-base font-black text-slate-900 truncate">{g.apartment_number || '—'}</div>
+              <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="invoices-modal-rebalance"
+                title="Herverdeel alle openstaande tegoeden over de openstaande facturen." aria-label="Herverdeel tegoeden"
+                className="shrink-0 w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-[#FF5C00] hover:border-orange-300 inline-flex items-center justify-center transition-colors disabled:opacity-60">
+                {rebalancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="text-xs text-slate-500 truncate" data-testid="invoices-modal-tenant">{g.tenant_name || 'Onbekende huurder'} · {g.location_name}</div>
+            <CreditBadge amount={credit} currency={g.currency} testId="invoices-modal-credit" />
           </div>
-          <div className="text-xs text-slate-500 truncate">Appt. {g.apartment_number} · {g.location_name}</div>
-          <CreditBadge amount={credit} currency={g.currency} testId="invoices-modal-credit" />
         </div>
         <div className="text-right shrink-0">
           <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Openstaand</div>
@@ -166,7 +173,20 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
     reloadCredits();
   }, [tab, q, severity, reloadCredits]);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
-  useEffect(() => { api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {}); }, []);
+  const loadTenants = useCallback(() => {
+    api.get('/tenants').then(({ data: d }) => setTenants(d || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
+  useEffect(() => {
+    const refresh = () => { load(); loadTenants(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('surirent:live-change', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('surirent:live-change', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load, loadTenants]);
 
   const groups = useMemo(() => {
     if (!data) return [];
@@ -205,14 +225,12 @@ export function KioskInvoicesModal({ Shell, onClose, onPay }) {
         className="h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
         <FilePlus2 className="w-4 h-4" /> Nieuwe factuur
       </button>
-      <button type="button" onClick={onClose} data-testid="invoices-modal-close"
-        className="col-span-2 h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm">Sluiten</button>
     </div>
   );
 
   return (
     <>
-      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide>
+      <Shell title="Facturen" Icon={FileSignature} testId="invoices-modal" onClose={onClose} footer={creating || confirmGen ? null : footer} wide xwide tall>
         {() => (
           <>
             {msg && (

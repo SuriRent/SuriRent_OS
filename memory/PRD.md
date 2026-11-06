@@ -1074,3 +1074,9 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - landing/KioskPricing.jsx: KioskShowcase (nagebouwde tablet + 4 stapkaarten), PriceAdvisor (goedkoopste betaalde pakket op basis van aantal appartementen; Lifetime nooit; anders Enterprise/offerte).
 - Enterprise heet overal "Op maat". Functiekaarten 2 kolommen onder 1280px.
 - Getest: iteration_144 + invoerveld-fix.
+
+## 2026-11 — Code gesynchroniseerd met GitHub SuriRent/SuriRent_OS main (60df541) + backup v2 aangevuld
+- Lokale code vervangen door GitHub main (.env behouden). Fix: saas_invoicing consolidate faalde op transacties zonder id (nu via _id).
+- Backup v2: + sent_upcoming_invoice_reminders (invoice_id+days_bucket), sent_trial_warnings (_key). Records zonder id: fcm_tokens->token, payment_plan_reminders->tenant_id. Globale sleutels (kiosk_id_owners, kiosk_pins, installments, landing_assets) zonder company_id-filter. Replace wist landing_assets nooit; installments ook via plan_id. Dubbele-sleutel conflicten worden overgeslagen i.p.v. 500.
+- BackupRestore.jsx: Nederlandse collectienamen + overgeslagen-teller.
+- Test: backend/tests/test_backup_v2_collections.py (4/4).

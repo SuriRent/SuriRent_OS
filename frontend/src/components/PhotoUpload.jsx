@@ -22,6 +22,7 @@ export default function PhotoUpload({
   showUrlField = true,
   testId = 'photo',
   hint = 'JPG / PNG · max 5 MB',
+  capture,
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -70,6 +71,7 @@ export default function PhotoUpload({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture={capture || undefined}
         data-testid={`${testId}-file`}
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}

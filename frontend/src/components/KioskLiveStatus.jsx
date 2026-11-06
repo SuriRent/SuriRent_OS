@@ -35,7 +35,11 @@ function useTodayReceiptCount(version) {
       .then(({ data }) => setCount(data.count)).catch(() => {});
     load();
     const t = setInterval(load, 60000);
-    return () => clearInterval(t);
+    window.addEventListener('surirent:live-change', load);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('surirent:live-change', load);
+    };
   }, [version]);
   return count;
 }

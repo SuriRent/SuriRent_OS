@@ -83,16 +83,6 @@ window.addEventListener('unhandledrejection', (e) => {
   }
 });
 
-// Probeer react-error-overlay programmatisch te stoppen (CRA dev tool).
-// Faalt stil als de module niet aanwezig is (productie build).
-try {
-  // eslint-disable-next-line global-require
-  const overlay = require('react-error-overlay');
-  if (overlay && typeof overlay.stopReportingRuntimeErrors === 'function') {
-    overlay.stopReportingRuntimeErrors();
-  }
-} catch { /* prod build of niet geinstalleerd */ }
-
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <BrowserRouter>

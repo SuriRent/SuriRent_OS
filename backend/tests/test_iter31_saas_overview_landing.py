@@ -72,6 +72,36 @@ class TestSuperadminOverview:
         r = requests.get(f"{BASE_URL}/api/superadmin/overview", headers=_hdr(admin_token), timeout=15)
         assert r.status_code in (401, 403)
 
+    def test_registered_customer_is_linked_in_superadmin_views(self, admin_token, super_token):
+        me = requests.get(f"{BASE_URL}/api/auth/me", headers=_hdr(admin_token), timeout=15)
+        assert me.status_code == 200, me.text
+        admin = me.json()
+        company_id = admin.get("company_id")
+        assert company_id, "registered customer admin should be linked to a company"
+
+        companies = requests.get(f"{BASE_URL}/api/companies", headers=_hdr(super_token), timeout=15)
+        assert companies.status_code == 200, companies.text
+        company = next((item for item in companies.json() if item.get("id") == company_id), None)
+        assert company, f"company {company_id} missing from superadmin contract list"
+
+        clients = requests.get(f"{BASE_URL}/api/superadmin/clients", headers=_hdr(super_token), timeout=15)
+        assert clients.status_code == 200, clients.text
+        client = next((item for item in clients.json() if item.get("email") == admin.get("email")), None)
+        assert client, f"registered admin {admin.get('email')} missing from superadmin client list"
+        assert client.get("company_id") == company_id
+        assert client.get("company_slug") == company.get("slug")
+
+    def test_employee_list_contains_only_platform_staff(self, super_token):
+        r = requests.get(f"{BASE_URL}/api/superadmin/employees", headers=_hdr(super_token), timeout=15)
+        assert r.status_code == 200, r.text
+        employees = r.json()
+        assert isinstance(employees, list)
+        assert all(employee.get("role") == "superadmin" for employee in employees)
+
+    def test_employee_list_forbidden_for_admin(self, admin_token):
+        r = requests.get(f"{BASE_URL}/api/superadmin/employees", headers=_hdr(admin_token), timeout=15)
+        assert r.status_code in (401, 403)
+
 
 # --- Presence tracking -----------------------------------------------------
 class TestPresenceTracking:

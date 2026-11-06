@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap,
+  Landmark, Mail, Globe, Check, Loader2, Save, AlertCircle, Send, RefreshCw, UserCog, CreditCard, Zap, Bell, Smartphone,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import ApkReleases from './ApkReleases';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const rawData = window.atob((base64String + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+}
 
 function Section({ title, icon: Icon, children, accent }) {
   return (
@@ -19,12 +25,12 @@ function Section({ title, icon: Icon, children, accent }) {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, hint, mono, testid }) {
+function Field({ label, value, onChange, type = 'text', placeholder, hint, mono, testid, inputMode, maxLength }) {
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">{label}</label>
       <input type={type} value={value ?? ''} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} data-testid={testid}
+        placeholder={placeholder} data-testid={testid} inputMode={inputMode} maxLength={maxLength}
         className={`w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none ${mono ? 'font-mono text-sm' : ''}`} />
       {hint && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
     </div>
@@ -131,27 +137,37 @@ export default function SaasSettings() {
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [pushDeviceCount, setPushDeviceCount] = useState(0);
+  const [pushDeviceBusy, setPushDeviceBusy] = useState(false);
+  const [pushDeviceError, setPushDeviceError] = useState('');
 
   // --- Mijn Account (superadmin login-gegevens) ---
   const [account, setAccount] = useState(null);
   const [accName, setAccName] = useState('');
   const [accEmail, setAccEmail] = useState('');
-  const [accPassword, setAccPassword] = useState('');
   const [accSaving, setAccSaving] = useState(false);
   const [accError, setAccError] = useState('');
   const [accSuccess, setAccSuccess] = useState('');
+  const [pinConfigured, setPinConfigured] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [pinSuccess, setPinSuccess] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: r }, { data: acc }] = await Promise.all([
+      const [{ data: r }, { data: acc }, { data: pinStatus }] = await Promise.all([
         api.get('/superadmin/settings'),
         api.get('/superadmin/account'),
+        api.get('/auth/personal-pin/status'),
       ]);
       setData(r);
       setAccount(acc);
       setAccName(acc.name || '');
       setAccEmail(acc.email || '');
+      setPinConfigured(!!pinStatus.has_pin);
     } catch (e) {
       setError(formatError(e));
     } finally { setLoading(false); }
@@ -165,6 +181,7 @@ export default function SaasSettings() {
       const payload = {
         banking: data.banking,
         branding: data.branding,
+        push_notifications: data.push_notifications,
         fx: {
           mode: data.fx?.mode || 'auto',
           manual_eur_per_srd: Number(data.fx?.manual_eur_per_srd) || 0,
@@ -208,26 +225,86 @@ export default function SaasSettings() {
       if (accEmail.toLowerCase() !== (account?.email || '').toLowerCase()) {
         payload.email = accEmail;
       }
-      if (accPassword) payload.password = accPassword;
       if (Object.keys(payload).length === 0) {
         setAccError('Geen wijzigingen om op te slaan.');
         setAccSaving(false);
         return;
       }
       const { data: r } = await api.put('/superadmin/account', payload);
-      setAccPassword('');
-      setAccount((prev) => ({
-        ...prev,
-        email: r.email,
-        name: r.name,
-        password_updated_at: r.password_updated_at,
-      }));
+      setAccount(r);
+      setAccEmail(r.email);
+      setAccName(r.name);
       setAccSuccess('Account-instellingen opgeslagen.');
       setTimeout(() => setAccSuccess(''), 4000);
     } catch (e) {
       setAccError(formatError(e));
     } finally { setAccSaving(false); }
   };
+
+  const savePin = async () => {
+    setPinError(''); setPinSuccess('');
+    if (!/^\d{4}$/.test(pin)) {
+      setPinError('De pincode moet precies 4 cijfers bevatten.');
+      return;
+    }
+    if (pin !== pinConfirm) {
+      setPinError('De pincodes komen niet overeen.');
+      return;
+    }
+    setPinSaving(true);
+    try {
+      await api.post('/auth/personal-pin/setup', { pin });
+      setPin('');
+      setPinConfirm('');
+      setPinConfigured(true);
+      setPinSuccess('Superadmin-pincode opgeslagen.');
+      setTimeout(() => setPinSuccess(''), 4000);
+    } catch (e) {
+      setPinError(formatError(e, 'Pincode kon niet worden opgeslagen.'));
+    } finally { setPinSaving(false); }
+  };
+
+  const enablePushOnDevice = async () => {
+    setPushDeviceBusy(true);
+    setPushDeviceError('');
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        throw new Error('Pushmeldingen worden niet ondersteund in deze browser.');
+      }
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('Sta meldingen toe in de browserinstellingen.');
+
+      const { data: vapid } = await api.get('/push/vapid-public-key');
+      if (!vapid.public_key) {
+        throw new Error('Push is nog niet geconfigureerd: stel VAPID_PRIVATE_KEY_B64 in bij de backendomgeving van Coolify.');
+      }
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapid.public_key),
+        });
+      }
+      const value = subscription.toJSON();
+      await api.post('/push/subscribe', {
+        endpoint: value.endpoint,
+        keys: value.keys,
+        user_agent: navigator.userAgent || '',
+      });
+      const { data: status } = await api.get('/push/status');
+      setPushDeviceCount(status.devices || 0);
+    } catch (e) {
+      setPushDeviceError(e.response?.data?.detail || e.message || formatError(e, 'Pushmeldingen activeren is mislukt.'));
+    } finally { setPushDeviceBusy(false); }
+  };
+
+  useEffect(() => {
+    api.get('/push/status').then(({ data: status }) => setPushDeviceCount(status.devices || 0))
+      .catch(() => {});
+  }, []);
 
   if (loading || !data) {
     return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
@@ -239,8 +316,8 @@ export default function SaasSettings() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">SaaS Instellingen</h1>
-          <p className="text-sm text-slate-500 mt-1">Banking, e-mail en platform-branding voor het hele SaaS systeem.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Instellingen</h1>
+          <p className="text-sm text-slate-500 mt-1">Bankgegevens, e-mail en platformbranding.</p>
         </div>
         <button onClick={save} disabled={saving} data-testid="saas-save"
           className="px-5 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-orange-500/25">
@@ -263,20 +340,14 @@ export default function SaasSettings() {
       <div className="grid lg:grid-cols-2 gap-4">
         <Section title="Mijn Account" icon={UserCog} accent="bg-emerald-100 text-emerald-600">
           <p className="text-xs text-slate-500 -mt-1">
-            Wijzig je eigen inlog e-mail en wachtwoord. Wijzigingen zijn direct actief.
+            Beheer je accountnaam en e-mailadres. Inloggen gaat uitsluitend met je superadmin-pincode.
           </p>
           <Field label="Naam" value={accName} placeholder="bv. Superadmin"
             onChange={setAccName} testid="acc-name" />
-          <Field label="Inlog e-mailadres" type="email" value={accEmail}
+          <Field label="Account e-mailadres" type="email" value={accEmail}
             placeholder="bv. jij@bedrijf.sr"
             onChange={setAccEmail} testid="acc-email"
-            hint="Dit is het adres waarmee je inlogt op het superadmin-portaal." />
-          <Field label="Nieuw wachtwoord" type="password" value={accPassword}
-            placeholder="Laat leeg om ongewijzigd te laten"
-            onChange={setAccPassword} testid="acc-password"
-            hint={account?.password_updated_at
-              ? `Laatst gewijzigd: ${new Date(account.password_updated_at).toLocaleString('nl-NL')}`
-              : 'Minstens 6 tekens.'} />
+            hint="Accountcontactgegevens; aanmelden op het superadmin-portaal gebeurt uitsluitend met de pincode." />
           {accError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2.5 text-xs flex items-center gap-2" data-testid="acc-error">
               <AlertCircle className="w-4 h-4 shrink-0" /> {accError}
@@ -292,6 +363,36 @@ export default function SaasSettings() {
             {accSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Account opslaan
           </button>
+          <div className="border-t border-slate-100 pt-4 mt-4 space-y-3" data-testid="superadmin-pin-settings">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Inloggen met pincode</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {pinConfigured
+                  ? 'Er is een pincode ingesteld. Stel hieronder een nieuwe pincode in om deze te wijzigen.'
+                  : 'Stel een 4-cijferige pincode in. Dit is de enige manier om in te loggen op het superadmin-portaal.'}
+              </p>
+            </div>
+            <Field label="Nieuwe pincode" type="password" value={pin} placeholder="4 cijfers"
+              onChange={setPin} testid="superadmin-pin" inputMode="numeric" maxLength={4}
+              hint="De pincode wordt beveiligd opgeslagen." />
+            <Field label="Pincode bevestigen" type="password" value={pinConfirm} placeholder="Herhaal de pincode"
+              onChange={setPinConfirm} testid="superadmin-pin-confirm" inputMode="numeric" maxLength={4} />
+            {pinError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-2.5 text-xs flex items-center gap-2" role="alert" data-testid="superadmin-pin-error">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {pinError}
+              </div>
+            )}
+            {pinSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-2.5 text-xs flex items-center gap-2" role="status" data-testid="superadmin-pin-success">
+                <Check className="w-4 h-4 shrink-0" /> {pinSuccess}
+              </div>
+            )}
+            <button type="button" onClick={savePin} disabled={pinSaving} data-testid="superadmin-pin-save"
+              className="w-full h-11 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+              {pinSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {pinConfigured ? 'Pincode wijzigen' : 'Pincode instellen'}
+            </button>
+          </div>
         </Section>
 
         <Section title="Bankoverschrijving" icon={Landmark}>
@@ -310,6 +411,48 @@ export default function SaasSettings() {
         </Section>
 
         <StripeSection />
+
+        <Section title="Superadmin pushmeldingen" icon={Bell} accent="bg-emerald-100 text-emerald-600">
+          <p className="text-xs text-slate-500">
+            Kies van welke gebeurtenissen je een pushmelding ontvangt. Meldingen komen alleen op apparaten
+            waarop je hieronder push hebt ingeschakeld.
+          </p>
+          <Toggle label="Pushmeldingen in- of uitschakelen"
+            hint="Hoofdschakelaar voor alle onderstaande categorieën"
+            value={data.push_notifications?.enabled}
+            onChange={(v) => upd('push_notifications', { enabled: v })}
+            testid="saas-push-enabled" />
+          {[
+            ['new_customers', 'Nieuwe klantregistraties'],
+            ['payments', 'Ontvangen betalingen'],
+            ['open_invoices', 'Openstaande facturen'],
+            ['arrears', 'Vervallen facturen en achterstanden'],
+            ['trials_expired', 'Verlopen proefperiodes'],
+          ].map(([key, label]) => (
+            <Toggle key={key} label={label}
+              value={data.push_notifications?.[key]}
+              onChange={(v) => upd('push_notifications', { [key]: v })}
+              testid={`saas-push-${key}`} />
+          ))}
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-emerald-900">
+              <Smartphone className="w-4 h-4 shrink-0" />
+              <span>{pushDeviceCount} superadmin-apparaat{pushDeviceCount === 1 ? '' : 'en'} gekoppeld</span>
+            </div>
+            <button type="button" onClick={enablePushOnDevice} disabled={pushDeviceBusy}
+              data-testid="saas-push-device-enable"
+              className="shrink-0 h-10 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50">
+              {pushDeviceBusy ? 'Bezig…' : 'Dit apparaat koppelen'}
+            </button>
+          </div>
+          {pushDeviceError && (
+            <p className="text-xs text-red-700" role="alert" data-testid="saas-push-device-error">{pushDeviceError}</p>
+          )}
+          <p className="text-[11px] text-slate-400">
+            Facturen en achterstanden worden dagelijks samengevat. De publieke VAPID-sleutel wordt
+            automatisch afgeleid van de privésleutel in Coolify. Geef de privésleutel nooit door aan de browser.
+          </p>
+        </Section>
 
         <Section title="Wisselkoers SRD → EUR" icon={RefreshCw} accent="bg-amber-100 text-amber-600">
           <div className="flex gap-2">

@@ -4,9 +4,9 @@ Stored in MongoDB collection `landing_content` with two documents:
   - {"id": "_published"}  — what the public marketing landing page renders
   - {"id": "_draft"}      — superadmin's working copy until they "Publish"
 
-Image uploads are stored in collection `landing_assets` with
-  {"id": "<uuid>", "filename": "...", "content_type": "...", "data_b64": "..."}
-and served back via /api/landing/asset/{id}.
+Image uploads are stored as Base64 in `landing_assets`; larger video uploads
+are stored in the `landing_video_blobs` GridFS bucket and referenced by
+`landing_assets.gridfs_id`. Both are served via /api/landing/asset/{id}.
 """
 
 from typing import Any

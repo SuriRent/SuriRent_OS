@@ -48,7 +48,9 @@ export function KioskBulkApproveSheet({ logs, employeeName, onClose, onDone }) {
           <ul className="mt-2 max-h-36 overflow-y-auto space-y-1">
             {logs.map((l) => (
               <li key={l.id} className="flex justify-between gap-3 text-slate-600">
-                <span className="truncate">{l.payment.tenant_name || 'Huurder'} · {l.payment.receipt_number}</span>
+                <span className="truncate">
+                  {l.payment.apartment_number || 'Geen appartement'} · {l.payment.tenant_name || 'Huurder'} · {l.payment.receipt_number}
+                </span>
                 <span className="font-bold whitespace-nowrap">{fmtMoney(l.payment.amount, l.payment.currency)}</span>
               </li>
             ))}

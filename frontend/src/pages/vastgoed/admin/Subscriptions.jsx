@@ -2,17 +2,27 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, Loader2, TrendingUp, Clock, AlertCircle, CheckCircle, XCircle,
-  Banknote, Receipt, Search, Mail, Phone, MoreVertical, Plus, X, Check, Calendar,
-  Pencil, ArrowRight, Crown, LogIn, Landmark, CreditCard, ScanLine, FileImage, Download,
+  Banknote, Receipt, Search, Mail, Phone, Plus, X, Check, Calendar,
+  Pencil, ArrowRight, Crown, LogIn, CreditCard, ScanLine, FileImage, Download, RefreshCw,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 
 const fmt = (n, c = 'SRD') => `${c} ${Number(n || 0).toLocaleString('nl-NL')}`;
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const intervalLabel = (interval) => ({ month: 'maand', quarter: 'kwartaal', year: 'jaar', lifetime: 'eenmalig' }[interval] || interval || 'maand');
+const invoicePeriodEnd = (startDate, interval) => {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  if ((interval || 'month') === 'month') {
+    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  }
+  const days = { quarter: 90, year: 365 }[interval] || 30;
+  start.setUTCDate(start.getUTCDate() + days);
+  return start.toISOString().slice(0, 10);
+};
 
 const STATUS_STYLES = {
-  trial: { label: 'Proefperiode', bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
+  trial: { label: 'Proefperiode', bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
   active: { label: 'Actief', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   expired: { label: 'Verlopen', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
   cancelled: { label: 'Opgezegd', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
@@ -50,7 +60,8 @@ function ExtendModal({ company, onClose, onDone }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8" data-testid="extend-modal">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-extrabold text-slate-900">Proefperiode verlengen</h3>
@@ -84,148 +95,6 @@ function ExtendModal({ company, onClose, onDone }) {
   );
 }
 
-function PaymentRegistrationModal({ companies, defaultCompanyId, onClose, onSaved }) {
-  const [companyId, setCompanyId] = useState(defaultCompanyId || (companies[0]?.id || ''));
-  const selectedCompany = companies.find((c) => c.id === companyId);
-  const [amount, setAmount] = useState(selectedCompany?.monthly_amount || 0);
-  const [currency, setCurrency] = useState(selectedCompany?.currency || 'SRD');
-  const [method, setMethod] = useState('bank');
-  const [reference, setReference] = useState('');
-  const [note, setNote] = useState('');
-  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
-
-  useEffect(() => {
-    if (selectedCompany) {
-      setAmount(selectedCompany.monthly_amount || 0);
-      setCurrency(selectedCompany.currency || 'SRD');
-    }
-  }, [selectedCompany]);
-
-  const submit = async () => {
-    setLoading(true); setErr('');
-    try {
-      await api.post('/superadmin/subscription-payments', {
-        company_id: companyId,
-        amount: Number(amount) || 0,
-        currency, method, reference, note,
-        paid_at: new Date(paidAt).toISOString(),
-      });
-      onSaved();
-    } catch (e) { setErr(formatError(e)); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="register-payment-modal">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-              <Banknote className="w-5 h-5 text-emerald-600" />
-            </div>
-            <h3 className="text-xl font-extrabold text-slate-900">Betaling registreren</h3>
-          </div>
-          <button onClick={onClose} data-testid="reg-pay-close"
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrijf</label>
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} data-testid="reg-pay-company"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none bg-white">
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} · {c.plan}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
-              <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
-                data-testid="reg-pay-amount"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Valuta</label>
-              <select value={currency} onChange={(e) => setCurrency(e.target.value)} data-testid="reg-pay-currency"
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none bg-white">
-                <option value="SRD">SRD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Betaalmethode</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { v: 'bank', l: 'Bankoverschrijving', icon: Landmark },
-                { v: 'contant', l: 'Contant', icon: Banknote },
-                { v: 'overig', l: 'Overig', icon: MoreVertical },
-              ].map((m) => {
-                const Icon = m.icon;
-                const sel = method === m.v;
-                return (
-                  <button key={m.v} type="button" onClick={() => setMethod(m.v)} data-testid={`reg-pay-method-${m.v}`}
-                    className={`flex flex-col items-center gap-1 py-2 rounded-xl border-2 transition ${
-                      sel ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:border-slate-300'
-                    }`}>
-                    <Icon className={`w-4 h-4 ${sel ? 'text-orange-600' : 'text-slate-500'}`} />
-                    <span className={`text-xs font-bold ${sel ? 'text-orange-700' : 'text-slate-700'}`}>{m.l}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Referentie / Mededeling</label>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-              placeholder="bv. ABONNEMENT — mei 2026" data-testid="reg-pay-reference"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono text-sm" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Datum ontvangen</label>
-            <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} data-testid="reg-pay-date"
-              className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Notitie (intern)</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
-              data-testid="reg-pay-note"
-              className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none text-sm" />
-          </div>
-        </div>
-
-        {err && <p className="text-sm text-red-600 mt-3" data-testid="reg-pay-error">{err}</p>}
-
-        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mt-4 text-xs text-slate-600">
-          Bij registreren wordt automatisch een factuur aangemaakt en het bedrijf op <strong>actief</strong> gezet (30 dagen verlenging).
-        </div>
-
-        <div className="flex gap-2 mt-5">
-          <button onClick={onClose} disabled={loading}
-            className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Annuleer</button>
-          <button onClick={submit} disabled={loading || !companyId || amount <= 0} data-testid="reg-pay-submit"
-            className="flex-1 h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Registreer
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // =====================================================================
 // NewInvoiceModal — Handmatig een SaaS-factuur aanmaken voor een bedrijf
 // =====================================================================
@@ -235,8 +104,10 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
   const [amount, setAmount] = useState(selected?.monthly_amount || 0);
   const [currency, setCurrency] = useState(selected?.currency || 'SRD');
   const [plan, setPlan] = useState(selected?.plan || 'starter');
-  const [periodStart, setPeriodStart] = useState(new Date().toISOString().slice(0, 10));
-  const [periodEnd, setPeriodEnd] = useState(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+  const monthlyPlan = (selected?.plan_interval || 'month') === 'month';
+  const today = new Date().toISOString().slice(0, 10);
+  const [periodStart, setPeriodStart] = useState(today);
+  const [periodEnd, setPeriodEnd] = useState(invoicePeriodEnd(today, selected?.plan_interval));
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -246,6 +117,9 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
       setAmount(selected.monthly_amount || 0);
       setCurrency(selected.currency || 'SRD');
       setPlan(selected.plan || 'starter');
+      const start = new Date().toISOString().slice(0, 10);
+      setPeriodStart(start);
+      setPeriodEnd(invoicePeriodEnd(start, selected.plan_interval));
     }
   }, [selected]);
 
@@ -266,7 +140,8 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="new-invoice-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -287,9 +162,11 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
               {companies.map((c) => (<option key={c.id} value={c.id}>{c.name} · {c.plan}</option>))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                {monthlyPlan ? 'Maandbedrag' : 'Bedrag'}
+              </label>
               <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)}
                 data-testid="new-inv-amount"
                 className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none font-mono" />
@@ -305,15 +182,24 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Periode van</label>
-              <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)}
+              <input type="date" value={periodStart} onChange={(e) => {
+                setPeriodStart(e.target.value);
+                if (monthlyPlan) setPeriodEnd(invoicePeriodEnd(e.target.value, 'month'));
+              }}
                 className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">tot</label>
               <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none" />
+                disabled={monthlyPlan}
+                className="w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-orange-500 outline-none disabled:bg-slate-100 disabled:text-slate-500" />
             </div>
           </div>
+          <p className="text-xs text-slate-500">
+            {monthlyPlan
+              ? 'Maandplannen volgen kalendermaanden; de eerste periode wordt naar rato berekend en de volgende start op de 1e.'
+              : 'De factuurperiode volgt het gekozen abonnementsinterval.'}
+          </p>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Notitie (optioneel)</label>
             <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
@@ -340,11 +226,11 @@ function NewInvoiceModal({ companies, defaultCompanyId, onClose, onSaved }) {
 // NewPaymentPlanModal — Splits factuur / totaalbedrag in N termijnen
 // =====================================================================
 function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, onSaved }) {
-  const openInvoices = invoices.filter((i) => i.status !== 'paid');
+  const openInvoices = invoices.filter((i) => !['paid', 'superseded'].includes(i.status));
   const [invoiceId, setInvoiceId] = useState(prefillInvoiceId || (openInvoices[0]?.id || ''));
   const sourceInv = openInvoices.find((i) => i.id === invoiceId);
   const [companyId, setCompanyId] = useState(sourceInv?.company_id || companies[0]?.id || '');
-  const [totalAmount, setTotalAmount] = useState(sourceInv?.amount || 0);
+  const [totalAmount, setTotalAmount] = useState(sourceInv?.balance_due ?? sourceInv?.amount ?? 0);
   const [currency, setCurrency] = useState(sourceInv?.currency || 'SRD');
   const [installments, setInstallments] = useState(3);
   const [intervalDays, setIntervalDays] = useState(30);
@@ -355,7 +241,7 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
   useEffect(() => {
     if (sourceInv) {
       setCompanyId(sourceInv.company_id);
-      setTotalAmount(sourceInv.amount);
+      setTotalAmount(sourceInv.balance_due ?? sourceInv.amount);
       setCurrency(sourceInv.currency);
     }
   }, [sourceInv]);
@@ -382,7 +268,8 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="new-plan-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -413,8 +300,8 @@ function NewPaymentPlanModal({ companies, invoices, prefillInvoiceId, onClose, o
               {companies.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Totaal bedrag</label>
               <input type="number" step="0.01" min="0" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)}
                 disabled={!!invoiceId}
@@ -503,7 +390,8 @@ function KasMutationModal({ companies, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4"
+      data-superadmin-fullscreen-dialog="true">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto" data-testid="kas-mutation-modal">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -555,8 +443,8 @@ function KasMutationModal({ companies, onClose, onSaved }) {
           </div>
 
           {/* Bedrag + valuta */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.44fr)] gap-2">
+            <div className="min-w-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Bedrag</label>
               <input type="number" step="0.01" min="0" value={amount}
                 onChange={(e) => setAmount(e.target.value)} data-testid="kas-mut-amount"
@@ -608,7 +496,7 @@ function KasMutationModal({ companies, onClose, onSaved }) {
         {err && <p className="text-sm text-red-600 mt-3" data-testid="kas-mut-error">{err}</p>}
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mt-4 text-xs text-slate-600">
-          Deze boeking verschijnt direct in het SaaS-kasboek en beïnvloedt het saldo per valuta. Alle mutaties zijn traceerbaar via uw superadmin-email.
+          Deze boeking verschijnt direct in het kasboek en beïnvloedt het saldo per valuta. Alle mutaties zijn traceerbaar via uw superadmin-email.
         </div>
 
         <div className="flex gap-2 mt-5">
@@ -633,16 +521,16 @@ function CompanyDetailDrawer({ company, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [showExtend, setShowExtend] = useState(false);
-  const [showPay, setShowPay] = useState(false);
   const status = STATUS_STYLES[company.billing_status] || STATUS_STYLES.active;
 
   const impersonate = async () => {
-    if (!window.confirm(`Inloggen als beheerder van "${company.name}"? U verlaat het SaaS dashboard en kunt diens omgeving zien.`)) return;
+    if (!window.confirm(`Inloggen als beheerder van "${company.name}"? U verlaat het dashboard en kunt diens omgeving zien.`)) return;
     setBusy(true); setErr('');
     try {
       const { data } = await api.post(`/superadmin/companies/${company.id}/impersonate`);
       if (data?.token) localStorage.setItem('admin_token', data.token);
       if (data?.company) localStorage.setItem('active_company', JSON.stringify(data.company));
+      try { sessionStorage.setItem('superadmin_impersonation', JSON.stringify({ returnPath: '/admin/subscriptions' })); } catch { /* non-blocking */ }
       // Hard reload to guarantee a clean component tree for the impersonated context
       window.location.href = '/admin';
     } catch (e) { setErr(formatError(e)); setBusy(false); }
@@ -702,14 +590,18 @@ function CompanyDetailDrawer({ company, onClose, onChanged }) {
               </p>
             )}
             {company.billing_status === 'expired' && (
-              <p className="text-sm text-slate-700">Proefperiode is verlopen. Markeer als actief zodra betaling is ontvangen.</p>
+              <p className="text-sm text-slate-700">
+                {company.access_restricted
+                  ? 'Respijtperiode verlopen: beheerfuncties zijn beperkt. De huurderkiosk en betalingen blijven beschikbaar; gegevens worden niet verwijderd.'
+                  : `Proefperiode verlopen: nog ${company.grace_days_left ?? '—'} dagen volledige toegang. Daarna worden beheerfuncties beperkt; de huurderkiosk en betalingen blijven beschikbaar.`}
+              </p>
             )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-4">
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-2">Abonnement</p>
             <Row label="Pakket" value={company.plan} bold />
-            <Row label="Maandprijs" value={fmt(company.monthly_amount, company.currency)} />
+            <Row label="Prijs per periode" value={`${fmt(company.monthly_amount, company.currency)} · ${intervalLabel(company.plan_interval)}`} />
             <Row label="Aangemaakt op" value={fmtDate(company.created_at)} />
           </div>
 
@@ -734,10 +626,6 @@ function CompanyDetailDrawer({ company, onClose, onChanged }) {
             className="w-full h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
             <LogIn className="w-4 h-4" /> Login als beheerder
           </button>
-          <button onClick={() => setShowPay(true)} disabled={busy} data-testid="drawer-register-payment"
-            className="w-full h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-sm flex items-center justify-center gap-2">
-            <Banknote className="w-4 h-4" /> Betaling registreren
-          </button>
           {(company.billing_status === 'trial' || company.billing_status === 'expired') && (
             <button onClick={() => setShowExtend(true)} disabled={busy} data-testid="drawer-extend"
               className="w-full h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm flex items-center justify-center gap-2">
@@ -756,11 +644,6 @@ function CompanyDetailDrawer({ company, onClose, onChanged }) {
           <ExtendModal company={company} onClose={() => setShowExtend(false)}
             onDone={() => { setShowExtend(false); onChanged(); }} />
         )}
-        {showPay && (
-          <PaymentRegistrationModal companies={[company]} defaultCompanyId={company.id}
-            onClose={() => setShowPay(false)}
-            onSaved={() => { setShowPay(false); onChanged(); }} />
-        )}
       </div>
     </div>
   );
@@ -776,6 +659,7 @@ function Row({ label, value, mono, bold }) {
 }
 
 export default function Subscriptions({ viewMode = 'all' } = {}) {
+  const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -790,12 +674,12 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
   const [payFilter, setPayFilter] = useState('all'); // all | contant | bank | ocr
   const [kasFilter, setKasFilter] = useState('all'); // all | in (payments) | out (refunds/adjust)
   const [selected, setSelected] = useState(null);
-  const [showPay, setShowPay] = useState(false);
   const [showKasMut, setShowKasMut] = useState(false);
   const [showNewInv, setShowNewInv] = useState(false);
   const [showNewPlan, setShowNewPlan] = useState(false);
   const [planPrefillInvId, setPlanPrefillInvId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [previewStmt, setPreviewStmt] = useState(null);  // {url, contentType}
   const [busyRow, setBusyRow] = useState('');
   // Als viewMode een specifieke tab forceert, tonen we de tab-balk niet.
@@ -803,44 +687,44 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const [o, c, i, p, pa] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get('/superadmin/overview'),
         api.get('/companies'),
         api.get('/superadmin/subscription-invoices'),
         api.get('/superadmin/subscription-payments'),
         api.get('/superadmin/saas-pending-approvals'),
       ]);
-      setOverview(o.data); setCompanies(c.data); setInvoices(i.data); setPayments(p.data);
-      setPending(pa.data);
+      const setters = [setOverview, setCompanies, setInvoices, setPayments, setPending];
+      const labels = ['overzicht', 'bedrijven', 'facturen', 'betalingen', 'OCR-goedkeuringen'];
+      const failures = [];
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          setters[index](result.value.data);
+        } else {
+          failures.push(labels[index]);
+        }
+      });
+      if (failures.length) {
+        setLoadError(`Kon ${failures.join(', ')} niet laden. Vernieuw om opnieuw te proberen.`);
+      }
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // Prefill support — Kasregister stuurt bedrijf/factuur via URL query.
-  // Bij landing op /admin/saas_payments?prefill_company=xxx opent de betaling-
-  // modal automatisch met dat bedrijf en de eerst-openstaande factuur voorgevuld.
-  const [prefillCompany, setPrefillCompany] = useState('');
-  useEffect(() => {
-    if (loading) return;
-    if (companies.length === 0) return;
-    const params = new URLSearchParams(window.location.search);
-    const cid = params.get('prefill_company');
-    if (cid && companies.some((c) => c.id === cid)) {
-      setPrefillCompany(cid);
-      setShowPay(true);
-      // Clean URL zonder rerender-storm.
-      const url = new URL(window.location.href);
-      url.searchParams.delete('prefill_company');
-      window.history.replaceState({}, '', url.toString());
-    }
-  }, [loading, companies]);
-
-  const markPaid = async (inv) => {
-    if (!window.confirm(`Factuur ${inv.id.slice(-6)} voor ${inv.company_name} markeren als betaald?`)) return;
-    await api.post(`/superadmin/subscription-invoices/${inv.id}/mark-paid`);
-    load();
-  };
+  const scopedCompanies = activeCompanyId
+    ? companies.filter((company) => company.id === activeCompanyId)
+    : companies;
+  const scopedInvoices = activeCompanyId
+    ? invoices.filter((invoice) => invoice.company_id === activeCompanyId)
+    : invoices;
+  const scopedPayments = activeCompanyId
+    ? payments.filter((payment) => payment.company_id === activeCompanyId)
+    : payments;
+  const scopedPending = activeCompanyId
+    ? pending.filter((payment) => payment.company_id === activeCompanyId)
+    : pending;
 
   const approvePending = async (pr) => {
     if (!window.confirm(`OCR-betaling van ${pr.company_name} goedkeuren? Het abonnement wordt direct geactiveerd.`)) return;
@@ -881,11 +765,21 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
     } finally { setBusyRow(''); }
   };
 
-  if (loading || !overview) {
+  if (loading && !overview) {
     return <div className="py-16 flex items-center justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
   }
+  if (!overview) {
+    return (
+      <div className="max-w-3xl mx-auto mt-10 rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="font-bold text-red-800">{loadError || 'Overzicht kon niet worden geladen.'}</p>
+        <button onClick={load} disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 font-bold text-white disabled:opacity-50">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
 
-  const filtered = companies.filter((c) => {
+  const filtered = scopedCompanies.filter((c) => {
     if (filter !== 'all' && c.billing_status !== filter) return false;
     if (search && !`${c.name} ${c.slug} ${c.owner_email || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -893,6 +787,12 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
   return (
     <div>
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+          <span>{loadError}</span>
+          <button onClick={load} disabled={loading} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -900,32 +800,45 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
               {viewMode === 'companies' ? 'Bedrijven'
                 : viewMode === 'pending' ? 'OCR-goedkeuring'
-                : viewMode === 'invoices' ? 'SaaS Facturen'
-                : viewMode === 'payments' ? 'SaaS Betalingen'
-                : viewMode === 'payment_plans' ? 'SaaS Betalingsregelingen'
-                : viewMode === 'kasgeld' ? 'SaaS Kasgeld'
-                : 'SaaS Beheer'}
+                : viewMode === 'invoices' ? 'Facturen'
+                : viewMode === 'payments' ? 'Betalingen'
+                : viewMode === 'payment_plans' ? 'Betalingsregelingen'
+                : viewMode === 'kasgeld' ? 'Kasgeld'
+                : 'Beheer'}
             </h1>
           </div>
           <p className="text-sm text-slate-500">
             {viewMode === 'companies' ? 'Alle klanten met hun abonnementsstatus en plan.'
-              : viewMode === 'pending' ? 'Handmatig goedkeuren van OCR-mismatches bij SaaS-betalingen.'
+              : viewMode === 'pending' ? 'Handmatig goedkeuren van OCR-mismatches bij betalingen.'
               : viewMode === 'invoices' ? 'Facturen die SuriRent N.V. uitstuurt aan klanten.'
-              : viewMode === 'payments' ? 'Ontvangen betalingen van klanten — handmatig of via OCR.'
-              : viewMode === 'payment_plans' ? 'Bedrijven die hun SaaS abonnement in termijnen betalen.'
-              : viewMode === 'kasgeld' ? 'Volledig kasboek van alle ontvangen SaaS-betalingen — cash flow overzicht.'
+              : viewMode === 'payments' ? 'Ontvangen betalingen van klanten.'
+              : viewMode === 'payment_plans' ? 'Bedrijven die hun abonnement in termijnen betalen.'
+              : viewMode === 'kasgeld' ? 'Volledig kasboek van alle ontvangen betalingen — cash flow overzicht.'
               : 'Alle bedrijven, abonnementen, facturen en betalingen op één plek.'}
           </p>
         </div>
-        <button onClick={() => setShowPay(true)} data-testid="register-payment-btn"
-          className="px-5 h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-500/25">
-          <Banknote className="w-4 h-4" /> Betaling registreren
-        </button>
       </div>
+
+      {viewMode === 'invoices' && (
+        <div className="mb-4">
+          <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
+            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
+            <Plus className="w-4 h-4" /> Nieuwe factuur
+          </button>
+        </div>
+      )}
+      {viewMode === 'kasgeld' && (
+        <div className="mb-4">
+          <button onClick={() => setShowKasMut(true)} data-testid="new-kas-mutation-btn"
+            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
+            <Plus className="w-4 h-4" /> Nieuwe mutatie
+          </button>
+        </div>
+      )}
 
       {viewMode === 'all' && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <StatCard icon={TrendingUp} label="MRR" value={fmt(overview.mrr, overview.currency)}
+          <StatCard icon={TrendingUp} label="MRR" value={Object.entries(overview.mrr_by_currency || { [overview.currency || 'SRD']: overview.mrr || 0 }).map(([currency, amount]) => fmt(amount, currency)).join(' · ')}
             sub={`${overview.active} actief abonnement${overview.active === 1 ? '' : 'en'}`} color="emerald" />
           <StatCard icon={Building2} label="Totaal bedrijven" value={overview.companies_total}
             sub={`${overview.active} actief · ${overview.trial} trial`} color="orange" />
@@ -939,12 +852,12 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
       {showTabBar && (
         <div className="flex items-center gap-1.5 mb-4 border-b border-slate-100 overflow-x-auto">
         {[
-          { id: 'companies', label: `Bedrijven (${companies.length})`, icon: Building2 },
+          { id: 'companies', label: `Bedrijven (${scopedCompanies.length})`, icon: Building2 },
           { id: 'pending',
-            label: `OCR-goedkeuring${pending.length > 0 ? ` (${pending.length})` : ''}`,
-            icon: ScanLine, highlight: pending.length > 0 },
-          { id: 'invoices', label: `Facturen (${invoices.length})`, icon: Receipt },
-          { id: 'payments', label: `Betalingen (${payments.length})`, icon: Banknote },
+            label: `OCR-goedkeuring${scopedPending.length > 0 ? ` (${scopedPending.length})` : ''}`,
+            icon: ScanLine, highlight: scopedPending.length > 0 },
+          { id: 'invoices', label: `Facturen (${scopedInvoices.length})`, icon: Receipt },
+          { id: 'payments', label: `Betalingen (${scopedPayments.length})`, icon: Banknote },
         ].map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -955,9 +868,9 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
                   : t.highlight ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-slate-500 hover:text-slate-700'
               }`}>
               <Icon className="w-4 h-4" /> {t.label}
-              {t.id === 'pending' && pending.length > 0 && !active && (
+              {t.id === 'pending' && scopedPending.length > 0 && !active && (
                 <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold">
-                  {pending.length}
+                  {scopedPending.length}
                 </span>
               )}
             </button>
@@ -1007,6 +920,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
                   </div>
                   <div className="hidden sm:block text-right shrink-0">
                     <p className="text-sm font-extrabold text-slate-900">{fmt(c.monthly_amount, c.currency)}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">{intervalLabel(c.plan_interval)}</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider capitalize">{c.plan}</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
@@ -1024,34 +938,30 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
       {tab === 'invoices' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             <FilterPills value={invFilter} onChange={setInvFilter}
               options={[
-                { v: 'all', l: 'Alles', c: invoices.length },
-                { v: 'open', l: 'Open', c: invoices.filter((x) => x.status !== 'paid' && !isOverdue(x)).length },
-                { v: 'paid', l: 'Betaald', c: invoices.filter((x) => x.status === 'paid').length },
-                { v: 'overdue', l: 'Vervallen', c: invoices.filter(isOverdue).length },
+                { v: 'all', l: 'Alles', c: scopedInvoices.length },
+                { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
+                { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
+                { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
               ]}
               testidPrefix="saas-inv-filter" />
-            <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
-              className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm flex items-center gap-2 shadow-md shadow-orange-500/25">
-              <Plus className="w-4 h-4" /> Nieuwe factuur
-            </button>
           </div>
-          <SaasInvoiceList invoices={filterInvoices(invoices, invFilter)} onMarkPaid={markPaid} />
+          <SaasInvoiceList invoices={filterInvoices(scopedInvoices, invFilter)} />
         </div>
       )}
 
       {tab === 'pending' && (
         <div className="space-y-3" data-testid="sub-pending-list">
-          {pending.length === 0 && (
+          {scopedPending.length === 0 && (
             <div className="bg-white rounded-2xl border-2 border-dashed border-emerald-200 p-10 text-center">
               <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
               <p className="font-extrabold text-slate-700">Alles netjes!</p>
               <p className="text-sm text-slate-500 mt-1">Geen OCR-mismatches die wachten op handmatige goedkeuring.</p>
             </div>
           )}
-          {pending.map((pr) => {
+          {scopedPending.map((pr) => {
             const ocr = pr.ocr || {};
             return (
               <div key={pr.id} data-testid={`pending-row-${pr.id}`}
@@ -1119,24 +1029,23 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
         <div className="space-y-3">
           <FilterPills value={payFilter} onChange={setPayFilter}
             options={[
-              { v: 'all', l: 'Alles', c: payments.length },
-              { v: 'contant', l: 'Contant', c: payments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
-              { v: 'bank', l: 'Bank', c: payments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
-              { v: 'ocr', l: 'OCR', c: payments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
+              { v: 'all', l: 'Alles', c: scopedPayments.length },
+              { v: 'contant', l: 'Contant', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
+              { v: 'bank', l: 'Bank', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
+              { v: 'ocr', l: 'OCR', c: scopedPayments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
             ]}
             testidPrefix="saas-pay-filter" />
-          <SaasPaymentList payments={filterPayments(payments, payFilter)} />
+          <SaasPaymentList payments={filterPayments(scopedPayments, payFilter)} />
         </div>
       )}
 
       {tab === 'payment_plans' && (
-        <SaasPaymentPlansView invoices={invoices} companies={companies}
+        <SaasPaymentPlansView invoices={scopedInvoices} companies={scopedCompanies}
           onNewPlan={(invId) => { setPlanPrefillInvId(invId || null); setShowNewPlan(true); }} />
       )}
 
       {tab === 'kasgeld' && (
-        <SaasKasgeldView payments={payments} filter={kasFilter} onFilter={setKasFilter}
-          onNewMutation={() => setShowKasMut(true)} />
+        <SaasKasgeldView payments={scopedPayments} filter={kasFilter} onFilter={setKasFilter} />
       )}
 
       {selected && (
@@ -1144,25 +1053,19 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
           onChanged={() => { setSelected(null); load(); }} />
       )}
 
-      {showPay && (
-        <PaymentRegistrationModal companies={companies} defaultCompanyId={prefillCompany}
-          onClose={() => { setShowPay(false); setPrefillCompany(''); }}
-          onSaved={() => { setShowPay(false); setPrefillCompany(''); load(); }} />
-      )}
-
       {showNewInv && (
-        <NewInvoiceModal companies={companies} onClose={() => setShowNewInv(false)}
+        <NewInvoiceModal companies={scopedCompanies} onClose={() => setShowNewInv(false)}
           onSaved={() => { setShowNewInv(false); load(); }} />
       )}
 
       {showNewPlan && (
-        <NewPaymentPlanModal companies={companies} invoices={invoices} prefillInvoiceId={planPrefillInvId}
+        <NewPaymentPlanModal companies={scopedCompanies} invoices={scopedInvoices} prefillInvoiceId={planPrefillInvId}
           onClose={() => { setShowNewPlan(false); setPlanPrefillInvId(null); }}
           onSaved={() => { setShowNewPlan(false); setPlanPrefillInvId(null); load(); }} />
       )}
 
       {showKasMut && (
-        <KasMutationModal companies={companies} onClose={() => setShowKasMut(false)}
+        <KasMutationModal companies={scopedCompanies} onClose={() => setShowKasMut(false)}
           onSaved={() => { setShowKasMut(false); load(); }} />
       )}
 
@@ -1206,15 +1109,16 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 // Helper: is factuur vervallen? (open + due_date verstreken)
 // =====================================================================
 function isOverdue(inv) {
-  if (inv.status === 'paid') return false;
+  if (['paid', 'superseded'].includes(inv.status)) return false;
   const due = inv.due_date || inv.period_end;
   if (!due) return false;
   try { return new Date(due) < new Date(); } catch { return false; }
 }
 function filterInvoices(list, f) {
+  if (f === 'all') return list;
   if (f === 'paid') return list.filter((x) => x.status === 'paid');
   if (f === 'overdue') return list.filter(isOverdue);
-  if (f === 'open') return list.filter((x) => x.status !== 'paid' && !isOverdue(x));
+  if (f === 'open') return list.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x));
   return list;
 }
 function filterPayments(list, f) {
@@ -1271,7 +1175,7 @@ async function emailInvoicePdf(inv) {
   }
 }
 
-function SaasInvoiceList({ invoices, onMarkPaid }) {
+function SaasInvoiceList({ invoices }) {
   const navigate = useNavigate();
   if (invoices.length === 0) {
     return (
@@ -1286,6 +1190,9 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
       {invoices.map((inv) => {
         const overdue = isOverdue(inv);
         const paid = inv.status === 'paid';
+        const superseded = inv.status === 'superseded';
+        const partial = Number(inv.paid_amount || 0) > 0 && !paid;
+        const balanceDue = inv.balance_due ?? Math.max(Number(inv.amount || 0) - Number(inv.paid_amount || 0), 0);
         return (
           <div key={inv.id} data-testid={`sub-invoice-${inv.id}`}
             className="w-full bg-white hover:bg-slate-50 rounded-2xl shadow-sm p-4 flex items-center gap-3 border border-slate-100 transition">
@@ -1301,16 +1208,21 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
                 <p className="font-black text-slate-900 truncate">{inv.company_name}</p>
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                   paid ? 'bg-emerald-100 text-emerald-700'
+                    : superseded ? 'bg-slate-100 text-slate-600'
                     : overdue ? 'bg-red-100 text-red-700'
+                    : partial ? 'bg-sky-100 text-sky-700'
                     : 'bg-amber-100 text-amber-700'
-                }`}>{paid ? 'Betaald' : overdue ? 'Vervallen' : 'Open'}</span>
+                }`}>{paid ? 'Betaald' : superseded ? 'Vervangen' : overdue ? 'Vervallen' : partial ? 'Gedeeltelijk betaald' : 'Open'}</span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">
-                {(inv.invoice_number || inv.id?.slice(-6) || '').toUpperCase()} · {inv.plan} · {fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}
+                {(inv.invoice_number || inv.id?.slice(-6) || '').toUpperCase()} · {inv.plan} · {fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}{inv.due_date ? ` · Uiterlijk ${fmtDate(inv.due_date)}` : ''}
               </p>
             </div>
             <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
               <p className="text-base font-black text-slate-900 whitespace-nowrap">{fmt(inv.amount, inv.currency)}</p>
+              {balanceDue > 0 && balanceDue < Number(inv.amount || 0) && (
+                <p className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Openstaand: {fmt(balanceDue, inv.currency)}</p>
+              )}
               <div className="flex gap-1.5">
                 <button onClick={() => downloadInvoicePdf(inv)} data-testid={`inv-pdf-${inv.id}`}
                   title="Download PDF"
@@ -1322,17 +1234,11 @@ function SaasInvoiceList({ invoices, onMarkPaid }) {
                   className="text-[10px] font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded inline-flex items-center gap-1">
                   <Mail className="w-3 h-3" /> Mail
                 </button>
-                {!paid && (
+                {!paid && !superseded && (
                   <button onClick={() => navigate(`/saas/checkout/${inv.id}`)} data-testid={`inv-card-pay-${inv.id}`}
                     title="Online betalen met kaart (Stripe)"
                     className="text-[10px] font-bold text-[#FF5C00] bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded inline-flex items-center gap-1">
                     <CreditCard className="w-3 h-3" /> Kaart
-                  </button>
-                )}
-                {!paid && (
-                  <button onClick={() => onMarkPaid(inv)} data-testid={`mark-paid-${inv.id}`}
-                    className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded">
-                    ✓ Betaald
                   </button>
                 )}
               </div>
@@ -1390,33 +1296,43 @@ function SaasPaymentList({ payments }) {
 }
 
 function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
+  const { activeCompanyId } = useAuth();
   const [realPlans, setRealPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [plansError, setPlansError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
     (async () => {
+      setLoadingPlans(true);
+      setPlansError('');
       try {
         const { data } = await api.get('/superadmin/saas-payment-plans');
         if (alive) setRealPlans(data || []);
-      } catch { /* leeg */ }
+      } catch (e) {
+        if (alive) setPlansError(formatError(e, 'Betalingsregelingen konden niet worden geladen.'));
+      }
       finally { if (alive) setLoadingPlans(false); }
     })();
-  }, [invoices]);
+    return () => { alive = false; };
+  }, [retryKey]);
+  const scopedPlans = activeCompanyId
+    ? realPlans.filter((plan) => plan.company_id === activeCompanyId)
+    : realPlans;
 
   // Bedrijven met minimaal 1 open factuur → mogelijk om te zetten naar regeling
-  const openByCompany = {};
-  for (const inv of invoices) {
-    if (inv.status === 'paid') continue;
-    if (inv.saas_plan_id) continue; // al onderdeel van een regeling
-    const cid = inv.company_id;
-    if (!openByCompany[cid]) {
-      openByCompany[cid] = { company_id: cid, company_name: inv.company_name, invoices: [], total: 0, currency: inv.currency };
-    }
-    openByCompany[cid].invoices.push(inv);
-    openByCompany[cid].total += Number(inv.amount || 0);
-  }
-  const openList = Object.values(openByCompany);
+  const openList = invoices
+    .filter((inv) => !['paid', 'superseded'].includes(inv.status) && !inv.saas_plan_id)
+    .filter((inv) => !(inv.payment_plans || []).some((plan) =>
+      (plan.schedule || []).some((term) => term.status !== 'paid' && Number(term.paid_amount || 0) < Number(term.amount || 0)),
+    ))
+    .map((inv) => ({
+      invoice: inv,
+      company_id: inv.company_id,
+      company_name: inv.company_name,
+      currency: inv.currency,
+    }));
 
   return (
     <div className="space-y-6">
@@ -1435,15 +1351,21 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
       {/* Sectie 1 · Actieve regelingen (formeel via API) */}
       <div>
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">
-          Actieve regelingen ({realPlans.length})
+          Actieve regelingen ({scopedPlans.length})
         </p>
+        {plansError && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+            <span>{plansError}</span>
+            <button onClick={() => setRetryKey((key) => key + 1)} className="shrink-0 font-bold underline">Opnieuw proberen</button>
+          </div>
+        )}
         {loadingPlans && (
           <div className="py-6 text-center text-slate-400 text-sm">
             <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" />
             Laden…
           </div>
         )}
-        {!loadingPlans && realPlans.length === 0 && (
+        {!loadingPlans && !plansError && scopedPlans.length === 0 && (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-dashed border-slate-200">
             <Calendar className="w-10 h-10 mx-auto text-slate-300 mb-2" />
             <p className="text-slate-500 font-semibold">Nog geen actieve regelingen.</p>
@@ -1451,7 +1373,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
           </div>
         )}
         <div className="space-y-2">
-          {realPlans.map((p) => {
+          {scopedPlans.map((p) => {
             const paid = p.paid || 0;
             const progress = p.total_amount > 0 ? Math.round((paid / p.total_amount) * 100) : 0;
             const openCount = (p.invoices || []).filter((i) => i.status !== 'paid').length;
@@ -1496,11 +1418,11 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
       {openList.length > 0 && (
         <div>
           <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">
-            Kandidaten ({openList.length}) — bedrijven met openstaande facturen
+            Openstaande facturen ({openList.length}) — kies een factuur om in termijnen te splitsen
           </p>
           <div className="space-y-2">
             {openList.map((c) => (
-              <div key={c.company_id} data-testid={`open-candidate-${c.company_id}`}
+              <div key={c.invoice.id} data-testid={`open-candidate-${c.invoice.id}`}
                 className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
                 <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                   <AlertCircle className="w-5 h-5" />
@@ -1508,11 +1430,11 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
                 <div className="flex-1 min-w-0">
                   <p className="font-black text-slate-900 truncate">{c.company_name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {c.invoices.length} open · totaal <span className="font-mono">{fmt(c.total, c.currency)}</span>
+                    Factuur {(c.invoice.invoice_number || c.invoice.id?.slice(-6) || '').toUpperCase()} · <span className="font-mono">{fmt(c.invoice.balance_due ?? c.invoice.amount, c.currency)}</span>
                   </p>
                 </div>
-                <button onClick={() => onNewPlan && onNewPlan(c.invoices[0]?.id)}
-                  data-testid={`make-plan-${c.company_id}`}
+                <button onClick={() => onNewPlan && onNewPlan(c.invoice.id)}
+                  data-testid={`make-plan-${c.invoice.id}`}
                   className="h-9 px-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" /> Maak regeling
                 </button>
@@ -1528,7 +1450,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
   );
 }
 
-function SaasKasgeldView({ payments, filter, onFilter, onNewMutation }) {
+function SaasKasgeldView({ payments, filter, onFilter }) {
   const filtered = filter === 'all' ? payments
     : filter === 'ocr' ? payments.filter((p) => p.source === 'ocr')
     : filter === 'contant' ? payments.filter((p) => (p.method || '').toLowerCase().includes('contant'))
@@ -1570,16 +1492,9 @@ function SaasKasgeldView({ payments, filter, onFilter, onNewMutation }) {
             { v: 'manual', l: 'Handmatig', c: counts.manual },
           ]}
           testidPrefix="saas-kas-filter" />
-        {onNewMutation && (
-          <button onClick={onNewMutation} data-testid="new-kas-mutation-btn"
-            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm flex items-center gap-2 shadow-md shadow-orange-500/25">
-            <Plus className="w-4 h-4" /> Nieuwe mutatie
-          </button>
-        )}
       </div>
 
       <SaasPaymentList payments={filtered} />
     </div>
   );
 }
-

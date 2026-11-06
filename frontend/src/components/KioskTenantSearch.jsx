@@ -26,8 +26,8 @@ function ResultRow({ a, onPick }) {
         <Building2 className="w-5 h-5 text-orange-500" />
       </span>
       <span className="flex-1 min-w-0">
-        <span className="block font-bold text-slate-900 truncate">{a.tenant_name}</span>
-        <span className="block text-sm text-slate-500 truncate">Appt. {a.number}</span>
+        <span className="block font-bold text-slate-900 truncate">{a.number || '—'}</span>
+        <span className="block text-sm text-slate-500 truncate">{a.tenant_name || 'Onbekende huurder'}</span>
       </span>
       <StatusBadge status={a.pay_status} testId={`tenant-search-status-${a.number}`} />
     </button>
@@ -49,7 +49,7 @@ export function KioskTenantSearch({ onClose, onPick }) {
     return (items || [])
       .filter((a) => a.status === 'occupied' && a.tenant_id)
       .filter((a) => !term || `${a.tenant_name || ''} ${a.number || ''}`.toLowerCase().includes(term))
-      .sort((x, y) => String(x.tenant_name || '').localeCompare(String(y.tenant_name || '')));
+      .sort((x, y) => String(x.number || '').localeCompare(String(y.number || ''), undefined, { numeric: true }));
   }, [items, q]);
 
   return (

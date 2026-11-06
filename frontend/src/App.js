@@ -11,7 +11,8 @@ import RotateNotice from './components/RotateNotice';
 import { KtpPrintToast } from './components/KtpPrintToast';
 import BrandedShell from './components/BrandedShell';
 import { isMarketingHost, appUrl } from './lib/env';
-import { brandedSlugFromPath } from './lib/branded-nav';
+import { brandedSlugFromPath, useBrandedNavigate } from './lib/branded-nav';
+import { api, formatError } from './lib/api';
 
 // LAZY LOADED ROUTES — Code-splitting per route zodat een kiosk-bezoeker
 // NIET de admin-bundle hoeft te downloaden (en andersom). Initial paint
@@ -51,6 +52,7 @@ const TenantPublicLanding = lazyWithRetry(() => import('./pages/vastgoed/TenantP
 const PublicLandingBySlug = lazyWithRetry(() => import('./pages/vastgoed/PublicLandingBySlug'));
 const OverSuriRent = lazyWithRetry(() => import('./pages/marketing/OverSuriRent'));
 const LoginPage = lazyWithRetry(() => import('./pages/vastgoed/LoginPage'));
+const SuperadminLogin = lazyWithRetry(() => import('./pages/vastgoed/SuperadminLogin'));
 const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboard'));
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
@@ -61,6 +63,7 @@ const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
 const AssistantPage = lazyWithRetry(() => import('./pages/assistant/AssistantPage'));
 const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'));
 const SaaSStripeCheckout = lazyWithRetry(() => import('./pages/SaaSStripeCheckout'));
+const SaaSBankCheckout = lazyWithRetry(() => import('./pages/SaaSBankCheckout'));
 const KioskStripePay = lazyWithRetry(() => import('./pages/KioskStripePay'));
 
 function RouteFallback() {
@@ -69,6 +72,51 @@ function RouteFallback() {
   // flikker. Dus tijdens deze korte suspense-window renderen we NIETS
   // (de PWA splash blijft eronder zichtbaar).
   return <div className="min-h-screen" style={{ background: 'transparent' }} />;
+}
+
+function AuthSessionNotice() {
+  const location = useLocation();
+  const isAdminRoute = !isMarketingHost()
+    && location.pathname.split('/').filter(Boolean).includes('admin');
+  const [checking, setChecking] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    if (!isAdminRoute) {
+      setVisible(false);
+      setMessage('');
+    }
+    const show = () => {
+      if (isAdminRoute) setVisible(true);
+    };
+    window.addEventListener('surirent:auth-error', show);
+    return () => window.removeEventListener('surirent:auth-error', show);
+  }, [isAdminRoute]);
+
+  const checkSession = async () => {
+    setChecking(true);
+    setMessage('');
+    try {
+      await api.get('/auth/me');
+      window.location.reload();
+    } catch {
+      setMessage('De gegevens zijn nog niet beschikbaar. Je sessie blijft behouden; probeer het opnieuw zodra de verbinding werkt.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  if (!visible || !isAdminRoute) return null;
+  return (
+    <div role="alert" data-testid="auth-session-notice"
+      className="fixed inset-x-3 top-3 z-[1000] mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-xl">
+      <span>{message || 'Gegevens konden niet worden geladen. Je blijft ingelogd; probeer opnieuw of log zelf uit.'}</span>
+      <button type="button" onClick={checkSession} disabled={checking} data-testid="auth-session-check"
+        className="shrink-0 rounded-xl bg-[#FF5C00] px-4 py-2 font-bold text-white disabled:opacity-60">
+        {checking ? 'Opnieuw proberen…' : 'Opnieuw proberen'}
+      </button>
+    </div>
+  );
 }
 
 /* Per-company branded routes (path-based). Mounted under both AppRoutes and
@@ -81,8 +129,9 @@ function BrandedRouteTree() {
       <Routes>
         <Route path="" element={<LoginPage />} />
         <Route path="login" element={<LoginPage />} />
-        <Route path="admin/*" element={<Protected><AdminDashboard /></Protected>} />
+        <Route path="admin/*" element={<Protected><AdminRoute /></Protected>} />
         <Route path="saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+        <Route path="saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
         <Route path="deel-ontvangst" element={<Protected><SharedReceivePage /></Protected>} />
         <Route path="kiosk" element={<KioskLayout />} />
         <Route path="kiosk/huurder" element={<TenantKioskLayout />} />
@@ -121,12 +170,125 @@ function Protected({ children }) {
   return children;
 }
 
+function PwaManifestSync() {
+  const { user } = useAuth();
+  usePwaManifest(user?.role === 'superadmin' ? 'superadmin' : undefined);
+  return null;
+}
+
+const KIOSK_ADMIN_DESTINATIONS = {
+  overview: 'overzicht',
+  locations: 'locaties',
+  apartments: 'appartementen',
+  tenants: 'huurders',
+  contracts: 'contracten',
+  payments: 'betalingen',
+  invoices: 'facturen',
+  payment_plans: 'regelingen',
+  deposits: 'borg',
+  maintenance: 'onderhoud',
+  kasgeld: 'kasgeld',
+  employees: 'werknemers',
+  notifications: 'notificaties',
+  instellingen: 'instellingen',
+  settings: 'instellingen',
+  branding: 'instellingen',
+  mijn_abonnement: 'instellingen',
+  mijn_landing: 'instellingen',
+  setup_wizard: 'instellingen',
+  business_info: 'instellingen',
+  backup_restore: 'instellingen',
+  nfc: 'nfc',
+};
+
+const KIOSK_ADMIN_SECTIONS = {
+  mijn_abonnement: 'abonnement',
+  mijn_landing: 'landing',
+  setup_wizard: 'setup',
+  business_info: 'bedrijf',
+  branding: 'branding',
+  backup_restore: 'backup',
+  settings: 'integraties',
+};
+
+function AdminRoute() {
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useBrandedNavigate();
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const segments = location.pathname.split('/').filter(Boolean);
+  const adminIndex = segments.indexOf('admin');
+  const legacyTab = adminIndex >= 0 ? segments[adminIndex + 1] : '';
+  const destination = KIOSK_ADMIN_DESTINATIONS[legacyTab] || '';
+  const legacySection = KIOSK_ADMIN_SECTIONS[legacyTab];
+
+  useEffect(() => {
+    if (!user || user.role === 'superadmin') return undefined;
+    let cancelled = false;
+    setError('');
+
+    (async () => {
+      try {
+        if (user.role === 'admin' || user.role === 'boekhouder') {
+          const companyId = localStorage.getItem('active_company_id');
+          const { data } = await api.post('/auth/admin-to-kiosk', companyId ? { company_id: companyId } : {});
+          if (!data?.token) throw new Error('Kiosk Beheer kon niet worden geopend.');
+          localStorage.setItem('kiosk_token', data.token);
+          localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
+          localStorage.setItem('pwa_preferred_role', 'kiosk');
+        }
+        if (cancelled) return;
+        const params = new URLSearchParams(location.search);
+        if (destination) params.set('admin', destination);
+        else params.delete('admin');
+        const query = params.toString();
+        const hash = location.hash || (legacySection ? `#${legacySection}` : '');
+        navigate(`/kiosk${query ? `?${query}` : ''}${hash}`, { replace: true });
+      } catch (e) {
+        if (!cancelled) setError(formatError(e, 'Kiosk Beheer kon niet worden geopend.'));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [user, destination, legacySection, location.search, location.hash, navigate, attempt]);
+
+  if (user?.role === 'superadmin') return <AdminDashboard />;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="max-w-md text-center">
+        {!error ? (
+          <div className="text-sm font-bold text-slate-600">Kiosk Beheer wordt geopend…</div>
+        ) : (
+          <>
+            <h1 className="text-lg font-black text-slate-900">Kiosk Beheer is niet beschikbaar</h1>
+            <p className="mt-2 text-sm text-slate-600">{error}</p>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)}
+              className="mt-5 rounded-xl bg-[#FF5C00] px-5 py-3 text-sm font-black text-white">
+              Opnieuw proberen
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MarketingRoutes() {
   // surirent.sr only serves the marketing landing.
   return (
     <Routes>
       <Route path="/" element={<MarketingLanding />} />
+      <Route path="/functies" element={<MarketingLanding />} />
+      <Route path="/contact" element={<MarketingLanding />} />
+      <Route path="/over-ons" element={<MarketingLanding />} />
+      <Route path="/handleiding" element={<MarketingLanding />} />
+      <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
+      <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/over-surirent" element={<OverSuriRent />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -208,10 +370,13 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
-      <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+      <Route path="/saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
       <Route path="/betalen/:token" element={<KioskStripePay />} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
@@ -253,11 +418,20 @@ function HybridRoutes() {
   return (
     <Routes>
       <Route path="/" element={<MarketingLanding />} />
+      <Route path="/functies" element={<MarketingLanding />} />
+      <Route path="/contact" element={<MarketingLanding />} />
+      <Route path="/over-ons" element={<MarketingLanding />} />
+      <Route path="/handleiding" element={<MarketingLanding />} />
+      <Route path="/algemene-voorwaarden" element={<MarketingLanding />} />
+      <Route path="/privacy" element={<MarketingLanding />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+      <Route path="/superadmin/login" element={<SuperadminLogin />} />
       <Route path="/landing-preview" element={<TenantPublicLanding />} />
       <Route path="/site/:slug" element={<PublicLandingBySlug />} />
-      <Route path="/admin/*" element={<Protected><AdminDashboard /></Protected>} />
+      <Route path="/admin/*" element={<Protected><AdminRoute /></Protected>} />
       <Route path="/saas/checkout/:invoiceId" element={<Protected><SaaSStripeCheckout /></Protected>} />
+      <Route path="/saas/bank-checkout/:invoiceId" element={<Protected><SaaSBankCheckout /></Protected>} />
       <Route path="/kiosk" element={<KioskLayout />} />
       <Route path="/kiosk/huurder" element={<TenantKioskLayout />} />
       <Route path="/assistent" element={<AssistantPage />} />
@@ -294,7 +468,6 @@ function HybridRoutes() {
 
 export default function App() {
   useRegisterServiceWorker();
-  usePwaManifest();
   useSheetSwipeToDismiss();
   // Globale tik-geluiden voor elke knop + keypad + text-input. Werkt
   // op iPhone PWA, Android PWA en desktop. Gebruiker kan uitschakelen
@@ -325,6 +498,8 @@ export default function App() {
     const slug = tenant.company?.slug || '';
     return (
       <AuthProvider>
+        <PwaManifestSync />
+        <AuthSessionNotice />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Root op custom domain = tenant landing page */}
@@ -339,6 +514,8 @@ export default function App() {
                 pre-resolved slug — die zit in de path zodat useParams() nog
                 gewoon werkt in BrandedShell. We prefix intern zonder URL wijziging. */}
             <Route path="/login" element={<Navigate to={`/${slug}/login`} replace />} />
+            <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
+            <Route path="/superadmin/login" element={<SuperadminLogin />} />
             <Route path="/admin/*" element={<Navigate to={`/${slug}/admin`} replace />} />
             <Route path="/kiosk" element={<Navigate to={`/${slug}/kiosk`} replace />} />
             <Route path="/kiosk/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
@@ -365,6 +542,8 @@ export default function App() {
   }
   return (
     <AuthProvider>
+      <PwaManifestSync />
+      <AuthSessionNotice />
       <Suspense fallback={<RouteFallback />}>
         {mode === 'marketing' && <MarketingRoutes />}
         {mode === 'app' && <AppRoutes />}

@@ -51,7 +51,16 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
   }, [primary]);
 
   const enterKiosk = (data, code) => {
-    try { localStorage.removeItem('admin_token'); } catch { /* ignore */ }
+    try {
+      if (data.admin_token) {
+        localStorage.setItem('admin_token', data.admin_token);
+        localStorage.setItem('kiosk_staff', '1');
+      } else {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('auth_user_cache');
+        localStorage.removeItem('kiosk_staff');
+      }
+    } catch { /* ignore */ }
     if (data.token) localStorage.setItem('kiosk_token', data.token);
     if (data.company) localStorage.setItem('kiosk_company', JSON.stringify(data.company));
     setKioskEmployee({ id: data.employee.id, name: data.employee.name || 'Medewerker', pin: data.employee.pin || code });
@@ -60,7 +69,7 @@ function PinLanding({ onSuccess, onPassword, onRegister, branding, pwaTarget }) 
   };
 
   const enterAdmin = (token) => {
-    try { clearKioskEmployee(); } catch { /* ignore */ }
+    try { clearKioskEmployee(); localStorage.removeItem('kiosk_staff'); } catch { /* ignore */ }
     localStorage.setItem('admin_token', token);
     setPreferredRole('admin');
     api.post('/auth/device-qr-token/issue').then((r) => {

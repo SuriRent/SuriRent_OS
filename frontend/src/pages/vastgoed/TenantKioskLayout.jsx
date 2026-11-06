@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscribeNfc } from '../../lib/nfc-bus';
 import { useSearchParams } from 'react-router-dom';
-import { useBrandedNavigate } from '../../lib/branded-nav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -10,15 +9,18 @@ import {
   Home as HomeIcon, Mail, Wallet, FileText,
   HelpCircle, Send, Check, ArrowRight, Banknote, Droplets, AlertCircle,
   QrCode, Smartphone, Clock as ClockIcon, Receipt, Hash, X, Printer,
-  Landmark, FileUp,
+  Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { KioskReceiptImageButton } from '../../components/KioskReceiptImageButton';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
 import {
   detectCompanySlug, fetchBranding, fetchBrandingByHost,
   readCachedBranding, applyBranding, resolveLogoUrl,
 } from '../../lib/branding';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import useKeyboardOpen from '../../lib/use-keyboard-open';
+import { startTenantLive, stopTenantLive } from '../../lib/tenant-live';
 
 const TENANT_TOKEN_KEY = 'tenant_token';
 const PIN_LENGTH = 4;
@@ -66,6 +68,12 @@ function PinPad({ value, onDigit, onBack, busy }) {
       </button>
     </div>
   );
+}
+
+function TenantAvatar({ url, name, iconClass = 'w-10 h-10' }) {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) return <Building2 className={`${iconClass} text-[#FF5C00]`} />;
+  return <img src={resolveLogoUrl(url)} alt="" onError={() => setBroken(true)} className="w-full h-full object-cover" />;
 }
 
 function PinDots({ value, error }) {
@@ -213,21 +221,25 @@ function SetupPinView({ branding, tenantSetup, onSetupComplete }) {
 
 
 // =====================================================================
-// LOGIN view — NFC-only (PIN flow is verwijderd op verzoek van de eigenaar).
+// LOGIN view — NFC of 4-cijferige PIN.
 // Werkt via 3 input-bronnen:
 //   1. Web NFC API (Android Chrome) — built-in NFC chip via NDEFReader
 //   2. USB HID NFC-lezer (keyboard emulation) — rapid burst + Enter
 //   3. URL-tag `?nfc=<UID>` (iOS Safari + universele fallback)
 // Onbekende kaart → duidelijke melding "vraag de beheerder om te koppelen".
 // =====================================================================
-function LoginView({ branding, onLoggedIn, prefill }) {
+function LoginView({ branding, onLoggedIn, prefill, mode = 'pin' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [lastUid, setLastUid] = useState('');
+  const [pin, setPin] = useState('');
+  const [tenants, setTenants] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [showForgot, setShowForgot] = useState(false);
+  useEffect(() => { setPin(''); setSelected(null); setError(''); setHint(''); }, [mode]);
   // refs voor handleScan deps zonder rerender storm
   const busyRef = useRef(false);
-  const navigate = useBrandedNavigate();
 
   const handleScan = useCallback(async (rawUid) => {
     if (busyRef.current) return;
@@ -262,6 +274,45 @@ function LoginView({ branding, onLoggedIn, prefill }) {
       setBusy(false);
     }
   }, [branding?.id, branding?.slug, onLoggedIn]);
+
+  const submitPin = useCallback(async (code) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError('');
+    setHint('');
+    try {
+      const payload = { pin: code, tenant_id: selected?.id };
+      if (branding?.id) payload.company_id = branding.id;
+      else if (branding?.slug) payload.company_slug = branding.slug;
+      else throw new Error('Geen bedrijfscontext gevonden — open de Huurder Kiosk via de QR-code.');
+      const { data } = await api.post('/tenant-portal/pin-login', payload);
+      localStorage.setItem(TENANT_TOKEN_KEY, data.token);
+      try { playSuccessPing(); } catch { /* noop */ }
+      onLoggedIn();
+    } catch (e) {
+      try { playErrorBuzz(); } catch { /* noop */ }
+      setError(e?.response?.status === 401 ? 'Onjuiste PIN' : (formatError(e) || 'Inloggen met PIN mislukt'));
+      setTimeout(() => setPin(''), 700);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [branding?.id, branding?.slug, onLoggedIn, selected?.id]);
+
+  useEffect(() => {
+    if (!branding?.id && !branding?.slug) return;
+    let cancelled = false;
+    const params = branding.id ? { company_id: branding.id } : { company_slug: branding.slug };
+    api.get('/tenant-portal/directory', { params })
+      .then(({ data }) => { if (!cancelled) setTenants(data?.tenants || []); })
+      .catch(() => { if (!cancelled) setTenants([]); });
+    return () => { cancelled = true; };
+  }, [branding?.id, branding?.slug]);
+
+  useEffect(() => {
+    if (mode === 'pin' && selected && pin.length === PIN_LENGTH) submitPin(pin);
+  }, [mode, selected, pin, submitPin]);
 
   // === URL-tag NFC (iOS Safari + universele fallback) ===
   // Een NFC-tag geprogrammeerd met `https://<host>/kiosk/huurder?nfc=<UID>`
@@ -347,13 +398,80 @@ function LoginView({ branding, onLoggedIn, prefill }) {
 
   const hasWebNfc = typeof window !== 'undefined' && 'NDEFReader' in window;
 
+  if (mode === 'pin') {
+    const list = tenants || [];
+    const closeModal = () => { setSelected(null); setPin(''); setError(''); };
+    return (
+      <div className="min-h-full w-full flex flex-col" data-testid="tk-login">
+        <div className="flex-1 px-3 sm:px-5 pt-4 pb-6" data-testid="tk-tenant-list">
+          {tenants === null ? (
+            <Loader2 className="w-10 h-10 animate-spin text-white mx-auto mt-16" />
+          ) : !list.length ? (
+            <p className="text-center text-white/90 font-bold py-16" data-testid="tk-tenant-empty">
+              {tenants.length ? 'Geen huurder gevonden' : 'Nog geen huurders met PIN. Vraag de beheerder om een PIN in te stellen.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5">
+              {list.map((t) => (
+                <button key={t.id} onClick={() => { setSelected(t); setPin(''); setError(''); }}
+                  data-testid={`tk-tenant-${t.id}`}
+                  className="flex flex-col items-center gap-1 px-3 py-6 rounded-3xl bg-white shadow-lg active:scale-[0.98] transition">
+                  <span className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-50 border-4 border-white shadow flex items-center justify-center overflow-hidden mb-2">
+                    <TenantAvatar url={t.avatar_url} name={t.name} />
+                  </span>
+                  <span className="font-black text-2xl sm:text-3xl text-slate-900 uppercase tracking-tight">{t.apartment || '—'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {selected && (
+            <motion.div key="pin-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+              onClick={closeModal} data-testid="tk-pin-modal">
+              <motion.div initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm my-auto rounded-3xl bg-[#FF5C00] p-5 shadow-2xl flex flex-col items-center gap-3">
+                <button onClick={closeModal} aria-label="Sluiten" data-testid="tk-pin-close"
+                  className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center">
+                  <X className="w-5 h-5" />
+                </button>
+                <span className="w-20 h-20 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
+                  <TenantAvatar url={selected.avatar_url} name={selected.name} iconClass="w-9 h-9" />
+                </span>
+                <div className="text-center text-white" data-testid="tk-selected-tenant">
+                  <p className="font-black text-2xl uppercase leading-tight">{selected.apartment || '—'}</p>
+                </div>
+                <p className="text-sm font-bold text-white/90">Voer uw PIN in</p>
+                <PinDots value={pin} error={!!error} />
+                {error && <p className="text-sm font-bold text-white bg-red-600/60 px-4 py-1.5 rounded-full" data-testid="tk-pin-error">{error}</p>}
+                <div className="w-full max-w-[260px]">
+                  <PinPad value={pin} busy={busy}
+                    onDigit={(d) => { setError(''); setPin((p) => (p.length >= PIN_LENGTH ? p : p + d)); }}
+                    onBack={() => setPin((p) => p.slice(0, -1))} />
+                </div>
+                <button onClick={() => setShowForgot(true)} data-testid="tk-forgot-link"
+                  className="text-xs font-bold text-white/85 hover:text-white underline underline-offset-4">
+                  PIN vergeten?
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {showForgot && <ForgotPinSheet branding={branding} onClose={() => setShowForgot(false)} />}
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-full w-full flex flex-col items-center justify-center px-5 py-8"
+    <div className="min-h-full w-full flex flex-col items-center justify-start sm:justify-center px-5 py-6 overflow-y-auto"
       data-testid="tk-login">
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="w-full max-w-md flex flex-col items-center text-center">
+        className="w-full flex flex-col items-center text-center max-w-md">
         {/* Logo */}
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 shadow-2xl flex items-center justify-center p-3 mb-5">
           {branding?.logo_url ? (
@@ -373,7 +491,6 @@ function LoginView({ branding, onLoggedIn, prefill }) {
           {branding?.tagline || 'Tik uw NFC-kaart om in te loggen'}
         </p>
 
-        {/* NFC TAP ZONE — grote pulserende cirkel met kaart-icoon */}
         <div className="relative mt-10 mb-4" data-testid="tk-nfc-tap-zone">
           {/* Pulserende ringen — visueel signaal dat de scanner ACTIEF luistert */}
           {!busy && !error && (
@@ -423,13 +540,6 @@ function LoginView({ branding, onLoggedIn, prefill }) {
             Houd uw kaart of telefoon tegen de scanner
           </p>
         )}
-
-        {/* Logout/back voor het geval iemand per ongeluk hier komt */}
-        <button onClick={() => navigate('/')}
-          data-testid="tk-nfc-cancel"
-          className="mt-8 text-xs font-bold text-white/70 hover:text-white underline underline-offset-4">
-          Sluiten
-        </button>
       </motion.div>
     </div>
   );
@@ -466,7 +576,7 @@ function ForgotPinSheet({ branding, onClose, onSent }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
       data-testid="tk-forgot-sheet" onClick={onClose}>
       <motion.div
         initial={{ y: 400, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 400 }}
@@ -560,15 +670,12 @@ function DashboardView({ overview, onAction, onHistory }) {
   // én een "Via betalingsregeling"-label als de factuur in een actief plan zit.
   const [invoices, setInvoices] = useState([]);
   const [planInvoiceIds, setPlanInvoiceIds] = useState(new Set());
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const loadInvoiceDetails = useCallback(async () => {
       try {
         const [invRes, planRes] = await Promise.all([
           api.get('/tenant-portal/invoices'),
           api.get('/tenant-portal/payment-plans').catch(() => ({ data: [] })),
         ]);
-        if (cancelled) return;
         setInvoices(invRes.data || []);
         const ids = new Set();
         for (const p of planRes.data || []) {
@@ -578,9 +685,12 @@ function DashboardView({ overview, onAction, onHistory }) {
         }
         setPlanInvoiceIds(ids);
       } catch { /* stilzwijgend */ }
-    })();
-    return () => { cancelled = true; };
   }, []);
+  useEffect(() => { loadInvoiceDetails(); }, [loadInvoiceDetails]);
+  useEffect(() => {
+    window.addEventListener('surirent:tenant-live-change', loadInvoiceDetails);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadInvoiceDetails);
+  }, [loadInvoiceDetails]);
   const partialOrOpen = (invoices || []).filter(
     (i) => (i.status || '').toLowerCase() !== 'paid' && Number(i.remaining_amount ?? i.amount) > 0,
   ).sort((a, b) => (a.period_year - b.period_year) || (a.period_month - b.period_month));
@@ -617,9 +727,9 @@ function DashboardView({ overview, onAction, onHistory }) {
           overlappen. */}
       <div className="md:flex-1 md:min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3">
         {/* LEFT — Financieel overzicht (kiosk-style) */}
-        <div className="bg-white rounded-2xl flex-none md:flex-[3] flex flex-col p-3 sm:p-4 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm sm:text-base font-bold text-slate-900">Financieel overzicht</h3>
+        <div className="bg-white rounded-3xl shadow-lg flex-none md:flex-[3] flex flex-col p-4 sm:p-6 min-w-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg sm:text-2xl font-black text-slate-900">Financieel overzicht</h3>
           </div>
           <div className="flex-1 divide-y divide-slate-100">
             {items.map((it) => {
@@ -694,7 +804,7 @@ function DashboardView({ overview, onAction, onHistory }) {
         </div>
 
         {/* RIGHT — Te betalen + Volgende + Geschiedenis (kiosk-style) */}
-        <div className="bg-white rounded-2xl flex-none md:flex-[2] flex flex-col items-center justify-center text-center p-3 sm:p-6 md:min-h-[260px]">
+        <div className="bg-white rounded-3xl shadow-lg flex-none md:flex-[2] flex flex-col items-center justify-center text-center p-4 sm:p-8 md:min-h-[260px]">
           <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-1.5 sm:mb-3 ${
             hasBalance ? 'bg-orange-100' : 'bg-emerald-100'
           }`}>
@@ -712,7 +822,7 @@ function DashboardView({ overview, onAction, onHistory }) {
             {hasBalance ? 'U heeft een openstaand bedrag.' : 'U bent volledig bij. Bedankt!'}
           </p>
           <button onClick={() => onAction('pay')} data-testid="tk-tile-pay"
-            className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-lg font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 sm:py-3.5 active:scale-[0.98]">
+            className="w-full max-w-xs bg-[#FF6B1A] hover:bg-[#F26A12] text-white text-base sm:text-xl font-black rounded-2xl flex items-center justify-center gap-2 transition py-3 sm:py-4 active:scale-[0.98] shadow-md">
             Volgende <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           <button onClick={onHistory} data-testid="tk-tile-history"
@@ -720,16 +830,6 @@ function DashboardView({ overview, onAction, onHistory }) {
             <ClockIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Betalingsgeschiedenis
           </button>
         </div>
-      </div>
-
-      {/* Secondary tiles (kleiner, onderaan) */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 pb-3">
-        <SecondaryTile icon={Wrench} label="Onderhoud" testId="tk-tile-maintenance"
-          accent="bg-sky-50 text-sky-600" onClick={() => onAction('maintenance')} />
-        <SecondaryTile icon={User} label="Gegevens" testId="tk-tile-me"
-          accent="bg-emerald-50 text-emerald-600" onClick={() => onAction('me')} />
-        <SecondaryTile icon={Phone} label="Contact" testId="tk-tile-contact"
-          accent="bg-violet-50 text-violet-600" onClick={() => onAction('contact')} />
       </div>
     </div>
   );
@@ -778,8 +878,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
   // {planId, planCurrency, seq, due_date, amount, label}.
   const [planInstallments, setPlanInstallments] = useState([]);
 
-  useEffect(() => {
-    api.get('/tenant-portal/payment-plans')
+  const loadPlans = useCallback(() => api.get('/tenant-portal/payment-plans')
       .then((r) => {
         const out = [];
         for (const p of r.data || []) {
@@ -798,8 +897,12 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
         out.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
         setPlanInstallments(out);
       })
-      .catch(() => setPlanInstallments([]));
-  }, [cur]);
+      .catch(() => setPlanInstallments([])), [cur]);
+  useEffect(() => { loadPlans(); }, [loadPlans]);
+  useEffect(() => {
+    window.addEventListener('surirent:tenant-live-change', loadPlans);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadPlans);
+  }, [loadPlans]);
 
   const planItemKey = (it) => `plan:${it.planId}:${it.seq}`;
 
@@ -889,21 +992,17 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2" data-testid="tk-pay-select">
-      <div className="flex items-center justify-between flex-wrap gap-2 py-2 pr-20 sm:pr-24">
-        <button onClick={onBack} data-testid="tk-payselect-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <span className="text-sm sm:text-base font-semibold text-white">Wat wilt u betalen?</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 py-3">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Wat wilt u betalen?</h2>
         <div className="text-right text-white hidden sm:block">
-          <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
-          {apt && <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>}
+          <p className="text-sm font-bold">{tenant.name}</p>
+          {apt && <p className="text-xs opacity-80">{apt.number}</p>}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2">
+      <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0 pb-2">
         {/* LEFT — items checklist */}
-        <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col min-w-0 p-2 sm:p-3">
+        <div className="bg-white rounded-3xl shadow-lg flex-1 md:flex-[3] flex flex-col min-w-0 p-3 sm:p-5">
           {(enabled.length > 1 || planInstallments.length > 0) && (
             <button onClick={selectAll} data-testid="tk-pay-select-all"
               className={`w-full flex items-center justify-between rounded-lg border-2 transition px-2.5 py-2 sm:px-3 sm:py-2.5 mb-1.5 ${
@@ -1009,7 +1108,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
           )}
 
           <button onClick={handleNext} disabled={!canProceed} data-testid="tk-payment-next-btn"
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-3 sm:py-3.5 mt-1.5 text-sm sm:text-base font-bold">
+            className="w-full bg-[#FF6B1A] hover:bg-[#F26A12] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-4 mt-2 text-base sm:text-xl font-black shadow-md">
             <span>Volgende — {fmt(activeAmount)}</span> <ArrowRight className="w-5 h-5" />
           </button>
 
@@ -1043,7 +1142,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
         </div>
 
         {/* RIGHT — Desktop keypad */}
-        <div className="bg-white rounded-2xl hidden md:flex flex-none md:flex-[2] flex-col min-w-0 p-4 sm:p-5">
+        <div className="bg-white rounded-3xl shadow-lg hidden md:flex flex-none md:flex-[2] flex-col min-w-0 p-4 sm:p-6">
           <h4 className="text-sm sm:text-base font-bold text-slate-900 mb-0.5">Bedrag invoeren</h4>
           <p className="text-xs text-slate-400 mb-3">Totaal openstaand: {fmt(totalDue)}</p>
           <div className={`border-2 rounded-lg transition px-3 py-3 mb-3 ${hasCustom ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}`}>
@@ -1068,53 +1167,111 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 }
 
 // =====================================================================
-// PAY METHOD — Bankoverschrijving
+// PAY METHOD — door de beheerder ingeschakelde methodes
 // =====================================================================
-function TenantPayMethod({ payload, overview, onBack, onConfirm }) {
-  const { tenant, apartment: apt } = overview;
+const PIN_METHOD = { v: 'pin', l: 'PIN', sub: 'Betaal met uw pinpas', icon: CreditCard };
+
+const CARD_METHOD = { v: 'creditcard', l: 'Creditcard', sub: 'Scan de QR-code met uw telefoon', icon: CreditCard };
+
+// QR-popup: de huurder scant de code en betaalt op de telefoon; de kiosk pollt de status.
+function TenantStripeQr({ payload, onPaid, onClose }) {
+  const [state, setState] = useState({ phase: 'loading', token: '', pi: '', mode: '', err: '' });
+  useEffect(() => {
+    let stop = false;
+    let timer = null;
+    const poll = (pi) => {
+      api.get(`/tenant-portal/stripe/status/${pi}`).then(({ data }) => {
+        if (stop) return;
+        if (data?.status === 'paid') { onPaid(pi); return; }
+        if (data?.status === 'failed') {
+          setState((s) => ({ ...s, phase: 'error', err: 'Betaling mislukt of geweigerd.' }));
+          return;
+        }
+        timer = setTimeout(() => poll(pi), 2000);
+      }).catch(() => { if (!stop) timer = setTimeout(() => poll(pi), 3000); });
+    };
+    api.post('/tenant-portal/stripe/intent', { amount: payload.amount, currency: payload.currency || 'SRD' })
+      .then(({ data }) => {
+        if (stop) return;
+        setState({ phase: 'qr', token: data.token, pi: data.payment_intent_id, mode: data.mode, err: '' });
+        poll(data.payment_intent_id);
+      })
+      .catch((e) => { if (!stop) setState({ phase: 'error', token: '', pi: '', mode: '', err: formatError(e, 'Kon de betaling niet starten') }); });
+    return () => { stop = true; if (timer) clearTimeout(timer); };
+  }, []);
   const cur = payload.currency || 'SRD';
-  const methods = [
-    { v: 'bank', l: 'Bankoverschrijving', sub: 'Upload bankafschrift', icon: Landmark, accent: 'sky' },
-  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-testid="tk-stripe-qr">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl">
+        <h3 className="text-2xl font-black text-slate-900">Betaal met creditcard</h3>
+        <p className="text-[#F26A12] font-black text-2xl mt-1">{fmtMoney(payload.amount, cur)}</p>
+        {state.phase === 'loading' && <p className="mt-8 mb-8 text-slate-500">QR-code wordt gemaakt…</p>}
+        {state.phase === 'qr' && (
+          <>
+            <div className="mt-5 inline-block p-4 bg-white rounded-2xl border-2 border-slate-200">
+              <QRCodeSVG value={`${window.location.origin}/betalen/${state.token}`} size={220} />
+            </div>
+            <p className="mt-4 text-slate-600 text-sm">Scan de QR-code met de camera van uw telefoon en betaal veilig met uw creditcard. Dit scherm gaat vanzelf verder.</p>
+            {state.mode === 'test' && <p className="mt-2 text-xs font-bold text-amber-600">Testmodus</p>}
+          </>
+        )}
+        {state.phase === 'error' && <p className="mt-6 mb-4 text-red-600 font-semibold" data-testid="tk-stripe-error">{state.err}</p>}
+        <button onClick={onClose} data-testid="tk-stripe-cancel"
+          className="mt-6 w-full rounded-2xl bg-slate-100 text-slate-700 font-bold py-3">Annuleren</button>
+      </div>
+    </div>
+  );
+}
+
+function TenantPayMethod({ payload, onConfirm }) {
+  const cur = payload.currency || 'SRD';
+  const [methods, setMethods] = useState([PIN_METHOD]);
+  const [qrOpen, setQrOpen] = useState(false);
+  useEffect(() => {
+    api.get('/tenant-portal/payment-methods')
+      .then(({ data }) => {
+        const list = (data?.methods || [])
+          .filter((m) => m.id === 'pin' || m.id === 'creditcard')
+          .map((m) => {
+            const base = m.id === 'creditcard' ? CARD_METHOD : PIN_METHOD;
+            return { ...base, l: m.label || base.l, sub: m.sub || base.sub };
+          });
+        if (list.length) setMethods(list);
+      })
+      .catch(() => {});
+  }, []);
   return (
     <div className="h-full flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }} data-testid="tk-pay-method">
-      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
-        <button onClick={onBack} data-testid="tk-method-back"
-          className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
-          <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
-        </button>
-        <span className="text-sm sm:text-base font-semibold text-white">
-          Hoe wilt u betalen? <span className="ml-2 opacity-80">{fmtMoney(payload.amount, cur)}</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-3">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Hoe wilt u betalen?</h2>
+        <span className="bg-white text-[#F26A12] font-black text-lg sm:text-2xl rounded-2xl px-4 py-1.5 shadow-md" data-testid="tk-method-amount">
+          {fmtMoney(payload.amount, cur)}
         </span>
-        <div className="text-right text-white">
-          <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
-          {apt && <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>}
-        </div>
       </div>
       <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-4xl w-full px-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl w-full px-2">
           {methods.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.v} onClick={() => onConfirm({ ...payload, method: m.v })}
+              <button key={m.v} onClick={() => (m.v === 'creditcard' ? setQrOpen(true) : onConfirm({ ...payload, method: m.v }))}
                 data-testid={`tk-method-${m.v}`}
-                className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl">
-                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mb-0 sm:mb-4 ${
-                  m.accent === 'emerald' ? 'bg-emerald-100 text-emerald-600'
-                    : m.accent === 'sky' ? 'bg-sky-100 text-sky-600'
-                    : 'bg-red-100 text-red-600'
-                }`}>
-                  <Icon className="w-7 h-7 sm:w-10 sm:h-10" />
+                className="bg-white rounded-3xl p-5 sm:p-8 flex items-center gap-5 text-left hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 rounded-3xl flex items-center justify-center bg-[#FFF1E8] text-[#F26A12]">
+                  <Icon className="w-9 h-9 sm:w-14 sm:h-14" strokeWidth={1.8} />
                 </div>
-                <div className="sm:text-center">
-                  <p className="text-base sm:text-xl font-extrabold text-slate-900">{m.l}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{m.sub}</p>
+                <div>
+                  <p className="text-xl sm:text-3xl font-black text-slate-900">{m.l}</p>
+                  <p className="text-sm sm:text-base text-slate-500 mt-1">{m.sub}</p>
                 </div>
               </button>
             );
           })}
         </div>
       </div>
+      {qrOpen && (
+        <TenantStripeQr payload={payload} onClose={() => setQrOpen(false)}
+          onPaid={(pi) => { setQrOpen(false); onConfirm({ ...payload, method: 'creditcard', stripe_payment_intent_id: pi, stripe_paid: true }); }} />
+      )}
     </div>
   );
 }
@@ -1184,7 +1341,9 @@ function TenantPayBank({ payload, overview, branding, onBack, onConfirm }) {
             Bankoverschrijving · {fmtMoney(payload.amount, cur)}
           </span>
         </div>
-        <p className="text-xs text-white/85 mb-3 mt-1">{tenant.name}{apt ? ` — Appt. ${apt.number}` : ''}</p>
+        <p className="text-xs text-white/85 mb-3 mt-1">
+          {apt ? `Appt. ${apt.number} — ` : 'Geen appartement — '}{tenant.name}
+        </p>
 
         {/* STAP 1 — Land selectie */}
         <div className="bg-white rounded-3xl shadow-xl p-4 sm:p-5 mb-3">
@@ -1308,11 +1467,14 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
         bank_country: payload.bank_country,
         bank_statement_id: payload.bank_statement_id,
       } : {};
+      const stripeExtras = payload.method === 'creditcard'
+        ? { stripe_payment_intent_id: payload.stripe_payment_intent_id } : {};
       const planItems = payload.plan_items || [];
       const plainItems = payload.plain_items || [];
       for (const pi of planItems) {
         await api.post(`/tenant-portal/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`, {
           method: payload.method,
+          ...stripeExtras,
           amount: pi.amount,
           note: `Huurder Kiosk — termijn ${pi.seq}`,
           ...bankExtras,
@@ -1329,6 +1491,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
             period_year: it.period_year || undefined,
             note: payload.note || '',
             ...bankExtras,
+            ...stripeExtras,
           });
         }
       } else if (planItems.length === 0) {
@@ -1342,6 +1505,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
           period_year: payload.period_year || undefined,
           note: payload.note || '',
           ...bankExtras,
+          ...stripeExtras,
         });
       }
       playSuccessPing();
@@ -1352,8 +1516,19 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
     } finally { setBusy(false); }
   };
 
+  // Al betaald op de telefoon: direct boeken, geen extra bevestiging nodig.
+  const autoSubmitted = useRef(false);
+  useEffect(() => {
+    if (payload.stripe_paid && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      submit();
+    }
+  }, []);
+
   const methodLabel = {
     contant: 'Contant',
+    pin: 'PIN',
+    creditcard: 'Creditcard',
     bank: 'Bankoverschrijving',
   }[payload.method] || payload.method;
 
@@ -1403,6 +1578,13 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
               </p>
             </div>
           )}
+          {payload.method === 'pin' && (
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200" data-testid="tk-pin-warning">
+              <p className="text-xs font-bold text-amber-800 leading-snug">
+                ⏳ Uw pinbetaling wordt door de beheerder gecontroleerd en daarna verwerkt.
+              </p>
+            </div>
+          )}
           {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3" data-testid="tk-confirm-error">{err}</p>}
           <button onClick={submit} disabled={busy} data-testid="tk-confirm-submit"
             className="w-full h-14 rounded-2xl bg-gradient-to-r from-[#FF8A3D] to-[#FF5C00] text-white font-black text-base shadow-lg active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-2">
@@ -1425,28 +1607,20 @@ function ConfirmRow({ label, value }) {
 }
 
 // =====================================================================
-// HISTORY — alle betalingen van de huurder met PDF-download
+// HISTORY — alle betalingen van de huurder met bon-JPG
 // =====================================================================
 function TenantHistoryView({ overview, onBack }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
   const apt = overview?.apartment;
 
+  const loadPayments = useCallback(() => api.get('/tenant-portal/payments')
+    .then((r) => { setItems(r.data || []); setErr(''); }).catch((e) => setErr(formatError(e))), []);
+  useEffect(() => { loadPayments(); }, [loadPayments]);
   useEffect(() => {
-    api.get('/tenant-portal/payments')
-      .then((r) => setItems(r.data || [])).catch((e) => setErr(formatError(e)));
-  }, []);
-
-  const openPdf = async (paymentId) => {
-    // We hebben tenant_token — gebruik blob-fetch zodat de PDF met de
-    // juiste Authorization-header wordt opgehaald.
-    try {
-      const r = await api.get(`/payments/${paymentId}/pdf`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(r.data);
-      window.open(url, '_blank');
-      setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
-    } catch (e) { setErr(formatError(e, 'PDF download mislukt')); }
-  };
+    window.addEventListener('surirent:tenant-live-change', loadPayments);
+    return () => window.removeEventListener('surirent:tenant-live-change', loadPayments);
+  }, [loadPayments]);
 
   return (
     <div className="h-full flex flex-col px-3 sm:px-6 pt-2 pb-3" data-testid="tk-history">
@@ -1510,10 +1684,11 @@ function TenantHistoryView({ overview, onBack }) {
                   </p>
                 )}
               </div>
-              <button onClick={() => openPdf(p.id)} data-testid={`tk-history-pdf-${p.id}`}
-                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0">
-                <Printer className="w-3 h-3" /> Afdruk
-              </button>
+              <KioskReceiptImageButton paymentId={p.id} filename={`bon-${p.receipt_number || p.id}.jpg`}
+                testId={`tk-history-image-${p.id}`}
+                className="px-2.5 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 shrink-0 disabled:opacity-50">
+                <Printer className="w-3 h-3" /> Bon
+              </KioskReceiptImageButton>
             </div>
           ))}
         </div>
@@ -1663,17 +1838,15 @@ function MeView({ overview, onBack }) {
 // =====================================================================
 // CONTACT
 // =====================================================================
-function ContactView({ overview, branding, onBack }) {
-  const phone = overview?.company?.phone || branding?.phone || '';
-  const email = overview?.company?.email || branding?.email || '';
+function ContactView({ overview, branding }) {
+  const co = overview?.company || {};
+  const phone = co.phone || branding?.contact_phone || branding?.phone || '';
+  const wa = co.whatsapp || branding?.whatsapp_number || phone;
+  const email = co.email || branding?.contact_email || branding?.email || '';
   return (
-    <div className="min-h-full w-full px-4 sm:px-6 py-5 sm:py-8" data-testid="tk-contact">
+    <div className="min-h-full w-full px-4 sm:px-6 py-3" data-testid="tk-contact">
       <div className="max-w-2xl mx-auto">
-        <button onClick={onBack} data-testid="tk-contact-back"
-          className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-widest text-white/85 hover:text-white mb-4">
-          <ArrowLeft className="w-3.5 h-3.5" /> Terug
-        </button>
-        <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Contact</h2>
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Contact</h2>
         <p className="text-sm text-white/85 mt-1 mb-5">Direct in contact met uw beheerder.</p>
         <div className="space-y-2.5">
           {phone ? (
@@ -1683,7 +1856,7 @@ function ContactView({ overview, branding, onBack }) {
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Phone className="w-6 h-6" /></div>
                 <div><p className="text-base font-black text-slate-900">Bel beheerder</p><p className="text-xs text-slate-500">{phone}</p></div>
               </a>
-              <a href={`https://wa.me/${phone.replace(/[^\d]/g, '')}`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://wa.me/${String(wa).replace(/[^\d]/g, '')}`} target="_blank" rel="noopener noreferrer"
                 data-testid="tk-whatsapp"
                 className="block bg-white rounded-2xl shadow-lg active:shadow-md p-4 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Phone className="w-6 h-6" /></div>
@@ -1760,22 +1933,125 @@ function CompanyPicker({ onPicked }) {
 }
 
 // =====================================================================
+// KIOSK SHELL — bovenbalk + onderbalk in dezelfde stijl als de beheerkiosk
+// =====================================================================
+function TenantTopBar({ branding, subtitle, right }) {
+  return (
+    <header className="kiosk-chrome fixed top-0 left-0 right-0 z-[100] flex items-center gap-3 md:gap-6 px-3 py-2 md:py-3 bg-[#FF6B1A] border-b border-[#E04E00]/40 shadow-md"
+      style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 8px)' }}
+      data-testid="tk-topbar">
+      <div className="flex items-center gap-3 min-w-0">
+        {branding?.logo_url ? (
+          <img loading="lazy" src={resolveLogoUrl(branding.logo_url)} alt="logo" className="w-10 h-10 object-contain rounded-xl bg-white/95 p-1" />
+        ) : (
+          <HomeIcon className="w-8 h-8 text-white" strokeWidth={2.4} />
+        )}
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="tk-welcome">
+          {branding?.app_name || branding?.name || 'Huurder Kiosk'}
+        </h1>
+      </div>
+      <div className="hidden md:flex flex-1 items-center gap-2 min-w-0 text-white/95 font-bold text-sm">
+        <MapPin className="w-4 h-4 shrink-0" />
+        <span className="truncate">{[branding?.address, subtitle].filter(Boolean).join(' • ')}</span>
+      </div>
+      <div className="flex-1 md:flex-none flex items-center justify-end gap-2">{right}</div>
+    </header>
+  );
+}
+
+function TenantBarBtn({ dir, onClick, disabled }) {
+  const Icon = dir === 'back' ? ChevronLeft : ChevronRight;
+  return (
+    <button onClick={onClick} disabled={disabled} data-testid={`tk-bar-${dir}`}
+      className="shrink-0 w-16 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-[#F26A12] bg-white font-semibold text-[10px] lg:text-xs disabled:opacity-35 active:scale-95 transition">
+      <Icon className="w-7 h-7" />
+      {dir === 'back' ? 'Terug' : 'Volgende'}
+    </button>
+  );
+}
+
+function TenantBottomBar({ items, onBack, onNext, canBack, canNext, keyboardOpen }) {
+  if (keyboardOpen) return null;
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-[110] border-t bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      data-testid="tk-bottombar">
+      <div className="flex items-stretch gap-1 px-2 py-2">
+        <TenantBarBtn dir="back" onClick={onBack} disabled={!canBack} />
+        {items.map((it) => (
+          <button key={it.id} onClick={it.onClick} data-testid={`tk-nav-${it.id}`}
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl py-2 px-1 transition ${
+              it.active ? 'bg-white text-[#F26A12] shadow-md' : 'text-white bg-white/[0.06] hover:bg-white/15'
+            }`}>
+            <it.icon className="w-6 h-6" strokeWidth={1.8} />
+            <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold truncate max-w-full">{it.label}</span>
+          </button>
+        ))}
+        <TenantBarBtn dir="next" onClick={onNext} disabled={!canNext} />
+      </div>
+    </nav>
+  );
+}
+
+// =====================================================================
 // CONTAINER
 // =====================================================================
 export default function TenantKioskLayout() {
   useHidePwaSplash();
-  const navigate = useBrandedNavigate();
+  const keyboardOpen = useKeyboardOpen();
   const [searchParams] = useSearchParams();
   const aptId = searchParams.get('apt');
   const tenantIdParam = searchParams.get('t');
   const [authed, setAuthed] = useState(() => !!localStorage.getItem(TENANT_TOKEN_KEY));
   const [view, setView] = useState('dashboard');
-  const [payload, setPayload] = useState(null);  // payment-flow draft
+  const viewHistory = useRef({ entries: ['dashboard'], index: 0 });
+  const [, setViewHistoryTick] = useState(0);
+  const [loginMode, setLoginMode] = useState('pin');
+  const [payload, setPayload] = useState(null);  // payment-flow draft = useState(null);  // payment-flow draft
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [prefill, setPrefill] = useState(null);
   const [tenantSetup, setTenantSetup] = useState(null); // { tenant_id, name, has_pin }
   const [branding, setBranding] = useState(() => readCachedBranding());
+  const navigateView = (nextView, { reset = false, replace = false } = {}) => {
+    const history = viewHistory.current;
+    if (reset) {
+      history.entries = [nextView];
+      history.index = 0;
+    } else {
+      history.entries = history.entries.slice(0, history.index + 1);
+      if (replace && history.entries.length) history.entries[history.index] = nextView;
+      else if (history.entries[history.entries.length - 1] !== nextView) history.entries.push(nextView);
+      history.index = history.entries.length - 1;
+    }
+    setView(nextView);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewBack = () => {
+    const history = viewHistory.current;
+    if (history.index > 0) {
+      history.index -= 1;
+      setView(history.entries[history.index]);
+    } else if (view !== 'dashboard') {
+      history.entries = ['dashboard', view];
+      history.index = 0;
+      setView('dashboard');
+    }
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  const goViewNext = () => {
+    const history = viewHistory.current;
+    if (history.index >= history.entries.length - 1) return;
+    history.index += 1;
+    setView(history.entries[history.index]);
+    setViewHistoryTick((tick) => tick + 1);
+  };
+  useEffect(() => {
+    if (authed) return;
+    viewHistory.current = { entries: ['dashboard'], index: 0 };
+    setView('dashboard');
+    setViewHistoryTick((tick) => tick + 1);
+  }, [authed]);
 
   // 1) Branding laden — primary color toepassen voor de hele kiosk-achtergrond
   const [needsCompanyPick, setNeedsCompanyPick] = useState(false);
@@ -1854,24 +2130,36 @@ export default function TenantKioskLayout() {
   }, [tenantIdParam, authed]);
 
   // 3) Overview laden na login
-  const loadOverview = useCallback(async () => {
+  const loadOverview = useCallback(async (quiet = false) => {
     if (!authed) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     try {
       const { data } = await api.get('/tenant-portal/overview');
       setOverview(data);
-    } catch {
-      localStorage.removeItem(TENANT_TOKEN_KEY);
-      setAuthed(false);
-    } finally { setLoading(false); }
+    } catch (e) {
+      if (e?.response?.status === 401) {
+        localStorage.removeItem(TENANT_TOKEN_KEY);
+        setAuthed(false);
+      }
+    } finally { if (!quiet) setLoading(false); }
   }, [authed]);
-  useEffect(() => { if (authed) loadOverview(); }, [authed, loadOverview]);
+  useEffect(() => {
+    if (!authed) return undefined;
+    loadOverview();
+    startTenantLive();
+    const refresh = () => loadOverview(true);
+    window.addEventListener('surirent:tenant-live-change', refresh);
+    return () => {
+      window.removeEventListener('surirent:tenant-live-change', refresh);
+      stopTenantLive();
+    };
+  }, [authed, loadOverview]);
 
   const logout = () => {
     api.post('/tenant-portal/logout').catch(() => {});
     localStorage.removeItem(TENANT_TOKEN_KEY);
     setAuthed(false);
-    setView('dashboard');
+    navigateView('dashboard', { reset: true });
   };
 
   // Branded background — gebruik primary color als orange-fallback.
@@ -1928,7 +2216,7 @@ export default function TenantKioskLayout() {
             </span>
           )}
           {withLogout && (
-            <button onClick={authed ? logout : () => navigate('/')}
+            <button onClick={authed ? logout : () => setLoginMode('pin')}
               data-testid="tk-logout"
               className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded-lg px-4 py-2 text-sm inline-flex items-center gap-1.5">
               <LogOut className="w-4 h-4" /> Uit
@@ -1941,9 +2229,11 @@ export default function TenantKioskLayout() {
 
   // --- Not authed: show PIN-only login (or company picker if no context) ---
   if (!authed) {
+    const nfcOn = loginMode === 'nfc';
     return (
       <div style={wrapper} className="flex flex-col">
-        <div className="flex-1">
+        <TenantTopBar branding={branding} subtitle={nfcOn ? 'Inloggen met NFC' : 'Kies uw appartement'} />
+        <div className="flex-1" style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)', paddingBottom: 96 }}>
           <AnimatePresence mode="wait">
             <motion.div key={needsCompanyPick ? 'picker' : 'login'} variants={slideVariants}
               initial="enter" animate="center" exit="exit"
@@ -1952,16 +2242,22 @@ export default function TenantKioskLayout() {
               {needsCompanyPick && !prefill?.email && !tenantSetup ? (
                 <CompanyPicker onPicked={(data) => { setBranding(data); setNeedsCompanyPick(false); }} />
               ) : (
-                <LoginView branding={branding}
+                <LoginView branding={branding} mode={loginMode}
                   prefill={prefill || (tenantSetup ? { firstName: tenantSetup.firstName } : null)}
                   onLoggedIn={() => setAuthed(true)} />
               )}
             </motion.div>
           </AnimatePresence>
         </div>
-        {/* Footer verwijderd op de NFC-login pagina — geen "Gopi Appartements
-            + Uit" balk meer. Op ingelogde pagina's blijft er een compacte
-            Uit-knop rechtsboven staan (zie hoofd-return). */}
+        <TenantBottomBar
+          keyboardOpen={keyboardOpen}
+          canBack={nfcOn} canNext={!nfcOn}
+          onBack={() => setLoginMode('pin')} onNext={() => setLoginMode('nfc')}
+          items={[
+            { id: 'pin', label: 'Appartement', icon: HomeIcon, active: !nfcOn, onClick: () => setLoginMode('pin') },
+            { id: 'nfc', label: 'NFC', icon: Smartphone, active: nfcOn, onClick: () => setLoginMode('nfc') },
+            { id: 'close', label: 'Sluiten', icon: X, onClick: () => { setLoginMode('pin'); window.scrollTo?.(0, 0); } },
+          ]} />
       </div>
     );
   }
@@ -1978,18 +2274,15 @@ export default function TenantKioskLayout() {
   // --- Authed views ---
   return (
     <div style={wrapperLocked} className="flex flex-col relative">
-      {/* Compacte Uit-knop rechtsboven — vervangt de brede footer met
-          bedrijfsnaam + Uit die de gebruiker uit de layout wilde. Alleen
-          zichtbaar op ingelogde screens. Blijft binnen de safe-area zodat
-          het niet achter de iPhone notch verdwijnt. */}
-      <button onClick={logout}
-        data-testid="tk-logout"
-        title="Uitloggen"
-        style={{ top: 'calc(var(--kiosk-sat) + 12px)' }}
-        className="fixed right-4 z-50 bg-white/95 hover:bg-white text-slate-700 font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow-lg">
-        <LogOut className="w-3.5 h-3.5" /> Uit
-      </button>
-      <div className="flex-1 min-h-0 flex flex-col">
+      <TenantTopBar branding={branding}
+        subtitle={overview?.tenant?.apartment_number || overview?.tenant?.apartment || ''}
+        right={(
+          <button onClick={logout} data-testid="tk-logout" title="Uitloggen"
+            className="bg-white/95 hover:bg-white text-[#F26A12] font-black rounded-full pl-3 pr-4 py-2 text-xs inline-flex items-center gap-1.5 shadow">
+            <LogOut className="w-4 h-4" /> Uitloggen
+          </button>
+        )} />
+      <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: 'calc(var(--kiosk-sat, 0px) + 72px)', paddingBottom: 96 }}>
         <AnimatePresence mode="wait">
           <motion.div key={view} variants={slideVariants}
             initial="enter" animate="center" exit="exit"
@@ -1997,54 +2290,68 @@ export default function TenantKioskLayout() {
             className="w-full flex flex-col md:h-full">
             {view === 'dashboard' && (
               <DashboardView overview={overview}
-                onAction={setView}
-                onHistory={() => setView('history')} />
+                onAction={navigateView}
+                onHistory={() => navigateView('history')} />
             )}
             {view === 'pay' && (
               <TenantPaySelect overview={overview}
-                onBack={() => setView('dashboard')}
-                onConfirm={(p) => { setPayload(p); setView('pay-method'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-method'); }} />
             )}
             {view === 'pay-method' && payload && (
               <TenantPayMethod payload={payload} overview={overview}
-                onBack={() => setView('pay')}
+                onBack={goViewBack}
                 onConfirm={(p) => {
                   setPayload(p);
-                  if (p.method === 'bank') setView('pay-bank');
-                  else setView('pay-confirm');
+                  if (p.method === 'bank') navigateView('pay-bank');
+                  else navigateView('pay-confirm');
                 }} />
             )}
             {view === 'pay-bank' && payload && (
               <TenantPayBank payload={payload} overview={overview} branding={branding}
-                onBack={() => setView('pay-method')}
-                onConfirm={(p) => { setPayload(p); setView('pay-confirm'); }} />
+                onBack={goViewBack}
+                onConfirm={(p) => { setPayload(p); navigateView('pay-confirm'); }} />
             )}
             {view === 'pay-confirm' && payload && (
               <TenantPayConfirm payload={payload} overview={overview}
-                onBack={() => {
-                  if (payload.method === 'bank') setView('pay-bank');
-                  else setView('pay-method');
-                }}
-                onPaid={() => { setView('paid'); setPayload(null); loadOverview(); }} />
+                onBack={goViewBack}
+                onPaid={() => {
+                  viewHistory.current = { entries: ['dashboard', 'paid'], index: 1 };
+                  setView('paid');
+                  setViewHistoryTick((tick) => tick + 1);
+                  setPayload(null);
+                  loadOverview();
+                }} />
             )}
-            {view === 'paid' && <PaidView onContinue={() => setView('dashboard')} />}
+            {view === 'paid' && <PaidView onContinue={() => navigateView('dashboard', { reset: true })} />}
             {view === 'history' && (
-              <TenantHistoryView overview={overview} onBack={() => setView('dashboard')} />
+              <TenantHistoryView overview={overview} onBack={goViewBack} />
             )}
             {view === 'maintenance' && (
-              <MaintenanceView onBack={() => setView('dashboard')}
-                onDone={() => setView('dashboard')} />
+              <MaintenanceView onBack={goViewBack}
+                onDone={goViewBack} />
             )}
-            {view === 'me' && <MeView overview={overview} onBack={() => setView('dashboard')} />}
+            {view === 'me' && <MeView overview={overview} onBack={goViewBack} />}
             {view === 'contact' && (
               <ContactView overview={overview} branding={branding}
-                onBack={() => setView('dashboard')} />
+                onBack={goViewBack} />
             )}
           </motion.div>
         </AnimatePresence>
       </div>
-      {/* Grote onder-footer verwijderd — alleen de kleine Uit-knop
-          rechtsboven blijft (zie hierboven). */}
+      <TenantBottomBar
+        keyboardOpen={keyboardOpen}
+        canBack={viewHistory.current.index > 0 || view !== 'dashboard'}
+        canNext={viewHistory.current.index < viewHistory.current.entries.length - 1}
+        onBack={goViewBack} onNext={goViewNext}
+        items={[
+          { id: 'dashboard', label: 'Overzicht', icon: Wallet, active: view === 'dashboard', onClick: () => navigateView('dashboard') },
+          { id: 'pay', label: 'Betalen', icon: CreditCard, active: view.startsWith('pay'), onClick: () => navigateView('pay') },
+          { id: 'history', label: 'Geschiedenis', icon: Receipt, active: view === 'history', onClick: () => navigateView('history') },
+          { id: 'maintenance', label: 'Onderhoud', icon: Wrench, active: view === 'maintenance', onClick: () => navigateView('maintenance') },
+          { id: 'me', label: 'Gegevens', icon: User, active: view === 'me', onClick: () => navigateView('me') },
+          { id: 'contact', label: 'Contact', icon: Phone, active: view === 'contact', onClick: () => navigateView('contact') },
+        ]} />
     </div>
   );
 }

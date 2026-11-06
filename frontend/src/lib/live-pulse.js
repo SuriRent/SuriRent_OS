@@ -37,13 +37,14 @@ export function useLivePulse(activeTab) {
   useEffect(() => {
     const timers = new Map();
     const onLive = (ev) => {
-      const rawPath = String(ev?.detail?.path || '');
-      if (!rawPath.startsWith('/api/')) return;
-      const swrKey = rawPath.slice(4); // strip '/api'
-      const rule = PATH_TO_TAB.find((r) => r.match(swrKey));
-      if (!rule) return;
-      const nextTabs = rule.tabs.filter((t) => t !== activeTab);
-      if (nextTabs.length === 0) return;
+      const paths = ev?.detail?.paths || [ev?.detail?.path];
+      const nextTabs = new Set();
+      paths.forEach((rawPath) => {
+        if (typeof rawPath !== 'string' || !rawPath.startsWith('/api/')) return;
+        const rule = PATH_TO_TAB.find((r) => r.match(rawPath.slice(4)));
+        rule?.tabs.filter((t) => t !== activeTab).forEach((tab) => nextTabs.add(tab));
+      });
+      if (nextTabs.size === 0) return;
       setPulsing((prev) => {
         const next = new Set(prev);
         nextTabs.forEach((t) => next.add(t));

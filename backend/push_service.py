@@ -9,10 +9,12 @@ instance en gebruiken die voor elke push.
 import os
 import json
 import base64
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from py_vapid import Vapid01
 from pywebpush import webpush, WebPushException
 
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_PEM_B64 = os.environ.get("VAPID_PRIVATE_KEY_B64", "")
 VAPID_CONTACT = os.environ.get("VAPID_CONTACT", "mailto:admin@vastgoed.sr")
 
@@ -29,6 +31,26 @@ def _get_vapid() -> Vapid01:
     pem_bytes = base64.b64decode(VAPID_PRIVATE_PEM_B64)
     _vapid_instance = Vapid01.from_pem(pem_bytes)
     return _vapid_instance
+
+
+def get_vapid_public_key() -> str:
+    """Return the public key for the configured private key, deriving it if needed."""
+    if not VAPID_PRIVATE_PEM_B64:
+        return ""
+    pem_bytes = base64.b64decode(VAPID_PRIVATE_PEM_B64, validate=True)
+    private_key = serialization.load_pem_private_key(pem_bytes, password=None)
+    if not isinstance(private_key, ec.EllipticCurvePrivateKey) or not isinstance(
+        private_key.curve, ec.SECP256R1,
+    ):
+        raise ValueError("VAPID private key must use the P-256 curve")
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.X962,
+        serialization.PublicFormat.UncompressedPoint,
+    )
+    derived_key = base64.urlsafe_b64encode(public_key).decode("ascii").rstrip("=")
+    if VAPID_PUBLIC_KEY and VAPID_PUBLIC_KEY != derived_key:
+        raise ValueError("VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY_B64")
+    return derived_key
 
 
 def send_push(subscription: dict, title: str, body: str, data: dict | None = None) -> bool:

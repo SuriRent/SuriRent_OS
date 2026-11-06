@@ -48,6 +48,7 @@ export default function LoginPage() {
     return 'pin';
   })();
   const [view, setView] = useState(initialView);
+  const isKioskLogin = (searchParams.get('target') || '').toLowerCase() === 'kiosk';
   const [skipRedirect, setSkipRedirect] = useState(false);
   // Als de PIN succesvol was gaan we in "authenticating"-mode: we tonen
   // een oranje overlay met het huis-icoon + spinner totdat de navigatie
@@ -55,6 +56,12 @@ export default function LoginPage() {
   // PIN-success en de router-transitie doordat AuthProvider's user-state
   // pas op de volgende render cycle beschikbaar is.
   const [authenticating, setAuthenticating] = useState(false);
+
+  useEffect(() => {
+    if ((searchParams.get('view') || '').toLowerCase() === 'superadmin') {
+      window.location.replace('/superadmin/login');
+    }
+  }, [searchParams]);
 
   // ────────────────────────────────────────────────────────────────────
   // PWA Onboarding — eerste-keer welkom-scherm na PWA installatie.
@@ -219,7 +226,7 @@ export default function LoginPage() {
 
   // PWA shortcut target. Two PWA app icons:
   //   /login?source=pwa&target=kiosk → after PIN, go to /kiosk
-  //   /login?source=pwa&target=admin → after PIN, go to /admin (PIN gives both tokens)
+  //   /login?source=pwa&target=admin → after PIN, go to Kiosk Beheer
   // Defaults to 'kiosk' (the original Kiosk-first PWA experience).
   const pwaTarget = (() => {
     const t = (searchParams.get('target') || '').toLowerCase();
@@ -227,10 +234,10 @@ export default function LoginPage() {
   })();
 
   // PWA: if user has a stored preferred role AND a still-valid token for that role,
-  // jump directly to that surface (kiosk / admin / tenant). The token-check prevents
+  // jump directly to that surface (kiosk / Kiosk Beheer / tenant). The token-check prevents
   // redirect loops when a token has expired or been revoked.
   // If the URL contains an explicit `target`, prefer that over the stored role so
-  // the Beheer-shortcut always lands on /admin (or its PIN-gate) and not on /kiosk.
+  // the Beheer-shortcut always opens the management-enabled kiosk.
   useEffect(() => {
     if (!isStandalonePWA()) return;
     const params = new URLSearchParams(window.location.search);
@@ -305,7 +312,8 @@ export default function LoginPage() {
   if (view === 'login') {
     return (
       <PasswordView initialMode={view} onBack={() => setView('pin')}
-        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={branding} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)}
+        branding={branding} showSuperadminLink={!isKioskLogin} />
     );
   }
 
@@ -316,7 +324,8 @@ export default function LoginPage() {
   if (!branding?.slug) {
     return (
       <PasswordView initialMode="login" onBack={() => {}}
-        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)} branding={null} />
+        onRegistered={() => setSkipRedirect(true)} onLoginStart={() => setSkipRedirect(true)}
+        branding={null} showSuperadminLink={!isKioskLogin} />
     );
   }
 
@@ -337,7 +346,7 @@ export default function LoginPage() {
     if (forced === 'admin' || (pwaTarget === 'admin' && hasAdmin)) {
       setPreferredRole('admin');
       // Refresh AuthProvider zodat de nieuwe admin_token meteen actief is.
-      // Soft navigate naar /admin nadat user state is bijgewerkt.
+      // Na het verversen opent de beheerder dezelfde kioskbeheeromgeving.
       let me = null;
       try { me = await refresh(); } catch { /* niet-fataal */ }
       await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }) });
