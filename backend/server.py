@@ -382,7 +382,17 @@ BACKUP_EXTRA_COLLECTIONS = {
     "bank_statements": "id", "landing_assets": "id", "audit_log": "id",
     "notifications": "id", "fcm_tokens": "id", "sent_invoice_reminders": "invoice_id",
     "kiosk_devices_seen": "key",
+    "subscription_invoices": "id", "subscription_payments": "id",
+    "saas_payment_requests": "id", "saas_payment_plans": "id", "saas_stripe_transactions": "id",
+    "sent_upcoming_invoice_reminders": ("invoice_id", "days_bucket"),
+    "sent_trial_warnings": "_key",
 }
+# Records zonder `id` krijgen bij herstel deze logische sleutel i.p.v. een nieuw id.
+BACKUP_FALLBACK_KEYS = {"fcm_tokens": ("token",), "payment_plan_reminders": ("tenant_id",)}
+# Unieke sleutels over alle bedrijven heen → filter zonder company_id.
+BACKUP_GLOBAL_KEY_COLLECTIONS = {"company_landings", "landing_assets", "kiosk_id_owners", "kiosk_pins", "payment_plan_installments"}
+# Worden in 'replace'-modus nooit gewist (gedeelde, onveranderlijke foto's/logo's).
+BACKUP_NEVER_DELETE = {"landing_assets"}
 BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_billing_date",
                        "trial_started_at", "trial_ends_at", "pending_invoice_id"}
 
@@ -5674,6 +5684,11 @@ async def export_company_backup(user=Depends(get_current_user)):
         a async for a in db.landing_assets.find({"id": {"$in": list(refs)}}, {"_id": 0})
     ] if refs else []
     backup["summary"] = {k: len(v) for k, v in backup["collections"].items()}
+    # Nummerreeksen (bon-, factuur-, contract-, borgnummers) zijn globaal.
+    backup["counters"] = {
+        c["_id"]: c.get("seq", 0) async for c in db.counters.find({})
+        if isinstance(c.get("_id"), str)
+    }
 
     # Bouw een filename met datum + slug voor downloadbestand.
     slug = (company.get("slug") or cid)[:32]
@@ -5721,8 +5736,16 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     # Extra collections (v2) worden alleen gewist als de backup ze ook bevat.
     full = backup.get("format_version") == 2
     if body.mode == "replace":
+        target_plan_ids = [p["id"] async for p in db.payment_plans.find({"company_id": target_cid}, {"_id": 0, "id": 1})]
         for coll in TENANT_SCOPED_COLLECTIONS + (list(BACKUP_EXTRA_COLLECTIONS) if full else []):
-            query = {"id": target_cid} if coll == "company_landings" else {"company_id": target_cid}
+            if coll in BACKUP_NEVER_DELETE:
+                continue
+            if coll == "company_landings":
+                query = {"id": target_cid}
+            elif coll == "payment_plan_installments":
+                query = {"$or": [{"company_id": target_cid}, {"plan_id": {"$in": target_plan_ids}}]}
+            else:
+                query = {"company_id": target_cid}
             res = await db[coll].delete_many(query)
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
@@ -5732,26 +5755,42 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     for coll, docs in collections_in.items():
         if coll not in TENANT_SCOPED_COLLECTIONS and not (full and coll in BACKUP_EXTRA_COLLECTIONS):
             continue
-        key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
+        base_key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
+        base_keys = base_key if isinstance(base_key, tuple) else (base_key,)
+        skipped = 0
         ins = 0
         upd = 0
         for d in docs:
             d = {k: v for k, v in (d or {}).items() if k != "_id"}
             if coll == "company_landings":
                 d["id"] = target_cid
-            else:
+            elif coll != "landing_assets":
                 d["company_id"] = target_cid
-            if key == "id":
-                d["id"] = d.get("id") or new_id()
-            if d.get(key) is None:
+            keys = base_keys
+            if keys == ("id",) and not d.get("id"):
+                fb = BACKUP_FALLBACK_KEYS.get(coll)
+                if fb and all(d.get(k) is not None for k in fb):
+                    keys = fb
+                else:
+                    d["id"] = new_id()
+            if any(d.get(k) is None for k in keys):
                 continue
-            flt = {key: d[key]} if coll in ("company_landings", "landing_assets") else {key: d[key], "company_id": target_cid}
-            res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
+            flt = {k: d[k] for k in keys}
+            # fcm-token is wereldwijd uniek; overige sleutels per bedrijf.
+            if coll not in BACKUP_GLOBAL_KEY_COLLECTIONS and keys != ("token",):
+                flt["company_id"] = target_cid
+            try:
+                res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
+            except DuplicateKeyError:
+                skipped += 1
+                continue
             if res.upserted_id is not None:
                 ins += 1
             elif res.modified_count > 0:
                 upd += 1
         summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
+        if skipped:
+            summary["collections"][coll]["skipped"] = skipped
         summary["collections"][coll]["inserted"] += ins
         summary["collections"][coll]["upserted"] += upd
 
@@ -5776,6 +5815,15 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
             if r.upserted_id is not None or r.modified_count:
                 u_ins += 1
         summary["users_restored"] = u_ins
+
+    if full:
+        # Nummerreeksen: het hoogste getal wint, zodat nieuwe nummers nooit botsen.
+        restored_counters = 0
+        for ckey, seq in (backup.get("counters") or {}).items():
+            if isinstance(ckey, str) and isinstance(seq, int) and not isinstance(seq, bool):
+                await db.counters.update_one({"_id": ckey}, {"$max": {"seq": seq}}, upsert=True)
+                restored_counters += 1
+        summary["counters_restored"] = restored_counters
 
     summary["restored_at"] = now_utc_iso()
     return summary
@@ -14799,7 +14847,6 @@ def _add_workdays(start_date, n_workdays: int):
 def _last_day_of_month(year: int, month: int):
     """Laatste dag van de gegeven (jaar, maand) als date object."""
     from datetime import date
-    import calendar
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
