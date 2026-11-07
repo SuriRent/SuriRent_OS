@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { subscribeNfc } from '../lib/nfc-bus';
 import { FxStats, TenantPhoto } from './KioskFx';
 import useVisualViewportPosition from '../lib/use-visual-viewport-position';
+import { useWhitePageBehindModal } from '../lib/ios-status-bar';
 
 // Koppelscherm: onbekende NFC-tag → huurder kiezen → opslaan.
 export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
@@ -17,6 +18,7 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
   const [clash, setClash] = useState('');
   const sheetRef = useRef(null);
   useVisualViewportPosition(sheetRef);
+  useWhitePageBehindModal(639);
 
   const [linkedTo, setLinkedTo] = useState('');
   useEffect(() => subscribeNfc((id) => { setUid(id); setErr(''); setClash(''); }), []);

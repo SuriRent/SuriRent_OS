@@ -123,11 +123,11 @@ function BtPrinterDialog({ onClose }) {
   ), document.body);
 }
 
-export function KioskSheetLiveActions({ isAdmin, onClose }) {
+export function KioskSheetLiveActions({ isAdmin, onClose, children }) {
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   const [paired, setPaired] = useState(isPairedPrinter);
   const on = isAdmin ? s.active : s.connected;
-  const pill = 'relative h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition';
+  const pill = 'relative flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition';
   const pair = async () => {
     if (!window.confirm('Dit toestel koppelen als KT-V520 printer? Het print daarna bonnen die de beheerder op afstand stuurt, ook als niemand is ingelogd.')) return;
     try { const d = await pairThisDevice(); window.alert(`Gekoppeld als ${d.name}`); setPaired(true); }
@@ -136,24 +136,24 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
   const showPair = isAdmin && isKtpDevice() && !paired;
   const [btOpen, setBtOpen] = useState(false);
   const showBt = (s.printer ?? localStorage.getItem('kiosk_printer')) === 'bluetooth';
-  const cols = 1 + (showPair ? 1 : 0) + (showBt ? 1 : 0);
   return (
-    <div className={`mt-3 grid gap-2 ${cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} data-testid="kiosk-sheet-live-actions">
-      <button onClick={() => { onClose(); setKioskOverlayOpen(true); }} data-testid="kiosk-sheet-receipts" className={pill}>
+    <div className="contents" data-testid="kiosk-sheet-live-actions">
+      <button onClick={() => { onClose(); setKioskOverlayOpen(true); }} data-testid="kiosk-sheet-receipts" className={pill} aria-label="Bonnen">
         <span className={`w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'bg-slate-300'}`} />
-        <Receipt className="w-4 h-4" strokeWidth={2.5} /> Bonnen
+        <Receipt className="w-5 h-5" strokeWidth={2.5} />
       </button>
       {showPair && (
         <button onClick={pair} data-testid="kiosk-sheet-ktp-pair" className={pill} aria-label="Koppel dit toestel als KT-V520">
-          <Printer className="w-4 h-4" strokeWidth={2.5} /> KT-V520
+          <Printer className="w-5 h-5" strokeWidth={2.5} />
         </button>
       )}
       {showBt && (
-        <button onClick={() => setBtOpen(true)} data-testid="kiosk-sheet-bt-printer" className={pill}>
-          <Bluetooth className="w-4 h-4" strokeWidth={2.5} /> {getSavedPrinter() ? 'Printer' : 'Koppel printer'}
+        <button onClick={() => setBtOpen(true)} data-testid="kiosk-sheet-bt-printer" className={pill} aria-label={getSavedPrinter() ? 'Printer' : 'Koppel printer'}>
+          <Bluetooth className="w-5 h-5" strokeWidth={2.5} />
         </button>
       )}
       {btOpen && <BtPrinterDialog onClose={() => setBtOpen(false)} />}
+      {children}
     </div>
   );
 }

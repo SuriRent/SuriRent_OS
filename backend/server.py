@@ -382,7 +382,17 @@ BACKUP_EXTRA_COLLECTIONS = {
     "bank_statements": "id", "landing_assets": "id", "audit_log": "id",
     "notifications": "id", "fcm_tokens": "id", "sent_invoice_reminders": "invoice_id",
     "kiosk_devices_seen": "key",
+    "subscription_invoices": "id", "subscription_payments": "id",
+    "saas_payment_requests": "id", "saas_payment_plans": "id", "saas_stripe_transactions": "id",
+    "sent_upcoming_invoice_reminders": ("invoice_id", "days_bucket"),
+    "sent_trial_warnings": "_key",
 }
+# Records zonder `id` krijgen bij herstel deze logische sleutel i.p.v. een nieuw id.
+BACKUP_FALLBACK_KEYS = {"fcm_tokens": ("token",), "payment_plan_reminders": ("tenant_id",)}
+# Unieke sleutels over alle bedrijven heen → filter zonder company_id.
+BACKUP_GLOBAL_KEY_COLLECTIONS = {"company_landings", "landing_assets", "kiosk_id_owners", "kiosk_pins", "payment_plan_installments"}
+# Worden in 'replace'-modus nooit gewist (gedeelde, onveranderlijke foto's/logo's).
+BACKUP_NEVER_DELETE = {"landing_assets"}
 BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_billing_date",
                        "trial_started_at", "trial_ends_at", "pending_invoice_id"}
 
@@ -5674,6 +5684,11 @@ async def export_company_backup(user=Depends(get_current_user)):
         a async for a in db.landing_assets.find({"id": {"$in": list(refs)}}, {"_id": 0})
     ] if refs else []
     backup["summary"] = {k: len(v) for k, v in backup["collections"].items()}
+    # Nummerreeksen (bon-, factuur-, contract-, borgnummers) zijn globaal.
+    backup["counters"] = {
+        c["_id"]: c.get("seq", 0) async for c in db.counters.find({})
+        if isinstance(c.get("_id"), str)
+    }
 
     # Bouw een filename met datum + slug voor downloadbestand.
     slug = (company.get("slug") or cid)[:32]
@@ -5721,8 +5736,16 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     # Extra collections (v2) worden alleen gewist als de backup ze ook bevat.
     full = backup.get("format_version") == 2
     if body.mode == "replace":
+        target_plan_ids = [p["id"] async for p in db.payment_plans.find({"company_id": target_cid}, {"_id": 0, "id": 1})]
         for coll in TENANT_SCOPED_COLLECTIONS + (list(BACKUP_EXTRA_COLLECTIONS) if full else []):
-            query = {"id": target_cid} if coll == "company_landings" else {"company_id": target_cid}
+            if coll in BACKUP_NEVER_DELETE:
+                continue
+            if coll == "company_landings":
+                query = {"id": target_cid}
+            elif coll == "payment_plan_installments":
+                query = {"$or": [{"company_id": target_cid}, {"plan_id": {"$in": target_plan_ids}}]}
+            else:
+                query = {"company_id": target_cid}
             res = await db[coll].delete_many(query)
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
@@ -5732,26 +5755,42 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
     for coll, docs in collections_in.items():
         if coll not in TENANT_SCOPED_COLLECTIONS and not (full and coll in BACKUP_EXTRA_COLLECTIONS):
             continue
-        key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
+        base_key = BACKUP_EXTRA_COLLECTIONS.get(coll, "id")
+        base_keys = base_key if isinstance(base_key, tuple) else (base_key,)
+        skipped = 0
         ins = 0
         upd = 0
         for d in docs:
             d = {k: v for k, v in (d or {}).items() if k != "_id"}
             if coll == "company_landings":
                 d["id"] = target_cid
-            else:
+            elif coll != "landing_assets":
                 d["company_id"] = target_cid
-            if key == "id":
-                d["id"] = d.get("id") or new_id()
-            if d.get(key) is None:
+            keys = base_keys
+            if keys == ("id",) and not d.get("id"):
+                fb = BACKUP_FALLBACK_KEYS.get(coll)
+                if fb and all(d.get(k) is not None for k in fb):
+                    keys = fb
+                else:
+                    d["id"] = new_id()
+            if any(d.get(k) is None for k in keys):
                 continue
-            flt = {key: d[key]} if coll in ("company_landings", "landing_assets") else {key: d[key], "company_id": target_cid}
-            res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
+            flt = {k: d[k] for k in keys}
+            # fcm-token is wereldwijd uniek; overige sleutels per bedrijf.
+            if coll not in BACKUP_GLOBAL_KEY_COLLECTIONS and keys != ("token",):
+                flt["company_id"] = target_cid
+            try:
+                res = await db[coll].update_one(flt, {"$set": d}, upsert=True)
+            except DuplicateKeyError:
+                skipped += 1
+                continue
             if res.upserted_id is not None:
                 ins += 1
             elif res.modified_count > 0:
                 upd += 1
         summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
+        if skipped:
+            summary["collections"][coll]["skipped"] = skipped
         summary["collections"][coll]["inserted"] += ins
         summary["collections"][coll]["upserted"] += upd
 
@@ -5776,6 +5815,15 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
             if r.upserted_id is not None or r.modified_count:
                 u_ins += 1
         summary["users_restored"] = u_ins
+
+    if full:
+        # Nummerreeksen: het hoogste getal wint, zodat nieuwe nummers nooit botsen.
+        restored_counters = 0
+        for ckey, seq in (backup.get("counters") or {}).items():
+            if isinstance(ckey, str) and isinstance(seq, int) and not isinstance(seq, bool):
+                await db.counters.update_one({"_id": ckey}, {"$max": {"seq": seq}}, upsert=True)
+                restored_counters += 1
+        summary["counters_restored"] = restored_counters
 
     summary["restored_at"] = now_utc_iso()
     return summary
@@ -13193,6 +13241,8 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out = {
         "bedrijfsnaam": (p.get("company_name") or "").strip() or "SuriRent",
         "adres": (loc or {}).get("address") or p.get("company_address") or "",
+        "bedrijf_adres": p.get("company_address") or (loc or {}).get("address") or "",
+        "locatie_adres": (loc or {}).get("address") or (loc or {}).get("name") or p.get("location_name") or "",
         "telefoon": (loc or {}).get("phone") or p.get("company_phone") or p.get("company_whatsapp") or "",
         "kwitantie": p.get("receipt_number") or "",
         "datum": datum,
@@ -13218,7 +13268,11 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out["paper_width"] = 58 if out["printer"] == "kt-v520" else cfg["paper_width"]
     cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
     out["cols"] = cols
+    out["_bon"] = ((cs or {}).get("receipts") or {}).get("bon") or {}
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
+    out.pop("_bon", None)
+    out["template"] = "lines"
+    out["receipt_type"] = "betaling"
     return out
 
 
@@ -13253,47 +13307,71 @@ def _receipt_employee(p: dict) -> str:
 
 def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     """Bon als tekstregels voor ESC/POS-printers (KT-V520 / Bluetooth)."""
-    W = cols
+    # Opmaak zoals de KT-V520 APK print (foto's klant): 28 tekens breed bij 58mm.
+    W = min(cols, 28) if cols <= 32 else cols - 6
     dash = "-" * W
 
     def row(label, value):
         label, value = str(label), str(value)
         gap = W - len(label) - len(value)
-        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label}\n{value.rjust(W)}"
+        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label} {value}"
 
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
-    lines = [L(d["bedrijfsnaam"], "center", True, "large")]
-    for extra in (d.get("adres"), d.get("telefoon") and f"Tel: {d['telefoon']}"):
-        if extra:
-            lines.append(L(extra, "center"))
-    lines += [L(dash), L(title, "center", True), L(dash)]
+    cfg = {"split_name": True, "footer": "Bedankt voor uw betaling", **{k: True for k in (
+        "show_address", "show_phone", "show_tenant_phone", "show_apartment", "show_tenant_address",
+        "show_method", "show_outstanding_period", "show_employee", "show_note")}, **(d.get("_bon") or {})}
+    # Bedrijfsnaam: eerste woord op regel 1, rest op regel 2 (groot, vet, gecentreerd)
+    first, _sp, rest = (d["bedrijfsnaam"] or "").strip().partition(" ")
+    if not cfg["split_name"]:
+        first, rest = (d["bedrijfsnaam"] or "").strip(), ""
+    lines = [L(first, "center", True, "large")]
+    if rest.strip():
+        lines.append(L(rest.strip(), "center", True, "large"))
+    # Adres en telefoon (bedrijf), iets groter dan gewone tekst
+    if cfg["show_address"] and d.get("bedrijf_adres"):
+        lines += [L(x, "center", False, "medium") for x in _wrap_text(d["bedrijf_adres"], W - 6)]
+    if cfg["show_phone"] and d.get("telefoon"):
+        lines.append(L(f"TEL: {d['telefoon']}", "center", False, "medium"))
+    lines += [L(dash), L(title, "center", False, "medium"), L(dash)]
     if d.get("kwitantie"):
-        lines.append(L(row("Nr:", d["kwitantie"])))
-    lines.append(L(row("Datum:", d["datum"])))
+        lines.append(L(row("NR.", d["kwitantie"])))
+    lines.append(L(row("DATUM", d["datum"])))
     lines.append(L(dash))
-    lines.append(L("HUURDER:", bold=True))
+    # Huurder
+    lines.append(L("HUURDER:"))
     lines.append(L(d.get("naam") or "-"))
-    if d.get("huurder_telefoon"):
-        lines.append(L(row("Tel:", d["huurder_telefoon"])))
-    if d.get("appartement") or d.get("vestiging"):
-        lines.append(L(" - ".join(x for x in (d.get("appartement") and f"App. {d['appartement']}", d.get("vestiging")) if x)))
-    lines += [L(dash), L(d["omschrijving"])]
-    if d.get("methode"):
-        lines.append(L(row("Methode:", d["methode"])))
-    lines.append(L(row("BETAALD", d["bedrag"]), bold=True))
-    if d.get("openstaand_periode"):
-        # Optioneel: openstaand bedrag + maanden als eigen blok onder het bedrag.
-        lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], bold=True)]
+    apt = str(d.get("appartement") or "").strip()
+    if cfg["show_apartment"] and apt:
+        lines.append(L(apt.upper() if re.match(r"^[A-Za-z]{3,}\b", apt) else f"App. {apt}"))
+    if cfg["show_tenant_address"] and d.get("locatie_adres"):
+        lines += [L(x) for x in _wrap_text(d["locatie_adres"], W)]
+    if cfg["show_tenant_phone"] and d.get("huurder_telefoon"):
+        lines.append(L(f"TEL: {d['huurder_telefoon']}"))
+    lines.append(L(dash))
+    lines += [L("OMSCHRIJVING:")] + [L(x) for x in _wrap_text(d["omschrijving"], W)]
+    lines.append(L(dash))
+    # Betaald
+    lines.append(L(f"BETAALD: {d['bedrag']}", "left", True, "medium"))
+    if cfg["show_method"] and d.get("methode"):
+        lines.append(L(row("BETAALWIJZE", d["methode"])))
+    if cfg["show_employee"] and d.get("medewerker"):
+        lines += [L("Ontvangen door:"), L(d["medewerker"])]
+    lines.append(L(dash))
+    # Nog openstaand
+    lines += [L("Nog openstaand:", "left", True, "medium"), L(d["openstaand"], "left", True, "medium")]
+    if cfg["show_outstanding_period"] and d.get("openstaand_periode"):
         lines += [L(x) for x in _wrap_text(f"Maand(en): {d['openstaand_periode']}", W)]
-    else:
-        lines.append(L(row("Openstaand:", d["openstaand"])))
-    if d.get("medewerker"):
-        lines.append(L(row("Ontvangen door:", d["medewerker"])))
-    if d.get("opmerking"):
-        lines += [L(dash), L(f"Opmerking: {d['opmerking']}")]
-    lines += [L(dash), L("Bedankt voor uw betaling!", "center"), L(""), L("")]
+    if cfg["show_note"] and d.get("opmerking"):
+        lines += [L(dash), L("OPMERKING:")] + [L(x) for x in _wrap_text(d["opmerking"], W)]
+    foot = str(cfg["footer"] or "").strip()
+    if foot:
+        lines.append(L(dash))
+        lines += [L(x, "center") for x in _wrap_text(foot, W)]
+        if d.get("kwitantie"):
+            lines.append(L(f"- {d['kwitantie']} -", "center"))
+    lines += [L(""), L("")]
     return lines
 
 
@@ -14799,7 +14877,6 @@ def _add_workdays(start_date, n_workdays: int):
 def _last_day_of_month(year: int, month: int):
     """Laatste dag van de gegeven (jaar, maand) als date object."""
     from datetime import date
-    import calendar
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
@@ -18009,6 +18086,27 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
     p["_screen_sizes"] = True
     html = _render_receipt_html(p, fmt="thermal", preview=True)
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
+@api.post("/settings/receipts/preview-lines")
+async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
+    """Bonvoorbeeld als regels (met nog niet opgeslagen bon-opties): zelfde opbouw als naar de KT-V520 APK."""
+    cid = company_id_of(user)
+    brand = await _company_brand_info(cid)
+    p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
+    if p:
+        d = await _receipt_print_data(p)
+    else:
+        d = {"bedrijfsnaam": (brand.get("company_name") or "SuriRent N.V.") if isinstance(brand, dict) else "SuriRent N.V.",
+             "adres": "Voorbeeldstraat 1", "bedrijf_adres": "Voorbeeldstraat 1, Paramaribo", "locatie_adres": "Centrum",
+             "telefoon": "+597 123 4567", "kwitantie": "VB-000001",
+             "datum": "01-01-2026 10:00", "naam": "Voorbeeld Huurder", "huurder_telefoon": "+597 7654321",
+             "appartement": "A-101", "omschrijving": "Huur — Januari 2026", "methode": "Contant",
+             "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",
+             "medewerker": "Medewerker", "opmerking": "Voorbeeldbon", "cols": _RECEIPT_COLS}
+    d["_bon"] = (body or {}).get("bon") or {}
+    cols = d.get("cols", _RECEIPT_COLS)
+    return {"lines": _receipt_text_lines(d, "KWITANTIE", cols), "cols": cols}
 
 
 @api.post("/settings/{section}/test")

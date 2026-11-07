@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import useVisualViewportPosition from '../lib/use-visual-viewport-position';
+import { setIosStatusBar } from '../lib/ios-status-bar';
 
 /**
  * KeyboardSafeModal
@@ -48,12 +49,15 @@ export default function KeyboardSafeModal({ onClose, testId, children, className
     body.style.overflow = 'hidden';
     body.style.backgroundColor = '#ffffff';
     html.style.backgroundColor = '#ffffff';
+    const metas = Array.from(document.querySelectorAll('meta[name="theme-color"]')).map((m) => [m, m.getAttribute('content')]);
+    setIosStatusBar('#FFFFFF');
 
     return () => {
       const s = bodyStyleRef.current;
       body.style.overflow = s.overflow;
       body.style.backgroundColor = s.bodyBg;
       html.style.backgroundColor = s.htmlBg;
+      metas.forEach(([m, c]) => m.setAttribute('content', c));
     };
   }, []);
 

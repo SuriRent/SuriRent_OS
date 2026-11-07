@@ -382,7 +382,7 @@ function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoic
   );
 }
 
-export default function KioskInvoicesPage({ onBack }) {
+export default function KioskInvoicesPage({ onBack, embedded = false }) {
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [data, setData] = useState(null);
@@ -420,6 +420,13 @@ export default function KioskInvoicesPage({ onBack }) {
     };
   }, [load, loadTenants]);
 
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const open = () => setCreating(true);
+    window.addEventListener('kiosk-invoice-new', open);
+    return () => window.removeEventListener('kiosk-invoice-new', open);
+  }, [embedded]);
+
   const groups = useMemo(() => {
     if (!data) return [];
     const byId = new Map(groupByTenant(data.invoices || [], MONTHS_NL).map((g) => [g.tenant_id, g]));
@@ -450,9 +457,9 @@ export default function KioskInvoicesPage({ onBack }) {
   };
 
   return (
-    <div className="h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0"
-      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-admin-page-facturen">
-      <div className="kiosk-chrome md:hidden flex items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0">
+    <div className={embedded ? 'w-full flex flex-col' : 'h-full w-full bg-[#FF5C00] flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0'}
+      style={embedded ? undefined : { paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-admin-page-facturen">
+      <div className={`kiosk-chrome md:hidden ${embedded ? 'hidden' : 'flex'} items-center justify-between gap-2 px-1 sm:px-2 py-2 shrink-0`}>
         {onBack ? (
           <button onClick={onBack} data-testid="kiosk-admin-page-back"
             className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 active:scale-95 transition">

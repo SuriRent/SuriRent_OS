@@ -7,6 +7,21 @@ import { useState, useRef } from 'react';
 import { Download, Upload, AlertTriangle, CheckCircle2, Loader2, Database, ShieldAlert } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
+// Leesbare namen voor de collecties in het herstel-overzicht.
+const COLL_LABELS = {
+  apartments: 'Appartementen', tenants: 'Huurders', payments: 'Betalingen', contracts: 'Contracten', invoices: 'Facturen',
+  employees: 'Werknemers', salaries: 'Loonstroken', deposits: 'Borg', maintenance: 'Onderhoud', kasgeld: 'Kasgeld',
+  push_subs: 'Push-abonnementen', locations: 'Locaties',
+  company_settings: 'Bedrijfsinstellingen', company_landings: 'Eigen landingspagina',
+  payment_plans: 'Betalingsregelingen', payment_plan_installments: 'Termijnen betalingsregeling', payment_plan_reminders: 'Herinneringen betalingsregeling',
+  tenant_notes: 'Huurder-notities', fines: 'Boetes', power_devices: 'Stroommeters', power_log: 'Stroomlogboek',
+  kiosk_pins: 'Kiosk-PIN', kiosk_printers: 'Kiosk-printers', kiosk_id_owners: 'Kiosk-koppelingen', kiosk_emp_state: 'Kiosk-medewerkerstatus',
+  kiosk_stripe_payments: 'Kiosk-kaartbetalingen', kiosk_print_log: 'Kiosk-printlog', kiosk_devices_seen: 'Kiosk-apparaten',
+  bank_statements: 'Bankafschriften', audit_log: 'Auditlog', notifications: 'Meldingen', fcm_tokens: 'Push-apparaten (app)',
+  sent_invoice_reminders: 'Verstuurde factuurherinneringen', sent_upcoming_invoice_reminders: 'Verstuurde vooraankondigingen',
+  sent_trial_warnings: 'Verstuurde proefperiode-waarschuwingen', landing_assets: "Foto's en logo's",
+};
+
 export default function BackupRestore() {
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -89,10 +104,10 @@ export default function BackupRestore() {
           <div className="grid sm:grid-cols-2 gap-1 text-xs text-emerald-700">
             {Object.entries(summary.collections || {}).map(([k, v]) => (
               <p key={k}>
-                <span className="font-bold">{k}:</span>{' '}
+                <span className="font-bold" title={k}>{COLL_LABELS[k] || k}:</span>{' '}
                 {v.inserted ? `+${v.inserted} nieuw` : ''}{' '}
                 {v.upserted ? `${v.upserted} bijgewerkt` : ''}{' '}
-                {v.deleted ? `(${v.deleted} verwijderd)` : ''}
+                {v.deleted ? `(${v.deleted} verwijderd)` : ''}{' '}{v.skipped ? `${v.skipped} overgeslagen` : ''}
               </p>
             ))}
           </div>

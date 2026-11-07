@@ -146,7 +146,7 @@ async def consolidate_company_invoices(db, company_id: str) -> dict | None:
                 {"invoice_ids": {"$in": secondary_ids}},
                 {"invoice_id": {"$in": secondary_ids}},
             ]},
-            {"_id": 0, "id": 1, "invoice_id": 1, "invoice_ids": 1},
+            {"_id": 1, "invoice_id": 1, "invoice_ids": 1},
         ).to_list(10000)
         for transaction in transactions:
             invoice_ids = [
@@ -158,7 +158,7 @@ async def consolidate_company_invoices(db, company_id: str) -> dict | None:
             if transaction.get("invoice_id") in secondary_ids:
                 changes["invoice_id"] = master["id"]
             await db.saas_stripe_transactions.update_one(
-                {"id": transaction["id"]}, {"$set": changes},
+                {"_id": transaction["_id"]}, {"$set": changes},
             )
         await db.subscription_invoices.update_many(
             {"id": {"$in": secondary_ids}},

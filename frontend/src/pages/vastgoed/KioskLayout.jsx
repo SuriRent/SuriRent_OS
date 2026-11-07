@@ -33,6 +33,7 @@ import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
@@ -42,7 +43,7 @@ import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
-import { setIosStatusBar } from '../../lib/ios-status-bar';
+import { setIosStatusBar, useWhitePageBehindModal } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
 import useVisualViewportPosition from '../../lib/use-visual-viewport-position';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
@@ -3303,7 +3304,7 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel() {
+function KasgeldPanel({ embedded = false }) {
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3344,6 +3345,12 @@ function KasgeldPanel() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const open = () => setShowForm(true);
+    window.addEventListener('kiosk-kasgeld-new', open);
+    return () => window.removeEventListener('kiosk-kasgeld-new', open);
+  }, [embedded]);
   useEffect(() => {
     const onChange = () => load({ quiet: true });
     const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
@@ -3405,12 +3412,48 @@ function KasgeldPanel() {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className={`h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : theme === 'green' ? 'bg-[#F2F8F4]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
-      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
+    <div className={embedded ? 'w-full flex flex-col' : `h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : theme === 'green' ? 'bg-[#F2F8F4]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
+      style={embedded ? undefined : { paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
       {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
+      {embedded && (
+        <div className="space-y-4" data-testid="kasgeld-fx">
+          <FxStats testId="kasgeld-fx-stats" items={[
+            ['SRD', Number(balances.SRD || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'orange'],
+            ['USD', Number(balances.USD || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'slate'],
+            ['EUR', Number(balances.EUR || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'slate']]} />
+          <FxTabs testPrefix="kasgeld" value={sourceFilter} onChange={setSourceFilter} tabs={[
+            { v: 'all', label: 'Alles', count: items.length },
+            { v: 'kasgeld', label: 'Handmatig', count: items.filter((it) => (it.source || 'kasgeld') === 'kasgeld').length },
+            { v: 'payment', label: 'Betalingen', count: items.filter((it) => it.source === 'payment').length }]} />
+          {err && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
+          {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
+          {!err && !loading && visibleItems.length === 0 && <FxEmpty text="Nog geen mutaties." testId="kasgeld-empty" />}
+          {visibleItems.map((it) => {
+            const isIn = it.type === 'in';
+            const d = it.entry_date || it.created_at;
+            const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+            const creator = (it.created_by_name || '').trim();
+            return (
+              <FxRow key={it.id} testId={`kasgeld-row-${it.id}`}
+                title={it.description || it.category || '—'}
+                sub={[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`].filter(Boolean).join(' · ')}
+                amount={`${isIn ? '+' : '−'}${fmtMoney(it.amount, it.currency)}`}
+                status={it.excluded_from_balance ? 'Niet in saldo' : isIn ? 'Ontvangen' : 'Uitgave'}
+                tone={it.excluded_from_balance ? 'slate' : isIn ? 'green' : 'red'}
+                actions={canManage && it.source !== 'payment' ? (
+                  <>
+                    <FxIconBtn onClick={() => setEditing(it)} title="Bewerken" testId={`kasgeld-row-edit-${it.id}`}><Pencil className="w-4 h-4" /></FxIconBtn>
+                    <FxIconBtn onClick={() => removeEntry(it)} danger title="Verwijderen" testId={`kasgeld-row-delete-${it.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+                  </>
+                ) : undefined} />
+            );
+          })}
+        </div>
+      )}
+      {!embedded && (
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
         <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-3 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
@@ -3454,13 +3497,13 @@ function KasgeldPanel() {
           </div>
 
           <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-            className="w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
+            className={`${embedded ? 'hidden' : ''} w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_            rgba(255,92,0,0.35)] active:scale-[0.98] transition`}>
             <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
           </button>
         </div>
 
         {/* ─── Recente mutaties ─── (mobile: bottom | desktop: left wide) */}
-        <div className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden">
+        <div className={`bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col ${embedded ? 'p-3' : 'p-4'} sm:p-5 min-w-0 overflow-hidden`}>
           <div className="row-label-value items-center mb-3">
             <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Recente mutaties</h3>
             <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-full px-3 py-1.5" data-testid="kasgeld-count-badge">
@@ -3493,26 +3536,26 @@ function KasgeldPanel() {
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1 pb-14 md:pb-0">
+          <div className={`flex-1 min-h-0 overflow-y-auto space-y-2 ${embedded ? '' : '-mx-1 px-1'} pb-14 md:pb-0`}>
             {monthGroups.map((g) => {
               const isOpen = expandedMonths.has(g.key);
               const isSelected = g.key === selectedMonth;
               return (
-                <div key={g.key} className={`rounded-2xl border transition ${
+                <div key={g.key} className={embedded ? '' : `rounded-2xl border transition ${
                   isSelected ? 'border-orange-200 bg-orange-50/40' : 'border-slate-200 bg-slate-50/40'
                 }`} data-testid={`kasgeld-month-${g.key}`}>
                   <button type="button" onClick={() => toggleMonth(g.key)}
                     data-testid={`kasgeld-month-toggle-${g.key}`}
-                    className="w-full flex items-center gap-3 px-4 py-4 text-left">
+                    className={`w-full flex items-center gap-3 ${embedded ? 'px-0' : 'px-4'} py-4 text-left`}>
                     <Calendar className="w-5 h-5 text-slate-500 shrink-0" />
                     <span className="flex-1 min-w-0 font-black text-slate-900 capitalize truncate">{g.label}</span>
                     <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{g.items.length} mutaties</span>
                     <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {isOpen && (
-                    <div className="divide-y divide-slate-100 border-t border-slate-100 bg-white rounded-b-2xl" data-testid={`kasgeld-month-items-${g.key}`}>
+                    <div className={`divide-y divide-slate-100 border-t border-slate-100 bg-white ${embedded ? '' : 'rounded-b-2xl'}`} data-testid={`kasgeld-month-items-${g.key}`}>
                       {g.items.map((it) => (
-                        <KasgeldMutationRow key={it.id} item={it} canManage={canManage}
+                        <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush={embedded}
                           onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
                       ))}
                     </div>
@@ -3523,6 +3566,7 @@ function KasgeldPanel() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Month picker overlay (bottom-sheet op mobiel, centered op desktop) */}
       {showMonthPicker && (
@@ -3942,14 +3986,14 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
 
 // Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
-function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
+function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }) {
   const isIn = item.type === 'in';
   const d = item.entry_date || item.created_at;
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
   const creator = (item.created_by_name || '').trim();
   return (
-    <div className="kiosk-cash-row flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
+    <div className={`kiosk-cash-row flex items-center gap-3 ${flush ? 'px-0' : 'px-3 sm:px-4'} py-3`} data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
         isIn ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'
       }`}>
@@ -5051,12 +5095,7 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
   const modalRef = useRef(null);
   useVisualViewportPosition(modalRef, fullscreenMobile ? 768 : 640);
   const { theme } = useContext(KioskThemeCtx);
-  useEffect(() => {
-    if (!fullscreenMobile) return undefined;
-    const statusBarColor = theme === 'green' ? '#F2F8F4' : theme === 'white' ? '#FFFFFF' : '#FF5C00';
-    setIosStatusBar('#FFFFFF');
-    return () => setIosStatusBar(statusBarColor);
-  }, [fullscreenMobile, theme]);
+  useWhitePageBehindModal(fullscreenMobile ? 767 : 639);
   return createPortal((
     <div
       className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white ${fullscreenMobile ? 'md:bg-black/50 md:backdrop-blur-md md:flex md:items-center md:justify-center md:p-4' : 'sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4'} ${theme === 'white' ? 'kiosk-modal-white' : theme === 'green' ? 'kiosk-modal-green' : ''}`}
@@ -5518,9 +5557,8 @@ function SheetThemeButton() {
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
-      className={`mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
-      {white || green ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
-      {nextTheme}
+      className={`flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
+      {white || green ? <Palette className="w-5 h-5" strokeWidth={2.5} /> : <Sun className="w-5 h-5" strokeWidth={2.5} />}
     </button>
   );
 }
@@ -5584,28 +5622,23 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
 
       <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-        <div className="grid grid-cols-3 gap-2" data-testid="kiosk-sheet-actions">
-          <button onClick={() => onPick('kasgeld')} data-testid="kiosk-tile-kasgeld"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
-            <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
-          </button>
-          {hasAdminAccess && !isStaffSession() ? (
-            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings"
-              className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
-              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Instellingen
+        <div className="flex gap-2" data-testid="kiosk-sheet-actions">
+        <div className="contents" data-testid="kiosk-sheet-actions-row">
+          {hasAdminAccess && !isStaffSession() && (
+            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings" aria-label="Instellingen"
+              className="flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center bg-white/15 text-white shadow-sm active:scale-95 transition">
+              <SettingsIcon className="w-5 h-5" strokeWidth={2.5} />
             </button>
-          ) : <span />}
-          <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
-            <LogOut className="w-4 h-4" strokeWidth={2.5} /> Uit
+          )}
+          <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit" aria-label="Uit"
+            className="flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center bg-white/15 text-white shadow-sm active:scale-95 transition">
+            <LogOut className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
-        <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose} />
-        <button type="button" onClick={() => onPick('scanid')} data-testid="kiosk-sheet-scan-id"
-          className="mt-3 w-full h-12 rounded-full font-black text-base inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
-          <ScanLine className="w-5 h-5" strokeWidth={2.5} /> SCAN ID
-        </button>
-        <SheetThemeButton />
+        <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
+          <SheetThemeButton />
+        </KioskSheetLiveActions>
+        </div>
       </div>
     </div>
   ), document.body);
@@ -6231,6 +6264,7 @@ export default function KioskLayout() {
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
   const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:'));
+  useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') {
@@ -6434,7 +6468,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPage id="appartementen" kioskLayout onBack={goBack} />
+              ? <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />
               : (
                 <div className="h-full min-h-0 kiosk-admin-skin">
                   <KioskApartmentsPanel
@@ -6447,29 +6481,52 @@ export default function KioskLayout() {
               )
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
-            <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
-            <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
-            <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:betalingen' && hasAdminAccess && (
-            <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:regelingen' && hasAdminAccess && (
-            <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
-            <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             <KioskAdminPage id={step.slice(6)} onBack={goBack} />
           )}
           {step === 'kasgeld' && (
-            <KasgeldPanel />
+            isMobileViewport ? (
+              <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
+                wide xwide tall fullscreenMobile
+                footer={(
+                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-kasgeld-new'))} data-testid="kiosk-popup-kasgeld-new"
+                    className="w-full h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
+                    <Wallet className="w-4 h-4" /> Nieuwe mutatie
+                  </button>
+                )}>
+                <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4"><KasgeldPanel embedded /></div></KioskFxCtx.Provider>
+              </KioskModalShell>
+            ) : <KasgeldPanel />
           )}
           {step === 'stroom' && hasAdminAccess && (
             <div className="h-full overflow-y-auto bg-orange-500 kiosk-admin-skin" data-testid="kiosk-stroom">

@@ -310,10 +310,10 @@ export default function DesktopRegisterWizard({ onClose, initialPlan }) {
                 {w.step === 2 && (
                   <div className="grid grid-cols-2 gap-8 [@media(max-height:820px)]:gap-4">
                     <Field icon={Mail} label={t.email} required hint={t.emailHint}>
-                      <IconInput icon={Mail} type="email" autoComplete="email" value={w.email} onChange={(e) => w.setEmail(e.target.value)} placeholder={t.emailPh} data-testid="register-email" autoFocus />
+                      <IconInput icon={Mail} type="email" autoComplete="email" name="email" id="register-email" value={w.email} onChange={(e) => w.setEmail(e.target.value)} placeholder={t.emailPh} data-testid="register-email" autoFocus />
                     </Field>
                     <Field icon={Lock} label={t.password} required>
-                      <IconInput icon={Lock} type={w.showPw ? 'text' : 'password'} autoComplete="new-password" minLength={6} value={w.password}
+                      <IconInput icon={Lock} type={w.showPw ? 'text' : 'password'} autoComplete="new-password" name="new-password" id="register-password" minLength={6} value={w.password}
                         onChange={(e) => w.setPassword(e.target.value)} placeholder={t.passwordPh} data-testid="register-password"
                         right={<button type="button" onClick={() => w.setShowPw((s) => !s)} data-testid="register-password-toggle" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{w.showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>} />
                       <div className="mt-2.5"><PasswordStrength password={w.password} lang={lang} /></div>

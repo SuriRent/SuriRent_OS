@@ -95,7 +95,7 @@ export function encodeEscPos(lines) {
   const out = [0x1b, 0x40];
   const ALIGN = { left: 0, center: 1, right: 2 };
   for (const l of lines) {
-    out.push(0x1b, 0x61, ALIGN[l.align] ?? 0, 0x1b, 0x45, l.bold ? 1 : 0, 0x1d, 0x21, l.size === 'large' ? 0x11 : 0);
+    out.push(0x1b, 0x61, ALIGN[l.align] ?? 0, 0x1b, 0x45, l.bold ? 1 : 0, 0x1d, 0x21, l.size === 'large' ? 0x11 : l.size === 'medium' ? 0x01 : 0);
     for (const ch of plain(l.text)) out.push(ch.charCodeAt(0));
     out.push(0x0a);
   }

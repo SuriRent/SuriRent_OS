@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, X } from 'lucide-react';
+import { useWhitePageBehindModal } from '../lib/ios-status-bar';
 
 const SECTIONS = [
   {
@@ -97,6 +98,7 @@ const SECTIONS = [
 ];
 
 export default function KioskManual({ onClose }) {
+  useWhitePageBehindModal(767);
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onClose();
@@ -106,11 +108,12 @@ export default function KioskManual({ onClose }) {
   }, [onClose]);
 
   return createPortal((
-    <div className="fixed inset-0 z-[150] flex items-end justify-center bg-[#0B1B3F]/60 backdrop-blur-sm md:items-center md:p-6"
+    <div className="fixed inset-0 z-[150] flex items-stretch justify-center bg-[#F7F8FA] md:items-center md:p-6 md:bg-[#0B1B3F]/60 md:backdrop-blur-sm"
       data-testid="kiosk-manual-overlay" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="kiosk-manual-title"
-        className="flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl bg-[#F7F8FA] shadow-2xl md:rounded-3xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+        className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-[#F7F8FA] md:h-auto md:max-h-[96dvh] md:rounded-3xl md:shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 pb-3 sm:px-6"
+          style={{ paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]">
               <BookOpen className="h-5 w-5" />

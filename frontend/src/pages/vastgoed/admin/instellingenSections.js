@@ -11,7 +11,7 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'deposit', label: 'Borg', desc: 'Stel de standaardborg in als veelvoud van de maandhuur.', icon: ShieldCheck },
   { id: 'stripe', label: 'Stripe betalingen', desc: 'Laat huurders in de Kiosk betalen met Creditcard of iDEAL.', icon: CreditCard },
   { id: 'stroom', label: 'Stroom', desc: 'Tuya-koppeling, schakelaars per appartement koppelen en automatisch afsluiten bij achterstand.', icon: Zap },
-  { id: 'bon', label: 'Bon & afdrukken', desc: 'Kies het afdrukformaat en de lettergrootte van de kwitantie.', icon: Printer },
+  { id: 'bon', label: 'Bon & afdrukken', desc: 'Kies wat er op de bon staat: bedrijfsnaam, velden en voettekst.', icon: Printer },
   { id: 'bon-printer', label: 'Bon printer', desc: 'Kies KT-V520 of een Bluetooth bonprinter en koppel hem.', icon: Bluetooth },
   { id: 'kiosk-apparaten', label: 'Kiosk apparaten', desc: 'Printer-hardware voor alle kiosks van je bedrijf.', icon: Tablet },
   { id: 'backup', label: 'Backup & herstel', desc: 'Maak veilige kopieën en herstel data wanneer nodig.', icon: Database },
