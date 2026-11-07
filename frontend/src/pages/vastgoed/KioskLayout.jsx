@@ -5623,6 +5623,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
       <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         <div className="flex gap-2" data-testid="kiosk-sheet-actions">
+        <div className="contents" data-testid="kiosk-sheet-actions-row">
           {hasAdminAccess && !isStaffSession() && (
             <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings" aria-label="Instellingen"
               className="flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center bg-white/15 text-white shadow-sm active:scale-95 transition">
@@ -5637,6 +5638,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
           <SheetThemeButton />
         </KioskSheetLiveActions>
+        </div>
       </div>
     </div>
   ), document.body);
