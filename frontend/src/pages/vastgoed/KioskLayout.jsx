@@ -3148,14 +3148,17 @@ function FittedReceiptPreview({ paymentId, maxScale = 1, fancy = false }) {
         style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
         {lines ? (
           <div ref={paperRef} data-testid="receipt-preview-lines"
-            className={`absolute top-0 left-0 ${fancy ? 'p-3 pb-5' : 'bg-white border border-dashed border-slate-200 p-2'}`}
+            className={`absolute top-0 left-0 ${fancy ? '' : 'bg-white border border-dashed border-slate-200 p-2'}`}
             style={{
               width: '58mm', fontFamily: 'monospace', color: fancy ? '#1f2937' : '#000',
               transform: `scale(${scale})`, transformOrigin: 'top left',
               ...(fancy ? {
-                background: 'linear-gradient(180deg,#fffdf8 0%,#ffffff 40%,#fffdf8 100%)',
-                clipPath: `polygon(${Array.from({ length: 13 }, (_, i) => `${(i * 100) / 12}% ${i % 2 ? 'calc(100% - 7px)' : '100%'}`).join(',')},100% 0,0 0)`,
-                borderTop: '4px solid #f97316',
+                background: '#ffffff',
+                backgroundImage: 'repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 3px,rgba(0,0,0,0.012) 3px,rgba(0,0,0,0.012) 4px)',
+                padding: '14px 12px 18px',
+                letterSpacing: '0.02em',
+                WebkitFontSmoothing: 'antialiased',
+                clipPath: `polygon(${Array.from({ length: 21 }, (_, i) => `${(i * 100) / 20}% ${i % 2 ? '5px' : '0'}`).join(',')},${Array.from({ length: 21 }, (_, i) => `${100 - (i * 100) / 20}% ${i % 2 ? 'calc(100% - 5px)' : '100%'}`).join(',')})`,
               } : {}),
             }}>
             {lines.map((l, i) => (
@@ -3286,7 +3289,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
                 )}
               </div>
             </div>
-            <div className="flex-1 min-h-0 w-full rounded-2xl bg-gradient-to-b from-orange-50 to-orange-100 ring-1 ring-orange-200/60 p-3 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-2xl" data-testid="receipt-desktop-bon">
+            <div className="flex-1 min-h-0 w-full rounded-2xl bg-[radial-gradient(ellipse_at_top,#f1f5f9,#cbd5e1)] ring-1 ring-slate-200 p-3 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-[0_10px_18px_rgba(15,23,42,0.28)]" data-testid="receipt-desktop-bon">
               <FittedReceiptPreview paymentId={payment.id} maxScale={3} fancy />
             </div>
             <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
