@@ -18100,6 +18100,20 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
 async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
     """Bonvoorbeeld als regels (met nog niet opgeslagen bon-opties): zelfde opbouw als naar de KT-V520 APK."""
     cid = company_id_of(user)
+    kind = (body or {}).get("kind") or "betaling"
+    if kind in ("kasbon", "borgbon"):
+        sess = {"company_id": cid}
+        if kind == "kasbon":
+            e = await db.kasgeld.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+            if not e:
+                return {"lines": [], "cols": 21, "empty": "Nog geen kasbon beschikbaar — maak eerst een kasgeld-mutatie."}
+            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True)
+        else:
+            e = await db.deposits.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+            if not e:
+                return {"lines": [], "cols": 21, "empty": "Nog geen borgbon beschikbaar — registreer eerst een borg."}
+            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True)
+        return {"lines": d["lines"], "cols": d.get("cols", 21)}
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
     if p:

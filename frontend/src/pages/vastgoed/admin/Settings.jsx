@@ -723,19 +723,28 @@ const BON_SHOW_FIELDS = [
 function BonPreview({ bon }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [kind, setKind] = useState('betaling');
   const key = JSON.stringify(bon);
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    api.post('/settings/receipts/preview-lines', { bon: JSON.parse(key) })
-      .then(({ data }) => { if (alive) setLines(data.lines || []); })
+    api.post('/settings/receipts/preview-lines', { bon: JSON.parse(key), kind })
+      .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [key]);
-  const px = { normal: 12, small: 13, medium: 14, large: 20 };
+  }, [key, kind]);
+  const px = kind === 'betaling'
+    ? { normal: 12, small: 13, medium: 14, large: 20 }
+    : { normal: 15, small: 15, medium: 18, large: 21 };
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
+      <div className="flex gap-1 mb-2 justify-center" data-testid="bon-preview-tabs">
+        {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon']].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setKind(k)} data-testid={`bon-tab-${k}`}
+            className={`px-3 h-8 rounded-full text-xs font-bold ${kind === k ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600'}`}>{l}</button>
+        ))}
+      </div>
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
         Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
