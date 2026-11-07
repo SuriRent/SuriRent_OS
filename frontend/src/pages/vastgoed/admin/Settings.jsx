@@ -654,150 +654,80 @@ export function InvoicingForm({ initial, onSaved, onDirty }) {
 function ReceiptsForm({ initial }) {
   const s = useSection('receipts', initial);
   const d = s.data;
-  const options = [
-    {
-      id: 'a4',
-      title: 'A4 kantoorprinter',
-      desc: 'Volledige A4 pagina met blauwe kader en gedetailleerde layout. Ideaal voor kantoorprinters (laser/inkjet) op de PC.',
-    },
-    {
-      id: 'thermal',
-      title: '58mm bonprinter (thermisch)',
-      desc: 'Compacte 1-kolom POS-stijl bon voor 58mm bonrol. Ideaal voor kassa-achtige setups met een thermische bonprinter.',
-    },
-  ];
-  const current = d.print_format || 'a4';
+  const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
+  const setBon = (k, v) => s.onField('bon', { ...bon, [k]: v });
   return (
     <SectionShell msg={s.msg} err={s.err}>
       <p className="text-sm text-slate-600">
-        Bepaalt hoe de kwitantie wordt gerenderd wanneer de Kiosk-medewerker
-        op <b>Afdruk</b> drukt. Verander dit alleen als je printer-hardware
-        wijzigt.
+        Bepaalt wat er op de bon staat die de Kiosk naar de KT-V520 printer stuurt.
+        De opmaak (groottes, vet, uitlijning) ligt vast; hieronder kies je de inhoud.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {options.map((opt) => (
-          <button key={opt.id}
-            onClick={() => s.onField('print_format', opt.id)}
-            data-testid={`receipts-fmt-${opt.id}`}
-            className={`text-left p-4 rounded-2xl border-2 transition ${current === opt.id
-              ? 'border-[#FF5C00] bg-orange-50'
-              : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <Printer className={`w-4 h-4 ${current === opt.id ? 'text-[#FF5C00]' : 'text-slate-400'}`} />
-              <span className="text-sm font-black text-slate-900">{opt.title}</span>
-              {current === opt.id && <Check className="w-4 h-4 text-[#FF5C00] ml-auto" />}
-            </div>
-            <p className="text-xs text-slate-500 leading-snug">{opt.desc}</p>
-          </button>
-        ))}
-      </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-4">
-          <BonFontPicker value={d.font_size || 'groot'} onChange={(v) => s.onField('font_size', v)} />
-          <BonCustomFonts preset={d.font_size || 'groot'}
-            value={{ ...BON_DEFAULTS[d.font_size || 'groot'], ...((d.presets || {})[d.font_size || 'groot'] || {}) }}
-            onChange={(v) => s.onField('presets', { ...(d.presets || {}), [d.font_size || 'groot']: v })} />
+          <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="bon-options">
+            <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
+              <input type="checkbox" id="bon-split-name" name="bon-split-name" checked={!!bon.split_name}
+                onChange={(e) => setBon('split_name', e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+              Bedrijfsnaam splitsen (eerste woord op regel 1, rest op regel 2)
+            </label>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 pt-2">Zichtbare velden</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {BON_SHOW_FIELDS.map((f) => (
+                <label key={f.k} className="flex items-center gap-3 text-sm text-slate-700">
+                  <input type="checkbox" id={`bon-${f.k}`} name={`bon-${f.k}`} checked={!!bon[f.k]}
+                    onChange={(e) => setBon(f.k, e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+                  {f.label}
+                </label>
+              ))}
+            </div>
+            <label className="block pt-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Voettekst (optioneel)</span>
+              <input type="text" id="bon-footer" name="bon-footer" maxLength={120} value={bon.footer || ''}
+                onChange={(e) => setBon('footer', e.target.value)} placeholder="Bijv. Bedankt voor uw betaling!"
+                data-testid="bon-footer-input"
+                className="mt-1 w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+            </label>
+          </div>
         </div>
-        <BonPreview />
-      </div>
-      <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
-        <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
-        worden met de vlag <code className="bg-white px-1 rounded">--kiosk-printing</code>.
-        Zie <code>/app/memory/kiosk-printing-setup.md</code> voor exacte
-        commando's per platform.
+        <BonPreview bon={bon} />
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
   );
 }
 
-// Lettergrootte van de geprinte bon (klein / normaal / groot).
-const BON_FONTS = [
-  { id: 'klein', label: 'Klein', sample: 12, desc: 'Compact — korte bon, meer tekst per regel' },
-  { id: 'normaal', label: 'Normaal', sample: 16, desc: 'Gebalanceerd en goed leesbaar' },
-  { id: 'groot', label: 'Groot', sample: 20, desc: 'Extra groot — makkelijk te lezen, langere bon' },
-];
-
-const BON_DEFAULTS = {
-  klein: { base: 12, name: 16, title: 13, amount: 18, text_zoom: 280 },
-  normaal: { base: 16, name: 20, title: 18, amount: 22, text_zoom: 350 },
-  groot: { base: 20, name: 26, title: 22, amount: 28, text_zoom: 420 },
+const BON_DEFAULT_OPTS = {
+  split_name: true, footer: '',
+  show_address: true, show_phone: true, show_tenant_phone: true, show_apartment: true,
+  show_tenant_address: true, show_method: true, show_outstanding_period: true, show_employee: true, show_note: true,
 };
 
-const CUSTOM_FONT_FIELDS = [
-  { k: 'base', label: 'Overige tekst', min: 8, max: 48 },
-  { k: 'name', label: 'Bedrijfsnaam', min: 8, max: 60 },
-  { k: 'title', label: 'KWITANTIE', min: 8, max: 60 },
-  { k: 'text_zoom', label: 'APK textZoom', min: 50, max: 800, step: 10, unit: '%' },
+const BON_SHOW_FIELDS = [
+  { k: 'show_address', label: 'Adres bedrijf' },
+  { k: 'show_phone', label: 'Telefoon bedrijf' },
+  { k: 'show_apartment', label: 'Appartementnummer' },
+  { k: 'show_tenant_address', label: 'Adres bij huurder' },
+  { k: 'show_tenant_phone', label: 'Telefoon huurder' },
+  { k: 'show_method', label: 'Betaalwijze' },
+  { k: 'show_outstanding_period', label: 'Openstaande maand(en)' },
+  { k: 'show_employee', label: 'Ontvangen door' },
+  { k: 'show_note', label: 'Opmerking' },
 ];
 
-function BonCustomFonts({ preset, value, onChange }) {
-  const set = (k, v) => onChange({ ...value, [k]: v === '' ? '' : Number(v) });
-  const label = BON_FONTS.find((f) => f.id === preset)?.label || preset;
-  return (
-    <div className="rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-4" data-testid="bon-custom-fonts">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <p className="text-sm font-black text-slate-900">Lettergroottes voor “{label}” aanpassen</p>
-        <button type="button" onClick={() => onChange({ ...BON_DEFAULTS[preset] })} data-testid="bon-font-reset"
-          className="text-xs font-bold text-[#FF5C00] hover:underline">Standaard herstellen</button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {CUSTOM_FONT_FIELDS.map((f) => {
-          const def = BON_DEFAULTS[preset][f.k];
-          const v = value[f.k] ?? def;
-          return (
-            <label key={f.k} className="block">
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{f.label}</span>
-              <div className="mt-1 flex items-center gap-2">
-                <button type="button" onClick={() => set(f.k, Math.max(f.min, Number(v || def) - (f.step || 1)))}
-                  data-testid={`bon-font-${f.k}-minus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">−</button>
-                <input type="number" inputMode="numeric" min={f.min} max={f.max} step={f.step || 1} value={v}
-                  onChange={(e) => set(f.k, e.target.value)} data-testid={`bon-font-${f.k}-input`}
-                  className="w-20 h-11 px-2 text-center rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none font-bold" />
-                <button type="button" onClick={() => set(f.k, Math.min(f.max, Number(v || def) + (f.step || 1)))}
-                  data-testid={`bon-font-${f.k}-plus`} className="w-10 h-11 rounded-xl bg-white border-2 border-slate-200 font-black text-slate-700 hover:border-[#FF5C00]">+</button>
-                <span className="text-xs font-semibold text-slate-500">{f.unit || 'px'}</span>
-              </div>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function BonFontPicker({ value, onChange }) {
-  return (
-    <div data-testid="bon-font-picker">
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Lettergrootte van de bon</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {BON_FONTS.map((f) => (
-          <button key={f.id} type="button" onClick={() => onChange(f.id)} data-testid={`bon-font-${f.id}`}
-            className={`text-left p-4 rounded-2xl border-2 transition-colors ${value === f.id ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-            <div className="flex items-center justify-between">
-              <span className="font-black text-slate-900" style={{ fontSize: f.sample }}>{f.label}</span>
-              {value === f.id && <Check className="w-4 h-4 text-[#FF5C00]" />}
-            </div>
-            <p className="text-xs text-slate-500 mt-1 leading-snug">{f.desc}</p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview() {
+function BonPreview({ bon }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const key = JSON.stringify(bon);
   useEffect(() => {
     let alive = true;
-    api.get('/settings/receipts/preview-lines')
+    setLoading(true);
+    api.post('/settings/receipts/preview-lines', { bon: JSON.parse(key) })
       .then(({ data }) => { if (alive) setLines(data.lines || []); })
       .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [key]);
   const px = { normal: 12, medium: 15, large: 21 };
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">

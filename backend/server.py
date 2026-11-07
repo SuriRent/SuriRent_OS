@@ -13266,7 +13266,9 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out["paper_width"] = 58 if out["printer"] == "kt-v520" else cfg["paper_width"]
     cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
     out["cols"] = cols
+    out["_bon"] = ((cs or {}).get("receipts") or {}).get("bon") or {}
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
+    out.pop("_bon", None)
     out["template"] = "lines"
     out["receipt_type"] = "betaling"
     return out
@@ -13314,13 +13316,19 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
+    cfg = {"split_name": True, "footer": "", **{k: True for k in (
+        "show_address", "show_phone", "show_tenant_phone", "show_apartment", "show_tenant_address",
+        "show_method", "show_outstanding_period", "show_employee", "show_note")}, **(d.get("_bon") or {})}
     # 1. Bedrijfsnaam: eerste woord op regel 1, rest op regel 2 (groot, vet, gecentreerd)
     first, _sp, rest = (d["bedrijfsnaam"] or "").strip().partition(" ")
+    if not cfg["split_name"]:
+        first, rest = (d["bedrijfsnaam"] or "").strip(), ""
     lines = [L(first, "center", True, "large")]
     if rest.strip():
         lines.append(L(rest.strip(), "center", True, "large"))
     # 2. Adres en telefoon: iets groter dan kleine tekst
-    for extra in (d.get("adres"), d.get("telefoon") and f"Tel: {d['telefoon']}"):
+    for extra in (cfg["show_address"] and d.get("adres"),
+                  cfg["show_phone"] and d.get("telefoon") and f"Tel: {d['telefoon']}"):
         if extra:
             lines.append(L(extra, "center", False, "medium"))
     # 3. KWITANTIE nummer en datum
@@ -13330,27 +13338,29 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     # 5. Huurder
     lines.append(L("HUURDER:", bold=True))
     lines.append(L(d.get("naam") or "-"))
-    if d.get("appartement"):
+    if cfg["show_apartment"] and d.get("appartement"):
         lines.append(L(f"App. {d['appartement']}"))
-    if d.get("adres"):
+    if cfg["show_tenant_address"] and d.get("adres"):
         lines.append(L(d["adres"]))
-    if d.get("huurder_telefoon"):
+    if cfg["show_tenant_phone"] and d.get("huurder_telefoon"):
         lines.append(L(f"Tel: {d['huurder_telefoon']}"))
     # 6. Omschrijving en betaalwijze
     lines.append(L(d["omschrijving"]))
-    if d.get("methode"):
+    if cfg["show_method"] and d.get("methode"):
         lines.append(L(f"Betaalwijze: {d['methode']}"))
     lines.append(L(dash))
     # 8. Betaald, 9. Nog openstaand
     lines += [L("BETAALD:", bold=True), L(d["bedrag"], "left", True, "large")]
     lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], "left", True, "large")]
-    if d.get("openstaand_periode"):
+    if cfg["show_outstanding_period"] and d.get("openstaand_periode"):
         lines += [L(x) for x in _wrap_text(d["openstaand_periode"], W)]
     # 10. Ontvangen door en opmerking
-    if d.get("medewerker"):
+    if cfg["show_employee"] and d.get("medewerker"):
         lines.append(L(f"Ontvangen door: {d['medewerker']}"))
-    if d.get("opmerking"):
+    if cfg["show_note"] and d.get("opmerking"):
         lines += [L(x) for x in _wrap_text(f"Opmerking: {d['opmerking']}", W)]
+    if str(cfg["footer"] or "").strip():
+        lines += [L(dash)] + [L(x, "center") for x in _wrap_text(str(cfg["footer"]).strip(), W)]
     lines += [L(""), L("")]
     return lines
 
@@ -18068,9 +18078,9 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
-@api.get("/settings/receipts/preview-lines")
-async def receipts_preview_lines(user=Depends(get_current_user)):
-    """Bonvoorbeeld als regels: exact dezelfde opbouw die naar de KT-V520 APK gaat."""
+@api.post("/settings/receipts/preview-lines")
+async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
+    """Bonvoorbeeld als regels (met nog niet opgeslagen bon-opties): zelfde opbouw als naar de KT-V520 APK."""
     cid = company_id_of(user)
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
@@ -18082,10 +18092,10 @@ async def receipts_preview_lines(user=Depends(get_current_user)):
              "datum": "01-01-2026 10:00", "naam": "Voorbeeld Huurder", "huurder_telefoon": "+597 7654321",
              "appartement": "A-101", "omschrijving": "Huur — Januari 2026", "methode": "Contant",
              "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",
-             "medewerker": "Medewerker", "opmerking": "Voorbeeldbon"}
-        d["lines"] = _receipt_text_lines(d, "KWITANTIE", _RECEIPT_COLS)
-        d["cols"] = _RECEIPT_COLS
-    return {"lines": d["lines"], "cols": d.get("cols", _RECEIPT_COLS)}
+             "medewerker": "Medewerker", "opmerking": "Voorbeeldbon", "cols": _RECEIPT_COLS}
+    d["_bon"] = (body or {}).get("bon") or {}
+    cols = d.get("cols", _RECEIPT_COLS)
+    return {"lines": _receipt_text_lines(d, "KWITANTIE", cols), "cols": cols}
 
 
 @api.post("/settings/{section}/test")

@@ -130,6 +130,13 @@ def empty_section(section: str) -> dict:
                 "normaal": {"base": 16, "name": 20, "title": 18, "amount": 22, "text_zoom": 350},
                 "groot": {"base": 20, "name": 26, "title": 22, "amount": 28, "text_zoom": 420},
             },
+            # Bon-inhoud (KT-V520 APK, template "lines").
+            "bon": {
+                "split_name": True, "footer": "",
+                "show_address": True, "show_phone": True, "show_tenant_phone": True,
+                "show_apartment": True, "show_tenant_address": True, "show_method": True,
+                "show_outstanding_period": True, "show_employee": True, "show_note": True,
+            },
         },
         # Kiosk apparaten: KingTop KT-V520 (KTPsdk.aar in de APK) voor alle kiosks.
         "kiosk_devices": {"kt_v520_enabled": False, "printer_mode": None, "paper_width": 58},
