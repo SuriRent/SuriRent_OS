@@ -48,15 +48,15 @@ function ApkDownloadButton({ rel, variant, testid }) {
 }
 
 const SHOTS = {
-  overzicht:     'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png',
-  locaties:      'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/nlo3hnqf_2.png',
-  appartementen: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/sy8hpkqs_3.png',
-  betalingen:    'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/dwbjqd89_4.png',
-  facturen:      'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mfvavq0r_5.png',
-  kioskLoc:      'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7eebv0bd_11.png',
-  kioskApt:      'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/n7efnoh0_12.png',
-  kioskOverview: 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/t334vu2t_13.png',
-  kioskNumpad:   'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/mjshklb8_14.png',
+  overzicht:     '/marketing/overzicht.png',
+  locaties:      '/marketing/locaties.png',
+  appartementen: '/marketing/appartementen.png',
+  betalingen:    '/marketing/betalingen.png',
+  facturen:      '/marketing/facturen.png',
+  kioskLoc:      '/marketing/kioskLoc.png',
+  kioskApt:      '/marketing/kioskApt.png',
+  kioskOverview: '/marketing/kioskOverview.png',
+  kioskNumpad:   '/marketing/kioskNumpad.png',
 };
 
 // =============================================================================

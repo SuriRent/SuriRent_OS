@@ -265,18 +265,12 @@
           var p = (window.location.pathname || '').toLowerCase();
           var isMarketing = p === '/' || p === '' || p.indexOf('/site/') === 0;
           if (!isMarketing) return;
-          // Preconnect naar assets-CDN (TCP+TLS handshake vast open).
-          var pc = document.createElement('link');
-          pc.rel = 'preconnect';
-          pc.href = 'https://customer-assets.emergentagent.com';
-          pc.crossOrigin = 'anonymous';
-          document.head.appendChild(pc);
           // Preload van de hero achtergrondafbeelding (LCP-kandidaat).
           var pl = document.createElement('link');
           pl.rel = 'preload';
           pl.as = 'image';
           pl.setAttribute('fetchpriority', 'high');
-          pl.href = 'https://customer-assets.emergentagent.com/job_vastgoed-app/artifacts/7sx9hgg7_1.png';
+          pl.href = '/marketing/overzicht.png';
           document.head.appendChild(pl);
         } catch (e) { /* noop */ }
       })();
