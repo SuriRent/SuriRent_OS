@@ -5518,9 +5518,9 @@ function SheetThemeButton() {
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
-      className={`mt-3 w-full h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
+      className={`h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
       {white || green ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
-      {nextTheme}
+      Kleur
     </button>
   );
 }
@@ -5600,12 +5600,13 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
             <LogOut className="w-4 h-4" strokeWidth={2.5} /> Uit
           </button>
         </div>
-        <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose} />
-        <button type="button" onClick={() => onPick('scanid')} data-testid="kiosk-sheet-scan-id"
-          className="mt-3 w-full h-12 rounded-full font-black text-base inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
-          <ScanLine className="w-5 h-5" strokeWidth={2.5} /> SCAN ID
-        </button>
-        <SheetThemeButton />
+        <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
+          <button type="button" onClick={() => onPick('scanid')} data-testid="kiosk-sheet-scan-id"
+            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
+            <ScanLine className="w-4 h-4" strokeWidth={2.5} /> Scan ID
+          </button>
+          <SheetThemeButton />
+        </KioskSheetLiveActions>
       </div>
     </div>
   ), document.body);

@@ -123,7 +123,7 @@ function BtPrinterDialog({ onClose }) {
   ), document.body);
 }
 
-export function KioskSheetLiveActions({ isAdmin, onClose }) {
+export function KioskSheetLiveActions({ isAdmin, onClose, children }) {
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   const [paired, setPaired] = useState(isPairedPrinter);
   const on = isAdmin ? s.active : s.connected;
@@ -136,9 +136,8 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
   const showPair = isAdmin && isKtpDevice() && !paired;
   const [btOpen, setBtOpen] = useState(false);
   const showBt = (s.printer ?? localStorage.getItem('kiosk_printer')) === 'bluetooth';
-  const cols = 1 + (showPair ? 1 : 0) + (showBt ? 1 : 0);
   return (
-    <div className={`mt-3 grid gap-2 ${cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} data-testid="kiosk-sheet-live-actions">
+    <div className="mt-2 grid grid-cols-3 gap-2" data-testid="kiosk-sheet-live-actions">
       <button onClick={() => { onClose(); setKioskOverlayOpen(true); }} data-testid="kiosk-sheet-receipts" className={pill}>
         <span className={`w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'bg-slate-300'}`} />
         <Receipt className="w-4 h-4" strokeWidth={2.5} /> Bonnen
@@ -154,6 +153,7 @@ export function KioskSheetLiveActions({ isAdmin, onClose }) {
         </button>
       )}
       {btOpen && <BtPrinterDialog onClose={() => setBtOpen(false)} />}
+      {children}
     </div>
   );
 }
