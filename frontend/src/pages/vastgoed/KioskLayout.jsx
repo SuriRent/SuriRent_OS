@@ -6451,7 +6451,9 @@ export default function KioskLayout() {
             <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
-            <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
             <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
