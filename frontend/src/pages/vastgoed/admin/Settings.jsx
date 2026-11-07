@@ -734,7 +734,7 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
         </div>
   );
   const previewEl = (
-    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
+    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} fit={kioskLayout} />
   );
   if (kioskLayout) {
     return (
@@ -860,9 +860,29 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scale, setScale] = useState(1);
+  const [natH, setNatH] = useState(0);
+  const wrapRef = useRef(null);
+  const innerRef = useRef(null);
+  useEffect(() => {
+    if (!fit) return undefined;
+    const calc = () => {
+      const wrap = wrapRef.current;
+      const inner = innerRef.current;
+      const box = wrap?.closest('[data-testid="kiosk-bon-summary"]');
+      if (!wrap || !inner || !box) return;
+      const nat = inner.offsetHeight;
+      const avail = box.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top - 24 - 64;
+      setNatH(nat);
+      setScale(Math.max(0.3, Math.min(1, avail / nat)));
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [fit, lines, kind]);
   const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
@@ -889,7 +909,8 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
         Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
-      <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
+      <div ref={wrapRef} style={fit ? { height: natH * scale } : undefined}>
+      <div ref={innerRef} className="mx-auto w-fit bg-slate-100 rounded-2xl p-4" style={fit ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : undefined}>
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
           data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>
           {lines.map((l, i) => (
@@ -898,6 +919,7 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
             </div>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );
