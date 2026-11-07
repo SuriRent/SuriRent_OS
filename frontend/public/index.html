@@ -255,26 +255,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <script>
-      // Conditionele hero-image preload — alleen op de marketing landing (`/`)
-      // en `/site/<slug>` (public tenant landing). Op andere routes (admin,
-      // kiosk, login) is de hero-visual nooit nodig; een onbenutte preload
-      // veroorzaakt een console warning en verspilt bandbreedte.
-      (function () {
-        try {
-          var p = (window.location.pathname || '').toLowerCase();
-          var isMarketing = p === '/' || p === '' || p.indexOf('/site/') === 0;
-          if (!isMarketing) return;
-          // Preload van de hero achtergrondafbeelding (LCP-kandidaat).
-          var pl = document.createElement('link');
-          pl.rel = 'preload';
-          pl.as = 'image';
-          pl.setAttribute('fetchpriority', 'high');
-          pl.href = '/marketing/overzicht.png';
-          document.head.appendChild(pl);
-        } catch (e) { /* noop */ }
-      })();
-    </script>
+
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>App</title>
     <script>
