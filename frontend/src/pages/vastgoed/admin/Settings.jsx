@@ -657,7 +657,6 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
   const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
   const setBon = (k, v) => s.onField('bon', { ...bon, [k]: v });
   const [kind, setKind] = useState('betaling');
-  const layouts = d.layouts || {};
   const kasbon = { show_balance: true, show_employee: true, show_note: true, footer: '', ...(d.kasbon || {}) };
   const borgbon = { show_apartment: true, show_method: true, footer: 'Borg ontvangen.', ...(d.borgbon || {}) };
   const setKas = (k, v) => s.onField('kasbon', { ...kasbon, [k]: v });
@@ -725,19 +724,14 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
             </label>
           </div>
           )}
-          <LayoutEditor kind={kind} layout={layouts[kind] || {}}
-            onChange={(v) => s.onField('layouts', { ...layouts, [kind]: v })} />
-          {!(layouts[kind] || {}).enabled && (
           <ExtraLinesEditor
             items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
             onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
           />
-          )}
         </div>
   );
   const previewEl = (
-    <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind}
-              onSave={s.save} saving={s.saving} msg={s.msg} err={s.err} />
+    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
   );
   if (kioskLayout) {
     return (
@@ -785,217 +779,6 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
               </div>
               <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
-  );
-}
-
-const T =  (text, o = {}) => ({ t: 'text', text, align: 'left', bold: false, size: 'normal', ...o });
-const PR = (text, right, o = {}) => ({ t: 'pair', text, right, align: 'left', bold: false, size: 'normal', ...o });
-const DASH = { t: 'dash' };
-const BLANK = { t: 'blank' };
-const DEFAULT_BLOCKS = {
-  betaling: [
-    T('{bedrijf_eerste}', { align: 'center', bold: true, size: 'large' }), T('{bedrijf_rest}', { align: 'center', bold: true, size: 'large' }),
-    T('{bedrijf_adres}', { align: 'center', size: 'small' }), T('TEL: {telefoon}', { align: 'center', size: 'small' }),
-    DASH, T('{titel}', { align: 'center', size: 'small' }), DASH,
-    PR('NR.', '{kwitantie}'), PR('DATUM', '{datum}'), DASH,
-    T('HUURDER:'), T('{naam}'), T('{appartement}'), T('{locatie_adres}'), T('TEL: {huurder_telefoon}'), DASH,
-    T('OMSCHRIJVING:'), T('{omschrijving}'), DASH,
-    T('BETAALD: {bedrag}', { bold: true, size: 'medium' }), PR('BETAALWIJZE', '{methode}'), T('Ontvangen door: {medewerker}'), DASH,
-    T('Nog openstaand: {openstaand}', { bold: true, size: 'medium' }), T('Maand(en): {openstaand_periode}'), DASH,
-    T('OPMERKING: {opmerking}'), DASH,
-    T('Bedankt voor uw betaling', { align: 'center' }), T('- {kwitantie} -', { align: 'center' }), BLANK, BLANK, BLANK,
-  ],
-  kasbon: [
-    T('{bedrijfsnaam}', { align: 'center', bold: true, size: 'large' }), T('{titel}', { align: 'center', bold: true }), DASH,
-    T('NR. {nummer}'), T('DATUM {datum}'), DASH, T('{soort}'),
-    PR('{label}', '{bedrag}', { bold: true }), PR('Kassaldo:', '{kassaldo}'), DASH,
-    PR('Medewerker:', '{medewerker}'), T('Opmerking: {opmerking}'), DASH, BLANK, BLANK,
-  ],
-  borgbon: [
-    T('{bedrijfsnaam}', { align: 'center', bold: true, size: 'large' }), T('{titel}', { align: 'center', bold: true }), DASH,
-    T('NR. {nummer}'), T('DATUM {datum}'), DASH,
-    PR('Huurder:', '{huurder}'), PR('Appt.:', '{appartement}'), DASH,
-    PR('Methode:', '{methode}'), DASH, PR('Borg:', '{bedrag}', { bold: true }), DASH,
-    T('Borg ontvangen.', { align: 'center' }), BLANK, BLANK,
-  ],
-};
-const PLACEHOLDERS = {
-  betaling: ['bedrijfsnaam', 'bedrijf_eerste', 'bedrijf_rest', 'bedrijf_adres', 'telefoon', 'titel', 'kwitantie', 'datum', 'naam', 'appartement',
-    'locatie_adres', 'huurder_telefoon', 'omschrijving', 'bedrag', 'methode', 'medewerker', 'openstaand', 'openstaand_periode', 'opmerking'],
-  kasbon: ['bedrijfsnaam', 'titel', 'nummer', 'datum', 'soort', 'label', 'bedrag', 'kassaldo', 'medewerker', 'opmerking'],
-  borgbon: ['bedrijfsnaam', 'titel', 'nummer', 'datum', 'huurder', 'appartement', 'bedrag', 'borg', 'methode', 'medewerker', 'opmerking'],
-};
-
-function LayoutEditor({ kind, layout, onChange }) {
-  const enable = (on) => onChange({ ...layout, enabled: on, blocks: layout.blocks?.length ? layout.blocks : DEFAULT_BLOCKS[kind] });
-  return (
-    <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-2" data-testid="layout-editor-toggle">
-      <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
-        <input type="checkbox" checked={!!layout.enabled} onChange={(e) => enable(e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
-        Eigen opmaak gebruiken
-      </label>
-      <p className="text-xs text-slate-500">Klik rechts op &quot;Bon Editor openen&quot; om de bon op je eigen manier op te maken.</p>
-    </div>
-  );
-}
-
-// Bon-editor: de bon zelf is bewerkbaar. Regels met een lege {plaatshouder} worden niet geprint.
-const BON_PX = { betaling: { normal: 12, small: 13, medium: 14, large: 20 }, kas: { normal: 15, small: 15, medium: 18, large: 21 } };
-
-function LayoutPaper({ kind, setKind, layout, onChange, lines, loading, onSave, saving, msg, err, onClose }) {
-  const blocks = layout.blocks || [];
-  const [foc, setFoc] = useState({ i: -1, f: 'text' });
-  const sizes = kind === 'betaling'
-    ? [['normal', 'Normaal'], ['small', 'Iets groter'], ['medium', 'Middel'], ['large', 'Groot']]
-    : [['normal', 'Normaal'], ['large', 'Groot']];
-  const setBlocks = (b) => onChange({ ...layout, blocks: b });
-  const upd = (i, patch) => setBlocks(blocks.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const move = (i, dlt) => {
-    const j = i + dlt;
-    if (j < 0 || j >= blocks.length) return;
-    const b = [...blocks];
-    [b[i], b[j]] = [b[j], b[i]];
-    setBlocks(b);
-  };
-  const insert = (blk) => {
-    const at = foc.i >= 0 ? foc.i + 1 : blocks.length;
-    setBlocks([...blocks.slice(0, at), blk, ...blocks.slice(at)].slice(0, 80));
-  };
-  const addPh = (p, i) => {
-    const f = foc.i === i && foc.f === 'right' ? 'right' : 'text';
-    upd(i, { [f]: `${blocks[i]?.[f] || ''}{${p}}` });
-  };
-  const btn = 'h-7 px-2 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]';
-  const px = BON_PX[kind === 'betaling' ? 'betaling' : 'kas'];
-  const cardRefs = useRef({});
-  const select = (i, scroll = true) => {
-    setFoc({ i, f: 'text' });
-    if (scroll) cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-  const typeLabel = { text: 'Tekst', pair: 'Links / rechts', dash: 'Streepjes', blank: 'Lege regel' };
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col" data-testid="bon-editor">
-      <div className="h-14 shrink-0 bg-white border-b border-slate-200 px-4 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 mr-3">
-          <Paintbrush className="w-5 h-5 text-orange-500" />
-          <h1 className="font-extrabold text-slate-900">Bon Editor</h1>
-        </div>
-        <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
-          {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon']].map(([k, l]) => (
-            <button key={k} type="button" onClick={() => { setKind(k); setFoc({ i: -1, f: 'text' }); }} data-testid={`editor-tab-${k}`}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${kind === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{l}</button>
-          ))}
-        </div>
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-          <input type="checkbox" checked={!!layout.enabled} onChange={(e) => onChange({ ...layout, enabled: e.target.checked, blocks: blocks.length ? blocks : DEFAULT_BLOCKS[kind] })} className="w-4 h-4 accent-[#FF5C00]" />
-          Eigen opmaak actief
-        </label>
-        <div className="flex-1" />
-        {loading && <Loader2 className="w-4 h-4 animate-spin text-orange-500" />}
-        {msg && <span className="text-xs font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {msg}</span>}
-        {err && <span className="text-xs font-bold text-red-600">{err}</span>}
-        <button type="button" onClick={onSave} disabled={saving} data-testid="editor-save"
-          className="h-9 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-sm flex items-center gap-1.5 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Opslaan
-        </button>
-        <button type="button" onClick={onClose} data-testid="editor-close" title="Sluiten"
-          className="h-9 w-9 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 flex items-center justify-center"><X className="w-4 h-4" /></button>
-      </div>
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-        <div className="flex-1 min-w-0 min-h-0 overflow-auto p-4 flex justify-center items-start">
-          <div className="bg-white rounded-xl shadow-2xl p-6 shrink-0">
-            <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
-              style={{ width: '58mm', fontFamily: 'monospace', color: '#000', zoom: 1.5, opacity: loading ? 0.6 : 1 }} data-testid="bon-edit-paper">
-              {lines.map((l, k) => {
-                const sb = blocks[l.b];
-                if (sb && foc.i === l.b && (sb.t === 'text' || sb.t === 'pair')) {
-                  if (lines[k - 1]?.b === l.b) return null;
-                  const inp = 'font-mono bg-transparent outline-none w-full border-b border-dashed border-slate-400 focus:border-[#FF5C00]';
-                  return (
-                    <div key={k} className="rounded ring-2 ring-[#FF5C00] bg-orange-50 px-0.5 flex gap-1"
-                      style={{ fontWeight: sb.bold ? 700 : 400, fontSize: px[sb.size] || px.normal }}>
-                      <input autoFocus className={inp} style={{ textAlign: sb.t === 'pair' ? 'left' : sb.align }} value={sb.text || ''}
-                        aria-label="Regeltekst op bon" onFocus={() => setFoc({ i: l.b, f: 'text' })} onChange={(e) => upd(l.b, { text: e.target.value })} />
-                      {sb.t === 'pair' && (
-                        <input className={inp} style={{ textAlign: 'right' }} value={sb.right || ''} aria-label="Rechts op bon"
-                          onFocus={() => setFoc({ i: l.b, f: 'right' })} onChange={(e) => upd(l.b, { right: e.target.value })} />
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                <div key={k} onClick={() => select(l.b)}
-                  className={`cursor-pointer rounded px-0.5 ${foc.i === l.b ? 'ring-2 ring-[#FF5C00] bg-orange-50' : 'hover:bg-orange-50/70'}`}
-                  style={{ fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, textAlign: l.align || 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em',
-                    ...(l.hidden ? { opacity: 0.4, fontStyle: 'italic', borderBottom: '1px dotted #94a3b8' } : {}) }}>
-                  {l.hidden ? `(verborgen) ${l.text || 'leeg'}` : l.text}
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <aside className="w-full lg:w-[380px] lg:shrink-0 max-h-[45vh] lg:max-h-none border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
-          <div className="p-4 border-b border-slate-100">
-            <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              Klik op een regel van de bon of kies hieronder een regel. Gebruik plaatshouders zoals {'{naam}'} voor gegevens; een regel met een lege plaatshouder wordt niet geprint.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <button type="button" className={btn} onClick={() => insert(T(''))}>+ Tekst</button>
-              <button type="button" className={btn} onClick={() => insert(PR('', ''))}>+ Links/rechts</button>
-              <button type="button" className={btn} onClick={() => insert(DASH)}>+ Streepjes</button>
-              <button type="button" className={btn} onClick={() => insert(BLANK)}>+ Lege regel</button>
-              <button type="button" className={btn} onClick={() => insert(T('Bankoverschrijving:', { bold: true }))}>+ Bankgegevens</button>
-              <button type="button" className={`${btn} ml-auto`} onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, enabled: true, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard</button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-            {blocks.length === 0 && (
-              <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">Nog geen regels. Zet &quot;Eigen opmaak actief&quot; aan of kies Standaard.</p>
-            )}
-            {blocks.map((b, i) => (
-              <div key={i} ref={(el) => { cardRefs.current[i] = el; }} onClick={() => setFoc((f) => (f.i === i ? f : { i, f: 'text' }))}
-                className={`block rounded-xl border p-3 ${foc.i === i ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200 hover:border-emerald-300'}`}>
-                <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
-                  <span className="truncate">#{i + 1} · {typeLabel[b.t] || 'Regel'}</span>
-                  <span className="flex items-center gap-1">
-                    <button type="button" onClick={() => select(i, false)} className="text-[10px] font-bold text-emerald-700 hover:underline">Toon</button>
-                    <button type="button" onClick={() => { move(i, -1); setFoc({ i: Math.max(0, i - 1), f: 'text' }); }} disabled={i === 0} className="px-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30">↑</button>
-                    <button type="button" onClick={() => { move(i, 1); setFoc({ i: Math.min(blocks.length - 1, i + 1), f: 'text' }); }} disabled={i === blocks.length - 1} className="px-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30">↓</button>
-                    <button type="button" onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }} className="text-rose-600 hover:bg-rose-50 rounded p-1" aria-label="Verwijder regel"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </span>
-                </div>
-                {(b.t === 'text' || b.t === 'pair') && (
-                  <div className="mt-2 space-y-2">
-                    <input type="text" value={b.text || ''} onChange={(e) => upd(i, { text: e.target.value })} onFocus={() => setFoc({ i, f: 'text' })}
-                      aria-label={`Regel ${i + 1}`} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-mono text-slate-800 focus:border-emerald-500 focus:outline-none" />
-                    {b.t === 'pair' && (
-                      <input type="text" value={b.right || ''} onChange={(e) => upd(i, { right: e.target.value })} onFocus={() => setFoc({ i, f: 'right' })}
-                        aria-label={`Regel ${i + 1} rechts`} placeholder="Rechts"
-                        className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-mono text-slate-800 focus:border-emerald-500 focus:outline-none" />
-                    )}
-                    <div className="flex flex-wrap items-center gap-1">
-                      {b.t === 'text' && ['left', 'center', 'right'].map((a) => (
-                        <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
-                      ))}
-                      <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
-                      <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
-                        {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                      </select>
-                      <select className={btn} value="" onChange={(e) => { if (e.target.value) { setFoc({ i, f: foc.i === i ? foc.f : 'text' }); addPh(e.target.value, i); } }} aria-label="Plaatshouder invoegen">
-                        <option value="">{'{ } invoegen'}</option>
-                        {PLACEHOLDERS[kind].map((p) => <option key={p} value={p}>{`{${p}}`}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </aside>
-      </div>
-    </div>
   );
 }
 
@@ -1068,24 +851,21 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout, onSave, saving, msg, err }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const lay = layouts[kind] || {};
-  const editing = !!lay.enabled || open;
   const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
     setLoading(true);
     const h = setTimeout(() => {
-      api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind, marks: editing })
+      api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind })
         .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
         .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
         .finally(() => { if (alive) setLoading(false); });
     }, 250);
     return () => { alive = false; clearTimeout(h); };
-  }, [key, kind, editing]);
+  }, [key, kind]);
   const px = kind === 'betaling'
     ? { normal: 12, small: 13, medium: 14, large: 20 }
     : { normal: 15, small: 15, medium: 18, large: 21 };
@@ -1100,15 +880,6 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout, on
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
         Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
-      <button type="button" onClick={() => { if (!lay.blocks?.length) onLayout(kind, { ...lay, enabled: true, blocks: DEFAULT_BLOCKS[kind] }); setOpen(true); }}
-        data-testid="open-bon-editor"
-        className="mb-2 w-full h-10 rounded-xl bg-[#FF5C00] text-white text-sm font-extrabold flex items-center justify-center gap-2">
-        <Paintbrush className="w-4 h-4" /> Bon Editor openen
-      </button>
-      {open && (
-        <LayoutPaper kind={kind} setKind={setKind} layout={lay} lines={lines} loading={loading} onChange={(v) => onLayout(kind, v)}
-          onSave={onSave} saving={saving} msg={msg} err={err} onClose={() => setOpen(false)} />
-      )}
       <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
           data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>

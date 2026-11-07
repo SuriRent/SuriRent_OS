@@ -13314,9 +13314,7 @@ _LAYOUT_PH = re.compile(r"\{(\w+)\}")
 
 
 def _pick_layout(saved: Optional[dict], override: Optional[dict]) -> Optional[dict]:
-    lay = override if isinstance(override, dict) else saved
-    if isinstance(lay, dict) and lay.get("enabled") and isinstance(lay.get("blocks"), list):
-        return lay
+    # Bon-editor is verwijderd: opgeslagen eigen opmaak wordt niet meer gebruikt.
     return None
 
 
