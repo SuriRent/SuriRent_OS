@@ -3100,15 +3100,56 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
   );
 }
 
+// Printergeluid (thermische printer): korte ruisbursts in ritme + afscheur-klik.
+function playPrintSound(seconds = 3.5) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const rate = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, Math.floor(rate * 0.03), rate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const master = ctx.createGain();
+    master.gain.value = 0.35;
+    master.connect(ctx.destination);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 2400;
+    filter.Q.value = 0.9;
+    filter.connect(master);
+    const t0 = ctx.currentTime + 0.05;
+    const step = 0.045;
+    for (let t = 0; t < seconds; t += step) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = 0.85 + Math.random() * 0.3;
+      src.connect(filter);
+      src.start(t0 + t);
+    }
+    const tear = ctx.createBufferSource();
+    tear.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = 1.6;
+    tear.connect(g); g.connect(master);
+    tear.start(t0 + seconds + 0.05);
+    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, (seconds + 1) * 1000);
+  } catch { /* geluid is optioneel */ }
+}
+
 // Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
-function FittedReceiptPreview({ paymentId, maxScale = 1 }) {
+function FittedReceiptPreview({ paymentId, maxScale = 1, sound = false }) {
   const boxRef = useRef(null);
   const paperRef = useRef(null);
   const [size, setSize] = useState({ w: 230, h: 420 });
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [lines, setLines] = useState(null);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (sound && lines) playPrintSound(3.5);
+  }, [sound, lines]);
 
   useEffect(() => {
     let alive = true;
@@ -3257,13 +3298,17 @@ function ReceiptScreen({ payment, overview, onDone }) {
 
   if (isDesktop) {
     return (
-      <div className="h-full bg-orange-500 flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="receipt-desktop">
-        <div className="flex-1 min-h-0 flex justify-center py-3">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[34rem] min-w-0 flex flex-col items-center text-center px-8 py-5 gap-3" data-testid="receipt-card">
+      <div className="h-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 relative overflow-hidden flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="receipt-desktop">
+        <div className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-amber-300/20 blur-3xl" />
+        <div className="relative flex-1 min-h-0 flex justify-center py-3">
+          <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4 }}
+            className="bg-white/95 backdrop-blur rounded-[2rem] shadow-2xl ring-1 ring-white/60 w-full max-w-[34rem] min-w-0 flex flex-col items-center text-center px-8 py-5 gap-3" data-testid="receipt-card">
             <div className="flex items-center gap-3 shrink-0" data-testid="receipt-thanks">
-              <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shrink-0">
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.15 }}
+                className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg ring-4 ring-emerald-100 shrink-0">
                 <Check className="w-7 h-7 text-white" strokeWidth={3.5} />
-              </div>
+              </motion.div>
               <div className="text-left">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">De betaling is gelukt!</h2>
                 {payment.received_by && (
@@ -3273,8 +3318,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
                 )}
               </div>
             </div>
-            <div className="flex-1 min-h-0 w-full rounded-2xl bg-orange-50 p-3 flex flex-col overflow-hidden [&>*]:drop-shadow-xl" data-testid="receipt-desktop-bon">
-              <FittedReceiptPreview paymentId={payment.id} maxScale={3} />
+            <div className="flex-1 min-h-0 w-full rounded-2xl bg-gradient-to-b from-orange-50 to-orange-100 ring-1 ring-orange-200/60 p-3 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-2xl" data-testid="receipt-desktop-bon">
+              <FittedReceiptPreview paymentId={payment.id} maxScale={3} sound />
             </div>
             <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
               <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
@@ -3307,7 +3352,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
               {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
               {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
             </p>
-          </div>
+          </motion.div>
         </div>
         {partialInv && !planMade && (
           <PartialPlanSuggestion
