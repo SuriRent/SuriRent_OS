@@ -3263,7 +3263,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // de huurder hem kan beantwoorden.
   useEffect(() => {
     if (partialInv && !planMade) return undefined;
-    const t = setTimeout(onDone, 20000);
+    const t = setTimeout(onDone, 15000);
     return () => clearTimeout(t);
   }, [onDone, partialInv, planMade]);
 
@@ -3347,7 +3347,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
             )}
           </div>
           <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
-            Automatisch terug naar startscherm in 20 seconden
+            Automatisch terug naar startscherm in 15 seconden
             {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
             {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
           </p>
