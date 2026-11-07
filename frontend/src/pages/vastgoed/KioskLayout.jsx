@@ -3276,12 +3276,22 @@ function ReceiptScreen({ payment, overview, onDone }) {
           <span className="text-sm font-bold">Bon bekijken</span>
         </button>
         {bonOpen && createPortal((
-          <div className="fixed inset-0 z-[150] bg-black/55 flex items-end justify-center overflow-hidden" onClick={() => setBonOpen(false)} data-testid="receipt-bon-popup">
-            <div className="w-full max-w-md h-[88vh] flex flex-col px-4" onClick={(e) => e.stopPropagation()}>
-              <FittedReceiptPreview paymentId={payment.id} maxScale={3} />
-              <button type="button" onClick={() => setBonOpen(false)} data-testid="receipt-bon-close"
-                className="shrink-0 my-3 h-11 rounded-2xl bg-white/95 text-slate-800 font-black text-sm">Sluiten</button>
-            </div>
+          <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBonOpen(false)} data-testid="receipt-bon-popup">
+            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+              className="w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ height: 'min(88vh, 820px)' }} onClick={(e) => e.stopPropagation()}>
+              <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span className="flex items-center gap-2 font-black text-slate-900"><Printer className="w-5 h-5 text-orange-500" /> Kwitantie</span>
+                <button type="button" onClick={() => setBonOpen(false)} data-testid="receipt-bon-close" aria-label="Sluiten"
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="flex-1 min-h-0 bg-slate-100 p-3 flex flex-col overflow-hidden">
+                <FittedReceiptPreview paymentId={payment.id} maxScale={3} />
+              </div>
+              <div className="shrink-0 p-3">
+                <button type="button" onClick={() => setBonOpen(false)}
+                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-black">Klaar</button>
+              </div>
+            </motion.div>
           </div>
         ), document.body)}
         <div className={`flex justify-between items-center px-3 py-1.5 mt-2 rounded-xl shrink-0 ${
