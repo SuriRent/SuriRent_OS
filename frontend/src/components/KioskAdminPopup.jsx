@@ -13,6 +13,7 @@ const NEW = {
   betalingen: { label: 'Nieuwe betaling', event: 'quick-pay-open' },
   appartementen: { label: 'Nieuw appartement', event: 'kiosk-apt-new' },
   huurders: { label: 'Nieuwe huurder', event: 'kiosk-tenant-new' },
+  facturen: { label: 'Nieuwe factuur', event: 'kiosk-invoice-new' },
   werknemers: { label: 'Nieuw toevoegen', event: 'kiosk-emp-new' },
 };
 

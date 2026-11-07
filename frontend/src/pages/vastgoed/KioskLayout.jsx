@@ -6469,7 +6469,9 @@ export default function KioskLayout() {
               : <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
-            <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
