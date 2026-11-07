@@ -3267,76 +3267,6 @@ function ReceiptScreen({ payment, overview, onDone }) {
     return () => clearTimeout(t);
   }, [onDone, partialInv, planMade]);
 
-  if (isDesktop) {
-    return (
-      <div className="h-full bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600 relative overflow-hidden flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="receipt-desktop">
-        <div className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full bg-white/10 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-amber-300/20 blur-3xl" />
-        <div className="relative flex-1 min-h-0 flex justify-center py-3">
-          <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4 }}
-            className="bg-white/95 backdrop-blur rounded-[2rem] shadow-2xl ring-1 ring-white/60 w-full max-w-[34rem] min-w-0 flex flex-col items-center text-center px-8 py-5 gap-3" data-testid="receipt-card">
-            <div className="flex items-center gap-3 shrink-0" data-testid="receipt-thanks">
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.15 }}
-                className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg ring-4 ring-emerald-100 shrink-0">
-                <Check className="w-7 h-7 text-white" strokeWidth={3.5} />
-              </motion.div>
-              <div className="text-left">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">De betaling is gelukt!</h2>
-                {payment.received_by && (
-                  <p className="text-xs text-slate-500" data-testid="receipt-received-by-banner">
-                    Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex-1 min-h-0 w-full rounded-2xl bg-[radial-gradient(ellipse_at_top,#f1f5f9,#cbd5e1)] ring-1 ring-slate-200 p-3 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-[0_10px_18px_rgba(15,23,42,0.28)]" data-testid="receipt-desktop-bon">
-              <FittedReceiptPreview paymentId={payment.id} maxScale={3} fancy />
-            </div>
-            <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
-              <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
-              <span className={`font-extrabold text-xl ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
-                {remainingLoading ? '…' : fmtMoney(remaining, cur)}
-              </span>
-            </div>
-            <button onClick={onDone} data-testid="receipt-done"
-              className="w-full h-14 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-colors">
-              <UserRound className="w-5 h-5" strokeWidth={2.6} />
-              Volgende huurder
-            </button>
-            <div className="w-full flex flex-col gap-2">
-              {payment.id && (
-                <div className="w-full empty:hidden" data-testid="receipt-ktp-print">
-                  <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters autoSend />
-                </div>
-              )}
-              {payment.id && <BtPrintButton paymentId={payment.id} autoSend />}
-              {isKtpDevice() && (
-                <button onClick={manualPrint} type="button" data-testid="receipt-manual-print"
-                  className="w-full h-11 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 border-2 border-slate-200 transition-colors">
-                  <Printer className="w-4 h-4" />
-                  Ingebouwde printer
-                </button>
-              )}
-            </div>
-            <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
-              Automatisch terug naar startscherm in 20 seconden
-              {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
-              {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
-            </p>
-          </motion.div>
-        </div>
-        {partialInv && !planMade && (
-          <PartialPlanSuggestion
-            tenantId={payment.tenant_id || overview?.tenant?.id}
-            partialInvoice={partialInv}
-            onClose={() => setPartialInv(null)}
-            onPlanned={() => { setPlanMade(true); setPartialInv(null); }}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden">
       <div className="kiosk-chrome text-center mb-2 shrink-0" data-testid="receipt-thanks">
@@ -3347,8 +3277,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
         <p className="text-xs sm:text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
       </div>
 
-      <div className="w-full flex-1 min-h-0 flex flex-col md:flex-row md:justify-center items-center md:items-stretch gap-3 md:gap-4">
-      <div className="bg-white rounded-3xl w-full max-w-md md:max-w-sm md:flex-none p-3 sm:p-5 shadow-2xl flex-1 min-h-0 md:flex-none flex flex-col md:justify-center" data-testid="receipt-card">
+      <div className="w-full flex-1 min-h-0 flex flex-col items-center">
+      <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
         <div className="flex items-center justify-center gap-2 mb-1 text-slate-400 shrink-0">
           <Printer className="w-3.5 h-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Bon Printer</span>
@@ -3359,6 +3289,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
           </p>
         )}
         {/* Mobiel: bon schuift als popup omhoog (zoals uit de printer) */}
+        {isDesktop && <FittedReceiptPreview paymentId={payment.id} />}
         {!isDesktop && (
         <button type="button" onClick={() => setBonOpen(true)} data-testid="receipt-show-bon"
           className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 transition-colors">
