@@ -3188,7 +3188,13 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // we de "regeling maken?"-suggestie BEFORE auto-done.
   const [partialInv, setPartialInv] = useState(null);
   const [planMade, setPlanMade] = useState(false);
-  const [bonOpen, setBonOpen] = useState(true);
+  const [bonOpen, setBonOpen] = useState(() => !(typeof window !== 'undefined' && window.innerWidth >= 768));
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
+  useEffect(() => {
+    const on = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   useEffect(() => {
     if (!bonOpen) return undefined;
     const t = setTimeout(() => setBonOpen(false), 12000);
@@ -3259,7 +3265,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
         <p className="text-xs sm:text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
       </div>
 
-      <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
+      <div className="w-full flex-1 min-h-0 flex flex-col md:flex-row md:justify-center items-center md:items-stretch gap-3 md:gap-4">
+      <div className="bg-white rounded-3xl w-full max-w-md md:max-w-sm md:flex-none p-3 sm:p-5 shadow-2xl flex-1 min-h-0 md:flex-none flex flex-col md:justify-center" data-testid="receipt-card">
         <div className="flex items-center justify-center gap-2 mb-1 text-slate-400 shrink-0">
           <Printer className="w-3.5 h-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Bon Printer</span>
@@ -3269,13 +3276,15 @@ function ReceiptScreen({ payment, overview, onDone }) {
             Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
           </p>
         )}
-        {/* Bon schuift als popup omhoog (zoals uit de printer) */}
+        {/* Mobiel: bon schuift als popup omhoog (zoals uit de printer) */}
+        {!isDesktop && (
         <button type="button" onClick={() => setBonOpen(true)} data-testid="receipt-show-bon"
           className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 transition-colors">
           <Printer className="w-10 h-10" />
           <span className="text-sm font-bold">Bon bekijken</span>
         </button>
-        {bonOpen && createPortal((
+        )}
+        {!isDesktop && bonOpen && createPortal((
           <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBonOpen(false)} data-testid="receipt-bon-popup">
             <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
               className="w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ height: 'min(88vh, 820px)' }} onClick={(e) => e.stopPropagation()}>
@@ -3330,6 +3339,17 @@ function ReceiptScreen({ payment, overview, onDone }) {
             {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
           </p>
         </div>
+      </div>
+      {isDesktop && (
+        <div className="bg-white rounded-3xl shadow-2xl w-full md:w-[26rem] flex flex-col overflow-hidden min-h-0" data-testid="receipt-desktop-bon">
+          <div className="shrink-0 flex items-center gap-2 px-5 py-3 border-b border-slate-100 font-black text-slate-900">
+            <Printer className="w-5 h-5 text-orange-500" /> Kwitantie
+          </div>
+          <div className="flex-1 min-h-0 bg-slate-100 p-4 flex flex-col overflow-hidden">
+            <FittedReceiptPreview paymentId={payment.id} maxScale={2.5} />
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Partial-payment regeling suggestie — verschijnt na ~1.5s zodat de
