@@ -3460,7 +3460,7 @@ function KasgeldPanel({ embedded = false }) {
           </div>
 
           <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-            className={`${embedded ? 'hidden' : ''} w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
+            className={`${embedded ? 'hidden' : ''} w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_            rgba(255,92,0,0.35)] active:scale-[0.98] transition`}>
             <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
           </button>
         </div>
