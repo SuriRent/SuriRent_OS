@@ -16976,7 +16976,7 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
     printer = "kt-v520" if force_ktp else cfg["printer"]
     paper = 58 if printer == "kt-v520" else cfg["paper_width"]
     # Zelfde opmaak als de KT-V520 kasbon; 22 tekens zodat niets (ook geen streepjes) afbreekt.
-    W = 34 if paper == 80 else 22
+    W = 34 if paper == 80 else 21
     cur = e.get("currency") or "SRD"
 
     def money(v):
@@ -17093,7 +17093,7 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     cfg = await _kiosk_device_config(cid)
     printer = "kt-v520" if force_ktp else cfg["printer"]
     paper = 58 if printer == "kt-v520" else cfg["paper_width"]
-    W = 34 if paper == 80 else 22
+    W = 34 if paper == 80 else 21
     cur = d.get("currency") or "SRD"
 
     def money(v):
