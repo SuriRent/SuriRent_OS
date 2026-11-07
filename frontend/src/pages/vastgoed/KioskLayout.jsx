@@ -3102,7 +3102,7 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
 
 // Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
-function FittedReceiptPreview({ paymentId }) {
+function FittedReceiptPreview({ paymentId, maxScale = 1 }) {
   const boxRef = useRef(null);
   const paperRef = useRef(null);
   const [size, setSize] = useState({ w: 230, h: 420 });
@@ -3140,7 +3140,7 @@ function FittedReceiptPreview({ paymentId }) {
   };
 
   const px = { normal: 12, small: 13, medium: 14, large: 20 };
-  const scale = box.h ? Math.min(1, box.h / size.h, box.w / size.w) : 1;
+  const scale = box.h ? Math.min(maxScale, box.h / size.h, box.w / size.w) : 1;
   return (
     <div ref={boxRef} className="flex-1 min-h-0 overflow-hidden flex items-start justify-center" data-testid="receipt-preview-box">
       <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 3.5, ease: [0.25, 0.1, 0.25, 1] }}
@@ -3188,6 +3188,12 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // we de "regeling maken?"-suggestie BEFORE auto-done.
   const [partialInv, setPartialInv] = useState(null);
   const [planMade, setPlanMade] = useState(false);
+  const [bonOpen, setBonOpen] = useState(true);
+  useEffect(() => {
+    if (!bonOpen) return undefined;
+    const t = setTimeout(() => setBonOpen(false), 12000);
+    return () => clearTimeout(t);
+  }, [bonOpen]);
 
   useEffect(() => {
     const tid = payment.tenant_id || overview?.tenant?.id;
@@ -3263,8 +3269,21 @@ function ReceiptScreen({ payment, overview, onDone }) {
             Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
           </p>
         )}
-        {/* Bon-preview: geschaald zodat alles zonder scrollen past, horizontaal gecentreerd */}
-        <FittedReceiptPreview paymentId={payment.id} />
+        {/* Bon schuift als popup omhoog (zoals uit de printer) */}
+        <button type="button" onClick={() => setBonOpen(true)} data-testid="receipt-show-bon"
+          className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 transition-colors">
+          <Printer className="w-10 h-10" />
+          <span className="text-sm font-bold">Bon bekijken</span>
+        </button>
+        {bonOpen && createPortal((
+          <div className="fixed inset-0 z-[150] bg-black/55 flex items-end justify-center overflow-hidden" onClick={() => setBonOpen(false)} data-testid="receipt-bon-popup">
+            <div className="w-full max-w-md h-[88vh] flex flex-col px-4" onClick={(e) => e.stopPropagation()}>
+              <FittedReceiptPreview paymentId={payment.id} maxScale={3} />
+              <button type="button" onClick={() => setBonOpen(false)} data-testid="receipt-bon-close"
+                className="shrink-0 my-3 h-11 rounded-2xl bg-white/95 text-slate-800 font-black text-sm">Sluiten</button>
+            </div>
+          </div>
+        ), document.body)}
         <div className={`flex justify-between items-center px-3 py-1.5 mt-2 rounded-xl shrink-0 ${
           remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
         }`} data-testid="receipt-remaining-row">
