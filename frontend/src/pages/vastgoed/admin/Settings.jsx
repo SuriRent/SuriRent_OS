@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
-  Loader2, Check, Mail,
+  Loader2, Check, Mail, Paintbrush, Save, X, Trash2, CheckCircle2,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer, ShieldCheck,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -740,8 +740,9 @@ function ReceiptsForm({ initial }) {
           />
           )}
         </div>
-        <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
-      </div>
+        <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon}         kind={kind} setKind={setKind}
+                  onSave={s.save} saving={s.saving} msg={s.msg} err={s.err} />
+              </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
   );
@@ -791,17 +792,9 @@ function LayoutEditor({ kind, layout, onChange }) {
     <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-2" data-testid="layout-editor-toggle">
       <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
         <input type="checkbox" checked={!!layout.enabled} onChange={(e) => enable(e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
-        Eigen opmaak gebruiken (bon direct bewerken)
+        Eigen opmaak gebruiken
       </label>
-      {layout.enabled ? (
-        <>
-          <p className="text-xs text-slate-500">Bewerk de bon rechts: dit is de echte bon. Klik op een regel en typ; de geselecteerde regel toont de plaatshouders (bijv. {'{naam}'}) zodat gegevens automatisch blijven kloppen. Regels met een lege plaatshouder worden niet geprint (vaag weergegeven).</p>
-          <button type="button" className="h-8 px-3 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]"
-            onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard herstellen</button>
-        </>
-      ) : (
-        <p className="text-xs text-slate-500">Aan: de bon rechts wordt direct bewerkbaar (tekst, uitlijning, vet, grootte, regels erbij/weg).</p>
-      )}
+      <p className="text-xs text-slate-500">Klik rechts op &quot;Bon Editor openen&quot; om de bon op je eigen manier op te maken.</p>
     </div>
   );
 }
@@ -809,7 +802,7 @@ function LayoutEditor({ kind, layout, onChange }) {
 // Bon-editor: de bon zelf is bewerkbaar. Regels met een lege {plaatshouder} worden niet geprint.
 const BON_PX = { betaling: { normal: 12, small: 13, medium: 14, large: 20 }, kas: { normal: 15, small: 15, medium: 18, large: 21 } };
 
-function LayoutPaper({ kind, layout, onChange, lines }) {
+function LayoutPaper({ kind, setKind, layout, onChange, lines, loading, onSave, saving, msg, err, onClose }) {
   const blocks = layout.blocks || [];
   const [foc, setFoc] = useState({ i: -1, f: 'text' });
   const sizes = kind === 'betaling'
@@ -828,92 +821,122 @@ function LayoutPaper({ kind, layout, onChange, lines }) {
     const at = foc.i >= 0 ? foc.i + 1 : blocks.length;
     setBlocks([...blocks.slice(0, at), blk, ...blocks.slice(at)].slice(0, 80));
   };
-  const addPh = (p) => {
-    if (foc.i < 0 || !blocks[foc.i] || blocks[foc.i].t === 'dash' || blocks[foc.i].t === 'blank') {
-      insert(T(`{${p}}`));
-    } else {
-      const f = foc.f === 'right' ? 'right' : 'text';
-      upd(foc.i, { [f]: `${blocks[foc.i][f] || ''}{${p}}` });
-    }
+  const addPh = (p, i) => {
+    const f = foc.i === i && foc.f === 'right' ? 'right' : 'text';
+    upd(i, { [f]: `${blocks[i]?.[f] || ''}{${p}}` });
   };
-  const mono = 'font-mono bg-transparent outline-none w-full border-b border-dashed border-slate-300 focus:border-[#FF5C00]';
   const btn = 'h-7 px-2 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]';
   const px = BON_PX[kind === 'betaling' ? 'betaling' : 'kas'];
+  const cardRefs = useRef({});
+  const select = (i, scroll = true) => {
+    setFoc({ i, f: 'text' });
+    if (scroll) cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const typeLabel = { text: 'Tekst', pair: 'Links / rechts', dash: 'Streepjes', blank: 'Lege regel' };
   return (
-    <div className="space-y-3" data-testid="layout-editor" style={{ maxWidth: 340 }}>
-      {layout.enabled && (
-        <>
-          <div className="flex flex-wrap gap-1">
-            {PLACEHOLDERS[kind].map((p) => (
-              <button key={p} type="button" onClick={() => addPh(p)} className="px-2 h-7 rounded-full bg-orange-50 text-[#FF5C00] text-xs font-mono font-bold">{`{${p}}`}</button>
-            ))}
-          </div>
-          <div className="mx-auto bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2 space-y-0.5"
-            style={{ width: '58mm', fontFamily: 'monospace', color: '#000' }} data-testid="bon-edit-paper">
-            {lines.map((l, k) => {
-              const bi = l.b;
-              const b = blocks[bi];
-              const sel = foc.i === bi;
-              if (b && sel && lines[k - 1]?.b === bi) return null;
-              const st = { fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, textAlign: l.align || 'left' };
-              if (b && sel) {
-                return (
-                  <div key={k} className="rounded ring-2 ring-[#FF5C00]/60 bg-orange-50/60 px-0.5" data-testid="bon-edit-selected">
-                    {(b.t === 'text' || b.t === 'pair') ? (
-                      <div className="flex gap-1" style={{ fontWeight: b.bold ? 700 : 400, fontSize: px[b.size] || px.normal }}>
-                        <input autoFocus className={mono} style={{ textAlign: b.t === 'pair' ? 'left' : b.align }} value={b.text || ''} aria-label="Regeltekst"
-                          onFocus={() => setFoc({ i: bi, f: 'text' })} onChange={(e) => upd(bi, { text: e.target.value })} />
-                        {b.t === 'pair' && (
-                          <input className={mono} style={{ textAlign: 'right' }} value={b.right || ''} aria-label="Regeltekst rechts"
-                            onFocus={() => setFoc({ i: bi, f: 'right' })} onChange={(e) => upd(bi, { right: e.target.value })} />
-                        )}
-                      </div>
-                    ) : (
-                      <div className="font-mono text-slate-400 text-xs">{b.t === 'dash' ? '- - - streepjes - - -' : '(lege regel)'}</div>
-                    )}
-                  </div>
-                );
-              }
-              return (
-                <div key={k} onClick={() => setFoc({ i: bi, f: 'text' })} className="cursor-text rounded hover:bg-orange-50/60 px-0.5"
-                  style={{ ...st, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em', ...(l.hidden ? { opacity: 0.4, fontStyle: 'italic', borderBottom: '1px dotted #94a3b8' } : {}) }}>
+    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col" data-testid="bon-editor">
+      <div className="h-14 shrink-0 bg-white border-b border-slate-200 px-4 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 mr-3">
+          <Paintbrush className="w-5 h-5 text-orange-500" />
+          <h1 className="font-extrabold text-slate-900">Bon Editor</h1>
+        </div>
+        <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+          {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon']].map(([k, l]) => (
+            <button key={k} type="button" onClick={() => { setKind(k); setFoc({ i: -1, f: 'text' }); }} data-testid={`editor-tab-${k}`}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${kind === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{l}</button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+          <input type="checkbox" checked={!!layout.enabled} onChange={(e) => onChange({ ...layout, enabled: e.target.checked, blocks: blocks.length ? blocks : DEFAULT_BLOCKS[kind] })} className="w-4 h-4 accent-[#FF5C00]" />
+          Eigen opmaak actief
+        </label>
+        <div className="flex-1" />
+        {loading && <Loader2 className="w-4 h-4 animate-spin text-orange-500" />}
+        {msg && <span className="text-xs font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {msg}</span>}
+        {err && <span className="text-xs font-bold text-red-600">{err}</span>}
+        <button type="button" onClick={onSave} disabled={saving} data-testid="editor-save"
+          className="h-9 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-sm flex items-center gap-1.5 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Opslaan
+        </button>
+        <button type="button" onClick={onClose} data-testid="editor-close" title="Sluiten"
+          className="h-9 w-9 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 flex items-center justify-center"><X className="w-4 h-4" /></button>
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+        <div className="flex-1 min-w-0 min-h-0 overflow-auto p-4 flex justify-center items-start">
+          <div className="bg-white rounded-xl shadow-2xl p-6 shrink-0">
+            <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
+              style={{ width: '58mm', fontFamily: 'monospace', color: '#000', zoom: 1.5, opacity: loading ? 0.6 : 1 }} data-testid="bon-edit-paper">
+              {lines.map((l, k) => (
+                <div key={k} onClick={() => select(l.b)}
+                  className={`cursor-pointer rounded px-0.5 ${foc.i === l.b ? 'ring-2 ring-[#FF5C00] bg-orange-50' : 'hover:bg-orange-50/70'}`}
+                  style={{ fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, textAlign: l.align || 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em',
+                    ...(l.hidden ? { opacity: 0.4, fontStyle: 'italic', borderBottom: '1px dotted #94a3b8' } : {}) }}>
                   {l.hidden ? `(verborgen) ${l.text || 'leeg'}` : l.text}
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          {foc.i >= 0 && blocks[foc.i] && (() => {
-            const b = blocks[foc.i];
-            const i = foc.i;
-            return (
-              <div className="flex flex-wrap gap-1" data-testid="bon-edit-toolbar">
-                {b.t === 'text' && ['left', 'center', 'right'].map((a) => (
-                  <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
-                ))}
-                {b.t !== 'dash' && b.t !== 'blank' && (
-                  <>
-                    <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
-                    <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
-                      {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </select>
-                  </>
+        </div>
+        <aside className="w-full lg:w-[380px] lg:shrink-0 max-h-[45vh] lg:max-h-none border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
+          <div className="p-4 border-b border-slate-100">
+            <h2 className="text-sm font-extrabold text-slate-900">Bewerkbare inhoud</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              Klik op een regel van de bon of kies hieronder een regel. Gebruik plaatshouders zoals {'{naam}'} voor gegevens; een regel met een lege plaatshouder wordt niet geprint.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button type="button" className={btn} onClick={() => insert(T(''))}>+ Tekst</button>
+              <button type="button" className={btn} onClick={() => insert(PR('', ''))}>+ Links/rechts</button>
+              <button type="button" className={btn} onClick={() => insert(DASH)}>+ Streepjes</button>
+              <button type="button" className={btn} onClick={() => insert(BLANK)}>+ Lege regel</button>
+              <button type="button" className={btn} onClick={() => insert(T('Bankoverschrijving:', { bold: true }))}>+ Bankgegevens</button>
+              <button type="button" className={`${btn} ml-auto`} onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, enabled: true, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard</button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+            {blocks.length === 0 && (
+              <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">Nog geen regels. Zet &quot;Eigen opmaak actief&quot; aan of kies Standaard.</p>
+            )}
+            {blocks.map((b, i) => (
+              <div key={i} ref={(el) => { cardRefs.current[i] = el; }} onClick={() => setFoc((f) => (f.i === i ? f : { i, f: 'text' }))}
+                className={`block rounded-xl border p-3 ${foc.i === i ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200 hover:border-emerald-300'}`}>
+                <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-700">
+                  <span className="truncate">#{i + 1} · {typeLabel[b.t] || 'Regel'}</span>
+                  <span className="flex items-center gap-1">
+                    <button type="button" onClick={() => select(i, false)} className="text-[10px] font-bold text-emerald-700 hover:underline">Toon</button>
+                    <button type="button" onClick={() => { move(i, -1); setFoc({ i: Math.max(0, i - 1), f: 'text' }); }} disabled={i === 0} className="px-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30">↑</button>
+                    <button type="button" onClick={() => { move(i, 1); setFoc({ i: Math.min(blocks.length - 1, i + 1), f: 'text' }); }} disabled={i === blocks.length - 1} className="px-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30">↓</button>
+                    <button type="button" onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }} className="text-rose-600 hover:bg-rose-50 rounded p-1" aria-label="Verwijder regel"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </span>
+                </div>
+                {(b.t === 'text' || b.t === 'pair') && (
+                  <div className="mt-2 space-y-2">
+                    <input type="text" value={b.text || ''} onChange={(e) => upd(i, { text: e.target.value })} onFocus={() => setFoc({ i, f: 'text' })}
+                      aria-label={`Regel ${i + 1}`} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-mono text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                    {b.t === 'pair' && (
+                      <input type="text" value={b.right || ''} onChange={(e) => upd(i, { right: e.target.value })} onFocus={() => setFoc({ i, f: 'right' })}
+                        aria-label={`Regel ${i + 1} rechts`} placeholder="Rechts"
+                        className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-mono text-slate-800 focus:border-emerald-500 focus:outline-none" />
+                    )}
+                    <div className="flex flex-wrap items-center gap-1">
+                      {b.t === 'text' && ['left', 'center', 'right'].map((a) => (
+                        <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
+                      ))}
+                      <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
+                      <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
+                        {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                      <select className={btn} value="" onChange={(e) => { if (e.target.value) { setFoc({ i, f: foc.i === i ? foc.f : 'text' }); addPh(e.target.value, i); } }} aria-label="Plaatshouder invoegen">
+                        <option value="">{'{ } invoegen'}</option>
+                        {PLACEHOLDERS[kind].map((p) => <option key={p} value={p}>{`{${p}}`}</option>)}
+                      </select>
+                    </div>
+                  </div>
                 )}
-                <button type="button" className={btn} onClick={() => { move(i, -1); setFoc({ i: Math.max(0, i - 1), f: 'text' }); }}>↑</button>
-                <button type="button" className={btn} onClick={() => { move(i, 1); setFoc({ i: Math.min(blocks.length - 1, i + 1), f: 'text' }); }}>↓</button>
-                <button type="button" className={`${btn} text-red-600`} onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }}>Verwijder</button>
               </div>
-            );
-          })()}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={btn} onClick={() => insert(T(''))}>+ Tekst</button>
-            <button type="button" className={btn} onClick={() => insert(PR('', ''))}>+ Links/rechts</button>
-            <button type="button" className={btn} onClick={() => insert(DASH)}>+ Streepjes</button>
-            <button type="button" className={btn} onClick={() => insert(BLANK)}>+ Lege regel</button>
-            <button type="button" className={btn} onClick={() => insert(T('Bankoverschrijving:', { bold: true }))}>+ Bankgegevens</button>
-            <button type="button" className={`${btn} ml-auto`} onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard herstellen</button>
+            ))}
           </div>
-        </>
-      )}
+        </aside>
+      </div>
     </div>
   );
 }
@@ -987,11 +1010,12 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout, onSave, saving, msg, err }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
   const lay = layouts[kind] || {};
-  const editing = !!lay.enabled;
+  const editing = !!lay.enabled || open;
   const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
@@ -1016,11 +1040,17 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) 
         ))}
       </div>
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
-        {editing ? 'Live bon — klik een regel om te bewerken' : 'Voorbeeld (58mm)'} {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+        Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
-      {editing ? (
-        <LayoutPaper kind={kind} layout={lay} lines={lines} onChange={(v) => onLayout(kind, v)} />
-      ) : (
+      <button type="button" onClick={() => { if (!lay.blocks?.length) onLayout(kind, { ...lay, enabled: true, blocks: DEFAULT_BLOCKS[kind] }); setOpen(true); }}
+        data-testid="open-bon-editor"
+        className="mb-2 w-full h-10 rounded-xl bg-[#FF5C00] text-white text-sm font-extrabold flex items-center justify-center gap-2">
+        <Paintbrush className="w-4 h-4" /> Bon Editor openen
+      </button>
+      {open && (
+        <LayoutPaper kind={kind} setKind={setKind} layout={lay} lines={lines} loading={loading} onChange={(v) => onLayout(kind, v)}
+          onSave={onSave} saving={saving} msg={msg} err={err} onClose={() => setOpen(false)} />
+      )}
       <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
           data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>
@@ -1031,7 +1061,6 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) 
           ))}
         </div>
       </div>
-      )}
     </div>
   );
 }
