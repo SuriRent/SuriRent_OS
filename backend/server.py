@@ -13320,6 +13320,8 @@ def _custom_bon_lines(items, where: str, width: int) -> list:
         align = it.get("align") if it.get("align") in ("left", "center", "right") else "left"
         size = "large" if it.get("size") == "large" else "normal"
         w = max(8, int(width * 0.75)) if size == "large" else width
+        if it.get("divider", True):
+            out.append({"text": "-" * width, "align": "left", "bold": False, "size": "normal"})
         out += [{"text": x, "align": align, "bold": bool(it.get("bold")), "size": size} for x in _wrap_text(text, w)]
     return out
 

@@ -744,14 +744,15 @@ function ReceiptsForm({ initial }) {
 
 const EXTRA_PRESETS = [
   { label: '+ Bankgegevens', items: [
-    { text: 'Bankoverschrijving:', bold: true }, { text: 'Bank: ' }, { text: 'Rek.nr: ' }, { text: 'T.n.v.: ' },
+    { text: 'Bankoverschrijving:', bold: true, divider: true }, { text: 'Bank: ' }, { text: 'Rek.nr: ' }, { text: 'T.n.v.: ' },
   ] },
-  { label: '+ Eigen regel', items: [{ text: '' }] },
+  { label: '+ Eigen blok (met streepjes)', items: [{ text: '', divider: true }] },
+  { label: '+ Extra regel', items: [{ text: '' }] },
 ];
 
 function ExtraLinesEditor({ items, onChange }) {
   const upd = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-  const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', ...x }))].slice(0, 10));
+  const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', divider: false, ...x }))].slice(0, 10));
   const sel = 'h-9 px-2 rounded-lg border-2 border-slate-200 text-sm';
   return (
     <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="extra-lines">
@@ -771,6 +772,9 @@ function ExtraLinesEditor({ items, onChange }) {
             <select className={sel} value={it.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
               <option value="normal">Normaal</option><option value="large">Groot</option>
             </select>
+            <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={it.divider !== false} onChange={(e) => upd(i, { divider: e.target.checked })} className="w-4 h-4 accent-[#FF5C00]" /> Streepjes erboven
+            </label>
             <label className="flex items-center gap-1 text-sm">
               <input type="checkbox" checked={!!it.bold} onChange={(e) => upd(i, { bold: e.target.checked })} className="w-4 h-4 accent-[#FF5C00]" /> Vet
             </label>
