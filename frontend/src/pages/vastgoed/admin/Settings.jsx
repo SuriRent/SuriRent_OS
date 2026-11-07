@@ -656,6 +656,24 @@ function ReceiptsForm({ initial }) {
   const d = s.data;
   const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
   const setBon = (k, v) => s.onField('bon', { ...bon, [k]: v });
+  const [kind, setKind] = useState('betaling');
+  const kasbon = { show_balance: true, show_employee: true, show_note: true, footer: '', ...(d.kasbon || {}) };
+  const borgbon = { show_apartment: true, show_method: true, footer: 'Borg ontvangen.', ...(d.borgbon || {}) };
+  const setKas = (k, v) => s.onField('kasbon', { ...kasbon, [k]: v });
+  const setBorg = (k, v) => s.onField('borgbon', { ...borgbon, [k]: v });
+  const chk = (id, label, obj, set, k) => (
+    <label key={id} className="flex items-center gap-3 text-sm text-slate-700">
+      <input type="checkbox" id={id} name={id} checked={!!obj[k]} onChange={(e) => set(k, e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+      {label}
+    </label>
+  );
+  const footerField = (id, obj, set, ph) => (
+    <label className="block pt-2">
+      <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Voettekst (optioneel)</span>
+      <input type="text" id={id} name={id} maxLength={120} value={obj.footer || ''} onChange={(e) => set('footer', e.target.value)}
+        placeholder={ph} className="mt-1 w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+    </label>
+  );
   return (
     <SectionShell msg={s.msg} err={s.err}>
       <p className="text-sm text-slate-600">
@@ -664,6 +682,24 @@ function ReceiptsForm({ initial }) {
       </p>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
         <div className="space-y-4">
+          {kind === 'kasbon' && (
+            <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="kasbon-options">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Kasbon — zichtbare velden</p>
+              {chk('kasbon-balance', 'Kassaldo', kasbon, setKas, 'show_balance')}
+              {chk('kasbon-employee', 'Medewerker', kasbon, setKas, 'show_employee')}
+              {chk('kasbon-note', 'Opmerking', kasbon, setKas, 'show_note')}
+              {footerField('kasbon-footer', kasbon, setKas, 'Bijv. Bedankt')}
+            </div>
+          )}
+          {kind === 'borgbon' && (
+            <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="borgbon-options">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Borgbon — zichtbare velden</p>
+              {chk('borgbon-apartment', 'Appartement', borgbon, setBorg, 'show_apartment')}
+              {chk('borgbon-method', 'Betaalmethode', borgbon, setBorg, 'show_method')}
+              {footerField('borgbon-footer', borgbon, setBorg, 'Borg ontvangen.')}
+            </div>
+          )}
+          {kind === 'betaling' && (
           <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="bon-options">
             <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
               <input type="checkbox" id="bon-split-name" name="bon-split-name" checked={!!bon.split_name}
@@ -693,8 +729,9 @@ function ReceiptsForm({ initial }) {
                 className="mt-1 w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
             </label>
           </div>
+          )}
         </div>
-        <BonPreview bon={bon} />
+        <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
@@ -720,22 +757,30 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon }) {
+function BonPreview({ bon, kasbon, borgbon, kind, setKind }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const key = JSON.stringify(bon);
+  const key = JSON.stringify({ bon, kasbon, borgbon });
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    api.post('/settings/receipts/preview-lines', { bon: JSON.parse(key) })
-      .then(({ data }) => { if (alive) setLines(data.lines || []); })
+    api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind })
+      .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [key]);
-  const px = { normal: 12, small: 13, medium: 14, large: 20 };
+  }, [key, kind]);
+  const px = kind === 'betaling'
+    ? { normal: 12, small: 13, medium: 14, large: 20 }
+    : { normal: 15, small: 15, medium: 18, large: 21 };
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
+      <div className="flex gap-1 mb-2 justify-center" data-testid="bon-preview-tabs">
+        {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon']].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setKind(k)} data-testid={`bon-tab-${k}`}
+            className={`px-3 h-8 rounded-full text-xs font-bold ${kind === k ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600'}`}>{l}</button>
+        ))}
+      </div>
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
         Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>

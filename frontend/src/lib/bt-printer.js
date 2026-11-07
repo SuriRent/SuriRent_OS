@@ -91,10 +91,29 @@ const plain = (s) => String(s ?? '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^\x0A\x20-\x7E]/g, '?');
 
-export function encodeEscPos(lines) {
+const widthOf = (l, cols) => (l.size === 'large' ? Math.floor(cols / 2) : cols);
+
+// Breekt te lange regels af op woordgrens, op de echte tekenbreedte van de printer (large = dubbele breedte).
+function wrapLine(l, cols) {
+  const max = widthOf(l, cols);
+  const text = plain(l.text);
+  if (text.length <= max) return [l];
+  const out = [];
+  let cur = '';
+  for (const w of text.split(' ')) {
+    const word = w.slice(0, max);
+    if (!cur) cur = word;
+    else if (cur.length + 1 + word.length <= max) cur += ` ${word}`;
+    else { out.push(cur); cur = word; }
+  }
+  if (cur) out.push(cur);
+  return out.map((t) => ({ ...l, text: t }));
+}
+
+export function encodeEscPos(lines, cols = paperWidth() >= 80 ? 48 : 32) {
   const out = [0x1b, 0x40];
   const ALIGN = { left: 0, center: 1, right: 2 };
-  for (const l of lines) {
+  for (const l of lines.flatMap((x) => wrapLine(x, cols))) {
     out.push(0x1b, 0x61, ALIGN[l.align] ?? 0, 0x1b, 0x45, l.bold ? 1 : 0, 0x1d, 0x21, l.size === 'large' ? 0x11 : l.size === 'medium' ? 0x01 : 0);
     for (const ch of plain(l.text)) out.push(ch.charCodeAt(0));
     out.push(0x0a);

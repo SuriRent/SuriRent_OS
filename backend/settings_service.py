@@ -137,6 +137,8 @@ def empty_section(section: str) -> dict:
                 "show_apartment": True, "show_tenant_address": True, "show_method": True,
                 "show_outstanding_period": True, "show_employee": True, "show_note": True,
             },
+            "kasbon": {"show_balance": True, "show_employee": True, "show_note": True, "footer": ""},
+            "borgbon": {"show_apartment": True, "show_method": True, "footer": "Borg ontvangen."},
         },
         # Kiosk apparaten: KingTop KT-V520 (KTPsdk.aar in de APK) voor alle kiosks.
         "kiosk_devices": {"kt_v520_enabled": False, "printer_mode": None, "paper_width": 58},

@@ -16963,7 +16963,7 @@ async def kiosk_list_cash(_session=Depends(get_kiosk_session)):
     return combined[:200]
 
 
-async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = False) -> dict:
+async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = False, opts: Optional[dict] = None) -> dict:
     """Kasgeld-mutatie als 58mm bon-regels (zelfde vorm als _receipt_print_data)."""
     cid = session.get("company_id")
     e = await db.kasgeld.find_one({"id": entry_id, **kiosk_scope(session)}, {"_id": 0})
@@ -16971,11 +16971,13 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
         raise HTTPException(status_code=404, detail="Mutatie niet gevonden")
     company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
     cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    cfgo = {"show_balance": True, "show_employee": True, "show_note": True, "footer": "",
+            **(((cs or {}).get("receipts") or {}).get("kasbon") or {}), **(opts or {})}
     font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
     cfg = await _kiosk_device_config(cid)
     printer = "kt-v520" if force_ktp else cfg["printer"]
     paper = 58 if printer == "kt-v520" else cfg["paper_width"]
-    # Zelfde opmaak als de KT-V520 kasbon; 22 tekens zodat niets (ook geen streepjes) afbreekt.
+    # Zelfde opmaak als de KT-V520 kasbon; 21 tekens (Groot) zodat niets (ook geen streepjes) afbreekt.
     W = 34 if paper == 80 else 21
     cur = e.get("currency") or "SRD"
 
@@ -17016,14 +17018,18 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
              L(f"NR. {nr}"), L(f"DATUM {datum}"), L(dash),
              L("Kasstorting" if is_in else "Kasopname")]
     lines += pair("Ontvangen:" if is_in else "Uitbetaald:", money(e.get("amount")), bold=True)
-    if e.get("balance_after") is not None:
+    if cfgo["show_balance"] and e.get("balance_after") is not None:
         lines += pair("Kassaldo:", money(e["balance_after"]))
     lines.append(L(dash))
-    lines += pair("Medewerker:", e.get("created_by_name") or "-")
-    if e.get("description"):
+    if cfgo["show_employee"]:
+        lines += pair("Medewerker:", e.get("created_by_name") or "-")
+    if cfgo["show_note"] and e.get("description"):
         lines.append(L("Opmerking:"))
         lines += [L(x) for x in wrap(e["description"], W)]
-    lines += [L(dash), L(""), L("")]
+    lines += [L(dash)]
+    if str(cfgo.get("footer") or "").strip():
+        lines += [L(x, "center") for x in wrap(cfgo["footer"], W)]
+    lines += [L(""), L("")]
     return {
         "template": "lines", "receipt_type": "kasgeld",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": e.get("created_by_name") or "",
@@ -17081,7 +17087,7 @@ async def kiosk_deposit_payment(tenant_id: str, body: KioskDepositPayIn, _sessio
     return {"deposit": await _enrich_deposit(doc), "invoices_created": created}
 
 
-async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False) -> dict:
+async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False, opts: Optional[dict] = None) -> dict:
     cid = session.get("company_id")
     d = await db.deposits.find_one({"id": did, "company_id": cid}, {"_id": 0})
     if not d:
@@ -17089,6 +17095,8 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     d = await _enrich_deposit(d)
     company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
     cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    cfgo = {"show_apartment": True, "show_method": True, "footer": "Borg ontvangen.",
+            **(((cs or {}).get("receipts") or {}).get("borgbon") or {}), **(opts or {})}
     font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
     cfg = await _kiosk_device_config(cid)
     printer = "kt-v520" if force_ktp else cfg["printer"]
@@ -17116,7 +17124,7 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("BORGBON", "center", True), L(dash),
              L(f"NR. {d.get('receipt_no') or did[:6].upper()}"), L(f"DATUM {datum}"), L(dash)]
     lines += pair("Huurder:", d.get("tenant_name") or "-")
-    if d.get("apartment_number"):
+    if cfgo["show_apartment"] and d.get("apartment_number"):
         lines += pair("Appt.:", d["apartment_number"])
     settled = d.get("status") in ("refunded", "partial")
     if settled:
@@ -17141,10 +17149,14 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
             lines += [L(dash), L(d["refund_note"])]
         lines += [L(""), L("Handtekening huurder:"), L(""), L("_" * W), L(""), L("")]
     else:
-        lines += pair("Methode:", methods.get(d.get("method") or "", d.get("method") or "-"))
-        lines.append(L(dash))
+        if cfgo["show_method"]:
+            lines += pair("Methode:", methods.get(d.get("method") or "", d.get("method") or "-"))
+            lines.append(L(dash))
         lines += pair("Borg:", money(d.get("amount")), bold=True)
-        lines += [L(dash), L("Borg ontvangen.", "center"), L(""), L("")]
+        lines.append(L(dash))
+        if str(cfgo.get("footer") or "").strip():
+            lines += [L(x, "center") for x in _wrap_text(cfgo["footer"], W)]
+        lines += [L(""), L("")]
     shown = d.get("amount_due") if settled and float(d.get("amount_due") or 0) > 0 else (d.get("refund_amount") if settled else d.get("amount"))
     return {
         "template": "lines", "receipt_type": "deposit_refund" if settled else "deposit",
@@ -18100,6 +18112,20 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
 async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
     """Bonvoorbeeld als regels (met nog niet opgeslagen bon-opties): zelfde opbouw als naar de KT-V520 APK."""
     cid = company_id_of(user)
+    kind = (body or {}).get("kind") or "betaling"
+    if kind in ("kasbon", "borgbon"):
+        sess = {"company_id": cid}
+        if kind == "kasbon":
+            e = await db.kasgeld.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+            if not e:
+                return {"lines": [], "cols": 21, "empty": "Nog geen kasbon beschikbaar — maak eerst een kasgeld-mutatie."}
+            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True, opts=(body or {}).get("kasbon"))
+        else:
+            e = await db.deposits.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+            if not e:
+                return {"lines": [], "cols": 21, "empty": "Nog geen borgbon beschikbaar — registreer eerst een borg."}
+            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True, opts=(body or {}).get("borgbon"))
+        return {"lines": d["lines"], "cols": d.get("cols", 21)}
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
     if p:
