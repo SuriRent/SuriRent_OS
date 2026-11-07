@@ -6227,6 +6227,7 @@ export default function KioskLayout() {
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
   const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:'));
+  useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
       if (e.detail === 'admin:facturen') {

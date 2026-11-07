@@ -14,9 +14,9 @@ export function setIosStatusBar(color) {
 let whiteDepth = 0;
 let savedWhite = null;
 
-export function useWhitePageBehindModal(maxWidth = 767) {
+export function useWhitePageBehindModal(maxWidth = 767, active = true) {
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia(`(max-width: ${maxWidth}px)`).matches) return undefined;
+    if (!active || typeof window === 'undefined' || !window.matchMedia(`(max-width: ${maxWidth}px)`).matches) return undefined;
     const html = document.documentElement;
     const body = document.body;
     if (whiteDepth === 0) {
