@@ -866,14 +866,32 @@ function LayoutPaper({ kind, setKind, layout, onChange, lines, loading, onSave, 
           <div className="bg-white rounded-xl shadow-2xl p-6 shrink-0">
             <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
               style={{ width: '58mm', fontFamily: 'monospace', color: '#000', zoom: 1.5, opacity: loading ? 0.6 : 1 }} data-testid="bon-edit-paper">
-              {lines.map((l, k) => (
+              {lines.map((l, k) => {
+                const sb = blocks[l.b];
+                if (sb && foc.i === l.b && (sb.t === 'text' || sb.t === 'pair')) {
+                  if (lines[k - 1]?.b === l.b) return null;
+                  const inp = 'font-mono bg-transparent outline-none w-full border-b border-dashed border-slate-400 focus:border-[#FF5C00]';
+                  return (
+                    <div key={k} className="rounded ring-2 ring-[#FF5C00] bg-orange-50 px-0.5 flex gap-1"
+                      style={{ fontWeight: sb.bold ? 700 : 400, fontSize: px[sb.size] || px.normal }}>
+                      <input autoFocus className={inp} style={{ textAlign: sb.t === 'pair' ? 'left' : sb.align }} value={sb.text || ''}
+                        aria-label="Regeltekst op bon" onFocus={() => setFoc({ i: l.b, f: 'text' })} onChange={(e) => upd(l.b, { text: e.target.value })} />
+                      {sb.t === 'pair' && (
+                        <input className={inp} style={{ textAlign: 'right' }} value={sb.right || ''} aria-label="Rechts op bon"
+                          onFocus={() => setFoc({ i: l.b, f: 'right' })} onChange={(e) => upd(l.b, { right: e.target.value })} />
+                      )}
+                    </div>
+                  );
+                }
+                return (
                 <div key={k} onClick={() => select(l.b)}
                   className={`cursor-pointer rounded px-0.5 ${foc.i === l.b ? 'ring-2 ring-[#FF5C00] bg-orange-50' : 'hover:bg-orange-50/70'}`}
                   style={{ fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, textAlign: l.align || 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em',
                     ...(l.hidden ? { opacity: 0.4, fontStyle: 'italic', borderBottom: '1px dotted #94a3b8' } : {}) }}>
                   {l.hidden ? `(verborgen) ${l.text || 'leeg'}` : l.text}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
