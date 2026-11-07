@@ -6431,7 +6431,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPage id="appartementen" kioskLayout onBack={goBack} />
+              ? <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />
               : (
                 <div className="h-full min-h-0 kiosk-admin-skin">
                   <KioskApartmentsPanel
@@ -6444,7 +6444,9 @@ export default function KioskLayout() {
               )
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
-            <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
             isMobileViewport
@@ -6452,13 +6454,19 @@ export default function KioskLayout() {
               : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
-            <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:betalingen' && hasAdminAccess && (
-            <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:regelingen' && hasAdminAccess && (
-            <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
+            isMobileViewport
+              ? <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />
+              : <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
             <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
