@@ -882,7 +882,7 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
       const bridge = apkBridge();
       const bt = getSavedPrinter();
       if (bridge) {
-        const data = { lines, template: 'lines', receipt_type: kind, size_mode: 'normal', paper_width: paperWidth() };
+        const data = { lines, template: 'lines', receipt_type: { kasbon: 'kasgeld', borgbon: 'deposit' }[kind] || 'betaling', size_mode: 'normal', paper_width: paperWidth() };
         bridge(JSON.stringify(apkPrintMessage('', data)));
       } else if (opts.first) {
         const { data } = await api.post('/settings/receipts/preview-remote-print', { bon, kasbon, borgbon, kind, printer_id: opts.first.id });
