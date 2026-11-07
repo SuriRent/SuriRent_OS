@@ -740,7 +740,7 @@ function ReceiptsForm({ initial }) {
           />
           )}
         </div>
-        <BonPreview bon={bon} layouts={layouts} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
+        <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
@@ -785,8 +785,31 @@ const PLACEHOLDERS = {
   borgbon: ['bedrijfsnaam', 'titel', 'nummer', 'datum', 'huurder', 'appartement', 'bedrag', 'borg', 'methode', 'medewerker', 'opmerking'],
 };
 
-// Live bon-editor: bouw de bon zelf op; regels met een lege {plaatshouder} worden niet geprint.
 function LayoutEditor({ kind, layout, onChange }) {
+  const enable = (on) => onChange({ ...layout, enabled: on, blocks: layout.blocks?.length ? layout.blocks : DEFAULT_BLOCKS[kind] });
+  return (
+    <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-2" data-testid="layout-editor-toggle">
+      <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
+        <input type="checkbox" checked={!!layout.enabled} onChange={(e) => enable(e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+        Eigen opmaak gebruiken (bon direct bewerken)
+      </label>
+      {layout.enabled ? (
+        <>
+          <p className="text-xs text-slate-500">Bewerk de bon rechts: klik op een regel en typ. Gebruik de oranje plaatshouders (bijv. {'{naam}'}) voor gegevens; regels met een lege plaatshouder worden niet geprint. Met &quot;Toon met gegevens&quot; zie je het echte resultaat.</p>
+          <button type="button" className="h-8 px-3 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]"
+            onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard herstellen</button>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500">Aan: de bon rechts wordt direct bewerkbaar (tekst, uitlijning, vet, grootte, regels erbij/weg).</p>
+      )}
+    </div>
+  );
+}
+
+// Bon-editor: de bon zelf is bewerkbaar. Regels met een lege {plaatshouder} worden niet geprint.
+const BON_PX = { betaling: { normal: 12, small: 13, medium: 14, large: 20 }, kas: { normal: 15, small: 15, medium: 18, large: 21 } };
+
+function LayoutPaper({ kind, layout, onChange }) {
   const blocks = layout.blocks || [];
   const [foc, setFoc] = useState({ i: -1, f: 'text' });
   const sizes = kind === 'betaling'
@@ -813,30 +836,26 @@ function LayoutEditor({ kind, layout, onChange }) {
       upd(foc.i, { [f]: `${blocks[foc.i][f] || ''}{${p}}` });
     }
   };
-  const enable = (on) => onChange({ ...layout, enabled: on, blocks: blocks.length ? blocks : DEFAULT_BLOCKS[kind] });
   const mono = 'font-mono bg-transparent outline-none w-full border-b border-dashed border-slate-300 focus:border-[#FF5C00]';
   const btn = 'h-7 px-2 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]';
+  const px = BON_PX[kind === 'betaling' ? 'betaling' : 'kas'];
   return (
-    <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="layout-editor">
-      <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
-        <input type="checkbox" checked={!!layout.enabled} onChange={(e) => enable(e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
-        Eigen opmaak gebruiken (bon-editor)
-      </label>
+    <div className="space-y-3" data-testid="layout-editor" style={{ maxWidth: 340 }}>
       {layout.enabled && (
         <>
-          <p className="text-xs text-slate-500">Typ direct op de bon. Klik een plaatshouder om die in de geselecteerde regel te zetten; regels met een lege plaatshouder worden niet geprint. Het voorbeeld ernaast past live mee.</p>
           <div className="flex flex-wrap gap-1">
             {PLACEHOLDERS[kind].map((p) => (
               <button key={p} type="button" onClick={() => addPh(p)} className="px-2 h-7 rounded-full bg-orange-50 text-[#FF5C00] text-xs font-mono font-bold">{`{${p}}`}</button>
             ))}
           </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1">
+          <div className="mx-auto bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2 space-y-0.5"
+            style={{ width: '58mm', fontFamily: 'monospace', color: '#000' }} data-testid="bon-edit-paper">
             {blocks.map((b, i) => (
-              <div key={i} className={`rounded-lg px-2 py-1 ${foc.i === i ? 'bg-white ring-2 ring-[#FF5C00]/40' : ''}`} onClick={() => setFoc((f) => ({ ...f, i }))}>
-                {b.t === 'dash' && <div className="font-mono text-slate-400 text-sm select-none">- - - - - - - - - - - - -</div>}
-                {b.t === 'blank' && <div className="font-mono text-slate-300 text-xs select-none">(lege regel)</div>}
+              <div key={i} className={`rounded px-0.5 ${foc.i === i ? 'ring-2 ring-[#FF5C00]/50 bg-orange-50/40' : ''}`} onClick={() => setFoc((f) => ({ ...f, i }))}>
+                {b.t === 'dash' && <div className="font-mono text-slate-400 select-none overflow-hidden whitespace-nowrap" style={{ fontSize: px.normal }}>{'-'.repeat(60)}</div>}
+                {b.t === 'blank' && <div className="font-mono text-slate-300 select-none" style={{ fontSize: 9, minHeight: '1em' }}>&nbsp;</div>}
                 {(b.t === 'text' || b.t === 'pair') && (
-                  <div className="flex gap-2" style={{ fontWeight: b.bold ? 700 : 400, fontSize: b.size === 'large' ? 18 : b.size === 'medium' ? 15 : 13 }}>
+                  <div className="flex gap-1" style={{ fontWeight: b.bold ? 700 : 400, fontSize: px[b.size] || px.normal }}>
                     <input className={mono} style={{ textAlign: b.t === 'pair' ? 'left' : b.align }} value={b.text || ''} aria-label={`Regel ${i + 1}`}
                       onFocus={() => setFoc({ i, f: 'text' })} onChange={(e) => upd(i, { text: e.target.value })} />
                     {b.t === 'pair' && (
@@ -949,9 +968,12 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showData, setShowData] = useState(false);
+  const lay = layouts[kind] || {};
+  const editing = !!lay.enabled && !showData;
   const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
@@ -974,8 +996,17 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
         ))}
       </div>
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
-        Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+        {editing ? 'Bon bewerken (58mm)' : 'Voorbeeld (58mm)'} {loading && !editing && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+        {lay.enabled && (
+          <button type="button" onClick={() => setShowData((v) => !v)} data-testid="bon-toggle-data"
+            className="ml-auto h-7 px-2 rounded border border-slate-200 text-[11px] normal-case tracking-normal font-bold hover:border-[#FF5C00]">
+            {showData ? 'Terug naar bewerken' : 'Toon met gegevens'}
+          </button>
+        )}
       </p>
+      {editing ? (
+        <LayoutPaper kind={kind} layout={lay} onChange={(v) => onLayout(kind, v)} />
+      ) : (
       <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
           data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>
@@ -986,6 +1017,7 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }
