@@ -13271,8 +13271,11 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out["_bon"] = ((cs or {}).get("receipts") or {}).get("bon") or {}
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
     out.pop("_bon", None)
-    # Geen template "lines": de APK print de betalings-bon met zijn eigen compacte sjabloon.
     out["receipt_type"] = "betaling"
+    # Alleen aanzetten als de APK size_mode "normal" ondersteunt; anders print de APK zijn eigen sjabloon.
+    if out["printer"] == "kt-v520" and (((cs or {}).get("receipts") or {}).get("bon") or {}).get("apk_normal"):
+        out["template"] = "lines"
+        out["size_mode"] = "normal"
     return out
 
 

@@ -670,6 +670,11 @@ function ReceiptsForm({ initial }) {
                 onChange={(e) => setBon('split_name', e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
               Bedrijfsnaam splitsen (eerste woord op regel 1, rest op regel 2)
             </label>
+            <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
+              <input type="checkbox" id="bon-apk-normal" name="bon-apk-normal" checked={!!bon.apk_normal}
+                onChange={(e) => setBon('apk_normal', e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+              KT-V520: bon door webapp laten bepalen (alleen aanzetten als de APK size_mode "normal" ondersteunt)
+            </label>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-500 pt-2">Zichtbare velden</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {BON_SHOW_FIELDS.map((f) => (
