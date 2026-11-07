@@ -402,7 +402,7 @@ function DesktopKioskHeader({
       </button>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
-          <div className={`${currentStep === 'overview' ? 'hidden md:flex' : 'flex'} items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]`} data-testid="kiosk-header-tenant">
+          <div className="hidden md:flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
             <div className="w-9 h-9 [&>div]:!w-9 [&>div]:!h-9 [&>div]:!ring-0 shrink-0">
               <OverviewTenantPhoto src={tenant.photo} name={tenant.name} />
             </div>
