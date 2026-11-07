@@ -13267,6 +13267,8 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
     out["cols"] = cols
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
+    out["template"] = "lines"
+    out["receipt_type"] = "betaling"
     return out
 
 
@@ -13312,36 +13314,44 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
-    lines = [L(d["bedrijfsnaam"], "center", True, "large")]
+    # 1. Bedrijfsnaam: eerste woord op regel 1, rest op regel 2 (groot, vet, gecentreerd)
+    first, _sp, rest = (d["bedrijfsnaam"] or "").strip().partition(" ")
+    lines = [L(first, "center", True, "large")]
+    if rest.strip():
+        lines.append(L(rest.strip(), "center", True, "large"))
+    # 2. Adres en telefoon: iets groter dan kleine tekst
     for extra in (d.get("adres"), d.get("telefoon") and f"Tel: {d['telefoon']}"):
         if extra:
-            lines.append(L(extra, "center"))
-    lines += [L(dash), L(title, "center", True), L(dash)]
-    if d.get("kwitantie"):
-        lines.append(L(row("Nr:", d["kwitantie"])))
-    lines.append(L(row("Datum:", d["datum"])))
+            lines.append(L(extra, "center", False, "medium"))
+    # 3. KWITANTIE nummer en datum
+    lines.append(L(f"{title} {d['kwitantie']}".strip(), "center", True))
+    lines.append(L(d["datum"], "center"))
     lines.append(L(dash))
+    # 5. Huurder
     lines.append(L("HUURDER:", bold=True))
     lines.append(L(d.get("naam") or "-"))
+    if d.get("appartement"):
+        lines.append(L(f"App. {d['appartement']}"))
+    if d.get("adres"):
+        lines.append(L(d["adres"]))
     if d.get("huurder_telefoon"):
-        lines.append(L(row("Tel:", d["huurder_telefoon"])))
-    if d.get("appartement") or d.get("vestiging"):
-        lines.append(L(" - ".join(x for x in (d.get("appartement") and f"App. {d['appartement']}", d.get("vestiging")) if x)))
-    lines += [L(dash), L(d["omschrijving"])]
+        lines.append(L(f"Tel: {d['huurder_telefoon']}"))
+    # 6. Omschrijving en betaalwijze
+    lines.append(L(d["omschrijving"]))
     if d.get("methode"):
-        lines.append(L(row("Methode:", d["methode"])))
-    lines.append(L(row("BETAALD", d["bedrag"]), bold=True))
+        lines.append(L(f"Betaalwijze: {d['methode']}"))
+    lines.append(L(dash))
+    # 8. Betaald, 9. Nog openstaand
+    lines += [L("BETAALD:", bold=True), L(d["bedrag"], "left", True, "large")]
+    lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], "left", True, "large")]
     if d.get("openstaand_periode"):
-        # Optioneel: openstaand bedrag + maanden als eigen blok onder het bedrag.
-        lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], bold=True)]
-        lines += [L(x) for x in _wrap_text(f"Maand(en): {d['openstaand_periode']}", W)]
-    else:
-        lines.append(L(row("Openstaand:", d["openstaand"])))
+        lines += [L(x) for x in _wrap_text(d["openstaand_periode"], W)]
+    # 10. Ontvangen door en opmerking
     if d.get("medewerker"):
-        lines.append(L(row("Ontvangen door:", d["medewerker"])))
+        lines.append(L(f"Ontvangen door: {d['medewerker']}"))
     if d.get("opmerking"):
-        lines += [L(dash), L(f"Opmerking: {d['opmerking']}")]
-    lines += [L(dash), L("Bedankt voor uw betaling!", "center"), L(""), L("")]
+        lines += [L(x) for x in _wrap_text(f"Opmerking: {d['opmerking']}", W)]
+    lines += [L(""), L("")]
     return lines
 
 
