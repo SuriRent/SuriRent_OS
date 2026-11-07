@@ -3259,27 +3259,33 @@ function ReceiptScreen({ payment, overview, onDone }) {
     return (
       <div className="h-full bg-orange-500 flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="receipt-desktop">
         <div className="flex-1 min-h-0 flex flex-row gap-3 pb-3 pt-3">
-          <div className="bg-white rounded-2xl flex-[3] min-w-0 flex flex-col p-5" data-testid="receipt-card">
-            <div className="flex items-center gap-3 mb-3 shrink-0" data-testid="receipt-thanks">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                <Check className="w-7 h-7 text-emerald-600" strokeWidth={3} />
+          <div className="bg-white rounded-2xl shadow-xl flex-[3] min-w-0 flex flex-col p-5" data-testid="receipt-card">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <div className="flex items-center gap-2 font-black text-slate-900 text-lg">
+                <span className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center"><Printer className="w-5 h-5 text-orange-600" /></span>
+                Kwitantie
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">Kwitantie</p>
-                <h2 className="text-xl font-black text-slate-900 leading-tight">Bedankt! Uw betaling is verwerkt</h2>
-                {payment.received_by && (
-                  <p className="text-xs text-slate-500 truncate" data-testid="receipt-received-by-banner">
-                    Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
-                  </p>
-                )}
-              </div>
+              {payment.received_by && (
+                <p className="text-xs text-slate-500 truncate" data-testid="receipt-received-by-banner">
+                  Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
+                </p>
+              )}
             </div>
-            <div className="flex-1 min-h-0 rounded-xl bg-slate-100 p-3 flex flex-col overflow-hidden" data-testid="receipt-desktop-bon">
+            <div className="flex-1 min-h-0 rounded-2xl bg-gradient-to-b from-slate-100 to-slate-200 p-4 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-xl" data-testid="receipt-desktop-bon">
               <FittedReceiptPreview paymentId={payment.id} maxScale={2.5} />
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl flex-[2] min-w-0 flex flex-col items-center justify-center text-center p-6 gap-3">
+          <div className="bg-white rounded-2xl shadow-xl flex-[2] min-w-0 flex flex-col items-center justify-center text-center p-8 gap-4">
+            <div className="w-24 h-24 rounded-full bg-emerald-100 flex items-center justify-center ring-8 ring-emerald-50" data-testid="receipt-thanks">
+              <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg">
+                <Check className="w-10 h-10 text-white" strokeWidth={3.5} />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Bedankt!</h2>
+              <p className="text-sm text-slate-500 mt-1">Uw betaling is verwerkt</p>
+            </div>
             <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
               <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
               <span className={`font-extrabold text-xl ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
