@@ -132,7 +132,7 @@ def empty_section(section: str) -> dict:
             },
             # Bon-inhoud (KT-V520 APK, template "lines").
             "bon": {
-                "split_name": True, "apk_normal": False, "footer": "Bedankt voor uw betaling",
+                "split_name": True, "apk_normal": True, "footer": "Bedankt voor uw betaling",
                 "show_address": True, "show_phone": True, "show_tenant_phone": True,
                 "show_apartment": True, "show_tenant_address": True, "show_method": True,
                 "show_outstanding_period": True, "show_employee": True, "show_note": True,

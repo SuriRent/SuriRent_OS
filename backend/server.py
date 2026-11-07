@@ -13273,7 +13273,7 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out.pop("_bon", None)
     out["receipt_type"] = "betaling"
     # Alleen aanzetten als de APK size_mode "normal" ondersteunt; anders print de APK zijn eigen sjabloon.
-    if out["printer"] == "kt-v520" and (((cs or {}).get("receipts") or {}).get("bon") or {}).get("apk_normal"):
+    if out["printer"] == "kt-v520" and (((cs or {}).get("receipts") or {}).get("bon") or {}).get("apk_normal", True):
         out["template"] = "lines"
         out["size_mode"] = "normal"
     return out
@@ -13317,10 +13317,15 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     def row(label, value):
         label, value = str(label), str(value)
         gap = W - len(label) - len(value)
-        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label} {value}"
+        return [f"{label}{' ' * gap}{value}"] if gap >= 1 else [label, value.rjust(W)]
 
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
+
+    def money(label, value):
+        if len(label) + 1 + len(str(value)) <= 24:
+            return [L(f"{label} {value}", "left", True, "medium")]
+        return [L(label, "left", True, "medium"), L(str(value), "left", True, "medium")]
 
     cfg = {"split_name": True, "footer": "Bedankt voor uw betaling", **{k: True for k in (
         "show_address", "show_phone", "show_tenant_phone", "show_apartment", "show_tenant_address",
@@ -13334,13 +13339,13 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         lines.append(L(rest.strip(), "center", True, "large"))
     # Adres en telefoon (bedrijf), iets groter dan gewone tekst
     if cfg["show_address"] and d.get("bedrijf_adres"):
-        lines += [L(x, "center", False, "medium") for x in _wrap_text(d["bedrijf_adres"], W - 6)]
+        lines += [L(x, "center", False, "small") for x in _wrap_text(d["bedrijf_adres"], W - 6)]
     if cfg["show_phone"] and d.get("telefoon"):
-        lines.append(L(f"TEL: {d['telefoon']}", "center", False, "medium"))
-    lines += [L(dash), L(title, "center", False, "medium"), L(dash)]
+        lines.append(L(f"TEL: {d['telefoon']}", "center", False, "small"))
+    lines += [L(dash), L(title, "center", False, "small"), L(dash)]
     if d.get("kwitantie"):
-        lines.append(L(row("NR.", d["kwitantie"])))
-    lines.append(L(row("DATUM", d["datum"])))
+        lines += [L(x) for x in row("NR.", d["kwitantie"])]
+    lines += [L(x) for x in row("DATUM", d["datum"])]
     lines.append(L(dash))
     # Huurder
     lines.append(L("HUURDER:"))
@@ -13356,14 +13361,14 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     lines += [L("OMSCHRIJVING:")] + [L(x) for x in _wrap_text(d["omschrijving"], W)]
     lines.append(L(dash))
     # Betaald
-    lines.append(L(f"BETAALD: {d['bedrag']}", "left", True, "medium"))
+    lines += money("BETAALD:", d["bedrag"])
     if cfg["show_method"] and d.get("methode"):
-        lines.append(L(row("BETAALWIJZE", d["methode"])))
+        lines += [L(x) for x in row("BETAALWIJZE", d["methode"])]
     if cfg["show_employee"] and d.get("medewerker"):
         lines += [L("Ontvangen door:"), L(d["medewerker"])]
     lines.append(L(dash))
     # Nog openstaand
-    lines += [L("Nog openstaand:", "left", True, "medium"), L(d["openstaand"], "left", True, "medium")]
+    lines += money("Nog openstaand:", d["openstaand"])
     if cfg["show_outstanding_period"] and d.get("openstaand_periode"):
         lines += [L(x) for x in _wrap_text(f"Maand(en): {d['openstaand_periode']}", W)]
     if cfg["show_note"] and d.get("opmerking"):
