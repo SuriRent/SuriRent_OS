@@ -657,6 +657,7 @@ function ReceiptsForm({ initial }) {
   const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
   const setBon = (k, v) => s.onField('bon', { ...bon, [k]: v });
   const [kind, setKind] = useState('betaling');
+  const layouts = d.layouts || {};
   const kasbon = { show_balance: true, show_employee: true, show_note: true, footer: '', ...(d.kasbon || {}) };
   const borgbon = { show_apartment: true, show_method: true, footer: 'Borg ontvangen.', ...(d.borgbon || {}) };
   const setKas = (k, v) => s.onField('kasbon', { ...kasbon, [k]: v });
@@ -730,15 +731,152 @@ function ReceiptsForm({ initial }) {
             </label>
           </div>
           )}
+          <LayoutEditor kind={kind} layout={layouts[kind] || {}}
+            onChange={(v) => s.onField('layouts', { ...layouts, [kind]: v })} />
+          {!(layouts[kind] || {}).enabled && (
           <ExtraLinesEditor
             items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
             onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
           />
+          )}
         </div>
-        <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
+        <BonPreview bon={bon} layouts={layouts} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
+  );
+}
+
+const T = (text, o = {}) => ({ t: 'text', text, align: 'left', bold: false, size: 'normal', ...o });
+const PR = (text, right, o = {}) => ({ t: 'pair', text, right, align: 'left', bold: false, size: 'normal', ...o });
+const DASH = { t: 'dash' };
+const BLANK = { t: 'blank' };
+const DEFAULT_BLOCKS = {
+  betaling: [
+    T('{bedrijf_eerste}', { align: 'center', bold: true, size: 'large' }), T('{bedrijf_rest}', { align: 'center', bold: true, size: 'large' }),
+    T('{bedrijf_adres}', { align: 'center', size: 'small' }), T('TEL: {telefoon}', { align: 'center', size: 'small' }),
+    DASH, T('{titel}', { align: 'center', size: 'small' }), DASH,
+    PR('NR.', '{kwitantie}'), PR('DATUM', '{datum}'), DASH,
+    T('HUURDER:'), T('{naam}'), T('{appartement}'), T('{locatie_adres}'), T('TEL: {huurder_telefoon}'), DASH,
+    T('OMSCHRIJVING:'), T('{omschrijving}'), DASH,
+    T('BETAALD: {bedrag}', { bold: true, size: 'medium' }), PR('BETAALWIJZE', '{methode}'), T('Ontvangen door: {medewerker}'), DASH,
+    T('Nog openstaand: {openstaand}', { bold: true, size: 'medium' }), T('Maand(en): {openstaand_periode}'), DASH,
+    T('OPMERKING: {opmerking}'), DASH,
+    T('Bedankt voor uw betaling', { align: 'center' }), T('- {kwitantie} -', { align: 'center' }), BLANK, BLANK, BLANK,
+  ],
+  kasbon: [
+    T('{bedrijfsnaam}', { align: 'center', bold: true, size: 'large' }), T('{titel}', { align: 'center', bold: true }), DASH,
+    T('NR. {nummer}'), T('DATUM {datum}'), DASH, T('{soort}'),
+    PR('{label}', '{bedrag}', { bold: true }), PR('Kassaldo:', '{kassaldo}'), DASH,
+    PR('Medewerker:', '{medewerker}'), T('Opmerking: {opmerking}'), DASH, BLANK, BLANK,
+  ],
+  borgbon: [
+    T('{bedrijfsnaam}', { align: 'center', bold: true, size: 'large' }), T('{titel}', { align: 'center', bold: true }), DASH,
+    T('NR. {nummer}'), T('DATUM {datum}'), DASH,
+    PR('Huurder:', '{huurder}'), PR('Appt.:', '{appartement}'), DASH,
+    PR('Methode:', '{methode}'), DASH, PR('Borg:', '{bedrag}', { bold: true }), DASH,
+    T('Borg ontvangen.', { align: 'center' }), BLANK, BLANK,
+  ],
+};
+const PLACEHOLDERS = {
+  betaling: ['bedrijfsnaam', 'bedrijf_eerste', 'bedrijf_rest', 'bedrijf_adres', 'telefoon', 'titel', 'kwitantie', 'datum', 'naam', 'appartement',
+    'locatie_adres', 'huurder_telefoon', 'omschrijving', 'bedrag', 'methode', 'medewerker', 'openstaand', 'openstaand_periode', 'opmerking'],
+  kasbon: ['bedrijfsnaam', 'titel', 'nummer', 'datum', 'soort', 'label', 'bedrag', 'kassaldo', 'medewerker', 'opmerking'],
+  borgbon: ['bedrijfsnaam', 'titel', 'nummer', 'datum', 'huurder', 'appartement', 'bedrag', 'borg', 'methode', 'medewerker', 'opmerking'],
+};
+
+// Live bon-editor: bouw de bon zelf op; regels met een lege {plaatshouder} worden niet geprint.
+function LayoutEditor({ kind, layout, onChange }) {
+  const blocks = layout.blocks || [];
+  const [foc, setFoc] = useState({ i: -1, f: 'text' });
+  const sizes = kind === 'betaling'
+    ? [['normal', 'Normaal'], ['small', 'Iets groter'], ['medium', 'Middel'], ['large', 'Groot']]
+    : [['normal', 'Normaal'], ['large', 'Groot']];
+  const setBlocks = (b) => onChange({ ...layout, blocks: b });
+  const upd = (i, patch) => setBlocks(blocks.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const move = (i, dlt) => {
+    const j = i + dlt;
+    if (j < 0 || j >= blocks.length) return;
+    const b = [...blocks];
+    [b[i], b[j]] = [b[j], b[i]];
+    setBlocks(b);
+  };
+  const insert = (blk) => {
+    const at = foc.i >= 0 ? foc.i + 1 : blocks.length;
+    setBlocks([...blocks.slice(0, at), blk, ...blocks.slice(at)].slice(0, 80));
+  };
+  const addPh = (p) => {
+    if (foc.i < 0 || !blocks[foc.i] || blocks[foc.i].t === 'dash' || blocks[foc.i].t === 'blank') {
+      insert(T(`{${p}}`));
+    } else {
+      const f = foc.f === 'right' ? 'right' : 'text';
+      upd(foc.i, { [f]: `${blocks[foc.i][f] || ''}{${p}}` });
+    }
+  };
+  const enable = (on) => onChange({ ...layout, enabled: on, blocks: blocks.length ? blocks : DEFAULT_BLOCKS[kind] });
+  const mono = 'font-mono bg-transparent outline-none w-full border-b border-dashed border-slate-300 focus:border-[#FF5C00]';
+  const btn = 'h-7 px-2 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]';
+  return (
+    <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="layout-editor">
+      <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
+        <input type="checkbox" checked={!!layout.enabled} onChange={(e) => enable(e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+        Eigen opmaak gebruiken (bon-editor)
+      </label>
+      {layout.enabled && (
+        <>
+          <p className="text-xs text-slate-500">Typ direct op de bon. Klik een plaatshouder om die in de geselecteerde regel te zetten; regels met een lege plaatshouder worden niet geprint. Het voorbeeld ernaast past live mee.</p>
+          <div className="flex flex-wrap gap-1">
+            {PLACEHOLDERS[kind].map((p) => (
+              <button key={p} type="button" onClick={() => addPh(p)} className="px-2 h-7 rounded-full bg-orange-50 text-[#FF5C00] text-xs font-mono font-bold">{`{${p}}`}</button>
+            ))}
+          </div>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1">
+            {blocks.map((b, i) => (
+              <div key={i} className={`rounded-lg px-2 py-1 ${foc.i === i ? 'bg-white ring-2 ring-[#FF5C00]/40' : ''}`} onClick={() => setFoc((f) => ({ ...f, i }))}>
+                {b.t === 'dash' && <div className="font-mono text-slate-400 text-sm select-none">- - - - - - - - - - - - -</div>}
+                {b.t === 'blank' && <div className="font-mono text-slate-300 text-xs select-none">(lege regel)</div>}
+                {(b.t === 'text' || b.t === 'pair') && (
+                  <div className="flex gap-2" style={{ fontWeight: b.bold ? 700 : 400, fontSize: b.size === 'large' ? 18 : b.size === 'medium' ? 15 : 13 }}>
+                    <input className={mono} style={{ textAlign: b.t === 'pair' ? 'left' : b.align }} value={b.text || ''} aria-label={`Regel ${i + 1}`}
+                      onFocus={() => setFoc({ i, f: 'text' })} onChange={(e) => upd(i, { text: e.target.value })} />
+                    {b.t === 'pair' && (
+                      <input className={mono} style={{ textAlign: 'right' }} value={b.right || ''} aria-label={`Regel ${i + 1} rechts`}
+                        onFocus={() => setFoc({ i, f: 'right' })} onChange={(e) => upd(i, { right: e.target.value })} />
+                    )}
+                  </div>
+                )}
+                {foc.i === i && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {(b.t === 'text') && ['left', 'center', 'right'].map((a) => (
+                      <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
+                    ))}
+                    {b.t !== 'dash' && b.t !== 'blank' && (
+                      <>
+                        <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
+                        <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
+                          {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </>
+                    )}
+                    <button type="button" className={btn} onClick={() => move(i, -1)}>↑</button>
+                    <button type="button" className={btn} onClick={() => move(i, 1)}>↓</button>
+                    <button type="button" className={`${btn} text-red-600`} onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }}>Verwijder</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={btn} onClick={() => insert(T(''))}>+ Tekst</button>
+            <button type="button" className={btn} onClick={() => insert(PR('', ''))}>+ Links/rechts</button>
+            <button type="button" className={btn} onClick={() => insert(DASH)}>+ Streepjes</button>
+            <button type="button" className={btn} onClick={() => insert(BLANK)}>+ Lege regel</button>
+            <button type="button" className={btn} onClick={() => insert(T('Bankoverschrijving:', { bold: true }))}>+ Bankgegevens</button>
+            <button type="button" className={`${btn} ml-auto`} onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard herstellen</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -811,10 +949,10 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, kind, setKind }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const key = JSON.stringify({ bon, kasbon, borgbon });
+  const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
     setLoading(true);
