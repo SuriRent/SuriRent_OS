@@ -40,7 +40,7 @@ export function apkPrintMessage(url, data) {
   const msg = { type: 'PRINT_RECEIPT', url, textZoom: data.textZoom ?? 420, lettergrootte: data.lettergrootte || 'groot', fontSizes: data.fontSizes, data };
   if (printer === 'kt-v520' && data.lines) { msg.printer = 'kt-v520'; msg.lines = data.lines; }
   // Eigen bon (kasbon, financieel overzicht): APK moet `lines` 1-op-1 printen, niet het betalingssjabloon.
-  if (data.template === 'lines' && data.lines) { msg.template = 'lines'; msg.receipt_type = data.receipt_type; msg.lines = data.lines; msg.paper_width = data.paper_width || paperWidth(); }
+  if (data.template === 'lines' && data.lines) { msg.template = 'lines'; msg.receipt_type = data.receipt_type; msg.lines = data.lines;   msg.paper_width = data.paper_width || paperWidth(); if (data.size_mode) msg.size_mode = data.size_mode; }
   const bt = getSavedPrinter();
   if (printer === 'bluetooth' && data.lines && bt?.via === 'apk') {
     Object.assign(msg, { printer: 'bluetooth', bt_address: bt.id, paper_width: data.paper_width || paperWidth(), lines: data.lines });
@@ -87,7 +87,7 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
     sheet.style.cssText = 'width:54mm;font-family:monospace;white-space:pre-wrap;word-break:break-word;color:#000;';
-    const px = { normal: '11px', medium: '13px', large: '18px' };
+    const px = { normal: '11px', small: '12px', medium: '13px', large: '18px' };
     data.lines.forEach((l) => {
       const r = document.createElement('div');
       r.textContent = l.text || '\u00a0';

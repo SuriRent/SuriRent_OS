@@ -670,6 +670,11 @@ function ReceiptsForm({ initial }) {
                 onChange={(e) => setBon('split_name', e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
               Bedrijfsnaam splitsen (eerste woord op regel 1, rest op regel 2)
             </label>
+            <label className="flex items-center gap-3 text-sm font-bold text-slate-800">
+              <input type="checkbox" id="bon-apk-normal" name="bon-apk-normal" checked={!!bon.apk_normal}
+                onChange={(e) => setBon('apk_normal', e.target.checked)} className="w-5 h-5 accent-[#FF5C00]" />
+              KT-V520: bon door webapp laten bepalen (compact, vereist nieuwe APK)
+            </label>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-500 pt-2">Zichtbare velden</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {BON_SHOW_FIELDS.map((f) => (
@@ -697,7 +702,7 @@ function ReceiptsForm({ initial }) {
 }
 
 const BON_DEFAULT_OPTS = {
-  split_name: true, footer: 'Bedankt voor uw betaling',
+  split_name: true, apk_normal: true, footer: 'Bedankt voor uw betaling',
   show_address: true, show_phone: true, show_tenant_phone: true, show_apartment: true,
   show_tenant_address: true, show_method: true, show_outstanding_period: true, show_employee: true, show_note: true,
 };
@@ -728,7 +733,7 @@ function BonPreview({ bon }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [key]);
-  const px = { normal: 12, medium: 15, large: 21 };
+  const px = { normal: 12, small: 13, medium: 14, large: 20 };
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
