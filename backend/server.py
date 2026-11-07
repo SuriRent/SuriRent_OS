@@ -13271,7 +13271,7 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out["_bon"] = ((cs or {}).get("receipts") or {}).get("bon") or {}
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
     out.pop("_bon", None)
-    out["template"] = "lines"
+    # Geen template "lines": de APK print de betalings-bon met zijn eigen compacte sjabloon.
     out["receipt_type"] = "betaling"
     return out
 
@@ -13308,7 +13308,7 @@ def _receipt_employee(p: dict) -> str:
 def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     """Bon als tekstregels voor ESC/POS-printers (KT-V520 / Bluetooth)."""
     # Opmaak zoals de KT-V520 APK print (foto's klant): 28 tekens breed bij 58mm.
-    W = min(cols, 28) if cols <= 32 else cols - 6
+    W = 26 if cols <= 32 else cols - 6
     dash = "-" * W
 
     def row(label, value):
@@ -13371,7 +13371,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         lines += [L(x, "center") for x in _wrap_text(foot, W)]
         if d.get("kwitantie"):
             lines.append(L(f"- {d['kwitantie']} -", "center"))
-    lines += [L(""), L("")]
+    lines += [L(""), L(""), L("")]
     return lines
 
 
