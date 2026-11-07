@@ -1389,3 +1389,9 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
     grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   }
 }
+
+/* Mobiel: lege bovenbalk-pil (geen printer) verbergen zodat er geen streep naast de bel staat */
+@media (max-width: 767px) {
+  [data-testid="kiosk-toolbar"]:not(:has(> button)) { display: none; }
+}
+
