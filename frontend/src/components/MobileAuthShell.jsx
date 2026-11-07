@@ -186,7 +186,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart, sho
         <form onSubmit={submit} className="w-full max-w-sm space-y-3">
           {/* E-mail */}
           <div className="relative">
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+            <input type="email" name="email" id="mobile-login-email" value={email} onChange={(e) => setEmail(e.target.value)}
               data-testid="mobile-login-email"
               required autoComplete="username" placeholder="E-mailadres"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30 transition-all" />
@@ -196,6 +196,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart, sho
           <div className="relative">
             <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
               data-testid="mobile-login-password"
+              name="password" id="mobile-login-password"
               required minLength={6} autoComplete="current-password" placeholder="Wachtwoord"
               className="w-full h-14 px-5 pr-14 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30 transition-all" />
             <button type="button" onClick={() => setShowPw((s) => !s)}
@@ -596,12 +597,12 @@ export function MobileRegisterWizard({ onClose, primary = '#FF5C00', initialPlan
         {step === 2 && (
           <div className="space-y-3">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              data-testid="register-email" autoFocus autoComplete="email"
+              data-testid="register-email" name="email" id="register-email" autoFocus autoComplete="email"
               placeholder="E-mailadres"
               className="w-full h-14 px-5 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
             <div className="relative">
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                data-testid="register-password" minLength={6} autoComplete="new-password"
+                data-testid="register-password" name="new-password" id="register-password" minLength={6} autoComplete="new-password"
                 placeholder="Wachtwoord (min. 6 tekens)"
                 className="w-full h-14 px-5 pr-14 rounded-full bg-white text-slate-900 text-base font-medium placeholder:text-slate-400 outline-none shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] focus:ring-4 focus:ring-white/30" />
               <button type="button" onClick={() => setShowPw((s) => !s)}
