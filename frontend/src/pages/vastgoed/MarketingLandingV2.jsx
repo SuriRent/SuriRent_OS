@@ -1445,11 +1445,11 @@ function Footer({ onLogin, apk }) {
             <div className="flex items-center gap-2" data-testid="footer-payment-logos">
               <EditableText path="marketing.footer.payment_label" fallback="Betaal met" as="span" label="Footer · Betaalmethodenlabel" className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mr-1" />
               <span className="inline-flex items-center bg-white rounded-md px-2 py-1 shadow-sm">
-                <EditableImage path="marketing.footer.payment_logos.mope" fallback="/payment-logos/mope.webp"                 alt="MOPÉ" width={137} height={20}
+                <EditableImage path="marketing.footer.payment_logos.mope" fallback="/payment-logos/mope.webp" alt="MOPÉ" width={137} height={20} style={{ aspectRatio: '137 / 20' }}
                   label="Footer · MOPÉ logo" className="h-5 w-auto object-contain" data-testid="footer-logo-mope" />
               </span>
               <span className="inline-flex items-center bg-white rounded-md px-2 py-1 shadow-sm">
-                <EditableImage path="marketing.footer.payment_logos.uni5pay" fallback="/payment-logos/uni5pay.webp"                 alt="Uni5Pay" width={449} height={60}
+                <EditableImage path="marketing.footer.payment_logos.uni5pay" fallback="/payment-logos/uni5pay.webp" alt="Uni5Pay" width={449} height={60} style={{ aspectRatio: '449 / 60' }}
                   label="Footer · Uni5Pay logo" className="h-5 w-auto object-contain" data-testid="footer-logo-uni5pay" />
               </span>
             </div>
