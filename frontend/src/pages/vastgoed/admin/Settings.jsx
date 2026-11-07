@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
-  Loader2, Check, Mail,
+  Loader2, Check, Mail, Paintbrush, Save, X, Trash2, CheckCircle2,
   AlertCircle, ChevronRight, Shield, Power, PowerOff, FileText, Printer, ShieldCheck,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { apkBridge, apkPrintMessage } from '../../../lib/kiosk-print';
+import { getSavedPrinter, paperWidth, printLinesBluetooth } from '../../../lib/bt-printer';
 
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
@@ -651,7 +653,7 @@ export function InvoicingForm({ initial, onSaved, onDirty }) {
 // =====================================================================
 // ReceiptsForm — welk formaat gebruikt de Kiosk voor kwitantie-afdruk
 // =====================================================================
-function ReceiptsForm({ initial }) {
+function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
   const s = useSection('receipts', initial);
   const d = s.data;
   const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
@@ -674,13 +676,7 @@ function ReceiptsForm({ initial }) {
         placeholder={ph} className="mt-1 w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
     </label>
   );
-  return (
-    <SectionShell msg={s.msg} err={s.err}>
-      <p className="text-sm text-slate-600">
-        Bepaalt wat er op de bon staat die de Kiosk naar de KT-V520 printer stuurt.
-        De opmaak (groottes, vet, uitlijning) ligt vast; hieronder kies je de inhoud.
-      </p>
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+  const formEl = (
         <div className="space-y-4">
           {kind === 'kasbon' && (
             <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="kasbon-options">
@@ -733,25 +729,78 @@ function ReceiptsForm({ initial }) {
           <ExtraLinesEditor
             items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
             onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
+            space={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).bottom_space}
+            defSpace={kind === 'betaling' ? 3 : 2}
+            onSpace={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('bottom_space', v)}
           />
         </div>
-        <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
-      </div>
-      <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
+  );
+  const previewEl = (
+    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} fit={kioskLayout} />
+  );
+  if (kioskLayout) {
+    return (
+              <div className="h-full w-full bg-[#FF5C00] flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-bon-panel">
+                <div className="flex-1 min-h-0 flex gap-3 py-3 overflow-hidden">
+                  <section className="flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-5" data-testid="kiosk-bon-form">
+                    <div className="mb-3 flex items-center justify-between gap-3 shrink-0">
+                      <div className="min-w-0">
+                        <h1 className="truncate text-xl font-black tracking-tight text-slate-900">Bon &amp; afdrukken</h1>
+                        <p className="text-xs font-semibold text-slate-500">Kies wat er op de bon staat.</p>
+                      </div>
+                      <Printer className="h-5 w-5 text-[#FF5C00]" />
+                    </div>
+                    {s.err && <p className="mb-2 shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{s.err}</p>}
+                    {s.msg && <p className="mb-2 shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{s.msg}</p>}
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                      {formEl}
+                      <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
+                    </div>
+                  </section>
+                  <aside className="flex min-h-0 flex-[2] flex-col overflow-y-auto rounded-2xl bg-white p-6" data-testid="kiosk-bon-summary">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h2 className="text-2xl font-black tracking-tight text-slate-900">Voorbeeld</h2>
+                      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('bon-print-sample'))} data-testid="bon-preview-print"
+                        title="Print dit voorbeeld" aria-label="Print voorbeeld" className="rounded-full p-2 hover:bg-orange-50 active:scale-95">
+                        <Printer className="h-5 w-5 text-[#FF5C00]" />
+                      </button>
+                    </div>
+                    {previewEl}
+                    <button type="button" onClick={onBack} data-testid="bon-exit"
+                      className="mt-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200">
+                      Terug naar kiosk
+                    </button>
+                  </aside>
+                </div>
+              </div>
+    );
+  }
+  return (
+    <SectionShell msg={s.msg} err={s.err}>
+              <p className="text-sm text-slate-600">
+                Bepaalt wat er op de bon staat die de Kiosk naar de KT-V520 printer stuurt.
+                De opmaak (groottes, vet, uitlijning) ligt vast; hieronder kies je de inhoud.
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+                {formEl}
+                {previewEl}
+              </div>
+              <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
   );
 }
 
 const EXTRA_PRESETS = [
   { label: '+ Bankgegevens', items: [
-    { text: 'Bankoverschrijving:', bold: true }, { text: 'Bank: ' }, { text: 'Rek.nr: ' }, { text: 'T.n.v.: ' },
+    { text: 'Bankoverschrijving:', bold: true, divider: true }, { text: 'Bank: ' }, { text: 'Rek.nr: ' }, { text: 'T.n.v.: ' },
   ] },
-  { label: '+ Eigen regel', items: [{ text: '' }] },
+  { label: '+ Eigen blok (met streepjes)', items: [{ text: '', divider: true }] },
+  { label: '+ Extra regel', items: [{ text: '' }] },
 ];
 
-function ExtraLinesEditor({ items, onChange }) {
+function ExtraLinesEditor({ items, onChange, space, onSpace, defSpace }) {
   const upd = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-  const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', ...x }))].slice(0, 10));
+  const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', divider: false, ...x }))].slice(0, 10));
   const sel = 'h-9 px-2 rounded-lg border-2 border-slate-200 text-sm';
   return (
     <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="extra-lines">
@@ -772,6 +821,9 @@ function ExtraLinesEditor({ items, onChange }) {
               <option value="normal">Normaal</option><option value="large">Groot</option>
             </select>
             <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={it.divider !== false} onChange={(e) => upd(i, { divider: e.target.checked })} className="w-4 h-4 accent-[#FF5C00]" /> Streepjes erboven
+            </label>
+            <label className="flex items-center gap-1 text-sm">
               <input type="checkbox" checked={!!it.bold} onChange={(e) => upd(i, { bold: e.target.checked })} className="w-4 h-4 accent-[#FF5C00]" /> Vet
             </label>
             <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))} className="ml-auto text-sm text-red-600 font-bold">Verwijder</button>
@@ -784,6 +836,12 @@ function ExtraLinesEditor({ items, onChange }) {
             className="h-9 px-3 rounded-xl border-2 border-slate-200 text-sm font-bold hover:border-[#FF5C00]">{p.label}</button>
         ))}
       </div>
+      <label className="flex items-center gap-2 text-sm text-slate-700" data-testid="bon-bottom-space">
+        Witruimte onderaan de bon
+        <select className={sel} value={space ?? defSpace} onChange={(e) => onSpace(Number(e.target.value))} aria-label="Witruimte onderaan">
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n === 0 ? 'Geen' : `${n} regel${n > 1 ? 's' : ''}`}</option>)}
+        </select>
+      </label>
     </div>
   );
 }
@@ -807,18 +865,72 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, kind, setKind }) {
+function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const key = JSON.stringify({ bon, kasbon, borgbon });
+  const [scale, setScale] = useState(1);
+  const [natH, setNatH] = useState(0);
+  const wrapRef = useRef(null);
+  const innerRef = useRef(null);
+  const [printMsg, setPrintMsg] = useState('');
+  const printSample = async () => {
+    setPrintMsg('');
+    try {
+      const bridge = apkBridge();
+      const bt = getSavedPrinter();
+      if (bridge) {
+        const data = { lines, template: 'lines', receipt_type: kind, size_mode: 'normal', paper_width: paperWidth() };
+        bridge(JSON.stringify(apkPrintMessage('', data)));
+      } else if (bt?.via === 'web') {
+        await printLinesBluetooth(lines);
+      } else {
+        const w = window.open('', '_blank', 'width=320,height=600');
+        if (!w) throw new Error('Pop-up geblokkeerd');
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        w.document.write(`<html><body style="margin:0"><div style="width:54mm;font-family:monospace;color:#000">${lines.map((l) => `<div style="text-align:${l.align || 'left'};font-weight:${l.bold ? 700 : 400};font-size:${px[l.size] || px.normal}px;white-space:pre-wrap;min-height:1em">${esc(l.text)}</div>`).join('')}</div></body></html>`);
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+      setPrintMsg('Voorbeeld naar printer gestuurd');
+    } catch (e) {
+      setPrintMsg(`Printen mislukt: ${e?.message || e}`);
+    }
+  };
+  const printRef = useRef(printSample);
+  printRef.current = printSample;
+  useEffect(() => {
+    const on = () => printRef.current();
+    window.addEventListener('bon-print-sample', on);
+    return () => window.removeEventListener('bon-print-sample', on);
+  }, []);
+  useEffect(() => {
+    if (!fit) return undefined;
+    const calc = () => {
+      const wrap = wrapRef.current;
+      const inner = innerRef.current;
+      const box = wrap?.closest('[data-testid="kiosk-bon-summary"]');
+      if (!wrap || !inner || !box) return;
+      const nat = inner.offsetHeight;
+      const avail = box.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top - 24 - 64;
+      setNatH(nat);
+      setScale(Math.max(0.3, Math.min(1, avail / nat)));
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [fit, lines, kind]);
+  const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind })
-      .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
-      .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+    const h = setTimeout(() => {
+      api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind })
+        .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
+        .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 250);
+    return () => { alive = false; clearTimeout(h); };
   }, [key, kind]);
   const px = kind === 'betaling'
     ? { normal: 12, small: 13, medium: 14, large: 20 }
@@ -831,10 +943,21 @@ function BonPreview({ bon, kasbon, borgbon, kind, setKind }) {
             className={`px-3 h-8 rounded-full text-xs font-bold ${kind === k ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600'}`}>{l}</button>
         ))}
       </div>
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
-        Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
-      </p>
-      <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+          Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+        </p>
+        {!fit && (
+          <button type="button" onClick={printSample} disabled={loading || !lines.length} data-testid="bon-preview-print-inline"
+            title="Print dit voorbeeld" aria-label="Print voorbeeld"
+            className="h-9 w-9 rounded-full bg-[#FF5C00] hover:bg-[#e65200] text-white flex items-center justify-center disabled:opacity-50">
+            <Printer className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+      {printMsg && <p className="text-xs font-semibold text-slate-600 mb-2 text-center">{printMsg}</p>}
+      <div ref={wrapRef} style={fit ? { height: natH * scale } : undefined}>
+      <div ref={innerRef} className="mx-auto w-fit bg-slate-100 rounded-2xl p-4" style={fit ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : undefined}>
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
           data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>
           {lines.map((l, i) => (
@@ -843,6 +966,7 @@ function BonPreview({ bon, kasbon, borgbon, kind, setKind }) {
             </div>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -909,7 +1033,7 @@ function RecomputeDueDatesButton() {
 
 
 // ============== Main ==============
-export default function SettingsPage({ initialSection, hideSubNav = false }) {
+export default function SettingsPage({ initialSection, hideSubNav = false, kioskLayout = false, onBack }) {
   const [section, setSection] = useState(initialSection || 'smtp');
   useEffect(() => {
     if (initialSection) setSection(initialSection);
@@ -948,13 +1072,17 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {section === 'deposit' && <DepositForm initial={settings.deposit} />}
-      {section === 'receipts' && <ReceiptsForm initial={settings.receipts} />}
+      {section === 'receipts' && <ReceiptsForm initial={settings.receipts} kioskLayout={kioskLayout} onBack={onBack} />}
       {section === 'domain' && <DomainForm initial={settings.domain} />}
     </>
   );
 
   // Wanneer we in InstellingenHub geëmbed worden (hideSubNav=true), tonen
   // we alleen de content — de hub levert de header + top-tabs zelf.
+  if (kioskLayout) {
+    return <div className="h-full min-h-0">{contentBlock}</div>;
+  }
+
   if (hideSubNav) {
     return (
       <div>

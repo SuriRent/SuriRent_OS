@@ -13269,8 +13269,10 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     cols = _RECEIPT_COLS_80 if out["paper_width"] == 80 else _RECEIPT_COLS
     out["cols"] = cols
     out["_bon"] = ((cs or {}).get("receipts") or {}).get("bon") or {}
+    out["_layout"] = (((cs or {}).get("receipts") or {}).get("layouts") or {}).get("betaling")
     out["lines"] = _receipt_text_lines(out, (p.get("_title") or "KWITANTIE"), cols)
     out.pop("_bon", None)
+    out.pop("_layout", None)
     out["receipt_type"] = "betaling"
     # Alleen aanzetten als de APK size_mode "normal" ondersteunt; anders print de APK zijn eigen sjabloon.
     if out["printer"] == "kt-v520" and (((cs or {}).get("receipts") or {}).get("bon") or {}).get("apk_normal", True):
@@ -13308,6 +13310,87 @@ def _receipt_employee(p: dict) -> str:
     return (p.get("kiosk_employee_name") or p.get("received_by") or "").strip()
 
 
+_LAYOUT_PH = re.compile(r"\{(\w+)\}")
+
+
+def _pick_layout(saved: Optional[dict], override: Optional[dict]) -> Optional[dict]:
+    # Bon-editor is verwijderd: opgeslagen eigen opmaak wordt niet meer gebruikt.
+    return None
+
+
+def _render_layout(blocks: list, vars_: dict, W: int, mode: str, marks: bool = False) -> list:
+    """Met marks (alleen voorbeeld): elke regel krijgt het bloknummer 'b'; verborgen blokken komen als 'hidden' mee."""
+    if not marks:
+        return _render_layout_blocks(blocks, vars_, W, mode)
+    out = []
+    for idx, b in enumerate((blocks or [])[:80]):
+        seg = _render_layout_blocks([b], vars_, W, mode)
+        if not seg:
+            seg = [{"text": str((b or {}).get("text") or "") + (("  " + str(b.get("right"))) if b.get("right") else ""),
+                    "align": "left", "bold": False, "size": "normal", "hidden": True}]
+        out += [{**x, "b": idx} for x in seg]
+    return out
+
+
+def _render_layout_blocks(blocks: list, vars_: dict, W: int, mode: str) -> list:
+    """Eigen bonopmaak (live editor): blokken met {plaatshouders} → printregels.
+    mode 'kwit' = Normaal (S/M/L-groottes), 'kas' = Groot (alleen normaal/large)."""
+    def sub(txt):
+        miss = False
+
+        def rep(m):
+            nonlocal miss
+            v = str(vars_.get(m.group(1)) or "").strip()
+            if not v:
+                miss = True
+            return v
+        return _LAYOUT_PH.sub(rep, str(txt or "")[:300]), miss, bool(_LAYOUT_PH.search(str(txt or "")))
+
+    out = []
+    for b in (blocks or [])[:80]:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("t")
+        align = b.get("align") if b.get("align") in ("left", "center", "right") else "left"
+        size = b.get("size") if b.get("size") in ("normal", "small", "medium", "large") else "normal"
+        if mode == "kas":
+            size = "large" if size == "large" else "normal"
+        bold = bool(b.get("bold"))
+        cw = {"normal": W, "small": W - 2, "medium": W - 2, "large": int(W * (0.7 if mode == "kwit" else 0.75))}[size]
+        if mode == "kas":
+            cw = W if size == "normal" else int(W * 0.75)
+        if t == "dash":
+            out.append({"text": "-" * W, "align": "left", "bold": False, "size": "normal"})
+        elif t == "blank":
+            out.append({"text": "", "align": "left", "bold": False, "size": "normal"})
+        elif t == "pair":
+            left, m1, _ = sub(b.get("text"))
+            right, m2, _ = sub(b.get("right"))
+            if m1 or m2 or not (left or right):
+                continue
+            gap = cw - len(left) - len(right)
+            if gap >= 1:
+                out.append({"text": left + " " * gap + right, "align": "left", "bold": bold, "size": size})
+            else:
+                out.append({"text": left, "align": "left", "bold": bold, "size": size})
+                out.append({"text": right.rjust(cw), "align": "left", "bold": bold, "size": size})
+        else:
+            txt, miss, had = sub(b.get("text"))
+            if miss or not txt:
+                continue
+            out += [{"text": x, "align": align, "bold": bold, "size": size} for x in _wrap_text(txt, cw)]
+    return out
+
+
+def _bottom_pad(cfg, default: int) -> list:
+    """Witruimte onderaan de bon (instelbaar in Bon & afdrukken)."""
+    try:
+        n = int((cfg or {}).get("bottom_space", default))
+    except (TypeError, ValueError):
+        n = default
+    return [{"text": "", "align": "left", "bold": False, "size": "normal"} for _ in range(max(0, min(n, 6)))]
+
+
 def _custom_bon_lines(items, where: str, width: int) -> list:
     """Eigen regels uit Bon & afdrukken (boven = onder de titel, onder = onderaan de bon)."""
     out = []
@@ -13320,6 +13403,8 @@ def _custom_bon_lines(items, where: str, width: int) -> list:
         align = it.get("align") if it.get("align") in ("left", "center", "right") else "left"
         size = "large" if it.get("size") == "large" else "normal"
         w = max(8, int(width * 0.75)) if size == "large" else width
+        if it.get("divider", True):
+            out.append({"text": "-" * width, "align": "left", "bold": False, "size": "normal"})
         out += [{"text": x, "align": align, "bold": bool(it.get("bold")), "size": size} for x in _wrap_text(text, w)]
     return out
 
@@ -13329,6 +13414,14 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     # Opmaak zoals de KT-V520 APK print (foto's klant): 28 tekens breed bij 58mm.
     W = 26 if cols <= 32 else cols - 6
     dash = "-" * W
+
+    lay = _pick_layout(None, d.get("_layout"))
+    if lay:
+        first_w, _sp, rest_w = (d.get("bedrijfsnaam") or "").strip().partition(" ")
+        apt_v = str(d.get("appartement") or "").strip()
+        vs = {**d, "titel": title, "bedrijf_eerste": first_w, "bedrijf_rest": rest_w.strip(),
+              "appartement": (apt_v.upper() if re.match(r"^[A-Za-z]{3,}\b", apt_v) else f"App. {apt_v}") if apt_v else ""}
+        return _render_layout(lay["blocks"], vs, W, "kwit", bool(d.get("_marks")))
 
     def row(label, value):
         label, value = str(label), str(value)
@@ -13397,7 +13490,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         if d.get("kwitantie"):
             lines.append(L(f"- {d['kwitantie']} -", "center"))
     lines += _custom_bon_lines(cfg.get("extra_lines"), "bottom", W)
-    lines += [L(""), L(""), L("")]
+    lines += _bottom_pad(cfg, 3)
     return lines
 
 
@@ -17049,7 +17142,16 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
         lines += [L(x, "center") for x in wrap(cfgo["footer"], W)]
     lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
     lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W)
-    lines += [L(""), L("")]
+    lines += _bottom_pad(cfgo, 2)
+    lay = _pick_layout(((cs or {}).get("receipts") or {}).get("layouts", {}).get("kasbon"), (opts or {}).get("_layout"))
+    if lay:
+        lines = _render_layout(lay["blocks"], {
+            "bedrijfsnaam": company.get("name") or "SuriRent", "titel": "KASBON", "nummer": nr, "datum": datum,
+            "soort": "Kasstorting" if is_in else "Kasopname", "label": "Ontvangen:" if is_in else "Uitbetaald:",
+            "bedrag": money(e.get("amount")),
+            "kassaldo": money(e["balance_after"]) if e.get("balance_after") is not None else "",
+            "medewerker": e.get("created_by_name") or "", "opmerking": e.get("description") or "",
+        }, W, "kas", bool((opts or {}).get("_marks")))
     return {
         "template": "lines", "receipt_type": "kasgeld",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": e.get("created_by_name") or "",
@@ -17180,8 +17282,18 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     while lines and not str(lines[-1]["text"]).strip():
         lines.pop()
     lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
-    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W) + [L(""), L("")]
+    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W) + _bottom_pad(cfgo, 2)
     shown = d.get("amount_due") if settled and float(d.get("amount_due") or 0) > 0 else (d.get("refund_amount") if settled else d.get("amount"))
+    lay = _pick_layout(((cs or {}).get("receipts") or {}).get("layouts", {}).get("borgbon"), (opts or {}).get("_layout"))
+    if lay:
+        lines = _render_layout(lay["blocks"], {
+            "bedrijfsnaam": company.get("name") or "SuriRent", "titel": "BORGAFREKENING" if settled else "BORGBON",
+            "nummer": d.get("receipt_no") or did[:6].upper(), "datum": datum, "huurder": d.get("tenant_name") or "",
+            "appartement": d.get("apartment_number") or "", "bedrag": money(shown),
+            "borg": money(d.get("amount")),
+            "methode": methods.get(d.get("method") or "", d.get("method") or ""),
+            "medewerker": d.get("created_by_name") or "", "opmerking": d.get("note") or "",
+        }, W, "kas", bool((opts or {}).get("_marks")))
     return {
         "template": "lines", "receipt_type": "deposit_refund" if settled else "deposit",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": d.get("created_by_name") or "",
@@ -18143,12 +18255,12 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
             e = await db.kasgeld.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
             if not e:
                 return {"lines": [], "cols": 21, "empty": "Nog geen kasbon beschikbaar — maak eerst een kasgeld-mutatie."}
-            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True, opts=(body or {}).get("kasbon"))
+            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("kasbon") or {}), "_marks": bool((body or {}).get("marks")), "_layout": ((body or {}).get("layouts") or {}).get("kasbon") or {}})
         else:
             e = await db.deposits.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
             if not e:
                 return {"lines": [], "cols": 21, "empty": "Nog geen borgbon beschikbaar — registreer eerst een borg."}
-            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True, opts=(body or {}).get("borgbon"))
+            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("borgbon") or {}), "_marks": bool((body or {}).get("marks")), "_layout": ((body or {}).get("layouts") or {}).get("borgbon") or {}})
         return {"lines": d["lines"], "cols": d.get("cols", 21)}
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
@@ -18163,6 +18275,10 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
              "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",
              "medewerker": "Medewerker", "opmerking": "Voorbeeldbon", "cols": _RECEIPT_COLS}
     d["_bon"] = (body or {}).get("bon") or {}
+    d["_marks"] = bool((body or {}).get("marks"))
+    lays = (body or {}).get("layouts")
+    if isinstance(lays, dict):
+        d["_layout"] = lays.get("betaling") or {}
     cols = d.get("cols", _RECEIPT_COLS)
     return {"lines": _receipt_text_lines(d, "KWITANTIE", cols), "cols": cols}
 
