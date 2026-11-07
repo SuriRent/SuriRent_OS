@@ -13320,7 +13320,21 @@ def _pick_layout(saved: Optional[dict], override: Optional[dict]) -> Optional[di
     return None
 
 
-def _render_layout(blocks: list, vars_: dict, W: int, mode: str) -> list:
+def _render_layout(blocks: list, vars_: dict, W: int, mode: str, marks: bool = False) -> list:
+    """Met marks (alleen voorbeeld): elke regel krijgt het bloknummer 'b'; verborgen blokken komen als 'hidden' mee."""
+    if not marks:
+        return _render_layout_blocks(blocks, vars_, W, mode)
+    out = []
+    for idx, b in enumerate((blocks or [])[:80]):
+        seg = _render_layout_blocks([b], vars_, W, mode)
+        if not seg:
+            seg = [{"text": str((b or {}).get("text") or "") + (("  " + str(b.get("right"))) if b.get("right") else ""),
+                    "align": "left", "bold": False, "size": "normal", "hidden": True}]
+        out += [{**x, "b": idx} for x in seg]
+    return out
+
+
+def _render_layout_blocks(blocks: list, vars_: dict, W: int, mode: str) -> list:
     """Eigen bonopmaak (live editor): blokken met {plaatshouders} → printregels.
     mode 'kwit' = Normaal (S/M/L-groottes), 'kas' = Groot (alleen normaal/large)."""
     def sub(txt):
@@ -13400,7 +13414,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         apt_v = str(d.get("appartement") or "").strip()
         vs = {**d, "titel": title, "bedrijf_eerste": first_w, "bedrijf_rest": rest_w.strip(),
               "appartement": (apt_v.upper() if re.match(r"^[A-Za-z]{3,}\b", apt_v) else f"App. {apt_v}") if apt_v else ""}
-        return _render_layout(lay["blocks"], vs, W, "kwit")
+        return _render_layout(lay["blocks"], vs, W, "kwit", bool(d.get("_marks")))
 
     def row(label, value):
         label, value = str(label), str(value)
@@ -17130,7 +17144,7 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
             "bedrag": money(e.get("amount")),
             "kassaldo": money(e["balance_after"]) if e.get("balance_after") is not None else "",
             "medewerker": e.get("created_by_name") or "", "opmerking": e.get("description") or "",
-        }, W, "kas")
+        }, W, "kas", bool((opts or {}).get("_marks")))
     return {
         "template": "lines", "receipt_type": "kasgeld",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": e.get("created_by_name") or "",
@@ -17272,7 +17286,7 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
             "borg": money(d.get("amount")),
             "methode": methods.get(d.get("method") or "", d.get("method") or ""),
             "medewerker": d.get("created_by_name") or "", "opmerking": d.get("note") or "",
-        }, W, "kas")
+        }, W, "kas", bool((opts or {}).get("_marks")))
     return {
         "template": "lines", "receipt_type": "deposit_refund" if settled else "deposit",
         "bedrijfsnaam": company.get("name") or "SuriRent", "medewerker": d.get("created_by_name") or "",
@@ -18234,12 +18248,12 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
             e = await db.kasgeld.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
             if not e:
                 return {"lines": [], "cols": 21, "empty": "Nog geen kasbon beschikbaar — maak eerst een kasgeld-mutatie."}
-            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("kasbon") or {}), "_layout": ((body or {}).get("layouts") or {}).get("kasbon") or {}})
+            d = await _kasgeld_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("kasbon") or {}), "_marks": bool((body or {}).get("marks")), "_layout": ((body or {}).get("layouts") or {}).get("kasbon") or {}})
         else:
             e = await db.deposits.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
             if not e:
                 return {"lines": [], "cols": 21, "empty": "Nog geen borgbon beschikbaar — registreer eerst een borg."}
-            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("borgbon") or {}), "_layout": ((body or {}).get("layouts") or {}).get("borgbon") or {}})
+            d = await _deposit_receipt_data(e["id"], sess, force_ktp=True, opts={**((body or {}).get("borgbon") or {}), "_marks": bool((body or {}).get("marks")), "_layout": ((body or {}).get("layouts") or {}).get("borgbon") or {}})
         return {"lines": d["lines"], "cols": d.get("cols", 21)}
     brand = await _company_brand_info(cid)
     p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
@@ -18254,6 +18268,7 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
              "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",
              "medewerker": "Medewerker", "opmerking": "Voorbeeldbon", "cols": _RECEIPT_COLS}
     d["_bon"] = (body or {}).get("bon") or {}
+    d["_marks"] = bool((body or {}).get("marks"))
     lays = (body or {}).get("layouts")
     if isinstance(lays, dict):
         d["_layout"] = lays.get("betaling") or {}

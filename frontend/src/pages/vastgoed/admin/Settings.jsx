@@ -795,7 +795,7 @@ function LayoutEditor({ kind, layout, onChange }) {
       </label>
       {layout.enabled ? (
         <>
-          <p className="text-xs text-slate-500">Bewerk de bon rechts: klik op een regel en typ. Gebruik de oranje plaatshouders (bijv. {'{naam}'}) voor gegevens; regels met een lege plaatshouder worden niet geprint. Met &quot;Toon met gegevens&quot; zie je het echte resultaat.</p>
+          <p className="text-xs text-slate-500">Bewerk de bon rechts: dit is de echte bon. Klik op een regel en typ; de geselecteerde regel toont de plaatshouders (bijv. {'{naam}'}) zodat gegevens automatisch blijven kloppen. Regels met een lege plaatshouder worden niet geprint (vaag weergegeven).</p>
           <button type="button" className="h-8 px-3 rounded border border-slate-200 text-xs font-bold hover:border-[#FF5C00]"
             onClick={() => { if (window.confirm('Terug naar de standaard bon?')) onChange({ ...layout, blocks: DEFAULT_BLOCKS[kind] }); }}>Standaard herstellen</button>
         </>
@@ -809,7 +809,7 @@ function LayoutEditor({ kind, layout, onChange }) {
 // Bon-editor: de bon zelf is bewerkbaar. Regels met een lege {plaatshouder} worden niet geprint.
 const BON_PX = { betaling: { normal: 12, small: 13, medium: 14, large: 20 }, kas: { normal: 15, small: 15, medium: 18, large: 21 } };
 
-function LayoutPaper({ kind, layout, onChange }) {
+function LayoutPaper({ kind, layout, onChange, lines }) {
   const blocks = layout.blocks || [];
   const [foc, setFoc] = useState({ i: -1, f: 'text' });
   const sizes = kind === 'betaling'
@@ -850,41 +850,60 @@ function LayoutPaper({ kind, layout, onChange }) {
           </div>
           <div className="mx-auto bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2 space-y-0.5"
             style={{ width: '58mm', fontFamily: 'monospace', color: '#000' }} data-testid="bon-edit-paper">
-            {blocks.map((b, i) => (
-              <div key={i} className={`rounded px-0.5 ${foc.i === i ? 'ring-2 ring-[#FF5C00]/50 bg-orange-50/40' : ''}`} onClick={() => setFoc((f) => ({ ...f, i }))}>
-                {b.t === 'dash' && <div className="font-mono text-slate-400 select-none overflow-hidden whitespace-nowrap" style={{ fontSize: px.normal }}>{'-'.repeat(60)}</div>}
-                {b.t === 'blank' && <div className="font-mono text-slate-300 select-none" style={{ fontSize: 9, minHeight: '1em' }}>&nbsp;</div>}
-                {(b.t === 'text' || b.t === 'pair') && (
-                  <div className="flex gap-1" style={{ fontWeight: b.bold ? 700 : 400, fontSize: px[b.size] || px.normal }}>
-                    <input className={mono} style={{ textAlign: b.t === 'pair' ? 'left' : b.align }} value={b.text || ''} aria-label={`Regel ${i + 1}`}
-                      onFocus={() => setFoc({ i, f: 'text' })} onChange={(e) => upd(i, { text: e.target.value })} />
-                    {b.t === 'pair' && (
-                      <input className={mono} style={{ textAlign: 'right' }} value={b.right || ''} aria-label={`Regel ${i + 1} rechts`}
-                        onFocus={() => setFoc({ i, f: 'right' })} onChange={(e) => upd(i, { right: e.target.value })} />
+            {lines.map((l, k) => {
+              const bi = l.b;
+              const b = blocks[bi];
+              const sel = foc.i === bi;
+              if (b && sel && lines[k - 1]?.b === bi) return null;
+              const st = { fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, textAlign: l.align || 'left' };
+              if (b && sel) {
+                return (
+                  <div key={k} className="rounded ring-2 ring-[#FF5C00]/60 bg-orange-50/60 px-0.5" data-testid="bon-edit-selected">
+                    {(b.t === 'text' || b.t === 'pair') ? (
+                      <div className="flex gap-1" style={{ fontWeight: b.bold ? 700 : 400, fontSize: px[b.size] || px.normal }}>
+                        <input autoFocus className={mono} style={{ textAlign: b.t === 'pair' ? 'left' : b.align }} value={b.text || ''} aria-label="Regeltekst"
+                          onFocus={() => setFoc({ i: bi, f: 'text' })} onChange={(e) => upd(bi, { text: e.target.value })} />
+                        {b.t === 'pair' && (
+                          <input className={mono} style={{ textAlign: 'right' }} value={b.right || ''} aria-label="Regeltekst rechts"
+                            onFocus={() => setFoc({ i: bi, f: 'right' })} onChange={(e) => upd(bi, { right: e.target.value })} />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="font-mono text-slate-400 text-xs">{b.t === 'dash' ? '- - - streepjes - - -' : '(lege regel)'}</div>
                     )}
                   </div>
-                )}
-                {foc.i === i && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {(b.t === 'text') && ['left', 'center', 'right'].map((a) => (
-                      <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
-                    ))}
-                    {b.t !== 'dash' && b.t !== 'blank' && (
-                      <>
-                        <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
-                        <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
-                          {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </>
-                    )}
-                    <button type="button" className={btn} onClick={() => move(i, -1)}>↑</button>
-                    <button type="button" className={btn} onClick={() => move(i, 1)}>↓</button>
-                    <button type="button" className={`${btn} text-red-600`} onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }}>Verwijder</button>
-                  </div>
-                )}
-              </div>
-            ))}
+                );
+              }
+              return (
+                <div key={k} onClick={() => setFoc({ i: bi, f: 'text' })} className="cursor-text rounded hover:bg-orange-50/60 px-0.5"
+                  style={{ ...st, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em', ...(l.hidden ? { opacity: 0.4, fontStyle: 'italic', borderBottom: '1px dotted #94a3b8' } : {}) }}>
+                  {l.hidden ? `(verborgen) ${l.text || 'leeg'}` : l.text}
+                </div>
+              );
+            })}
           </div>
+          {foc.i >= 0 && blocks[foc.i] && (() => {
+            const b = blocks[foc.i];
+            const i = foc.i;
+            return (
+              <div className="flex flex-wrap gap-1" data-testid="bon-edit-toolbar">
+                {b.t === 'text' && ['left', 'center', 'right'].map((a) => (
+                  <button key={a} type="button" className={`${btn} ${b.align === a ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { align: a })}>{a === 'left' ? 'Links' : a === 'center' ? 'Midden' : 'Rechts'}</button>
+                ))}
+                {b.t !== 'dash' && b.t !== 'blank' && (
+                  <>
+                    <button type="button" className={`${btn} ${b.bold ? 'bg-[#FF5C00] text-white' : ''}`} onClick={() => upd(i, { bold: !b.bold })}>Vet</button>
+                    <select className={btn} value={b.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
+                      {sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </>
+                )}
+                <button type="button" className={btn} onClick={() => { move(i, -1); setFoc({ i: Math.max(0, i - 1), f: 'text' }); }}>↑</button>
+                <button type="button" className={btn} onClick={() => { move(i, 1); setFoc({ i: Math.min(blocks.length - 1, i + 1), f: 'text' }); }}>↓</button>
+                <button type="button" className={`${btn} text-red-600`} onClick={() => { setBlocks(blocks.filter((_, j) => j !== i)); setFoc({ i: -1, f: 'text' }); }}>Verwijder</button>
+              </div>
+            );
+          })()}
           <div className="flex flex-wrap gap-2">
             <button type="button" className={btn} onClick={() => insert(T(''))}>+ Tekst</button>
             <button type="button" className={btn} onClick={() => insert(PR('', ''))}>+ Links/rechts</button>
@@ -971,19 +990,20 @@ const BON_SHOW_FIELDS = [
 function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showData, setShowData] = useState(false);
   const lay = layouts[kind] || {};
-  const editing = !!lay.enabled && !showData;
+  const editing = !!lay.enabled;
   const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind })
-      .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
-      .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [key, kind]);
+    const h = setTimeout(() => {
+      api.post('/settings/receipts/preview-lines', { ...JSON.parse(key), kind, marks: editing })
+        .then(({ data }) => { if (alive) setLines(data.lines?.length ? data.lines : [{ text: data.empty || 'Voorbeeld niet beschikbaar', align: 'center' }]); })
+        .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 250);
+    return () => { alive = false; clearTimeout(h); };
+  }, [key, kind, editing]);
   const px = kind === 'betaling'
     ? { normal: 12, small: 13, medium: 14, large: 20 }
     : { normal: 15, small: 15, medium: 18, large: 21 };
@@ -996,16 +1016,10 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, onLayout }) 
         ))}
       </div>
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
-        {editing ? 'Bon bewerken (58mm)' : 'Voorbeeld (58mm)'} {loading && !editing && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
-        {lay.enabled && (
-          <button type="button" onClick={() => setShowData((v) => !v)} data-testid="bon-toggle-data"
-            className="ml-auto h-7 px-2 rounded border border-slate-200 text-[11px] normal-case tracking-normal font-bold hover:border-[#FF5C00]">
-            {showData ? 'Terug naar bewerken' : 'Toon met gegevens'}
-          </button>
-        )}
+        {editing ? 'Live bon — klik een regel om te bewerken' : 'Voorbeeld (58mm)'} {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
       {editing ? (
-        <LayoutPaper kind={kind} layout={lay} onChange={(v) => onLayout(kind, v)} />
+        <LayoutPaper kind={kind} layout={lay} lines={lines} onChange={(v) => onLayout(kind, v)} />
       ) : (
       <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
