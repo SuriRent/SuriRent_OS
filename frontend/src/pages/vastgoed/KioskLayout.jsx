@@ -3100,46 +3100,9 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
   );
 }
 
-// Printergeluid (thermische printer): korte ruisbursts in ritme + afscheur-klik.
-function playPrintSound(seconds = 3.5) {
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const rate = ctx.sampleRate;
-    const buf = ctx.createBuffer(1, Math.floor(rate * 0.03), rate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    const master = ctx.createGain();
-    master.gain.value = 0.35;
-    master.connect(ctx.destination);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 2400;
-    filter.Q.value = 0.9;
-    filter.connect(master);
-    const t0 = ctx.currentTime + 0.05;
-    const step = 0.045;
-    for (let t = 0; t < seconds; t += step) {
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.playbackRate.value = 0.85 + Math.random() * 0.3;
-      src.connect(filter);
-      src.start(t0 + t);
-    }
-    const tear = ctx.createBufferSource();
-    tear.buffer = buf;
-    const g = ctx.createGain();
-    g.gain.value = 1.6;
-    tear.connect(g); g.connect(master);
-    tear.start(t0 + seconds + 0.05);
-    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, (seconds + 1) * 1000);
-  } catch { /* geluid is optioneel */ }
-}
-
 // Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
-function FittedReceiptPreview({ paymentId, maxScale = 1, sound = false }) {
+function FittedReceiptPreview({ paymentId, maxScale = 1, fancy = false }) {
   const boxRef = useRef(null);
   const paperRef = useRef(null);
   const [size, setSize] = useState({ w: 230, h: 420 });
@@ -3147,9 +3110,6 @@ function FittedReceiptPreview({ paymentId, maxScale = 1, sound = false }) {
   const [lines, setLines] = useState(null);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    if (sound && lines) playPrintSound(3.5);
-  }, [sound, lines]);
 
   useEffect(() => {
     let alive = true;
@@ -3188,8 +3148,16 @@ function FittedReceiptPreview({ paymentId, maxScale = 1, sound = false }) {
         style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
         {lines ? (
           <div ref={paperRef} data-testid="receipt-preview-lines"
-            className="absolute top-0 left-0 bg-white border border-dashed border-slate-200 p-2"
-            style={{ width: '58mm', fontFamily: 'monospace', color: '#000', transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+            className={`absolute top-0 left-0 ${fancy ? 'p-3 pb-5' : 'bg-white border border-dashed border-slate-200 p-2'}`}
+            style={{
+              width: '58mm', fontFamily: 'monospace', color: fancy ? '#1f2937' : '#000',
+              transform: `scale(${scale})`, transformOrigin: 'top left',
+              ...(fancy ? {
+                background: 'linear-gradient(180deg,#fffdf8 0%,#ffffff 40%,#fffdf8 100%)',
+                clipPath: `polygon(${Array.from({ length: 13 }, (_, i) => `${(i * 100) / 12}% ${i % 2 ? 'calc(100% - 7px)' : '100%'}`).join(',')},100% 0,0 0)`,
+                borderTop: '4px solid #f97316',
+              } : {}),
+            }}>
             {lines.map((l, i) => (
               <div key={i} style={{ textAlign: l.align || 'left', fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em' }}>{l.text}</div>
             ))}
@@ -3319,7 +3287,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
               </div>
             </div>
             <div className="flex-1 min-h-0 w-full rounded-2xl bg-gradient-to-b from-orange-50 to-orange-100 ring-1 ring-orange-200/60 p-3 flex flex-col overflow-hidden shadow-inner [&>*]:drop-shadow-2xl" data-testid="receipt-desktop-bon">
-              <FittedReceiptPreview paymentId={payment.id} maxScale={3} sound />
+              <FittedReceiptPreview paymentId={payment.id} maxScale={3} fancy />
             </div>
             <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
               <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
