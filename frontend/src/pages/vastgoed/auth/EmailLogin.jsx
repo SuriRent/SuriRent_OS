@@ -264,7 +264,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-12 lg:mb-16">
               <span className="w-12 h-12 rounded-2xl bg-white p-2 shadow-lg">
-                <img loading="lazy" src="/kiosk-icons/mark-orange.png" alt="SuriRent" className="w-full h-full object-contain"
+                <img loading="lazy" width="64" height="64" src="/kiosk-icons/mark-orange.png" alt="SuriRent" className="w-full h-full object-contain"
                   onError={(e) => { e.currentTarget.src = '/kiosk-icons/mark-white.png'; e.currentTarget.style.filter = 'brightness(0) invert(0.2)'; }} />
               </span>
               <span className="text-3xl lg:text-4xl font-black tracking-tight">SURIRENT</span>
@@ -371,7 +371,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
             {/* Volledige naam */}
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Volledige naam</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} data-testid="auth-name"
+              <input type="text" name="name" id="register-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} data-testid="auth-name"
                 required minLength={2}
                 placeholder="Jan Jansen"
                 className="w-full h-12 text-base px-4 rounded-xl border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition" />
@@ -382,7 +382,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
               <label className="block text-sm font-bold text-slate-700 mb-2">
                 Bedrijfsnaam <span className="text-slate-400 font-medium">(optioneel)</span>
               </label>
-              <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} data-testid="auth-company-name"
+              <input type="text" name="company_name" id="register-company" autoComplete="organization" value={companyName} onChange={(e) => setCompanyName(e.target.value)} data-testid="auth-company-name"
                 placeholder="Uw bedrijfsnaam"
                 className="w-full h-12 text-base px-4 rounded-xl border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition" />
               {portalPreview.slug && companyName.length > 1 && (() => {
@@ -406,7 +406,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
             {/* E-mailadres */}
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">E-mailadres</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="auth-email"
+              <input type="email" name="email" id="register-email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="auth-email"
                 required
                 placeholder="naam@bedrijf.sr"
                 className="w-full h-12 text-base px-4 rounded-xl border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-slate-50 outline-none transition" />
@@ -418,6 +418,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
               <div className="relative">
                 <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
                   data-testid="auth-password" required minLength={6}
+                  name="new-password" id="register-password" autoComplete="new-password"
                   placeholder="••••••••••"
                   className="w-full h-12 text-base px-4 pr-11 rounded-xl border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-slate-50 outline-none transition" />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -436,14 +437,14 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
                 <div className="grid gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">Telefoon</label>
-                    <input type="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)} data-testid="auth-telefoon"
+                    <input type="tel" name="phone" id="register-phone" autoComplete="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)} data-testid="auth-telefoon"
                       placeholder="+597 ..."
                       className="w-full h-11 text-sm px-3 rounded-lg border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1.5">Adres</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} data-testid="auth-address"
+                  <input type="text" name="address" id="register-address" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} data-testid="auth-address"
                     placeholder="Bedrijfsadres"
                     className="w-full h-11 text-sm px-3 rounded-lg border border-slate-200 focus:border-[#FF5C00] focus:ring-4 focus:ring-[#FF5C00]/10 bg-white outline-none transition" />
                 </div>
