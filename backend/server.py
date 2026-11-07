@@ -13241,6 +13241,8 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
     out = {
         "bedrijfsnaam": (p.get("company_name") or "").strip() or "SuriRent",
         "adres": (loc or {}).get("address") or p.get("company_address") or "",
+        "bedrijf_adres": p.get("company_address") or (loc or {}).get("address") or "",
+        "locatie_adres": (loc or {}).get("address") or (loc or {}).get("name") or p.get("location_name") or "",
         "telefoon": (loc or {}).get("phone") or p.get("company_phone") or p.get("company_whatsapp") or "",
         "kwitantie": p.get("receipt_number") or "",
         "datum": datum,
@@ -13305,62 +13307,70 @@ def _receipt_employee(p: dict) -> str:
 
 def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     """Bon als tekstregels voor ESC/POS-printers (KT-V520 / Bluetooth)."""
-    W = cols
+    # Opmaak zoals de KT-V520 APK print (foto's klant): 28 tekens breed bij 58mm.
+    W = min(cols, 28) if cols <= 32 else cols - 6
     dash = "-" * W
 
     def row(label, value):
         label, value = str(label), str(value)
         gap = W - len(label) - len(value)
-        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label}\n{value.rjust(W)}"
+        return f"{label}{' ' * gap}{value}" if gap >= 1 else f"{label} {value}"
 
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
-    cfg = {"split_name": True, "footer": "", **{k: True for k in (
+    cfg = {"split_name": True, "footer": "Bedankt voor uw betaling", **{k: True for k in (
         "show_address", "show_phone", "show_tenant_phone", "show_apartment", "show_tenant_address",
         "show_method", "show_outstanding_period", "show_employee", "show_note")}, **(d.get("_bon") or {})}
-    # 1. Bedrijfsnaam: eerste woord op regel 1, rest op regel 2 (groot, vet, gecentreerd)
+    # Bedrijfsnaam: eerste woord op regel 1, rest op regel 2 (groot, vet, gecentreerd)
     first, _sp, rest = (d["bedrijfsnaam"] or "").strip().partition(" ")
     if not cfg["split_name"]:
         first, rest = (d["bedrijfsnaam"] or "").strip(), ""
     lines = [L(first, "center", True, "large")]
     if rest.strip():
         lines.append(L(rest.strip(), "center", True, "large"))
-    # 2. Adres en telefoon: iets groter dan kleine tekst
-    for extra in (cfg["show_address"] and d.get("adres"),
-                  cfg["show_phone"] and d.get("telefoon") and f"Tel: {d['telefoon']}"):
-        if extra:
-            lines.append(L(extra, "center", False, "medium"))
-    # 3. KWITANTIE nummer en datum
-    lines.append(L(f"{title} {d['kwitantie']}".strip(), "center", True))
-    lines.append(L(d["datum"], "center"))
+    # Adres en telefoon (bedrijf), iets groter dan gewone tekst
+    if cfg["show_address"] and d.get("bedrijf_adres"):
+        lines += [L(x, "center", False, "medium") for x in _wrap_text(d["bedrijf_adres"], W - 6)]
+    if cfg["show_phone"] and d.get("telefoon"):
+        lines.append(L(f"TEL: {d['telefoon']}", "center", False, "medium"))
+    lines += [L(dash), L(title, "center", False, "medium"), L(dash)]
+    if d.get("kwitantie"):
+        lines.append(L(row("NR.", d["kwitantie"])))
+    lines.append(L(row("DATUM", d["datum"])))
     lines.append(L(dash))
-    # 5. Huurder
-    lines.append(L("HUURDER:", bold=True))
+    # Huurder
+    lines.append(L("HUURDER:"))
     lines.append(L(d.get("naam") or "-"))
-    if cfg["show_apartment"] and d.get("appartement"):
-        lines.append(L(f"App. {d['appartement']}"))
-    if cfg["show_tenant_address"] and d.get("adres"):
-        lines.append(L(d["adres"]))
+    apt = str(d.get("appartement") or "").strip()
+    if cfg["show_apartment"] and apt:
+        lines.append(L(apt.upper() if re.match(r"^[A-Za-z]{3,}\b", apt) else f"App. {apt}"))
+    if cfg["show_tenant_address"] and d.get("locatie_adres"):
+        lines += [L(x) for x in _wrap_text(d["locatie_adres"], W)]
     if cfg["show_tenant_phone"] and d.get("huurder_telefoon"):
-        lines.append(L(f"Tel: {d['huurder_telefoon']}"))
-    # 6. Omschrijving en betaalwijze
-    lines.append(L(d["omschrijving"]))
-    if cfg["show_method"] and d.get("methode"):
-        lines.append(L(f"Betaalwijze: {d['methode']}"))
+        lines.append(L(f"TEL: {d['huurder_telefoon']}"))
     lines.append(L(dash))
-    # 8. Betaald, 9. Nog openstaand
-    lines += [L("BETAALD:", bold=True), L(d["bedrag"], "left", True, "large")]
-    lines += [L("Nog openstaand:", bold=True), L(d["openstaand"], "left", True, "large")]
-    if cfg["show_outstanding_period"] and d.get("openstaand_periode"):
-        lines += [L(x) for x in _wrap_text(d["openstaand_periode"], W)]
-    # 10. Ontvangen door en opmerking
+    lines += [L("OMSCHRIJVING:")] + [L(x) for x in _wrap_text(d["omschrijving"], W)]
+    lines.append(L(dash))
+    # Betaald
+    lines.append(L(f"BETAALD: {d['bedrag']}", "left", True, "medium"))
+    if cfg["show_method"] and d.get("methode"):
+        lines.append(L(row("BETAALWIJZE", d["methode"])))
     if cfg["show_employee"] and d.get("medewerker"):
-        lines.append(L(f"Ontvangen door: {d['medewerker']}"))
+        lines += [L("Ontvangen door:"), L(d["medewerker"])]
+    lines.append(L(dash))
+    # Nog openstaand
+    lines += [L("Nog openstaand:", "left", True, "medium"), L(d["openstaand"], "left", True, "medium")]
+    if cfg["show_outstanding_period"] and d.get("openstaand_periode"):
+        lines += [L(x) for x in _wrap_text(f"Maand(en): {d['openstaand_periode']}", W)]
     if cfg["show_note"] and d.get("opmerking"):
-        lines += [L(x) for x in _wrap_text(f"Opmerking: {d['opmerking']}", W)]
-    if str(cfg["footer"] or "").strip():
-        lines += [L(dash)] + [L(x, "center") for x in _wrap_text(str(cfg["footer"]).strip(), W)]
+        lines += [L(dash), L("OPMERKING:")] + [L(x) for x in _wrap_text(d["opmerking"], W)]
+    foot = str(cfg["footer"] or "").strip()
+    if foot:
+        lines.append(L(dash))
+        lines += [L(x, "center") for x in _wrap_text(foot, W)]
+        if d.get("kwitantie"):
+            lines.append(L(f"- {d['kwitantie']} -", "center"))
     lines += [L(""), L("")]
     return lines
 
@@ -18088,7 +18098,8 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
         d = await _receipt_print_data(p)
     else:
         d = {"bedrijfsnaam": (brand.get("company_name") or "SuriRent N.V.") if isinstance(brand, dict) else "SuriRent N.V.",
-             "adres": "Voorbeeldstraat 1", "telefoon": "+597 123456", "kwitantie": "KW-VOORBEELD",
+             "adres": "Voorbeeldstraat 1", "bedrijf_adres": "Voorbeeldstraat 1, Paramaribo", "locatie_adres": "Centrum",
+             "telefoon": "+597 123 4567", "kwitantie": "VB-000001",
              "datum": "01-01-2026 10:00", "naam": "Voorbeeld Huurder", "huurder_telefoon": "+597 7654321",
              "appartement": "A-101", "omschrijving": "Huur — Januari 2026", "methode": "Contant",
              "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",

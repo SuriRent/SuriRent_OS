@@ -697,7 +697,7 @@ function ReceiptsForm({ initial }) {
 }
 
 const BON_DEFAULT_OPTS = {
-  split_name: true, footer: '',
+  split_name: true, footer: 'Bedankt voor uw betaling',
   show_address: true, show_phone: true, show_tenant_phone: true, show_apartment: true,
   show_tenant_address: true, show_method: true, show_outstanding_period: true, show_employee: true, show_note: true,
 };
