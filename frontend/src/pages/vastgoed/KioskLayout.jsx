@@ -3466,7 +3466,7 @@ function KasgeldPanel({ embedded = false }) {
         </div>
 
         {/* ─── Recente mutaties ─── (mobile: bottom | desktop: left wide) */}
-        <div className="bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col p-4 sm:p-5 min-w-0 overflow-hidden">
+        <div className={`bg-white rounded-2xl md:flex-[3] md:order-1 flex flex-col ${embedded ? 'p-3' : 'p-4'} sm:p-5 min-w-0 overflow-hidden`}>
           <div className="row-label-value items-center mb-3">
             <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">Recente mutaties</h3>
             <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-full px-3 py-1.5" data-testid="kasgeld-count-badge">
@@ -3499,26 +3499,26 @@ function KasgeldPanel({ embedded = false }) {
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 -mx-1 px-1 pb-14 md:pb-0">
+          <div className={`flex-1 min-h-0 overflow-y-auto space-y-2 ${embedded ? '' : '-mx-1 px-1'} pb-14 md:pb-0`}>
             {monthGroups.map((g) => {
               const isOpen = expandedMonths.has(g.key);
               const isSelected = g.key === selectedMonth;
               return (
-                <div key={g.key} className={`rounded-2xl border transition ${
+                <div key={g.key} className={embedded ? '' : `rounded-2xl border transition ${
                   isSelected ? 'border-orange-200 bg-orange-50/40' : 'border-slate-200 bg-slate-50/40'
                 }`} data-testid={`kasgeld-month-${g.key}`}>
                   <button type="button" onClick={() => toggleMonth(g.key)}
                     data-testid={`kasgeld-month-toggle-${g.key}`}
-                    className="w-full flex items-center gap-3 px-4 py-4 text-left">
+                    className={`w-full flex items-center gap-3 ${embedded ? 'px-0' : 'px-4'} py-4 text-left`}>
                     <Calendar className="w-5 h-5 text-slate-500 shrink-0" />
                     <span className="flex-1 min-w-0 font-black text-slate-900 capitalize truncate">{g.label}</span>
                     <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{g.items.length} mutaties</span>
                     <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {isOpen && (
-                    <div className="divide-y divide-slate-100 border-t border-slate-100 bg-white rounded-b-2xl" data-testid={`kasgeld-month-items-${g.key}`}>
+                    <div className={`divide-y divide-slate-100 border-t border-slate-100 bg-white ${embedded ? '' : 'rounded-b-2xl'}`} data-testid={`kasgeld-month-items-${g.key}`}>
                       {g.items.map((it) => (
-                        <KasgeldMutationRow key={it.id} item={it} canManage={canManage}
+                        <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush={embedded}
                           onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
                       ))}
                     </div>
@@ -3948,14 +3948,14 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
 
 // Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
-function KasgeldMutationRow({ item, canManage, onEdit, onDelete }) {
+function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }) {
   const isIn = item.type === 'in';
   const d = item.entry_date || item.created_at;
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
   const creator = (item.created_by_name || '').trim();
   return (
-    <div className="kiosk-cash-row flex items-center gap-3 px-3 sm:px-4 py-3" data-testid={`kasgeld-row-${item.id}`}>
+    <div className={`kiosk-cash-row flex items-center gap-3 ${flush ? 'px-0' : 'px-3 sm:px-4'} py-3`} data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
         isIn ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'
       }`}>
