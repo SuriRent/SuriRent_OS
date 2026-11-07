@@ -42,7 +42,7 @@ import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
-import { setIosStatusBar } from '../../lib/ios-status-bar';
+import { setIosStatusBar, useWhitePageBehindModal } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
 import useVisualViewportPosition from '../../lib/use-visual-viewport-position';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
@@ -5051,26 +5051,7 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
   const modalRef = useRef(null);
   useVisualViewportPosition(modalRef, fullscreenMobile ? 768 : 640);
   const { theme } = useContext(KioskThemeCtx);
-  useEffect(() => {
-    if (!fullscreenMobile) return undefined;
-    const statusBarColor = theme === 'green' ? '#F2F8F4' : theme === 'white' ? '#FFFFFF' : '#FF5C00';
-    setIosStatusBar('#FFFFFF');
-    const mobile = window.matchMedia('(max-width: 767px)').matches;
-    const html = document.documentElement;
-    const prevHtmlBg = html.style.backgroundColor;
-    const prevBodyBg = document.body.style.backgroundColor;
-    if (mobile) {
-      html.style.backgroundColor = '#FFFFFF';
-      document.body.style.backgroundColor = '#FFFFFF';
-    }
-    return () => {
-      setIosStatusBar(statusBarColor);
-      if (mobile) {
-        html.style.backgroundColor = prevHtmlBg;
-        document.body.style.backgroundColor = prevBodyBg;
-      }
-    };
-  }, [fullscreenMobile, theme]);
+  useWhitePageBehindModal(fullscreenMobile ? 767 : 639);
   return createPortal((
     <div
       className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white ${fullscreenMobile ? 'md:bg-black/50 md:backdrop-blur-md md:flex md:items-center md:justify-center md:p-4' : 'sm:bg-black/50 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4'} ${theme === 'white' ? 'kiosk-modal-white' : theme === 'green' ? 'kiosk-modal-green' : ''}`}
