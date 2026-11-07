@@ -1,7 +1,7 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
@@ -33,6 +33,7 @@ import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+const KioskBonPage = lazy(() => import('./admin/KioskBonPage'));
 import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
@@ -6277,6 +6278,10 @@ export default function KioskLayout() {
         setAdminPopup(null);
         setStep(e.detail);
       }
+      else if (e.detail === 'admin:inst-bon' && window.innerWidth >= 768) {
+        setAdminPopup(null);
+        setStep('admin:bon');
+      }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };
     window.addEventListener('kiosk-nav', onNav);
@@ -6509,6 +6514,11 @@ export default function KioskLayout() {
             isMobileViewport
               ? <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
               : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
+          )}
+          {step === 'admin:bon' && hasAdminAccess && (
+            <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
+              <div className="h-full min-h-0 kiosk-admin-skin"><KioskBonPage onBack={goBack} /></div>
+            </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (

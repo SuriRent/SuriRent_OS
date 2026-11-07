@@ -651,7 +651,7 @@ export function InvoicingForm({ initial, onSaved, onDirty }) {
 // =====================================================================
 // ReceiptsForm — welk formaat gebruikt de Kiosk voor kwitantie-afdruk
 // =====================================================================
-function ReceiptsForm({ initial }) {
+function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
   const s = useSection('receipts', initial);
   const d = s.data;
   const bon = { ...BON_DEFAULT_OPTS, ...(d.bon || {}) };
@@ -675,13 +675,7 @@ function ReceiptsForm({ initial }) {
         placeholder={ph} className="mt-1 w-full h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
     </label>
   );
-  return (
-    <SectionShell msg={s.msg} err={s.err}>
-      <p className="text-sm text-slate-600">
-        Bepaalt wat er op de bon staat die de Kiosk naar de KT-V520 printer stuurt.
-        De opmaak (groottes, vet, uitlijning) ligt vast; hieronder kies je de inhoud.
-      </p>
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+  const formEl = (
         <div className="space-y-4">
           {kind === 'kasbon' && (
             <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="kasbon-options">
@@ -740,15 +734,61 @@ function ReceiptsForm({ initial }) {
           />
           )}
         </div>
-        <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon}         kind={kind} setKind={setKind}
-                  onSave={s.save} saving={s.saving} msg={s.msg} err={s.err} />
+  );
+  const previewEl = (
+    <BonPreview bon={bon} layouts={layouts} onLayout={(k, v) => s.onField('layouts', { ...layouts, [k]: v })} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind}
+              onSave={s.save} saving={s.saving} msg={s.msg} err={s.err} />
+  );
+  if (kioskLayout) {
+    return (
+              <div className="h-full w-full bg-[#FF5C00] flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-bon-panel">
+                <div className="flex-1 min-h-0 flex gap-3 py-3 overflow-hidden">
+                  <section className="flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-2xl bg-white p-5" data-testid="kiosk-bon-form">
+                    <div className="mb-3 flex items-center justify-between gap-3 shrink-0">
+                      <div className="min-w-0">
+                        <h1 className="truncate text-xl font-black tracking-tight text-slate-900">Bon &amp; afdrukken</h1>
+                        <p className="text-xs font-semibold text-slate-500">Kies wat er op de bon staat.</p>
+                      </div>
+                      <Printer className="h-5 w-5 text-[#FF5C00]" />
+                    </div>
+                    {s.err && <p className="mb-2 shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{s.err}</p>}
+                    {s.msg && <p className="mb-2 shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{s.msg}</p>}
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                      {formEl}
+                      <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
+                    </div>
+                  </section>
+                  <aside className="flex min-h-0 flex-[2] flex-col overflow-y-auto rounded-2xl bg-white p-6" data-testid="kiosk-bon-summary">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h2 className="text-2xl font-black tracking-tight text-slate-900">Voorbeeld</h2>
+                      <Printer className="h-5 w-5 text-[#FF5C00]" />
+                    </div>
+                    {previewEl}
+                    <button type="button" onClick={onBack} data-testid="bon-exit"
+                      className="mt-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200">
+                      Terug naar kiosk
+                    </button>
+                  </aside>
+                </div>
               </div>
-      <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
+    );
+  }
+  return (
+    <SectionShell msg={s.msg} err={s.err}>
+              <p className="text-sm text-slate-600">
+                Bepaalt wat er op de bon staat die de Kiosk naar de KT-V520 printer stuurt.
+                De opmaak (groottes, vet, uitlijning) ligt vast; hieronder kies je de inhoud.
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+                {formEl}
+                {previewEl}
+              </div>
+              <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
   );
 }
 
-const T = (text, o = {}) => ({ t: 'text', text, align: 'left', bold: false, size: 'normal', ...o });
+const T =  (text, o = {}) => ({ t: 'text', text, align: 'left', bold: false, size: 'normal', ...o });
 const PR = (text, right, o = {}) => ({ t: 'pair', text, right, align: 'left', bold: false, size: 'normal', ...o });
 const DASH = { t: 'dash' };
 const BLANK = { t: 'blank' };
@@ -1144,7 +1184,7 @@ function RecomputeDueDatesButton() {
 
 
 // ============== Main ==============
-export default function SettingsPage({ initialSection, hideSubNav = false }) {
+export default function SettingsPage({ initialSection, hideSubNav = false, kioskLayout = false, onBack }) {
   const [section, setSection] = useState(initialSection || 'smtp');
   useEffect(() => {
     if (initialSection) setSection(initialSection);
@@ -1183,13 +1223,17 @@ export default function SettingsPage({ initialSection, hideSubNav = false }) {
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {section === 'deposit' && <DepositForm initial={settings.deposit} />}
-      {section === 'receipts' && <ReceiptsForm initial={settings.receipts} />}
+      {section === 'receipts' && <ReceiptsForm initial={settings.receipts} kioskLayout={kioskLayout} onBack={onBack} />}
       {section === 'domain' && <DomainForm initial={settings.domain} />}
     </>
   );
 
   // Wanneer we in InstellingenHub geëmbed worden (hideSubNav=true), tonen
   // we alleen de content — de hub levert de header + top-tabs zelf.
+  if (kioskLayout) {
+    return <div className="h-full min-h-0">{contentBlock}</div>;
+  }
+
   if (hideSubNav) {
     return (
       <div>
