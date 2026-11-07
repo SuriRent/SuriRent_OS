@@ -5055,7 +5055,21 @@ function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testI
     if (!fullscreenMobile) return undefined;
     const statusBarColor = theme === 'green' ? '#F2F8F4' : theme === 'white' ? '#FFFFFF' : '#FF5C00';
     setIosStatusBar('#FFFFFF');
-    return () => setIosStatusBar(statusBarColor);
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    const html = document.documentElement;
+    const prevHtmlBg = html.style.backgroundColor;
+    const prevBodyBg = document.body.style.backgroundColor;
+    if (mobile) {
+      html.style.backgroundColor = '#FFFFFF';
+      document.body.style.backgroundColor = '#FFFFFF';
+    }
+    return () => {
+      setIosStatusBar(statusBarColor);
+      if (mobile) {
+        html.style.backgroundColor = prevHtmlBg;
+        document.body.style.backgroundColor = prevBodyBg;
+      }
+    };
   }, [fullscreenMobile, theme]);
   return createPortal((
     <div
