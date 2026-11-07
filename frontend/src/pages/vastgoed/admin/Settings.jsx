@@ -8,6 +8,8 @@ import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { apkBridge, apkPrintMessage } from '../../../lib/kiosk-print';
 import { getSavedPrinter, paperWidth, printLinesBluetooth } from '../../../lib/bt-printer';
+import { usePrintOptions } from '../../../components/PrintChoiceMenu';
+import { trackKtpJob } from '../../../components/KtpPrintToast';
 
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
@@ -873,14 +875,18 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
   const wrapRef = useRef(null);
   const innerRef = useRef(null);
   const [printMsg, setPrintMsg] = useState('');
+  const opts = usePrintOptions(true);
   const printSample = async () => {
     setPrintMsg('');
     try {
       const bridge = apkBridge();
       const bt = getSavedPrinter();
       if (bridge) {
-        const data = { lines, template: 'lines', receipt_type: kind, size_mode: 'normal', paper_width: paperWidth() };
+        const data = { lines, template: 'lines', receipt_type: { kasbon: 'kasgeld', borgbon: 'deposit' }[kind] || 'betaling', size_mode: 'normal', paper_width: paperWidth() };
         bridge(JSON.stringify(apkPrintMessage('', data)));
+      } else if (opts.first) {
+        const { data } = await api.post('/settings/receipts/preview-remote-print', { bon, kasbon, borgbon, kind, printer_id: opts.first.id });
+        trackKtpJob(data.job_id, opts.first.name);
       } else if (bt?.via === 'web') {
         await printLinesBluetooth(lines);
       } else {

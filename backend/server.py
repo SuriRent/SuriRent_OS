@@ -18283,6 +18283,21 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
     return {"lines": _receipt_text_lines(d, "KWITANTIE", cols), "cols": cols}
 
 
+@api.post("/settings/receipts/preview-remote-print")
+async def receipts_preview_remote_print(body: dict, user=Depends(get_current_user)):
+    """Stuur het bonvoorbeeld naar een online KT-V520 (WebSocket)."""
+    cid = company_id_of(user)
+    printer_id = (body or {}).get("printer_id") or ""
+    prev = await receipts_preview_lines(body, user)
+    if not prev.get("lines"):
+        raise HTTPException(status_code=400, detail=prev.get("empty") or "Voorbeeld niet beschikbaar")
+    kind = (body or {}).get("kind") or "betaling"
+    data = {"template": "lines", "receipt_type": {"kasbon": "kasgeld", "borgbon": "deposit"}.get(kind, "betaling"),
+            "printer": "kt-v520", "paper_width": 58, "size_mode": "normal", "cols": prev.get("cols", 21),
+            "lettergrootte": "groot", "textZoom": 420, "lines": prev["lines"]}
+    return {"job_id": await _publish_remote_print(cid, printer_id, {"data": data})}
+
+
 @api.post("/settings/{section}/test")
 async def test_settings_section(section: str, user=Depends(get_current_user)):
     if section not in VALID_SETTINGS_SECTIONS:
