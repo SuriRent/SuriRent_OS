@@ -698,8 +698,7 @@ function ReceiptsForm({ initial }) {
             value={{ ...BON_DEFAULTS[d.font_size || 'groot'], ...((d.presets || {})[d.font_size || 'groot'] || {}) }}
             onChange={(v) => s.onField('presets', { ...(d.presets || {}), [d.font_size || 'groot']: v })} />
         </div>
-        <BonPreview fontSize={d.font_size || 'groot'}
-          custom={{ ...BON_DEFAULTS[d.font_size || 'groot'], ...((d.presets || {})[d.font_size || 'groot'] || {}) }} />
+        <BonPreview />
       </div>
       <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
         <b>Tip:</b> Om écht dialoog-loos te printen moet Chrome/Edge opgestart
@@ -787,33 +786,32 @@ function BonFontPicker({ value, onChange }) {
   );
 }
 
-// Live voorbeeld van de 58mm-bon (laatste echte kwitantie of voorbeelddata).
-function BonPreview({ fontSize, custom }) {
-  const [html, setHtml] = useState('');
-  const [height, setHeight] = useState(420);
+// Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
+function BonPreview() {
+  const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    const params = { font_size: fontSize };
-    if (custom) ['base', 'name', 'title', 'amount'].forEach((k) => { if (custom[k] !== '' && custom[k] != null) params[k] = custom[k]; });
-    api.get('/settings/receipts/preview.html', { params, responseType: 'text' })
-      .then(({ data }) => { if (alive) setHtml(String(data).replace(/<script[\s\S]*?<\/script>/gi, '')); })
-      .catch(() => { if (alive) setHtml('<p style="font-family:sans-serif;padding:8px">Voorbeeld niet beschikbaar</p>'); })
+    api.get('/settings/receipts/preview-lines')
+      .then(({ data }) => { if (alive) setLines(data.lines || []); })
+      .catch(() => { if (alive) setLines([{ text: 'Voorbeeld niet beschikbaar', align: 'center' }]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [fontSize, custom?.base, custom?.name, custom?.title, custom?.amount]);
+  }, []);
+  const px = { normal: 12, medium: 15, large: 21 };
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
       <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
         Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
       </p>
       <div className="mx-auto w-fit bg-slate-100 rounded-2xl p-4">
-        <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 transition-opacity"
-          style={{ opacity: loading ? 0.5 : 1 }}>
-          <iframe title="Bonvoorbeeld" srcDoc={html} data-testid="bon-preview-frame" scrolling="no"
-            onLoad={(e) => { try { setHeight(e.target.contentDocument.body.scrollHeight + 8); } catch { /* ignore */ } }}
-            style={{ width: '58mm', height, border: 0, display: 'block' }} />
+        <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
+          data-testid="bon-preview-frame" style={{ width: '58mm', fontFamily: 'monospace', color: '#000', opacity: loading ? 0.5 : 1 }}>
+          {lines.map((l, i) => (
+            <div key={i} style={{ textAlign: l.align || 'left', fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em' }}>
+              {l.text}
+            </div>
+          ))}
         </div>
       </div>
     </div>

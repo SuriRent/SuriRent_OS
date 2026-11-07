@@ -18068,6 +18068,26 @@ async def receipts_preview(font_size: str = "groot", base: Optional[int] = None,
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
+@api.get("/settings/receipts/preview-lines")
+async def receipts_preview_lines(user=Depends(get_current_user)):
+    """Bonvoorbeeld als regels: exact dezelfde opbouw die naar de KT-V520 APK gaat."""
+    cid = company_id_of(user)
+    brand = await _company_brand_info(cid)
+    p = await db.payments.find_one({"company_id": cid, "receipt_number": {"$nin": [None, ""]}}, {"_id": 0}, sort=[("created_at", -1)])
+    if p:
+        d = await _receipt_print_data(p)
+    else:
+        d = {"bedrijfsnaam": (brand.get("company_name") or "SuriRent N.V.") if isinstance(brand, dict) else "SuriRent N.V.",
+             "adres": "Voorbeeldstraat 1", "telefoon": "+597 123456", "kwitantie": "KW-VOORBEELD",
+             "datum": "01-01-2026 10:00", "naam": "Voorbeeld Huurder", "huurder_telefoon": "+597 7654321",
+             "appartement": "A-101", "omschrijving": "Huur — Januari 2026", "methode": "Contant",
+             "bedrag": "SRD 2.500,00", "openstaand": "SRD 2.500,00", "openstaand_periode": "Feb, Mar 2026",
+             "medewerker": "Medewerker", "opmerking": "Voorbeeldbon"}
+        d["lines"] = _receipt_text_lines(d, "KWITANTIE", _RECEIPT_COLS)
+        d["cols"] = _RECEIPT_COLS
+    return {"lines": d["lines"], "cols": d.get("cols", _RECEIPT_COLS)}
+
+
 @api.post("/settings/{section}/test")
 async def test_settings_section(section: str, user=Depends(get_current_user)):
     if section not in VALID_SETTINGS_SECTIONS:
