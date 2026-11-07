@@ -727,6 +727,9 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
           <ExtraLinesEditor
             items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
             onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
+            space={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).bottom_space}
+            defSpace={kind === 'betaling' ? 3 : 2}
+            onSpace={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('bottom_space', v)}
           />
         </div>
   );
@@ -790,7 +793,7 @@ const EXTRA_PRESETS = [
   { label: '+ Extra regel', items: [{ text: '' }] },
 ];
 
-function ExtraLinesEditor({ items, onChange }) {
+function ExtraLinesEditor({ items, onChange, space, onSpace, defSpace }) {
   const upd = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
   const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', divider: false, ...x }))].slice(0, 10));
   const sel = 'h-9 px-2 rounded-lg border-2 border-slate-200 text-sm';
@@ -828,6 +831,12 @@ function ExtraLinesEditor({ items, onChange }) {
             className="h-9 px-3 rounded-xl border-2 border-slate-200 text-sm font-bold hover:border-[#FF5C00]">{p.label}</button>
         ))}
       </div>
+      <label className="flex items-center gap-2 text-sm text-slate-700" data-testid="bon-bottom-space">
+        Witruimte onderaan de bon
+        <select className={sel} value={space ?? defSpace} onChange={(e) => onSpace(Number(e.target.value))} aria-label="Witruimte onderaan">
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n === 0 ? 'Geen' : `${n} regel${n > 1 ? 's' : ''}`}</option>)}
+        </select>
+      </label>
     </div>
   );
 }

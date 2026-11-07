@@ -13382,6 +13382,15 @@ def _render_layout_blocks(blocks: list, vars_: dict, W: int, mode: str) -> list:
     return out
 
 
+def _bottom_pad(cfg, default: int) -> list:
+    """Witruimte onderaan de bon (instelbaar in Bon & afdrukken)."""
+    try:
+        n = int((cfg or {}).get("bottom_space", default))
+    except (TypeError, ValueError):
+        n = default
+    return [{"text": "", "align": "left", "bold": False, "size": "normal"} for _ in range(max(0, min(n, 6)))]
+
+
 def _custom_bon_lines(items, where: str, width: int) -> list:
     """Eigen regels uit Bon & afdrukken (boven = onder de titel, onder = onderaan de bon)."""
     out = []
@@ -13481,7 +13490,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         if d.get("kwitantie"):
             lines.append(L(f"- {d['kwitantie']} -", "center"))
     lines += _custom_bon_lines(cfg.get("extra_lines"), "bottom", W)
-    lines += [L(""), L(""), L("")]
+    lines += _bottom_pad(cfg, 3)
     return lines
 
 
@@ -17133,7 +17142,7 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
         lines += [L(x, "center") for x in wrap(cfgo["footer"], W)]
     lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
     lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W)
-    lines += [L(""), L("")]
+    lines += _bottom_pad(cfgo, 2)
     lay = _pick_layout(((cs or {}).get("receipts") or {}).get("layouts", {}).get("kasbon"), (opts or {}).get("_layout"))
     if lay:
         lines = _render_layout(lay["blocks"], {
@@ -17273,7 +17282,7 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
     while lines and not str(lines[-1]["text"]).strip():
         lines.pop()
     lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
-    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W) + [L(""), L("")]
+    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W) + _bottom_pad(cfgo, 2)
     shown = d.get("amount_due") if settled and float(d.get("amount_due") or 0) > 0 else (d.get("refund_amount") if settled else d.get("amount"))
     lay = _pick_layout(((cs or {}).get("receipts") or {}).get("layouts", {}).get("borgbon"), (opts or {}).get("_layout"))
     if lay:
