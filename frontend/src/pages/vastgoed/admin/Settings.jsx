@@ -730,11 +730,61 @@ function ReceiptsForm({ initial }) {
             </label>
           </div>
           )}
+          <ExtraLinesEditor
+            items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
+            onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
+          />
         </div>
         <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} />
       </div>
       <ActionRow onSave={s.save} saving={s.saving} canTest={false} />
     </SectionShell>
+  );
+}
+
+const EXTRA_PRESETS = [
+  { label: '+ Bankgegevens', items: [
+    { text: 'Bankoverschrijving:', bold: true }, { text: 'Bank: ' }, { text: 'Rek.nr: ' }, { text: 'T.n.v.: ' },
+  ] },
+  { label: '+ Eigen regel', items: [{ text: '' }] },
+];
+
+function ExtraLinesEditor({ items, onChange }) {
+  const upd = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
+  const add = (list) => onChange([...items, ...list.map((x) => ({ where: 'bottom', align: 'left', bold: false, size: 'normal', ...x }))].slice(0, 10));
+  const sel = 'h-9 px-2 rounded-lg border-2 border-slate-200 text-sm';
+  return (
+    <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="extra-lines">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Extra regels (eigen tekst, max 10)</p>
+      {items.map((it, i) => (
+        <div key={i} className="space-y-1 border-b border-slate-100 pb-2">
+          <input type="text" maxLength={200} value={it.text || ''} onChange={(e) => upd(i, { text: e.target.value })}
+            aria-label={`Extra regel ${i + 1}`} placeholder="Tekst, bijv. Rek.nr: 123456"
+            className="w-full h-10 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+          <div className="flex flex-wrap gap-2 items-center">
+            <select className={sel} value={it.where || 'bottom'} onChange={(e) => upd(i, { where: e.target.value })} aria-label="Plaats">
+              <option value="top">Bovenaan</option><option value="bottom">Onderaan</option>
+            </select>
+            <select className={sel} value={it.align || 'left'} onChange={(e) => upd(i, { align: e.target.value })} aria-label="Uitlijning">
+              <option value="left">Links</option><option value="center">Midden</option><option value="right">Rechts</option>
+            </select>
+            <select className={sel} value={it.size || 'normal'} onChange={(e) => upd(i, { size: e.target.value })} aria-label="Grootte">
+              <option value="normal">Normaal</option><option value="large">Groot</option>
+            </select>
+            <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={!!it.bold} onChange={(e) => upd(i, { bold: e.target.checked })} className="w-4 h-4 accent-[#FF5C00]" /> Vet
+            </label>
+            <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))} className="ml-auto text-sm text-red-600 font-bold">Verwijder</button>
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2">
+        {EXTRA_PRESETS.map((p) => (
+          <button key={p.label} type="button" onClick={() => add(p.items)}
+            className="h-9 px-3 rounded-xl border-2 border-slate-200 text-sm font-bold hover:border-[#FF5C00]">{p.label}</button>
+        ))}
+      </div>
+    </div>
   );
 }
 

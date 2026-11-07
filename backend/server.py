@@ -13308,6 +13308,22 @@ def _receipt_employee(p: dict) -> str:
     return (p.get("kiosk_employee_name") or p.get("received_by") or "").strip()
 
 
+def _custom_bon_lines(items, where: str, width: int) -> list:
+    """Eigen regels uit Bon & afdrukken (boven = onder de titel, onder = onderaan de bon)."""
+    out = []
+    for it in (items or [])[:10]:
+        if not isinstance(it, dict) or (it.get("where") or "bottom") != where:
+            continue
+        text = str(it.get("text") or "").strip()[:200]
+        if not text:
+            continue
+        align = it.get("align") if it.get("align") in ("left", "center", "right") else "left"
+        size = "large" if it.get("size") == "large" else "normal"
+        w = max(8, int(width * 0.75)) if size == "large" else width
+        out += [{"text": x, "align": align, "bold": bool(it.get("bold")), "size": size} for x in _wrap_text(text, w)]
+    return out
+
+
 def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
     """Bon als tekstregels voor ESC/POS-printers (KT-V520 / Bluetooth)."""
     # Opmaak zoals de KT-V520 APK print (foto's klant): 28 tekens breed bij 58mm.
@@ -13342,6 +13358,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         lines += [L(x, "center", False, "small") for x in _wrap_text(d["bedrijf_adres"], W - 6)]
     if cfg["show_phone"] and d.get("telefoon"):
         lines.append(L(f"TEL: {d['telefoon']}", "center", False, "small"))
+    lines += _custom_bon_lines(cfg.get("extra_lines"), "top", W)
     lines += [L(dash), L(title, "center", False, "small"), L(dash)]
     if d.get("kwitantie"):
         lines += [L(x) for x in row("NR.", d["kwitantie"])]
@@ -13379,6 +13396,7 @@ def _receipt_text_lines(d: dict, title: str, cols: int = _RECEIPT_COLS) -> list:
         lines += [L(x, "center") for x in _wrap_text(foot, W)]
         if d.get("kwitantie"):
             lines.append(L(f"- {d['kwitantie']} -", "center"))
+    lines += _custom_bon_lines(cfg.get("extra_lines"), "bottom", W)
     lines += [L(""), L(""), L("")]
     return lines
 
@@ -17029,6 +17047,8 @@ async def _kasgeld_receipt_data(entry_id: str, session: dict, force_ktp: bool = 
     lines += [L(dash)]
     if str(cfgo.get("footer") or "").strip():
         lines += [L(x, "center") for x in wrap(cfgo["footer"], W)]
+    lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
+    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W)
     lines += [L(""), L("")]
     return {
         "template": "lines", "receipt_type": "kasgeld",
@@ -17157,6 +17177,10 @@ async def _deposit_receipt_data(did: str, session: dict, force_ktp: bool = False
         if str(cfgo.get("footer") or "").strip():
             lines += [L(x, "center") for x in _wrap_text(cfgo["footer"], W)]
         lines += [L(""), L("")]
+    while lines and not str(lines[-1]["text"]).strip():
+        lines.pop()
+    lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
+    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W) + [L(""), L("")]
     shown = d.get("amount_due") if settled and float(d.get("amount_due") or 0) > 0 else (d.get("refund_amount") if settled else d.get("amount"))
     return {
         "template": "lines", "receipt_type": "deposit_refund" if settled else "deposit",
