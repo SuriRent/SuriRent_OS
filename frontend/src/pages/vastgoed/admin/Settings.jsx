@@ -760,7 +760,10 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
                   <aside className="flex min-h-0 flex-[2] flex-col overflow-y-auto rounded-2xl bg-white p-6" data-testid="kiosk-bon-summary">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <h2 className="text-2xl font-black tracking-tight text-slate-900">Voorbeeld</h2>
-                      <Printer className="h-5 w-5 text-[#FF5C00]" />
+                      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('bon-print-sample'))} data-testid="bon-preview-print"
+                        title="Print dit voorbeeld" aria-label="Print voorbeeld" className="rounded-full p-2 hover:bg-orange-50 active:scale-95">
+                        <Printer className="h-5 w-5 text-[#FF5C00]" />
+                      </button>
                     </div>
                     {previewEl}
                     <button type="button" onClick={onBack} data-testid="bon-exit"
@@ -894,6 +897,13 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
       setPrintMsg(`Printen mislukt: ${e?.message || e}`);
     }
   };
+  const printRef = useRef(printSample);
+  printRef.current = printSample;
+  useEffect(() => {
+    const on = () => printRef.current();
+    window.addEventListener('bon-print-sample', on);
+    return () => window.removeEventListener('bon-print-sample', on);
+  }, []);
   useEffect(() => {
     if (!fit) return undefined;
     const calc = () => {
@@ -937,11 +947,13 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
           Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
         </p>
-        <button type="button" onClick={printSample} disabled={loading || !lines.length} data-testid="bon-preview-print"
-          title="Print dit voorbeeld" aria-label="Print voorbeeld"
-          className="h-9 w-9 rounded-full bg-[#FF5C00] hover:bg-[#e65200] text-white flex items-center justify-center disabled:opacity-50">
-          <Printer className="w-4 h-4" />
-        </button>
+        {!fit && (
+          <button type="button" onClick={printSample} disabled={loading || !lines.length} data-testid="bon-preview-print-inline"
+            title="Print dit voorbeeld" aria-label="Print voorbeeld"
+            className="h-9 w-9 rounded-full bg-[#FF5C00] hover:bg-[#e65200] text-white flex items-center justify-center disabled:opacity-50">
+            <Printer className="w-4 h-4" />
+          </button>
+        )}
       </div>
       {printMsg && <p className="text-xs font-semibold text-slate-600 mb-2 text-center">{printMsg}</p>}
       <div ref={wrapRef} style={fit ? { height: natH * scale } : undefined}>
