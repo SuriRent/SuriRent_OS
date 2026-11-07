@@ -33,6 +33,7 @@ import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
@@ -3417,7 +3418,43 @@ function KasgeldPanel({ embedded = false }) {
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
-      <div className={`flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 ${embedded ? '' : 'overflow-hidden'}`}>
+      {embedded && (
+        <div className="space-y-4" data-testid="kasgeld-fx">
+          <FxStats testId="kasgeld-fx-stats" items={[
+            ['SRD', Number(balances.SRD || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'orange'],
+            ['USD', Number(balances.USD || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'slate'],
+            ['EUR', Number(balances.EUR || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'slate']]} />
+          <FxTabs testPrefix="kasgeld" value={sourceFilter} onChange={setSourceFilter} tabs={[
+            { v: 'all', label: 'Alles', count: items.length },
+            { v: 'kasgeld', label: 'Handmatig', count: items.filter((it) => (it.source || 'kasgeld') === 'kasgeld').length },
+            { v: 'payment', label: 'Betalingen', count: items.filter((it) => it.source === 'payment').length }]} />
+          {err && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
+          {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
+          {!err && !loading && visibleItems.length === 0 && <FxEmpty text="Nog geen mutaties." testId="kasgeld-empty" />}
+          {visibleItems.map((it) => {
+            const isIn = it.type === 'in';
+            const d = it.entry_date || it.created_at;
+            const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+            const creator = (it.created_by_name || '').trim();
+            return (
+              <FxRow key={it.id} testId={`kasgeld-row-${it.id}`}
+                title={it.description || it.category || '—'}
+                sub={[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`].filter(Boolean).join(' · ')}
+                amount={`${isIn ? '+' : '−'}${fmtMoney(it.amount, it.currency)}`}
+                status={it.excluded_from_balance ? 'Niet in saldo' : isIn ? 'Ontvangen' : 'Uitgave'}
+                tone={it.excluded_from_balance ? 'slate' : isIn ? 'green' : 'red'}
+                actions={canManage && it.source !== 'payment' ? (
+                  <>
+                    <FxIconBtn onClick={() => setEditing(it)} title="Bewerken" testId={`kasgeld-row-edit-${it.id}`}><Pencil className="w-4 h-4" /></FxIconBtn>
+                    <FxIconBtn onClick={() => removeEntry(it)} danger title="Verwijderen" testId={`kasgeld-row-delete-${it.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
+                  </>
+                ) : undefined} />
+            );
+          })}
+        </div>
+      )}
+      {!embedded && (
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
         <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-3 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
           <div className="row-label-value items-center mb-2.5 sm:mb-4">
@@ -3529,6 +3566,7 @@ function KasgeldPanel({ embedded = false }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Month picker overlay (bottom-sheet op mobiel, centered op desktop) */}
       {showMonthPicker && (
@@ -6493,7 +6531,7 @@ export default function KioskLayout() {
                     <Wallet className="w-4 h-4" /> Nieuwe mutatie
                   </button>
                 )}>
-                <KasgeldPanel embedded />
+                <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4"><KasgeldPanel embedded /></div></KioskFxCtx.Provider>
               </KioskModalShell>
             ) : <KasgeldPanel />
           )}
