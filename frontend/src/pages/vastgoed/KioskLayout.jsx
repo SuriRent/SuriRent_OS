@@ -3255,6 +3255,76 @@ function ReceiptScreen({ payment, overview, onDone }) {
     return () => clearTimeout(t);
   }, [onDone, partialInv, planMade]);
 
+  if (isDesktop) {
+    return (
+      <div className="h-full bg-orange-500 flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="receipt-desktop">
+        <div className="flex-1 min-h-0 flex flex-row gap-3 pb-3 pt-3">
+          <div className="bg-white rounded-2xl flex-[3] min-w-0 flex flex-col p-5" data-testid="receipt-card">
+            <div className="flex items-center gap-3 mb-3 shrink-0" data-testid="receipt-thanks">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <Check className="w-7 h-7 text-emerald-600" strokeWidth={3} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">Kwitantie</p>
+                <h2 className="text-xl font-black text-slate-900 leading-tight">Bedankt! Uw betaling is verwerkt</h2>
+                {payment.received_by && (
+                  <p className="text-xs text-slate-500 truncate" data-testid="receipt-received-by-banner">
+                    Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 rounded-xl bg-slate-100 p-3 flex flex-col overflow-hidden" data-testid="receipt-desktop-bon">
+              <FittedReceiptPreview paymentId={payment.id} maxScale={2.5} />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl flex-[2] min-w-0 flex flex-col items-center justify-center text-center p-6 gap-3">
+            <div className={`w-full flex justify-between items-center px-4 py-3 rounded-xl ${remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'}`} data-testid="receipt-remaining-row">
+              <span className={`text-sm font-bold ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>Openstaand saldo</span>
+              <span className={`font-extrabold text-xl ${remaining > 0 ? 'text-orange-700' : 'text-emerald-700'}`} data-testid="receipt-remaining">
+                {remainingLoading ? '…' : fmtMoney(remaining, cur)}
+              </span>
+            </div>
+            <button onClick={onDone} data-testid="receipt-done"
+              className="w-full h-14 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-colors">
+              <UserRound className="w-5 h-5" strokeWidth={2.6} />
+              Volgende huurder
+            </button>
+            <div className="w-full flex flex-col gap-2">
+              {payment.id && (
+                <div className="w-full empty:hidden" data-testid="receipt-ktp-print">
+                  <KtpPrintButton log={{ id: payment.id, payment_id: payment.id }} onPrinted={noop} fetchPrinters autoSend />
+                </div>
+              )}
+              {payment.id && <BtPrintButton paymentId={payment.id} autoSend />}
+              {isKtpDevice() && (
+                <button onClick={manualPrint} type="button" data-testid="receipt-manual-print"
+                  className="w-full h-11 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 border-2 border-slate-200 transition-colors">
+                  <Printer className="w-4 h-4" />
+                  Ingebouwde printer
+                </button>
+              )}
+            </div>
+            <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
+              Automatisch terug naar startscherm in 20 seconden
+              {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
+              {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
+            </p>
+          </div>
+        </div>
+        {partialInv && !planMade && (
+          <PartialPlanSuggestion
+            tenantId={payment.tenant_id || overview?.tenant?.id}
+            partialInvoice={partialInv}
+            onClose={() => setPartialInv(null)}
+            onPlanned={() => { setPlanMade(true); setPartialInv(null); }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden">
       <div className="kiosk-chrome text-center mb-2 shrink-0" data-testid="receipt-thanks">
@@ -3340,16 +3410,6 @@ function ReceiptScreen({ payment, overview, onDone }) {
           </p>
         </div>
       </div>
-      {isDesktop && (
-        <div className="bg-white rounded-3xl shadow-2xl w-full md:w-[26rem] flex flex-col overflow-hidden min-h-0" data-testid="receipt-desktop-bon">
-          <div className="shrink-0 flex items-center gap-2 px-5 py-3 border-b border-slate-100 font-black text-slate-900">
-            <Printer className="w-5 h-5 text-orange-500" /> Kwitantie
-          </div>
-          <div className="flex-1 min-h-0 bg-slate-100 p-4 flex flex-col overflow-hidden">
-            <FittedReceiptPreview paymentId={payment.id} maxScale={2.5} />
-          </div>
-        </div>
-      )}
       </div>
 
       {/* Partial-payment regeling suggestie — verschijnt na ~1.5s zodat de
