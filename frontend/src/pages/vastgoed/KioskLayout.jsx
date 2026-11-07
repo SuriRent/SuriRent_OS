@@ -3303,7 +3303,7 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel() {
+function KasgeldPanel({ embedded = false }) {
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3344,6 +3344,12 @@ function KasgeldPanel() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const open = () => setShowForm(true);
+    window.addEventListener('kiosk-kasgeld-new', open);
+    return () => window.removeEventListener('kiosk-kasgeld-new', open);
+  }, [embedded]);
   useEffect(() => {
     const onChange = () => load({ quiet: true });
     const onVisible = () => { if (document.visibilityState === 'visible') onChange(); };
@@ -3405,13 +3411,13 @@ function KasgeldPanel() {
   const srdBalance = balances.SRD || 0;
 
   return (
-    <div className={`h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : theme === 'green' ? 'bg-[#F2F8F4]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
-      style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
+    <div className={embedded ? 'w-full flex flex-col' : `h-full w-full ${theme === 'white' ? 'bg-[#F4F5F7]' : theme === 'green' ? 'bg-[#F2F8F4]' : 'bg-[#EF5600]'} flex flex-col pt-[max(var(--kiosk-sat),12px)] md:pt-0`}
+      style={embedded ? undefined : { paddingLeft: '1.5vw', paddingRight: '1.5vw' }}>
       {/* Body — mobile: vertical stack met Kasgeld-overzicht BOVEN (user mock);
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 overflow-hidden">
+      <div className={`flex-1 min-h-0 flex flex-col md:flex-row gap-2 sm:gap-3 pb-3 md:pt-3 ${embedded ? '' : 'overflow-hidden'}`}>
         {/* ─── Kasgeld overzicht ─── (mobile: top | desktop: right) */}
         <div className="bg-white rounded-2xl md:flex-[2] md:order-2 flex flex-col p-3 sm:p-6 shrink-0 md:shrink md:overflow-y-auto">
           <div className="row-label-value items-center mb-2.5 sm:mb-4">
@@ -3454,7 +3460,7 @@ function KasgeldPanel() {
           </div>
 
           <button onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn"
-            className="w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
+            className={`${embedded ? 'hidden' : ''} w-full h-12 sm:h-14 rounded-2xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-black text-base inline-flex items-center justify-center gap-2.5 shadow-[0_10px_25px_-5px_rgba(255,92,0,0.35)] active:scale-[0.98] transition">
             <Wallet className="w-5 h-5" strokeWidth={2.5} /> Nieuwe mutatie
           </button>
         </div>
@@ -6478,7 +6484,18 @@ export default function KioskLayout() {
             <KioskAdminPage id={step.slice(6)} onBack={goBack} />
           )}
           {step === 'kasgeld' && (
-            <KasgeldPanel />
+            isMobileViewport ? (
+              <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
+                wide xwide tall fullscreenMobile
+                footer={(
+                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-kasgeld-new'))} data-testid="kiosk-popup-kasgeld-new"
+                    className="w-full h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
+                    <Wallet className="w-4 h-4" /> Nieuwe mutatie
+                  </button>
+                )}>
+                <KasgeldPanel embedded />
+              </KioskModalShell>
+            ) : <KasgeldPanel />
           )}
           {step === 'stroom' && hasAdminAccess && (
             <div className="h-full overflow-y-auto bg-orange-500 kiosk-admin-skin" data-testid="kiosk-stroom">
