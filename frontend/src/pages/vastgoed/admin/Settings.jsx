@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { apkBridge, apkPrintMessage } from '../../../lib/kiosk-print';
+import { getSavedPrinter, paperWidth, printLinesBluetooth } from '../../../lib/bt-printer';
 
 const SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', icon: Mail, desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.' },
@@ -867,6 +869,31 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
   const [natH, setNatH] = useState(0);
   const wrapRef = useRef(null);
   const innerRef = useRef(null);
+  const [printMsg, setPrintMsg] = useState('');
+  const printSample = async () => {
+    setPrintMsg('');
+    try {
+      const bridge = apkBridge();
+      const bt = getSavedPrinter();
+      if (bridge) {
+        const data = { lines, template: 'lines', receipt_type: kind, size_mode: 'normal', paper_width: paperWidth() };
+        bridge(JSON.stringify(apkPrintMessage('', data)));
+      } else if (bt?.via === 'web') {
+        await printLinesBluetooth(lines);
+      } else {
+        const w = window.open('', '_blank', 'width=320,height=600');
+        if (!w) throw new Error('Pop-up geblokkeerd');
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        w.document.write(`<html><body style="margin:0"><div style="width:54mm;font-family:monospace;color:#000">${lines.map((l) => `<div style="text-align:${l.align || 'left'};font-weight:${l.bold ? 700 : 400};font-size:${px[l.size] || px.normal}px;white-space:pre-wrap;min-height:1em">${esc(l.text)}</div>`).join('')}</div></body></html>`);
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+      setPrintMsg('Voorbeeld naar printer gestuurd');
+    } catch (e) {
+      setPrintMsg(`Printen mislukt: ${e?.message || e}`);
+    }
+  };
   useEffect(() => {
     if (!fit) return undefined;
     const calc = () => {
@@ -906,9 +933,17 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
             className={`px-3 h-8 rounded-full text-xs font-bold ${kind === k ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600'}`}>{l}</button>
         ))}
       </div>
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-2">
-        Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
-      </p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+          Voorbeeld (58mm) {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+        </p>
+        <button type="button" onClick={printSample} disabled={loading || !lines.length} data-testid="bon-preview-print"
+          title="Print dit voorbeeld" aria-label="Print voorbeeld"
+          className="h-9 w-9 rounded-full bg-[#FF5C00] hover:bg-[#e65200] text-white flex items-center justify-center disabled:opacity-50">
+          <Printer className="w-4 h-4" />
+        </button>
+      </div>
+      {printMsg && <p className="text-xs font-semibold text-slate-600 mb-2 text-center">{printMsg}</p>}
       <div ref={wrapRef} style={fit ? { height: natH * scale } : undefined}>
       <div ref={innerRef} className="mx-auto w-fit bg-slate-100 rounded-2xl p-4" style={fit ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : undefined}>
         <div className="bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] border-t-4 border-dashed border-slate-200 p-2"
