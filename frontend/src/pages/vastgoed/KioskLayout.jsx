@@ -3104,8 +3104,19 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
 function FittedReceiptPreview({ paymentId }) {
   const boxRef = useRef(null);
+  const paperRef = useRef(null);
   const [size, setSize] = useState({ w: 230, h: 420 });
   const [box, setBox] = useState({ w: 0, h: 0 });
+  const [lines, setLines] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.get(`/kiosk/payments/${paymentId}/print-data`, { params: { force_ktp: true } })
+      .then(({ data }) => { if (alive) { if (data?.lines?.length) setLines(data.lines); else setFailed(true); } })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [paymentId]);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -3115,6 +3126,11 @@ function FittedReceiptPreview({ paymentId }) {
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    const el = paperRef.current;
+    if (lines && el) setSize({ w: Math.max(180, Math.ceil(el.offsetWidth)), h: Math.max(200, Math.ceil(el.offsetHeight)) });
+  }, [lines]);
+
   const onLoad = (e) => {
     try {
       const doc = e.currentTarget.contentDocument;
@@ -3123,11 +3139,21 @@ function FittedReceiptPreview({ paymentId }) {
     } catch { /* cross-origin — vaste maat */ }
   };
 
+  const px = { normal: 12, small: 13, medium: 14, large: 20 };
   const scale = box.h ? Math.min(1, box.h / size.h, box.w / size.w) : 1;
   return (
     <div ref={boxRef} className="flex-1 min-h-0 overflow-hidden flex items-start justify-center" data-testid="receipt-preview-box">
       <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 3.5, ease: [0.25, 0.1, 0.25, 1] }}
         style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
+        {lines ? (
+          <div ref={paperRef} data-testid="receipt-preview-lines"
+            className="absolute top-0 left-0 bg-white border border-dashed border-slate-200 p-2"
+            style={{ width: '58mm', fontFamily: 'monospace', color: '#000', transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+            {lines.map((l, i) => (
+              <div key={i} style={{ textAlign: l.align || 'left', fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em' }}>{l.text}</div>
+            ))}
+          </div>
+        ) : failed && (
         <iframe
           title="Kwitantie preview"
           data-testid="receipt-preview-iframe"
@@ -3138,6 +3164,7 @@ function FittedReceiptPreview({ paymentId }) {
           className="absolute top-0 left-0 bg-white border border-dashed border-slate-200"
           style={{ width: size.w, height: size.h, transform: `scale(${scale})`, transformOrigin: 'top left' }}
         />
+        )}
       </motion.div>
     </div>
   );

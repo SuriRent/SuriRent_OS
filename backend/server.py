@@ -13204,12 +13204,12 @@ async def _payment_bon_jpg(payment: dict) -> bytes:
 
 
 @api.get("/kiosk/payments/{payment_id}/print-data")
-async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_session)):
+async def kiosk_payment_print_data(payment_id: str, force_ktp: bool = False, _session=Depends(get_kiosk_session)):
     """Gestructureerde bon-gegevens voor het PRINT_RECEIPT bericht naar de APK."""
     p = await db.payments.find_one({"id": payment_id, **kiosk_scope(_session)}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    return await _receipt_print_data(p)
+    return await _receipt_print_data(p, force_ktp=force_ktp)
 
 
 async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
