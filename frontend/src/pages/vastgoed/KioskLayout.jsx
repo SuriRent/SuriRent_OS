@@ -5557,9 +5557,8 @@ function SheetThemeButton() {
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
-      className={`h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
-      {white || green ? <Palette className="w-4 h-4" strokeWidth={2.5} /> : <Sun className="w-4 h-4" strokeWidth={2.5} />}
-      Kleur
+      className={`flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
+      {white || green ? <Palette className="w-5 h-5" strokeWidth={2.5} /> : <Sun className="w-5 h-5" strokeWidth={2.5} />}
     </button>
   );
 }
@@ -5623,27 +5622,19 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
 
       <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
-        <div className="grid grid-cols-3 gap-2" data-testid="kiosk-sheet-actions">
-          <button onClick={() => onPick('kasgeld')} data-testid="kiosk-tile-kasgeld"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
-            <Wallet className="w-4 h-4" strokeWidth={2.5} /> Kasgeld
-          </button>
-          {hasAdminAccess && !isStaffSession() ? (
-            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings"
-              className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
-              <SettingsIcon className="w-4 h-4" strokeWidth={2.5} /> Instellingen
+        <div className="flex gap-2" data-testid="kiosk-sheet-actions">
+          {hasAdminAccess && !isStaffSession() && (
+            <button onClick={() => onPick('settings')} data-testid="kiosk-tile-settings" aria-label="Instellingen"
+              className="flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center bg-white/15 text-white shadow-sm active:scale-95 transition">
+              <SettingsIcon className="w-5 h-5" strokeWidth={2.5} />
             </button>
-          ) : <span />}
-          <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white/15 text-white shadow-sm active:scale-95 transition">
-            <LogOut className="w-4 h-4" strokeWidth={2.5} /> Uit
+          )}
+          <button onClick={() => onPick('exit')} data-testid="kiosk-tile-exit" aria-label="Uit"
+            className="flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center bg-white/15 text-white shadow-sm active:scale-95 transition">
+            <LogOut className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
-          <button type="button" onClick={() => onPick('scanid')} data-testid="kiosk-sheet-scan-id"
-            className="h-11 rounded-full font-bold text-sm inline-flex items-center justify-center gap-2 bg-white text-[#FF5C00] shadow-sm active:scale-95 transition">
-            <ScanLine className="w-4 h-4" strokeWidth={2.5} /> Scan ID
-          </button>
           <SheetThemeButton />
         </KioskSheetLiveActions>
       </div>
