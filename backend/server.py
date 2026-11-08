@@ -15528,6 +15528,8 @@ async def _ensure_demo_company() -> dict:
     has_tenants = await db.tenants.count_documents({"company_id": cid})
     if not has_tenants:
         await _seed_demo_data(cid)
+    elif await db.apartments.count_documents({"company_id": cid}) < 20:
+        await _demo_reset_tick()
     return c
 
 
@@ -15554,6 +15556,14 @@ async def _seed_demo_data(cid: str):
         ("HUIS 1A", 6000, loc_a_id), ("HUIS 1B", 5500, loc_a_id),
         ("HUIS 2C", 7000, loc_a_id), ("Studio 1", 4500, loc_b_id),
         ("Penthouse", 12000, loc_a_id),
+        ("HUIS 2D", 6500, loc_a_id), ("HUIS 2E", 6500, loc_a_id),
+        ("HUIS 3A", 5000, loc_a_id), ("HUIS 3B", 5000, loc_a_id),
+        ("HUIS 3C", 7500, loc_a_id), ("HUIS 3D", 7500, loc_a_id),
+        ("Studio 2", 4200, loc_b_id), ("Studio 3", 4200, loc_b_id),
+        ("Studio 4", 4800, loc_b_id), ("HUIS 4A", 5800, loc_b_id),
+        ("HUIS 4B", 5800, loc_b_id), ("HUIS 4C", 6200, loc_b_id),
+        ("HUIS 5A", 8000, loc_a_id), ("HUIS 5B", 8000, loc_a_id),
+        ("Penthouse 2", 11000, loc_a_id),
     ]):
         apts.append({
             "id": str(uuid.uuid4()), "company_id": cid, "location_id": loc,
@@ -15571,6 +15581,21 @@ async def _seed_demo_data(cid: str):
         ("Roy van der Berg", "+597 8801003", "roy@demo.sr", apts[2], 9012, "male"),
         ("Kevin Doelahasori", "+597 8801004", "kevin@demo.sr", apts[3], 3344, "male"),
         ("Anisha Ramdhan", "+597 8801005", "anisha@demo.sr", apts[4], 5566, "female"),
+        ("Sunil Mohan", "+597 8801006", "sunil@demo.sr", apts[5], 1111, "male"),
+        ("Priya Jagessar", "+597 8801007", "priya@demo.sr", apts[6], 2222, "female"),
+        ("Dennis Linger", "+597 8801008", "dennis@demo.sr", apts[7], 3333, "male"),
+        ("Shanti Lachman", "+597 8801009", "shanti@demo.sr", apts[8], 4444, "female"),
+        ("Ricardo Tjin", "+597 8801010", "ricardo@demo.sr", apts[9], 5555, "male"),
+        ("Natasha Wijdenbosch", "+597 8801011", "natasha@demo.sr", apts[10], 6666, "female"),
+        ("Hemant Kalka", "+597 8801012", "hemant@demo.sr", apts[11], 7777, "male"),
+        ("Gina Bouterse", "+597 8801013", "gina@demo.sr", apts[12], 8888, "female"),
+        ("Ashwin Soekhoe", "+597 8801014", "ashwin@demo.sr", apts[13], 9999, "male"),
+        ("Cynthia Fernand", "+597 8801015", "cynthia@demo.sr", apts[14], 1357, "female"),
+        ("Raj Bissessar", "+597 8801016", "raj@demo.sr", apts[15], 2468, "male"),
+        ("Melissa Kartosen", "+597 8801017", "melissa@demo.sr", apts[16], 3579, "female"),
+        ("Orlando Pinas", "+597 8801018", "orlando@demo.sr", apts[17], 4680, "male"),
+        ("Vandana Ramkisoensing", "+597 8801019", "vandana@demo.sr", apts[18], 5791, "female"),
+        ("Stanley Hasselbaink", "+597 8801020", "stanley@demo.sr", apts[19], 6802, "male"),
     ]
     tenants = []
     for name, phone, email, apt, pin, gender in tenants_data:
@@ -15750,6 +15775,53 @@ async def _seed_demo_data(cid: str):
             "created_at": (now - timedelta(days=days_back)).isoformat(),
             "is_demo": True,
         })
+    # Huurders 6–20: gevarieerde situaties (betaald, deels, achterstand, bank/contant/pin)
+    extra_plan_tenant = None
+    for idx in range(5, 20):
+        tn = tenants[idx]
+        rent = apts[idx]["rent_amount"]
+        scenario = ["paid", "paid", "arrears", "partial", "paid"][idx % 5]
+        if idx == 9:
+            scenario = "plan"
+        for offset in ([2, 1, 0] if scenario in ("arrears", "plan") else [1, 0]):
+            m = cur_m - offset if cur_m - offset > 0 else cur_m - offset + 12
+            y = cur_y if cur_m - offset > 0 else cur_y - 1
+            inv_id = str(uuid.uuid4())
+            is_cur = offset == 0
+            if scenario in ("arrears", "plan"):
+                paid_amt, status = 0, "open"
+            elif scenario == "partial" and is_cur:
+                paid_amt, status = round(rent * 0.5), "partial"
+            else:
+                paid_amt, status = rent, "paid"
+            days_back = max(1, offset * 30 - 2 - (idx % 4))
+            invoices_to_insert.append({
+                "id": inv_id, "company_id": cid,
+                "tenant_id": tn["id"], "apartment_id": tn["apartment_id"],
+                "invoice_number": inv_number(),
+                "period_month": m, "period_year": y,
+                "amount": rent, "amount_due": rent, "paid_amount": paid_amt,
+                "currency": "SRD", "status": status, "kind": "huur",
+                "due_date": (now - timedelta(days=offset * 30)).date().isoformat(),
+                "paid_at": (now - timedelta(days=days_back)).isoformat() if paid_amt else None,
+                "is_demo": True, "created_at": iso_now,
+            })
+            if paid_amt:
+                payments_to_insert.append({
+                    "id": str(uuid.uuid4()), "company_id": cid,
+                    "tenant_id": tn["id"], "tenant_name": tn["name"],
+                    "apartment_id": tn["apartment_id"],
+                    "amount": paid_amt, "currency": "SRD",
+                    "category": "huur", "method": ["contant", "bank", "pin"][idx % 3],
+                    "period_month": m, "period_year": y,
+                    "invoice_id": inv_id, "receipt_number": f"D-KW-{inv_counter:05d}",
+                    "status": "approved",
+                    "paid_at": (now - timedelta(days=days_back)).isoformat(),
+                    "created_at": (now - timedelta(days=days_back)).isoformat(),
+                    "is_demo": True,
+                })
+            if scenario == "plan":
+                extra_plan_tenant = (tn, inv_id, rent)
     await db.invoices.insert_many(invoices_to_insert)
     await db.payments.insert_many(payments_to_insert)
     # Betalingsregeling voor Roy's restbedrag
@@ -15768,6 +15840,45 @@ async def _seed_demo_data(cid: str):
          "amount": 1500, "due_date": (now + timedelta(days=15 * (i + 1))).date().isoformat(),
          "status": "pending", "is_demo": True}
         for i in range(2)
+    ])
+    # Tweede betalingsregeling (huurder met 3 maanden achterstand, 1 termijn al betaald)
+    if extra_plan_tenant:
+        ptn, pinv, prent = extra_plan_tenant
+        plan2_id = str(uuid.uuid4())
+        await db.payment_plans.insert_one({
+            "id": plan2_id, "company_id": cid,
+            "tenant_id": ptn["id"], "tenant_name": ptn["name"],
+            "invoice_ids": [pinv], "total_amount": prent * 3,
+            "currency": "SRD", "status": "active",
+            "num_installments": 4, "paid_installments": 1,
+            "notes": "Demo regeling achterstand in 4 termijnen",
+            "created_at": iso_now, "is_demo": True,
+        })
+        inst_amt = round(prent * 3 / 4)
+        await db.payment_plan_installments.insert_many([
+            {"id": str(uuid.uuid4()), "plan_id": plan2_id, "sequence": i + 1,
+             "amount": inst_amt,
+             "due_date": (now + timedelta(days=30 * (i - 1))).date().isoformat(),
+             "status": "paid" if i == 0 else "pending", "is_demo": True}
+            for i in range(4)
+        ])
+    # Stroom: schakelaar per appartement; achterstand-huurders staan UIT
+    off_idx = {0, 7, 12}
+    exempt_idx = {4, 19}
+    await db.power_devices.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid, "apartment_id": a["id"],
+         "tuya_device_id": f"demo-{i + 1:02d}", "exempt": i in exempt_idx,
+         "on": i not in off_idx, "cut_by_auto": i in off_idx,
+         "cut_at": iso_now if i in off_idx else None,
+         "created_at": iso_now, "updated_at": iso_now, "is_demo": True}
+        for i, a in enumerate(apts)
+    ])
+    await db.power_log.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid, "device_id": None,
+         "apartment_id": apts[i]["id"], "action": "uit", "by": "auto",
+         "reason": "achterstand", "at": (now - timedelta(days=2 + i)).isoformat(),
+         "is_demo": True}
+        for i in off_idx
     ])
     # Werknemers
     await db.employees.insert_many([
@@ -15791,6 +15902,26 @@ async def _seed_demo_data(cid: str):
          "description": "Salaris Anita (deelbetaling)",
          "entry_date": (now - timedelta(days=1)).isoformat(),
          "created_at": (now - timedelta(days=1)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "in",
+         "amount": 2000, "currency": "SRD", "category": "overig",
+         "description": "Kasstorting beheerder",
+         "entry_date": (now - timedelta(days=4)).isoformat(),
+         "created_at": (now - timedelta(days=4)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 1200, "currency": "SRD", "category": "onderhoud",
+         "description": "Schilder — gang Hoofdvestiging",
+         "entry_date": (now - timedelta(days=6)).isoformat(),
+         "created_at": (now - timedelta(days=6)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "in",
+         "amount": 150, "currency": "USD", "category": "overig",
+         "description": "Huur in USD (contant)",
+         "entry_date": (now - timedelta(days=3)).isoformat(),
+         "created_at": (now - timedelta(days=3)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 60, "currency": "EUR", "category": "overig",
+         "description": "Sleutelset laten maken",
+         "entry_date": (now - timedelta(days=5)).isoformat(),
+         "created_at": (now - timedelta(days=5)).isoformat(), "is_demo": True},
     ])
     # Boete op Jan's achterstallige huur — automatische late-fee die admin
     # nog kan kwijtschelden of innen. Toont dashboard "Openstaande boete".
@@ -15826,6 +15957,14 @@ async def _seed_demo_data(cid: str):
         (anisha, apts[4], "Jacuzzi water blijft koud",
          "Penthouse jacuzzi opwarming werkt niet meer — thermostaat controleren.",
          "in_progress", "high"),
+        (tenants[5], apts[5], "Plafond vochtplek", "Vochtplek in slaapkamer na regen.", "open", "high"),
+        (tenants[6], apts[6], "Stopcontact vonkt", "Stopcontact naast bed geeft vonken.", "in_progress", "high"),
+        (tenants[7], apts[7], "Tuinpoort klemt", "Poort sluit niet goed.", "done", "low"),
+        (tenants[9], apts[9], "Toilet loopt door", "Spoelbak blijft water lopen.", "open", "medium"),
+        (tenants[11], apts[11], "Schilderwerk gang", "Gang opnieuw laten schilderen.", "done", "low"),
+        (tenants[13], apts[13], "Airco lekt", "Binnenunit druppelt water.", "open", "medium"),
+        (tenants[15], apts[15], "Slot voordeur", "Slot draait zwaar.", "in_progress", "medium"),
+        (tenants[18], apts[18], "Waterdruk laag", "Weinig waterdruk in douche.", "open", "low"),
     ]
     await db.maintenance.insert_many([
         {"id": str(uuid.uuid4()), "company_id": cid,
@@ -15846,7 +15985,7 @@ async def _demo_reset_tick():
         "tenants", "apartments", "locations", "contracts", "invoices",
         "payments", "payment_plans", "payment_plan_installments", "deposits",
         "employees", "cash_book", "maintenance", "kasgeld", "kasgeld_entries",
-        "fines", "notifications", "kiosk_sessions",
+        "fines", "notifications", "kiosk_sessions", "power_devices", "power_log",
     ]
     for coll in collections:
         try:

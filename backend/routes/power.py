@@ -131,11 +131,12 @@ async def _log(cid: str, dev: dict, action: str, by: str, reason: str = "") -> N
 
 
 async def _switch(cid: str, dev: dict, on: bool, by: str, reason: str = "") -> dict:
-    cfg = await _cfg(cid)
-    st = await _read(cfg, dev["tuya_device_id"])
-    code = st.get("switch_code") or "switch_1"
-    await _tuya(cfg, "POST", f"/v1.0/devices/{dev['tuya_device_id']}/commands",
-                {"commands": [{"code": code, "value": bool(on)}]})
+    if not str(dev.get("tuya_device_id", "")).startswith("demo-"):
+        cfg = await _cfg(cid)
+        st = await _read(cfg, dev["tuya_device_id"])
+        code = st.get("switch_code") or "switch_1"
+        await _tuya(cfg, "POST", f"/v1.0/devices/{dev['tuya_device_id']}/commands",
+                    {"commands": [{"code": code, "value": bool(on)}]})
     patch = {"on": bool(on), "updated_at": _deps.iso(_deps.now_utc())}
     if on:
         patch.update({"cut_by_auto": False, "notice_at": None, "cut_at": None})
@@ -258,6 +259,8 @@ async def delete_device(dev_id: str, user: dict = Depends(_owner)):
 async def device_status(dev_id: str, user: dict = Depends(_admin)):
     cid = _deps.company_id_of(user)
     d = await _own_device(cid, dev_id)
+    if str(d.get("tuya_device_id", "")).startswith("demo-"):
+        return {"switch_code": "switch_1", "on": d.get("on")}
     try:
         st = await _read(await _cfg(cid), d["tuya_device_id"])
     except TuyaError as e:
