@@ -2,6 +2,28 @@ import { useState, useEffect, useCallback } from 'react';
 import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
+function PowerTile({ device, unlinked = false }) {
+  const on = device.on;
+  const box = unlinked
+    ? 'bg-slate-100 text-slate-400'
+    : on === true
+      ? 'bg-emerald-400 text-white ring-4 ring-emerald-200 shadow-[0_0_22px_6px_rgba(52,211,153,0.75)]'
+      : on === false
+        ? 'bg-red-100 text-red-500'
+        : 'bg-slate-100 text-slate-400';
+  const label = unlinked ? 'Niet gekoppeld' : on === true ? 'Stroom aan' : on === false ? 'Stroom uit' : (device.tenant_name || 'Status onbekend');
+  const labelColor = unlinked ? 'text-slate-500' : on === true ? 'text-emerald-600' : on === false ? 'text-red-500' : 'text-slate-500';
+  return (
+    <div className={`rounded-2xl bg-white/95 p-4 flex flex-col items-center gap-2 ${unlinked ? 'border-2 border-dashed border-slate-300' : 'border border-white shadow-md'}`}>
+      <div className="text-lg font-black text-slate-800">{device.apartment_number}</div>
+      <span data-testid="power-lamp" data-lamp={!unlinked && on === true ? 'on' : 'off'} className={`flex h-14 w-14 items-center justify-center rounded-2xl ${box}`}>
+        <Zap className="h-7 w-7" fill={!unlinked && on === true ? 'currentColor' : 'none'} />
+      </span>
+      <div className={`text-xs font-bold text-center ${labelColor}`}>{label}</div>
+    </div>
+  );
+}
+
 function Rocker({ on, busy, onToggle, orangeMode = false }) {
   const isOn = on === true;
   const isOff = on === false;
