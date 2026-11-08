@@ -267,19 +267,13 @@ body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; 
   }
   .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
   nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] {
-    height: 4.25rem !important; align-items: center; padding-left: 6px; padding-right: 6px; gap: 6px;
     background: linear-gradient(180deg, rgba(255,140,40,0.55), rgba(230,80,0,0.8)) !important;
     backdrop-filter: blur(8px);
     border-top: 1px solid rgba(255,255,255,0.4);
   }
   nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] button:not([data-testid="kiosk-mobile-bar-plus"]) {
-    background: linear-gradient(180deg, rgba(255,190,100,0.5), rgba(255,110,20,0.3));
-    border: 1px solid rgba(255,255,255,0.3); border-radius: 14px;
-    margin: 0; height: 3.4rem; min-width: 0; gap: 3px;
-    box-shadow: 0 4px 10px -4px rgba(120,30,0,0.5), inset 0 1px 0 rgba(255,255,255,0.35);
+    background: transparent; border: 0; box-shadow: none; margin: 0;
   }
-  nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] button:not([data-testid="kiosk-mobile-bar-plus"]) span { font-size: 11px; line-height: 1.1; white-space: nowrap; }
-  nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] button[data-testid="kiosk-mobile-bar-plus"] { margin-top: -1.6rem; flex-shrink: 0; }
 }
 /* Desktop (md+): golvende achtergrond, glazen balken, glanzende knoppen. Mobiel blijft ongewijzigd. */
 @media (min-width: 768px) {
