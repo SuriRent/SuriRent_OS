@@ -21,20 +21,20 @@ const DEVICES = [
 
 const GROUPS = {
   logo_url: 'Algemeen', brand_name: 'Algemeen', header_cta: 'Algemeen',
-  hero: 'Hoofdbanner', types: 'Kies een type', why: 'Voordelen', reviews: 'Reviews', cta: 'Oproep', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
+  hero: 'Hoofdbanner', types: 'Kies een type', why: 'Voordelen', promise: 'Onze belofte', reviews: 'Reviews', cta: 'Oproep', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
 };
 
 const SECTIONS = [
   { id: 'hero', label: 'Hoofdbanner', scroll: 'hero.title_line1' },
   { id: 'aanbod', label: 'Aanbod', scroll: 'aanbod.title' },
   { id: 'types', label: 'Kies een type', scroll: 'types.title' },
-  { id: 'reviews', label: 'Reviews', scroll: 'reviews.title' },
+  { id: 'reviews', label: 'Onze belofte', scroll: 'promise.title' },
   { id: 'about', label: 'Over ons', scroll: 'about.title' },
   { id: 'contact', label: 'Contact', scroll: 'contact.title' },
 ];
 
 const TEMPLATES = [
-  { id: 'pro', name: 'Prestige', desc: 'Professioneel: volledige foto-hero, voordelen, reviews en call-to-action.', bg: 'from-slate-900 to-orange-700', dark: true },
+  { id: 'pro', name: 'Villa', desc: 'Donkere cinematische hero, zwevende header, locatie-ticker en "Onze belofte".', bg: 'from-slate-900 to-orange-700', dark: true },
   { id: 'homeland', name: 'Homeland', desc: 'Licht, foto rechts, zoekkaart.', bg: 'from-orange-50 to-white', dark: false },
   { id: 'modern', name: 'Modern', desc: 'Grote foto-banner, donkere accenten.', bg: 'from-slate-800 to-slate-950', dark: true },
   { id: 'minimal', name: 'Minimal', desc: 'Strak en wit, brede foto onder de titel.', bg: 'from-white to-slate-100', dark: false },
