@@ -241,6 +241,27 @@ body.kiosk-green-active button[class*="bg-orange-600"] { background-color: #0084
 body.kiosk-green-active [class*="text-[#FF5C00]"],
 body.kiosk-green-active [class*="text-orange-500"],
 body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; }
+/* Witte modus: zachte golvende achtergrond, glazen balken. */
+.kiosk-fullscreen.kiosk-white {
+  background-color: #F4F5F7 !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='a' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23FFFFFF'/><stop offset='1' stop-color='%23E9EDF2'/></linearGradient><linearGradient id='o' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='%23FFD9BF' stop-opacity='.55'/><stop offset='1' stop-color='%23FFB27A' stop-opacity='.35'/></linearGradient></defs><rect width='1600' height='900' fill='url(%23a)'/><path d='M0 620 C250 520 450 720 800 640 S1350 520 1600 610 L1600 900 L0 900Z' fill='%23E3E8EF' opacity='.8'/><path d='M0 700 C300 610 520 800 880 720 S1380 640 1600 700 L1600 900 L0 900Z' fill='url(%23o)'/><path d='M0 780 C320 720 600 860 960 790 S1400 740 1600 790 L1600 900 L0 900Z' fill='%23D5DCE6' opacity='.7'/><path d='M0 160 C300 60 600 260 980 150 S1400 60 1600 140 L1600 0 L0 0Z' fill='%23EDF0F5' opacity='.9'/><path d='M0 90 C320 20 640 170 1000 90 S1400 20 1600 80 L1600 0 L0 0Z' fill='url(%23o)' opacity='.6'/></svg>");
+  background-size: cover; background-position: center;
+}
+.kiosk-fullscreen.kiosk-white .h-full.bg-orange-500,
+.kiosk-fullscreen.kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
+.kiosk-fullscreen.kiosk-white .kiosk-head-wrap {
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.7)) !important;
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 8px 24px -14px rgba(30,40,60,0.35);
+}
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-desktop-header"] { background: transparent !important; }
+nav[data-testid="kiosk-bottom-bar"].bg-white,
+nav[data-testid="kiosk-mobile-bottom-bar"].bg-white {
+  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(240,243,247,0.95)) !important;
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255,255,255,0.9);
+}
 /* The active kiosk root theme is authoritative if the body theme class lags. */
 .kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
 /* Mobiel: staande golvende achtergrond; effen oranje lagen doorzichtig. */
