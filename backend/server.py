@@ -4226,6 +4226,33 @@ async def discard_my_landing(user=Depends(get_current_user)):
     return {"ok": True}
 
 
+@api.post("/companies/me/landing/upload")
+async def upload_my_landing_image(file: UploadFile = File(...), user=Depends(get_current_user)):
+    """Afbeelding uploaden voor de marketing website van de tenant."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    if ctype not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        raise HTTPException(status_code=400, detail="Kies een afbeelding (JPG, PNG, WebP of GIF).")
+    raw = await file.read(MAX_LANDING_ASSET_BYTES + 1)
+    if len(raw) > MAX_LANDING_ASSET_BYTES:
+        raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
+    asset_id = new_id()
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": file.filename or f"asset-{asset_id}",
+        "content_type": ctype,
+        "kind": "image",
+        "company_id": cid,
+        "uploaded_by": user.get("email"),
+        "uploaded_at": iso(now_utc()),
+        "size": len(raw),
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+    })
+    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}", "content_type": ctype}
+
+
 class CustomDomainIn(BaseModel):
     custom_domain: Optional[str] = ""
 

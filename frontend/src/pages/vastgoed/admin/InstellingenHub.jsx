@@ -10,7 +10,24 @@ import StripeCompanySettings from './StripeCompanySettings';
 import PowerSettings from './PowerSettings';
 import KioskDevices from './KioskDevices';
 import BonPrinter from './BonPrinter';
+import TenantSiteEditor from './TenantSiteEditor';
 import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
+
+function WebsiteSettings() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3" data-testid="website-settings">
+      <p className="text-sm text-gray-600">
+        Bewerk teksten en afbeeldingen van je publieke website, bekijk het resultaat op mobiel, tablet en desktop en publiceer wanneer je klaar bent.
+      </p>
+      <button type="button" onClick={() => setOpen(true)} data-testid="open-site-editor"
+        className="h-11 px-5 rounded-xl bg-[#FF5C00] hover:bg-[#e65300] text-white font-bold">
+        Open website-editor
+      </button>
+      {open && <TenantSiteEditor onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
 
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
 // zijmenu (desktop) of de mobiele sheet; de sectie volgt de URL-hash.
@@ -26,6 +43,7 @@ export const RENDER = {
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
   'bon-printer': () => <BonPrinter />,
   'kiosk-apparaten': () => <KioskDevices />,
+  website: () => <WebsiteSettings />,
   backup: () => <BackupRestore />,
   domein: () => <SettingsPage initialSection="domain" hideSubNav />,
 };

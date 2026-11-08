@@ -23,6 +23,7 @@ import {
   EditableProvider, EditableText, EditableImage,
 } from '../../lib/landing-editable';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
+import { api } from '../../lib/api';
 
 const fmtMoney = (n, c = 'SRD') => {
   try {
@@ -532,7 +533,7 @@ export default function TenantPublicLanding({
 
   // Lazy fetch — voor edit-mode of wanneer parent niets meegeeft.
   useEffect(() => {
-    if (!editMode && companyProp) return;
+    if (companyProp) return;
     const backend = process.env.REACT_APP_BACKEND_URL || '';
     const fetchData = async () => {
       try {
@@ -540,22 +541,20 @@ export default function TenantPublicLanding({
         if (editMode) {
           const params = new URLSearchParams(window.location.search);
           const cid = params.get('cid');
-          const url = cid
-            ? `${backend}/api/superadmin/companies/${cid}/landing?mode=draft`
-            : `${backend}/api/companies/me/landing?mode=draft`;
-          const token = localStorage.getItem('admin_token') || '';
-          const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-          const j = await r.json();
-          setContent(j.content || {});
-          // Company info + apartments uit aparte endpoint
-          const aptUrl = `${backend}/api/companies/me/landing-apartments`;
-          const ra = await fetch(aptUrl, { headers: { Authorization: `Bearer ${token}` } });
-          if (ra.ok) setApartments(await ra.json());
-          const meUrl = `${backend}/api/auth/me`;
-          const rm = await fetch(meUrl, { headers: { Authorization: `Bearer ${token}` } });
-          if (rm.ok) {
-            const me = await rm.json();
-            setCompany(me.active_company || me.company || null);
+          const [rd, ra, rm] = await Promise.allSettled([
+            api.get(cid ? `/superadmin/companies/${cid}/landing` : '/companies/me/landing', { params: { mode: 'draft' } }),
+            api.get('/companies/me/landing-apartments'),
+            api.get('/auth/me'),
+          ]);
+          if (rd.status === 'fulfilled') setContent(rd.value.data?.content || {});
+          if (ra.status === 'fulfilled') setApartments(ra.value.data || []);
+          if (rm.status === 'fulfilled') {
+            const me = rm.value.data || {};
+            const co = me.active_company || me.company || null;
+            const pub = co?.slug
+              ? (await api.get(`/public/company-landing/by-slug/${encodeURIComponent(co.slug)}`).catch(() => null))?.data
+              : null;
+            setCompany(co ? { ...co, login_url: pub?.login_url || null } : null);
           }
         } else {
           const r = await fetch(`${backend}/api/public/company-landing`);
