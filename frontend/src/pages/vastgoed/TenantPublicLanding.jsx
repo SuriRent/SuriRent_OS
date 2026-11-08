@@ -20,7 +20,7 @@ import {
   Home, Bed, Bath, Square, Wifi, Car, Loader2, Building2, ChevronRight,
 } from 'lucide-react';
 import {
-  EditableProvider, EditableText, EditableImage,
+  EditableProvider, EditableText, EditableImage, useEditable,
 } from '../../lib/landing-editable';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { api } from '../../lib/api';
@@ -69,39 +69,10 @@ function Header({ company }) {
   );
 }
 
-function Hero({ company, filter, setFilter }) {
+function SearchCard({ company, filter, setFilter }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
   const tabs = [['all', 'Alle'], ['free', 'Beschikbaar'], ['occupied', 'Bezet']];
   return (
-    <section className="relative bg-gradient-to-b from-orange-50 via-white to-white" data-testid="tenant-hero">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 pt-10 lg:pt-16 pb-24 lg:pb-32 grid lg:grid-cols-2 gap-10 items-center">
-        <div>
-          <EditableText path="hero.eyebrow" fallback="Vind uw perfecte plek"
-            as="p" className="inline-block text-xs font-bold px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm mb-5"
-            style={{ color: primary }} />
-          <h1 className="font-black tracking-tight leading-[1.05] text-slate-900"
-            style={{ fontSize: 'clamp(2.25rem, 5vw, 4rem)' }}>
-            <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />
-            <br />
-            <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht."
-              as="span" style={{ color: primary }} />
-          </h1>
-          <EditableText path="hero.subtitle"
-            fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
-            as="p" multiline
-            className="mt-5 text-base lg:text-lg text-slate-600 max-w-lg leading-relaxed" />
-          <a href="#aanbod"
-            className="mt-8 inline-flex items-center justify-center gap-2 h-12 px-6 rounded-lg text-white text-sm font-bold shadow-md"
-            style={{ backgroundColor: primary }}>
-            <EditableText path="hero.cta_primary" fallback="Bekijk het aanbod" as="span" />
-            <ArrowRight className="w-4 h-4" />
-          </a>
-        </div>
-        <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl bg-slate-100">
-          <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80"
-            alt="" className="w-full h-full object-cover" />
-        </div>
-      </div>
       <div className="absolute left-0 right-0 bottom-0 translate-y-1/2 px-5 lg:px-10 z-20">
         <div className="max-w-[1100px] mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 p-4 lg:p-5"
           data-testid="tenant-search">
@@ -132,12 +103,163 @@ function Hero({ company, filter, setFilter }) {
           </div>
         </div>
       </div>
+  );
+}
+
+function HomelandHero({ company, filter, setFilter }) {
+  const primary = company?.branding?.primary_color || '#FF5C00';
+  return (
+    <section className="relative bg-gradient-to-b from-orange-50 via-white to-white" data-testid="tenant-hero">
+      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 pt-10 lg:pt-16 pb-24 lg:pb-32 grid lg:grid-cols-2 gap-10 items-center">
+        <div>
+          <EditableText path="hero.eyebrow" fallback="Vind uw perfecte plek"
+            as="p" className="inline-block text-xs font-bold px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm mb-5"
+            style={{ color: primary }} />
+          <h1 className="font-black tracking-tight leading-[1.05] text-slate-900"
+            style={{ fontSize: 'clamp(2.25rem, 5vw, 4rem)' }}>
+            <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />
+            <br />
+            <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht."
+              as="span" style={{ color: primary }} />
+          </h1>
+          <EditableText path="hero.subtitle"
+            fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
+            as="p" multiline
+            className="mt-5 text-base lg:text-lg text-slate-600 max-w-lg leading-relaxed" />
+          <a href="#aanbod"
+            className="mt-8 inline-flex items-center justify-center gap-2 h-12 px-6 rounded-lg text-white text-sm font-bold shadow-md"
+            style={{ backgroundColor: primary }}>
+            <EditableText path="hero.cta_primary" fallback="Bekijk het aanbod" as="span" />
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
+        <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl bg-slate-100">
+          <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80"
+            alt="" className="w-full h-full object-cover" />
+        </div>
+      </div>
+      <SearchCard company={company} filter={filter} setFilter={setFilter} />
     </section>
   );
 }
 
+export function useTemplate() {
+  const { content } = useEditable();
+  const t = content?.template;
+  return t === 'modern' || t === 'minimal' ? t : 'homeland';
+}
+
+function ModernHero({ company, filter, setFilter }) {
+  const primary = company?.branding?.primary_color || '#FF5C00';
+  return (
+    <section className="relative text-white" data-testid="tenant-hero">
+      <div className="absolute inset-0 bg-slate-900">
+        <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1800&q=80"
+          alt="" className="w-full h-full object-cover opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-slate-900/30 pointer-events-none" />
+      </div>
+      <div className="relative max-w-[1280px] mx-auto px-5 lg:px-10 pt-24 lg:pt-36 pb-48 lg:pb-56 text-center">
+        <EditableText path="hero.eyebrow" fallback="Vind uw perfecte plek" as="p"
+          className="inline-block text-xs font-bold tracking-[0.3em] uppercase px-4 py-2 rounded-full bg-white/15 backdrop-blur mb-6" />
+        <h1 className="font-black tracking-tight leading-[1.02]" style={{ fontSize: 'clamp(2.5rem, 6.5vw, 5.25rem)' }}>
+          <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />
+          <br />
+          <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht." as="span" style={{ color: primary }} />
+        </h1>
+        <EditableText path="hero.subtitle"
+          fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
+          as="p" multiline className="mt-6 text-base lg:text-xl text-white/80 max-w-2xl mx-auto leading-relaxed" />
+        <a href="#aanbod" className="mt-9 inline-flex items-center gap-2 h-14 px-8 rounded-full text-white font-bold shadow-xl"
+          style={{ backgroundColor: primary }}>
+          <EditableText path="hero.cta_primary" fallback="Bekijk het aanbod" as="span" />
+          <ArrowRight className="w-4 h-4" />
+        </a>
+      </div>
+      <SearchCard company={company} filter={filter} setFilter={setFilter} />
+    </section>
+  );
+}
+
+function MinimalHero({ company, filter, setFilter }) {
+  const primary = company?.branding?.primary_color || '#FF5C00';
+  return (
+    <section className="relative bg-white" data-testid="tenant-hero">
+      <div className="max-w-[1100px] mx-auto px-5 lg:px-10 pt-16 lg:pt-24 pb-40 lg:pb-48">
+        <div className="max-w-3xl">
+          <EditableText path="hero.eyebrow" fallback="Vind uw perfecte plek" as="p"
+            className="text-xs font-black tracking-[0.32em] uppercase mb-5" style={{ color: primary }} />
+          <h1 className="font-black tracking-tight leading-[1.05] text-slate-900" style={{ fontSize: 'clamp(2.25rem, 5.5vw, 4.5rem)' }}>
+            <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />{' '}
+            <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht." as="span" style={{ color: primary }} />
+          </h1>
+          <EditableText path="hero.subtitle"
+            fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
+            as="p" multiline className="mt-5 text-base lg:text-lg text-slate-600 leading-relaxed" />
+        </div>
+        <div className="mt-10 aspect-[21/9] rounded-2xl overflow-hidden bg-slate-100">
+          <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80"
+            alt="" className="w-full h-full object-cover" />
+        </div>
+      </div>
+      <SearchCard company={company} filter={filter} setFilter={setFilter} />
+    </section>
+  );
+}
+
+function Hero(props) {
+  const tpl = useTemplate();
+  if (tpl === 'modern') return <ModernHero {...props} />;
+  if (tpl === 'minimal') return <MinimalHero {...props} />;
+  return <HomelandHero {...props} />;
+}
+
+const TYPE_DEFAULTS = [
+  { label: 'Appartement', keyword: 'appartement', img: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80' },
+  { label: 'Studio', keyword: 'studio', img: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80' },
+  { label: 'Woonhuis', keyword: 'huis', img: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80' },
+  { label: 'Kamer', keyword: 'kamer', img: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=800&q=80' },
+];
+
+function TypesSection({ company, apartments, setFilter }) {
+  const primary = company?.branding?.primary_color || '#FF5C00';
+  const pick = (kw) => {
+    setFilter((f) => ({ ...f, q: kw }));
+    document.getElementById('aanbod')?.scrollIntoView({ behavior: 'smooth' });
+  };
+  const count = (kw) => apartments.filter((a) => `${a.number || ''} ${a.description || ''}`.toLowerCase().includes(kw)).length;
+  return (
+    <section id="types" className="bg-white py-16 lg:py-20" data-testid="tenant-types">
+      <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <EditableText path="types.eyebrow" fallback="Soorten woningen" as="p"
+            className="text-xs font-black tracking-[0.32em] uppercase mb-3" style={{ color: primary }} />
+          <EditableText path="types.title" fallback="Kies een type" as="h2"
+            className="text-3xl lg:text-5xl font-black tracking-tight text-slate-900 leading-tight" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          {TYPE_DEFAULTS.map((t, i) => (
+            <div key={t.keyword} className="group relative rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 shadow-md">
+              <EditableImage path={`types.i${i}.img`} fallback={t.img} alt={t.label}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent pointer-events-none" />
+              <div className="absolute left-4 right-4 bottom-4 text-white">
+                <EditableText path={`types.i${i}.label`} fallback={t.label} as="h3" className="text-lg lg:text-xl font-extrabold" />
+                <button type="button" onClick={() => pick(t.keyword)}
+                  className="mt-2 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1"
+                  style={{ backgroundColor: primary }}>
+                  {count(t.keyword)} in aanbod <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 function StatsBar({ company, apartments }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
+  const tpl = useTemplate();
   const free = apartments.filter((a) => a.status !== 'occupied').length;
   const stats = [
     { value: free, label: 'Beschikbaar' },
@@ -148,12 +270,13 @@ function StatsBar({ company, apartments }) {
   return (
     <section className="bg-white pt-44 md:pt-36 lg:pt-32 pb-4">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
-        <div className="rounded-2xl grid grid-cols-2 lg:grid-cols-4 gap-6 py-8 px-6 text-white shadow-lg"
-          style={{ backgroundColor: primary }}>
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-6 py-8 px-6 shadow-lg ${
+          tpl === 'modern' ? 'rounded-full text-white bg-slate-900' : tpl === 'minimal' ? 'rounded-none text-slate-900 bg-white border-y border-slate-200 shadow-none' : 'rounded-2xl text-white'}`}
+          style={tpl === 'homeland' ? { backgroundColor: primary } : undefined}>
           {stats.map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-3xl lg:text-4xl font-black">{s.value}</p>
-              <p className="text-xs lg:text-sm font-bold uppercase tracking-wider text-white/85 mt-1">{s.label}</p>
+              <p className="text-xs lg:text-sm font-bold uppercase tracking-wider opacity-80 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
@@ -170,7 +293,7 @@ function ApartmentsGrid({ company, apartments: allApartments, filter }) {
     if (filter?.status === 'free' && a.status === 'occupied') return false;
     if (filter?.status === 'occupied' && a.status !== 'occupied') return false;
     if (max && Number(a.rent_amount) > max) return false;
-    if (q && !`${a.number || ''} ${a.address || ''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${a.number || ''} ${a.address || ''} ${a.description || ''}`.toLowerCase().includes(q)) return false;
     return true;
   });
   return (
@@ -625,6 +748,7 @@ export default function TenantPublicLanding({
         <Header company={company} />
         <Hero company={company} filter={filter} setFilter={setFilter} />
         <StatsBar company={company} apartments={apartments} />
+        <TypesSection company={company} apartments={apartments} setFilter={setFilter} />
         <ApartmentsGrid company={company} apartments={apartments} filter={filter} />
         <About company={company} />
         <ContactSection company={company} />

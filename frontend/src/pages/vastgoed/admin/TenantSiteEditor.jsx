@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft, Type, Image as ImageIcon, Settings, Layers, Smartphone, Tablet, Monitor,
-  Loader2, Upload, Undo2, ExternalLink, Globe, Check,
+  Loader2, Upload, Undo2, ExternalLink, Globe, Check, LayoutTemplate,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { setPath } from '../../../lib/landing-editable';
@@ -21,14 +21,21 @@ const DEVICES = [
 
 const GROUPS = {
   logo_url: 'Algemeen', brand_name: 'Algemeen', header_cta: 'Algemeen',
-  hero: 'Hoofdbanner', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
+  hero: 'Hoofdbanner', types: 'Kies een type', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
 };
 
 const SECTIONS = [
   { id: 'hero', label: 'Hoofdbanner', scroll: 'hero.title_line1' },
   { id: 'aanbod', label: 'Aanbod', scroll: 'aanbod.title' },
+  { id: 'types', label: 'Kies een type', scroll: 'types.title' },
   { id: 'about', label: 'Over ons', scroll: 'about.title' },
   { id: 'contact', label: 'Contact', scroll: 'contact.title' },
+];
+
+const TEMPLATES = [
+  { id: 'homeland', name: 'Homeland', desc: 'Licht, foto rechts, zoekkaart.', bg: 'from-orange-50 to-white', dark: false },
+  { id: 'modern', name: 'Modern', desc: 'Grote foto-banner, donkere accenten.', bg: 'from-slate-800 to-slate-950', dark: true },
+  { id: 'minimal', name: 'Minimal', desc: 'Strak en wit, brede foto onder de titel.', bg: 'from-white to-slate-100', dark: false },
 ];
 
 const prettify = (path) => {
@@ -188,6 +195,7 @@ export default function TenantSiteEditor({ onClose }) {
   const dev = DEVICES.find((d) => d.id === device) || DEVICES[2];
 
   const rail = [
+    { id: 'templates', label: 'Templates', icon: LayoutTemplate },
     { id: 'content', label: 'Inhoud', icon: Type },
     { id: 'sections', label: 'Secties', icon: Layers },
     { id: 'settings', label: 'Instellingen', icon: Settings },
@@ -261,6 +269,29 @@ export default function TenantSiteEditor({ onClose }) {
         </div>
 
         <div className="md:w-[340px] shrink-0 max-h-[38%] md:max-h-none overflow-y-auto bg-[#1b1e24] border-b md:border-b-0 md:border-r border-white/10 p-4 space-y-4">
+          {tab === 'templates' && (
+            <>
+              <p className="text-xs text-white/50">Kies een ontwerp. Je teksten en foto's blijven behouden.</p>
+              {TEMPLATES.map((t) => {
+                const on = (draft?.template || 'homeland') === t.id;
+                return (
+                  <button key={t.id} type="button" onClick={() => update('template', t.id)} data-testid={`site-template-${t.id}`}
+                    className={`w-full text-left rounded-xl overflow-hidden border-2 ${on ? 'border-orange-500' : 'border-white/10 hover:border-white/30'}`}>
+                    <div className={`h-24 bg-gradient-to-br ${t.bg} p-3 flex flex-col gap-1.5`}>
+                      <span className={`h-2 w-1/2 rounded ${t.dark ? 'bg-white/80' : 'bg-slate-800/70'}`} />
+                      <span className="h-2 w-1/3 rounded bg-orange-500" />
+                      <span className={`mt-auto h-6 rounded ${t.dark ? 'bg-white/15' : 'bg-white shadow'}`} />
+                    </div>
+                    <div className="p-3 bg-black/25">
+                      <p className="text-sm font-extrabold flex items-center gap-2">{t.name}{on && <Check className="w-4 h-4 text-orange-400" />}</p>
+                      <p className="text-xs text-white/60">{t.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
           {tab === 'content' && (
             <>
               <p className="text-xs text-white/50">Klik op een tekst in het voorbeeld om hem direct te bewerken, of pas hem hier aan.</p>
