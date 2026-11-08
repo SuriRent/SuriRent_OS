@@ -270,8 +270,7 @@ body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; 
 }
 .kiosk-fullscreen.kiosk-white [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
 nav.kiosk-white-nav {
-  background: linear-gradient(180deg, #FFFFFF 0%, #E6EAF0 100%) !important;
-  border-top: 1px solid #fff;
+  background: linear-gradient(180deg, #EEF1F6 0%, #E4E8EF 100%) !important;
 }
 nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) {
   background: linear-gradient(180deg, #FFFFFF 0%, #E9EDF3 100%) !important;
