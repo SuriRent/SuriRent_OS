@@ -34,6 +34,7 @@ import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 const KioskBonPage = lazy(() => import('./admin/KioskBonPage'));
+const KioskSettingsPage = lazy(() => import('./admin/KioskSettingsPage'));
 import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
@@ -6361,6 +6362,11 @@ export default function KioskLayout() {
         setAdminPopup(null);
         setStep('admin:bon');
       }
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
+        && INSTELLINGEN_SECTIONS.some((s) => s.id === e.detail.slice(11))) {
+        setAdminPopup(null);
+        setStep(e.detail);
+      }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };
     window.addEventListener('kiosk-nav', onNav);
@@ -6597,6 +6603,11 @@ export default function KioskLayout() {
           {step === 'admin:bon' && hasAdminAccess && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskBonPage onBack={goBack} /></div>
+            </Suspense>
+          )}
+          {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
+            <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
+              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} /></div>
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'

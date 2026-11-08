@@ -14,7 +14,7 @@ import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingen
 
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
 // zijmenu (desktop) of de mobiele sheet; de sectie volgt de URL-hash.
-const RENDER = {
+export const RENDER = {
   abonnement: () => <MijnAbonnement />,
   bedrijf: () => <BusinessInfo />,
   branding: () => <Branding />,
