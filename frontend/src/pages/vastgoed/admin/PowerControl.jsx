@@ -4,25 +4,24 @@ import { api, formatError } from '../../../lib/api';
 
 function PowerTile({ device, unlinked = false }) {
   const on = device.on;
-  const state = unlinked ? 'blue' : on == null ? 'orange' : on ? 'green' : 'red';
+  const state = unlinked || on == null ? 'orange' : on ? 'green' : 'red';
   const th = {
-    blue: { border: 'border-white shadow-[0_8px_18px_-6px_rgba(120,30,0,0.45)]', head: 'bg-gradient-to-b from-[#12508F] to-[#0A2F63]', ring: 'border-blue-300 bg-blue-50 text-blue-600 shadow-[0_0_14px_2px_rgba(37,99,235,0.25)]', pill: 'bg-slate-100 text-slate-700', dot: 'bg-slate-500', label: 'Niet gekoppeld', still: true },
-    green: { border: 'border-green-500 shadow-[0_0_18px_3px_rgba(34,197,94,0.55)]', head: 'bg-green-800', ring: 'border-green-400 bg-green-50 text-green-600 shadow-[0_0_24px_8px_rgba(34,197,94,0.55)]', pill: 'bg-green-100 text-green-800', dot: 'bg-green-500', label: 'Stroom aan' },
-    red: { border: 'border-red-500 shadow-[0_0_18px_3px_rgba(239,68,68,0.55)]', head: 'bg-red-800', ring: 'border-red-400 bg-red-50 text-red-600 shadow-[0_0_24px_8px_rgba(239,68,68,0.55)]', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', label: 'Stroom uit' },
-    orange: { border: 'border-orange-400 shadow-[0_0_18px_3px_rgba(249,115,22,0.55)]', head: 'bg-orange-700', ring: 'border-orange-400 bg-orange-50 text-orange-500 shadow-[0_0_24px_8px_rgba(249,115,22,0.55)]', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
+    green: { glow: '34,197,94', border: 'border-green-500', head: 'bg-green-800', ring: 'border-green-200 bg-green-500 text-white', pill: 'bg-green-100 text-green-800', dot: 'bg-green-500', label: 'Stroom aan' },
+    red: { glow: '239,68,68', border: 'border-red-500', head: 'bg-red-800', ring: 'border-red-200 bg-red-500 text-white', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', label: 'Stroom uit' },
+    orange: { glow: '249,115,22', border: 'border-orange-400', head: 'bg-orange-700', ring: 'border-orange-200 bg-orange-500 text-white', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
   }[state];
   return (
-    <div className={`overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state}>
+    <div className={`power-glow overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state} style={{ '--glow': th.glow }}>
       <div className={`flex items-center justify-center gap-2 px-3 py-2.5 text-white ${th.head}`}>
         <Home className="h-5 w-5 shrink-0" />
         <span className="truncate text-base font-black uppercase tracking-wide">{device.apartment_number}</span>
       </div>
       <div className="flex flex-col items-center gap-3 px-3 py-4">
-        <span data-testid="power-lamp" className={`flex h-16 w-16 items-center justify-center rounded-full border-2 ${th.still ? '' : 'animate-pulse'} ${th.ring}`}>
-          <Zap className={`h-8 w-8 ${th.still ? '' : 'animate-pulse'}`} fill="currentColor" />
+        <span data-testid="power-lamp" className={`power-glow flex h-16 w-16 items-center justify-center rounded-full border-2 ${th.ring}`}>
+          <Zap className="h-8 w-8" fill="currentColor" />
         </span>
         <span className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${th.pill}`}>
-          <span className={`h-2.5 w-2.5 rounded-full ${th.still ? '' : 'animate-pulse'} ${th.dot}`} />
+          <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${th.dot}`} />
           {th.label}
         </span>
       </div>
