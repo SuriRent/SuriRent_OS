@@ -68,42 +68,67 @@ function Header({ company }) {
   );
 }
 
-function Hero({ company }) {
+function Hero({ company, filter, setFilter }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
+  const tabs = [['all', 'Alle'], ['free', 'Beschikbaar'], ['occupied', 'Bezet']];
   return (
-    <section className="relative bg-slate-900 text-white overflow-hidden" data-testid="tenant-hero">
-      <div className="absolute inset-0">
-        <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80"
-          alt="" className="w-full h-full object-cover opacity-40" />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 via-slate-900/70 to-slate-900" />
-      </div>
-      <div className="relative max-w-[1280px] mx-auto px-5 lg:px-10 py-20 lg:py-32">
-        <EditableText path="hero.eyebrow" fallback="Beschikbare appartementen"
-          as="p" className="text-xs font-black tracking-[0.32em] uppercase mb-5"
-          style={{ color: primary }} />
-        <h1 className="font-black tracking-tight leading-[1.02]"
-          style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)' }}>
-          <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />
-          <br />
-          <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht."
-            as="span" style={{ color: primary }} />
-        </h1>
-        <EditableText path="hero.subtitle"
-          fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
-          as="p" multiline
-          className="mt-6 text-lg lg:text-xl text-white/85 max-w-2xl leading-relaxed" />
-        <div className="mt-8 flex flex-col sm:flex-row gap-3">
+    <section className="relative bg-gradient-to-b from-orange-50 via-white to-white" data-testid="tenant-hero">
+      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 pt-10 lg:pt-16 pb-24 lg:pb-32 grid lg:grid-cols-2 gap-10 items-center">
+        <div>
+          <EditableText path="hero.eyebrow" fallback="Vind uw perfecte plek"
+            as="p" className="inline-block text-xs font-bold px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm mb-5"
+            style={{ color: primary }} />
+          <h1 className="font-black tracking-tight leading-[1.05] text-slate-900"
+            style={{ fontSize: 'clamp(2.25rem, 5vw, 4rem)' }}>
+            <EditableText path="hero.title_line1" fallback={`Welkom bij ${company?.name || ''}`} as="span" />
+            <br />
+            <EditableText path="hero.title_line2" fallback="uw nieuwe thuis wacht."
+              as="span" style={{ color: primary }} />
+          </h1>
+          <EditableText path="hero.subtitle"
+            fallback="Moderne, comfortabele appartementen voor lange en korte huur. Direct beschikbaar in Suriname."
+            as="p" multiline
+            className="mt-5 text-base lg:text-lg text-slate-600 max-w-lg leading-relaxed" />
           <a href="#aanbod"
-            className="inline-flex items-center justify-center gap-2 h-14 px-7 rounded-md text-white text-base font-black"
+            className="mt-8 inline-flex items-center justify-center gap-2 h-12 px-6 rounded-lg text-white text-sm font-bold shadow-md"
             style={{ backgroundColor: primary }}>
             <EditableText path="hero.cta_primary" fallback="Bekijk het aanbod" as="span" />
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-4 h-4" />
           </a>
-          <a href="#contact"
-            className="inline-flex items-center justify-center gap-2 h-14 px-7 rounded-md bg-white/10 hover:bg-white/20 border border-white/30 text-white text-base font-bold backdrop-blur-sm">
-            <MessageCircle className="w-5 h-5" />
-            <EditableText path="hero.cta_secondary" fallback="Neem contact op" as="span" />
-          </a>
+        </div>
+        <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl bg-slate-100">
+          <EditableImage path="hero.bg_url" fallback="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1600&q=80"
+            alt="" className="w-full h-full object-cover" />
+        </div>
+      </div>
+      <div className="absolute left-0 right-0 bottom-0 translate-y-1/2 px-5 lg:px-10 z-20">
+        <div className="max-w-[1100px] mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 p-4 lg:p-5"
+          data-testid="tenant-search">
+          <div className="flex gap-1 mb-3">
+            {tabs.map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setFilter((f) => ({ ...f, status: k }))}
+                className="px-4 h-9 rounded-lg text-sm font-bold transition"
+                style={filter.status === k ? { backgroundColor: `${primary}1A`, color: primary } : { color: '#64748B' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3">
+            <label className="border border-slate-200 rounded-xl px-4 py-2 block">
+              <span className="text-[11px] font-bold text-slate-500">Zoeken</span>
+              <input value={filter.q} onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
+                placeholder="Eenheid of adres" className="w-full text-sm font-semibold text-slate-800 outline-none bg-transparent" />
+            </label>
+            <label className="border border-slate-200 rounded-xl px-4 py-2 block">
+              <span className="text-[11px] font-bold text-slate-500">Maximale prijs per maand</span>
+              <input type="number" min="0" value={filter.max} onChange={(e) => setFilter((f) => ({ ...f, max: e.target.value }))}
+                placeholder="Geen limiet" className="w-full text-sm font-semibold text-slate-800 outline-none bg-transparent" />
+            </label>
+            <a href="#aanbod" className="h-14 px-8 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md"
+              style={{ backgroundColor: primary }}>
+              <Home className="w-4 h-4" /> Zoeken
+            </a>
+          </div>
         </div>
       </div>
     </section>
@@ -112,28 +137,41 @@ function Hero({ company }) {
 
 function StatsBar({ company, apartments }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
+  const free = apartments.filter((a) => a.status !== 'occupied').length;
   const stats = [
-    { value: apartments.filter((a) => a.status !== 'occupied').length, label: 'Beschikbaar' },
+    { value: free, label: 'Beschikbaar' },
+    { value: apartments.length - free, label: 'Bezet' },
     { value: '24/7', label: 'Bereikbaar' },
-    { value: '100%', label: 'Suriname' },
     { value: 'NL/EN', label: 'Talen' },
   ];
   return (
-    <section className="bg-white border-b border-slate-100 -mt-px">
-      <div className="max-w-[1280px] mx-auto px-5 lg:px-10 grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 py-10">
-        {stats.map((s) => (
-          <div key={s.label} className="text-center">
-            <p className="text-3xl lg:text-4xl font-black" style={{ color: primary }}>{s.value}</p>
-            <p className="text-xs lg:text-sm font-bold uppercase tracking-wider text-slate-500 mt-1">{s.label}</p>
-          </div>
-        ))}
+    <section className="bg-white pt-44 md:pt-36 lg:pt-32 pb-4">
+      <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
+        <div className="rounded-2xl grid grid-cols-2 lg:grid-cols-4 gap-6 py-8 px-6 text-white shadow-lg"
+          style={{ backgroundColor: primary }}>
+          {stats.map((s) => (
+            <div key={s.label} className="text-center">
+              <p className="text-3xl lg:text-4xl font-black">{s.value}</p>
+              <p className="text-xs lg:text-sm font-bold uppercase tracking-wider text-white/85 mt-1">{s.label}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-function ApartmentsGrid({ company, apartments }) {
+function ApartmentsGrid({ company, apartments: allApartments, filter }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
+  const q = (filter?.q || '').trim().toLowerCase();
+  const max = Number(filter?.max) || 0;
+  const apartments = allApartments.filter((a) => {
+    if (filter?.status === 'free' && a.status === 'occupied') return false;
+    if (filter?.status === 'occupied' && a.status !== 'occupied') return false;
+    if (max && Number(a.rent_amount) > max) return false;
+    if (q && !`${a.number || ''} ${a.address || ''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
   return (
     <section id="aanbod" className="bg-slate-50 py-16 lg:py-24">
       <div className="max-w-[1280px] mx-auto px-5 lg:px-10">
@@ -484,6 +522,7 @@ export default function TenantPublicLanding({
   const [apartments, setApartments] = useState(apartmentsProp || []);
   const [content, setContent] = useState(contentProp || {});
   const [loading, setLoading] = useState(!companyProp);
+  const [filter, setFilter] = useState({ status: 'all', q: '', max: '' });
 
   const editMode = editModeProp ?? (() => {
     try {
@@ -585,9 +624,9 @@ export default function TenantPublicLanding({
           </div>
         )}
         <Header company={company} />
-        <Hero company={company} />
+        <Hero company={company} filter={filter} setFilter={setFilter} />
         <StatsBar company={company} apartments={apartments} />
-        <ApartmentsGrid company={company} apartments={apartments} />
+        <ApartmentsGrid company={company} apartments={apartments} filter={filter} />
         <About company={company} />
         <ContactSection company={company} />
         <TenantFooter company={company} />
