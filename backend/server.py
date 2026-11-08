@@ -4035,53 +4035,68 @@ async def public_company_landing(request: Request, host: Optional[str] = None):
     Returnt {company, content, apartments, found:bool}. Bij niet gevonden
     geeft `found=false` zodat de frontend kan terugvallen op de default
     SuriRent landing."""
-    target = _normalize_host(host or request.headers.get("host", ""))
+    target = _normalize_host(request.headers.get("x-forwarded-host") or host or request.headers.get("host", ""))
     # Skip onze eigen hosts — die mogen NOOIT als custom domain matchen,
     # zodat preview/prod altijd de superadmin landing zien.
     SYSTEM_HOSTS_SUFFIXES = ("surirent.sr", "emergentagent.com", "localhost")
     if not target or any(target == s or target.endswith("." + s) for s in SYSTEM_HOSTS_SUFFIXES):
         return {"found": False}
 
-    # Zoek eerst op companies.custom_domain (legacy), dan op company_settings.domain.custom_domain.
-    company = await db.companies.find_one(
-        {"custom_domain": target},
-        {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
-         "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1,
-         "kkf_number": 1},
+    COMPANY_FIELDS = {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
+                      "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1,
+                      "kkf_number": 1}
+    role = "login"
+    company = None
+    # Marketing-domein (bv. kewalbansing.net) → publieke website van de tenant.
+    mk = await db.company_settings.find_one(
+        {"domain.marketing_domain": target, "domain.marketing_enabled": True},
+        {"_id": 0, "company_id": 1},
     )
+    if mk:
+        company = await db.companies.find_one({"id": mk["company_id"]}, COMPANY_FIELDS)
+        role = "marketing"
+    # Daarna het login-domein: companies.custom_domain (legacy) of company_settings.domain.custom_domain.
+    if not company:
+        company = await db.companies.find_one({"custom_domain": target}, COMPANY_FIELDS)
     if not company:
         settings_doc = await db.company_settings.find_one(
             {"domain.custom_domain": target, "domain.enabled": True},
             {"_id": 0, "company_id": 1},
         )
         if settings_doc:
-            company = await db.companies.find_one(
-                {"id": settings_doc["company_id"]},
-                {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
-                 "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1, "kkf_number": 1},
-            )
+            company = await db.companies.find_one({"id": settings_doc["company_id"]}, COMPANY_FIELDS)
     if not company:
         return {"found": False}
+
+    dom_cfg = ((await db.company_settings.find_one(
+        {"company_id": company["id"]}, {"_id": 0, "domain": 1}) or {}).get("domain") or {})
+    login_host = (dom_cfg.get("custom_domain") or "").strip().lower() if dom_cfg.get("enabled") else ""
+    marketing_host = (dom_cfg.get("marketing_domain") or "").strip().lower() if dom_cfg.get("marketing_enabled") else ""
 
     landing_doc = await db.company_landings.find_one({"id": company["id"]}, {"_id": 0}) or {}
     content = landing_doc.get("published") or {}
 
-    # Vul publieke apartments aan (alleen vrije eenheden voor de showcase).
+    # Publieke apartments: vrije eenheden eerst, bezette eenheden onderaan.
     apartments = []
     cursor = db.apartments.find(
-        {"company_id": company["id"], "status": {"$in": ["vacant", "available"]}},
+        {"company_id": company["id"], "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)
     async for a in cursor:
         apartments.append(a)
+    apartments.sort(key=lambda a: 1 if a.get("status") == "occupied" else 0)
 
     return {
         "found": True,
+        "role": role,
         "company": company,
         "content": content,
         "apartments": apartments,
+        "login_url": f"https://{login_host}" if login_host else None,
+        "marketing_url": f"https://{marketing_host}" if marketing_host else None,
     }
+
 
 
 @api.get("/public/company-landing/by-slug/{slug}")
@@ -4107,12 +4122,13 @@ async def public_company_landing_by_slug(slug: str):
 
     apartments = []
     cursor = db.apartments.find(
-        {"company_id": company["id"], "status": {"$in": ["vacant", "available"]}},
+        {"company_id": company["id"], "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)
     async for a in cursor:
         apartments.append(a)
+    apartments.sort(key=lambda a: 1 if a.get("status") == "occupied" else 0)
 
     return {
         "found": True,
@@ -4249,7 +4265,7 @@ async def get_my_landing_apartments(user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     out = []
     cursor = db.apartments.find(
-        {"company_id": cid, "status": {"$in": ["vacant", "available"]}},
+        {"company_id": cid, "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)

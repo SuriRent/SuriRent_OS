@@ -55,6 +55,8 @@ function Header({ company }) {
           <a href="#aanbod" className="text-sm font-bold text-slate-700 hover:text-slate-900">Aanbod</a>
           <a href="#over" className="text-sm font-bold text-slate-700 hover:text-slate-900">Over ons</a>
           <a href="#contact" className="text-sm font-bold text-slate-700 hover:text-slate-900">Contact</a>
+          <a href={company?.login_url || `/${company?.slug || ''}/login`} data-testid="tenant-landing-login"
+            className="text-sm font-bold text-slate-700 hover:text-slate-900">Inloggen</a>
         </nav>
         <a href="#contact"
           className="h-11 px-4 md:px-5 rounded-md text-white text-sm font-bold flex items-center gap-2 shadow-sm"
@@ -111,7 +113,7 @@ function Hero({ company }) {
 function StatsBar({ company, apartments }) {
   const primary = company?.branding?.primary_color || '#FF5C00';
   const stats = [
-    { value: apartments.length, label: 'Beschikbaar' },
+    { value: apartments.filter((a) => a.status !== 'occupied').length, label: 'Beschikbaar' },
     { value: '24/7', label: 'Bereikbaar' },
     { value: '100%', label: 'Suriname' },
     { value: 'NL/EN', label: 'Talen' },
@@ -166,8 +168,8 @@ function ApartmentsGrid({ company, apartments }) {
                     </div>
                   )}
                   <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md"
-                    style={{ backgroundColor: primary }}>
-                    Beschikbaar
+                    style={{ backgroundColor: apt.status === 'occupied' ? '#64748B' : primary }}>
+                    {apt.status === 'occupied' ? 'Bezet' : 'Beschikbaar'}
                   </div>
                 </div>
                 <div className="p-5">

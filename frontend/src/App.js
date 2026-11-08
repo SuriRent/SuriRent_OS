@@ -490,6 +490,24 @@ export default function App() {
   if (tenant.status === 'checking') {
     return <RouteFallback />;
   }
+  if (tenant.status === 'tenant' && tenant.role === 'marketing') {
+    // Marketing-domein: publieke website van de tenant. Alle andere paden
+    // gaan naar het login-domein (of het slug-pad als dat niet is ingesteld).
+    const loginBase = tenant.login_url || '';
+    const slug = tenant.company?.slug || '';
+    const company = { ...tenant.company, login_url: tenant.login_url || null };
+    if (window.location.pathname !== '/' && window.location.pathname !== '/landing-preview') {
+      const rest = window.location.pathname + window.location.search;
+      window.location.replace(loginBase ? `${loginBase}${rest}` : `/${slug}/login`);
+      return <RouteFallback />;
+    }
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <TenantPublicLanding company={company} apartments={tenant.apartments || []}
+          content={tenant.content || {}} editMode={false} />
+      </Suspense>
+    );
+  }
   if (tenant.status === 'tenant') {
     // Bij een custom-domain visit renderen we de volledige branded app zoals
     // wanneer je via `/{slug}/...` zou binnenkomen — landing, login, kiosk,

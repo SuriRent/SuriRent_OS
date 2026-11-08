@@ -259,7 +259,7 @@ export function DomainForm({ initial }) {
       <SwitchField label="Ingeschakeld" testid="domain-enabled"
         value={d.enabled} onChange={(v) => s.onField('enabled', v)}
         desc="Wanneer aan, herkent het platform inkomende requests op jouw domein." />
-      <TextField label="Custom domein" testid="domain-custom" value={d.custom_domain} onChange={(v) => s.onField('custom_domain', v.trim().toLowerCase())} placeholder="vastgoed.mijnbedrijf.com" helper="Zonder https:// en zonder pad." />
+      <TextField label="Custom domein (login)" testid="domain-custom" value={d.custom_domain} onChange={(v) => s.onField('custom_domain', v.trim().toLowerCase())} placeholder="login.mijnbedrijf.com" helper="Inlogportaal van je klant. Zonder https:// en zonder pad." />
 
       {/* Live status widget — vervangt de losse verificatie-badge */}
       {d.custom_domain && (
@@ -300,6 +300,14 @@ TTL:    3600`}
           <li>Zet hierboven <b>Ingeschakeld</b> aan, sla op en klik <b>Test verbinding</b>.</li>
         </ol>
         <p className="text-slate-500">Gebruikt de klant Cloudflare? Zet de DNS-record dan eerst op &ldquo;DNS only&rdquo; (grijze wolk) tot het certificaat is uitgegeven.</p>
+      </div>
+      <div className="border-t border-slate-200 pt-4 space-y-3">
+        <SwitchField label="Marketing website" testid="domain-marketing-enabled"
+          value={d.marketing_enabled} onChange={(v) => s.onField('marketing_enabled', v)}
+          desc="Toont je publieke verhuur-website (beschikbare en bezette appartementen) op dit domein." />
+        <TextField label="Marketing domein" testid="domain-marketing" value={d.marketing_domain}
+          onChange={(v) => s.onField('marketing_domain', v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))}
+          placeholder="mijnbedrijf.com" helper="Bijv. mijnbedrijf.com voor de website en login.mijnbedrijf.com voor inloggen. Zelfde DNS- en Coolify-stappen als hierboven. De inhoud bewerk je bij Landing editor." />
       </div>
       <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled && !!d.custom_domain} />
     </SectionShell>
