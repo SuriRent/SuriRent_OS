@@ -257,9 +257,9 @@ function CompanyForm({ initial, onCancel, onSaved }) {
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Slug (URL-vriendelijk) *</label>
               <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                disabled={isEdit}
                 data-testid="company-slug"
-                className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none disabled:opacity-60" />
+                className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-slate-200 focus:border-[#FF5C00] outline-none" />
+              {isEdit && <p className="text-[11px] text-slate-500 mt-1">Let op: bij wijzigen verandert de inloglink (/{form.slug || 'slug'}/login). Oude links werken dan niet meer.</p>}
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Contact e-mail</label>
