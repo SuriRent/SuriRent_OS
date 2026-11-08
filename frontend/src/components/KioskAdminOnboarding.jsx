@@ -15,6 +15,10 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
   const [tourActive, setTourActive] = useState(false);
 
   const tourPromptKey = `kiosk_feature_tour_prompted_${cid}`;
+  const markTourSeen = useCallback(() => {
+    try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Server flag is the source of truth. */ }
+    api.post('/companies/me/kiosk-tour-seen').catch(() => {});
+  }, [tourPromptKey]);
   const refreshSetup = useCallback(async (showWizardIfIncomplete = true) => {
     if (!isCompanyAdmin || !cid || needsOnboarding) return;
     try {
@@ -28,11 +32,12 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
       setWizardOpen(false);
       let prompted = false;
       try { prompted = localStorage.getItem(tourPromptKey) === '1'; } catch { /* Continue without persisted preference. */ }
-      if (!prompted) setTourPromptOpen(true);
+      if (data?.tour_seen) prompted = true;
+      if (!prompted) { setTourPromptOpen(true); markTourSeen(); }
     } catch {
       // A temporary network error should not prevent the wizard from starting later.
     }
-  }, [isCompanyAdmin, cid, needsOnboarding, tourPromptKey]);
+  }, [isCompanyAdmin, cid, needsOnboarding, tourPromptKey, markTourSeen]);
 
   useEffect(() => {
     setWizardOpen(false);
@@ -44,13 +49,13 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
   useEffect(() => {
     if (!isCompanyAdmin || !cid) return undefined;
     const startTour = () => {
-      try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+      markTourSeen();
       setTourPromptOpen(false);
       setTourActive(true);
     };
     window.addEventListener('kiosk-tour-start', startTour);
     return () => window.removeEventListener('kiosk-tour-start', startTour);
-  }, [isCompanyAdmin, cid, tourPromptKey]);
+  }, [isCompanyAdmin, cid, markTourSeen]);
 
   if (!isCompanyAdmin) return null;
   if (needsOnboarding) {
@@ -65,18 +70,18 @@ export function KioskAdminOnboarding({ enabled, onWizardClosed }) {
         onClose={() => { setWizardOpen(false); refreshSetup(false); onWizardClosed?.(); }} />
       <KioskFeatureTour promptOpen={tourPromptOpen} active={tourActive}
         onStart={() => {
-          try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+          markTourSeen();
           setTourPromptOpen(false);
           setTourActive(true);
         }}
         onSkip={() => {
-          try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+          markTourSeen();
           window.dispatchEvent(new CustomEvent('kiosk-tour-navigate', { detail: { type: 'home' } }));
           setTourPromptOpen(false);
           setTourActive(false);
         }}
         onFinish={() => {
-          try { localStorage.setItem(tourPromptKey, '1'); } catch { /* Tour still works without persisted preference. */ }
+          markTourSeen();
           window.dispatchEvent(new CustomEvent('kiosk-tour-navigate', { detail: { type: 'home' } }));
           setTourActive(false);
         }} />

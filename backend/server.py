@@ -4909,7 +4909,17 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
         "next_step": next((s["id"] for s in steps if not s["done"]), None),
         "counts": {"locations": location_count, "apartments": apt_count, "tenants": tenant_count,
                    "linked_tenants": linked_tenant_count},
+        "tour_seen": bool(c.get("kiosk_tour_seen")),
     }
+
+
+@api.post("/companies/me/kiosk-tour-seen")
+async def mark_kiosk_tour_seen(user=Depends(require_role("admin"))):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await db.companies.update_one({"id": cid}, {"$set": {"kiosk_tour_seen": True}})
+    return {"ok": True}
 
 
 
