@@ -6466,7 +6466,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { backgroundImage: 'url(/kiosk-orange-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
