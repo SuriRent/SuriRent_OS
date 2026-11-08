@@ -9105,47 +9105,22 @@ async def public_signature_request_submit(token: str, file: UploadFile = File(..
 
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
-                       user=Depends(get_current_user),
-                       ocr_done: str = Form(""), ocr_name: str = Form(""),
-                       ocr_id_number: str = Form(""), ocr_birth_date: str = Form(""),
-                       ocr_confidence: str = Form("0")):
-    """ID-kaart velden. De browser leest de kaart met Tesseract.js en stuurt de
-    herkende velden mee (ocr_*). Zonder die velden valt dit terug op Gemini
-    (EMERGENT_LLM_KEY) voor oudere clients."""
+                       user=Depends(get_current_user)):
+    """ID-kaart velden via Google Gemini (eigen GEMINI_API_KEY). Werkt met
+    Surinaamse ID's, paspoorten en NL rijbewijzen."""
     import os
     import json as _json
-    import tempfile
-    if ocr_done:
-        try:
-            conf = max(0.0, min(1.0, float(ocr_confidence or 0)))
-        except ValueError:
-            conf = 0.0
-        bd = ocr_birth_date.strip()
-        return {
-            "name": ocr_name.strip()[:120],
-            "id_number": re.sub(r"[^A-Z0-9]", "", ocr_id_number.upper())[:20],
-            "birth_date": bd if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bd) else "",
-            "confidence": conf,
-        }
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR module niet geladen: {e}")
-    api_key = os.getenv("EMERGENT_LLM_KEY")
+    import httpx
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY ontbreekt")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op de server")
 
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
 
     ctype = (file.content_type or "image/jpeg").lower()
-    suffix = ".png" if "png" in ctype else (".webp" if "webp" in ctype else ".jpg")
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-        f.write(raw)
-        tmp_path = f.name
 
     prompt = (
         "Extract identity data from this ID card / passport image. "
@@ -9160,21 +9135,30 @@ async def ocr_id_card(file: UploadFile = File(...),
         "Als het document GEEN ID/paspoort/rijbewijs is, zet confidence=0. "
         "Als een veld onduidelijk is: null."
     )
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"idocr-{new_id()[:8]}",
-        system_message="Je bent een OCR-engine die uitsluitend geldig JSON terug geeft.",
-    ).with_model("gemini", "gemini-2.5-flash")
-
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     try:
-        msg = UserMessage(text=prompt,
-                            file_contents=[FileContentWithMimeType(file_path=tmp_path, mime_type=mime)])
-        raw_text = await chat.send_message(msg)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                headers={"x-goog-api-key": api_key},
+                json={
+                    "systemInstruction": {"parts": [{"text": "Je bent een OCR-engine die uitsluitend geldig JSON terug geeft."}]},
+                    "contents": [{"parts": [
+                        {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}},
+                        {"text": prompt},
+                    ]}],
+                    "generationConfig": {"responseMimeType": "application/json", "temperature": 0,
+                                         "thinkingConfig": {"thinkingBudget": 0}},
+                },
+            )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="OCR-dienst niet bereikbaar")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"OCR-dienst fout ({resp.status_code})")
+    try:
+        raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        raise HTTPException(status_code=502, detail="OCR gaf geen antwoord terug")
 
     txt = (raw_text or "").strip()
     # Strip markdown fences als aanwezig.
@@ -10931,18 +10915,13 @@ async def _kiosk_cached(name: str, sc: dict, compute):
 
 @api.post("/kiosk/id-scan")
 async def kiosk_id_scan(file: UploadFile = File(...), user_key: str = Form(""),
-                        ocr_done: str = Form(""), ocr_name: str = Form(""),
-                        ocr_id_number: str = Form(""), ocr_birth_date: str = Form(""),
-                        ocr_confidence: str = Form("0"),
                         _session=Depends(get_kiosk_session)):
     # Telefoon scant ID → OCR + foto bewaren → desktop van dezelfde gebruiker krijgt de gegevens via WS.
     cid = _session["company_id"]
     if not (file.content_type or "").lower().startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload een foto van de ID-kaart")
     try:
-        scan = await ocr_id_card(file=file, user={}, ocr_done=ocr_done, ocr_name=ocr_name,
-                                 ocr_id_number=ocr_id_number, ocr_birth_date=ocr_birth_date,
-                                 ocr_confidence=ocr_confidence)
+        scan = await ocr_id_card(file=file, user={})
     except HTTPException:
         raise
     except Exception:

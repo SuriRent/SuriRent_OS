@@ -68,6 +68,7 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `REACT_APP_MARKETING_HOST` | Ja bij gescheiden domeinen | Marketing-hostname zonder `https://` of afsluitende slash; bepaalt waar de marketingwebsite wordt getoond. |
 | `REACT_APP_APP_URL` | Ja bij gescheiden domeinen | Volledige publieke app-URL; marketinglinks naar aanmelden/inloggen verwijzen hiernaartoe. |
 | `EMERGENT_LLM_KEY` | Nee | Optionele AI-, spraak- en gerelateerde Emergent-integraties. |
+| `GEMINI_API_KEY` | Voor Scan ID | Google Gemini-key om ID-kaarten uit te lezen (gratis via aistudio.google.com/apikey). |
 | `INTEGRATION_PROXY_URL` | Nee | Optionele basis-URL voor de object-storage-integratie. |
 | `STRIPE_PUBLISHABLE_KEY` | Nee | Optionele Stripe publishable key. |
 | `STRIPE_SECRET_KEY` | Nee | Optionele Stripe secret key. |
