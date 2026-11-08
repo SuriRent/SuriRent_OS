@@ -27,6 +27,7 @@ export const RENDER = {
   'bon-printer': () => <BonPrinter />,
   'kiosk-apparaten': () => <KioskDevices />,
   backup: () => <BackupRestore />,
+  domein: () => <SettingsPage initialSection="domain" hideSubNav />,
 };
 
 export default function InstellingenHub({ embedded = false, section = null }) {

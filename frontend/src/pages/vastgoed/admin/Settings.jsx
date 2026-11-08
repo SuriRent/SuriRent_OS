@@ -267,16 +267,16 @@ export function DomainForm({ initial }) {
       )}
 
       <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
-        <p className="font-bold flex items-center gap-2 text-slate-900"><Shield className="w-4 h-4 text-[#FF5C00]" /> DNS configuratie</p>
+        <p className="font-bold flex items-center gap-2 text-slate-900"><Shield className="w-4 h-4 text-[#FF5C00]" /> DNS configuratie (bij de klant)</p>
         {!target.configured && target.error && (
           <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-            <b>Let op:</b> {target.error} — De onderstaande waarden zijn placeholders totdat dit door Emergent support is ingesteld.
+            <b>Let op:</b> {target.error} — Zet <code>APP_PUBLIC_HOST</code> in de server-omgeving (Coolify). De waarden hieronder zijn tot dan voorbeelden.
           </p>
         )}
-        <p>Maak bij je domeinregistrar één van deze records aan:</p>
+        <p>Laat de klant bij zijn domeinregistrar één van deze records aanmaken:</p>
         <pre className="bg-white border border-slate-200 rounded-lg p-2 font-mono text-[11px] overflow-x-auto">
 {`Type:   CNAME
-Naam:   ${d.custom_domain || 'vastgoed'}
+Naam:   ${d.custom_domain || 'login'}
 Waarde: ${exampleTarget}
 TTL:    3600
 
@@ -290,25 +290,16 @@ TTL:    3600`}
         <p className="text-slate-500">Na DNS-propagatie (max 24u): klik <b>Test verbinding</b> om te verifiëren.</p>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          SSL / HTTPS — belangrijke tekst dat de tenant dit ZELF moet
-          regelen. Emergent stelt geen certificaat uit voor custom
-          domeinen; anders krijgt de tenant een certificaat waarmee zijn
-          eindgebruikers zien dat de site door Emergent gehost wordt.
-          Aanbevolen: Cloudflare Proxy (gratis, geeft ook DDoS-protectie
-          en SSL "Flexible" of "Full" mode werkt direct).
-          ═══════════════════════════════════════════════════════════════ */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-slate-700 space-y-2">
-        <p className="font-bold flex items-center gap-2 text-slate-900"><Shield className="w-4 h-4 text-blue-600" /> HTTPS / SSL — u regelt dit zelf</p>
-        <p>Voor uw eigen domein <b>bent u zelf verantwoordelijk voor het SSL/HTTPS certificaat</b>. Wij stellen geen certificaat uit voor custom domeinen — anders zouden uw huurders zien dat de site via een externe host loopt.</p>
-        <p className="font-semibold text-slate-800 mt-1.5">Aanbevolen aanpak (gratis, 5 min):</p>
+        <p className="font-bold flex items-center gap-2 text-slate-900"><Shield className="w-4 h-4 text-blue-600" /> Server (Coolify) — door de beheerder</p>
         <ol className="list-decimal ml-4 space-y-1 text-slate-600">
-          <li>Maak een gratis <a href="https://cloudflare.com" target="_blank" rel="noreferrer" className="text-blue-700 font-semibold hover:underline">Cloudflare</a> account aan en voeg uw domein toe.</li>
-          <li>Verander de nameservers bij uw registrar naar de Cloudflare nameservers.</li>
-          <li>In Cloudflare: zet de CNAME/A record (zoals hierboven) met de <b>oranje wolk aan</b> (proxied).</li>
-          <li>SSL/TLS → Overzicht → kies mode <b>&ldquo;Full&rdquo;</b> (of &ldquo;Flexible&rdquo; als tijdelijke test).</li>
+          <li>Open in Coolify de applicatie → <b>Configuration</b> → veld <b>Domains</b>.</li>
+          <li>Voeg het domein van de klant toe aan de web-service, komma-gescheiden, bv. <code>https://app.example.com,https://{d.custom_domain || 'login.klant.nl'}</code>.</li>
+          <li>Zorg dat de DNS van de klant naar het IP van je Coolify-server wijst.</li>
+          <li>Klik <b>Save</b> en <b>Redeploy</b>. Coolify maakt automatisch een gratis Let&rsquo;s Encrypt-certificaat.</li>
+          <li>Zet hierboven <b>Ingeschakeld</b> aan, sla op en klik <b>Test verbinding</b>.</li>
         </ol>
-        <p className="text-slate-500 mt-1.5">Cloudflare geeft u dan automatisch een geldig HTTPS-certificaat, DDoS-bescherming en een snelheidsboost via hun CDN. Alternatief: uw eigen reverse-proxy (nginx / Traefik) met Let&rsquo;s Encrypt.</p>
+        <p className="text-slate-500">Gebruikt de klant Cloudflare? Zet de DNS-record dan eerst op &ldquo;DNS only&rdquo; (grijze wolk) tot het certificaat is uitgegeven.</p>
       </div>
       <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled && !!d.custom_domain} />
     </SectionShell>
