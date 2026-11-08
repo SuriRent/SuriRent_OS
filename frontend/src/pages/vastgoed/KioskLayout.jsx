@@ -295,13 +295,14 @@ function KioskSettingsMenu() {
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
+  useEffect(() => { import('./admin/KioskSettingsPage'); }, []);
   if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
   const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
+      <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
         className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
         <SettingsIcon className="w-6 h-6" />
       </button>
@@ -6357,10 +6358,6 @@ export default function KioskLayout() {
       else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:regelingen') {
         setAdminPopup(null);
         setStep(e.detail);
-      }
-      else if (e.detail === 'admin:inst-bon' && window.innerWidth >= 768) {
-        setAdminPopup(null);
-        setStep('admin:bon');
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
         && INSTELLINGEN_SECTIONS.some((s) => s.id === e.detail.slice(11))) {

@@ -1,12 +1,21 @@
+import { useEffect, useState } from 'react';
 import { RENDER } from './InstellingenHub';
 import { INSTELLINGEN_SECTIONS } from './instellingenSections';
 
-// Desktop kiosk-layout voor de Instellingen-onderdelen: zelfde opzet als
-// "Bon & afdrukken" (oranje achtergrond, twee witte panelen).
+// Vaste Instellingen-pagina voor de desktop kiosk: links de inhoud, rechts alle
+// onderdelen. Wisselen gebeurt lokaal (geen navigatie) en bezochte onderdelen
+// blijven gemount, zodat er niets opnieuw laadt of flikkert.
 export default function KioskSettingsPage({ id, onBack }) {
-  const current = INSTELLINGEN_SECTIONS.find((s) => s.id === id) || INSTELLINGEN_SECTIONS[1];
+  const [sec, setSec] = useState(INSTELLINGEN_SECTIONS.some((s) => s.id === id) ? id : 'abonnement');
+  const [visited, setVisited] = useState(() => new Set([sec]));
+  useEffect(() => {
+    if (INSTELLINGEN_SECTIONS.some((s) => s.id === id)) setSec(id);
+  }, [id]);
+  useEffect(() => {
+    setVisited((v) => (v.has(sec) ? v : new Set(v).add(sec)));
+  }, [sec]);
+  const current = INSTELLINGEN_SECTIONS.find((s) => s.id === sec);
   const Icon = current.icon;
-  const go = (sid) => window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${sid}` }));
 
   return (
     <div className="h-full w-full bg-[#FF5C00] flex flex-col" style={{ paddingLeft: '1.5vw', paddingRight: '1.5vw' }} data-testid="kiosk-settings-panel">
@@ -19,8 +28,10 @@ export default function KioskSettingsPage({ id, onBack }) {
             </div>
             <Icon className="h-5 w-5 shrink-0 text-[#FF5C00]" />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1" key={current.id}>
-            {RENDER[current.id]()}
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {INSTELLINGEN_SECTIONS.filter((s) => visited.has(s.id)).map((s) => (
+              <div key={s.id} className={s.id === sec ? '' : 'hidden'}>{RENDER[s.id]()}</div>
+            ))}
           </div>
         </section>
         <aside className="flex min-h-0 flex-[2] flex-col overflow-y-auto rounded-2xl bg-white p-6" data-testid="kiosk-settings-nav">
@@ -28,9 +39,9 @@ export default function KioskSettingsPage({ id, onBack }) {
           <div className="space-y-1">
             {INSTELLINGEN_SECTIONS.map((s) => {
               const I = s.icon;
-              const active = s.id === current.id;
+              const active = s.id === sec;
               return (
-                <button key={s.id} type="button" onClick={() => go(s.id)} data-testid={`kiosk-settings-nav-${s.id}`}
+                <button key={s.id} type="button" onClick={() => setSec(s.id)} data-testid={`kiosk-settings-nav-${s.id}`}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition-colors ${active ? 'bg-[#FF5C00] text-white' : 'text-slate-700 hover:bg-orange-50 hover:text-[#FF5C00]'}`}>
                   <I className="h-4 w-4 shrink-0" />
                   <span className="truncate">{s.label}</span>
@@ -39,7 +50,7 @@ export default function KioskSettingsPage({ id, onBack }) {
             })}
           </div>
           <button type="button" onClick={onBack} data-testid="kiosk-settings-exit"
-            className="mt-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200">
+            className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-bold text-slate-700 hover:bg-slate-200">
             Terug naar kiosk
           </button>
         </aside>
