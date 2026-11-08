@@ -15997,23 +15997,36 @@ async def _demo_reset_tick():
     print(f"[demo-reset] Voltooid voor {cid}.")
 
 
+def _demo_next_reset_ts() -> float:
+    """Volgende reset-moment: elk heel/half uur (UTC), onafhankelijk van opstarttijd."""
+    import time
+    now = time.time()
+    return (int(now // 1800) + 1) * 1800
+
+
+@api.get("/public/demo-reset-info")
+async def demo_reset_info():
+    import time
+    nxt = _demo_next_reset_ts()
+    return {"seconds_left": max(0, int(nxt - time.time())), "interval_minutes": 30}
+
+
 async def _demo_reset_loop():
-    """Achtergrond-loop: reset demo-omgeving elke 30 minuten."""
+    """Achtergrond-loop: reset demo-omgeving elke 30 minuten (op :00 en :30)."""
     import asyncio
-    # Initiele setup direct bij start
+    import time
     try:
         await _ensure_demo_company()
     except Exception as e:  # noqa: BLE001
         print(f"[demo-reset] initial ensure failed: {e}")
     while True:
         try:
-            await asyncio.sleep(30 * 60)  # 30 minuten
+            await asyncio.sleep(max(1, _demo_next_reset_ts() - time.time()))
             await _demo_reset_tick()
         except asyncio.CancelledError:
             break
         except Exception as e:  # noqa: BLE001
             print(f"[demo-reset] tick failed: {e}")
-
 
 @api.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):

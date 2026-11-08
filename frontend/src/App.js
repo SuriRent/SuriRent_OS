@@ -8,6 +8,7 @@ import { useSheetSwipeToDismiss } from './lib/sheet-swipe';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { installGlobalTapSounds } from './lib/tap-sounds';
 import RotateNotice from './components/RotateNotice';
+import DemoResetTimer from './components/DemoResetTimer';
 import { KtpPrintToast } from './components/KtpPrintToast';
 import BrandedShell from './components/BrandedShell';
 import { isMarketingHost, appUrl } from './lib/env';
@@ -550,6 +551,7 @@ export default function App() {
         <PersonalPinSetup />
         <RotateNotice />
         <KtpPrintToast />
+        <DemoResetTimer />
       </AuthProvider>
     );
   }
@@ -566,6 +568,7 @@ export default function App() {
       <PersonalPinSetup />
       <RotateNotice />
         <KtpPrintToast />
+        <DemoResetTimer />
     </AuthProvider>
   );
 }
