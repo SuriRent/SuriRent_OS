@@ -253,17 +253,33 @@ body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; 
 .kiosk-fullscreen.kiosk-white .h-full.bg-orange-500,
 .kiosk-fullscreen.kiosk-white .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
 .kiosk-fullscreen.kiosk-white .kiosk-head-wrap {
-  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.7)) !important;
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255,255,255,0.9);
-  box-shadow: 0 8px 24px -14px rgba(30,40,60,0.35);
+  background: linear-gradient(180deg, #FFFFFF 0%, #EEF1F6 100%) !important;
+  border-bottom: 1px solid #fff;
+  box-shadow: 0 8px 24px -12px rgba(30,40,60,0.35);
 }
-.kiosk-fullscreen.kiosk-white [data-testid="kiosk-desktop-header"] { background: transparent !important; }
-nav[data-testid="kiosk-bottom-bar"].bg-white,
-nav[data-testid="kiosk-mobile-bottom-bar"].bg-white {
-  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(240,243,247,0.95)) !important;
-  backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(255,255,255,0.9);
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-desktop-header"] {
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(238,241,246,0.85)) !important;
+  border-bottom: 1px solid #fff;
+}
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-10"],
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-11"],
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-admin-menu-btn"] {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E9EDF3 100%) !important;
+  border: 1.5px solid #fff;
+  box-shadow: 0 5px 12px -4px rgba(30,40,60,0.35), inset 0 1px 0 #fff;
+}
+.kiosk-fullscreen.kiosk-white [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
+nav.kiosk-white-nav {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E6EAF0 100%) !important;
+  border-top: 1px solid #fff;
+}
+nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E9EDF3 100%) !important;
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 4px 10px -4px rgba(30,40,60,0.35), inset 0 1px 0 #fff;
+}
+@media (max-width: 767px) {
+  nav.kiosk-white-nav button:not([data-testid="kiosk-mobile-bar-plus"]) { background: transparent !important; border: 0; box-shadow: none; }
 }
 /* The active kiosk root theme is authoritative if the body theme class lags. */
 .kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
