@@ -1,25 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
+import { Zap, Home, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
 function PowerTile({ device, unlinked = false }) {
   const on = device.on;
-  const box = unlinked
-    ? 'bg-slate-100 text-slate-400'
-    : on === true
-      ? 'bg-emerald-400 text-white ring-4 ring-emerald-200 shadow-[0_0_22px_6px_rgba(52,211,153,0.75)]'
-      : on === false
-        ? 'bg-red-100 text-red-500'
-        : 'bg-slate-100 text-slate-400';
-  const label = unlinked ? 'Niet gekoppeld' : on === true ? 'Stroom aan' : on === false ? 'Stroom uit' : (device.tenant_name || 'Status onbekend');
-  const labelColor = unlinked ? 'text-slate-500' : on === true ? 'text-emerald-600' : on === false ? 'text-red-500' : 'text-slate-500';
+  const state = unlinked || on == null ? 'orange' : on ? 'green' : 'red';
+  const th = {
+    green: { border: 'border-green-500 shadow-[0_0_18px_3px_rgba(34,197,94,0.55)]', head: 'bg-green-800', ring: 'border-green-400 bg-green-50 text-green-600 shadow-[0_0_24px_8px_rgba(34,197,94,0.55)]', pill: 'bg-green-100 text-green-800', dot: 'bg-green-500', label: 'Stroom aan' },
+    red: { border: 'border-red-500 shadow-[0_0_18px_3px_rgba(239,68,68,0.55)]', head: 'bg-red-800', ring: 'border-red-400 bg-red-50 text-red-600 shadow-[0_0_24px_8px_rgba(239,68,68,0.55)]', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', label: 'Stroom uit' },
+    orange: { border: 'border-orange-400 shadow-[0_0_18px_3px_rgba(249,115,22,0.55)]', head: 'bg-orange-700', ring: 'border-orange-400 bg-orange-50 text-orange-500 shadow-[0_0_24px_8px_rgba(249,115,22,0.55)]', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
+  }[state];
   return (
-    <div className={`rounded-2xl bg-white/95 p-4 flex flex-col items-center gap-2 ${unlinked ? 'border-2 border-dashed border-slate-300' : 'border border-white shadow-md'}`}>
-      <div className="text-lg font-black text-slate-800">{device.apartment_number}</div>
-      <span data-testid="power-lamp" data-lamp={!unlinked && on === true ? 'on' : 'off'} className={`flex h-14 w-14 items-center justify-center rounded-2xl ${box}`}>
-        <Zap className="h-7 w-7" fill={!unlinked && on === true ? 'currentColor' : 'none'} />
-      </span>
-      <div className={`text-xs font-bold text-center ${labelColor}`}>{label}</div>
+    <div className={`overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state}>
+      <div className={`flex items-center justify-center gap-2 px-3 py-2.5 text-white ${th.head}`}>
+        <Home className="h-5 w-5 shrink-0" />
+        <span className="truncate text-base font-black uppercase tracking-wide">{device.apartment_number}</span>
+      </div>
+      <div className="flex flex-col items-center gap-3 px-3 py-4">
+        <span data-testid="power-lamp" className={`flex h-16 w-16 items-center justify-center rounded-full border-2 animate-pulse ${th.ring}`}>
+          <Zap className="h-8 w-8 animate-pulse" fill="currentColor" />
+        </span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${th.pill}`}>
+          <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${th.dot}`} />
+          {th.label}
+        </span>
+      </div>
     </div>
   );
 }
