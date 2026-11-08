@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   CheckCircle2, AlertCircle, ArrowUp, ArrowDown, Loader2, Landmark, Banknote, Copy, Check,
-  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert,
+  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert, Crown,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
@@ -23,7 +23,7 @@ const intervalLabel = (interval) => ({
   once: 'eenmalig',
 }[interval] || 'maand');
 const METHOD_LABEL = { creditcard: 'Creditcard', ideal: 'iDEAL', bank: 'Bank', stripe: 'Stripe', contant: 'Contant' };
-const CARD = 'bg-white rounded-2xl border border-orange-100';
+const CARD = 'bg-white rounded-2xl border border-slate-200 shadow-sm';
 
 function StatusPill({ tone, children }) {
   const t = {
@@ -490,11 +490,40 @@ export default function MijnAbonnement() {
       {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="my-sub-error">{err}</div>}
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
-      <header className="border-b border-slate-200 pb-4">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#FF6A1A]">Facturering</p>
-        <h2 className="mt-1 text-xl sm:text-2xl font-black tracking-tight text-slate-900">Mijn abonnement</h2>
-        <p className="mt-1 text-sm text-slate-500">Beheer betalingen, facturen en je pakket op één plek.</p>
-      </header>
+      {(() => {
+        const plan = plans.find((p) => p.id === me.plan_id);
+        const tone = { active: 'bg-emerald-400/20 text-emerald-200', trial: 'bg-sky-400/20 text-sky-200', expired: 'bg-red-400/20 text-red-200' }[me.status] || 'bg-white/15 text-white/80';
+        const label = { active: 'Actief', trial: 'Proefperiode', expired: 'Verlopen' }[me.status] || me.status;
+        return (
+          <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg" data-testid="my-sub-hero">
+            <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#FF5C00]/30 blur-3xl" />
+            <div className="relative flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#E05200] shadow-lg"><Crown className="h-6 w-6 text-white" /></span>
+                <div>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/50">Huidig pakket</p>
+                  <p className="text-2xl font-black tracking-tight">{plan?.name || 'Abonnement'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                {me.monthly_amount != null && (
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-white/50">Prijs</p>
+                    <p className="text-xl font-black tabular-nums">{fmt(me.monthly_amount, me.currency)}<span className="text-xs font-semibold text-white/50"> / {intervalLabel(plan?.interval)}</span></p>
+                  </div>
+                )}
+                {me.renews_at && (
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-white/50">Vernieuwing</p>
+                    <p className="text-sm font-extrabold">{fmtDate(me.renews_at)}</p>
+                  </div>
+                )}
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${tone}`}>{label}</span>
+              </div>
+            </div>
+          </header>
+        );
+      })()}
 
       <section aria-label="Betalingen en facturen" className={`grid grid-cols-1 gap-4 [&>*]:min-w-0 ${stripeOn ? 'xl:grid-cols-5' : ''}`}>
         <div className={stripeOn ? 'xl:col-span-3' : ''}>
