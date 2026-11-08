@@ -243,7 +243,21 @@ body.kiosk-green-active [class*="text-orange-500"],
 body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; }
 /* The active kiosk root theme is authoritative if the body theme class lags. */
 .kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
-/* Desktop (md+): golvende achtergrond, glazen balken boven/onder, glanzende knoppen. Mobiel blijft ongewijzigd. */
+/* Mobiel: staande golvende achtergrond; effen oranje lagen doorzichtig. */
+@media (max-width: 767px) {
+  .kiosk-fullscreen[data-theme="orange"] {
+    background-image: var(--kiosk-orange-bg-portrait, none); background-size: cover; background-position: center;
+  }
+  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
+  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
+  .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap { background: transparent !important; }
+  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] {
+    background: linear-gradient(180deg, rgba(255,150,40,0.55), rgba(255,107,26,0.35)) !important;
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,0.45);
+  }
+}
+/* Desktop (md+): golvende achtergrond, glazen balken, glanzende knoppen. Mobiel blijft ongewijzigd. */
 @media (min-width: 768px) {
   .kiosk-fullscreen[data-theme="orange"] {
     background-image: var(--kiosk-orange-bg, none); background-size: cover; background-position: center;
