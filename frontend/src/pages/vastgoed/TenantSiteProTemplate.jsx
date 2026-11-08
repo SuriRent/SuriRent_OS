@@ -36,8 +36,8 @@ function Navbar({ company }) {
   return (
     <header className={`fixed ${editMode ? 'top-8' : 'top-0'} inset-x-0 z-50 backdrop-blur-xl transition-colors duration-300 ${
       solid ? 'bg-white/85 border-b border-stone-200/80' : 'bg-[#0F1115]/30 border-b border-white/10'}`}>
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between">
-        <a className="flex items-center gap-3 group" href="#top" data-testid="tenant-landing-logo">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 h-[72px] flex items-center justify-between gap-2">
+        <a className="flex items-center gap-2.5 sm:gap-3 group min-w-0" href="#top" data-testid="tenant-landing-logo">
           {logo ? (
             <EditableImage path="logo_url" fallback={logo} alt={company?.name} className="w-10 h-10 rounded-xl object-cover" />
           ) : (
@@ -45,25 +45,25 @@ function Navbar({ company }) {
               {initials}
             </span>
           )}
-          <span className="leading-tight">
+          <span className="leading-tight min-w-0">
             <EditableText path="brand_name" fallback={company?.name || 'Vastgoed'} as="span"
-              className={`block font-bold text-[15px] tracking-tight ${solid ? 'text-[#121519]' : 'text-white'}`} style={DISPLAY} />
+              className={`block font-bold text-sm sm:text-[15px] tracking-tight truncate ${solid ? 'text-[#121519]' : 'text-white'}`} style={DISPLAY} />
             <EditableText path="brand_tagline" fallback="Vastgoed" as="span"
               className="block text-[10px] font-semibold uppercase tracking-[0.28em] text-[#FF5C00]" />
           </span>
         </a>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-2 sm:gap-6 shrink-0">
           <button type="button" onClick={() => go('woningen')}
             className={`hidden sm:block text-sm font-medium transition-colors duration-200 hover:text-[#FF5C00] ${solid ? 'text-[#525866]' : 'text-white/80'}`}>
             Woningen
           </button>
           <a href={loginHref} data-testid="tenant-landing-login"
-            className={`text-sm font-semibold px-5 py-2.5 rounded-full border transition-all duration-150 active:scale-95 hover:border-[#FF5C00] hover:text-[#FF5C00] ${
+            className={`text-xs sm:text-sm font-semibold whitespace-nowrap px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full border transition-all duration-150 active:scale-95 hover:border-[#FF5C00] hover:text-[#FF5C00] ${
               solid ? 'border-stone-300 text-[#121519]' : 'border-white/30 text-white'}`}>
             Inloggen
           </a>
           <button type="button" onClick={() => go('woningen')}
-            className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#FF5C00] text-white hover:bg-[#E05200] active:scale-95 transition-all duration-150">
+            className="text-xs sm:text-sm font-semibold whitespace-nowrap px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full bg-[#FF5C00] text-white hover:bg-[#E05200] active:scale-95 transition-all duration-150">
             <EditableText path="header_cta" fallback="Bekijk aanbod" as="span" />
           </button>
         </nav>
@@ -81,7 +81,7 @@ function Hero({ company, free }) {
           alt="" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0F1115] via-[#0F1115]/60 to-[#0F1115]/30 pointer-events-none" />
       </div>
-      <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 pb-24 pt-40 w-full">
+      <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 pb-16 sm:pb-24 pt-32 sm:pt-40 w-full">
         <div className="flex flex-wrap items-center gap-3 mb-8">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white/90 text-xs font-semibold uppercase tracking-widest">
             <ShieldCheck className="w-3.5 h-3.5 text-[#FF5C00]" />
@@ -91,7 +91,7 @@ function Hero({ company, free }) {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Live · SuriRent API
           </span>
         </div>
-        <h1 className="font-extrabold tracking-tight leading-[1.06] text-4xl sm:text-5xl lg:text-6xl text-white max-w-4xl" style={DISPLAY}>
+        <h1 className="font-extrabold tracking-tight leading-[1.06] text-[2rem] sm:text-5xl lg:text-6xl text-white max-w-4xl break-words" style={DISPLAY}>
           <EditableText path="hero.title_line1" fallback="Exclusieve woningen te" as="span" />{' '}
           <EditableText path="hero.title_accent" fallback="huur" as="span" style={{ color: ORANGE }} />{' '}
           <EditableText path="hero.title_line2" fallback="in Suriname" as="span" />
@@ -101,14 +101,14 @@ function Hero({ company, free }) {
             fallback={`${company?.name || 'Wij'} beheert en verhuurt zorgvuldig geselecteerde woningen in Paramaribo en omgeving.`} as="span" />
           {' '}<span className="text-white font-semibold">Momenteel {free} {free === 1 ? 'woning' : 'woningen'} beschikbaar.</span>
         </p>
-        <div className="mt-10 flex flex-wrap items-center gap-4">
+        <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4">
           <button type="button" onClick={() => document.getElementById('woningen')?.scrollIntoView({ behavior: 'smooth' })}
-            className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-[#FF5C00] text-white font-semibold hover:bg-[#E05200] active:scale-95 transition-all duration-150">
+            className="inline-flex items-center justify-center gap-3 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-[#FF5C00] text-white font-semibold hover:bg-[#E05200] active:scale-95 transition-all duration-150">
             <EditableText path="hero.cta_primary" fallback="Bekijk het aanbod" as="span" />
             <ArrowDown className="w-4 h-4 animate-bounce" />
           </button>
           <a href={loginHref}
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/30 text-white font-semibold hover:border-[#FF5C00] hover:text-[#FF5C00] active:scale-95 transition-all duration-150">
+            className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full border border-white/30 text-white font-semibold hover:border-[#FF5C00] hover:text-[#FF5C00] active:scale-95 transition-all duration-150">
             <EditableText path="hero.cta_secondary" fallback="Huurder? Log in via SuriRent" as="span" />
           </a>
         </div>
@@ -210,7 +210,7 @@ function Listing({ company, apartments, filter, setFilter }) {
     if (q && !`${a.number || ''} ${a.address || ''} ${a.description || ''}`.toLowerCase().includes(q)) return false;
     return true;
   });
-  const num = 'w-24 px-3 py-3 rounded-xl bg-[#F8F6F2] border border-transparent focus:border-[#FF5C00] outline-none text-sm text-[#121519] transition-colors duration-200';
+  const num = 'flex-1 min-w-0 sm:flex-none sm:w-24 px-3 py-3 rounded-xl bg-[#F8F6F2] border border-transparent focus:border-[#FF5C00] outline-none text-sm text-[#121519] transition-colors duration-200';
   return (
     <main id="woningen" className="max-w-7xl mx-auto px-5 sm:px-8 py-16 sm:py-24 scroll-mt-20">
       <div className="mb-10">
@@ -218,15 +218,15 @@ function Listing({ company, apartments, filter, setFilter }) {
         <EditableText path="aanbod.title" fallback="Beschikbare woningen" as="h2"
           className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[#121519]" style={DISPLAY} />
       </div>
-      <div className="sticky top-[84px] z-30 backdrop-blur-md bg-white/90 shadow-xl rounded-2xl border border-stone-200/80 p-4" data-testid="tenant-search">
+      <div className="lg:sticky top-[84px] z-30 backdrop-blur-md bg-white/90 shadow-xl rounded-2xl border border-stone-200/80 p-4" data-testid="tenant-search">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <label className="flex items-center gap-3 flex-1 px-4 py-3 rounded-xl bg-[#F8F6F2] border border-transparent focus-within:border-[#FF5C00] transition-colors duration-200">
             <Search className="w-4 h-4 text-[#8C95A6] shrink-0" />
             <input placeholder="Zoek op adres of titel..." className="w-full bg-transparent outline-none text-sm text-[#121519] placeholder:text-[#8C95A6]"
               type="text" value={filter.q} onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))} />
           </label>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-[#8C95A6] whitespace-nowrap">Huurprijs p/m</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="w-full sm:w-auto text-xs font-semibold uppercase tracking-widest text-[#8C95A6] whitespace-nowrap">Huurprijs p/m</span>
             <input min="0" placeholder="Min" className={num} type="number" value={filter.min || ''} onChange={(e) => setFilter((f) => ({ ...f, min: e.target.value }))} />
             <span className="text-[#8C95A6]">—</span>
             <input min="0" placeholder="Max" className={num} type="number" value={filter.max || ''} onChange={(e) => setFilter((f) => ({ ...f, max: e.target.value }))} />
@@ -357,9 +357,15 @@ export default function ProPage({ company, apartments, filter, setFilter }) {
     l.id = 'villa-fonts'; l.rel = 'stylesheet'; l.href = FONT_HREF;
     document.head.appendChild(l);
   }, []);
+  useEffect(() => {
+    const h = document.documentElement; const b = document.body;
+    const prev = [h.style.background, b.style.background, h.style.overflowX, b.style.overflowX];
+    h.style.background = '#0F1115'; b.style.background = '#FAF8F5'; h.style.overflowX = 'hidden'; b.style.overflowX = 'hidden';
+    return () => { h.style.background = prev[0]; b.style.background = prev[1]; h.style.overflowX = prev[2]; b.style.overflowX = prev[3]; };
+  }, []);
   const free = apartments.filter((a) => a.status !== 'occupied').length;
   return (
-    <div className="bg-[#FAF8F5] min-h-screen antialiased" style={BODY}>
+    <div className="bg-[#FAF8F5] min-h-screen antialiased w-full max-w-full overflow-x-hidden" style={BODY}>
       <Navbar company={company} />
       <Hero company={company} free={free} />
       <Marquee company={company} />
