@@ -2,64 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
-function BreakerTile({ device, orangeMode = false, unlinked = false }) {
-  const { on, apartment_number: apartmentNumber, tenant_name: tenantName } = device;
-  const isOn = on === true;
-  const isOff = on === false;
-  const lamp = isOn
-    ? 'bg-emerald-400 ring-2 ring-emerald-300/70 shadow-[0_0_6px_2px_rgba(52,211,153,0.95),0_0_16px_4px_rgba(52,211,153,0.6)]'
-    : isOff ? 'bg-red-500/80 shadow-[0_0_6px_rgba(248,113,113,0.6)]'
-      : unlinked ? 'bg-slate-500' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]';
-  const accent = orangeMode ? 'text-orange-400' : 'text-sky-300';
-  const buttonColors = orangeMode
-    ? 'border-orange-800 bg-gradient-to-b from-orange-300 to-orange-600'
-    : 'border-slate-500 bg-gradient-to-b from-sky-300 to-cyan-600';
-  return (
-    <span aria-hidden="true"
-      className="relative mx-auto flex aspect-[1.45/1] min-h-[9rem] w-full flex-col overflow-hidden rounded-xl border border-slate-400 bg-gradient-to-b from-white via-slate-100 to-slate-300 p-1.5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.95),0_8px_18px_rgba(15,23,42,0.22)]">
-      <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 left-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="flex flex-none items-center justify-between rounded-t border-b border-slate-300 bg-gradient-to-b from-white to-slate-200 px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
-        <span>N&nbsp; POWER</span><span>L↓</span>
-      </span>
-      <span className="flex flex-1 items-center justify-around bg-gradient-to-b from-slate-200 to-slate-300 py-1">
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-      </span>
-      <span className="mx-1 flex flex-1 flex-col items-center border-x border-slate-300 bg-gradient-to-b from-slate-100 to-slate-300 px-2 py-1.5">
-        <span className="flex w-full items-center justify-between rounded-sm bg-gradient-to-b from-slate-800 to-slate-950 px-2 py-1 text-[8px] font-black tracking-[0.14em] text-white shadow-sm">
-          <span className={accent}>SURI RENT</span>
-          <span className={`h-3 w-3 rounded-full border border-white/30 ${lamp}`} data-testid="power-lamp" data-lamp={isOn ? 'on' : isOff ? 'off' : 'none'} />
-        </span>
-        <span className="mt-1 flex w-full min-w-0 flex-col items-center border border-slate-400 bg-white px-2 py-1 text-center shadow-sm">
-          <span className="max-w-full truncate text-xs font-black leading-tight text-slate-900">{apartmentNumber}</span>
-          <span className="max-w-full truncate text-[8px] font-medium leading-tight text-slate-500">{tenantName || 'Geen huurder'}</span>
-        </span>
-        <span className="mt-1 flex items-center gap-1 text-[6px] font-bold tracking-wider text-slate-300">
-          <span>BREAKER</span><span>·</span><span>POWER</span>
-        </span>
-        <span className="my-1 flex flex-1 items-center justify-center">
-          <span className={`flex h-9 w-9 items-center justify-center rounded-full border-[3px] shadow-[inset_0_2px_3px_rgba(255,255,255,0.65),0_3px_6px_rgba(15,23,42,0.3)] transition duration-300 ${buttonColors} ${isOn ? 'ring-2 ring-emerald-400/80' : isOff ? 'opacity-75' : 'opacity-90'}`}>
-            <Power className="h-5 w-5 text-slate-900" strokeWidth={2.6} />
-          </span>
-        </span>
-        <span className={`text-[7px] font-black tracking-widest ${isOn ? 'text-emerald-700' : isOff ? 'text-red-700' : 'text-slate-500'}`}>
-          {unlinked ? 'NIET GEKOPPELD' : isOn ? 'I  AAN' : isOff ? 'O  UIT' : 'STATUS ONBEKEND'}
-        </span>
-      </span>
-      <span className="flex flex-1 items-center justify-around bg-gradient-to-b from-slate-300 to-slate-200 py-1">
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-      </span>
-      <span className="flex flex-none items-center justify-between rounded-b border-t border-slate-300 bg-gradient-to-b from-slate-200 to-white px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
-        <span>N&nbsp; LOAD</span><span>L↓</span>
-      </span>
-    </span>
-  );
-}
-
 function Rocker({ on, busy, onToggle, orangeMode = false }) {
   const isOn = on === true;
   const isOff = on === false;
@@ -249,12 +191,12 @@ export default function PowerControl({ kiosk = false, orangeMode = false }) {
           <button key={d.id} type="button" onClick={() => setOpen(d)} data-testid={`power-tile-${d.id}`}
             aria-label={`${d.apartment_number}, ${d.tenant_name || 'Geen huurder'}, stroom ${d.on === true ? 'aan' : d.on === false ? 'uit' : 'onbekend'}. Open bediening.`}
             className="rounded-2xl border-0 bg-transparent p-0 text-left shadow-none transition active:scale-[0.98] hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-            <BreakerTile device={d} orangeMode={orangeMode} />
+            <PowerTile device={d} />
           </button>
         ))}
         {free.map((a) => (
-          <div key={a.id} className="opacity-60" data-testid={`power-free-${a.id}`}>
-            <BreakerTile device={{ apartment_number: a.number, tenant_name: 'Niet gekoppeld', on: undefined }} orangeMode={orangeMode} unlinked />
+          <div key={a.id} data-testid={`power-free-${a.id}`}>
+            <PowerTile device={{ apartment_number: a.number }} unlinked />
           </div>
         ))}
       </div>
