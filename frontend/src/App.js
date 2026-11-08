@@ -528,6 +528,7 @@ export default function App() {
             <Route path="/login" element={<Navigate to={`/${slug}/login`} replace />} />
             <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
             <Route path="/superadmin/login" element={<SuperadminLogin />} />
+            <Route path="/landing-preview" element={<TenantPublicLanding />} />
             <Route path="/admin/*" element={<Navigate to={`/${slug}/admin`} replace />} />
             <Route path="/kiosk" element={<Navigate to={`/${slug}/kiosk`} replace />} />
             <Route path="/kiosk/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
