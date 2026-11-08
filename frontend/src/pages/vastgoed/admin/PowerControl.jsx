@@ -2,10 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
-function BreakerTile({ device, orangeMode = false }) {
+function BreakerTile({ device, orangeMode = false, unlinked = false }) {
   const { on, apartment_number: apartmentNumber, tenant_name: tenantName } = device;
   const isOn = on === true;
   const isOff = on === false;
+  const lamp = isOn
+    ? 'bg-emerald-400 ring-2 ring-emerald-300/70 shadow-[0_0_6px_2px_rgba(52,211,153,0.95),0_0_16px_4px_rgba(52,211,153,0.6)]'
+    : isOff ? 'bg-red-500/80 shadow-[0_0_6px_rgba(248,113,113,0.6)]'
+      : unlinked ? 'bg-slate-500' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]';
   const accent = orangeMode ? 'text-orange-400' : 'text-sky-300';
   const buttonColors = orangeMode
     ? 'border-orange-800 bg-gradient-to-b from-orange-300 to-orange-600'
@@ -27,7 +31,7 @@ function BreakerTile({ device, orangeMode = false }) {
       <span className="mx-1 flex flex-1 flex-col items-center border-x border-slate-300 bg-gradient-to-b from-slate-100 to-slate-300 px-2 py-1.5">
         <span className="flex w-full items-center justify-between rounded-sm bg-gradient-to-b from-slate-800 to-slate-950 px-2 py-1 text-[8px] font-black tracking-[0.14em] text-white shadow-sm">
           <span className={accent}>SURI RENT</span>
-          <span className={`h-2 w-2 rounded-full border border-white/30 ${isOn ? 'bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-400 shadow-[0_0_7px_rgba(248,113,113,0.7)]' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]'}`} />
+          <span className={`h-3 w-3 rounded-full border border-white/30 ${lamp}`} data-testid="power-lamp" data-lamp={isOn ? 'on' : isOff ? 'off' : 'none'} />
         </span>
         <span className="mt-1 flex w-full min-w-0 flex-col items-center border border-slate-400 bg-white px-2 py-1 text-center shadow-sm">
           <span className="max-w-full truncate text-xs font-black leading-tight text-slate-900">{apartmentNumber}</span>
@@ -42,7 +46,7 @@ function BreakerTile({ device, orangeMode = false }) {
           </span>
         </span>
         <span className={`text-[7px] font-black tracking-widest ${isOn ? 'text-emerald-700' : isOff ? 'text-red-700' : 'text-slate-500'}`}>
-          {isOn ? 'I  AAN' : isOff ? 'O  UIT' : 'STATUS ONBEKEND'}
+          {unlinked ? 'NIET GEKOPPELD' : isOn ? 'I  AAN' : isOff ? 'O  UIT' : 'STATUS ONBEKEND'}
         </span>
       </span>
       <span className="flex flex-1 items-center justify-around bg-gradient-to-b from-slate-300 to-slate-200 py-1">
@@ -249,10 +253,8 @@ export default function PowerControl({ kiosk = false, orangeMode = false }) {
           </button>
         ))}
         {free.map((a) => (
-          <div key={a.id} className="rounded-2xl p-4 flex flex-col items-center text-center gap-2 bg-white/70 border-2 border-dashed border-slate-300 opacity-80" data-testid={`power-free-${a.id}`}>
-            <span className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-300 flex items-center justify-center"><Zap className="w-6 h-6" /></span>
-            <span className="font-black text-slate-700 text-base leading-tight">{a.number}</span>
-            <span className="text-[11px] text-slate-400">Niet gekoppeld</span>
+          <div key={a.id} className="opacity-60" data-testid={`power-free-${a.id}`}>
+            <BreakerTile device={{ apartment_number: a.number, tenant_name: 'Niet gekoppeld', on: undefined }} orangeMode={orangeMode} unlinked />
           </div>
         ))}
       </div>
