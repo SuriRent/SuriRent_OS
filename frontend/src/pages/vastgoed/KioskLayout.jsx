@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
 import {
@@ -730,10 +731,7 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
     if (!file) return;
     setScanning(true); setErr('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('user_key', 'link-tenant');
-      const { data } = await api.post('/kiosk/id-scan', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await postIdOcr('/kiosk/id-scan', file, { user_key: 'link-tenant' });
       const sc = data?.scan || {};
       setF((p) => ({ ...p, name: sc.name || p.name, id_number: sc.id_number || p.id_number, birth_date: sc.birth_date || p.birth_date }));
       setScan(data);
@@ -4712,11 +4710,7 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
     setScannedIdFile(file);
     setScanning(true); setErr(''); setScanMsg('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await api.post('/tenants/ocr-id-card', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const r = await postIdOcr('/tenants/ocr-id-card', file);
       const d = r?.data || {};
       if (d.name) setName(d.name);
       if (d.birth_date) setBirthDate(d.birth_date);

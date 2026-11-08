@@ -9105,13 +9105,28 @@ async def public_signature_request_submit(token: str, file: UploadFile = File(..
 
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
-                       user=Depends(get_current_user)):
-    """OCR van een ID-kaart via Gemini 2.5. Retourneert de gevonden velden
-    zodat het huurder-formulier automatisch ingevuld kan worden. Werkt met
-    Surinaamse ID's, paspoorten en NL rijbewijzen."""
+                       user=Depends(get_current_user),
+                       ocr_done: str = Form(""), ocr_name: str = Form(""),
+                       ocr_id_number: str = Form(""), ocr_birth_date: str = Form(""),
+                       ocr_confidence: str = Form("0")):
+    """ID-kaart velden. De browser leest de kaart met Tesseract.js en stuurt de
+    herkende velden mee (ocr_*). Zonder die velden valt dit terug op Gemini
+    (EMERGENT_LLM_KEY) voor oudere clients."""
     import os
     import json as _json
     import tempfile
+    if ocr_done:
+        try:
+            conf = max(0.0, min(1.0, float(ocr_confidence or 0)))
+        except ValueError:
+            conf = 0.0
+        bd = ocr_birth_date.strip()
+        return {
+            "name": ocr_name.strip()[:120],
+            "id_number": re.sub(r"[^A-Z0-9]", "", ocr_id_number.upper())[:20],
+            "birth_date": bd if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bd) else "",
+            "confidence": conf,
+        }
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
     except Exception as e:
@@ -10916,13 +10931,18 @@ async def _kiosk_cached(name: str, sc: dict, compute):
 
 @api.post("/kiosk/id-scan")
 async def kiosk_id_scan(file: UploadFile = File(...), user_key: str = Form(""),
+                        ocr_done: str = Form(""), ocr_name: str = Form(""),
+                        ocr_id_number: str = Form(""), ocr_birth_date: str = Form(""),
+                        ocr_confidence: str = Form("0"),
                         _session=Depends(get_kiosk_session)):
     # Telefoon scant ID → OCR + foto bewaren → desktop van dezelfde gebruiker krijgt de gegevens via WS.
     cid = _session["company_id"]
     if not (file.content_type or "").lower().startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload een foto van de ID-kaart")
     try:
-        scan = await ocr_id_card(file=file, user={})
+        scan = await ocr_id_card(file=file, user={}, ocr_done=ocr_done, ocr_name=ocr_name,
+                                 ocr_id_number=ocr_id_number, ocr_birth_date=ocr_birth_date,
+                                 ocr_confidence=ocr_confidence)
     except HTTPException:
         raise
     except Exception:

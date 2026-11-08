@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScanLine, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { api, formatError } from '../lib/api';
+import { postIdOcr } from '../lib/idOcr';
 import { getKioskUserKey } from '../lib/kiosk-live';
 
 // Telefoon: SCAN ID → camera → OCR op de server → desktop van dezelfde gebruiker opent Nieuwe huurder.
@@ -13,10 +14,7 @@ export function PhoneIdScan({ onClose, CameraModal }) {
     if (!file) { onClose(); return; }
     setPhase('busy'); setErr('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('user_key', getKioskUserKey());
-      const { data } = await api.post('/kiosk/id-scan', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await postIdOcr('/kiosk/id-scan', file, { user_key: getKioskUserKey() });
       setResult(data.scan || {});
       setPhase('done');
     } catch (e) { setErr(formatError(e)); setPhase('error'); }
