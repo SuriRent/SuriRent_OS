@@ -5905,7 +5905,7 @@ export default function KioskLayout() {
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   const [kioskTheme, setKioskTheme] = useState(() => {
     const stored = localStorage.getItem('kiosk_theme');
-    return ['orange', 'white', 'green'].includes(stored) ? stored : 'orange';
+    return stored === 'orange' ? 'orange' : 'white';
   });
   useEffect(() => {
     const root = document.documentElement;
@@ -5916,20 +5916,20 @@ export default function KioskLayout() {
     };
   }, []);
   useEffect(() => {
-    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { t = t === 'orange' ? 'orange' : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
     return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'green' : 'orange';
+    const next = kioskTheme === 'orange' ? 'white' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isWhite = kioskTheme === 'white';
-  const isGreen = kioskTheme === 'green';
+  const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
     const bg = isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
@@ -5941,7 +5941,7 @@ export default function KioskLayout() {
   }, [isWhite, isGreen]);
   useEffect(() => {
     const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'white' ? '#FFFFFF' : savedTheme === 'green' ? '#F2F8F4' : '#FF5C00';
+    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : '#FFFFFF';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;

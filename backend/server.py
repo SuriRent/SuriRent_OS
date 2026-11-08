@@ -10991,13 +10991,13 @@ async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
 
 
 class KioskThemeIn(BaseModel):
-    theme: Literal["orange", "white", "green"]
+    theme: Literal["orange", "white"]
 
 
 @api.get("/kiosk/theme")
 async def kiosk_get_theme(_session=Depends(get_kiosk_session)):
     c = await db.companies.find_one({"id": _session["company_id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
-    return {"theme": c.get("kiosk_theme") or "orange"}
+    return {"theme": "orange" if c.get("kiosk_theme") == "orange" else "white"}
 
 
 @api.put("/kiosk/theme")
