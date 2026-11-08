@@ -15,7 +15,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen,
+  BookOpen, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -399,9 +399,9 @@ function DesktopKioskHeader({
         </span>
       </div>
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
-        className={`hidden md:flex flex-1 min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-        {loc && <MapPin className="w-5 h-5 shrink-0" />}
-        <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
+        className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+        {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
+        <span className="truncate">{currentStep === 'stroom' ? title : loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
@@ -5097,7 +5097,7 @@ function useBodyScrollLock() {
 }
 
 function KioskHistBtn({ dir, disabled, onClick, white, green = false }) {
-  const Ico = dir === 'back' ? ChevronLeft : ChevronRight;
+  const Ico = dir === 'back' ? (white || green ? ChevronLeft : LayoutGrid) : ChevronRight;
   return (
     <button type="button" onClick={onClick} disabled={disabled} data-testid={`kiosk-bar-${dir}`} aria-label={dir === 'back' ? 'Vorig scherm' : 'Volgend scherm'}
       className={`shrink-0 w-16 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 transition-[background-color,opacity] duration-150 disabled:opacity-35 disabled:cursor-default ${green ? 'text-[#087A55] bg-emerald-50 enabled:hover:bg-emerald-100' : white ? 'text-[#FF5C00] bg-orange-50 enabled:hover:bg-orange-100' : 'text-[#F26A12] bg-white enabled:hover:bg-orange-50'}`}>
