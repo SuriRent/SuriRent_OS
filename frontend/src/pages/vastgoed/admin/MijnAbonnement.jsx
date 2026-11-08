@@ -7,7 +7,6 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
-import { Tab } from './invoices/kpi';
 
 const fmt = (n, c = 'SRD') => {
   const cur = (c || 'SRD').toUpperCase();
@@ -64,8 +63,8 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
   useEffect(() => { setSel(new Set(openInvoices.map((i) => i.id))); }, [key]);
   if (openInvoices.length === 0) {
     return (
-      <div className={`${CARD} px-5 py-4 flex items-center gap-3`} data-testid="saas-all-paid">
-        <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center shrink-0"><CheckCircle2 className="w-5 h-5" /></span>
+      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex items-center gap-4" data-testid="saas-all-paid">
+        <span className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow"><CheckCircle2 className="w-6 h-6" /></span>
         <div>
           <p className="text-sm font-black text-slate-900">Alles is betaald</p>
           <p className="text-xs text-slate-500">Er staan geen facturen open. Nieuwe facturen verschijnen hier automatisch.</p>
@@ -176,7 +175,13 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
 }
 
 function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
-  if (invoices.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen facturen.</p>;
+  if (invoices.length === 0) return (
+    <div className="p-10 flex flex-col items-center gap-3 text-center">
+      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><Receipt className="w-8 h-8" /></span>
+      <p className="text-base font-black text-slate-900">Nog geen facturen</p>
+      <p className="text-sm text-slate-500">Zodra er een factuur is, verschijnt die hier.</p>
+    </div>
+  );
   return (
     <div data-testid="my-invoices-list">
       <div className="hidden md:grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-orange-100">
@@ -225,7 +230,13 @@ function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
 }
 
 function PaymentsPanel({ payments }) {
-  if (payments.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen betalingen.</p>;
+  if (payments.length === 0) return (
+    <div className="p-10 flex flex-col items-center gap-3 text-center">
+      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><CreditCard className="w-8 h-8" /></span>
+      <p className="text-base font-black text-slate-900">Nog geen betalingen</p>
+      <p className="text-sm text-slate-500">Uw betalingen verschijnen hier.</p>
+    </div>
+  );
   return (
     <div className="divide-y divide-orange-50" data-testid="my-payments-list">
       {payments.map((p) => (
@@ -492,33 +503,29 @@ export default function MijnAbonnement() {
 
       {(() => {
         const plan = plans.find((p) => p.id === me.plan_id);
-        const tone = { active: 'bg-emerald-400/20 text-emerald-200', trial: 'bg-sky-400/20 text-sky-200', expired: 'bg-red-400/20 text-red-200' }[me.status] || 'bg-white/15 text-white/80';
         const label = { active: 'Actief', trial: 'Proefperiode', expired: 'Verlopen' }[me.status] || me.status;
         return (
-          <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg" data-testid="my-sub-hero">
-            <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#FF5C00]/30 blur-3xl" />
-            <div className="relative flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF8A3D] to-[#E05200] shadow-lg"><Crown className="h-6 w-6 text-white" /></span>
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/50">Huidig pakket</p>
-                  <p className="text-2xl font-black tracking-tight">{plan?.name || 'Abonnement'}</p>
+          <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF8A3D] via-[#FF6A1A] to-[#E05200] p-6 text-white shadow-[0_12px_30px_-12px_rgba(224,82,0,0.6)]" data-testid="my-sub-hero">
+            <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+            <div className="pointer-events-none absolute -left-10 -bottom-20 h-48 w-48 rounded-full bg-black/10 blur-2xl" />
+            <div className="relative flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30"><Crown className="h-7 w-7 text-white" /></span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-white/70">Huidig pakket</p>
+                  <p className="text-3xl font-black tracking-tight truncate">{plan?.name || 'Abonnement'}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-6">
-                {me.monthly_amount != null && (
-                  <div className="text-right">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-white/50">Prijs</p>
-                    <p className="text-xl font-black tabular-nums">{fmt(me.monthly_amount, me.currency)}<span className="text-xs font-semibold text-white/50"> / {intervalLabel(plan?.interval)}</span></p>
-                  </div>
-                )}
-                {me.renews_at && (
-                  <div className="text-right">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-white/50">Vernieuwing</p>
-                    <p className="text-sm font-extrabold">{fmtDate(me.renews_at)}</p>
-                  </div>
-                )}
-                <span className={`rounded-full px-3 py-1 text-xs font-black ${tone}`}>{label}</span>
+              <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-black text-[#E05200] shadow">{label}</span>
+            </div>
+            <div className="relative mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white/15 p-4 ring-1 ring-white/20">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-white/70">Prijs</p>
+                <p className="mt-1 text-2xl font-black tabular-nums">{me.monthly_amount != null ? fmt(me.monthly_amount, me.currency) : '—'}<span className="text-xs font-semibold text-white/70"> / {intervalLabel(plan?.interval)}</span></p>
+              </div>
+              <div className="rounded-2xl bg-white/15 p-4 ring-1 ring-white/20">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-white/70">Vernieuwing</p>
+                <p className="mt-1 text-2xl font-black">{me.renews_at ? fmtDate(me.renews_at) : '—'}</p>
               </div>
             </div>
           </header>
@@ -540,14 +547,21 @@ export default function MijnAbonnement() {
         )}
       </section>
 
-      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-1 sm:gap-3 overflow-x-auto border-b border-slate-200 no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0" data-testid="my-sub-tabs">
-        <Tab v="invoices" tab={tab} setTab={setTab} label={`Facturen (${invoices.length})`} dot={openInvoices.length ? 'red' : undefined} testid="my-sub-tab-invoices" />
-        <Tab v="payments" tab={tab} setTab={setTab} label={`Betalingen (${payments.length})`} dot="green" testid="my-sub-tab-payments" />
-        <Tab v="plans" tab={tab} setTab={setTab} label="Pakket wijzigen" testid="my-sub-tab-plans" />
-        {showBank && <Tab v="bank" tab={tab} setTab={setTab} label="Bankoverschrijving" testid="my-sub-tab-bank" />}
+      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-2 overflow-x-auto rounded-2xl bg-orange-50 p-1.5 no-scrollbar" data-testid="my-sub-tabs">
+        {[
+          ['invoices', `Facturen (${invoices.length})`, 'my-sub-tab-invoices', Receipt],
+          ['payments', `Betalingen (${payments.length})`, 'my-sub-tab-payments', CreditCard],
+          ['plans', 'Pakket wijzigen', 'my-sub-tab-plans', Crown],
+          ...(showBank ? [['bank', 'Bankoverschrijving', 'my-sub-tab-bank', Landmark]] : []),
+        ].map(([v, lbl, tid, Icon]) => (
+          <button key={v} type="button" onClick={() => setTab(v)} data-testid={tid}
+            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-extrabold transition-all ${tab === v ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 hover:bg-white'}`}>
+            <Icon className="h-4 w-4" />{lbl}
+          </button>
+        ))}
       </nav>
 
-      <div className={`${CARD} overflow-hidden`} data-testid={`my-sub-panel-${tab}`}>
+      <div className="bg-white rounded-3xl border border-orange-100 shadow-sm overflow-hidden" data-testid={`my-sub-panel-${tab}`}>
         {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}
           onPay={goPay} onBankPay={goBankPay} />}
         {tab === 'payments' && <PaymentsPanel payments={payments} />}
@@ -566,8 +580,8 @@ export default function MijnAbonnement() {
       </div>
 
       {(me.status === 'trial' || me.status === 'active') && (
-        <div className={`${CARD} px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3`}>
-          <span className="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
+        <div className="rounded-2xl border border-red-100 bg-red-50/40 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
           <div className="flex-1">
             <p className="text-sm font-black text-slate-900">Abonnement opzeggen</p>
             <p className="text-xs text-slate-500 mt-0.5">Toegang wordt direct geblokkeerd. Uw data blijft 90 dagen bewaard zodat u kunt heractiveren.</p>
