@@ -239,7 +239,7 @@ body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; 
 /* Desktop (md+): golvende achtergrond, glazen balken boven/onder, glanzende knoppen. Mobiel blijft ongewijzigd. */
 @media (min-width: 768px) {
   .kiosk-fullscreen[data-theme="orange"] {
-    background-image: url(/kiosk-orange-bg.png); background-size: cover; background-position: center;
+    background-image: var(--kiosk-orange-bg, none); background-size: cover; background-position: center;
   }
   .kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
   .kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
