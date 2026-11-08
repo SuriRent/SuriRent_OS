@@ -15511,7 +15511,7 @@ async def _ensure_demo_company() -> dict:
             "contact_email": DEMO_EMAIL,
             "contact_phone": "+597 000 0000",
             "address": "Henck Arronstraat 1, Paramaribo",
-            "plan": "pro",
+            "plan": "professional",
             "active": True,
             "is_demo": True,
             "created_at": iso(now_utc()),
@@ -15528,7 +15528,10 @@ async def _ensure_demo_company() -> dict:
     has_tenants = await db.tenants.count_documents({"company_id": cid})
     if not has_tenants:
         await _seed_demo_data(cid)
-    elif await db.apartments.count_documents({"company_id": cid}) < 20:
+    if c.get("plan") != "professional":
+        c["plan"] = "professional"
+        await db.companies.update_one({"id": cid}, {"$set": {"plan": "professional"}})
+    if has_tenants and await db.apartments.count_documents({"company_id": cid}) < 20:
         await _demo_reset_tick()
     return c
 

@@ -5878,6 +5878,7 @@ export default function KioskLayout() {
         localStorage.setItem('kiosk_token', data.kiosk_token);
         localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
         localStorage.setItem('is_demo_session', '1');
+        window.dispatchEvent(new Event('kiosk-employee-changed'));
         demoSession.current = true;
         if (data.company?.slug) localStorage.setItem('pwa_company_slug', data.company.slug);
         setCompany(data.company || null);
