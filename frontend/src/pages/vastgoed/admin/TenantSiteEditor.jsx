@@ -21,18 +21,20 @@ const DEVICES = [
 
 const GROUPS = {
   logo_url: 'Algemeen', brand_name: 'Algemeen', header_cta: 'Algemeen',
-  hero: 'Hoofdbanner', types: 'Kies een type', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
+  hero: 'Hoofdbanner', types: 'Kies een type', why: 'Voordelen', reviews: 'Reviews', cta: 'Oproep', aanbod: 'Aanbod', about: 'Over ons', contact: 'Contact', footer: 'Voettekst',
 };
 
 const SECTIONS = [
   { id: 'hero', label: 'Hoofdbanner', scroll: 'hero.title_line1' },
   { id: 'aanbod', label: 'Aanbod', scroll: 'aanbod.title' },
   { id: 'types', label: 'Kies een type', scroll: 'types.title' },
+  { id: 'reviews', label: 'Reviews', scroll: 'reviews.title' },
   { id: 'about', label: 'Over ons', scroll: 'about.title' },
   { id: 'contact', label: 'Contact', scroll: 'contact.title' },
 ];
 
 const TEMPLATES = [
+  { id: 'pro', name: 'Prestige', desc: 'Professioneel: volledige foto-hero, voordelen, reviews en call-to-action.', bg: 'from-slate-900 to-orange-700', dark: true },
   { id: 'homeland', name: 'Homeland', desc: 'Licht, foto rechts, zoekkaart.', bg: 'from-orange-50 to-white', dark: false },
   { id: 'modern', name: 'Modern', desc: 'Grote foto-banner, donkere accenten.', bg: 'from-slate-800 to-slate-950', dark: true },
   { id: 'minimal', name: 'Minimal', desc: 'Strak en wit, brede foto onder de titel.', bg: 'from-white to-slate-100', dark: false },
@@ -273,7 +275,7 @@ export default function TenantSiteEditor({ onClose }) {
             <>
               <p className="text-xs text-white/50">Kies een ontwerp. Je teksten en foto's blijven behouden.</p>
               {TEMPLATES.map((t) => {
-                const on = (draft?.template || 'homeland') === t.id;
+                const on = (draft?.template || 'pro') === t.id;
                 return (
                   <button key={t.id} type="button" onClick={() => update('template', t.id)} data-testid={`site-template-${t.id}`}
                     className={`w-full text-left rounded-xl overflow-hidden border-2 ${on ? 'border-orange-500' : 'border-white/10 hover:border-white/30'}`}>

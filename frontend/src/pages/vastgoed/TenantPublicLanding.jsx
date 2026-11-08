@@ -24,6 +24,7 @@ import {
 } from '../../lib/landing-editable';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { api } from '../../lib/api';
+import ProPage from './TenantSiteProTemplate';
 
 const fmtMoney = (n, c = 'SRD') => {
   try {
@@ -146,7 +147,7 @@ function HomelandHero({ company, filter, setFilter }) {
 export function useTemplate() {
   const { content } = useEditable();
   const t = content?.template;
-  return t === 'modern' || t === 'minimal' ? t : 'homeland';
+  return ['homeland', 'modern', 'minimal'].includes(t) ? t : 'pro';
 }
 
 function ModernHero({ company, filter, setFilter }) {
@@ -628,6 +629,27 @@ function TenantFooter({ company }) {
   );
 }
 
+function TemplateBody({ company, apartments, filter, setFilter }) {
+  const tpl = useTemplate();
+  if (tpl === 'pro') {
+    return (
+      <ProPage company={company} apartments={apartments} filter={filter} setFilter={setFilter}
+        shared={{ About, TypesSection, ContactSection, TenantFooter }} />
+    );
+  }
+  return (
+    <>
+      <Header company={company} />
+      <Hero company={company} filter={filter} setFilter={setFilter} />
+      <StatsBar company={company} apartments={apartments} />
+      <TypesSection company={company} apartments={apartments} setFilter={setFilter} />
+      <ApartmentsGrid company={company} apartments={apartments} filter={filter} />
+      <About company={company} />
+      <ContactSection company={company} />
+      <TenantFooter company={company} />
+    </>
+  );
+}
 /**
  * Main TenantPublicLanding component
  *
@@ -745,14 +767,7 @@ export default function TenantPublicLanding({
             ✏️ Bewerk modus actief — klik op een tekst of afbeelding
           </div>
         )}
-        <Header company={company} />
-        <Hero company={company} filter={filter} setFilter={setFilter} />
-        <StatsBar company={company} apartments={apartments} />
-        <TypesSection company={company} apartments={apartments} setFilter={setFilter} />
-        <ApartmentsGrid company={company} apartments={apartments} filter={filter} />
-        <About company={company} />
-        <ContactSection company={company} />
-        <TenantFooter company={company} />
+        <TemplateBody company={company} apartments={apartments} filter={filter} setFilter={setFilter} />
       </div>
     </EditableProvider>
   );
