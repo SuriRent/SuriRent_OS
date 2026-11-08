@@ -502,14 +502,8 @@ export default function App() {
         <AuthSessionNotice />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            {/* Root op custom domain = tenant landing page */}
-            <Route path="/" element={
-              <TenantPublicLanding
-                company={tenant.company}
-                apartments={tenant.apartments}
-                content={tenant.content}
-                editMode={false} />
-            } />
+            {/* Root op custom domain = inlogscherm van het bedrijf */}
+            <Route path="/" element={<Navigate to={`/${slug}/login`} replace />} />
             {/* Alle overige app-paden gaan door BrandedRouteTree met de
                 pre-resolved slug — die zit in de path zodat useParams() nog
                 gewoon werkt in BrandedShell. We prefix intern zonder URL wijziging. */}
