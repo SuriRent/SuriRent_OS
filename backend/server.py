@@ -9135,26 +9135,33 @@ async def ocr_id_card(file: UploadFile = File(...),
         "Als het document GEEN ID/paspoort/rijbewijs is, zet confidence=0. "
         "Als een veld onduidelijk is: null."
     )
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    models = [m for m in (os.getenv("GEMINI_MODEL"), "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash") if m]
+    payload = {
+        "systemInstruction": {"parts": [{"text": "Je bent een OCR-engine die uitsluitend geldig JSON terug geeft."}]},
+        "contents": [{"parts": [
+            {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}},
+            {"text": prompt},
+        ]}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
+    }
+    resp = None
     try:
         async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                headers={"x-goog-api-key": api_key},
-                json={
-                    "systemInstruction": {"parts": [{"text": "Je bent een OCR-engine die uitsluitend geldig JSON terug geeft."}]},
-                    "contents": [{"parts": [
-                        {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}},
-                        {"text": prompt},
-                    ]}],
-                    "generationConfig": {"responseMimeType": "application/json", "temperature": 0,
-                                         "thinkingConfig": {"thinkingBudget": 0}},
-                },
-            )
+            for model in dict.fromkeys(models):
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": api_key}, json=payload,
+                )
+                if resp.status_code != 404:
+                    break
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="OCR-dienst niet bereikbaar")
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"OCR-dienst fout ({resp.status_code})")
+        try:
+            gmsg = resp.json().get("error", {}).get("message", "")
+        except Exception:
+            gmsg = ""
+        raise HTTPException(status_code=502, detail=f"OCR-dienst fout ({resp.status_code}): {gmsg[:160]}")
     try:
         raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception:
