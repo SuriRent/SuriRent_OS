@@ -250,11 +250,33 @@ body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; 
   }
   .kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
   .kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
-  .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap { background: transparent !important; }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] {
-    background: linear-gradient(180deg, rgba(255,150,40,0.55), rgba(255,107,26,0.35)) !important;
+  .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap {
+    background: linear-gradient(180deg, rgba(255,150,40,0.6), rgba(255,107,26,0.4)) !important;
     backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255,255,255,0.45);
+    box-shadow: 0 8px 24px -12px rgba(120,30,0,0.45);
+  }
+  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] {
+    background: transparent !important; border-bottom: 0; backdrop-filter: none;
+  }
+  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-10"],
+  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-11"] {
+    background: linear-gradient(180deg, #FFB45A 0%, #FF7A1A 100%) !important;
+    border: 1.5px solid rgba(255,255,255,0.65);
+    box-shadow: 0 5px 12px -4px rgba(120,30,0,0.55), inset 0 1px 0 rgba(255,255,255,0.7);
+    color: #fff;
+  }
+  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
+  nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] {
+    background: linear-gradient(180deg, rgba(255,140,40,0.55), rgba(230,80,0,0.8)) !important;
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,0.4);
+  }
+  nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] button:not([data-testid="kiosk-mobile-bar-plus"]) {
+    background: linear-gradient(180deg, rgba(255,190,100,0.5), rgba(255,110,20,0.3));
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 12px;
+    margin: 3px 2px; height: calc(100% - 6px);
+    box-shadow: 0 4px 10px -4px rgba(120,30,0,0.5), inset 0 1px 0 rgba(255,255,255,0.35);
   }
 }
 /* Desktop (md+): golvende achtergrond, glazen balken, glanzende knoppen. Mobiel blijft ongewijzigd. */
