@@ -236,11 +236,8 @@ body.kiosk-green-active [class*="text-orange-500"],
 body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; }
 /* The active kiosk root theme is authoritative if the body theme class lags. */
 .kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
-/* Achtergrondafbeelding (kiosk-orange-bg.png) zichtbaar laten door de effen oranje lagen. */
-.kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
-.kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
 .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap,
-.kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] { background-color: rgba(255,107,26,0.55) !important; backdrop-filter: blur(6px); }
+.kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] { background-color: #FF6B1A !important; }
 .kiosk-fullscreen[data-theme="orange"] button[class*="bg-[#FF5C00]"],
 .kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-500"],
 .kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-600"] { background-color: #FF5C00 !important; }
