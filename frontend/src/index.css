@@ -1699,3 +1699,13 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-active="true"]:not(.zz1):not(
 body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:not(.zz1):not(.zz2):not(.zz3) {
   background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
 }
+
+/* Golf-modus: witte modus met de officiele achtergrond */
+.kiosk-fullscreen.kiosk-white.kiosk-wave {
+  background-color: #F4F7FD !important;
+  background-image: url("./ui-bg.jpg") !important;
+  background-repeat: no-repeat !important;
+  background-position: center bottom !important;
+  background-size: cover !important;
+}
+
