@@ -15,7 +15,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, LayoutGrid,
+  BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -361,10 +361,10 @@ function HeaderLive() {
 }
 
 function ThemeToggle({ testId, className = '' }) {
-  const { theme, toggle } = useContext(KioskThemeCtx);
+  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : green ? 'Oranje modus' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid={testId}
       aria-label={nextTheme} title={nextTheme}
@@ -430,10 +430,120 @@ function DesktopKioskHeader({
   );
 }
 
+const UI_FILTERS = [
+  { id: 'all', label: 'Alle' }, { id: 'paid', label: 'Betaald' }, { id: 'partial', label: 'Gedeeltelijk' },
+  { id: 'unpaid', label: 'Niet betaald' }, { id: 'vacant', label: 'Vrij' },
+];
+
+function uiAptStatus(a) {
+  if (!a.tenant_id) return 'vacant';
+  if (a.tenant_deposit_pending) return 'deposit';
+  return a.pay_status === 'paid' ? 'paid' : a.pay_status === 'partial' ? 'partial' : 'unpaid';
+}
+
+function UiStatusPill({ a, className = '' }) {
+  const s = uiAptStatus(a);
+  const base = `inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-bold text-white whitespace-nowrap ${className}`;
+  if (s === 'vacant') return <span className={`${base} bg-slate-700`} data-testid={`apt-${a.number}-link`}><ArrowRight className="w-4 h-4" strokeWidth={3} /> Beschikbaar</span>;
+  if (s === 'deposit') return <span className={`${base} bg-sky-600`} data-testid={`apt-${a.number}-deposit-pending`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Wacht op borg</span>;
+  if (s === 'paid') return <span className={`${base} bg-emerald-600`} data-testid={`apt-${a.number}-paid`}><Check className="w-4 h-4" strokeWidth={3} /> Betaald</span>;
+  if (s === 'partial') return <span className={`${base} bg-amber-500`} data-testid={`apt-${a.number}-partial`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Gedeeltelijk</span>;
+  return <span className={`${base} bg-red-500`} data-testid={`apt-${a.number}-unpaid`}><X className="w-4 h-4" strokeWidth={3} /> Niet betaald</span>;
+}
+
+// UI-thema: lijst-rij op telefoon, kaart op desktop/tablet.
+function UiAptCard({ a, onOpen }) {
+  const vacant = !a.tenant_id;
+  const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
+  const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
+  return (
+    <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
+      className="kiosk-ui-card group w-full text-left flex flex-col rounded-2xl md:rounded-[22px] bg-white p-3 md:p-4 transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className="flex items-center gap-3 md:items-start w-full min-w-0">
+        <div className={`shrink-0 rounded-full overflow-hidden w-14 h-14 md:w-[72px] md:h-[72px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-orange-50' : 'bg-slate-100'}`}>
+          {src && !vacant
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <Home className={`w-7 h-7 md:w-9 md:h-9 ${vacant ? 'text-orange-500' : 'text-slate-400'}`} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-lg md:text-xl font-black text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
+          <p className="flex items-center gap-1.5 text-sm md:text-[15px] text-slate-700 font-medium truncate">
+            <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />
+            <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
+          </p>
+        </div>
+        <UiStatusPill a={a} className="md:hidden shrink-0" />
+        <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:self-start">
+          <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
+        </span>
+      </div>
+      <div className="hidden md:flex justify-center mt-3"><UiStatusPill a={a} /></div>
+    </button>
+  );
+}
+
+function UiHero({ apartments, locationName }) {
+  const occ = apartments.filter((a) => a.tenant_id);
+  const paid = occ.filter((a) => a.pay_status === 'paid').length;
+  const unpaid = occ.length - paid;
+  const rent = occ.reduce((s, a) => s + (Number(a.rent_amount) || 0), 0);
+  const cur = occ.find((a) => a.currency)?.currency || 'SRD';
+  const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
+  const stat = (key, Icon, tone, label, value, bar, barTone) => (
+    <div key={key} className="kiosk-ui-stat rounded-2xl bg-white p-3 md:px-4 md:py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={`shrink-0 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
+        <div className="min-w-0">
+          <p className="text-[12px] md:text-[13px] font-semibold text-slate-600 truncate leading-tight">{label}</p>
+          <p className="text-xl md:text-2xl font-black text-[#1B2A5C] leading-tight truncate">{value}</p>
+        </div>
+      </div>
+      {bar !== undefined && (
+        <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} /></div>
+      )}
+    </div>
+  );
+  return (
+    <div className="kiosk-ui-hero px-1 sm:px-2 pb-3" data-testid="kiosk-ui-hero">
+      {locationName && (
+        <div className="md:hidden flex justify-center -mt-1 mb-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
+            <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span>
+          </span>
+        </div>
+      )}
+      <div className="rounded-3xl md:rounded-none px-4 pt-4 pb-3 md:p-0 text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A1F] to-[#FF9A45] md:bg-none md:from-transparent md:to-transparent md:flex md:items-center md:justify-between md:gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/90 md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF5C00] md:text-white shadow-md">
+            <Building2 className="w-6 h-6 md:hidden" strokeWidth={2.2} /><Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-3xl font-black tracking-tight leading-tight truncate">Appartementen Overzicht</h2>
+            <p className="text-sm md:text-base font-medium text-white/90 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
+          </div>
+        </div>
+        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(640px,55vw)] shrink-0">
+          {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
+          {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+          {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
+        </div>
+      </div>
+      <div className="md:hidden grid grid-cols-3 gap-2 mt-3">
+        {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
+        {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+        {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${Math.round(rent).toLocaleString('nl-NL')}`)}
+      </div>
+    </div>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange,
 }) {
+  const { isUi } = useContext(KioskThemeCtx);
+  const [uiQ, setUiQ] = useState('');
+  const [uiFilter, setUiFilter] = useState('all');
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -528,6 +638,11 @@ function ApartmentSelect({
     selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
+  const shown = !isUi ? visible : visible.filter((a) => {
+    const term = uiQ.trim().toLowerCase();
+    if (uiFilter !== 'all' && uiAptStatus(a) !== uiFilter) return false;
+    return !term || `${a.number} ${a.tenant_name || ''}`.toLowerCase().includes(term);
+  });
 
   // ----- Location picker view -----
   if (showLocationPicker) {
@@ -597,7 +712,7 @@ function ApartmentSelect({
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
-      <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0">
+      <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
             className="flex items-center gap-1 text-white/90 font-bold bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs">
@@ -609,13 +724,34 @@ function ApartmentSelect({
         </span>
       </div>
 
+      {isUi && <UiHero apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && (
+        <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
+          <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
+            <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
+            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." data-testid="kiosk-ui-search"
+              className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+          </label>
+          <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
+            <SlidersHorizontal className="w-5 h-5" />
+            <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
+              className="absolute inset-0 opacity-0 w-full h-full">
+              {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2">
-          {visible.map((a) => {
+        <div className={isUi
+          ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-1'
+          : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2'}>
+          {shown.map((a) => {
+            if (isUi) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
@@ -685,7 +821,7 @@ function ApartmentSelect({
             </button>
             );
           })}
-          {visible.length === 0 && (
+          {shown.length === 0 && (
             <div className="col-span-full bg-white/90 rounded-2xl p-10 text-center">
               <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-semibold">Geen appartementen op deze locatie.</p>
@@ -5525,10 +5661,10 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
 function SheetThemeButton() {
-  const { theme, toggle } = useContext(KioskThemeCtx);
+  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : green ? 'Oranje modus' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
@@ -5805,7 +5941,7 @@ export default function KioskLayout() {
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   const [kioskTheme, setKioskTheme] = useState(() => {
     const stored = localStorage.getItem('kiosk_theme');
-    return stored === 'orange' ? 'orange' : 'white';
+    return ['orange', 'ui'].includes(stored) ? stored : 'white';
   });
   useEffect(() => {
     const root = document.documentElement;
@@ -5816,32 +5952,34 @@ export default function KioskLayout() {
     };
   }, []);
   useEffect(() => {
-    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { t = t === 'orange' ? 'orange' : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (['white', 'orange', 'green', 'ui'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
     return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : 'orange';
+    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
-  const isWhite = kioskTheme === 'white';
+  const isUi = kioskTheme === 'ui';
+  const isWhite = kioskTheme === 'white' || isUi;
   const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
-    const bg = isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
+    const bg = isUi ? '#F6F7FB' : isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
     document.documentElement.style.backgroundColor = bg;
     document.body.style.backgroundColor = bg;
     document.body.classList.toggle('kiosk-white-body', isWhite);
+    document.body.classList.toggle('kiosk-ui-body', isUi);
     document.body.classList.toggle('kiosk-green-active', isGreen);
     setIosStatusBar(bg);
-  }, [isWhite, isGreen]);
+  }, [isWhite, isGreen, isUi]);
   useEffect(() => {
     const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : '#FFFFFF';
+    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : savedTheme === 'ui' ? '#F6F7FB' : '#FFFFFF';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -5852,7 +5990,7 @@ export default function KioskLayout() {
     return () => {
       setIosStatusBar('#F7F8FA');
       document.body.classList.remove('kiosk-mode');
-      document.body.classList.remove('kiosk-white-body', 'kiosk-green-active');
+      document.body.classList.remove('kiosk-white-body', 'kiosk-green-active', 'kiosk-ui-body');
       document.documentElement.style.backgroundColor = prevHtmlBg;
       document.body.style.backgroundColor = prevBodyBg;
     };
@@ -6104,7 +6242,7 @@ export default function KioskLayout() {
   };
 
 
-  const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
+  const themeCtx = useMemo(() => ({ theme: kioskTheme === 'ui' ? 'white' : kioskTheme, rawTheme: kioskTheme, isUi: kioskTheme === 'ui', toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
@@ -6366,7 +6504,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}${isUi ? ' kiosk-ui' : ''}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isUi ? undefined : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -6647,8 +6785,28 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {showMobileKioskBar && !keyboardOpen && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {showMobileKioskBar && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {showMobileKioskBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
+      {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
+        <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
+          <div className="grid grid-cols-5 items-stretch">
+            {[
+              { id: 'back', label: 'Terug', Icon: LayoutGrid, on: step === 'select', fn: () => { if (canBack) goBack(); } },
+              { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
+              { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
+              { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
+            ].map(({ id, label, Icon, on, fn }) => (
+              <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
+                <Icon className="w-6 h-6" strokeWidth={2} />
+                <span className="text-[11px] font-bold leading-tight truncate max-w-full">{label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      ), document.body)}
+      {showMobileKioskBar && !isUi && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"

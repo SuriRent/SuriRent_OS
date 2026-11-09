@@ -1521,3 +1521,44 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 @media (max-width: 767px) {
   [data-testid="kiosk-toolbar"]:not(:has(> button)) { display: none; }
 }
+
+/* ===== Kiosk UI thema (bovenop wit) ===== */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background: #F6F7FB !important;
+  background-image:
+    radial-gradient(120% 40% at 50% 108%, rgba(255,122,24,0.28) 0%, rgba(255,122,24,0) 70%),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+}
+.kiosk-ui [data-testid="kiosk-desktop-header"] {
+  background: #fff !important;
+  border-radius: 22px;
+  margin: 8px 10px 0;
+  box-shadow: 0 10px 30px -16px rgba(15,23,42,0.35);
+  border: 0 !important;
+}
+.kiosk-ui .kiosk-header-search {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+  color: #fff !important;
+  border-radius: 14px;
+}
+.kiosk-ui .kiosk-ui-card {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 12px 28px -18px rgba(15,23,42,0.4);
+  border: 1px solid rgba(15,23,42,0.04);
+}
+.kiosk-ui .kiosk-ui-stat {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px -16px rgba(15,23,42,0.4);
+}
+.kiosk-ui nav.kiosk-white-nav,
+.kiosk-ui [data-testid="kiosk-bottom-bar"] {
+  background: #fff !important;
+  border-radius: 24px !important;
+  box-shadow: 0 14px 34px -16px rgba(15,23,42,0.4) !important;
+}
+@media (max-width: 767px) {
+  .kiosk-ui .kiosk-mobile-has-bar { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+  .kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0; border-radius: 18px; }
+}
