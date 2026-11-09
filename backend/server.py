@@ -219,6 +219,8 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
     if payload.get("staff"):
         user["staff"] = True
+        if payload.get("act_name"):
+            user["name"] = payload["act_name"]
     # Impersonation context carried via JWT payload
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
@@ -1849,7 +1851,7 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
         c = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
         ktoken = create_token({"sub": "kiosk", "type": "kiosk", "company_id": cid}, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, ktoken, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        staff = await _staff_admin_token(cid, response) or {}
+        staff = await _staff_admin_token(cid, response, emp.get("name") or u.get("name", "")) or {}
         return {"kiosk": True, "token": ktoken, "company": c, "admin_token": staff.get("admin_token"),
                 "employee": {"id": emp.get("id"), "name": emp.get("name") or u.get("name", ""), "pin": pin},
                 "user": {"email": u["email"], "name": u.get("name", ""), "role": "kiosk"}}
@@ -2063,6 +2065,8 @@ async def me(user=Depends(get_current_user)):
         }
         if user.get("staff"):
             token_payload["staff"] = True
+            if user.get("name"):
+                token_payload["act_name"] = user["name"]
         result["access_token"] = create_token(token_payload, ACCESS_MIN)
     return result
 
@@ -6651,7 +6655,7 @@ async def admin_open_kiosk(
     }
 
 
-async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
+async def _staff_admin_token(cid: str, response: Response, act_name: str = "") -> Optional[dict]:
     """Beheer-token voor een kiosk-medewerker: werkt als de eigenaar van het bedrijf,
     gemarkeerd met staff=True zodat de kiosk de Instellingen verbergt."""
     u = await db.users.find_one(
@@ -6662,7 +6666,7 @@ async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
     if not u:
         return None
     atoken = create_token({
-        "sub": u["id"], "email": u["email"], "type": "access", "staff": True,
+        "sub": u["id"], "email": u["email"], "type": "access", "staff": True, "act_name": (act_name or "")[:80],
         "company_id": u.get("company_id"), "role": u.get("role", "admin"),
     }, ACCESS_MIN)
     _set_access_cookie(response, atoken)
@@ -6734,7 +6738,7 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             "sub": "kiosk", "type": "kiosk", "company_id": cid,
         }, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        staff = await _staff_admin_token(cid, response) or {}
+        staff = await _staff_admin_token(cid, response, matched_emp.get("name", "")) or {}
         return {
             "token": token,
             "company": c and {k: c[k] for k in ("id", "slug", "name")},
