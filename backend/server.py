@@ -20265,7 +20265,7 @@ def _slug_aware_start_url(role: str, slug: str | None) -> str:
 
 
 @app.get("/api/pwa/manifest")
-async def pwa_manifest(role: str = "beheer", slug: str | None = None):
+async def pwa_manifest(request: Request, role: str = "beheer", slug: str | None = None):
     """
     Slug-aware PWA manifest. Frontend zet:
         <link rel="manifest" href="/api/pwa/manifest?role=beheer&slug=surirent">
@@ -20283,6 +20283,14 @@ async def pwa_manifest(role: str = "beheer", slug: str | None = None):
     base["screenshots"] = _PWA_SCREENSHOTS
     base["iarc_rating_id"] = _PWA_IARC_RATING_ID
     base["protocol_handlers"] = _PWA_PROTOCOL_HANDLERS
+    # Eigen domein van een klant: de app draait op de root van het domein, dus scope "/" en
+    # een stabiel manifest (geen slug-pad) zodat Chrome de installatie direct aanbiedt.
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower().split(":")[0].split(",")[0].strip()
+    if host and not any(host == s or host.endswith("." + s) for s in ("surirent.sr", "emergentagent.com", "localhost", "127.0.0.1")):
+        is_custom = await db.companies.find_one({"custom_domain": host}, {"_id": 1}) or await db.company_settings.find_one(
+            {"domain.custom_domain": host, "domain.enabled": True}, {"_id": 1})
+        if is_custom:
+            slug = None
     if slug:
         slug = slug.lower().strip()
         # Strikte sanitatie — alleen [a-z0-9-] toelaten zodat we geen
