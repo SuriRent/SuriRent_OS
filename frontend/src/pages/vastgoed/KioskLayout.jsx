@@ -1706,20 +1706,44 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       (receipt?.period_month ? ` · Periode ${MONTHS_NL[receipt.period_month - 1]} ${receipt.period_year}` : '') +
       '.';
     const whatsAppUrl = phone.length >= 7
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(`${shareText}\n\nBon: ${imageUrl}`)}`
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`
       : imageUrl;
     // Reserveer het tabblad binnen de klikactie; browsers kunnen pop-ups na
     // het ophalen van de JPG blokkeren wanneer navigator.share niet lukt.
     const fallbackTab = window.open('about:blank', '_blank');
-    const useFallback = () => {
-      if (fallbackTab && !fallbackTab.closed) fallbackTab.location.replace(whatsAppUrl);
-      else if (phone.length >= 7) openWhatsApp(phone, `${shareText}\n\nBon: ${imageUrl}`);
-      else openReceiptImage(paymentId);
+    // Geen bestand-delen mogelijk (desktop): kopieer de bon als afbeelding naar het
+    // klembord en download de JPG, open WhatsApp zonder link; plakken met Ctrl+V.
+    const useFallback = async (jpgBlob, fileName) => {
+      let copied = false;
+      if (jpgBlob) {
+        try {
+          const bmp = await createImageBitmap(jpgBlob);
+          const cv = document.createElement('canvas');
+          cv.width = bmp.width; cv.height = bmp.height;
+          cv.getContext('2d').drawImage(bmp, 0, 0);
+          const png = await new Promise((res) => cv.toBlob(res, 'image/png'));
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+          copied = true;
+        } catch { /* klembord niet beschikbaar */ }
+        try {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(jpgBlob);
+          a.download = fileName;
+          document.body.appendChild(a); a.click(); a.remove();
+        } catch { /* download mislukt */ }
+      }
+      if (phone.length >= 7) {
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.location.replace(whatsAppUrl);
+        else openWhatsApp(phone, shareText);
+      } else {
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
+        if (!jpgBlob) openReceiptImage(paymentId);
+      }
       setWaState((prev) => ({
         ...prev,
         [paymentId]: {
           kind: 'ok',
-          msg: phone.length >= 7 ? 'WhatsApp geopend met bonlink' : 'Bon geopend; telefoonnummer ontbreekt',
+          msg: copied ? 'Bon gekopieerd — plak in WhatsApp (Ctrl+V)' : 'Bon gedownload — voeg toe in WhatsApp',
         },
       }));
     };
@@ -1733,14 +1757,14 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
         if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'ok', msg: 'Gedeeld' } }));
       } else {
-        useFallback();
+        await useFallback(blob, file.name);
       }
     } catch (e) {
       if (e && e.name === 'AbortError') {
         if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         setWaState((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
       } else {
-        useFallback();
+        await useFallback();
       }
     } finally {
       setBusy((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
