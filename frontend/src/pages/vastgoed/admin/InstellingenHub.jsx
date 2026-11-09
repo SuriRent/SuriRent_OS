@@ -5,6 +5,7 @@ import MijnAbonnement from './MijnAbonnement';
 import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
 import BackupRestore from './BackupRestore';
+import Notifications from './Notifications';
 import SettingsPage from './Settings';
 import StripeCompanySettings from './StripeCompanySettings';
 import PowerSettings from './PowerSettings';
@@ -44,6 +45,7 @@ export const RENDER = {
   'bon-printer': () => <BonPrinter />,
   'kiosk-apparaten': () => <KioskDevices />,
   website: () => <WebsiteSettings />,
+  notificaties: () => <Notifications embedded />,
   backup: () => <BackupRestore />,
   domein: () => <SettingsPage initialSection="domain" hideSubNav />,
 };
