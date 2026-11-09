@@ -5999,7 +5999,7 @@ export default function KioskLayout() {
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isUi = kioskTheme === 'ui';
-  const isWhite = kioskTheme === 'white' || isUi;
+  const isWhite = kioskTheme === 'white' || kioskTheme === 'wave' || isUi;
   const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
