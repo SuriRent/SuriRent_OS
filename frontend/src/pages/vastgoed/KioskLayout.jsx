@@ -15,9 +15,8 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, LayoutGrid, MoreHorizontal,
+  BookOpen, LayoutGrid,
 } from 'lucide-react';
-import MobileAdminHome from '../../components/MobileAdminHome';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { postIdOcr } from '../../lib/idOcr';
@@ -6098,8 +6097,6 @@ export default function KioskLayout() {
     };
   }, []);
 
-  const adminRole = useAdminRole(hasAdminAccess);
-
   const reset = () => {
     setApartment(null); setOverview(null); setPaymentPayload(null);
     setPaymentResult(null);
@@ -6229,8 +6226,7 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const mobileAdminHome = isMobileViewport && step === 'select' && hasAdminAccess && adminRole === 'admin' && !user?.original_user_id;
-  const showMobileKioskBar = !mobileAdminHome && !step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step);
+  const showMobileKioskBar = !step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -6440,44 +6436,7 @@ export default function KioskLayout() {
               ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
             </div>
           )}
-          {step === 'select' && mobileAdminHome && (
-            <MobileAdminHome
-              embedded
-              key={apartmentsReloadKey}
-              endpoint="/kiosk/apartments"
-              activeCompany={company}
-              onOpenMenu={adminMode}
-              onFab={() => setShowAddSheet(true)}
-              onApartment={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
-              onAction={(id) => {
-                if (id === 'payments') setShowPaymentsViewer(true);
-                else if (id === 'tenants') setPhoneScanOpen(true);
-                else if (id === 'kasgeld') setStep('kasgeld');
-                else setStep('admin:facturen');
-              }}
-              bar={(
-                <nav data-testid="kiosk-admin-mobile-bar" className="fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-3xl shadow-[0_-8px_26px_-12px_rgba(15,23,42,0.25)] px-2 pt-1"
-                  style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)' }}>
-                  <div className="grid grid-cols-4 items-stretch divide-x divide-slate-200">
-                    {[
-                      { id: 'home', label: 'Dashboard', Icon: Home, on: true, fn: () => {} },
-                      { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => setStep('admin:appartementen') },
-                      { id: 'ten', label: 'Huurders', Icon: Users, fn: () => setStep('admin:huurders') },
-                      { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
-                    ].map(({ id, label, Icon, on, fn }) => (
-                      <button key={id} type="button" onClick={fn} data-testid={`kiosk-admin-bar-${id}`}
-                        className="relative flex flex-col items-center justify-center gap-1 pt-2.5 pb-2 active:scale-95 transition">
-                        <Icon className={`w-7 h-7 ${on ? 'text-[#FF5C00]' : 'text-[#1B2A5C]'}`} strokeWidth={on ? 2.4 : 2} />
-                        <span className={`text-[13px] leading-tight ${on ? 'font-black text-[#FF5C00]' : 'font-semibold text-[#1B2A5C]'}`}>{label}</span>
-                        {on && <span aria-hidden className="absolute bottom-0 inset-x-3 h-[3px] rounded-full bg-[#FF5C00]" />}
-                      </button>
-                    ))}
-                  </div>
-                </nav>
-              )}
-            />
-          )}
-          {step === 'select' && !mobileAdminHome && (
+          {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
               selectedLocationId={selectedLocationId}
               onLocationSelectionChange={setSelectedLocationId}
