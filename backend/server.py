@@ -13303,7 +13303,8 @@ async def _note_receipt_data(tenant_id: str, note_id: str, session: dict, force_
     lines.append(L("Opmerking:"))
     for para in str(note.get("text") or "").split("\n"):
         lines += [L(x) for x in (_wrap_text(para, W) or [""])]
-    lines.append(L(dash))    lines += _bottom_pad({}, 2)
+    lines.append(L(dash))
+    lines += _bottom_pad({}, 2)
     return {
         "template": "lines", "receipt_type": "financieel",
         "bedrijfsnaam": company.get("name") or "SuriRent", "naam": t.get("name") or "", "datum": datum,
