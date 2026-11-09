@@ -108,9 +108,8 @@ export default function KioskEmployeePush({ className = '' }) {
         {on ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
       </button>
       {open && (
-        <div className="fixed inset-0 z-[70] bg-slate-900/50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-5 text-slate-900" onClick={(e) => e.stopPropagation()}
-            data-testid="kiosk-emp-push-modal">
+        <div className="fixed inset-0 z-[200] bg-white overflow-y-auto" data-testid="kiosk-emp-push-modal">
+          <div className="w-full min-h-full p-5 pb-24 text-slate-900 max-w-2xl mx-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-black">Meldingen · {emp.name || 'Medewerker'}</h3>
               <button type="button" onClick={() => setOpen(false)} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
