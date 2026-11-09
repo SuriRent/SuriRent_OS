@@ -308,6 +308,14 @@ def make_router(db, helpers):
             "created_at": now_iso,
         }
         await db.payment_plans.insert_one({**plan_doc})
+        try:
+            from routes import _deps as _pd
+            await _pd.notify_kiosk_employees(
+                cid, "Nieuwe betalingsregeling",
+                f"{plan_doc['tenant_name'] or 'Huurder'} — {plan_doc['currency']} {plan_doc['total_amount']:,.2f}",
+                {"kind": "payment_plan"}, "plans")
+        except Exception as e:  # noqa: BLE001
+            print(f"[push] plan employee notify failed: {e}")
         # Installments
         for it in installments:
             await db.payment_plan_installments.insert_one({

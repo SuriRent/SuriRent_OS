@@ -144,6 +144,14 @@ async def _switch(cid: str, dev: dict, on: bool, by: str, reason: str = "") -> d
         patch.update({"cut_at": _deps.iso(_deps.now_utc()), "cut_by_auto": by == "auto"})
     await _deps.db.power_devices.update_one({"id": dev["id"]}, {"$set": patch})
     await _log(cid, dev, "aan" if on else "uit", by, reason)
+    try:
+        apt = await _deps.db.apartments.find_one({"id": dev.get("apartment_id")}, {"_id": 0, "number": 1}) or {}
+        await _deps.notify_kiosk_employees(
+            cid, "Stroom aangezet" if on else "Stroom uitgezet",
+            f"Appartement {apt.get('number') or ''}".strip() + (f" · {reason}" if reason else ""),
+            {"kind": "power"}, "power")
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] medewerker-push mislukt: {e}")
     return patch
 
 

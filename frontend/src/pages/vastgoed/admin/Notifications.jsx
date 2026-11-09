@@ -60,6 +60,58 @@ function PushPreferences() {
   );
 }
 
+function BillReminders() {
+  const [bills, setBills] = useState([]);
+  const [state, setState] = useState('');
+  useEffect(() => {
+    api.get('/push/bill-reminders').then((r) => setBills(r.data?.bills || [])).catch(() => {});
+  }, []);
+  const set = (id, patch) => setBills((b) => b.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const save = async () => {
+    setState('saving');
+    try {
+      const r = await api.put('/push/bill-reminders', { bills });
+      setBills(r.data.bills); setState('saved');
+    } catch { setState('error'); }
+  };
+  if (!bills.length) return null;
+  const inp = 'w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-center';
+  return (
+    <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="bill-reminders">
+      <h3 className="font-black text-slate-900 mb-1">Vaste betalingen (stroom, water, internet)</h3>
+      <p className="text-xs text-slate-500 mb-3">Elke maand een melding voor de vervaldag. Beheerders en kiosk-medewerkers ontvangen deze.</p>
+      <ul className="divide-y divide-slate-100">
+        {bills.map((b) => (
+          <li key={b.id} className="py-3 flex flex-wrap items-center gap-3">
+            <div className="min-w-[120px] flex-1">
+              <p className="text-sm font-bold text-slate-900">{b.provider} · {b.label}</p>
+              <p className="text-xs text-slate-500">
+                Betalen voor de
+                <input type="number" min="1" max="28" value={b.day} className={`${inp} mx-1`}
+                  onChange={(e) => set(b.id, { day: Number(e.target.value) || 1 })} data-testid={`bill-day-${b.id}`} />
+                e, melding
+                <input type="number" min="0" max="14" value={b.days_before} className={`${inp} mx-1`}
+                  onChange={(e) => set(b.id, { days_before: Number(e.target.value) || 0 })} />
+                dagen eerder
+              </p>
+            </div>
+            <button type="button" onClick={() => set(b.id, { enabled: !b.enabled })} role="switch" aria-checked={b.enabled}
+              data-testid={`bill-enabled-${b.id}`}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${b.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${b.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={save} disabled={state === 'saving'} data-testid="bill-save"
+        className="mt-3 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold">
+        {state === 'saving' ? 'Opslaan…' : state === 'saved' ? 'Opgeslagen ✓' : 'Opslaan'}
+      </button>
+      {state === 'error' && <p className="mt-1 text-xs font-semibold text-red-600">Opslaan mislukt</p>}
+    </div>
+  );
+}
+
 export default function Notifications({ embedded = false }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const { clearBadge } = useBadge();
@@ -402,6 +454,7 @@ export default function Notifications({ embedded = false }) {
           <ApprovalSignatureCard />
 
           <PushPreferences />
+          <BillReminders />
 
           <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="tap-sounds-section">
             <div className="flex items-center gap-3 mb-2">

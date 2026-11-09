@@ -217,8 +217,13 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
     if user.get("disabled") or user.get("role") == "kiosk":
         raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
+    if re.fullmatch(r"\s*(kiosk[\s_-]*)?(admin|beheerder)\s*", user.get("name") or "", re.I) and user.get("company_id"):
+        _co = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0, "name": 1, "landlord_name": 1})
+        user["name"] = (_co or {}).get("landlord_name") or (_co or {}).get("name") or user.get("name")
     if payload.get("staff"):
         user["staff"] = True
+        if payload.get("act_name"):
+            user["name"] = payload["act_name"]
     # Impersonation context carried via JWT payload
     if payload.get("original_user_id"):
         user["original_user_id"] = payload["original_user_id"]
@@ -967,6 +972,7 @@ async def _overdue_push_loop():
             hour_local = (now_utc().hour - 3) % 24
             if 9 <= hour_local < 11:
                 await _send_overdue_pushes()
+                await _send_bill_reminders()
         except Exception:
             pass
         await _aio.sleep(15 * 60)
@@ -1848,7 +1854,7 @@ async def personal_pin_login(body: _PinLoginIn, request: Request, response: Resp
         c = await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "slug": 1, "name": 1})
         ktoken = create_token({"sub": "kiosk", "type": "kiosk", "company_id": cid}, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, ktoken, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        staff = await _staff_admin_token(cid, response) or {}
+        staff = await _staff_admin_token(cid, response, emp.get("name") or u.get("name", "")) or {}
         return {"kiosk": True, "token": ktoken, "company": c, "admin_token": staff.get("admin_token"),
                 "employee": {"id": emp.get("id"), "name": emp.get("name") or u.get("name", ""), "pin": pin},
                 "user": {"email": u["email"], "name": u.get("name", ""), "role": "kiosk"}}
@@ -2062,6 +2068,8 @@ async def me(user=Depends(get_current_user)):
         }
         if user.get("staff"):
             token_payload["staff"] = True
+            if user.get("name"):
+                token_payload["act_name"] = user["name"]
         result["access_token"] = create_token(token_payload, ACCESS_MIN)
     return result
 
@@ -6650,7 +6658,7 @@ async def admin_open_kiosk(
     }
 
 
-async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
+async def _staff_admin_token(cid: str, response: Response, act_name: str = "") -> Optional[dict]:
     """Beheer-token voor een kiosk-medewerker: werkt als de eigenaar van het bedrijf,
     gemarkeerd met staff=True zodat de kiosk de Instellingen verbergt."""
     u = await db.users.find_one(
@@ -6661,7 +6669,7 @@ async def _staff_admin_token(cid: str, response: Response) -> Optional[dict]:
     if not u:
         return None
     atoken = create_token({
-        "sub": u["id"], "email": u["email"], "type": "access", "staff": True,
+        "sub": u["id"], "email": u["email"], "type": "access", "staff": True, "act_name": (act_name or "")[:80],
         "company_id": u.get("company_id"), "role": u.get("role", "admin"),
     }, ACCESS_MIN)
     _set_access_cookie(response, atoken)
@@ -6733,7 +6741,7 @@ async def kiosk_pin(body: PinIn, request: Request, response: Response):
             "sub": "kiosk", "type": "kiosk", "company_id": cid,
         }, KIOSK_TOKEN_MIN)
         _set_access_cookie(response, token, name="kiosk_token", minutes=KIOSK_TOKEN_MIN)
-        staff = await _staff_admin_token(cid, response) or {}
+        staff = await _staff_admin_token(cid, response, matched_emp.get("name", "")) or {}
         return {
             "token": token,
             "company": c and {k: c[k] for k in ("id", "slug", "name")},
@@ -8207,6 +8215,9 @@ async def remove_tenant(apt_id: str, user=Depends(get_current_user)):
     await db.apartments.update_one(
         {"id": apt_id}, {"$set": {"tenant_id": None, "status": "vacant"}}
     )
+    asyncio.create_task(_notify_kiosk_employees(
+        apt.get("company_id"), "Appartement beschikbaar", f"Appartement {apt.get('number') or ''} is vrijgekomen.",
+        {"kind": "apartment"}, category="apartments"))
     return {"ok": True}
 
 
@@ -16630,7 +16641,23 @@ async def create_deposit(body: DepositIn, user=Depends(get_current_user)):
     doc.pop("_id", None)
     if t.get("deposit_required") and t.get("deposit_status") != "paid":
         await _activate_after_deposit(cid, body.tenant_id, doc["id"])
+    asyncio.create_task(_notify_deposit(cid, t, doc, "paid"))
     return await _enrich_deposit(doc)
+
+
+async def _notify_deposit(cid: str, tenant: dict, dep: dict, kind: str) -> None:
+    """Push naar beheerders en kiosk-medewerkers: borg betaald of terugbetaald."""
+    try:
+        name = (tenant or {}).get("name") or "Huurder"
+        if kind == "paid":
+            title, amt = "Borg betaald", float(dep.get("amount") or 0)
+        else:
+            title, amt = "Borg terugbetaald", float(dep.get("refund_amount") or 0)
+        body = f"{name} · {_nl_money(dep.get('currency') or 'SRD', amt)}"
+        await _notify_company_admins(cid, title, body, {"kind": "deposit", "url": "/admin/deposits"})
+        await _notify_kiosk_employees(cid, title, body, {"kind": "deposit"}, category="deposit")
+    except Exception as e:  # noqa: BLE001
+        print(f"[push] deposit notify failed: {e}")
 
 
 class DamageItemIn(BaseModel):
@@ -16708,6 +16735,8 @@ async def refund_deposit(did: str, body: DepositRefundIn, user=Depends(get_curre
     )
     if not updated:
         raise HTTPException(status_code=400, detail="Borg is al gerestitueerd")
+    t = await db.tenants.find_one({"id": updated["tenant_id"]}, {"_id": 0, "name": 1})
+    asyncio.create_task(_notify_deposit(updated["company_id"], t, updated, "refund"))
     return await _enrich_deposit(updated)
 
 
@@ -16816,6 +16845,9 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
         apt_number = (a or {}).get("number")
         await db.apartments.update_one({"id": t["apartment_id"], "tenant_id": tenant_id},
                                        {"$set": {"tenant_id": None, "status": "vacant"}})
+        asyncio.create_task(_notify_kiosk_employees(
+            cid, "Appartement beschikbaar", f"Appartement {apt_number or ''} is vrijgekomen.".replace("  ", " "),
+            {"kind": "apartment"}, category="apartments"))
     # Alle facturen archiveren: restant-open facturen krijgen status 'archived' (niet meer openstaand).
     arch_at = iso(now_utc())
     async for inv in db.invoices.find({"company_id": cid, "tenant_id": tenant_id, "archived": {"$ne": True}},
@@ -17553,6 +17585,7 @@ async def kiosk_deposit_payment(tenant_id: str, body: KioskDepositPayIn, _sessio
     await db.deposits.insert_one(doc)
     doc.pop("_id", None)
     created = await _activate_after_deposit(cid, tenant_id, doc["id"])
+    asyncio.create_task(_notify_deposit(cid, t, doc, "paid"))
     return {"deposit": await _enrich_deposit(doc), "invoices_created": created}
 
 
@@ -17808,8 +17841,11 @@ PUSH_CATEGORIES = [
     ("invoices", "Facturen", "Maandelijkse facturen gegenereerd."),
     ("kiosk_session", "Kiosk in-/uitloggen", "Medewerker ingelogd of uitgelogd in de kiosk."),
     ("billing", "Abonnement & SaaS-facturen", "Abonnement (bijna) verlopen en nieuwe SaaS-facturen."),
+    ("deposits", "Borg", "Borg betaald of terugbetaald."),
+    ("bills", "Vaste betalingen (ESB/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
 ]
 _PUSH_KIND_CATEGORY = {
+    "deposit": "deposits", "bill_reminder": "bills",
     "subscription": "billing",
     "payment": "payments", "payment_pending": "payments", "payment_pending_approval": "payments", "approval": "payments",
     "payment_plan": "plans", "overdue": "overdue", "invoice_reminder": "overdue",
@@ -17926,6 +17962,11 @@ EMP_PUSH_CATEGORIES = [
     ("admin_kasgeld", "Kasgeld door beheerder", "De beheerder heeft een kasgeld-mutatie gedaan."),
     ("maintenance", "Onderhoud", "Nieuwe onderhoudsmeldingen."),
     ("my_payment", "Mijn betalingen", "Goedkeuring of afwijzing van uw eigen betaling."),
+    ("power", "Stroom aan/uit", "Stroom aan- of uitgezet voor een appartement."),
+    ("deposit", "Borg", "Borg betaald of terugbetaald."),
+    ("plans", "Betalingsregelingen", "Nieuwe betalingsregelingen en betaalde termijnen."),
+    ("apartments", "Appartement beschikbaar", "Een appartement is vrijgekomen."),
+    ("bills", "Vaste betalingen (ESB/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
 ]
 
 
@@ -18028,6 +18069,67 @@ async def _notify_kiosk_employees(company_id: str, title: str, body: str, data: 
     except Exception as e:  # noqa: BLE001
         print(f"[emp-push] failed: {e}")
         return 0
+
+
+# ---- Vaste maandelijkse betalingen (ESB / SWM / Telesur) ----
+BILL_DEFAULTS = [
+    {"id": "esb", "provider": "EBS", "label": "Stroom", "day": 18, "days_before": 3, "enabled": False},
+    {"id": "swm", "provider": "SWM", "label": "Water", "day": 18, "days_before": 3, "enabled": False},
+    {"id": "telesur", "provider": "Telesur", "label": "Internet", "day": 18, "days_before": 3, "enabled": False},
+]
+
+
+def _merge_bills(saved: list | None) -> list:
+    by_id = {b.get("id"): b for b in (saved or [])}
+    out = []
+    for d in BILL_DEFAULTS:
+        b = {**d, **{k: v for k, v in (by_id.get(d["id"]) or {}).items() if k in d}}
+        b["day"] = max(1, min(28, int(b["day"])))
+        b["days_before"] = max(0, min(14, int(b["days_before"])))
+        b["enabled"] = bool(b["enabled"])
+        out.append(b)
+    return out
+
+
+class BillRemindersIn(BaseModel):
+    bills: list
+
+
+@api.get("/push/bill-reminders")
+async def get_bill_reminders(user=Depends(get_current_user)):
+    c = await db.companies.find_one({"id": company_id_of(user)}, {"_id": 0, "bill_reminders": 1}) or {}
+    return {"bills": _merge_bills(c.get("bill_reminders"))}
+
+
+@api.put("/push/bill-reminders")
+async def put_bill_reminders(body: BillRemindersIn, user=Depends(require_role("admin", "owner"))):
+    bills = _merge_bills([b for b in body.bills if isinstance(b, dict)])
+    await db.companies.update_one({"id": company_id_of(user)}, {"$set": {"bill_reminders": bills}})
+    return {"bills": bills}
+
+
+async def _send_bill_reminders() -> None:
+    """Eén push per maand per vaste betaling, vanaf `days_before` dagen voor de vervaldag."""
+    today = (now_utc() - timedelta(hours=3)).date()
+    async for c in db.companies.find({"bill_reminders": {"$exists": True}}, {"_id": 0, "id": 1, "bill_reminders": 1}):
+        for b in _merge_bills(c.get("bill_reminders")):
+            if not b["enabled"]:
+                continue
+            nxt = (today.replace(day=1) + timedelta(days=32)).replace(day=b["day"])
+            due = next((d for d in (today.replace(day=b["day"]), nxt)
+                        if d - timedelta(days=b["days_before"]) <= today <= d), None)
+            if due is None:
+                continue
+            key = f"{c['id']}:{b['id']}:{due.strftime('%Y-%m')}"
+            if await db.bill_reminders_sent.find_one({"key": key}):
+                continue
+            await db.bill_reminders_sent.insert_one({"key": key, "at": iso(now_utc())})
+            when = "vandaag" if due == today else f"voor de {b['day']}e"
+            title = f"{b['provider']} · {b['label']} betalen"
+            msg = f"{b['label']} ({b['provider']}) moet {when} betaald worden."
+            data = {"kind": "bill_reminder", "url": "/admin/notifications"}
+            await _notify_company_admins(c["id"], title, msg, data)
+            await _notify_kiosk_employees(c["id"], title, msg, {"kind": "bill_reminder"}, category="bills")
 
 
 async def _notify_company_admins(company_id: str, title: str, body: str, data: dict | None = None) -> int:
@@ -20165,6 +20267,7 @@ _route_deps.send_saas_payment_email = _send_saas_payment_email
 _route_deps.get_eur_per_srd = _get_eur_per_srd
 _route_deps.ensure_open_invoice = _ensure_open_invoice_for_company
 _route_deps.notify_company_admins = _notify_company_admins
+_route_deps.notify_kiosk_employees = _notify_kiosk_employees
 _route_deps.notify_superadmins = _notify_superadmins
 _route_deps.notify_tenant_power = _power_notify_tenant
 app.include_router(_nfc_routes.router, prefix="/api")
@@ -20191,6 +20294,14 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
         plan = await db.payment_plans.find_one({"id": plan_id}, {"_id": 0})
         if not plan:
             return
+        try:
+            _t = await db.tenants.find_one({"id": plan["tenant_id"]}, {"_id": 0, "name": 1}) or {}
+            await _notify_kiosk_employees(
+                plan.get("company_id"), "Termijn betaald",
+                f"{_t.get('name', 'Huurder')} heeft termijn {seq} van de betalingsregeling betaald.",
+                {"kind": "payment_plan"}, category="plans")
+        except Exception as e:  # noqa: BLE001
+            print(f"[push] installment employee notify failed: {e}")
         tenant = await db.tenants.find_one(
             {"id": plan["tenant_id"]}, {"_id": 0, "name": 1, "phone": 1, "email": 1}
         ) or {}
@@ -20821,6 +20932,10 @@ async def kiosk_quick_payment_plan(body: KioskQuickPlanIn, request: Request):
         )
     except Exception as e:
         print(f"[push] kiosk quick plan notify failed: {e}")
+    await _notify_kiosk_employees(
+        cid, "Nieuwe betalingsregeling",
+        f"{tenant.get('name', 'Huurder')} — {_nl_money(body.currency, body.total_amount)} in {n} termijnen",
+        {"kind": "payment_plan"}, category="plans")
 
     return {
         "id": plan_id,
