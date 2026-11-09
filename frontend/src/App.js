@@ -8,6 +8,7 @@ import { useSheetSwipeToDismiss } from './lib/sheet-swipe';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { installGlobalTapSounds } from './lib/tap-sounds';
 import RotateNotice from './components/RotateNotice';
+import DemoResetTimer from './components/DemoResetTimer';
 import { KtpPrintToast } from './components/KtpPrintToast';
 import BrandedShell from './components/BrandedShell';
 import { isMarketingHost, appUrl } from './lib/env';
@@ -490,6 +491,24 @@ export default function App() {
   if (tenant.status === 'checking') {
     return <RouteFallback />;
   }
+  if (tenant.status === 'tenant' && tenant.role === 'marketing') {
+    // Marketing-domein: publieke website van de tenant. Alle andere paden
+    // gaan naar het login-domein (of het slug-pad als dat niet is ingesteld).
+    const loginBase = tenant.login_url || '';
+    const slug = tenant.company?.slug || '';
+    const company = { ...tenant.company, login_url: tenant.login_url || null };
+    if (window.location.pathname !== '/' && window.location.pathname !== '/landing-preview') {
+      const rest = window.location.pathname + window.location.search;
+      window.location.replace(loginBase ? `${loginBase}${rest}` : `/${slug}/login`);
+      return <RouteFallback />;
+    }
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <TenantPublicLanding company={company} apartments={tenant.apartments || []}
+          content={tenant.content || {}} editMode={false} />
+      </Suspense>
+    );
+  }
   if (tenant.status === 'tenant') {
     // Bij een custom-domain visit renderen we de volledige branded app zoals
     // wanneer je via `/{slug}/...` zou binnenkomen — landing, login, kiosk,
@@ -502,20 +521,15 @@ export default function App() {
         <AuthSessionNotice />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            {/* Root op custom domain = tenant landing page */}
-            <Route path="/" element={
-              <TenantPublicLanding
-                company={tenant.company}
-                apartments={tenant.apartments}
-                content={tenant.content}
-                editMode={false} />
-            } />
+            {/* Root op custom domain = inlogscherm van het bedrijf */}
+            <Route path="/" element={<Navigate to={`/${slug}/login`} replace />} />
             {/* Alle overige app-paden gaan door BrandedRouteTree met de
                 pre-resolved slug — die zit in de path zodat useParams() nog
                 gewoon werkt in BrandedShell. We prefix intern zonder URL wijziging. */}
             <Route path="/login" element={<Navigate to={`/${slug}/login`} replace />} />
             <Route path="/superadmin" element={<Navigate to="/superadmin/login" replace />} />
             <Route path="/superadmin/login" element={<SuperadminLogin />} />
+            <Route path="/landing-preview" element={<TenantPublicLanding />} />
             <Route path="/admin/*" element={<Navigate to={`/${slug}/admin`} replace />} />
             <Route path="/kiosk" element={<Navigate to={`/${slug}/kiosk`} replace />} />
             <Route path="/kiosk/huurder" element={<Navigate to={`/${slug}/kiosk/huurder`} replace />} />
@@ -537,6 +551,7 @@ export default function App() {
         <PersonalPinSetup />
         <RotateNotice />
         <KtpPrintToast />
+        <DemoResetTimer />
       </AuthProvider>
     );
   }
@@ -553,6 +568,7 @@ export default function App() {
       <PersonalPinSetup />
       <RotateNotice />
         <KtpPrintToast />
+        <DemoResetTimer />
     </AuthProvider>
   );
 }

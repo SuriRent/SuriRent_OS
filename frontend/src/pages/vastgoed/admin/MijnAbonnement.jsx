@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { readSeed, writeSeed } from '../../../lib/swr';
 import {
   CheckCircle2, AlertCircle, ArrowUp, ArrowDown, Loader2, Landmark, Banknote, Copy, Check,
-  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert,
+  Upload, FileCheck2, ScanLine, CreditCard, Receipt, ShieldAlert, Crown,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
-import { Tab } from './invoices/kpi';
 
 const fmt = (n, c = 'SRD') => {
   const cur = (c || 'SRD').toUpperCase();
-  if (cur === 'EUR') return `€${Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (cur === 'EUR') return `â‚¬${Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return `${cur} ${Number(n || 0).toLocaleString('nl-NL')}`;
 };
-const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const fmtDate = (s) => s ? new Date(s).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : 'â€”';
 const isOpen = (i) => !['paid', 'superseded', 'cancelled', 'void'].includes(i.status);
 const intervalLabel = (interval) => ({
   quarter: 'kwartaal',
@@ -23,7 +22,7 @@ const intervalLabel = (interval) => ({
   once: 'eenmalig',
 }[interval] || 'maand');
 const METHOD_LABEL = { creditcard: 'Creditcard', ideal: 'iDEAL', bank: 'Bank', stripe: 'Stripe', contant: 'Contant' };
-const CARD = 'bg-white rounded-2xl border border-orange-100';
+const CARD = 'bg-white rounded-2xl border border-slate-200 shadow-sm';
 
 function StatusPill({ tone, children }) {
   const t = {
@@ -64,8 +63,8 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
   useEffect(() => { setSel(new Set(openInvoices.map((i) => i.id))); }, [key]);
   if (openInvoices.length === 0) {
     return (
-      <div className={`${CARD} px-5 py-4 flex items-center gap-3`} data-testid="saas-all-paid">
-        <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center shrink-0"><CheckCircle2 className="w-5 h-5" /></span>
+      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex items-center gap-4" data-testid="saas-all-paid">
+        <span className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow"><CheckCircle2 className="w-6 h-6" /></span>
         <div>
           <p className="text-sm font-black text-slate-900">Alles is betaald</p>
           <p className="text-xs text-slate-500">Er staan geen facturen open. Nieuwe facturen verschijnen hier automatisch.</p>
@@ -103,8 +102,8 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
             <input type="checkbox" checked={sel.has(i.id)} onChange={() => toggle(i.id)} className="w-4 h-4 accent-[#FF5C00]"
               data-testid={`saas-pay-check-${i.id}`} />
             <span className="flex-1 min-w-0">
-              <span className="block text-[13px] font-bold text-slate-900 truncate">{fmtDate(i.period_start)} → {fmtDate(i.period_end)}</span>
-              <span className="block text-[11px] text-slate-400"><span className="capitalize">{i.plan}</span>{i.autopay_failed && <span className="text-red-500 font-semibold"> · automatische betaling mislukt</span>}</span>
+              <span className="block text-[13px] font-bold text-slate-900 truncate">{fmtDate(i.period_start)} â†’ {fmtDate(i.period_end)}</span>
+              <span className="block text-[11px] text-slate-400"><span className="capitalize">{i.plan}</span>{i.autopay_failed && <span className="text-red-500 font-semibold"> Â· automatische betaling mislukt</span>}</span>
             </span>
             <span className="text-sm font-black text-slate-900 tabular-nums">{fmt(i.amount, i.currency)}</span>
           </label>
@@ -130,7 +129,7 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
           )}
         </div>
         {bankOn && chosen.length !== 1 && (
-          <p className="text-[11px] text-slate-500">Selecteer precies één factuur voor betaling via bankoverschrijving.</p>
+          <p className="text-[11px] text-slate-500">Selecteer precies Ã©Ã©n factuur voor betaling via bankoverschrijving.</p>
         )}
         {!stripeOn && !bankOn && <p className="text-xs text-slate-500">Neem contact op met SuriRent om uw factuur te betalen.</p>}
       </div>
@@ -151,8 +150,8 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
           <p className="text-sm font-black text-slate-900">Automatisch betalen</p>
           <p className="text-xs text-slate-500 mt-0.5" data-testid="autopay-status">
             {card
-              ? <>{autopay.enabled ? 'Aan' : 'Uit'} · <span className="capitalize">{card.brand}</span> •••• {card.last4} · verloopt {String(card.exp_month).padStart(2, '0')}/{String(card.exp_year).slice(-2)}</>
-              : 'Bewaar uw creditcard bij een betaling — nieuwe facturen worden dan direct afgeschreven.'}
+              ? <>{autopay.enabled ? 'Aan' : 'Uit'} Â· <span className="capitalize">{card.brand}</span> â€¢â€¢â€¢â€¢ {card.last4} Â· verloopt {String(card.exp_month).padStart(2, '0')}/{String(card.exp_year).slice(-2)}</>
+              : 'Bewaar uw creditcard bij een betaling â€” nieuwe facturen worden dan direct afgeschreven.'}
           </p>
         </div>
       </div>
@@ -176,7 +175,13 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
 }
 
 function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
-  if (invoices.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen facturen.</p>;
+  if (invoices.length === 0) return (
+    <div className="p-10 flex flex-col items-center gap-3 text-center">
+      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><Receipt className="w-8 h-8" /></span>
+      <p className="text-base font-black text-slate-900">Nog geen facturen</p>
+      <p className="text-sm text-slate-500">Zodra er een factuur is, verschijnt die hier.</p>
+    </div>
+  );
   return (
     <div data-testid="my-invoices-list">
       <div className="hidden md:grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-orange-100">
@@ -191,7 +196,7 @@ function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
             <div key={inv.id} data-testid={`my-invoice-${inv.id}`}
               className="px-5 py-3.5 grid grid-cols-[1fr_auto] md:grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-x-4 gap-y-1 items-center hover:bg-orange-50/40 transition-colors">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-900">{fmtDate(inv.period_start)} → {fmtDate(inv.period_end)}</p>
+                <p className="text-sm font-bold text-slate-900">{fmtDate(inv.period_start)} â†’ {fmtDate(inv.period_end)}</p>
                 {inv.due_date && <p className="text-[11px] font-semibold text-orange-600">Uiterlijk betalen: {fmtDate(inv.due_date)}</p>}
                 <p className="text-[11px] text-slate-400 font-mono">#{(inv.invoice_number || inv.id.slice(0, 8)).toUpperCase()}</p>
               </div>
@@ -225,7 +230,13 @@ function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
 }
 
 function PaymentsPanel({ payments }) {
-  if (payments.length === 0) return <p className="p-10 text-sm text-slate-400 text-center">Nog geen betalingen.</p>;
+  if (payments.length === 0) return (
+    <div className="p-10 flex flex-col items-center gap-3 text-center">
+      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><CreditCard className="w-8 h-8" /></span>
+      <p className="text-base font-black text-slate-900">Nog geen betalingen</p>
+      <p className="text-sm text-slate-500">Uw betalingen verschijnen hier.</p>
+    </div>
+  );
   return (
     <div className="divide-y divide-orange-50" data-testid="my-payments-list">
       {payments.map((p) => (
@@ -233,7 +244,7 @@ function PaymentsPanel({ payments }) {
           <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center shrink-0"><Banknote className="w-5 h-5" /></span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-slate-900">{fmtDate(p.paid_at)}</p>
-            <p className="text-[11px] text-slate-400 truncate">{p.reference || p.note || '—'}</p>
+            <p className="text-[11px] text-slate-400 truncate">{p.reference || p.note || 'â€”'}</p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-sm font-black text-slate-900 tabular-nums">{fmt(p.amount, p.currency)}</p>
@@ -312,7 +323,7 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
       {!result && (
         <button onClick={() => fileInput.current?.click()} disabled={busy} data-testid="saas-bank-proof-upload-btn"
           className="mt-auto w-full h-24 rounded-2xl border-2 border-dashed border-orange-200 hover:border-[#FF5C00] hover:bg-orange-50/50 text-slate-600 hover:text-[#FF5C00] font-bold text-sm flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-colors">
-          {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Scannen…</> : <><Upload className="w-5 h-5" /> Upload betaalbewijs<span className="text-[10px] font-semibold text-slate-400">JPG, PNG, WEBP of PDF · max 5 MB</span></>}
+          {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Scannenâ€¦</> : <><Upload className="w-5 h-5" /> Upload betaalbewijs<span className="text-[10px] font-semibold text-slate-400">JPG, PNG, WEBP of PDF Â· max 5 MB</span></>}
         </button>
       )}
       {result?.status === 'paid' && (
@@ -322,7 +333,7 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
             {result.invoice_paid
               ? 'Betaling automatisch goedgekeurd. De factuur is voldaan.'
               : 'Termijnbetaling automatisch goedgekeurd. Het resterende saldo blijft op dezelfde factuur staan.'}
-            <p className="font-normal text-emerald-700 mt-1">Herkend: {result.ocr?.currency || ''} {result.ocr?.amount?.toFixed(2) || '?'}{result.ocr?.date_iso && ` · ${result.ocr.date_iso}`}</p>
+            <p className="font-normal text-emerald-700 mt-1">Herkend: {result.ocr?.currency || ''} {result.ocr?.amount?.toFixed(2) || '?'}{result.ocr?.date_iso && ` Â· ${result.ocr.date_iso}`}</p>
           </div>
         </div>
       )}
@@ -347,7 +358,7 @@ function KV({ label, value, mono, onCopy, copied, wrap }) {
       <div className="flex items-center gap-1 min-w-0">
         <span className={`font-bold text-slate-900 text-[13px] ${wrap ? 'break-words whitespace-normal text-right' : 'truncate'} ${mono ? 'font-mono' : ''}`}>{value}</span>
         {onCopy && (
-          <button onClick={onCopy} title="Kopiëren" className="p-1.5 rounded-lg text-slate-400 hover:text-[#FF5C00] hover:bg-orange-50 transition-colors shrink-0">
+          <button onClick={onCopy} title="KopiÃ«ren" className="p-1.5 rounded-lg text-slate-400 hover:text-[#FF5C00] hover:bg-orange-50 transition-colors shrink-0">
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
         )}
@@ -362,7 +373,7 @@ function BankPanel({ details, invoice, amount, currency, company, onSuccess, onE
     .flatMap((plan) => (plan.schedule || []).map((term) => ({ plan, term })))
     .filter(({ term }) => term.status !== 'paid' && Number(term.amount || 0) > Number(term.paid_amount || 0))
     .sort((a, b) => (a.term.due_date || '').localeCompare(b.term.due_date || '') || a.term.seq - b.term.seq)[0];
-  const refText = `ABONNEMENT — ${company} — ${invoice ? new Date(invoice.created_at).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }) : 'huidige maand'}`;
+  const refText = `ABONNEMENT â€” ${company} â€” ${invoice ? new Date(invoice.created_at).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }) : 'huidige maand'}`;
   const paymentAmount = invoice
     ? fmt(nextInstallment
       ? Number(nextInstallment.term.amount) - Number(nextInstallment.term.paid_amount || 0)
@@ -388,7 +399,7 @@ function BankPanel({ details, invoice, amount, currency, company, onSuccess, onE
         <KV label="Omschrijving" value={refText} mono wrap onCopy={() => copy('ref', refText)} copied={copied === 'ref'} />
         {(details.whatsapp || details.support_email) && (
           <p className="text-[11px] text-slate-500 mt-3">
-            Vragen? {details.whatsapp && <>WhatsApp <a href={`https://wa.me/${(details.whatsapp || '').replace(/\D/g, '')}`} className="text-[#FF5C00] font-bold">{details.whatsapp}</a> · </>}
+            Vragen? {details.whatsapp && <>WhatsApp <a href={`https://wa.me/${(details.whatsapp || '').replace(/\D/g, '')}`} className="text-[#FF5C00] font-bold">{details.whatsapp}</a> Â· </>}
             {details.support_email && <>E-mail <a href={`mailto:${details.support_email}`} className="text-[#FF5C00] font-bold">{details.support_email}</a></>}
           </p>
         )}
@@ -467,7 +478,7 @@ export default function MijnAbonnement() {
     try {
       const { data } = await api.put('/billing/me/plan', { plan: plan.id });
       setMsg(data.effective === 'immediately' ? `Pakket gewijzigd naar ${plan.name}.`
-        : `Pakketwijziging gepland — gaat in bij volgende vernieuwing op ${fmtDate(data.renews_at)}.`);
+        : `Pakketwijziging gepland â€” gaat in bij volgende vernieuwing op ${fmtDate(data.renews_at)}.`);
       setTimeout(() => setMsg(''), 5000);
       await load();
     } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
@@ -490,12 +501,6 @@ export default function MijnAbonnement() {
       {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm" data-testid="my-sub-error">{err}</div>}
       {msg && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 text-sm" data-testid="my-sub-msg">{msg}</div>}
 
-      <header className="border-b border-slate-200 pb-4">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#FF6A1A]">Facturering</p>
-        <h2 className="mt-1 text-xl sm:text-2xl font-black tracking-tight text-slate-900">Mijn abonnement</h2>
-        <p className="mt-1 text-sm text-slate-500">Beheer betalingen, facturen en je pakket op één plek.</p>
-      </header>
-
       <section aria-label="Betalingen en facturen" className={`grid grid-cols-1 gap-4 [&>*]:min-w-0 ${stripeOn ? 'xl:grid-cols-5' : ''}`}>
         <div className={stripeOn ? 'xl:col-span-3' : ''}>
           <PayBanner me={me} openInvoices={sortedOpen} stripeOn={stripeOn} bankOn={showBank}
@@ -511,14 +516,21 @@ export default function MijnAbonnement() {
         )}
       </section>
 
-      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-1 sm:gap-3 overflow-x-auto border-b border-slate-200 no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0" data-testid="my-sub-tabs">
-        <Tab v="invoices" tab={tab} setTab={setTab} label={`Facturen (${invoices.length})`} dot={openInvoices.length ? 'red' : undefined} testid="my-sub-tab-invoices" />
-        <Tab v="payments" tab={tab} setTab={setTab} label={`Betalingen (${payments.length})`} dot="green" testid="my-sub-tab-payments" />
-        <Tab v="plans" tab={tab} setTab={setTab} label="Pakket wijzigen" testid="my-sub-tab-plans" />
-        {showBank && <Tab v="bank" tab={tab} setTab={setTab} label="Bankoverschrijving" testid="my-sub-tab-bank" />}
+      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-2 overflow-x-auto rounded-2xl bg-orange-50 p-1.5 no-scrollbar" data-testid="my-sub-tabs">
+        {[
+          ['invoices', `Facturen (${invoices.length})`, 'my-sub-tab-invoices', Receipt],
+          ['payments', `Betalingen (${payments.length})`, 'my-sub-tab-payments', CreditCard],
+          ['plans', 'Pakket wijzigen', 'my-sub-tab-plans', Crown],
+          ...(showBank ? [['bank', 'Bankoverschrijving', 'my-sub-tab-bank', Landmark]] : []),
+        ].map(([v, lbl, tid, Icon]) => (
+          <button key={v} type="button" onClick={() => setTab(v)} data-testid={tid}
+            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-extrabold transition-all ${tab === v ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 hover:bg-white'}`}>
+            <Icon className="h-4 w-4" />{lbl}
+          </button>
+        ))}
       </nav>
 
-      <div className={`${CARD} overflow-hidden`} data-testid={`my-sub-panel-${tab}`}>
+      <div className="bg-white rounded-3xl border border-orange-100 shadow-sm overflow-hidden" data-testid={`my-sub-panel-${tab}`}>
         {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}
           onPay={goPay} onBankPay={goBankPay} />}
         {tab === 'payments' && <PaymentsPanel payments={payments} />}
@@ -532,13 +544,13 @@ export default function MijnAbonnement() {
         )}
         {tab === 'bank' && showBank && (
           <BankPanel details={bank} invoice={oldestOpen} amount={me.monthly_amount} currency={me.currency} company={me.company_name || 'UW BEDRIJF'}
-            onSuccess={() => { setMsg('Betaling automatisch goedgekeurd — abonnement is geactiveerd!'); load(); }} onErr={setErr} />
+            onSuccess={() => { setMsg('Betaling automatisch goedgekeurd â€” abonnement is geactiveerd!'); load(); }} onErr={setErr} />
         )}
       </div>
 
       {(me.status === 'trial' || me.status === 'active') && (
-        <div className={`${CARD} px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3`}>
-          <span className="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
+        <div className="rounded-2xl border border-red-100 bg-red-50/40 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
           <div className="flex-1">
             <p className="text-sm font-black text-slate-900">Abonnement opzeggen</p>
             <p className="text-xs text-slate-500 mt-0.5">Toegang wordt direct geblokkeerd. Uw data blijft 90 dagen bewaard zodat u kunt heractiveren.</p>

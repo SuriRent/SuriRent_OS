@@ -1,58 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Power, Loader2, X, AlertCircle } from 'lucide-react';
+import { Zap, Home, Power, Check, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
-function BreakerTile({ device, orangeMode = false }) {
-  const { on, apartment_number: apartmentNumber, tenant_name: tenantName } = device;
-  const isOn = on === true;
-  const isOff = on === false;
-  const accent = orangeMode ? 'text-orange-400' : 'text-sky-300';
-  const buttonColors = orangeMode
-    ? 'border-orange-800 bg-gradient-to-b from-orange-300 to-orange-600'
-    : 'border-slate-500 bg-gradient-to-b from-sky-300 to-cyan-600';
+function PowerTile({ device, unlinked = false }) {
+  const on = device.on;
+  const state = unlinked || on == null ? 'orange' : on ? 'green' : 'red';
+  const th = {
+    green: { glow: '34,197,94', border: 'border-green-500', head: 'bg-green-800', ring: 'border-green-200 bg-green-500 text-white', pill: 'bg-green-100 text-green-800', dot: 'bg-green-500', label: 'Stroom aan' },
+    red: { glow: '239,68,68', border: 'border-red-500', head: 'bg-red-800', ring: 'border-red-200 bg-red-500 text-white', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', label: 'Stroom uit' },
+    orange: { glow: '249,115,22', border: 'border-orange-400', head: 'bg-orange-700', ring: 'border-orange-200 bg-orange-500 text-white', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
+  }[state];
   return (
-    <span aria-hidden="true"
-      className="relative mx-auto flex aspect-[1.45/1] min-h-[9rem] w-full flex-col overflow-hidden rounded-xl border border-slate-400 bg-gradient-to-b from-white via-slate-100 to-slate-300 p-1.5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.95),0_8px_18px_rgba(15,23,42,0.22)]">
-      <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 left-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full border border-slate-500 bg-slate-300 shadow-inner" />
-      <span className="flex flex-none items-center justify-between rounded-t border-b border-slate-300 bg-gradient-to-b from-white to-slate-200 px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
-        <span>N&nbsp; POWER</span><span>L↓</span>
-      </span>
-      <span className="flex flex-1 items-center justify-around bg-gradient-to-b from-slate-200 to-slate-300 py-1">
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-      </span>
-      <span className="mx-1 flex flex-1 flex-col items-center border-x border-slate-300 bg-gradient-to-b from-slate-100 to-slate-300 px-2 py-1.5">
-        <span className="flex w-full items-center justify-between rounded-sm bg-gradient-to-b from-slate-800 to-slate-950 px-2 py-1 text-[8px] font-black tracking-[0.14em] text-white shadow-sm">
-          <span className={accent}>SURI RENT</span>
-          <span className={`h-2 w-2 rounded-full border border-white/30 ${isOn ? 'bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.9)]' : isOff ? 'bg-red-400 shadow-[0_0_7px_rgba(248,113,113,0.7)]' : 'bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.7)]'}`} />
+    <div className={`power-glow overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state} style={{ '--glow': th.glow }}>
+      <div className={`flex items-center justify-center gap-2 px-3 py-2.5 text-white ${th.head}`}>
+        <Home className="h-5 w-5 shrink-0" />
+        <span className="truncate text-base font-black uppercase tracking-wide">{device.apartment_number}</span>
+      </div>
+      <div className="flex flex-col items-center gap-3 px-3 py-4">
+        <span data-testid="power-lamp" className={`power-glow flex h-16 w-16 items-center justify-center rounded-full border-2 ${th.ring}`}>
+          <Zap className="h-8 w-8" fill="currentColor" />
         </span>
-        <span className="mt-1 flex w-full min-w-0 flex-col items-center border border-slate-400 bg-white px-2 py-1 text-center shadow-sm">
-          <span className="max-w-full truncate text-xs font-black leading-tight text-slate-900">{apartmentNumber}</span>
-          <span className="max-w-full truncate text-[8px] font-medium leading-tight text-slate-500">{tenantName || 'Geen huurder'}</span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${th.pill}`}>
+          <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${th.dot}`} />
+          {th.label}
         </span>
-        <span className="mt-1 flex items-center gap-1 text-[6px] font-bold tracking-wider text-slate-300">
-          <span>BREAKER</span><span>·</span><span>POWER</span>
-        </span>
-        <span className="my-1 flex flex-1 items-center justify-center">
-          <span className={`flex h-9 w-9 items-center justify-center rounded-full border-[3px] shadow-[inset_0_2px_3px_rgba(255,255,255,0.65),0_3px_6px_rgba(15,23,42,0.3)] transition duration-300 ${buttonColors} ${isOn ? 'ring-2 ring-emerald-400/80' : isOff ? 'opacity-75' : 'opacity-90'}`}>
-            <Power className="h-5 w-5 text-slate-900" strokeWidth={2.6} />
-          </span>
-        </span>
-        <span className={`text-[7px] font-black tracking-widest ${isOn ? 'text-emerald-700' : isOff ? 'text-red-700' : 'text-slate-500'}`}>
-          {isOn ? 'I  AAN' : isOff ? 'O  UIT' : 'STATUS ONBEKEND'}
-        </span>
-      </span>
-      <span className="flex flex-1 items-center justify-around bg-gradient-to-b from-slate-300 to-slate-200 py-1">
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-        <span className="h-4 w-4 rounded-full border-2 border-slate-500 bg-gradient-to-br from-slate-200 via-slate-500 to-slate-300 shadow-inner" />
-      </span>
-      <span className="flex flex-none items-center justify-between rounded-b border-t border-slate-300 bg-gradient-to-b from-slate-200 to-white px-2 py-1 text-[8px] font-black tracking-widest text-slate-600">
-        <span>N&nbsp; LOAD</span><span>L↓</span>
-      </span>
-    </span>
+      </div>
+    </div>
   );
 }
 
@@ -223,8 +196,8 @@ export default function PowerControl({ kiosk = false, orangeMode = false }) {
   return (
     <div className={kiosk ? 'px-3 sm:px-4 pt-3 pb-32 md:pb-28' : 'space-y-4'} data-testid="power-control">
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">{devices.filter((d) => d.on === true).length} aan</span>
-        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-600">{devices.filter((d) => d.on === false).length} uit</span>
+        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-md"><Check className="w-4 h-4" strokeWidth={3} />Aan <span className="opacity-90">{devices.filter((d) => d.on === true).length}</span></span>
+        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold bg-white text-slate-800 shadow-md"><X className="w-4 h-4 text-red-500" strokeWidth={3} />Uit <span className="text-slate-500">{devices.filter((d) => d.on === false).length}</span></span>
         <span className="flex-1" />
         {devices.length > 0 && (
           <>
@@ -245,14 +218,12 @@ export default function PowerControl({ kiosk = false, orangeMode = false }) {
           <button key={d.id} type="button" onClick={() => setOpen(d)} data-testid={`power-tile-${d.id}`}
             aria-label={`${d.apartment_number}, ${d.tenant_name || 'Geen huurder'}, stroom ${d.on === true ? 'aan' : d.on === false ? 'uit' : 'onbekend'}. Open bediening.`}
             className="rounded-2xl border-0 bg-transparent p-0 text-left shadow-none transition active:scale-[0.98] hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-            <BreakerTile device={d} orangeMode={orangeMode} />
+            <PowerTile device={d} />
           </button>
         ))}
         {free.map((a) => (
-          <div key={a.id} className="rounded-2xl p-4 flex flex-col items-center text-center gap-2 bg-white/70 border-2 border-dashed border-slate-300 opacity-80" data-testid={`power-free-${a.id}`}>
-            <span className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-300 flex items-center justify-center"><Zap className="w-6 h-6" /></span>
-            <span className="font-black text-slate-700 text-base leading-tight">{a.number}</span>
-            <span className="text-[11px] text-slate-400">Niet gekoppeld</span>
+          <div key={a.id} data-testid={`power-free-${a.id}`}>
+            <PowerTile device={{ apartment_number: a.number }} unlinked />
           </div>
         ))}
       </div>

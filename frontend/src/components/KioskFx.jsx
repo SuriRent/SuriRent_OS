@@ -62,9 +62,9 @@ export function FxStats({ items, testId }) {
   return (
     <div className="grid grid-cols-3 gap-2" data-testid={testId}>
       {items.map(([l, v, tone], i) => (
-        <div key={l} className="rounded-xl bg-slate-50 px-3 py-2 min-w-0" data-testid={`${testId}-${i}`}>
-          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 truncate">{l}</div>
-          <div className={`text-sm font-black truncate ${FX_TONE[tone] || 'text-slate-900'}`}>{v}</div>
+        <div key={l} className="        rounded-xl bg-slate-50 px-3.5 py-4 sm:px-3 sm:py-2 min-w-0" data-testid={`${testId}-${i}`}>
+                  <div className="text-xs sm:text-[10px] font-bold uppercase tracking-wide text-slate-400 truncate">{l}</div>
+                  <div className={`text-lg sm:text-sm mt-0.5 sm:mt-0 font-black truncate ${FX_TONE[tone] || 'text-slate-900'}`}>{v}</div>
         </div>
       ))}
     </div>

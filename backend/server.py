@@ -4035,53 +4035,68 @@ async def public_company_landing(request: Request, host: Optional[str] = None):
     Returnt {company, content, apartments, found:bool}. Bij niet gevonden
     geeft `found=false` zodat de frontend kan terugvallen op de default
     SuriRent landing."""
-    target = _normalize_host(host or request.headers.get("host", ""))
+    target = _normalize_host(request.headers.get("x-forwarded-host") or host or request.headers.get("host", ""))
     # Skip onze eigen hosts — die mogen NOOIT als custom domain matchen,
     # zodat preview/prod altijd de superadmin landing zien.
     SYSTEM_HOSTS_SUFFIXES = ("surirent.sr", "emergentagent.com", "localhost")
     if not target or any(target == s or target.endswith("." + s) for s in SYSTEM_HOSTS_SUFFIXES):
         return {"found": False}
 
-    # Zoek eerst op companies.custom_domain (legacy), dan op company_settings.domain.custom_domain.
-    company = await db.companies.find_one(
-        {"custom_domain": target},
-        {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
-         "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1,
-         "kkf_number": 1},
+    COMPANY_FIELDS = {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
+                      "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1,
+                      "kkf_number": 1}
+    role = "login"
+    company = None
+    # Marketing-domein (bv. kewalbansing.net) → publieke website van de tenant.
+    mk = await db.company_settings.find_one(
+        {"domain.marketing_domain": target, "domain.marketing_enabled": True},
+        {"_id": 0, "company_id": 1},
     )
+    if mk:
+        company = await db.companies.find_one({"id": mk["company_id"]}, COMPANY_FIELDS)
+        role = "marketing"
+    # Daarna het login-domein: companies.custom_domain (legacy) of company_settings.domain.custom_domain.
+    if not company:
+        company = await db.companies.find_one({"custom_domain": target}, COMPANY_FIELDS)
     if not company:
         settings_doc = await db.company_settings.find_one(
             {"domain.custom_domain": target, "domain.enabled": True},
             {"_id": 0, "company_id": 1},
         )
         if settings_doc:
-            company = await db.companies.find_one(
-                {"id": settings_doc["company_id"]},
-                {"_id": 0, "id": 1, "name": 1, "slug": 1, "branding": 1, "address": 1,
-                 "contact_email": 1, "contact_phone": 1, "whatsapp_phone": 1, "kkf_number": 1},
-            )
+            company = await db.companies.find_one({"id": settings_doc["company_id"]}, COMPANY_FIELDS)
     if not company:
         return {"found": False}
+
+    dom_cfg = ((await db.company_settings.find_one(
+        {"company_id": company["id"]}, {"_id": 0, "domain": 1}) or {}).get("domain") or {})
+    login_host = (dom_cfg.get("custom_domain") or "").strip().lower() if dom_cfg.get("enabled") else ""
+    marketing_host = (dom_cfg.get("marketing_domain") or "").strip().lower() if dom_cfg.get("marketing_enabled") else ""
 
     landing_doc = await db.company_landings.find_one({"id": company["id"]}, {"_id": 0}) or {}
     content = landing_doc.get("published") or {}
 
-    # Vul publieke apartments aan (alleen vrije eenheden voor de showcase).
+    # Publieke apartments: vrije eenheden eerst, bezette eenheden onderaan.
     apartments = []
     cursor = db.apartments.find(
-        {"company_id": company["id"], "status": {"$in": ["vacant", "available"]}},
+        {"company_id": company["id"], "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)
     async for a in cursor:
         apartments.append(a)
+    apartments.sort(key=lambda a: 1 if a.get("status") == "occupied" else 0)
 
     return {
         "found": True,
+        "role": role,
         "company": company,
         "content": content,
         "apartments": apartments,
+        "login_url": f"https://{login_host}" if login_host else None,
+        "marketing_url": f"https://{marketing_host}" if marketing_host else None,
     }
+
 
 
 @api.get("/public/company-landing/by-slug/{slug}")
@@ -4107,12 +4122,13 @@ async def public_company_landing_by_slug(slug: str):
 
     apartments = []
     cursor = db.apartments.find(
-        {"company_id": company["id"], "status": {"$in": ["vacant", "available"]}},
+        {"company_id": company["id"], "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)
     async for a in cursor:
         apartments.append(a)
+    apartments.sort(key=lambda a: 1 if a.get("status") == "occupied" else 0)
 
     return {
         "found": True,
@@ -4210,6 +4226,33 @@ async def discard_my_landing(user=Depends(get_current_user)):
     return {"ok": True}
 
 
+@api.post("/companies/me/landing/upload")
+async def upload_my_landing_image(file: UploadFile = File(...), user=Depends(get_current_user)):
+    """Afbeelding uploaden voor de marketing website van de tenant."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    if ctype not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        raise HTTPException(status_code=400, detail="Kies een afbeelding (JPG, PNG, WebP of GIF).")
+    raw = await file.read(MAX_LANDING_ASSET_BYTES + 1)
+    if len(raw) > MAX_LANDING_ASSET_BYTES:
+        raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
+    asset_id = new_id()
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": file.filename or f"asset-{asset_id}",
+        "content_type": ctype,
+        "kind": "image",
+        "company_id": cid,
+        "uploaded_by": user.get("email"),
+        "uploaded_at": iso(now_utc()),
+        "size": len(raw),
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+    })
+    return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}", "content_type": ctype}
+
+
 class CustomDomainIn(BaseModel):
     custom_domain: Optional[str] = ""
 
@@ -4249,7 +4292,7 @@ async def get_my_landing_apartments(user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     out = []
     cursor = db.apartments.find(
-        {"company_id": cid, "status": {"$in": ["vacant", "available"]}},
+        {"company_id": cid, "status": {"$in": ["vacant", "available", "occupied"]}},
         {"_id": 0, "id": 1, "number": 1, "address": 1, "rent_amount": 1,
          "currency": 1, "description": 1, "photo_url": 1, "status": 1},
     ).sort("created_at", -1)
@@ -4909,7 +4952,17 @@ async def get_company_setup_status(user=Depends(require_role("admin"))):
         "next_step": next((s["id"] for s in steps if not s["done"]), None),
         "counts": {"locations": location_count, "apartments": apt_count, "tenants": tenant_count,
                    "linked_tenants": linked_tenant_count},
+        "tour_seen": bool(c.get("kiosk_tour_seen")),
     }
+
+
+@api.post("/companies/me/kiosk-tour-seen")
+async def mark_kiosk_tour_seen(user=Depends(require_role("admin"))):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await db.companies.update_one({"id": cid}, {"$set": {"kiosk_tour_seen": True}})
+    return {"ok": True}
 
 
 
@@ -9106,31 +9159,21 @@ async def public_signature_request_submit(token: str, file: UploadFile = File(..
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
                        user=Depends(get_current_user)):
-    """OCR van een ID-kaart via Gemini 2.5. Retourneert de gevonden velden
-    zodat het huurder-formulier automatisch ingevuld kan worden. Werkt met
+    """ID-kaart velden via Google Gemini (eigen GEMINI_API_KEY). Werkt met
     Surinaamse ID's, paspoorten en NL rijbewijzen."""
     import os
     import json as _json
-    import tempfile
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR module niet geladen: {e}")
-    api_key = os.getenv("EMERGENT_LLM_KEY")
+    import httpx
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY ontbreekt")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op de server")
 
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
 
     ctype = (file.content_type or "image/jpeg").lower()
-    suffix = ".png" if "png" in ctype else (".webp" if "webp" in ctype else ".jpg")
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-        f.write(raw)
-        tmp_path = f.name
 
     prompt = (
         "Extract identity data from this ID card / passport image. "
@@ -9145,21 +9188,37 @@ async def ocr_id_card(file: UploadFile = File(...),
         "Als het document GEEN ID/paspoort/rijbewijs is, zet confidence=0. "
         "Als een veld onduidelijk is: null."
     )
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"idocr-{new_id()[:8]}",
-        system_message="Je bent een OCR-engine die uitsluitend geldig JSON terug geeft.",
-    ).with_model("gemini", "gemini-2.5-flash")
-
+    models = [m for m in (os.getenv("GEMINI_MODEL"), "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash") if m]
+    payload = {
+        "systemInstruction": {"parts": [{"text": "Je bent een OCR-engine die uitsluitend geldig JSON terug geeft."}]},
+        "contents": [{"parts": [
+            {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}},
+            {"text": prompt},
+        ]}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
+    }
+    resp = None
     try:
-        msg = UserMessage(text=prompt,
-                            file_contents=[FileContentWithMimeType(file_path=tmp_path, mime_type=mime)])
-        raw_text = await chat.send_message(msg)
-    finally:
+        async with httpx.AsyncClient(timeout=45) as client:
+            for model in dict.fromkeys(models):
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": api_key}, json=payload,
+                )
+                if resp.status_code != 404:
+                    break
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="OCR-dienst niet bereikbaar")
+    if resp.status_code != 200:
         try:
-            os.unlink(tmp_path)
+            gmsg = resp.json().get("error", {}).get("message", "")
         except Exception:
-            pass
+            gmsg = ""
+        raise HTTPException(status_code=502, detail=f"OCR-dienst fout ({resp.status_code}): {gmsg[:160]}")
+    try:
+        raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        raise HTTPException(status_code=502, detail="OCR gaf geen antwoord terug")
 
     txt = (raw_text or "").strip()
     # Strip markdown fences als aanwezig.
@@ -10985,13 +11044,13 @@ async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
 
 
 class KioskThemeIn(BaseModel):
-    theme: Literal["orange", "white", "green"]
+    theme: Literal["orange", "white"]
 
 
 @api.get("/kiosk/theme")
 async def kiosk_get_theme(_session=Depends(get_kiosk_session)):
     c = await db.companies.find_one({"id": _session["company_id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
-    return {"theme": c.get("kiosk_theme") or "orange"}
+    return {"theme": "orange" if c.get("kiosk_theme") == "orange" else "white"}
 
 
 @api.put("/kiosk/theme")
@@ -13204,12 +13263,12 @@ async def _payment_bon_jpg(payment: dict) -> bytes:
 
 
 @api.get("/kiosk/payments/{payment_id}/print-data")
-async def kiosk_payment_print_data(payment_id: str, _session=Depends(get_kiosk_session)):
+async def kiosk_payment_print_data(payment_id: str, force_ktp: bool = False, _session=Depends(get_kiosk_session)):
     """Gestructureerde bon-gegevens voor het PRINT_RECEIPT bericht naar de APK."""
     p = await db.payments.find_one({"id": payment_id, **kiosk_scope(_session)}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
-    return await _receipt_print_data(p)
+    return await _receipt_print_data(p, force_ktp=force_ktp)
 
 
 async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
@@ -15452,7 +15511,7 @@ async def _ensure_demo_company() -> dict:
             "contact_email": DEMO_EMAIL,
             "contact_phone": "+597 000 0000",
             "address": "Henck Arronstraat 1, Paramaribo",
-            "plan": "pro",
+            "plan": "professional",
             "active": True,
             "is_demo": True,
             "created_at": iso(now_utc()),
@@ -15469,6 +15528,11 @@ async def _ensure_demo_company() -> dict:
     has_tenants = await db.tenants.count_documents({"company_id": cid})
     if not has_tenants:
         await _seed_demo_data(cid)
+    if c.get("plan") != "professional":
+        c["plan"] = "professional"
+        await db.companies.update_one({"id": cid}, {"$set": {"plan": "professional"}})
+    if has_tenants and await db.apartments.count_documents({"company_id": cid}) < 20:
+        await _demo_reset_tick()
     return c
 
 
@@ -15480,12 +15544,10 @@ async def _seed_demo_data(cid: str):
     iso_now = now.isoformat()
     # Locaties
     loc_a_id = str(uuid.uuid4())
-    loc_b_id = str(uuid.uuid4())
+    loc_b_id = loc_a_id
     await db.locations.insert_many([
         {"id": loc_a_id, "company_id": cid, "name": "Hoofdvestiging — Paramaribo",
          "address": "Henck Arronstraat 1, Paramaribo", "is_demo": True, "created_at": iso_now},
-        {"id": loc_b_id, "company_id": cid, "name": "Filiaal — Nieuw Nickerie",
-         "address": "Frederikstraat 5, Nieuw Nickerie", "is_demo": True, "created_at": iso_now},
     ])
     # 5 appartementen — ALLE zijn bezet (Studio 1 + Penthouse zijn later
     # in deze seed gekoppeld aan Kevin resp. Anisha; hun `tenant_id`
@@ -15495,6 +15557,14 @@ async def _seed_demo_data(cid: str):
         ("HUIS 1A", 6000, loc_a_id), ("HUIS 1B", 5500, loc_a_id),
         ("HUIS 2C", 7000, loc_a_id), ("Studio 1", 4500, loc_b_id),
         ("Penthouse", 12000, loc_a_id),
+        ("HUIS 2D", 6500, loc_a_id), ("HUIS 2E", 6500, loc_a_id),
+        ("HUIS 3A", 5000, loc_a_id), ("HUIS 3B", 5000, loc_a_id),
+        ("HUIS 3C", 7500, loc_a_id), ("HUIS 3D", 7500, loc_a_id),
+        ("Studio 2", 4200, loc_b_id), ("Studio 3", 4200, loc_b_id),
+        ("Studio 4", 4800, loc_b_id), ("HUIS 4A", 5800, loc_b_id),
+        ("HUIS 4B", 5800, loc_b_id), ("HUIS 4C", 6200, loc_b_id),
+        ("HUIS 5A", 8000, loc_a_id), ("HUIS 5B", 8000, loc_a_id),
+        ("Penthouse 2", 11000, loc_a_id),
     ]):
         apts.append({
             "id": str(uuid.uuid4()), "company_id": cid, "location_id": loc,
@@ -15512,6 +15582,21 @@ async def _seed_demo_data(cid: str):
         ("Roy van der Berg", "+597 8801003", "roy@demo.sr", apts[2], 9012, "male"),
         ("Kevin Doelahasori", "+597 8801004", "kevin@demo.sr", apts[3], 3344, "male"),
         ("Anisha Ramdhan", "+597 8801005", "anisha@demo.sr", apts[4], 5566, "female"),
+        ("Sunil Mohan", "+597 8801006", "sunil@demo.sr", apts[5], 1111, "male"),
+        ("Priya Jagessar", "+597 8801007", "priya@demo.sr", apts[6], 2222, "female"),
+        ("Dennis Linger", "+597 8801008", "dennis@demo.sr", apts[7], 3333, "male"),
+        ("Shanti Lachman", "+597 8801009", "shanti@demo.sr", apts[8], 4444, "female"),
+        ("Ricardo Tjin", "+597 8801010", "ricardo@demo.sr", apts[9], 5555, "male"),
+        ("Natasha Wijdenbosch", "+597 8801011", "natasha@demo.sr", apts[10], 6666, "female"),
+        ("Hemant Kalka", "+597 8801012", "hemant@demo.sr", apts[11], 7777, "male"),
+        ("Gina Bouterse", "+597 8801013", "gina@demo.sr", apts[12], 8888, "female"),
+        ("Ashwin Soekhoe", "+597 8801014", "ashwin@demo.sr", apts[13], 9999, "male"),
+        ("Cynthia Fernand", "+597 8801015", "cynthia@demo.sr", apts[14], 1357, "female"),
+        ("Raj Bissessar", "+597 8801016", "raj@demo.sr", apts[15], 2468, "male"),
+        ("Melissa Kartosen", "+597 8801017", "melissa@demo.sr", apts[16], 3579, "female"),
+        ("Orlando Pinas", "+597 8801018", "orlando@demo.sr", apts[17], 4680, "male"),
+        ("Vandana Ramkisoensing", "+597 8801019", "vandana@demo.sr", apts[18], 5791, "female"),
+        ("Stanley Hasselbaink", "+597 8801020", "stanley@demo.sr", apts[19], 6802, "male"),
     ]
     tenants = []
     for name, phone, email, apt, pin, gender in tenants_data:
@@ -15691,6 +15776,53 @@ async def _seed_demo_data(cid: str):
             "created_at": (now - timedelta(days=days_back)).isoformat(),
             "is_demo": True,
         })
+    # Huurders 6–20: gevarieerde situaties (betaald, deels, achterstand, bank/contant/pin)
+    extra_plan_tenant = None
+    for idx in range(5, 20):
+        tn = tenants[idx]
+        rent = apts[idx]["rent_amount"]
+        scenario = ["paid", "paid", "arrears", "partial", "paid"][idx % 5]
+        if idx == 9:
+            scenario = "plan"
+        for offset in ([2, 1, 0] if scenario in ("arrears", "plan") else [1, 0]):
+            m = cur_m - offset if cur_m - offset > 0 else cur_m - offset + 12
+            y = cur_y if cur_m - offset > 0 else cur_y - 1
+            inv_id = str(uuid.uuid4())
+            is_cur = offset == 0
+            if scenario in ("arrears", "plan"):
+                paid_amt, status = 0, "open"
+            elif scenario == "partial" and is_cur:
+                paid_amt, status = round(rent * 0.5), "partial"
+            else:
+                paid_amt, status = rent, "paid"
+            days_back = max(1, offset * 30 - 2 - (idx % 4))
+            invoices_to_insert.append({
+                "id": inv_id, "company_id": cid,
+                "tenant_id": tn["id"], "apartment_id": tn["apartment_id"],
+                "invoice_number": inv_number(),
+                "period_month": m, "period_year": y,
+                "amount": rent, "amount_due": rent, "paid_amount": paid_amt,
+                "currency": "SRD", "status": status, "kind": "huur",
+                "due_date": (now - timedelta(days=offset * 30)).date().isoformat(),
+                "paid_at": (now - timedelta(days=days_back)).isoformat() if paid_amt else None,
+                "is_demo": True, "created_at": iso_now,
+            })
+            if paid_amt:
+                payments_to_insert.append({
+                    "id": str(uuid.uuid4()), "company_id": cid,
+                    "tenant_id": tn["id"], "tenant_name": tn["name"],
+                    "apartment_id": tn["apartment_id"],
+                    "amount": paid_amt, "currency": "SRD",
+                    "category": "huur", "method": ["contant", "bank", "pin"][idx % 3],
+                    "period_month": m, "period_year": y,
+                    "invoice_id": inv_id, "receipt_number": f"D-KW-{inv_counter:05d}",
+                    "status": "approved",
+                    "paid_at": (now - timedelta(days=days_back)).isoformat(),
+                    "created_at": (now - timedelta(days=days_back)).isoformat(),
+                    "is_demo": True,
+                })
+            if scenario == "plan":
+                extra_plan_tenant = (tn, inv_id, rent)
     await db.invoices.insert_many(invoices_to_insert)
     await db.payments.insert_many(payments_to_insert)
     # Betalingsregeling voor Roy's restbedrag
@@ -15709,6 +15841,45 @@ async def _seed_demo_data(cid: str):
          "amount": 1500, "due_date": (now + timedelta(days=15 * (i + 1))).date().isoformat(),
          "status": "pending", "is_demo": True}
         for i in range(2)
+    ])
+    # Tweede betalingsregeling (huurder met 3 maanden achterstand, 1 termijn al betaald)
+    if extra_plan_tenant:
+        ptn, pinv, prent = extra_plan_tenant
+        plan2_id = str(uuid.uuid4())
+        await db.payment_plans.insert_one({
+            "id": plan2_id, "company_id": cid,
+            "tenant_id": ptn["id"], "tenant_name": ptn["name"],
+            "invoice_ids": [pinv], "total_amount": prent * 3,
+            "currency": "SRD", "status": "active",
+            "num_installments": 4, "paid_installments": 1,
+            "notes": "Demo regeling achterstand in 4 termijnen",
+            "created_at": iso_now, "is_demo": True,
+        })
+        inst_amt = round(prent * 3 / 4)
+        await db.payment_plan_installments.insert_many([
+            {"id": str(uuid.uuid4()), "plan_id": plan2_id, "sequence": i + 1,
+             "amount": inst_amt,
+             "due_date": (now + timedelta(days=30 * (i - 1))).date().isoformat(),
+             "status": "paid" if i == 0 else "pending", "is_demo": True}
+            for i in range(4)
+        ])
+    # Stroom: schakelaar per appartement; achterstand-huurders staan UIT
+    off_idx = {0, 7, 12}
+    exempt_idx = {4, 19}
+    await db.power_devices.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid, "apartment_id": a["id"],
+         "tuya_device_id": f"demo-{i + 1:02d}", "exempt": i in exempt_idx,
+         "on": i not in off_idx, "cut_by_auto": i in off_idx,
+         "cut_at": iso_now if i in off_idx else None,
+         "created_at": iso_now, "updated_at": iso_now, "is_demo": True}
+        for i, a in enumerate(apts)
+    ])
+    await db.power_log.insert_many([
+        {"id": str(uuid.uuid4()), "company_id": cid, "device_id": None,
+         "apartment_id": apts[i]["id"], "action": "uit", "by": "auto",
+         "reason": "achterstand", "at": (now - timedelta(days=2 + i)).isoformat(),
+         "is_demo": True}
+        for i in off_idx
     ])
     # Werknemers
     await db.employees.insert_many([
@@ -15732,6 +15903,26 @@ async def _seed_demo_data(cid: str):
          "description": "Salaris Anita (deelbetaling)",
          "entry_date": (now - timedelta(days=1)).isoformat(),
          "created_at": (now - timedelta(days=1)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "in",
+         "amount": 2000, "currency": "SRD", "category": "overig",
+         "description": "Kasstorting beheerder",
+         "entry_date": (now - timedelta(days=4)).isoformat(),
+         "created_at": (now - timedelta(days=4)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 1200, "currency": "SRD", "category": "onderhoud",
+         "description": "Schilder — gang Hoofdvestiging",
+         "entry_date": (now - timedelta(days=6)).isoformat(),
+         "created_at": (now - timedelta(days=6)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "in",
+         "amount": 150, "currency": "USD", "category": "overig",
+         "description": "Huur in USD (contant)",
+         "entry_date": (now - timedelta(days=3)).isoformat(),
+         "created_at": (now - timedelta(days=3)).isoformat(), "is_demo": True},
+        {"id": str(uuid.uuid4()), "company_id": cid, "type": "out",
+         "amount": 60, "currency": "EUR", "category": "overig",
+         "description": "Sleutelset laten maken",
+         "entry_date": (now - timedelta(days=5)).isoformat(),
+         "created_at": (now - timedelta(days=5)).isoformat(), "is_demo": True},
     ])
     # Boete op Jan's achterstallige huur — automatische late-fee die admin
     # nog kan kwijtschelden of innen. Toont dashboard "Openstaande boete".
@@ -15767,6 +15958,14 @@ async def _seed_demo_data(cid: str):
         (anisha, apts[4], "Jacuzzi water blijft koud",
          "Penthouse jacuzzi opwarming werkt niet meer — thermostaat controleren.",
          "in_progress", "high"),
+        (tenants[5], apts[5], "Plafond vochtplek", "Vochtplek in slaapkamer na regen.", "open", "high"),
+        (tenants[6], apts[6], "Stopcontact vonkt", "Stopcontact naast bed geeft vonken.", "in_progress", "high"),
+        (tenants[7], apts[7], "Tuinpoort klemt", "Poort sluit niet goed.", "done", "low"),
+        (tenants[9], apts[9], "Toilet loopt door", "Spoelbak blijft water lopen.", "open", "medium"),
+        (tenants[11], apts[11], "Schilderwerk gang", "Gang opnieuw laten schilderen.", "done", "low"),
+        (tenants[13], apts[13], "Airco lekt", "Binnenunit druppelt water.", "open", "medium"),
+        (tenants[15], apts[15], "Slot voordeur", "Slot draait zwaar.", "in_progress", "medium"),
+        (tenants[18], apts[18], "Waterdruk laag", "Weinig waterdruk in douche.", "open", "low"),
     ]
     await db.maintenance.insert_many([
         {"id": str(uuid.uuid4()), "company_id": cid,
@@ -15787,7 +15986,7 @@ async def _demo_reset_tick():
         "tenants", "apartments", "locations", "contracts", "invoices",
         "payments", "payment_plans", "payment_plan_installments", "deposits",
         "employees", "cash_book", "maintenance", "kasgeld", "kasgeld_entries",
-        "fines", "notifications", "kiosk_sessions",
+        "fines", "notifications", "kiosk_sessions", "power_devices", "power_log",
     ]
     for coll in collections:
         try:
@@ -15799,23 +15998,36 @@ async def _demo_reset_tick():
     print(f"[demo-reset] Voltooid voor {cid}.")
 
 
+def _demo_next_reset_ts() -> float:
+    """Volgende reset-moment: elk heel/half uur (UTC), onafhankelijk van opstarttijd."""
+    import time
+    now = time.time()
+    return (int(now // 1800) + 1) * 1800
+
+
+@api.get("/public/demo-reset-info")
+async def demo_reset_info():
+    import time
+    nxt = _demo_next_reset_ts()
+    return {"seconds_left": max(0, int(nxt - time.time())), "interval_minutes": 30}
+
+
 async def _demo_reset_loop():
-    """Achtergrond-loop: reset demo-omgeving elke 30 minuten."""
+    """Achtergrond-loop: reset demo-omgeving elke 30 minuten (op :00 en :30)."""
     import asyncio
-    # Initiele setup direct bij start
+    import time
     try:
         await _ensure_demo_company()
     except Exception as e:  # noqa: BLE001
         print(f"[demo-reset] initial ensure failed: {e}")
     while True:
         try:
-            await asyncio.sleep(30 * 60)  # 30 minuten
+            await asyncio.sleep(max(1, _demo_next_reset_ts() - time.time()))
             await _demo_reset_tick()
         except asyncio.CancelledError:
             break
         except Exception as e:  # noqa: BLE001
             print(f"[demo-reset] tick failed: {e}")
-
 
 @api.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):

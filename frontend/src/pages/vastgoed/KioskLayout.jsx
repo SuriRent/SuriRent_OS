@@ -15,10 +15,11 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen,
+  BookOpen, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
 import {
@@ -34,6 +35,7 @@ import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 const KioskBonPage = lazy(() => import('./admin/KioskBonPage'));
+const KioskSettingsPage = lazy(() => import('./admin/KioskSettingsPage'));
 import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
@@ -294,13 +296,14 @@ function KioskSettingsMenu() {
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
+  useEffect(() => { import('./admin/KioskSettingsPage'); }, []);
   if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
   const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
+      <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
         className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
         <SettingsIcon className="w-6 h-6" />
       </button>
@@ -396,9 +399,9 @@ function DesktopKioskHeader({
         </span>
       </div>
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
-        className={`hidden md:flex flex-1 min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-        {loc && <MapPin className="w-5 h-5 shrink-0" />}
-        <span className="truncate">{loc ? `${loc}  •  ${title}` : title}</span>
+        className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+        {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
+        <span className="truncate">{currentStep === 'stroom' ? title : loc ? `${loc}  •  ${title}` : title}</span>
       </button>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
@@ -728,10 +731,7 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
     if (!file) return;
     setScanning(true); setErr('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('user_key', 'link-tenant');
-      const { data } = await api.post('/kiosk/id-scan', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await postIdOcr('/kiosk/id-scan', file, { user_key: 'link-tenant' });
       const sc = data?.scan || {};
       setF((p) => ({ ...p, name: sc.name || p.name, id_number: sc.id_number || p.id_number, birth_date: sc.birth_date || p.birth_date }));
       setScan(data);
@@ -3102,10 +3102,22 @@ function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned })
 
 // Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
-function FittedReceiptPreview({ paymentId }) {
+function FittedReceiptPreview({ paymentId, maxScale = 1, fancy = false }) {
   const boxRef = useRef(null);
+  const paperRef = useRef(null);
   const [size, setSize] = useState({ w: 230, h: 420 });
   const [box, setBox] = useState({ w: 0, h: 0 });
+  const [lines, setLines] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+
+  useEffect(() => {
+    let alive = true;
+    api.get(`/kiosk/payments/${paymentId}/print-data`, { params: { force_ktp: true } })
+      .then(({ data }) => { if (alive) { if (data?.lines?.length) setLines(data.lines); else setFailed(true); } })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [paymentId]);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -3115,6 +3127,11 @@ function FittedReceiptPreview({ paymentId }) {
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    const el = paperRef.current;
+    if (lines && el) setSize({ w: Math.max(180, Math.ceil(el.offsetWidth)), h: Math.max(200, Math.ceil(el.offsetHeight)) });
+  }, [lines]);
+
   const onLoad = (e) => {
     try {
       const doc = e.currentTarget.contentDocument;
@@ -3123,11 +3140,32 @@ function FittedReceiptPreview({ paymentId }) {
     } catch { /* cross-origin — vaste maat */ }
   };
 
-  const scale = box.h ? Math.min(1, box.h / size.h, box.w / size.w) : 1;
+  const px = { normal: 12, small: 13, medium: 14, large: 20 };
+  const scale = box.h ? Math.min(maxScale, box.h / size.h, box.w / size.w) : 1;
   return (
     <div ref={boxRef} className="flex-1 min-h-0 overflow-hidden flex items-start justify-center" data-testid="receipt-preview-box">
       <motion.div initial={{ y: '100%', opacity: 0 }} animate={{ y: '0%', opacity: 1 }} transition={{ duration: 3.5, ease: [0.25, 0.1, 0.25, 1] }}
         style={{ width: size.w * scale, height: size.h * scale }} className="relative shrink-0" data-testid="receipt-paper">
+        {lines ? (
+          <div ref={paperRef} data-testid="receipt-preview-lines"
+            className={`absolute top-0 left-0 ${fancy ? '' : 'bg-white border border-dashed border-slate-200 p-2'}`}
+            style={{
+              width: '58mm', fontFamily: 'monospace', color: fancy ? '#1f2937' : '#000',
+              transform: `scale(${scale})`, transformOrigin: 'top left',
+              ...(fancy ? {
+                background: '#ffffff',
+                backgroundImage: 'repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 3px,rgba(0,0,0,0.012) 3px,rgba(0,0,0,0.012) 4px)',
+                padding: '14px 12px 18px',
+                letterSpacing: '0.02em',
+                WebkitFontSmoothing: 'antialiased',
+                clipPath: `polygon(${Array.from({ length: 21 }, (_, i) => `${(i * 100) / 20}% ${i % 2 ? '5px' : '0'}`).join(',')},${Array.from({ length: 21 }, (_, i) => `${100 - (i * 100) / 20}% ${i % 2 ? 'calc(100% - 5px)' : '100%'}`).join(',')})`,
+              } : {}),
+            }}>
+            {lines.map((l, i) => (
+              <div key={i} style={{ textAlign: l.align || 'left', fontWeight: l.bold ? 700 : 400, fontSize: px[l.size] || px.normal, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: '1em' }}>{l.text}</div>
+            ))}
+          </div>
+        ) : failed && (
         <iframe
           title="Kwitantie preview"
           data-testid="receipt-preview-iframe"
@@ -3138,6 +3176,7 @@ function FittedReceiptPreview({ paymentId }) {
           className="absolute top-0 left-0 bg-white border border-dashed border-slate-200"
           style={{ width: size.w, height: size.h, transform: `scale(${scale})`, transformOrigin: 'top left' }}
         />
+        )}
       </motion.div>
     </div>
   );
@@ -3161,6 +3200,18 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // we de "regeling maken?"-suggestie BEFORE auto-done.
   const [partialInv, setPartialInv] = useState(null);
   const [planMade, setPlanMade] = useState(false);
+  const [bonOpen, setBonOpen] = useState(() => !(typeof window !== 'undefined' && window.innerWidth >= 768));
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
+  useEffect(() => {
+    const on = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  useEffect(() => {
+    if (!bonOpen) return undefined;
+    const t = setTimeout(() => setBonOpen(false), 12000);
+    return () => clearTimeout(t);
+  }, [bonOpen]);
 
   useEffect(() => {
     const tid = payment.tenant_id || overview?.tenant?.id;
@@ -3212,7 +3263,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
   // de huurder hem kan beantwoorden.
   useEffect(() => {
     if (partialInv && !planMade) return undefined;
-    const t = setTimeout(onDone, 20000);
+    const t = setTimeout(onDone, 15000);
     return () => clearTimeout(t);
   }, [onDone, partialInv, planMade]);
 
@@ -3226,6 +3277,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
         <p className="text-xs sm:text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
       </div>
 
+      <div className="w-full flex-1 min-h-0 flex flex-col items-center">
       <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
         <div className="flex items-center justify-center gap-2 mb-1 text-slate-400 shrink-0">
           <Printer className="w-3.5 h-3.5" />
@@ -3236,8 +3288,34 @@ function ReceiptScreen({ payment, overview, onDone }) {
             Ontvangen door <span className="font-extrabold text-slate-900" data-testid="receipt-received-by">{payment.received_by}</span>
           </p>
         )}
-        {/* Bon-preview: geschaald zodat alles zonder scrollen past, horizontaal gecentreerd */}
-        <FittedReceiptPreview paymentId={payment.id} />
+        {/* Mobiel: bon schuift als popup omhoog (zoals uit de printer) */}
+        {isDesktop && <FittedReceiptPreview paymentId={payment.id} />}
+        {!isDesktop && (
+        <button type="button" onClick={() => setBonOpen(true)} data-testid="receipt-show-bon"
+          className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-orange-500 transition-colors">
+          <Printer className="w-10 h-10" />
+          <span className="text-sm font-bold">Bon bekijken</span>
+        </button>
+        )}
+        {!isDesktop && bonOpen && createPortal((
+          <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setBonOpen(false)} data-testid="receipt-bon-popup">
+            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}
+              className="w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ height: 'min(88vh, 820px)' }} onClick={(e) => e.stopPropagation()}>
+              <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span className="flex items-center gap-2 font-black text-slate-900"><Printer className="w-5 h-5 text-orange-500" /> Kwitantie</span>
+                <button type="button" onClick={() => setBonOpen(false)} data-testid="receipt-bon-close" aria-label="Sluiten"
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="flex-1 min-h-0 bg-slate-100 p-3 flex flex-col overflow-hidden">
+                <FittedReceiptPreview paymentId={payment.id} maxScale={3} />
+              </div>
+              <div className="shrink-0 p-3">
+                <button type="button" onClick={() => setBonOpen(false)}
+                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-black">Klaar</button>
+              </div>
+            </motion.div>
+          </div>
+        ), document.body)}
         <div className={`flex justify-between items-center px-3 py-1.5 mt-2 rounded-xl shrink-0 ${
           remaining > 0 ? 'bg-orange-50' : 'bg-emerald-50'
         }`} data-testid="receipt-remaining-row">
@@ -3269,11 +3347,12 @@ function ReceiptScreen({ payment, overview, onDone }) {
             )}
           </div>
           <p className="text-center text-[11px] text-slate-400" data-testid="receipt-autoreturn">
-            Automatisch terug naar startscherm in 20 seconden
+            Automatisch terug naar startscherm in 15 seconden
             {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
             {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
           </p>
         </div>
+      </div>
       </div>
 
       {/* Partial-payment regeling suggestie — verschijnt na ~1.5s zodat de
@@ -4631,11 +4710,7 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
     setScannedIdFile(file);
     setScanning(true); setErr(''); setScanMsg('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await api.post('/tenants/ocr-id-card', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const r = await postIdOcr('/tenants/ocr-id-card', file);
       const d = r?.data || {};
       if (d.name) setName(d.name);
       if (d.birth_date) setBirthDate(d.birth_date);
@@ -5022,7 +5097,7 @@ function useBodyScrollLock() {
 }
 
 function KioskHistBtn({ dir, disabled, onClick, white, green = false }) {
-  const Ico = dir === 'back' ? ChevronLeft : ChevronRight;
+  const Ico = dir === 'back' ? (white || green ? ChevronLeft : LayoutGrid) : ChevronRight;
   return (
     <button type="button" onClick={onClick} disabled={disabled} data-testid={`kiosk-bar-${dir}`} aria-label={dir === 'back' ? 'Vorig scherm' : 'Volgend scherm'}
       className={`shrink-0 w-16 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 transition-[background-color,opacity] duration-150 disabled:opacity-35 disabled:cursor-default ${green ? 'text-[#087A55] bg-emerald-50 enabled:hover:bg-emerald-100' : white ? 'text-[#FF5C00] bg-orange-50 enabled:hover:bg-orange-100' : 'text-[#F26A12] bg-white enabled:hover:bg-orange-50'}`}>
@@ -5803,6 +5878,7 @@ export default function KioskLayout() {
         localStorage.setItem('kiosk_token', data.kiosk_token);
         localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
         localStorage.setItem('is_demo_session', '1');
+        window.dispatchEvent(new Event('kiosk-employee-changed'));
         demoSession.current = true;
         if (data.company?.slug) localStorage.setItem('pwa_company_slug', data.company.slug);
         setCompany(data.company || null);
@@ -5830,7 +5906,7 @@ export default function KioskLayout() {
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   const [kioskTheme, setKioskTheme] = useState(() => {
     const stored = localStorage.getItem('kiosk_theme');
-    return ['orange', 'white', 'green'].includes(stored) ? stored : 'orange';
+    return stored === 'orange' ? 'orange' : 'white';
   });
   useEffect(() => {
     const root = document.documentElement;
@@ -5841,20 +5917,20 @@ export default function KioskLayout() {
     };
   }, []);
   useEffect(() => {
-    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { t = t === 'orange' ? 'orange' : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
     return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'green' : 'orange';
+    const next = kioskTheme === 'orange' ? 'white' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isWhite = kioskTheme === 'white';
-  const isGreen = kioskTheme === 'green';
+  const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
     const bg = isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
@@ -5866,7 +5942,7 @@ export default function KioskLayout() {
   }, [isWhite, isGreen]);
   useEffect(() => {
     const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'white' ? '#FFFFFF' : savedTheme === 'green' ? '#F2F8F4' : '#FF5C00';
+    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : '#FFFFFF';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -6278,9 +6354,10 @@ export default function KioskLayout() {
         setAdminPopup(null);
         setStep(e.detail);
       }
-      else if (e.detail === 'admin:inst-bon' && window.innerWidth >= 768) {
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
+        && INSTELLINGEN_SECTIONS.some((s) => s.id === e.detail.slice(11))) {
         setAdminPopup(null);
-        setStep('admin:bon');
+        setStep(e.detail);
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };
@@ -6390,7 +6467,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -6518,6 +6595,11 @@ export default function KioskLayout() {
           {step === 'admin:bon' && hasAdminAccess && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskBonPage onBack={goBack} /></div>
+            </Suspense>
+          )}
+          {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
+            <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
+              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} /></div>
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
@@ -6681,7 +6763,7 @@ export default function KioskLayout() {
           </button>
           {/* Grote telefoons (≥390px): onderste menubalk met + in het midden. */}
           <nav data-testid="kiosk-mobile-bottom-bar"
-            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+            className={`hidden min-[390px]:flex md:hidden fixed bottom-0 left-0 right-0 z-[109] h-10 items-center justify-around px-1 border-t ${isWhite ? 'kiosk-white-nav ' : ''}${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
             <button type="button" onClick={goBack} disabled={!canBack} data-testid="kiosk-mobile-bar-back"
               className={`flex-1 h-full flex flex-col items-center justify-center gap-px active:scale-95 transition-[transform,opacity] disabled:opacity-35 ${isGreen || isWhite ? 'text-slate-700' : 'text-white'}`}>
@@ -6714,7 +6796,7 @@ export default function KioskLayout() {
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
       {showDesktopBar && createPortal((
-        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
+        <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'kiosk-white-nav ' : ''}${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex items-stretch gap-1 px-2 py-2">
             <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />

@@ -60,7 +60,8 @@ def empty_section(section: str) -> dict:
         "twilio": {"account_sid": "", "auth_token": None,
                    "whatsapp_from": "", "sms_from": "", "enabled": False},
         "shelly": {"cloud_token": None, "server": "shelly-cloud.shelly.cloud", "enabled": False},
-        "domain": {"custom_domain": "", "dns_verified": False, "enabled": False},
+        "domain": {"custom_domain": "", "dns_verified": False, "enabled": False,
+                   "marketing_domain": "", "marketing_enabled": False},
         # Invoicing — automatische factuur-generatie + grace period
         # `grace_workdays`: aantal werkdagen NA de laatste dag van de maand
         # waarin de huurder nog moet betalen. Pas DAARNA wordt de volgende

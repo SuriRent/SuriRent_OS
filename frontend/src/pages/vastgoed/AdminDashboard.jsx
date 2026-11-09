@@ -22,6 +22,7 @@ import {
 import { TenantMoveOutModal, ArchivedTenants } from '../../components/TenantMoveOut';
 import Cropper from 'react-easy-crop';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
+import { postIdOcr } from '../../lib/idOcr';
 import { useAuth } from '../../lib/auth';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
@@ -3003,10 +3004,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
     if (!file || !onOcr) return;
     setOcring(true); setOcrResult(null);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const { data } = await api.post('/tenants/ocr-id-card', fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await postIdOcr('/tenants/ocr-id-card', file);
       setOcrResult(data);
       onOcr(data);
     } catch (e) {
