@@ -5746,8 +5746,14 @@ async def export_company_backup(user=Depends(get_current_user)):
     # Bouw een filename met datum + slug voor downloadbestand.
     slug = (company.get("slug") or cid)[:32]
     filename = f"surirent-backup-{slug}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
-    return JSONResponse(
-        content=backup,
+    def _bk_default(o):
+        if isinstance(o, (bytes, bytearray)):
+            import base64
+            return base64.b64encode(bytes(o)).decode()
+        return str(o)
+    return Response(
+        content=json.dumps(backup, default=_bk_default, ensure_ascii=False),
+        media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
