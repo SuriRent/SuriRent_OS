@@ -1509,6 +1509,15 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
   [data-testid="kiosk-toolbar"]:not(:has(> button)) { display: none; }
 }
 
-/* Kiosk: scrollbars verborgen, scrollen blijft werken */
-.kiosk-fullscreen * { scrollbar-width: none; -ms-overflow-style: none; }
-.kiosk-fullscreen *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* Kiosk: dunne, ronde scrollbar in kiosk-stijl (oranje + witte modus) */
+.kiosk-fullscreen *::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+.kiosk-fullscreen *::-webkit-scrollbar-track { background: transparent; }
+.kiosk-fullscreen *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.kiosk-fullscreen *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.55); border-radius: 999px; }
+.kiosk-fullscreen *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.85); }
+.kiosk-fullscreen.kiosk-white *::-webkit-scrollbar-thumb { background: rgba(255,92,0,0.45); }
+.kiosk-fullscreen.kiosk-white *::-webkit-scrollbar-thumb:hover { background: rgba(255,92,0,0.75); }
+@supports not selector(::-webkit-scrollbar) {
+  .kiosk-fullscreen * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.55) transparent; }
+  .kiosk-fullscreen.kiosk-white * { scrollbar-color: rgba(255,92,0,0.45) transparent; }
+}
