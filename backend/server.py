@@ -217,6 +217,9 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
     if user.get("disabled") or user.get("role") == "kiosk":
         raise HTTPException(status_code=403, detail="Geen toegang tot beheer")
+    if re.fullmatch(r"\s*(kiosk[\s_-]*)?(admin|beheerder)\s*", user.get("name") or "", re.I) and user.get("company_id"):
+        _co = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0, "name": 1, "landlord_name": 1})
+        user["name"] = (_co or {}).get("landlord_name") or (_co or {}).get("name") or user.get("name")
     if payload.get("staff"):
         user["staff"] = True
         if payload.get("act_name"):
