@@ -576,6 +576,13 @@ function ApartmentSelect({
 }) {
   const { isUi } = useContext(KioskThemeCtx);
   const [uiQ, setUiQ] = useState('');
+  const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const on = () => setIsDesk(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const [uiFilter, setUiFilter] = useState('all');
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
@@ -780,11 +787,11 @@ function ApartmentSelect({
       )}
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
-        <div className={isUi
+        <div className={isUi && !isDesk
           ? 'grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
           : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2'}>
           {shown.map((a) => {
-            if (isUi) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
+            if (isUi && !isDesk) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
