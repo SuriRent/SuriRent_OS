@@ -1538,6 +1538,20 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   // WhatsApp: haal kwitantie-JPG op, deel via Web Share API (WhatsApp
   // verschijnt in de share-sheet). Fallback: wa.me deeplink met tekst +
   // JPG in nieuw tabblad zodat medewerker 'em handmatig kan bijvoegen.
+  // Bon-JPG's vooraf ophalen zodat navigator.share direct binnen de klik kan
+  // starten (Android blokkeert delen na een trage fetch).
+  const jpgCache = useRef({});
+  const fetchJpg = (id) => {
+    if (!jpgCache.current[id]) {
+      jpgCache.current[id] = api.get(`/payments/${id}/image`, { responseType: 'blob' })
+        .then((r) => r.data).catch((e) => { delete jpgCache.current[id]; throw e; });
+    }
+    return jpgCache.current[id];
+  };
+  useEffect(() => {
+    (items || []).slice(0, 8).forEach((x) => { fetchJpg(x.id).catch(() => {}); });
+  }, [items]); // eslint-disable-line
+
   const handleWhatsApp = async (paymentId) => {
     if (busy[paymentId]) return;
     setBusy((prev) => ({ ...prev, [paymentId]: 'wa' }));
@@ -1555,7 +1569,9 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       : imageUrl;
     // Reserveer het tabblad binnen de klikactie; browsers kunnen pop-ups na
     // het ophalen van de JPG blokkeren wanneer navigator.share niet lukt.
-    const fallbackTab = window.open('about:blank', '_blank');
+    const canFileShare = typeof navigator.canShare === 'function'
+      && navigator.canShare({ files: [new File(['x'], 'x.jpg', { type: 'image/jpeg' })] });
+    const fallbackTab = canFileShare ? null : window.open('about:blank', '_blank');
     // Geen bestand-delen mogelijk (desktop): kopieer de bon als afbeelding naar het
     // klembord en download de JPG, open WhatsApp zonder link; plakken met Ctrl+V.
     const useFallback = async (jpgBlob, fileName) => {
@@ -1593,8 +1609,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       }));
     };
     try {
-      const resp = await api.get(`/payments/${paymentId}/image`, { responseType: 'blob' });
-      const blob = resp.data;
+      const blob = await fetchJpg(paymentId);
       const file = new File([blob], `bon-${receipt?.receipt_number || paymentId}.jpg`,
         { type: 'image/jpeg' });
       if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
@@ -1608,6 +1623,8 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
       if (e && e.name === 'AbortError') {
         if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         setWaState((prev) => { const c = { ...prev }; delete c[paymentId]; return c; });
+      } else if (canFileShare && e && e.name !== 'TypeError') {
+        setWaState((prev) => ({ ...prev, [paymentId]: { kind: 'err', msg: 'Delen mislukt, tik nogmaals' } }));
       } else {
         await useFallback();
       }
