@@ -22,8 +22,11 @@ function photoSrc(a) {
   return /^https?:/.test(p) ? p : `${process.env.REACT_APP_BACKEND_URL || ''}${p}`;
 }
 
-export default function MobileAdminHome({ user, activeCompany, onOpenMenu }) {
-  const { data } = useApiSWR('/admin/mobile-apartments');
+export default function MobileAdminHome({
+  activeCompany, onOpenMenu, endpoint = '/admin/mobile-apartments',
+  onAction = goTab, onApartment, onFab, bar, embedded = false,
+}) {
+  const { data } = useApiSWR(endpoint);
   const apartments = Array.isArray(data) ? data : [];
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
@@ -55,7 +58,7 @@ export default function MobileAdminHome({ user, activeCompany, onOpenMenu }) {
   ];
 
   return (
-    <div className="-m-3 sm:-m-5 pb-28 bg-[#F7F8FA] min-h-screen" data-testid="mobile-admin-home">
+    <div className={`${embedded ? '' : '-m-3 sm:-m-5 '}pb-28 bg-[#F7F8FA] min-h-screen`} data-testid="mobile-admin-home">
       <div className="relative px-5 pb-24 text-white"
         style={{
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 18px)',
@@ -107,7 +110,7 @@ export default function MobileAdminHome({ user, activeCompany, onOpenMenu }) {
 
       <div className="grid grid-cols-4 gap-2 px-3 mt-4" data-testid="mobile-home-actions">
         {actions.map(({ id, label, sub, Icon, primary }) => (
-          <button key={label} type="button" onClick={() => goTab(id)} data-testid={`mobile-home-action-${id}`}
+          <button key={label} type="button" onClick={() => onAction(id)} data-testid={`mobile-home-action-${id}`}
             className={`rounded-2xl flex flex-col items-center justify-center gap-1.5 py-3.5 min-h-[104px] text-center active:scale-95 transition ${
               primary
                 ? 'text-white bg-gradient-to-b from-[#FF8A3D] to-[#F05A00] shadow-[0_10px_22px_-8px_rgba(255,92,0,0.7)]'
@@ -151,7 +154,7 @@ export default function MobileAdminHome({ user, activeCompany, onOpenMenu }) {
           const src = photoSrc(a);
           const owed = Number(a.owed || 0);
           return (
-            <button key={a.id} type="button" onClick={() => goTab('apartments')} data-testid={`mobile-home-apt-${a.number}`}
+            <button key={a.id} type="button" onClick={() => (onApartment ? onApartment(a) : goTab('apartments'))} data-testid={`mobile-home-apt-${a.number}`}
               className="w-full rounded-[22px] bg-white shadow-[0_6px_18px_-10px_rgba(15,23,42,0.3)] flex items-center gap-3 p-3 pr-4 text-left active:scale-[0.99] transition">
               <div className="w-[76px] h-[76px] shrink-0 rounded-full p-[3px] bg-gradient-to-br from-[#FF8A3D] to-[#FFC999]">
                 <div className="w-full h-full rounded-full overflow-hidden bg-orange-50 flex items-center justify-center">
@@ -209,7 +212,8 @@ export default function MobileAdminHome({ user, activeCompany, onOpenMenu }) {
         )}
       </div>
 
-      <button type="button" onClick={onOpenMenu} aria-label="Nieuw" data-testid="mobile-home-fab"
+      {bar}
+      <button type="button" onClick={onFab || onOpenMenu} aria-label="Nieuw" data-testid="mobile-home-fab"
         className="fixed right-4 z-40 w-16 h-16 rounded-full bg-gradient-to-br from-[#FF8A3D] to-[#F05A00] text-white flex items-center justify-center shadow-[0_12px_26px_-6px_rgba(255,92,0,0.7)] active:scale-95 transition"
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}>
         <Plus className="w-8 h-8" strokeWidth={2.6} />
