@@ -15544,12 +15544,10 @@ async def _seed_demo_data(cid: str):
     iso_now = now.isoformat()
     # Locaties
     loc_a_id = str(uuid.uuid4())
-    loc_b_id = str(uuid.uuid4())
+    loc_b_id = loc_a_id
     await db.locations.insert_many([
         {"id": loc_a_id, "company_id": cid, "name": "Hoofdvestiging — Paramaribo",
          "address": "Henck Arronstraat 1, Paramaribo", "is_demo": True, "created_at": iso_now},
-        {"id": loc_b_id, "company_id": cid, "name": "Filiaal — Nieuw Nickerie",
-         "address": "Frederikstraat 5, Nieuw Nickerie", "is_demo": True, "created_at": iso_now},
     ])
     # 5 appartementen — ALLE zijn bezet (Studio 1 + Penthouse zijn later
     # in deze seed gekoppeld aan Kevin resp. Anisha; hun `tenant_id`
