@@ -133,6 +133,13 @@ html.apk-ktp { --kiosk-sat: 0px; }
 }
 .kiosk-has-head { top: var(--kiosk-head-h, 80px) !important; padding-top: 0 !important; }
 .kiosk-content-scroll.kiosk-no-bar { padding-bottom: 0 !important; }
+/* Android-telefoon met schermknoppen over de webview: laat de laatste inhoud
+   (toetsenbord, Betalingsgeschiedenis) boven de systeemnavigatiebalk uitkomen. */
+@media (max-width: 767px) {
+  .kiosk-fullscreen .kiosk-content-scroll.kiosk-no-bar {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 64px) !important;
+  }
+}
 /* Keep an opaque backing beneath iOS's translucent software keyboard.
    The visual viewport itself shrinks to the keyboard edge; the large
    viewport still covers the full screen behind the keyboard. */
