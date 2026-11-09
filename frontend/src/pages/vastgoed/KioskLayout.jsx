@@ -819,176 +819,22 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
   );
 }
 
-// =====================================================================
-// ShareVoiceButton + Modal — TTS herinnering met bewerkbare tekst
-// =====================================================================
-// Klik → laadt de default tekst via GET /reminder-voice-text, opent
-// een modal met textarea zodat de beheerder de tekst kan aanpassen.
-// Bevestigen → POST /reminder-voice.mp3 met {text}, deelt MP3 via
-// Web Share API of wa.me fallback.
-function ShareVoiceButton({ tenantId, tenantName, tenantPhone, totalDue, currency }) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [loadingText, setLoadingText] = useState(false);
-  const [text, setText] = useState('');
-  const [err, setErr] = useState('');
+// FinancialPrintButton — printer-icoon voor de financiële bon van de huurder.
+function FinancialPrintButton({ tenantId }) {
   const [printState, setPrintState] = useState(null);
   const printOpts = usePrintOptions();
-  const disabled = !(Number(totalDue) > 0);
-
-  const openModal = async () => {
-    if (disabled) return;
-    setErr('');
-    setOpen(true);
-    setLoadingText(true);
-    try {
-      const r = await api.get(`/kiosk/tenants/${tenantId}/reminder-voice-text`);
-      setText(r.data?.text || '');
-    } catch (e) {
-      setErr(formatError(e));
-    } finally {
-      setLoadingText(false);
-    }
-  };
-
-  const confirm = async () => {
-    const clean = (text || '').trim();
-    if (!clean) { setErr('Tekst mag niet leeg zijn'); return; }
-    if (clean.length > 2000) { setErr('Tekst is te lang (max 2000 tekens)'); return; }
-    setBusy(true);
-    setErr('');
-    try {
-      const [resp, bonResp] = await Promise.all([
-        api.post(`/kiosk/tenants/${tenantId}/reminder-voice.mp3`, { text: clean }, { responseType: 'blob' }),
-        api.get(`/kiosk/tenants/${tenantId}/financial-receipt.png`, { responseType: 'blob' }).catch(() => null),
-      ]);
-      const blob = resp.data;
-      const slug = (tenantName || 'huurder').replace(/\s+/g, '-');
-      const file = new File([blob], `herinnering-${slug}.mp3`, { type: 'audio/mpeg' });
-      const bon = bonResp?.data ? new File([bonResp.data], `financieel-overzicht-${slug}.png`, { type: 'image/png' }) : null;
-      const phoneDigits = String(tenantPhone || '').replace(/\D/g, '');
-      const totalTxt = Number.isFinite(Number(totalDue))
-        ? ` Totaal openstaand: ${fmtMoney(Number(totalDue), currency || 'SRD')}.`
-        : '';
-      const shareText = `Hallo ${tenantName || ''}, hierbij een gesproken herinnering en uw financieel overzicht.${totalTxt}`;
-      const canShare = (files) => typeof navigator.canShare === 'function' && navigator.canShare({ files });
-      const files = bon && canShare([file, bon]) ? [file, bon] : [file];
-      if (canShare(files)) {
-        await navigator.share({
-          files, text: shareText,
-          title: 'Betalingsherinnering',
-        });
-      } else if (phoneDigits.length >= 7) {
-        const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(shareText)}`;
-        window.open(url, '_blank', 'noopener');
-        window.open(URL.createObjectURL(blob), '_blank', 'noopener');
-        if (bon) window.open(URL.createObjectURL(bon), '_blank', 'noopener');
-      } else {
-        window.open(URL.createObjectURL(blob), '_blank', 'noopener');
-        if (bon) window.open(URL.createObjectURL(bon), '_blank', 'noopener');
-      }
-      setOpen(false);
-    } catch (e) {
-      if (e && e.name !== 'AbortError') {
-        setErr(formatError(e) || 'Spraakbericht mislukt');
-        // eslint-disable-next-line no-console
-        console.error('[share voice] failed:', e);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  if (!printOpts.any) return null;
   return (
-    <>
-      <button onClick={openModal} disabled={disabled}
-        data-testid="overview-voice-btn"
-        title={disabled ? 'Geen openstaand bedrag' : 'Spraakbericht versturen'}
-        className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
-        <Mic className="w-3.5 h-3.5" /> Spraak
-      </button>
-      {open && createPortal(
-        <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => !busy && setOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-            data-testid="voice-modal">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mic className="w-5 h-5 text-orange-500" />
-                <h3 className="font-bold text-slate-900">Spraakbericht</h3>
-              </div>
-              <button onClick={() => !busy && setOpen(false)}
-                data-testid="voice-modal-close"
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-            <div className="px-5 py-4 flex-1 overflow-auto">
-              <p className="text-xs text-slate-500 mb-2">
-                Bewerk de tekst hieronder. Deze wordt omgezet naar spraak
-                (Nova stem, Nederlands) en gedeeld via WhatsApp.
-              </p>
-              {loadingText ? (
-                <div className="h-40 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
-                </div>
-              ) : (
-                <textarea
-                  data-testid="voice-modal-textarea"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  disabled={busy}
-                  rows={7}
-                  maxLength={2000}
-                  className="w-full text-sm rounded-xl border border-slate-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none p-3 resize-none disabled:opacity-60"
-                />
-              )}
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[10px] text-slate-400">{(text || '').length} / 2000</p>
-                {err && <p data-testid="voice-modal-error" className="text-[10px] text-red-500 font-semibold">{err}</p>}
-              </div>
-              {printOpts.any && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
-                data-testid="voice-modal-print-row">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-800">Financiële bon</p>
-                  <p data-testid="voice-modal-print-status"
-                    className={`text-[11px] font-semibold ${printState?.kind === 'ok' ? 'text-emerald-600' : printState?.kind === 'err' ? 'text-red-500' : 'text-slate-500'}`}>
-                    {printState?.msg || 'Print het overzicht op de bonprinter'}
-                  </p>
-                </div>
-                <PrintChoiceMenu paymentId="fin" showLabel
-                  remoteUrl={`/kiosk/tenants/${tenantId}/financial-remote-print`}
-                  printDataUrl={`/kiosk/tenants/${tenantId}/financial-print-data`}
-                  onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
-                    .then((ok) => !ok && setPrintState({ kind: 'err', msg: 'Printen mislukt' }))}
-                  onStatus={setPrintState} />
-              </div>}
-            </div>
-            <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">
-              <button onClick={() => !busy && setOpen(false)}
-                data-testid="voice-modal-cancel"
-                disabled={busy}
-                className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm disabled:opacity-60">
-                Annuleren
-              </button>
-              <button onClick={confirm}
-                data-testid="voice-modal-confirm"
-                disabled={busy || loadingText || !text.trim()}
-                className="flex-[2] h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2">
-                {busy
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Bezig…</>
-                  : <><MessageCircle className="w-4 h-4" /> Genereer & Deel</>}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
-    </>
+    <span title={printState?.msg || 'Financiële bon printen'} data-testid="overview-fin-print">
+      <PrintChoiceMenu paymentId="fin" iconOnly
+        remoteUrl={`/kiosk/tenants/${tenantId}/financial-remote-print`}
+        printDataUrl={`/kiosk/tenants/${tenantId}/financial-print-data`}
+        onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
+          .then((ok) => !ok && setPrintState({ kind: 'err', msg: 'Printen mislukt' }))}
+        onStatus={setPrintState} />
+    </span>
   );
 }
-
 // =====================================================================
 // NotesButton — toont badge met aantal notities, opent NotesModal.
 // =====================================================================
@@ -1004,10 +850,9 @@ function NotesButton({ tenantId, tenantName }) {
   useKioskLiveRefresh(loadCount);
   return (
     <>
-      <button onClick={() => setOpen(true)} data-testid="overview-notes-btn"
-        className="px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5">
+      <button onClick={() => setOpen(true)} data-testid="overview-notes-btn" title="Notities" aria-label="Notities"
+        className="px-2.5 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1.5">
         <StickyNote className="w-3.5 h-3.5" />
-        Notitie
         {count !== null && count > 0 && (
           <span className="bg-orange-500 text-white rounded-full min-w-[18px] h-[18px] px-1 text-[10px] font-black flex items-center justify-center">{count}</span>
         )}
@@ -1390,7 +1235,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
-              <ShareVoiceButton tenantId={tenant.id} tenantName={tenant.name} tenantPhone={tenant.phone || ''} totalDue={totalDue} currency={cur} />
+              <FinancialPrintButton tenantId={tenant.id} />
               <NotesButton tenantId={tenant.id} tenantName={tenant.name} />
             </div>
           </div>

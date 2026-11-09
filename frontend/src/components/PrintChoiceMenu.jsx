@@ -44,7 +44,7 @@ export function usePrintOptions(open = false) {
 }
 
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.
-export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false }) {
+export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false, iconOnly = false }) {
   const remotePath = remoteUrl || `/kiosk/print-log/by-payment/${paymentId}/remote-print`;
   const dataPath = printDataUrl || `/kiosk/payments/${paymentId}/print-data`;
   const [pos, setPos] = useState(null);
@@ -107,7 +107,9 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
     <>
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
         aria-label="Afdruk"
-        className={showLabel
+        className={iconOnly
+          ? 'shrink-0 w-9 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white flex items-center justify-center transition-transform'
+          : showLabel
           ? 'shrink-0 whitespace-nowrap px-3 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-transform'
           : 'w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform'}>
         {disabled || sending ? <Loader2 className="w-4 h-4 sm:w-3 sm:h-3 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3 sm:h-3" />}
