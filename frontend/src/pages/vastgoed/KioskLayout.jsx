@@ -468,26 +468,25 @@ function UiAptCard({ a, onOpen }) {
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-2xl md:rounded-[26px] bg-white px-3 py-2 md:px-6 md:py-5 transition active:scale-[0.99] md:hover:-translate-y-0.5">
-      <div className={`flex items-center gap-3 md:items-start w-full min-w-0 ${vacant ? 'md:flex-col md:items-center md:text-center md:gap-1' : ''}`}>
-        <div className={`shrink-0 rounded-full overflow-hidden w-[52px] h-[52px] md:w-[92px] md:h-[92px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
+      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-[20px] md:rounded-[26px] bg-white px-3 py-3 md:px-6 md:py-5 transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className={`flex flex-col md:flex-row items-start gap-2 md:gap-3 w-full min-w-0 ${vacant ? 'items-center text-center md:flex-col md:items-center md:gap-1' : ''}`}>
+        <div className={`shrink-0 rounded-full overflow-hidden w-14 h-14 md:w-[92px] md:h-[92px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
           {src && !vacant
             ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             : <Home className={`w-7 h-7 md:w-11 md:h-11 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
         </div>
-        <div className="min-w-0 flex-1 md:max-w-full md:pr-11">
+        <div className="min-w-0 w-full md:flex-1 md:max-w-full md:pr-11">
           <p className="text-[17px] md:text-[26px] font-extrabold text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
-          <p className={`flex items-center gap-1.5 text-sm md:text-[17px] text-slate-700 font-medium truncate ${vacant ? 'md:justify-center' : ''}`}>
+          <p className={`flex items-center gap-1.5 text-[13px] md:text-[17px] text-slate-700 font-medium truncate ${vacant ? 'justify-center' : ''}`}>
             {!vacant && <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />}
             <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
           </p>
         </div>
-        <UiStatusPill a={a} className="md:hidden shrink-0" />
-        <span className={`shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:absolute md:top-4 md:right-4 ${vacant ? 'md:hidden' : ''}`}>
+        <span className={`shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center absolute top-3 right-3 md:top-4 md:right-4 ${vacant ? 'hidden' : ''}`}>
           <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="hidden md:flex justify-center mt-4"><UiStatusPill a={a} /></div>
+      <div className="flex justify-center mt-2 md:mt-4"><UiStatusPill a={a} /></div>
     </button>
   );
 }
@@ -545,17 +544,17 @@ function UiHero({ apartments, locationName }) {
         </div>
       )}
       <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
-      <div className="relative overflow-hidden rounded-3xl md:rounded-none kiosk-ui-hero-banner px-4 pt-3 pb-3 md:p-0 md:overflow-visible text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A1F] to-[#FF9A45] md:bg-none md:from-transparent md:to-transparent md:flex md:items-center md:justify-between md:gap-4">
+      <div className="relative overflow-hidden rounded-3xl md:rounded-none kiosk-ui-hero-banner px-1 pt-1 pb-1 md:p-0 md:overflow-visible text-slate-900 md:from-transparent md:to-transparent md:flex md:items-center md:justify-between md:gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 w-11 h-11 md:w-16 md:h-16 rounded-full bg-white/90 md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF5C00] md:text-white shadow-md">
-            <Building2 className="w-6 h-6 md:hidden" strokeWidth={2.2} /><Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
+          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#FF8A2B] to-[#FF5C00] flex items-center justify-center text-white shadow-md">
+            <Home className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2.4} fill="currentColor" />
           </span>
           <div className="min-w-0">
             <h2 className="text-[19px] md:text-3xl font-bold tracking-tight leading-tight truncate">Appartementen Overzicht</h2>
-            <p className="text-[13px] md:text-base font-normal text-white/90 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
+            <p className="text-[13px] md:text-base font-normal text-slate-500">Totaal: {apartments.length} appartementen</p>
           </div>
         </div>
-        <VillaArt className="md:hidden absolute right-1 bottom-0 w-28 pointer-events-none" />
+        
         <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
           {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
           {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
@@ -782,7 +781,7 @@ function ApartmentSelect({
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi
-          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-2 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
+          ? 'grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
           : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2'}>
           {shown.map((a) => {
             if (isUi) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
