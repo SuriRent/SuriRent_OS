@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import os
 import json
-from datetime import datetime
+import math
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 import stripe
@@ -488,33 +489,46 @@ async def autopay_charge_invoice(inv: dict) -> str:
 
 async def on_new_saas_invoice(inv: dict) -> str:
     """Hook bij een nieuwe abonnementsfactuur: pushmelding + automatisch betalen."""
-    result = await autopay_charge_invoice(inv)
-    if result == "skipped":
-        await _push(inv["company_id"], "Nieuwe abonnementsfactuur",
-                    f"{inv.get('currency') or 'SRD'} {float(inv.get('amount') or 0):,.0f} staat klaar om te betalen.")
-    return result
+    await _push(inv["company_id"], "Nieuwe abonnementsfactuur",
+                f"{inv.get('currency') or 'SRD'} {float(inv.get('amount') or 0):,.0f} is ontvangen en staat klaar.")
+    return await autopay_charge_invoice(inv)
 
 
 async def expiry_push_tick() -> int:
-    """Dagelijks: push bij verlopen proef/abonnement (1x per bedrijf per vervaldatum)."""
+    """Dagelijks: push bij (bijna) verlopen proef/abonnement (1x per bedrijf per drempel)."""
     now = _deps.now_utc()
     sent = 0
     async for c in _deps.db.companies.find({"billing_status": {"$in": ["trial", "expired", "active"]}}, {"_id": 0}):
         st = c.get("billing_status")
-        ref = c.get("trial_ends_at") if st in ("trial", "expired") else None
-        expired = st == "expired"
-        if st == "trial" and ref:
+        ref = c.get("trial_ends_at") if st in ("trial", "expired") else c.get("subscription_renews_at")
+        end = None
+        if ref:
             try:
-                expired = datetime.fromisoformat(str(ref).replace("Z", "+00:00")) <= now
+                end = datetime.fromisoformat(str(ref).replace("Z", "+00:00"))
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=timezone.utc)
             except ValueError:
-                expired = False
-        if not expired:
+                end = None
+        expired = st == "expired" or (end is not None and end <= now)
+        if expired:
+            if st == "active":
+                continue
+            title, msg, stage = "Abonnement verlopen", "Uw abonnement is verlopen. Betaal nu om toegang te behouden.", "expired"
+        elif end is not None:
+            days = math.ceil((end - now).total_seconds() / 86400)
+            if days > 7:
+                continue
+            stage = "1d" if days <= 1 else "3d" if days <= 3 else "7d"
+            human = "morgen" if days <= 1 else f"over {days} dagen"
+            title = "Abonnement loopt bijna af" if st == "active" else "Proefperiode loopt bijna af"
+            msg = f"Uw {'abonnement' if st == 'active' else 'proefperiode'} loopt {human} af. Verleng tijdig om onderbreking te voorkomen."
+        else:
             continue
-        key = f"{c['id']}:{ref or st}"
+        key = f"{c['id']}:{ref or st}" if stage == "expired" else f"{c['id']}:{ref}:{stage}"
         if await _deps.db.sent_expiry_push.find_one({"key": key}):
             continue
         await _deps.db.sent_expiry_push.insert_one({"key": key, "at": _deps.iso(now)})
-        await _push(c["id"], "Abonnement verlopen", "Uw abonnement is verlopen. Betaal nu om toegang te behouden.")
+        await _push(c["id"], title, msg)
         sent += 1
     return sent
 

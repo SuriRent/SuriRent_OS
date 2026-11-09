@@ -20,6 +20,46 @@ function urlBase64ToUint8Array(base64String) {
   return output;
 }
 
+function PushPreferences() {
+  const [cats, setCats] = useState([]);
+  const [saving, setSaving] = useState('');
+  useEffect(() => {
+    api.get('/push/preferences').then((r) => setCats(r.data?.categories || [])).catch(() => {});
+  }, []);
+  const toggle = async (id) => {
+    const next = cats.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c));
+    setCats(next);
+    setSaving(id);
+    try {
+      await api.put('/push/preferences', { prefs: Object.fromEntries(next.map((c) => [c.id, c.enabled])) });
+    } catch (e) {
+      setCats(cats);
+    } finally { setSaving(''); }
+  };
+  if (!cats.length) return null;
+  return (
+    <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="push-preferences">
+      <h3 className="font-black text-slate-900 mb-1">Welke meldingen wil ik ontvangen?</h3>
+      <p className="text-xs text-slate-500 mb-3">Geldt alleen voor jouw account en jouw toestellen.</p>
+      <ul className="divide-y divide-slate-100">
+        {cats.map((c) => (
+          <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-900">{c.label}</p>
+              <p className="text-xs text-slate-500">{c.desc}</p>
+            </div>
+            <button type="button" onClick={() => toggle(c.id)} disabled={saving === c.id}
+              role="switch" aria-checked={c.enabled} data-testid={`push-pref-${c.id}`}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${c.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${c.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function Notifications({ embedded = false }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded);
   const { clearBadge } = useBadge();
@@ -360,6 +400,8 @@ export default function Notifications({ embedded = false }) {
 
           <AndroidAppMeldingen />
           <ApprovalSignatureCard />
+
+          <PushPreferences />
 
           <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-6" data-testid="tap-sounds-section">
             <div className="flex items-center gap-3 mb-2">

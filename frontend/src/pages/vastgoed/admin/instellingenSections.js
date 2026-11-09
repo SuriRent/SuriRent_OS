@@ -1,4 +1,4 @@
-import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate } from 'lucide-react';
+import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate, Bell } from 'lucide-react';
 
 // Eén bron voor de Instellingen-onderdelen: gebruikt door zijmenu-dropdown,
 // mobiele sheet en InstellingenHub.
@@ -15,7 +15,8 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'bon-printer', label: 'Bon printer', desc: 'Kies KT-V520 of een Bluetooth bonprinter en koppel hem.', icon: Bluetooth },
   { id: 'kiosk-apparaten', label: 'Kiosk apparaten', desc: 'Printer-hardware voor alle kiosks van je bedrijf.', icon: Tablet },
   { id: 'domein', label: 'Eigen domein', desc: 'Laat klanten via hun eigen domein (bv. login.klant.nl) naar hun eigen pagina gaan.', icon: Globe },
-  { id: 'website', label: 'Marketing website', desc: 'Bewerk de publieke website van je bedrijf met de website-editor.', icon: LayoutTemplate },
+  { id: 'website', label: 'Marketing website', desc: 'Bewerk de publieke website van je bedrijf met de website-editor.', icon: LayoutTemplate, Bell },
+  { id: 'notificaties', label: 'Notificaties', desc: 'Push-meldingen op dit toestel (PWA): betalingen, achterstand en goedkeuringen.', icon: Bell },
   { id: 'backup', label: 'Backup & herstel', desc: 'Maak veilige kopieën en herstel data wanneer nodig.', icon: Database },
 ];
 

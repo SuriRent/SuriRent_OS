@@ -26,6 +26,7 @@ import {
   getKioskEmployee, withKioskEmployee,
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
+import KioskEmployeePush from '../../components/KioskEmployeePush';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt, printTextLines } from '../../lib/kiosk-print';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
@@ -422,6 +423,7 @@ function DesktopKioskHeader({
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
+        <KioskEmployeePush />
         <KioskSettingsMenu />
       </div>
     </div>
