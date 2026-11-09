@@ -1672,3 +1672,15 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] *
   background-position: center bottom !important;
   background-size: cover !important;
 }
+
+/* UI thema v6 */
+.kiosk-ui-card p, .kiosk-ui-stat p, .kiosk-ui-hero p { font-weight: 500 !important; }
+.kiosk-ui-card p:first-child { font-weight: 800 !important; }
+.kiosk-ui-stat p:last-child { font-weight: 800 !important; }
+.kiosk-ui-hero h2 { font-weight: 700 !important; }
+.kiosk-ui [data-testid="back-to-locations"] { background: transparent !important; padding: 8px 4px; }
+.kiosk-ui [data-testid="back-to-locations"] svg:last-child { background: #F1F3F9; border-radius: 9999px; padding: 3px; width: 24px; height: 24px; color: #1B2A5C; }
+body.kiosk-ui-body nav.kiosk-white-nav button[data-active="true"]:not(.zz1):not(.zz2):not(.zz3),
+body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:not(.zz1):not(.zz2):not(.zz3) {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+}
