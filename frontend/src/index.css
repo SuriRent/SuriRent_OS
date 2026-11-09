@@ -1563,6 +1563,21 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
   .kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0; border-radius: 18px; }
 }
 
+/* UI thema mobiel: header zonder zwevende balk, oranje banner die uitvloeit */
+@media (max-width: 767px) {
+  .kiosk-ui [data-testid="kiosk-desktop-header"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    margin: 4px 6px 0 !important;
+  }
+  .kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"] { font-size: 20px !important; font-weight: 800 !important; }
+  .kiosk-ui .kiosk-ui-hero-banner {
+    background: linear-gradient(90deg, #FF7A1F 0%, #FF9A45 55%, rgba(255,176,112,0.35) 100%) !important;
+    border-radius: 24px 24px 24px 24px;
+  }
+  .kiosk-ui .kiosk-ui-card { border-radius: 16px !important; box-shadow: 0 6px 16px -12px rgba(15,23,42,0.35); }
+}
+
 /* UI thema: header-tekst + locatiepil */
 .kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"],
 .kiosk-ui [data-testid="kiosk-desktop-header"] > div > svg { color: #1B2A5C !important; }
