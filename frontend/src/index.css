@@ -1508,3 +1508,7 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 @media (max-width: 767px) {
   [data-testid="kiosk-toolbar"]:not(:has(> button)) { display: none; }
 }
+
+/* Kiosk: scrollbars verborgen, scrollen blijft werken */
+.kiosk-fullscreen * { scrollbar-width: none; -ms-overflow-style: none; }
+.kiosk-fullscreen *::-webkit-scrollbar { display: none; width: 0; height: 0; }
