@@ -27,7 +27,7 @@ import {
 } from '../../components/KioskEmployee';
 import NumPad from '../../components/NumPad';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
-import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt } from '../../lib/kiosk-print';
+import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt, printTextLines } from '../../lib/kiosk-print';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
@@ -911,6 +911,19 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
     } catch (e) { setErr(formatError(e)); }
   };
 
+  const printNote = async (n) => {
+    const W = 21;
+    const wrap = (s) => String(s || '').split('\n').flatMap((ln) => ln.match(new RegExp(`.{1,${W}}(\\s|$)|\\S+?(\\s|$)`, 'g')) || ['']).map((x) => x.trimEnd());
+    const L = (text, align = 'left', bold = false, size = 'normal') => ({ text, align, bold, size });
+    const dash = '-'.repeat(W);
+    const when = new Date(n.created_at).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const lines = [L('NOTITIE', 'center', true, 'large'), L(dash), L('HUURDER:', 'left', true), ...wrap(tenantName).map((x) => L(x)), L(when)];
+    if (n.created_by) lines.push(L(`Door: ${n.created_by}`));
+    if (n.remind_at) lines.push(L(`Herinnering: ${n.remind_at}`));
+    lines.push(L(dash), ...wrap(n.text).map((x) => L(x)), L(dash), L(''), L(''));
+    try { await printTextLines(lines); } catch (e) { setErr(formatError(e)); }
+  };
+
   const dismiss = async (id) => {
     try {
       await api.post(`/kiosk/tenants/${tenantId}/notes/${id}/dismiss`);
@@ -996,6 +1009,10 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
                         Behandeld
                       </button>
                     )}
+                    <button onClick={() => printNote(n)} data-testid={`note-print-${n.id}`} title="Printen"
+                      className="opacity-60 hover:opacity-100 text-slate-600">
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
                     <button onClick={() => remove(n.id)} data-testid={`note-delete-${n.id}`}
                       className="opacity-60 hover:opacity-100 text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />

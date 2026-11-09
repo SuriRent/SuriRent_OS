@@ -107,6 +107,34 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
   }
 }
 
+/** Losse tekstbon (bijv. een notitie): APK, Bluetooth of printvenster. */
+export async function printTextLines(lines) {
+  const data = { template: 'lines', receipt_type: 'financieel', size_mode: 'normal', paper_width: paperWidth(), lines };
+  const bridge = apkBridge();
+  if (bridge) { bridge(JSON.stringify(apkPrintMessage('', data))); return true; }
+  if (printerMode() === 'bluetooth' && getSavedPrinter()?.via === 'web') {
+    try { await printLinesBluetooth(lines); return true; } catch { /* val terug op printvenster */ }
+  }
+  let bon = document.getElementById('bon');
+  if (!bon) { bon = document.createElement('div'); bon.id = 'bon'; document.body.appendChild(bon); }
+  bon.textContent = '';
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet';
+  sheet.style.cssText = 'width:54mm;font-family:monospace;white-space:pre-wrap;word-break:break-word;color:#000;';
+  const px = { normal: '11px', large: '18px' };
+  lines.forEach((l) => {
+    const r = document.createElement('div');
+    r.textContent = l.text || '\u00a0';
+    r.style.textAlign = l.align || 'left';
+    r.style.fontWeight = l.bold ? '700' : '400';
+    r.style.fontSize = px[l.size] || px.normal;
+    sheet.appendChild(r);
+  });
+  bon.appendChild(sheet);
+  fitPageToBon(bon);
+  window.print();
+  return true;
+}
 /**
  * Financieel overzicht als bon: APK (PRINT_RECEIPT met regels) of
  * printvenster met de 58mm PNG.
