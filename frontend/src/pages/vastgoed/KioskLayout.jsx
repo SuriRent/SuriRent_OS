@@ -1,7 +1,7 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
@@ -385,7 +385,9 @@ function DesktopKioskHeader({
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
+  const { isUi } = useContext(KioskThemeCtx);
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
+  const locLabel = currentStep === 'stroom' ? title : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
   return (
     <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
       <KioskAdminMenu returnTo={{
@@ -402,8 +404,15 @@ function DesktopKioskHeader({
       <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
         className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
         {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
-        <span className="truncate">{currentStep === 'stroom' ? title : loc ? `${loc}  •  ${title}` : title}</span>
+        <span className="truncate">{locLabel}</span>
+        {isUi && currentStep !== 'stroom' && totalGroups > 1 && <ChevronDown className="w-4 h-4 shrink-0" />}
       </button>
+      {isUi && onSearch && (
+        <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
+          className="hidden md:flex flex-1 min-w-0 max-w-[420px] h-11 items-center gap-2 rounded-full bg-slate-100/80 px-4 text-slate-400 text-[15px]">
+          <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" /> <span className="truncate">Zoek huurder...</span>
+        </button>
+      )}
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
           <div className="hidden md:flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
@@ -419,7 +428,7 @@ function DesktopKioskHeader({
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
-        <HeaderLive />
+        {!isUi && <HeaderLive />}
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
@@ -459,21 +468,21 @@ function UiAptCard({ a, onOpen }) {
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
       className="kiosk-ui-card group w-full text-left flex flex-col rounded-2xl md:rounded-[22px] bg-white p-3 md:p-4 transition active:scale-[0.99] md:hover:-translate-y-0.5">
-      <div className="flex items-center gap-3 md:items-start w-full min-w-0">
-        <div className={`shrink-0 rounded-full overflow-hidden w-14 h-14 md:w-[72px] md:h-[72px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-orange-50' : 'bg-slate-100'}`}>
+      <div className={`flex items-center gap-3 md:items-start w-full min-w-0 ${vacant ? 'md:flex-col md:items-center md:text-center md:gap-2' : ''}`}>
+        <div className={`shrink-0 rounded-full overflow-hidden w-14 h-14 md:w-[72px] md:h-[72px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100 md:w-[84px] md:h-[84px]' : 'bg-orange-50'}`}>
           {src && !vacant
             ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            : <Home className={`w-7 h-7 md:w-9 md:h-9 ${vacant ? 'text-orange-500' : 'text-slate-400'}`} />}
+            : <Home className={`w-7 h-7 md:w-9 md:h-9 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 md:flex-none md:max-w-full">
           <p className="text-lg md:text-xl font-black text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
-          <p className="flex items-center gap-1.5 text-sm md:text-[15px] text-slate-700 font-medium truncate">
-            <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />
+          <p className={`flex items-center gap-1.5 text-sm md:text-[13px] text-slate-700 font-medium truncate ${vacant ? 'md:justify-center' : ''}`}>
+            {!vacant && <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />}
             <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
           </p>
         </div>
         <UiStatusPill a={a} className="md:hidden shrink-0" />
-        <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:self-start">
+        <span className={`shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:self-start ${vacant ? 'md:hidden' : ''}`}>
           <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
         </span>
       </div>
@@ -515,8 +524,8 @@ function UiHero({ apartments, locationName }) {
       <div className="flex items-center gap-2.5 min-w-0">
         <span className={`shrink-0 w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
         <div className="min-w-0">
-          <p className="text-[12px] md:text-[13px] font-semibold text-slate-600 truncate leading-tight">{label}</p>
-          <p className="text-xl md:text-2xl font-black text-[#1B2A5C] leading-tight truncate">{value}</p>
+          <p className="text-[12px] md:text-[12px] font-semibold text-slate-600 truncate leading-tight">{label}</p>
+          <p className="text-xl md:text-[22px] font-black text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
         </div>
       </div>
       {bar !== undefined && (
@@ -545,7 +554,7 @@ function UiHero({ apartments, locationName }) {
           </div>
         </div>
         <VillaArt className="md:hidden absolute right-1 bottom-0 w-28 pointer-events-none" />
-        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(640px,55vw)] shrink-0">
+        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
           {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
           {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
           {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
@@ -6878,8 +6887,14 @@ export default function KioskLayout() {
       {showDesktopBar && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'kiosk-white-nav ' : ''}${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className="flex items-stretch gap-1 px-2 py-2">
-            <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />
+          <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
+            {isUi ? (
+              <button type="button" onClick={() => { if (canBack) goBack(); }} data-testid="kiosk-ui-bar-back" data-active="true"
+                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1.5 rounded-2xl py-2.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
+                <LayoutGrid className="w-7 h-7" strokeWidth={2} />
+                <span className="text-[11px] lg:text-sm font-bold leading-tight">Terug</span>
+              </button>
+            ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />}
             {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
@@ -6893,14 +6908,17 @@ export default function KioskLayout() {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
-                <button key={id} type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
+                <Fragment key={id}>
+                {isUi && <span className="self-center h-10 w-px bg-slate-300/80 shrink-0" aria-hidden="true" />}
+                <button type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isGreen ? 'bg-[#00845D] text-white shadow-md' : isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isGreen ? 'text-slate-600 bg-[#F1F8F4] hover:bg-emerald-50 hover:text-emerald-800' : isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
+                </Fragment>
               );
             })}
-            <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} green={isGreen} />
+            {!isUi && <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} green={isGreen} />}
           </div>
         </nav>
       ), document.body)}
