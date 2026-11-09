@@ -482,6 +482,27 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
+function VillaArt({ className = '' }) {
+  return (
+    <svg viewBox="0 0 240 150" className={className} aria-hidden="true">
+      <ellipse cx="120" cy="140" rx="112" ry="9" fill="#000" opacity="0.08" />
+      <rect x="30" y="62" width="120" height="76" rx="4" fill="#fff" />
+      <rect x="130" y="40" width="80" height="98" rx="4" fill="#FFE3CC" />
+      <path d="M22 66 L90 22 L158 66 Z" fill="#FF7A1F" />
+      <path d="M124 44 L170 14 L216 44 Z" fill="#E85D00" />
+      <rect x="44" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
+      <rect x="80" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
+      <rect x="146" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
+      <rect x="178" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
+      <rect x="146" y="98" width="24" height="40" rx="3" fill="#1B2A5C" />
+      <rect x="112" y="96" width="22" height="42" rx="3" fill="#8A5A3B" />
+      <circle cx="16" cy="118" r="16" fill="#3FAE5A" />
+      <rect x="14" y="128" width="4" height="12" fill="#6B4423" />
+      <circle cx="226" cy="122" r="13" fill="#3FAE5A" />
+    </svg>
+  );
+}
+
 function UiHero({ apartments, locationName }) {
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
@@ -512,7 +533,8 @@ function UiHero({ apartments, locationName }) {
           </span>
         </div>
       )}
-      <div className="rounded-3xl md:rounded-none px-4 pt-4 pb-3 md:p-0 text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A1F] to-[#FF9A45] md:bg-none md:from-transparent md:to-transparent md:flex md:items-center md:justify-between md:gap-4">
+      <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
+      <div className="relative overflow-hidden rounded-3xl md:rounded-none px-4 pt-4 pb-3 md:p-0 md:overflow-visible text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A1F] to-[#FF9A45] md:bg-none md:from-transparent md:to-transparent md:flex md:items-center md:justify-between md:gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/90 md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF5C00] md:text-white shadow-md">
             <Building2 className="w-6 h-6 md:hidden" strokeWidth={2.2} /><Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
@@ -522,6 +544,7 @@ function UiHero({ apartments, locationName }) {
             <p className="text-sm md:text-base font-medium text-white/90 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
           </div>
         </div>
+        <VillaArt className="md:hidden absolute right-1 bottom-0 w-28 pointer-events-none" />
         <div className="hidden md:grid grid-cols-3 gap-3 w-[min(640px,55vw)] shrink-0">
           {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
           {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
