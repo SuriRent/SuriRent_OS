@@ -1597,3 +1597,33 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 .kiosk-ui .kiosk-ui-bar > button[data-testid="kiosk-ui-bar-back"] { flex: 0 0 auto; }
 .kiosk-ui [data-testid="kiosk-ui-header-search"] { color: #94A3B8 !important; }
 .kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"] { font-size: 26px; }
+
+/* UI thema v3: exact ontwerp */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background-image:
+    url("./ui-bg-villa.png"),
+    radial-gradient(circle at -2% 14%, rgba(255,140,40,0.55) 0, rgba(255,170,90,0.25) 6%, rgba(255,200,150,0) 14%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 120' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23FFB36B'/%3E%3Cstop offset='1' stop-color='%23FF8A2B'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 40 C150 110 300 120 420 100 L800 120 L800 120 L0 120 Z' fill='url(%23g)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0 bottom 0, 0 0, left bottom, center !important;
+  background-size: auto 34%, 100% 100%, 45% 90px, 100% 100% !important;
+}
+.kiosk-ui nav.kiosk-white-nav,
+.kiosk-ui [data-testid="kiosk-bottom-bar"] { background: #fff !important; }
+.kiosk-ui nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+.kiosk-ui nav.kiosk-white-nav button[data-active="true"],
+.kiosk-ui nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+  border-radius: 18px; box-shadow: 0 8px 18px -8px rgba(255,92,0,0.7) !important; color: #fff !important;
+}
+.kiosk-ui nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] * { color: #fff !important; }
+.kiosk-ui nav.kiosk-white-nav button:not([data-active="true"]) { color: #1B2A5C; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid^="kiosk-theme-toggle"] { background: #FFF1E8 !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid^="kiosk-theme-toggle"] svg { color: #FF5C00 !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-settings"] {
+  background: #fff; box-shadow: 0 6px 16px -8px rgba(15,23,42,0.4); color: #1B2A5C !important;
+}
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-settings"] svg { color: #1B2A5C !important; }

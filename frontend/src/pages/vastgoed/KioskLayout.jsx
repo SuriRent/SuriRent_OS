@@ -292,7 +292,7 @@ function KioskBell() {
 
 // Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
 function KioskSettingsMenu() {
-  const { isAdmin } = useContext(KioskThemeCtx);
+  const { isAdmin, isUi } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
@@ -306,7 +306,7 @@ function KioskSettingsMenu() {
     <>
       <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
         className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
-        <SettingsIcon className="w-6 h-6" />
+        {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
       </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
@@ -527,6 +527,7 @@ function UiHero({ apartments, locationName }) {
           <p className="text-[12px] md:text-[12px] font-semibold text-slate-600 truncate leading-tight">{label}</p>
           <p className="text-xl md:text-[22px] font-black text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
         </div>
+        {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
       </div>
       {bar !== undefined && (
         <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} /></div>
@@ -534,7 +535,7 @@ function UiHero({ apartments, locationName }) {
     </div>
   );
   return (
-    <div className="kiosk-ui-hero px-1 sm:px-2 pb-3" data-testid="kiosk-ui-hero">
+    <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
       {locationName && (
         <div className="md:hidden flex justify-center -mt-1 mb-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
@@ -780,7 +781,7 @@ function ApartmentSelect({
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi
-          ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-1'
+          ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:px-5 md:pt-1'
           : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2'}>
           {shown.map((a) => {
             if (isUi) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
