@@ -91,8 +91,8 @@ export function KasgeldReceiptScreen({ entry, onDone }) {
 
   const isIn = entry.type === 'in';
   return (
-    <div className="flex flex-col items-center text-center gap-4" data-testid="kasgeld-receipt-screen">
-      <CheckCircle2 className="w-14 h-14 text-emerald-500" />
+    <div className="flex flex-col items-center text-center gap-2.5" data-testid="kasgeld-receipt-screen">
+      <CheckCircle2 className="w-10 h-10 text-emerald-500" />
       <div>
         <p className="text-lg font-black text-slate-900">Mutatie opgeslagen</p>
         <p className={`text-2xl font-black ${isIn ? 'text-emerald-600' : 'text-red-600'}`} data-testid="kasgeld-receipt-amount">
@@ -100,8 +100,8 @@ export function KasgeldReceiptScreen({ entry, onDone }) {
         </p>
         <p className="text-xs text-slate-500">{isIn ? 'Inleg' : 'Opname'}{entry.description ? ` · ${entry.description}` : ''}</p>
       </div>
-      <div className="w-full max-h-[38vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2" data-testid="kasgeld-receipt-preview">
-        {img ? <img src={img} alt="Kasgeld bon" className="mx-auto w-full max-w-[240px]" /> : <Loader2 className="w-5 h-5 animate-spin mx-auto my-6 text-slate-400" />}
+      <div className="w-full h-[40vh] min-h-[200px] flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-1.5" data-testid="kasgeld-receipt-preview">
+        {img ? <img src={img} alt="Kasgeld bon" className="h-full w-auto max-w-full object-contain" /> : <Loader2 className="w-5 h-5 animate-spin mx-auto my-6 text-slate-400" />}
       </div>
       <div className="w-full flex gap-2">
         {p.builtIn && <PrintBtn testId="kasgeld-print-builtin" icon={Printer} label="Ingebouwd" state={p.status.builtin}
@@ -115,7 +115,7 @@ export function KasgeldReceiptScreen({ entry, onDone }) {
         <p className="text-xs text-slate-500" data-testid="kasgeld-print-none">Geen printer actief</p>
       )}
       <button type="button" onClick={onDone} data-testid="kasgeld-receipt-done"
-        className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold active:scale-95 transition-transform">
+        className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold active:scale-95 transition-transform">
         Klaar
       </button>
     </div>
@@ -139,8 +139,8 @@ export function DepositReceiptScreen({ deposit, invoicesCreated = 0, onDone }) {
     if (p.bt && !auto.current.bt) { auto.current.bt = true; p.printBt(); }
   }, [p.builtIn, p.others.length, p.bt]);
   return (
-    <div className="flex flex-col items-center text-center gap-4" data-testid="deposit-receipt-screen">
-      <CheckCircle2 className={`w-14 h-14 ${deposit.amount_due > 0 ? 'text-red-500' : 'text-emerald-500'}`} />
+    <div className="flex flex-col items-center text-center gap-2.5" data-testid="deposit-receipt-screen">
+      <CheckCircle2 className={`w-10 h-10 ${deposit.amount_due > 0 ? 'text-red-500' : 'text-emerald-500'}`} />
       {deposit.status && deposit.status !== 'held' ? (
         <div>
           <p className="text-lg font-black text-slate-900">Borgafrekening</p>
@@ -157,8 +157,8 @@ export function DepositReceiptScreen({ deposit, invoicesCreated = 0, onDone }) {
           <p className="text-xs text-slate-500">Contract is actief{invoicesCreated ? ` · ${invoicesCreated} factuur aangemaakt` : ' · facturen starten nu'}</p>
         </div>
       )}
-      <div className="w-full max-h-[38vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
-        {img ? <img src={img} alt="Borgbon" className="mx-auto w-full max-w-[240px]" /> : <Loader2 className="w-5 h-5 animate-spin mx-auto my-6 text-slate-400" />}
+      <div className="w-full h-[40vh] min-h-[200px] flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+        {img ? <img src={img} alt="Borgbon" className="h-full w-auto max-w-full object-contain" /> : <Loader2 className="w-5 h-5 animate-spin mx-auto my-6 text-slate-400" />}
       </div>
       <div className="w-full flex gap-2">
         {p.builtIn && <PrintBtn testId="deposit-print-builtin" icon={Printer} label="Ingebouwd" state={p.status.builtin} onClick={p.printBuiltIn} className="bg-[#FF5C00] hover:bg-[#E05200]" />}
@@ -166,7 +166,7 @@ export function DepositReceiptScreen({ deposit, invoicesCreated = 0, onDone }) {
         {p.bt && <PrintBtn testId="deposit-print-bt" icon={Bluetooth} label="Bluetooth" state={p.status.bt} onClick={p.printBt} className="bg-blue-600 hover:bg-blue-700" />}
       </div>
       <button type="button" onClick={onDone} data-testid="deposit-receipt-done"
-        className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold active:scale-95 transition-transform">Klaar</button>
+        className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold active:scale-95 transition-transform">Klaar</button>
     </div>
   );
 }
