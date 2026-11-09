@@ -10102,6 +10102,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
         doc["credit_applied_at"] = None
     await db.payments.insert_one(doc)
     doc.pop("_id", None)
+    if status == "approved":
+        asyncio.create_task(_notify_tenant_payment(dict(doc)))
     # Factuur sluiten — alleen voor approved payments. Pending betalingen krijgen
     # bij goedkeuring alsnog de invoice-koppeling via /payments/{id}/approve.
     if matched_invoice and status == "approved":
@@ -10571,6 +10573,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
             print(f"[payments.approve] plan allocation failed: {e}")
     await db.payments.update_one({"id": pid}, {"$set": update})
     p.update(update)
+    asyncio.create_task(_notify_tenant_payment(dict(p)))
     return await _enrich_payment(p)
 
 
@@ -17771,6 +17774,125 @@ async def _deep_link(d: dict) -> str:
     return d.get("url") or "/admin"
 
 
+PUSH_CATEGORIES = [
+    ("payments", "Betalingen", "Nieuwe betalingen, pinbetalingen en bankoverschrijvingen die goedkeuring nodig hebben."),
+    ("plans", "Betalingsregelingen", "Termijnbetalingen en nieuwe betalingsregelingen."),
+    ("overdue", "Achterstand & herinneringen", "Achterstallige huur en verzonden herinneringen."),
+    ("kasgeld", "Kasgeld", "Nieuwe kasmutaties (opname of storting)."),
+    ("power", "Stroom", "Meldingen van stroomschakelaars."),
+    ("maintenance", "Onderhoud", "Nieuwe onderhoudsmeldingen."),
+    ("invoices", "Facturen", "Maandelijkse facturen gegenereerd."),
+    ("kiosk_session", "Kiosk in-/uitloggen", "Medewerker ingelogd of uitgelogd in de kiosk."),
+]
+_PUSH_KIND_CATEGORY = {
+    "payment": "payments", "payment_pending": "payments", "payment_pending_approval": "payments", "approval": "payments",
+    "payment_plan": "plans", "overdue": "overdue", "invoice_reminder": "overdue",
+    "kasgeld": "kasgeld", "power": "power", "maintenance": "maintenance",
+    "auto_invoice": "invoices", "kiosk_login": "kiosk_session", "kiosk_logout": "kiosk_session",
+}
+
+
+def _push_category(data: dict | None) -> str | None:
+    d = data or {}
+    if d.get("plan_id") and d.get("kind") == "payment":
+        return "plans"
+    return _PUSH_KIND_CATEGORY.get(d.get("kind"))
+
+
+class PushPrefsIn(BaseModel):
+    prefs: dict
+
+
+@api.get("/push/preferences")
+async def push_get_preferences(user=Depends(get_current_user)):
+    doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "push_prefs": 1}) or {}
+    saved = doc.get("push_prefs") or {}
+    return {"categories": [
+        {"id": cid, "label": label, "desc": desc, "enabled": saved.get(cid) is not False}
+        for cid, label, desc in PUSH_CATEGORIES
+    ]}
+
+
+@api.put("/push/preferences")
+async def push_set_preferences(body: PushPrefsIn, user=Depends(get_current_user)):
+    valid = {cid for cid, _, _ in PUSH_CATEGORIES}
+    prefs = {k: bool(v) for k, v in body.prefs.items() if k in valid}
+    await db.users.update_one({"id": user["id"]}, {"$set": {"push_prefs": prefs}})
+    return {"ok": True, "prefs": prefs}
+
+
+# ---- Push naar huurders (PWA huurderportaal) ----
+class TenantPushSubIn(BaseModel):
+    endpoint: str
+    keys: dict
+    user_agent: Optional[str] = ""
+
+
+@api.post("/tenant-portal/push/subscribe")
+async def tenant_push_subscribe(body: TenantPushSubIn, tenant=Depends(get_tenant_session)):
+    now_iso = iso(now_utc())
+    await db.tenant_push_subs.update_one(
+        {"endpoint": body.endpoint},
+        {"$set": {"tenant_id": tenant["id"], "company_id": tenant.get("company_id"), "keys": body.keys,
+                  "user_agent": body.user_agent or "", "last_seen_at": now_iso},
+         "$setOnInsert": {"id": new_id(), "created_at": now_iso}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.post("/tenant-portal/push/unsubscribe")
+async def tenant_push_unsubscribe(body: dict, tenant=Depends(get_tenant_session)):
+    ep = body.get("endpoint")
+    if ep:
+        await db.tenant_push_subs.delete_one({"endpoint": ep, "tenant_id": tenant["id"]})
+    return {"ok": True}
+
+
+@api.post("/tenant-portal/push/test")
+async def tenant_push_test(tenant=Depends(get_tenant_session)):
+    sent = await _notify_tenant(tenant["id"], "SuriRent", "Meldingen werken op dit toestel!", {"kind": "test", "url": "/kiosk/huurder"})
+    return {"sent": sent}
+
+
+async def _notify_tenant(tenant_id: str, title: str, body: str, data: dict | None = None) -> int:
+    """Push naar alle PWA-toestellen van één huurder. Faalt nooit hard."""
+    if not tenant_id:
+        return 0
+    try:
+        subs = [s async for s in db.tenant_push_subs.find({"tenant_id": tenant_id}, {"_id": 0})]
+        if not subs:
+            return 0
+        payload = {"audience": "tenant", "url": "/kiosk/huurder", **(data or {})}
+
+        async def _one(sub):
+            ok = await asyncio.to_thread(send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload)
+            if not ok:
+                await db.tenant_push_subs.delete_one({"endpoint": sub["endpoint"]})
+            return ok
+
+        res = await asyncio.gather(*[_one(s) for s in subs], return_exceptions=True)
+        return sum(1 for r in res if r is True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[tenant-push] failed: {e}")
+        return 0
+
+
+async def _notify_tenant_payment(p: dict) -> None:
+    """Bevestiging naar de huurder zodra een betaling definitief is goedgekeurd."""
+    if (p.get("method") or "") in ("borgverrekening",) or p.get("category") == "restschuld":
+        return
+    try:
+        amt = float(p.get("amount") or 0)
+        await _notify_tenant(
+            p.get("tenant_id"), "Betaling ontvangen",
+            f"Bedankt! We hebben {p.get('currency', '')} {amt:,.2f} van u ontvangen.",
+            {"kind": "tenant_payment", "payment_id": p.get("id")},
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[tenant-push] payment notify failed: {e}")
+
+
 async def _notify_company_admins(company_id: str, title: str, body: str, data: dict | None = None) -> int:
     """Stuur een push naar ALLE admins/owners/boekhouders van een bepaalde
     company. Push-dispatch gebeurt PARALLEL via asyncio.to_thread zodat het
@@ -17796,10 +17918,13 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
     # hebben dezelfde betalingsverwerkings-rechten als admins (geen approval
     # nodig) dus krijgen ook real-time meldingen.
     admin_ids = []
+    push_cat = _push_category(data)
     async for u in db.users.find(
         {"company_id": company_id, "role": {"$in": ["admin", "owner", "boekhouder"]}},
-        {"_id": 0, "id": 1},
+        {"_id": 0, "id": 1, "push_prefs": 1},
     ):
+        if push_cat and (u.get("push_prefs") or {}).get(push_cat) is False:
+            continue
         admin_ids.append(u["id"])
     # SSE ALTIJD broadcasten (ook als er geen push-subs of admin_ids zijn),
     # zodat open admin-tabs live updates krijgen zonder OS-push setup. Voorheen
@@ -20724,6 +20849,8 @@ async def _send_upcoming_invoice_reminders():
                     email_ok = True
                 except Exception as e:  # noqa: BLE001
                     print(f"[reminder-upcoming] smtp fail inv={inv['id'][:8]}: {e}")
+
+            await _notify_tenant(tenant.get("id"), "Factuur vervalt binnenkort", f"Factuur {inv.get('invoice_number','')} vervalt {due_nl}. Openstaand: {currency} {remaining:.2f}", {"kind": "tenant_reminder", "invoice_id": inv["id"]})
 
             # 3) Push naar de admin (info) + interne tab notificatie
             try:

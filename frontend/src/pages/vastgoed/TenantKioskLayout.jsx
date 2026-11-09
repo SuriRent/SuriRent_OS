@@ -12,6 +12,7 @@ import {
   Landmark, FileUp, ChevronLeft, MapPin,
 } from 'lucide-react';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import TenantPushToggle from '../../components/TenantPushToggle';
 import { KioskReceiptImageButton } from '../../components/KioskReceiptImageButton';
 import { playSuccessPing, playErrorBuzz, playSwoosh } from '../../lib/tap-sounds';
 import {
@@ -829,6 +830,7 @@ function DashboardView({ overview, onAction, onHistory }) {
             className="mt-1.5 sm:mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2 sm:py-2.5 text-xs sm:text-sm">
             <ClockIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Betalingsgeschiedenis
           </button>
+          <TenantPushToggle />
         </div>
       </div>
     </div>
