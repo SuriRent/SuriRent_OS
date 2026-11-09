@@ -277,6 +277,12 @@ nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plu
   border: 1px solid rgba(255,255,255,0.9);
   box-shadow: 0 4px 10px -4px rgba(30,40,60,0.35), inset 0 1px 0 #fff;
 }
+nav.kiosk-white-nav button[data-active="true"] {
+  background: #FF5C00 !important; color: #FFFFFF !important; border-color: #FF5C00 !important;
+}
+nav.kiosk-white-nav button[data-active="true"] * { color: #FFFFFF !important; }
+.kiosk-fullscreen.kiosk-white button[data-testid^="kiosk-theme-toggle"] { background: #FF5C00 !important; color: #FFFFFF !important; }
+.kiosk-fullscreen.kiosk-white button[data-testid^="kiosk-theme-toggle"] svg { color: #FFFFFF !important; }
 @media (max-width: 767px) {
   nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 }

@@ -6699,7 +6699,7 @@ export default function KioskLayout() {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
-                <button key={id} type="button" onClick={onClick} data-testid={testid}
+                <button key={id} type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isGreen ? 'bg-[#00845D] text-white shadow-md' : isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isGreen ? 'text-slate-600 bg-[#F1F8F4] hover:bg-emerald-50 hover:text-emerald-800' : isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
