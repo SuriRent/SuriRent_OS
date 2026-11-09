@@ -11265,14 +11265,12 @@ async def _kiosk_apartments_compute(q: dict) -> list:
                                             and int(i["period_year"]) * 12 + i["period_month"] > _cur_key)]
     # Betaal-status: "unpaid" (min. 1 factuur 0 betaald) > "partial" > "paid".
     status_by_tid: dict = {}
-    owed_by_tid: dict = {}
     for inv in invoices:
         amt = float(inv.get("amount") or 0)
         paid = float(inv.get("paid_amount") or 0)
         if amt > 0 and paid >= amt - 0.005:
             continue  # feitelijk betaald ondanks stale status
         tid = inv["tenant_id"]
-        owed_by_tid[tid] = owed_by_tid.get(tid, 0.0) + max(amt - paid, 0.0)
         if paid > 0:
             status_by_tid.setdefault(tid, "partial")
         else:
@@ -11297,15 +11295,8 @@ async def _kiosk_apartments_compute(q: dict) -> list:
             "show_tenant_photo": bool(a.get("show_tenant_photo") or False),
             "location_id": a.get("location_id"),
             "pay_status": status_by_tid.get(a.get("tenant_id"), "paid"),
-            "owed": round(owed_by_tid.get(a.get("tenant_id"), 0.0), 2),
         })
     return out
-
-
-@api.get("/admin/mobile-apartments")
-async def admin_mobile_apartments(user=Depends(get_current_user)):
-    cid = company_id_of(user)
-    return await _kiosk_apartments_compute({"company_id": cid} if cid else {})
 
 
 @api.get("/kiosk/tenants/{tenant_id}/overview")

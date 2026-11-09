@@ -613,7 +613,6 @@ ADMIN_TAB_LOADERS.push(
   loadSaasKasregister, loadSaasSettings, loadSaasClientPayments, loadLandingEditor, loadPlansAdmin,
 );
 import SetupWizardSheet from './admin/SetupWizardSheet';
-import MobileAdminHome from '../../components/MobileAdminHome';
 import MyUrlCard from '../../components/MyUrlCard';
 import TrialBanner from '../../components/TrialBanner';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
@@ -1135,44 +1134,6 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, onManual, user
 }
 
 function MobileTabBar({ active, onChange, tabs, onOpenMenu, user, badgeCount }) {
-  if (user?.role !== 'superadmin') {
-    const items = [
-      { id: 'overview', label: 'Dashboard', Icon: Home },
-      { id: 'apartments', label: 'Appartementen', Icon: Building },
-      { id: 'tenants', label: 'Huurders', Icon: UsersRound },
-    ].filter((i) => tabs.find((t) => t.id === i.id));
-    const cell = 'relative flex flex-col items-center justify-center gap-1 pt-2.5 pb-2 active:scale-95 transition';
-    return (
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40" data-testid="mobile-tab-bar">
-        <div className="bg-white rounded-t-3xl shadow-[0_-8px_26px_-12px_rgba(15,23,42,0.25)] px-2 pt-1"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)' }}>
-          <div className="grid items-stretch divide-x divide-slate-200" style={{ gridTemplateColumns: `repeat(${items.length + 1}, minmax(0, 1fr))` }}>
-            {items.map(({ id, label, Icon }) => {
-              const on = active === id;
-              return (
-                <button key={id} type="button" onClick={() => onChange(id)} data-testid={`tab-mobile-${id}`} className={cell}>
-                  <Icon className={`w-7 h-7 ${on ? 'text-[#FF5C00]' : 'text-[#1B2A5C]'}`} strokeWidth={on ? 2.4 : 2} />
-                  <span className={`text-[13px] leading-tight ${on ? 'font-black text-[#FF5C00]' : 'font-semibold text-[#1B2A5C]'}`}>{label}</span>
-                  {on && <span aria-hidden className="absolute bottom-0 inset-x-3 h-[3px] rounded-full bg-[#FF5C00]" />}
-                </button>
-              );
-            })}
-            <button type="button" onClick={onOpenMenu} data-testid="mobile-fab-menu" className={cell}>
-              <span className="relative">
-                <MoreHorizontal className="w-7 h-7 text-[#1B2A5C]" strokeWidth={2.6} />
-                {badgeCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white" data-testid="mobile-fab-badge">
-                    {badgeCount > 9 ? '9+' : badgeCount}
-                  </span>
-                )}
-              </span>
-              <span className="text-[13px] leading-tight font-semibold text-[#1B2A5C]">Meer</span>
-            </button>
-          </div>
-        </div>
-      </nav>
-    );
-  }
   const primaryIds = user?.role === 'superadmin' ? MOBILE_SUPER_PRIMARY_IDS : MOBILE_PRIMARY_IDS;
   const primary = primaryIds
     .map((id) => tabs.find((t) => t.id === id))
@@ -5170,7 +5131,7 @@ export default function AdminDashboard() {
     // Fallback: mobile → invoices (facturen als landingpagina op verzoek
     // gebruiker feb 2026), anders overview.
     try {
-      if (typeof window !== 'undefined' && window.innerWidth < 768 && !tabs.find((t) => t.id === 'overview')) return 'invoices';
+      if (typeof window !== 'undefined' && window.innerWidth < 768) return 'invoices';
     } catch { /* SSR-safe */ }
     return 'overview';
   })();
@@ -5354,7 +5315,7 @@ export default function AdminDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
           ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
-          : <>{tab !== 'overview' && <MobileTopLogo user={user} activeCompany={activeCompany} />}<DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
+          : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
         {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
@@ -5394,10 +5355,7 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_settings'} tabId="saas_settings" currentTab={tab}><SaasSettings /></KeepAliveTab>
           <KeepAliveTab active={tab === 'landing_editor'} tabId="landing_editor" currentTab={tab}><LandingEditor /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'overview'} tabId="overview" currentTab={tab}>
-            <div className="md:hidden"><MobileAdminHome user={user} activeCompany={activeCompany} onOpenMenu={() => setDrawerOpen(true)} /></div>
-            <div className="hidden md:block"><Overview /></div>
-          </KeepAliveTab>
+          <KeepAliveTab active={tab === 'overview'} tabId="overview" currentTab={tab}><Overview /></KeepAliveTab>
           <KeepAliveTab active={tab === 'locations'} tabId="locations" currentTab={tab}><Locations /></KeepAliveTab>
           <KeepAliveTab active={tab === 'apartments'} tabId="apartments" currentTab={tab}><Apartments /></KeepAliveTab>
           <KeepAliveTab active={tab === 'tenants'} tabId="tenants" currentTab={tab}><Tenants /></KeepAliveTab>
