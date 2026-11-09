@@ -950,6 +950,7 @@ async def _send_overdue_pushes():
                 body,
                 {"kind": "overdue", "url": "/admin/invoices", "count": len(overdue), "badge_inc": 1},
             )
+            await _notify_kiosk_employees(cid, "Huurders met achterstand", body, {"kind": "overdue"}, category="overdue")
             await db.companies.update_one({"id": cid}, {"$set": {"overdue_push_last": today_key}})
         except Exception as e:
             print(f"[push] overdue notify failed for company={cid}: {e}")
@@ -8081,6 +8082,9 @@ async def tenant_portal_maintenance_create(body: TenantMaintenanceIn, tenant=Dep
                 "badge_inc": 1,
             },
         )
+        await _notify_kiosk_employees(
+            cid, f"Nieuwe onderhoudsmelding · {apt_lbl}", f"{prio_prefix}{tenant_name}: {body.title}",
+            {"kind": "maintenance"}, category="maintenance")
     except Exception as e:
         print(f"[push] tenant-portal maintenance notify failed: {e}")
     return enriched
@@ -10574,6 +10578,11 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
     await db.payments.update_one({"id": pid}, {"$set": update})
     p.update(update)
     asyncio.create_task(_notify_tenant_payment(dict(p)))
+    if p.get("kiosk_employee_id"):
+        asyncio.create_task(_notify_kiosk_employees(
+            p.get("company_id"), "Betaling goedgekeurd",
+            f"Uw betaling van {p.get('currency', '')} {float(p.get('amount') or 0):,.2f} is goedgekeurd.",
+            {"kind": "my_payment"}, category="my_payment", only_emp_id=p["kiosk_employee_id"]))
     return await _enrich_payment(p)
 
 
@@ -10609,6 +10618,12 @@ async def _reject_payment_core(q: dict, reason: str, uid: str):
             print(f"[payments.reject] plan revert failed: {e}")
     await db.payments.update_one({"id": pid}, {"$set": update})
     p.update(update)
+    if p.get("kiosk_employee_id"):
+        asyncio.create_task(_notify_kiosk_employees(
+            p.get("company_id"), "Betaling afgewezen",
+            f"Uw betaling van {p.get('currency', '')} {float(p.get('amount') or 0):,.2f} is afgewezen."
+            + (f" Reden: {update['rejected_reason']}" if update["rejected_reason"] else ""),
+            {"kind": "my_payment"}, category="my_payment", only_emp_id=p["kiosk_employee_id"]))
     return await _enrich_payment(p)
 
 
@@ -10638,6 +10653,10 @@ async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
                 {"kind": "payment", "url": "/admin/payments",
                  "payment_id": enriched.get("id"), "badge_inc": 1},
             )
+            await _notify_kiosk_employees(
+                cid, f"Betaling {cur} {amt:,.2f}",
+                f"{enriched.get('tenant_name', 'Onbekend')} via {enriched.get('method', '')} (door beheerder)",
+                {"kind": "payment"}, category="admin_payment")
         except Exception as e:  # noqa: BLE001
             print(f"[push] admin payment notify failed: {e}")
     asyncio.create_task(_bg_notify())
@@ -17247,6 +17266,11 @@ async def create_cash(body: CashEntryIn, user=Depends(get_current_user)):
     bal_after = round(float((await kiosk_cash_balance({"company_id": cid})).get(doc["currency"], 0)), 2)
     await db.kasgeld.update_one({"id": doc["id"]}, {"$set": {"balance_after": bal_after}})
     doc["balance_after"] = bal_after
+    soort = "Inkomen" if doc.get("type") == "in" else "Uitgave"
+    asyncio.create_task(_notify_kiosk_employees(
+        cid, f"Kasgeld · {soort} {_nl_money(doc['currency'], doc['amount'])}",
+        f"Door {doc['created_by_name']} · {doc.get('description') or '-'}",
+        {"kind": "kasgeld"}, category="admin_kasgeld"))
     return doc
 
 
@@ -17783,8 +17807,10 @@ PUSH_CATEGORIES = [
     ("maintenance", "Onderhoud", "Nieuwe onderhoudsmeldingen."),
     ("invoices", "Facturen", "Maandelijkse facturen gegenereerd."),
     ("kiosk_session", "Kiosk in-/uitloggen", "Medewerker ingelogd of uitgelogd in de kiosk."),
+    ("billing", "Abonnement & SaaS-facturen", "Abonnement (bijna) verlopen en nieuwe SaaS-facturen."),
 ]
 _PUSH_KIND_CATEGORY = {
+    "subscription": "billing",
     "payment": "payments", "payment_pending": "payments", "payment_pending_approval": "payments", "approval": "payments",
     "payment_plan": "plans", "overdue": "overdue", "invoice_reminder": "overdue",
     "kasgeld": "kasgeld", "power": "power", "maintenance": "maintenance",
@@ -17891,6 +17917,117 @@ async def _notify_tenant_payment(p: dict) -> None:
         )
     except Exception as e:  # noqa: BLE001
         print(f"[tenant-push] payment notify failed: {e}")
+
+
+# ---- Push naar kiosk-medewerkers ----
+EMP_PUSH_CATEGORIES = [
+    ("overdue", "Huurders met achterstand", "Dagelijkse melding van huurders met openstaande huur."),
+    ("admin_payment", "Betaling door beheerder", "De beheerder heeft een betaling geregistreerd."),
+    ("admin_kasgeld", "Kasgeld door beheerder", "De beheerder heeft een kasgeld-mutatie gedaan."),
+    ("maintenance", "Onderhoud", "Nieuwe onderhoudsmeldingen."),
+    ("my_payment", "Mijn betalingen", "Goedkeuring of afwijzing van uw eigen betaling."),
+]
+
+
+class EmpPushAuth(BaseModel):
+    employee_id: str
+    pin: str
+
+
+class EmpPushSubIn(EmpPushAuth):
+    endpoint: str
+    keys: dict
+    user_agent: Optional[str] = ""
+
+
+class EmpPushPrefsIn(EmpPushAuth):
+    prefs: Optional[dict] = None
+
+
+async def _kiosk_emp_auth(kiosk: dict, employee_id: str, pin: str) -> dict:
+    cid = kiosk.get("company_id")
+    emp = await db.employees.find_one(
+        {"id": employee_id, "company_id": cid, "active": True, "app_role": "kiosk"}, {"_id": 0})
+    if not emp or not emp.get("kiosk_pin_hash") or not verify_password((pin or "").strip(), emp["kiosk_pin_hash"]):
+        raise HTTPException(status_code=401, detail="Ongeldige medewerker of PIN")
+    return emp
+
+
+@api.post("/kiosk/push/subscribe")
+async def kiosk_emp_push_subscribe(body: EmpPushSubIn, kiosk=Depends(get_kiosk_session)):
+    emp = await _kiosk_emp_auth(kiosk, body.employee_id, body.pin)
+    now_iso = iso(now_utc())
+    await db.emp_push_subs.update_one(
+        {"endpoint": body.endpoint},
+        {"$set": {"employee_id": emp["id"], "company_id": kiosk["company_id"], "keys": body.keys,
+                  "user_agent": body.user_agent or "", "last_seen_at": now_iso},
+         "$setOnInsert": {"id": new_id(), "created_at": now_iso}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.post("/kiosk/push/unsubscribe")
+async def kiosk_emp_push_unsubscribe(body: dict, kiosk=Depends(get_kiosk_session)):
+    ep = body.get("endpoint")
+    if ep:
+        await db.emp_push_subs.delete_one({"endpoint": ep, "company_id": kiosk["company_id"]})
+    return {"ok": True}
+
+
+@api.post("/kiosk/push/test")
+async def kiosk_emp_push_test(body: EmpPushAuth, kiosk=Depends(get_kiosk_session)):
+    emp = await _kiosk_emp_auth(kiosk, body.employee_id, body.pin)
+    sent = await _notify_kiosk_employees(kiosk["company_id"], "SuriRent kiosk", "Meldingen werken op dit toestel!",
+                                         {"kind": "test"}, only_emp_id=emp["id"])
+    return {"sent": sent}
+
+
+@api.post("/kiosk/push/preferences")
+async def kiosk_emp_push_prefs(body: EmpPushPrefsIn, kiosk=Depends(get_kiosk_session)):
+    emp = await _kiosk_emp_auth(kiosk, body.employee_id, body.pin)
+    if body.prefs is not None:
+        valid = {c for c, _, _ in EMP_PUSH_CATEGORIES}
+        prefs = {k: bool(v) for k, v in body.prefs.items() if k in valid}
+        await db.employees.update_one({"id": emp["id"]}, {"$set": {"push_prefs": prefs}})
+        emp["push_prefs"] = prefs
+    saved = emp.get("push_prefs") or {}
+    return {"categories": [
+        {"id": c, "label": label, "desc": desc, "enabled": saved.get(c) is not False}
+        for c, label, desc in EMP_PUSH_CATEGORIES
+    ]}
+
+
+async def _notify_kiosk_employees(company_id: str, title: str, body: str, data: dict | None = None,
+                                  category: str | None = None, only_emp_id: str | None = None) -> int:
+    """Push naar kiosk-medewerkers met een eigen abonnement; respecteert hun voorkeuren."""
+    if not company_id:
+        return 0
+    try:
+        q: dict = {"company_id": company_id}
+        if only_emp_id:
+            q["employee_id"] = only_emp_id
+        subs = [s async for s in db.emp_push_subs.find(q, {"_id": 0})]
+        if not subs:
+            return 0
+        if category:
+            ids = list({s["employee_id"] for s in subs})
+            off = {e["id"] async for e in db.employees.find(
+                {"id": {"$in": ids}, f"push_prefs.{category}": False}, {"_id": 0, "id": 1})}
+            subs = [s for s in subs if s["employee_id"] not in off]
+        payload = {"audience": "kiosk", "url": "/kiosk", **(data or {})}
+
+        async def _one(sub):
+            ok = await asyncio.to_thread(send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload)
+            if not ok:
+                await db.emp_push_subs.delete_one({"endpoint": sub["endpoint"]})
+            return ok
+
+        res = await asyncio.gather(*[_one(s) for s in subs], return_exceptions=True)
+        return sum(1 for r in res if r is True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[emp-push] failed: {e}")
+        return 0
 
 
 async def _notify_company_admins(company_id: str, title: str, body: str, data: dict | None = None) -> int:
