@@ -5766,6 +5766,17 @@ class BackupRestoreRequest(BaseModel):
 
 @api.post("/companies/me/restore")
 async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_current_user)):
+    import traceback as _tb
+    try:
+        return await _restore_company_backup_impl(body, user)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print("[restore] FOUT:\n" + _tb.format_exc())
+        raise HTTPException(status_code=500, detail=f"Herstel mislukt: {type(e).__name__}: {str(e)[:300]}")
+
+
+async def _restore_company_backup_impl(body: BackupRestoreRequest, user):
     """Importeer een eerder gemaakte JSON backup.
     - `mode='merge'` (default): upsert per id, behoudt bestaande records die niet in de backup zitten.
     - `mode='replace'`: wist alle company-scoped data en importeert opnieuw (destructief!).
@@ -5805,7 +5816,11 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
                 query = {"$or": [{"company_id": target_cid}, {"plan_id": {"$in": target_plan_ids}}]}
             else:
                 query = {"company_id": target_cid}
-            res = await db[coll].delete_many(query)
+            try:
+                res = await db[coll].delete_many(query)
+            except Exception as e:  # noqa: BLE001
+                print(f"[restore] wissen van {coll} mislukt: {e}")
+                continue
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
 
