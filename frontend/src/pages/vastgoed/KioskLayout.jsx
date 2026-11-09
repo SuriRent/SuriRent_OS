@@ -405,7 +405,7 @@ function DesktopKioskHeader({
         className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
         {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
         <span className="truncate">{locLabel}</span>
-        {isUi && currentStep !== 'stroom' && totalGroups > 1 && <ChevronDown className="w-4 h-4 shrink-0" />}
+        {isUi && currentStep !== 'stroom' && <ChevronDown className="w-4 h-4 shrink-0" />}
       </button>
       {isUi && onSearch && (
         <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
