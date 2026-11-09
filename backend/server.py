@@ -13264,6 +13264,66 @@ async def kiosk_tenant_financial_receipt_png(tenant_id: str, _session=Depends(ge
                     headers={"Cache-Control": "no-store"})
 
 
+async def _note_receipt_data(tenant_id: str, note_id: str, session: dict, force_ktp: bool = False) -> dict:
+    """Notitie als bon-regels, in dezelfde stijl als het financieel overzicht."""
+    cid = session.get("company_id")
+    t = await db.tenants.find_one({"id": tenant_id, **kiosk_scope(session)}, {"_id": 0, "name": 1, "phone": 1, "apartment_id": 1})
+    note = await db.tenant_notes.find_one({"id": note_id, "tenant_id": tenant_id, "company_id": cid}, {"_id": 0})
+    if not t or not note:
+        raise HTTPException(status_code=404, detail="Notitie niet gevonden")
+    apt = await db.apartments.find_one({"id": t.get("apartment_id")}, {"_id": 0, "number": 1}) if t.get("apartment_id") else {}
+    company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+    cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
+    cfg = await _kiosk_device_config(cid)
+    printer = "kt-v520" if force_ktp else cfg["printer"]
+    paper = 58 if printer == "kt-v520" else cfg["paper_width"]
+    W = 34 if paper == 80 else 21
+
+    def L(text, align="left", bold=False, size="normal"):
+        return {"text": text, "align": align, "bold": bold, "size": size}
+
+    dash = "-" * W
+    datum = datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("NOTITIE", "center", True),
+             L(dash), L(f"DATUM {datum}"), L(dash), L("HUURDER:", bold=True)]
+    lines += [L(x) for x in _wrap_text(t.get("name") or "-", W)]
+    if t.get("phone"):
+        lines.append(L(f"Tel: {t['phone']}"))
+    if (apt or {}).get("number"):
+        lines.append(L(f"App. {apt['number']}"))
+    lines.append(L(dash))
+    created = str(note.get("created_at") or "")[:16].replace("T", " ")
+    if created:
+        lines.append(L(f"Gemaakt: {created}"))
+    if note.get("created_by"):
+        lines.append(L(f"Door: {note['created_by']}"))
+    if note.get("remind_at"):
+        lines.append(L(f"Herinnering: {note['remind_at']}"))
+    lines.append(L(dash))
+    for para in str(note.get("text") or "").split("\n"):
+        lines += [L(x) for x in (_wrap_text(para, W) or [""])]
+    lines.append(L(dash))
+    lines += _bottom_pad({}, 2)
+    return {
+        "template": "lines", "receipt_type": "financieel",
+        "bedrijfsnaam": company.get("name") or "SuriRent", "naam": t.get("name") or "", "datum": datum,
+        "lettergrootte": font_size, "textZoom": text_zoom,
+        "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
+        "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
+    }
+
+
+@api.get("/kiosk/tenants/{tenant_id}/notes/{note_id}/print-data")
+async def kiosk_tenant_note_print_data(tenant_id: str, note_id: str, _session=Depends(get_kiosk_session)):
+    return await _note_receipt_data(tenant_id, note_id, _session)
+
+
+@api.post("/kiosk/tenants/{tenant_id}/notes/{note_id}/remote-print")
+async def kiosk_tenant_note_remote_print(tenant_id: str, note_id: str, body: RemotePrintIn, _session=Depends(get_kiosk_session)):
+    data = await _note_receipt_data(tenant_id, note_id, _session, force_ktp=True)
+    return {"job_id": await _publish_remote_print(_session["company_id"], body.printer_id, {"tenant_id": tenant_id, "data": data})}
+
 def _render_receipt_png(data: dict) -> bytes:
     """Bon-regels → 58mm monospace PNG."""
     W = data["cols"]

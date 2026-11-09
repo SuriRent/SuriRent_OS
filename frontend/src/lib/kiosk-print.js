@@ -108,8 +108,8 @@ export async function printReceipt({ paymentId, apiGet, relay = true }) {
 }
 
 /** Losse tekstbon (bijv. een notitie): APK, Bluetooth of printvenster. */
-export async function printTextLines(lines) {
-  const data = { template: 'lines', receipt_type: 'financieel', size_mode: 'normal', paper_width: paperWidth(), lines };
+export async function printTextLines(lines, extra = {}) {
+  const data = { template: 'lines', receipt_type: 'financieel', size_mode: 'normal', paper_width: paperWidth(), ...extra, lines };
   const bridge = apkBridge();
   if (bridge) { bridge(JSON.stringify(apkPrintMessage('', data))); return true; }
   if (printerMode() === 'bluetooth' && getSavedPrinter()?.via === 'web') {
