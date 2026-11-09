@@ -13166,8 +13166,8 @@ _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankov
                         "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
 
 
-async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool = False) -> dict:
-    """Financieel overzicht als bon-regels (zelfde vorm als _receipt_print_data)."""
+async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool = False, opts: Optional[dict] = None) -> dict:
+    """Financieel overzicht als bon-regels; zelfde opmaak/breedte als kasbon (instelbaar in Bon & afdrukken)."""
     ov = await kiosk_tenant_overview(tenant_id, session)
     t, apt = ov["tenant"], ov.get("apartment") or {}
     cid = session.get("company_id")
@@ -13179,18 +13179,16 @@ async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool
     credit = float(ov.get("credit_balance") or 0)
     company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
     cs = await db.company_settings.find_one({"company_id": cid}, {"_id": 0, "receipts": 1})
+    cfgo = {"show_phone": True, "show_apartment": True, "show_credit": True, "show_details": True,
+            "footer": "Vriendelijk bedankt!", **(((cs or {}).get("receipts") or {}).get("financieel") or {}), **(opts or {})}
     font_size, _fs, text_zoom = _receipt_fonts((cs or {}).get("receipts") or {})
     cfg = await _kiosk_device_config(cid)
     printer = "kt-v520" if force_ktp else cfg["printer"]
     paper = 58 if printer == "kt-v520" else cfg["paper_width"]
-    W = _RECEIPT_COLS_80 if paper == 80 else _RECEIPT_COLS
-    LBL = 14
+    W = 34 if paper == 80 else 21
 
     def money(v):
         return f"{cur} " + f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-    def row(label, value):
-        return f"{str(label)[:LBL - 1].ljust(LBL)}{value}"
 
     def period(i):
         pm, py = i.get("period_month"), i.get("period_year")
@@ -13201,26 +13199,41 @@ async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
+    def pair(label, value, bold=False):
+        txt = f"{label} {value}"
+        return [L(txt, bold=bold)] if len(txt) <= W else [L(label, bold=bold), L(value, bold=bold)]
+
     dash = "-" * W
     datum = datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
-    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L(dash),
-             L("FINANCIEEL OVERZICHT", "center", True), L(dash),
-             L(row("Datum:", datum)), L(dash), L("HUURDER:", bold=True), L(t.get("name") or "-")]
-    if t.get("phone"):
-        lines.append(L(row("Tel:", t["phone"])))
-    if apt.get("number"):
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("FINANCIEEL OVERZICHT", "center", True),
+             L(dash), L(f"DATUM {datum}"), L(dash), L("HUURDER:", bold=True)]
+    lines += [L(x) for x in _wrap_text(t.get("name") or "-", W)]
+    if cfgo["show_phone"] and t.get("phone"):
+        lines.append(L(f"Tel: {t['phone']}"))
+    if cfgo["show_apartment"] and apt.get("number"):
         lines.append(L(f"App. {apt['number']}"))
     lines.append(L(dash))
-    for title, items, sub in (("ACHTERSTAND:", open_inv, open_total), ("HUIDIGE MAAND:", cur_inv, cur_total)):
-        if items:
-            lines.append(L(title, bold=True))
-            lines += [L(row(period(i), money(i.get("outstanding")))) for i in items]
-            lines += [L(row("Subtotaal:", money(sub)), bold=True), L(dash)]
-    lines += [L(row("Achterstand:", money(open_total))), L(row("Huidig:", money(cur_total)))]
-    if credit > 0:
-        lines.append(L(row("Tegoed:", money(credit))))
-    lines += [L(dash), L(row("TOTAAL:", money(open_total + cur_total)), bold=True),
-              L(dash), L("Vriendelijk bedankt!", "center"), L(""), L("")]
+    if cfgo["show_details"]:
+        for title, items, sub in (("ACHTERSTAND:", open_inv, open_total), ("HUIDIGE MAAND:", cur_inv, cur_total)):
+            if items:
+                lines.append(L(title, bold=True))
+                for i in items:
+                    lines += pair(period(i), money(i.get("outstanding")))
+                lines += pair("Subtotaal:", money(sub), bold=True)
+                lines.append(L(dash))
+    else:
+        lines += pair("Achterstand:", money(open_total))
+        lines += pair("Huidig:", money(cur_total))
+        lines.append(L(dash))
+    if cfgo["show_credit"] and credit > 0:
+        lines += pair("Tegoed:", money(credit))
+    lines += pair("TOTAAL:", money(open_total + cur_total), bold=True)
+    lines.append(L(dash))
+    if str(cfgo.get("footer") or "").strip():
+        lines += [L(x, "center") for x in _wrap_text(cfgo["footer"], W)]
+    lines[2:2] = _custom_bon_lines(cfgo.get("extra_lines"), "top", W)
+    lines += _custom_bon_lines(cfgo.get("extra_lines"), "bottom", W)
+    lines += _bottom_pad(cfgo, 2)
     return {
         "template": "lines", "receipt_type": "financieel",
         "bedrijfsnaam": company.get("name") or "SuriRent", "naam": t.get("name") or "",
@@ -13229,7 +13242,6 @@ async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool
         "fontSizes": {"tekst": _fs[0], "bedrijfsnaam": _fs[1], "kwitantie": _fs[2], "bedrag": _fs[0]},
         "printer": printer, "paper_width": paper, "cols": W, "lines": lines,
     }
-
 
 @api.get("/kiosk/tenants/{tenant_id}/financial-print-data")
 async def kiosk_tenant_financial_print_data(tenant_id: str, _session=Depends(get_kiosk_session)):
@@ -13267,7 +13279,7 @@ def _render_receipt_png(data: dict) -> bytes:
         f_reg = f_bold = f_large = ImageFont.load_default()
     cw = f_reg.getlength("M")
     pad, lh = 24, int(fs * 1.35)
-    img_w = int(cw * W + pad * 2)
+    img_w = int(max([cw * W] + [len(x[0]) * cw * 1.5 for x in lines if x[3]]) + pad * 2)
     img = Image.new("RGB", (img_w, pad * 2 + sum(int(lh * 1.5) if lg else lh for *_, lg in lines)), "white")
     d = ImageDraw.Draw(img)
     y = pad
@@ -18497,6 +18509,15 @@ async def receipts_preview_lines(body: dict, user=Depends(get_current_user)):
     """Bonvoorbeeld als regels (met nog niet opgeslagen bon-opties): zelfde opbouw als naar de KT-V520 APK."""
     cid = company_id_of(user)
     kind = (body or {}).get("kind") or "betaling"
+    if kind == "financieel":
+        tn = await db.tenants.find_one({"company_id": cid}, {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+        if not tn:
+            return {"lines": [], "cols": 21, "empty": "Nog geen huurder beschikbaar voor een voorbeeld."}
+        try:
+            d = await _financial_receipt_data(tn["id"], {"company_id": cid}, force_ktp=True, opts=(body or {}).get("financieel") or {})
+        except HTTPException:
+            return {"lines": [], "cols": 21, "empty": "Voorbeeld niet beschikbaar."}
+        return {"lines": d["lines"], "cols": d.get("cols", 21)}
     if kind in ("kasbon", "borgbon"):
         sess = {"company_id": cid}
         if kind == "kasbon":
@@ -18540,7 +18561,7 @@ async def receipts_preview_remote_print(body: dict, user=Depends(get_current_use
     if not prev.get("lines"):
         raise HTTPException(status_code=400, detail=prev.get("empty") or "Voorbeeld niet beschikbaar")
     kind = (body or {}).get("kind") or "betaling"
-    data = {"template": "lines", "receipt_type": {"kasbon": "kasgeld", "borgbon": "deposit"}.get(kind, "betaling"),
+    data = {"template": "lines", "receipt_type": {"kasbon": "kasgeld", "borgbon": "deposit", "financieel": "financieel"}.get(kind, "betaling"),
             "printer": "kt-v520", "paper_width": 58, "size_mode": "normal", "cols": prev.get("cols", 21),
             "lettergrootte": "groot", "textZoom": 420, "lines": prev["lines"]}
     return {"job_id": await _publish_remote_print(cid, printer_id, {"data": data})}

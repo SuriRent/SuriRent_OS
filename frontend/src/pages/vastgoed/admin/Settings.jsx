@@ -662,6 +662,8 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
   const [kind, setKind] = useState('betaling');
   const kasbon = { show_balance: true, show_employee: true, show_note: true, footer: '', ...(d.kasbon || {}) };
   const borgbon = { show_apartment: true, show_method: true, footer: 'Borg ontvangen.', ...(d.borgbon || {}) };
+  const financieel = { show_phone: true, show_apartment: true, show_credit: true, show_details: true, footer: 'Vriendelijk bedankt!', ...(d.financieel || {}) };
+  const setFin = (k, v) => s.onField('financieel', { ...financieel, [k]: v });
   const setKas = (k, v) => s.onField('kasbon', { ...kasbon, [k]: v });
   const setBorg = (k, v) => s.onField('borgbon', { ...borgbon, [k]: v });
   const chk = (id, label, obj, set, k) => (
@@ -686,6 +688,16 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
               {chk('kasbon-employee', 'Medewerker', kasbon, setKas, 'show_employee')}
               {chk('kasbon-note', 'Opmerking', kasbon, setKas, 'show_note')}
               {footerField('kasbon-footer', kasbon, setKas, 'Bijv. Bedankt')}
+            </div>
+          )}
+          {kind === 'financieel' && (
+            <div className="rounded-2xl border-2 border-slate-200 bg-white p-4 space-y-3" data-testid="financieel-options">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Financieel overzicht — zichtbare velden</p>
+              {chk('fin-phone', 'Telefoon', financieel, setFin, 'show_phone')}
+              {chk('fin-apartment', 'Appartement', financieel, setFin, 'show_apartment')}
+              {chk('fin-details', 'Factuurregels per maand', financieel, setFin, 'show_details')}
+              {chk('fin-credit', 'Tegoed', financieel, setFin, 'show_credit')}
+              {footerField('fin-footer', financieel, setFin, 'Vriendelijk bedankt!')}
             </div>
           )}
           {kind === 'borgbon' && (
@@ -728,16 +740,16 @@ function ReceiptsForm({ initial, kioskLayout = false, onBack }) {
           </div>
           )}
           <ExtraLinesEditor
-            items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).extra_lines || []}
-            onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('extra_lines', v)}
-            space={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : bon).bottom_space}
+            items={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : kind === 'financieel' ? financieel : bon).extra_lines || []}
+            onChange={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : kind === 'financieel' ? setFin : setBon)('extra_lines', v)}
+            space={(kind === 'kasbon' ? kasbon : kind === 'borgbon' ? borgbon : kind === 'financieel' ? financieel : bon).bottom_space}
             defSpace={kind === 'betaling' ? 3 : 2}
-            onSpace={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : setBon)('bottom_space', v)}
+            onSpace={(v) => (kind === 'kasbon' ? setKas : kind === 'borgbon' ? setBorg : kind === 'financieel' ? setFin : setBon)('bottom_space', v)}
           />
         </div>
   );
   const previewEl = (
-    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} kind={kind} setKind={setKind} fit={kioskLayout} />
+    <BonPreview bon={bon} kasbon={kasbon} borgbon={borgbon} financieel={financieel} kind={kind} setKind={setKind} fit={kioskLayout} />
   );
   if (kioskLayout) {
     return (
@@ -866,7 +878,7 @@ const BON_SHOW_FIELDS = [
 ];
 
 // Live voorbeeld van de bon: exact de regels die naar de KT-V520 APK gaan.
-function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false }) {
+function BonPreview({ bon, kasbon, borgbon, financieel, layouts, kind, setKind, fit = false }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scale, setScale] = useState(1);
@@ -881,10 +893,10 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
       const bridge = apkBridge();
       const bt = getSavedPrinter();
       if (bridge) {
-        const data = { lines, template: 'lines', receipt_type: { kasbon: 'kasgeld', borgbon: 'deposit' }[kind] || 'betaling', size_mode: 'normal', paper_width: paperWidth() };
+        const data = { lines, template: 'lines', receipt_type: { kasbon: 'kasgeld', borgbon: 'deposit', financieel: 'financieel' }[kind] || 'betaling', size_mode: 'normal', paper_width: paperWidth() };
         bridge(JSON.stringify(apkPrintMessage('', data)));
       } else if (opts.first) {
-        const { data } = await api.post('/settings/receipts/preview-remote-print', { bon, kasbon, borgbon, kind, printer_id: opts.first.id });
+        const { data } = await api.post('/settings/receipts/preview-remote-print', { bon, kasbon, borgbon, financieel, kind, printer_id: opts.first.id });
         trackKtpJob(data.job_id, opts.first.name);
       } else if (bt?.via === 'web') {
         await printLinesBluetooth(lines);
@@ -925,7 +937,7 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
     window.addEventListener('resize', calc);
     return () => window.removeEventListener('resize', calc);
   }, [fit, lines, kind]);
-  const key = JSON.stringify({ bon, kasbon, borgbon, layouts });
+  const key = JSON.stringify({ bon, kasbon, borgbon, financieel, layouts });
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -943,7 +955,7 @@ function BonPreview({ bon, kasbon, borgbon, layouts, kind, setKind, fit = false 
   return (
     <div className="lg:sticky lg:top-4" data-testid="bon-preview">
       <div className="flex gap-1 mb-2 justify-center" data-testid="bon-preview-tabs">
-        {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon']].map(([k, l]) => (
+        {[['betaling', 'Kwitantie'], ['kasbon', 'Kasbon'], ['borgbon', 'Borgbon'], ['financieel', 'Financieel']].map(([k, l]) => (
           <button key={k} type="button" onClick={() => setKind(k)} data-testid={`bon-tab-${k}`}
             className={`px-3 h-8 rounded-full text-xs font-bold ${kind === k ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-600'}`}>{l}</button>
         ))}
