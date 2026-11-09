@@ -453,7 +453,7 @@ function uiAptStatus(a) {
 
 function UiStatusPill({ a, className = '' }) {
   const s = uiAptStatus(a);
-  const base = `inline-flex items-center justify-center gap-1.5 rounded-full px-3 md:px-4 py-1 md:py-1.5 text-[13px] md:text-sm font-bold text-white whitespace-nowrap ${className}`;
+  const base = `inline-flex items-center justify-center gap-1.5 rounded-full px-3 md:px-4 py-1 md:py-2 text-[13px] md:text-base font-bold text-white whitespace-nowrap ${className}`;
   if (s === 'vacant') return <span className={`${base} bg-slate-700`} data-testid={`apt-${a.number}-link`}><ArrowRight className="w-4 h-4" strokeWidth={3} /> Beschikbaar</span>;
   if (s === 'deposit') return <span className={`${base} bg-sky-600`} data-testid={`apt-${a.number}-deposit-pending`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Wacht op borg</span>;
   if (s === 'paid') return <span className={`${base} bg-emerald-600`} data-testid={`apt-${a.number}-paid`}><Check className="w-4 h-4" strokeWidth={3} /> Betaald</span>;
@@ -468,26 +468,26 @@ function UiAptCard({ a, onOpen }) {
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-2xl md:rounded-[22px] bg-white px-3 py-2 md:px-4 md:py-3 transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-2xl md:rounded-[26px] bg-white px-3 py-2 md:px-6 md:py-5 transition active:scale-[0.99] md:hover:-translate-y-0.5">
       <div className={`flex items-center gap-3 md:items-start w-full min-w-0 ${vacant ? 'md:flex-col md:items-center md:text-center md:gap-1' : ''}`}>
-        <div className={`shrink-0 rounded-full overflow-hidden w-[52px] h-[52px] md:w-[64px] md:h-[64px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
+        <div className={`shrink-0 rounded-full overflow-hidden w-[52px] h-[52px] md:w-[92px] md:h-[92px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
           {src && !vacant
             ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            : <Home className={`w-7 h-7 md:w-9 md:h-9 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
+            : <Home className={`w-7 h-7 md:w-11 md:h-11 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
         </div>
-        <div className="min-w-0 flex-1 md:max-w-full md:pr-9">
-          <p className="text-[17px] md:text-xl font-extrabold text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
-          <p className={`flex items-center gap-1.5 text-sm md:text-[13px] text-slate-700 font-medium truncate ${vacant ? 'md:justify-center' : ''}`}>
+        <div className="min-w-0 flex-1 md:max-w-full md:pr-11">
+          <p className="text-[17px] md:text-[26px] font-extrabold text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
+          <p className={`flex items-center gap-1.5 text-sm md:text-[17px] text-slate-700 font-medium truncate ${vacant ? 'md:justify-center' : ''}`}>
             {!vacant && <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />}
             <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
           </p>
         </div>
         <UiStatusPill a={a} className="md:hidden shrink-0" />
-        <span className={`shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:absolute md:top-3 md:right-3 ${vacant ? 'md:hidden' : ''}`}>
+        <span className={`shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center md:absolute md:top-4 md:right-4 ${vacant ? 'md:hidden' : ''}`}>
           <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="hidden md:flex justify-center mt-2"><UiStatusPill a={a} /></div>
+      <div className="hidden md:flex justify-center mt-4"><UiStatusPill a={a} /></div>
     </button>
   );
 }
@@ -782,7 +782,7 @@ function ApartmentSelect({
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi
-          ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start gap-2 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
+          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-2 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
           : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2'}>
           {shown.map((a) => {
             if (isUi) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
