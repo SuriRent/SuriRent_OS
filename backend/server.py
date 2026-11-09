@@ -5766,6 +5766,17 @@ class BackupRestoreRequest(BaseModel):
 
 @api.post("/companies/me/restore")
 async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_current_user)):
+    import traceback as _tb
+    try:
+        return await _restore_company_backup_impl(body, user)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print("[restore] FOUT:\n" + _tb.format_exc())
+        raise HTTPException(status_code=500, detail=f"Herstel mislukt: {type(e).__name__}: {str(e)[:300]}")
+
+
+async def _restore_company_backup_impl(body: BackupRestoreRequest, user):
     """Importeer een eerder gemaakte JSON backup.
     - `mode='merge'` (default): upsert per id, behoudt bestaande records die niet in de backup zitten.
     - `mode='replace'`: wist alle company-scoped data en importeert opnieuw (destructief!).
@@ -5805,7 +5816,11 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
                 query = {"$or": [{"company_id": target_cid}, {"plan_id": {"$in": target_plan_ids}}]}
             else:
                 query = {"company_id": target_cid}
-            res = await db[coll].delete_many(query)
+            try:
+                res = await db[coll].delete_many(query)
+            except Exception as e:  # noqa: BLE001
+                print(f"[restore] wissen van {coll} mislukt: {e}")
+                continue
             summary["collections"].setdefault(coll, {"deleted": 0, "inserted": 0, "upserted": 0})
             summary["collections"][coll]["deleted"] = res.deleted_count
 
@@ -5843,6 +5858,10 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
             except DuplicateKeyError:
                 skipped += 1
                 continue
+            except Exception as e:  # noqa: BLE001
+                skipped += 1
+                print(f"[restore] {coll} doc overgeslagen: {e}")
+                continue
             if res.upserted_id is not None:
                 ins += 1
             elif res.modified_count > 0:
@@ -5858,8 +5877,12 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
         cdoc = {k: v for k, v in (backup.get("company") or {}).items()
                 if k not in BACKUP_COMPANY_KEEP and k != "_id"}
         if cdoc:
-            await db.companies.update_one({"id": target_cid}, {"$set": cdoc})
-            summary["company_settings_restored"] = True
+            try:
+                await db.companies.update_one({"id": target_cid}, {"$set": cdoc})
+                summary["company_settings_restored"] = True
+            except Exception as e:  # noqa: BLE001
+                print(f"[restore] bedrijfsinstellingen overgeslagen: {e}")
+                summary["company_settings_restored"] = False
         # Gebruikers (beheerders/medewerkers incl. PIN) — nooit een e-mail van een ander bedrijf overschrijven.
         u_ins = 0
         for u in backup.get("users") or []:
@@ -5870,7 +5893,11 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
             if other or u.get("role") == "superadmin":
                 continue
             u["company_id"] = target_cid
-            r = await db.users.update_one({"id": u["id"]}, {"$set": u}, upsert=True)
+            try:
+                r = await db.users.update_one({"id": u["id"]}, {"$set": u}, upsert=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"[restore] gebruiker {u.get('email')} overgeslagen: {e}")
+                continue
             if r.upserted_id is not None or r.modified_count:
                 u_ins += 1
         summary["users_restored"] = u_ins
@@ -5880,8 +5907,11 @@ async def restore_company_backup(body: BackupRestoreRequest, user=Depends(get_cu
         restored_counters = 0
         for ckey, seq in (backup.get("counters") or {}).items():
             if isinstance(ckey, str) and isinstance(seq, int) and not isinstance(seq, bool):
-                await db.counters.update_one({"_id": ckey}, {"$max": {"seq": seq}}, upsert=True)
-                restored_counters += 1
+                try:
+                    await db.counters.update_one({"_id": ckey}, {"$max": {"seq": seq}}, upsert=True)
+                    restored_counters += 1
+                except Exception as e:  # noqa: BLE001
+                    print(f"[restore] teller {ckey} overgeslagen: {e}")
         summary["counters_restored"] = restored_counters
 
     summary["restored_at"] = now_utc_iso()
