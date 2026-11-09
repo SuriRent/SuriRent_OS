@@ -13283,24 +13283,24 @@ async def _note_receipt_data(tenant_id: str, note_id: str, session: dict, force_
     def L(text, align="left", bold=False, size="normal"):
         return {"text": text, "align": align, "bold": bold, "size": size}
 
+    def pair(label, value, bold=False):
+        txt = f"{label} {value}"
+        return [L(txt, bold=bold)] if len(txt) <= W else [L(label, bold=bold), L(value, bold=bold)]
+
     dash = "-" * W
     datum = datetime.now(timezone(timedelta(hours=-3))).strftime("%d-%m-%Y %H:%M")
-    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("NOTITIE", "center", True),
-             L(dash), L(f"DATUM {datum}"), L(dash), L("HUURDER:", bold=True)]
-    lines += [L(x) for x in _wrap_text(t.get("name") or "-", W)]
-    if t.get("phone"):
-        lines.append(L(f"Tel: {t['phone']}"))
+    nr = f"NT-{str(note.get('id') or '')[:6].upper()}"
+    lines = [L(company.get("name") or "SuriRent", "center", True, "large"), L("NOTITIE", "center", True), L(dash),
+             L(f"NR. {nr}"), L(f"DATUM {datum}"), L(dash), L("Huurder", bold=True)]
+    lines += [L(x, bold=True) for x in _wrap_text(t.get("name") or "-", W)]
     if (apt or {}).get("number"):
-        lines.append(L(f"App. {apt['number']}"))
+        lines += pair("Appartement:", apt["number"])
     lines.append(L(dash))
-    created = str(note.get("created_at") or "")[:16].replace("T", " ")
-    if created:
-        lines.append(L(f"Gemaakt: {created}"))
     if note.get("created_by"):
-        lines.append(L(f"Door: {note['created_by']}"))
+        lines += pair("Medewerker:", note["created_by"])
     if note.get("remind_at"):
-        lines.append(L(f"Herinnering: {note['remind_at']}"))
-    lines.append(L(dash))
+        lines += pair("Herinnering:", note["remind_at"])
+    lines.append(L("Opmerking:"))
     for para in str(note.get("text") or "").split("\n"):
         lines += [L(x) for x in (_wrap_text(para, W) or [""])]
     lines.append(L(dash))
