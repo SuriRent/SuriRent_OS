@@ -2,11 +2,11 @@ import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
 import villaM from '../../ui-villa-m.png';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Search, Menu as MenuIcon, ScanLine,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
@@ -83,12 +83,6 @@ function useKioskLiveRefresh(refresh) {
     };
   }, []);
 }
-
-const variants = {
-  enter: { opacity: 0, x: 60 },
-  center: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -60 },
-};
 
 function getKioskCompany() {
   try {
@@ -408,7 +402,9 @@ function DesktopKioskHeader({
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const { isUi } = useContext(KioskThemeCtx);
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
-  const locLabel = currentStep === 'stroom' ? title : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
+  const locLabel = currentStep === 'stroom' || currentStep === 'kasgeld'
+    ? title
+    : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
   return (
     <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
       <KioskAdminMenu returnTo={{
@@ -428,9 +424,9 @@ function DesktopKioskHeader({
         const btn = (onClick) => (
           <button type="button" onClick={onClick} data-testid="back-to-locations"
             className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-            {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
+            {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : currentStep !== 'kasgeld' && loc && <MapPin className="w-5 h-5 shrink-0" />}
             <span className="truncate">{locLabel}</span>
-            {isUi && currentStep !== 'stroom' && <ChevronDown className="w-4 h-4 shrink-0" />}
+            {isUi && currentStep !== 'stroom' && currentStep !== 'kasgeld' && <ChevronDown className="w-4 h-4 shrink-0" />}
           </button>
         );
         return useMenu
@@ -3634,7 +3630,7 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
               </svg>
               <div className="relative flex items-center gap-3 min-w-0">
                 <button type="button" onClick={onBack} aria-label="Terug" data-testid="kiosk-admin-page-back"
-                  className="shrink-0 w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-7 h-7" strokeWidth={2.6} /></button>
+                  className="shrink-0 w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-6 h-6" strokeWidth={2.6} /></button>
                 <div className="min-w-0">
                   <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
                   <p className="text-[13px] font-normal text-white/90 truncate">Totaal: {items.length} mutaties</p>
@@ -5386,9 +5382,18 @@ const UI_ADMIN_STEPS = ['facturen', 'locaties', 'huurders', 'appartementen', 'co
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
   const [top, setTop] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
-    if (h) setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
+    if (!h) return undefined;
+    const updateTop = () => setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
+    updateTop();
+    const observer = new ResizeObserver(updateTop);
+    observer.observe(h);
+    window.addEventListener('resize', updateTop);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateTop);
+    };
   }, []);
   return createPortal((
     <div className="fixed inset-x-0 bottom-0 z-[120] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
@@ -6726,10 +6731,7 @@ export default function KioskLayout() {
             onSearch={step === 'kasgeld' || step === 'overview' ? () => setSearchOpen(true) : undefined} />
         </div>
       )}
-      <AnimatePresence initial={false}>
-        <motion.div key={step} variants={variants}
-          initial="enter" animate="center" exit="exit"
-          transition={{ duration: 0.16, ease: 'easeOut' }}
+      <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
           className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
@@ -6741,7 +6743,7 @@ export default function KioskLayout() {
                     className="rounded-xl bg-white px-5 py-3 font-black text-[#0B1B3F]">Terug naar SuriRent</button>
                 </>
               ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
-            </div>
+            </motion.div>
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
@@ -6862,8 +6864,7 @@ export default function KioskLayout() {
           {step === 'receipt' && paymentResult && (
             <ReceiptScreen payment={paymentResult} overview={overview} onDone={reset} />
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
 
       {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk desktop-bar.
           De mobile "+" FAB + Snel Toevoegen sheet zijn verwijderd (user

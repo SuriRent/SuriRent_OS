@@ -52,7 +52,7 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
           </button>
         </div>
       )}
-      <div className="mt-3 px-2">
+      <div className={bare ? '' : 'mt-3 px-2'}>
         <Suspense fallback={<Loader2 className="mx-auto my-16 h-7 w-7 animate-spin text-[#FF5C00]" />}>
           <KioskFxCtx.Provider value><div className="kiosk-fx kiosk-ui-admin space-y-3">{children}</div></KioskFxCtx.Provider>
         </Suspense>
