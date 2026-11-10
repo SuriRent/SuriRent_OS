@@ -30,6 +30,7 @@ import NumPad from '../../components/NumPad';
 import KioskEmployeePush from '../../components/KioskEmployeePush';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt, printTextLines } from '../../lib/kiosk-print';
+import { PrinterLamp } from '../../components/PrinterLamp';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
@@ -563,8 +564,11 @@ function UiHero({ apartments, locationName, locOpts }) {
         return (
           <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
             {locOpts
-              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-[calc(100%-5.5rem)]">{(toggle) => pill(toggle)}</UiLocMenu>
               : pill(undefined)}
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex">
+              <PrinterLamp className="!w-9 !h-9 !bg-white !text-[#1B2A5C] shadow" />
+            </div>
           </div>
         );
       })()}

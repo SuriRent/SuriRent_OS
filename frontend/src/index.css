@@ -1701,4 +1701,4 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 
 @keyframes printer-lamp-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
 .printer-lamp-blink { animation: printer-lamp-blink 1s steps(1, end) infinite; }
-@media (max-width: 767px) { .kiosk-ui [data-testid="kiosk-toolbar"] { height: 44px; background: #fff !important; box-shadow: 0 4px 14px -6px rgba(15,23,42,.35); } .kiosk-ui [data-testid="kiosk-toolbar"] > button { width: 40px; height: 40px; } }
+@media (max-width: 767px) { .kiosk-ui [data-testid="kiosk-toolbar"] { display: none !important; } }
