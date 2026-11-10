@@ -13,6 +13,7 @@ import PaidHistorySection from '../pages/vastgoed/admin/invoices/PaidHistorySect
 import ReminderModal from '../pages/vastgoed/admin/invoices/ReminderModal';
 import { SeverityPills, useTenantCredits, creditOf, CreditBadge, InvoiceExtraActions } from './KioskInvoiceExtras';
 import { FxRow, FxTabs, FxSearch, FxStats, TenantPhoto } from './KioskFx';
+import { UiInvoicesList, UiDetailHead } from './KioskInvoicesUi';
 
 const TABS = [
   { v: 'all', label: 'Alle', key: 'allCount' },
@@ -208,7 +209,7 @@ function InvoiceLine({ inv, open, onPayInvoice, onDelete, credit, tenant, onChan
   );
 }
 
-function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoice, onRebalanced, credit, tenant, onChanged, onMsg }) {
+function TenantDetail({ g, ui = false, onBack, onRemind, onDelete, onPayInvoice, onNewInvoice, onRebalanced, credit, tenant, onChanged, onMsg }) {
   const [detailTab, setDetailTab] = useState('overzicht');
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState('');
@@ -241,6 +242,14 @@ function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoic
   };
   return (
     <div className="flex min-h-full flex-col gap-3 pb-3" data-testid="kiosk-inv-detail">
+      {ui && <UiDetailHead g={g} tenant={tenant} credit={credit} onBack={onBack} onNewInvoice={onNewInvoice} onRemind={onRemind} />}
+      {ui && (
+        <button type="button" onClick={rebalance} disabled={rebalancing} data-testid="kiosk-inv-detail-rebalance"
+          className="mx-2 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-white shadow-sm text-xs font-extrabold text-[#1B2A5C] disabled:opacity-60">
+          {rebalancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Tegoed herverdelen
+        </button>
+      )}
+      {!ui && (<>
       <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <TenantPhoto tenantId={g.tenant_id} name={g.tenant_name} size={56} />
@@ -293,6 +302,7 @@ function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoic
           </button>
         </div>
       </div>
+      </>)}
       {rebalanceMsg && <p className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700" data-testid="kiosk-inv-detail-rebalance-msg">{rebalanceMsg}</p>}
 
       <div className="flex shrink-0 gap-2 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-sm"
@@ -382,7 +392,7 @@ function TenantDetail({ g, onBack, onRemind, onDelete, onPayInvoice, onNewInvoic
   );
 }
 
-export default function KioskInvoicesPage({ onBack, embedded = false }) {
+export default function KioskInvoicesPage({ onBack, embedded = false, ui = false }) {
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [data, setData] = useState(null);
@@ -503,7 +513,7 @@ export default function KioskInvoicesPage({ onBack, embedded = false }) {
         ) : sel ? (
           <section className="min-h-0 flex-1 overflow-y-auto" data-testid="kiosk-inv-detail-panel">
             <div className="mx-auto w-full max-w-7xl">
-              <TenantDetail key={sel.tenant_id} g={sel} onBack={() => setSelId(null)} onRemind={setReminding}
+              <TenantDetail key={sel.tenant_id} g={sel} ui={ui} onBack={() => setSelId(null)} onRemind={setReminding}
                 onDelete={del} onPayInvoice={(inv, group) => setQuickPay({ inv, group })}
                 onNewInvoice={() => { setCreateTenantId(sel.tenant_id); setCreating(true); }}
                 onRebalanced={load} credit={creditOf(credits, sel.tenant_id, sel.currency)}
@@ -512,7 +522,7 @@ export default function KioskInvoicesPage({ onBack, embedded = false }) {
             </div>
           </section>
         ) : (
-          <>
+          ui ? (<UiInvoicesList groups={groups} s={s} month={month} q={q} setQ={setQ} tab={tab} setTab={setTab} tabs={TABS} severity={severity} setSeverity={setSeverity} data={data} error={error} credits={credits} creditOf={creditOf} onOpen={(value) => setSelId(value.tenant_id)} onRemind={setReminding} generate={generate} busy={busy} onNew={() => { setCreateTenantId(""); setCreating(true); }} onBack={onBack} />) : (<>
             <section className="kiosk-admin-summary order-1 flex shrink-0 flex-col rounded-2xl bg-white p-2.5 sm:p-6 md:order-2 md:flex-[2] md:overflow-y-auto"
               data-testid="kiosk-inv-summary">
               <div className="kiosk-admin-summary-heading mb-1 flex items-center justify-between gap-3 sm:mb-4">
@@ -628,7 +638,7 @@ export default function KioskInvoicesPage({ onBack, embedded = false }) {
                 )}
               </div>
             </section>
-          </>
+          </>)
         )}
       </main>
       {quickPay && <QuickPayModal invoice={quickPay.inv} tenantName={quickPay.group.tenant_name}

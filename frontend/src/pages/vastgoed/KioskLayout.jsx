@@ -5274,6 +5274,15 @@ function TenantInfoModal({ apartment, mode, onClose }) {
   );
 }
 
+function KioskUiPageShell({ children, testId }) {
+  useWhitePageBehindModal(767);
+  return createPortal((
+    <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+      <div className="kiosk-ui">{children}</div>
+    </div>
+  ), document.body);
+}
+
 function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false, fullscreenMobile = false }) {
   const [host, setHost] = useState(null);
   const modalRef = useRef(null);
@@ -6699,7 +6708,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiPageShell testId="kiosk-popup-facturen"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.facturen.Page embedded ui onBack={goBack} /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:bon' && hasAdminAccess && (
