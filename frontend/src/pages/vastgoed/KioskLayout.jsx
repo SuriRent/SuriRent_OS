@@ -3632,15 +3632,14 @@ function KasgeldPanel({ embedded = false, ui = false }) {
                   <ellipse cx="150" cy="73" rx="20" ry="6" fill="none" stroke="#B45309" strokeOpacity="0.55" strokeWidth="2" />
                 </g>
               </svg>
-                <div className="relative flex items-center gap-2 min-w-0">
+              <div className="relative flex items-center gap-3 min-w-0">
                 <button type="button" onClick={onBack} aria-label="Terug" data-testid="kiosk-admin-page-back"
-                    className="shrink-0 w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-6 h-6" strokeWidth={2.6} /></button>
-                  <span className="shrink-0 w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md"><Wallet className="w-7 h-7" strokeWidth={2} /></span>
-                  <div className="min-w-0">
-                    <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
-                    <p className="text-[13px] font-normal text-white/90 truncate">Totaal: {items.length} mutaties</p>
-                  </div>
+                  className="shrink-0 w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-7 h-7" strokeWidth={2.6} /></button>
+                <div className="min-w-0">
+                  <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
+                  <p className="text-[13px] font-normal text-white/90 truncate">Totaal: {items.length} mutaties</p>
                 </div>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-1.5 -mt-9 relative px-0.5">
               {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
