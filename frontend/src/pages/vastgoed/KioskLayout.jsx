@@ -8,7 +8,7 @@ import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Search, Sun, Palette, Menu as MenuIcon, ScanLine,
+  Search, Menu as MenuIcon, ScanLine,
   Building2, ArrowRight, ArrowLeft, Banknote, Receipt, LogOut, MapPin,
   Check, Loader2, Home, X, Wallet, FileText, AlertCircle, Coins,
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
@@ -362,20 +362,6 @@ function HeaderLive() {
   return <KioskHeaderLiveButtons isAdmin={isAdmin} />;
 }
 
-function ThemeToggle({ testId, className = '' }) {
-  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
-  const white = theme === 'white';
-  const green = theme === 'green';
-  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
-  return (
-    <button type="button" onClick={toggle} data-testid={testId}
-      aria-label={nextTheme} title={nextTheme}
-      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${white ? 'bg-orange-500 text-white hover:bg-orange-600' : green ? 'bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-white/15 text-white hover:bg-white/25'} ${className}`}>
-      {white ? <Palette className="w-5 h-5" /> : green ? <Sun className="w-5 h-5" /> : <Palette className="w-5 h-5" />}
-    </button>
-  );
-}
-
 const STEP_TITLES = {
   kasgeld: 'Kasgeldbeheer', stroom: 'Stroom', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
@@ -468,7 +454,6 @@ function DesktopKioskHeader({
           </button>
         )}
         <HeaderLive />
-        <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskEmployeePush />
@@ -5747,20 +5732,6 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
-function SheetThemeButton() {
-  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
-  const white = theme === 'white';
-  const green = theme === 'green';
-  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
-  return (
-    <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
-      aria-label={nextTheme}
-      className={`flex-1 h-11 rounded-full font-bold text-sm inline-flex items-center justify-center shadow-sm active:scale-95 transition ${green ? 'bg-white text-emerald-700' : 'bg-white/15 text-white'}`}>
-      {white || green ? <Palette className="w-5 h-5" strokeWidth={2.5} /> : <Sun className="w-5 h-5" strokeWidth={2.5} />}
-    </button>
-  );
-}
-
 function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   const { theme } = useContext(KioskThemeCtx);
   // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
@@ -5834,7 +5805,6 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
           </button>
         </div>
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
-          <SheetThemeButton />
         </KioskSheetLiveActions>
         </div>
       </div>
@@ -6026,10 +5996,7 @@ export default function KioskLayout() {
   // omdat de vaste witte FAB-menubalk onderaan staat — zo krijgen we nooit
   // een oranje strook onder de FAB bij iOS PWA viewport-drift.
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
-  const [kioskTheme, setKioskTheme] = useState(() => {
-    const stored = localStorage.getItem('kiosk_theme');
-    return ['orange', 'ui'].includes(stored) ? stored : 'white';
-  });
+  const kioskTheme = 'ui';
   useEffect(() => {
     const root = document.documentElement;
     const isAndroid = /Android/i.test(navigator.userAgent || '');
@@ -6038,23 +6005,10 @@ export default function KioskLayout() {
       if (isAndroid) root.classList.remove('kiosk-android-device');
     };
   }, []);
-  useEffect(() => {
-    const apply = (t) => { if (['white', 'orange', 'green', 'ui'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
-    api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
-    const onWs = (e) => apply(e.detail);
-    window.addEventListener('kiosk-theme', onWs);
-    return () => window.removeEventListener('kiosk-theme', onWs);
-  }, []);
-  const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
-    setKioskTheme(next);
-    localStorage.setItem('kiosk_theme', next);
-    api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
-  }, [kioskTheme]);
-  const isUi = kioskTheme === 'ui';
-  const isWhite = kioskTheme === 'white' || isUi;
+  const isUi = true;
+  const isWhite = true;
   const isGreen = false;
-  const isOrange = kioskTheme === 'orange';
+  const isOrange = false;
   useEffect(() => {
     const bg = isUi ? '#F6F7FB' : isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
     document.documentElement.style.backgroundColor = bg;
@@ -6065,8 +6019,7 @@ export default function KioskLayout() {
     setIosStatusBar(bg);
   }, [isWhite, isGreen, isUi]);
   useEffect(() => {
-    const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : savedTheme === 'ui' ? '#F6F7FB' : '#FFFFFF';
+    const BODY_BG = '#F6F7FB';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -6329,7 +6282,7 @@ export default function KioskLayout() {
   };
 
 
-  const themeCtx = useMemo(() => ({ theme: kioskTheme === 'ui' ? 'white' : kioskTheme, rawTheme: kioskTheme, isUi: kioskTheme === 'ui', toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
+  const themeCtx = useMemo(() => ({ theme: 'white', rawTheme: 'ui', isUi: true, toggle: () => {}, isAdmin: hasAdminAccess }), [hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
