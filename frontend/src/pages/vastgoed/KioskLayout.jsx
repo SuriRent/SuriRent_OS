@@ -6399,7 +6399,7 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const showMobileKioskBar = (!step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step))   || step === 'admin:facturen' || step === 'admin:locaties';  const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
+  const showMobileKioskBar = (!step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step))   || step === 'admin:facturen';  const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
     { id: 'overview', label: 'Overzicht', icon: Wallet, testid: 'kiosk-tb-overview', onClick: () => { openOnly(null); setTenantModal(null); setStep('overview'); } },
@@ -6411,7 +6411,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && (step === 'admin:facturen' || step === 'admin:locaties')));
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && step === 'admin:facturen'));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
@@ -6640,7 +6640,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
             isMobileViewport
-              ? (isUi ? <KioskUiPageShell testId="kiosk-popup-locaties"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.locaties.Page embedded ui page /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />)
+              ? <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />
               : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (

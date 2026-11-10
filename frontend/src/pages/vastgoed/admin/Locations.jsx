@@ -289,22 +289,14 @@ export default function Locations({ embedded = false, kioskLayout = false, ui = 
     const occ = items.reduce((s, l) => s + (l.apartments_occupied || 0), 0);
     const tabs = [{ v: 'all', label: 'Alle' }, { v: 'active', label: 'Actief' }, { v: 'empty', label: 'Leeg' }];
     return (
-      <div className="space-y-3 pb-8" data-testid="locations-page">
-        <div style={{ paddingTop: 'max(var(--kiosk-sat), 10px)' }} />
-        <UiHero icon={<MapPin className="w-7 h-7" strokeWidth={2} />} title="Locaties Overzicht" sub={`Totaal: ${items.length} locaties`} />
-        <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 px-2">
+      <div className="space-y-3" data-testid="locations-page">
+        <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-1.5">
           <UiStat Icon={MapPin} tone="bg-orange-100 text-[#FF5C00]" label="Locaties" value={items.length} />
           <UiStat Icon={Check} tone="bg-emerald-500 text-white" label="Bezet" value={`${occ} / ${totalApts}`}
             bar={`${totalApts ? Math.min(100, Math.round((occ / totalApts) * 100)) : 0}%`} barTone="bg-emerald-500" />
           <UiStat Icon={Building2} tone="bg-sky-100 text-sky-600" label="Appartementen" value={totalApts} />
         </div>
-        <div className="px-2">
-          <button type="button" onClick={() => { setDetailId(null); setCreating(true); }} data-testid="kiosk-loc-new-mobile"
-            className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
-            <Plus className="h-4 w-4" /> Nieuwe locatie
-          </button>
-        </div>
-        <div className="px-2">
+        <div>
         <label className="flex items-center gap-3 h-12 rounded-2xl bg-white px-4 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
           <Search className="w-5 h-5 text-[#1B2A5C]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek locatie of adres…" data-testid="loc-search"
@@ -312,7 +304,7 @@ export default function Locations({ embedded = false, kioskLayout = false, ui = 
           {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="w-4 h-4 text-slate-400" /></button>}
         </label>
         </div>
-        <div className="px-2 flex gap-1.5">
+        <div className="flex gap-1.5">
           {tabs.map((f) => (
             <button key={f.v} type="button" onClick={() => setFilter(f.v)} data-testid={`loc-filter-${f.v}`}
               className={`flex-1 min-w-max px-3 h-10 rounded-2xl text-xs font-black transition-colors ${filter === f.v ? 'bg-[#FF5C00] text-white shadow' : 'bg-white text-[#1B2A5C] shadow-sm'}`}>
@@ -320,7 +312,7 @@ export default function Locations({ embedded = false, kioskLayout = false, ui = 
             </button>
           ))}
         </div>
-        <div className="px-2 space-y-3">
+        <div className="space-y-3">
         {loading ? <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" /> : filtered.length === 0 ? (
           <p className="py-8 text-center text-sm font-semibold text-slate-500" data-testid="loc-empty">Geen locaties gevonden.</p>
         ) : filtered.map((l) => {
