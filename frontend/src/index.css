@@ -1565,7 +1565,9 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 
 /* UI thema mobiel: header zonder zwevende balk, oranje banner die uitvloeit */
 @media (max-width: 767px) {
-  .kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0 !important; background: transparent !important; box-shadow: none !important; border: 0 !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0 !important; background: transparent !important; box-shadow: none !important; border: 0 !important; backdrop-filter: none !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-header-settings"] { background: #fff !important; box-shadow: 0 6px 14px -8px rgba(15,23,42,0.4) !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-header-settings"] svg { color: #1B2A5C !important; }
   .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-head-wrap { background: transparent !important; box-shadow: none !important; border: 0 !important; }
   .kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"] { font-size: 20px !important; font-weight: 800 !important; }
   .kiosk-ui .kiosk-ui-card { border-radius: 20px !important; box-shadow: 0 6px 16px -12px rgba(15,23,42,0.35); }
