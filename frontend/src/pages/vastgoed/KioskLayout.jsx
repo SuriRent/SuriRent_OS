@@ -3609,21 +3609,27 @@ function KasgeldPanel({ embedded = false, ui = false }) {
         );
         return (
           <div data-testid="kasgeld-fx" className="kiosk-ui-hero">
-            <div className="relative z-0 rounded-b-xl -mx-1 px-4 pt-8 pb-14 text-white">
+            <div className="relative z-0 rounded-b-xl -mx-1 -mt-5 px-4 pt-14 pb-14 text-white">
               <svg className="absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
                 <defs><linearGradient id="kuiWaveKas" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
                 <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWaveKas)" />
               </svg>
-              <svg viewBox="0 0 220 140" className="absolute -right-2 bottom-3 h-[62%] w-auto max-w-none pointer-events-none -z-10" aria-hidden="true"
-                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%)', maskImage: 'linear-gradient(to right, transparent, #000 40%)' }}>
-                <g fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="22" y="38" width="124" height="66" rx="8" transform="rotate(-8 84 71)" fill="#fff" fillOpacity="0.18" />
-                  <circle cx="84" cy="71" r="16" transform="rotate(-8 84 71)" />
-                  <ellipse cx="170" cy="112" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
-                  <ellipse cx="170" cy="98" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
-                  <ellipse cx="170" cy="84" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
-                  <ellipse cx="170" cy="70" rx="30" ry="9" fill="#fff" fillOpacity="0.4" />
-                  <path d="M170 64v12M165 67h8" />
+              <svg viewBox="0 0 200 130" className="absolute -right-3 bottom-2 h-[72%] w-auto max-w-none pointer-events-none -z-10" aria-hidden="true"
+                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 30%)' }}>
+                <g strokeLinecap="round" strokeLinejoin="round">
+                  <g transform="rotate(-10 70 60)">
+                    <rect x="12" y="24" width="124" height="68" rx="9" fill="#34D399" stroke="#047857" strokeWidth="3" />
+                    <rect x="22" y="34" width="104" height="48" rx="5" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="2" />
+                    <circle cx="74" cy="58" r="16" fill="#10B981" stroke="#fff" strokeOpacity="0.9" strokeWidth="2.5" />
+                    <text x="74" y="65" textAnchor="middle" fontSize="20" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">$</text>
+                  </g>
+                  {[112, 99, 86, 73].map((y, i) => (
+                    <g key={y}>
+                      <ellipse cx="150" cy={y + 7} rx="32" ry="10" fill="#B45309" />
+                      <ellipse cx="150" cy={y} rx="32" ry="10" fill={i === 3 ? '#FCD34D' : '#FBBF24'} stroke="#B45309" strokeWidth="2.5" />
+                    </g>
+                  ))}
+                  <ellipse cx="150" cy="73" rx="20" ry="6" fill="none" stroke="#B45309" strokeOpacity="0.55" strokeWidth="2" />
                 </g>
               </svg>
               <div className="relative flex items-center gap-3 min-w-0">
@@ -3663,23 +3669,29 @@ function KasgeldPanel({ embedded = false, ui = false }) {
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
             {!err && !loading && list.length === 0 && <p className="text-center text-slate-500 py-10 text-sm" data-testid="kasgeld-empty">Nog geen mutaties.</p>}
             <div className="grid grid-cols-1 gap-2.5">
-              {list.map((it) => {
+              {list.map((it, idx) => {
+                const mk = (x) => { const dd = new Date(x.entry_date || x.created_at); return isNaN(dd) ? '' : `${MONTHS_NL[dd.getMonth()]} ${dd.getFullYear()}`; };
+                const monthLabel = mk(it);
+                const showMonth = monthLabel && (idx === 0 || mk(list[idx - 1]) !== monthLabel);
                 const isIn = it.type === 'in';
                 const d = it.entry_date || it.created_at;
                 const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
                 const creator = (it.created_by_name || '').trim();
                 const editable = canManage && it.source !== 'payment';
                 return (
-                  <div key={it.id} data-testid={`kasgeld-row-${it.id}`} className="kiosk-ui-card w-full rounded-[16px] bg-white px-3 py-2 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
+                  <Fragment key={it.id}>
+                  {showMonth && <p className="px-1 pt-2 text-[13px] font-bold uppercase tracking-wide text-[#1B2A5C]/70 capitalize" data-testid={`kasgeld-month-${monthLabel}`}>{monthLabel}</p>}
+                  <div data-testid={`kasgeld-row-${it.id}`} className="kiosk-ui-card w-full rounded-[16px] bg-white px-3 py-2 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`shrink-0 rounded-full w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
                         {isIn ? <ArrowDownLeft className="w-6 h-6" strokeWidth={2.6} /> : <ArrowUpRight className="w-6 h-6" strokeWidth={2.6} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[16px] font-extrabold text-[#1B2A5C] truncate leading-tight">{it.description || it.category || '—'}</p>
-                        <p className="text-[13px] text-slate-600 font-medium truncate">{[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`].filter(Boolean).join(' · ')}</p>
+                        <p className="text-[16px] font-extrabold text-[#1B2A5C] leading-tight line-clamp-2 break-words">{it.description || it.category || '—'}</p>
+                        <p className="text-[13px] text-slate-600 font-medium truncate">{[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant'].filter(Boolean).join(' · ')}</p>
+                        {creator && <p className="flex items-center gap-1 text-[12px] text-slate-500 truncate"><User className="w-3 h-3 shrink-0" /><span className="truncate">{creator}</span></p>}
                       </div>
-                      <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-[13px] font-bold text-white whitespace-nowrap ${it.excluded_from_balance ? 'bg-slate-500' : isIn ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                      <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[12.5px] font-bold text-white whitespace-nowrap ${it.excluded_from_balance ? 'bg-slate-500' : isIn ? 'bg-emerald-600' : 'bg-red-500'}`}>
                         {isIn ? '+' : '−'}{fmtMoney(it.amount, it.currency)}
                       </span>
                       {editable && (
@@ -3692,6 +3704,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
                       )}
                     </div>
                   </div>
+                  </Fragment>
                 );
               })}
             </div>
