@@ -6696,7 +6696,7 @@ export default function KioskLayout() {
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
               <KioskUiPageShell testId="kiosk-popup-kasgeld">
-                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" Icon={Wallet} newItem={UI_NEW.kasgeld} onBack={goBack} testId="kiosk-ui-kasgeld">
+                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" Icon={Wallet} art="cash" newItem={UI_NEW.kasgeld} onBack={goBack} testId="kiosk-ui-kasgeld">
                   <KasgeldPanel embedded />
                 </KioskUiAdminPage>
               </KioskUiPageShell>

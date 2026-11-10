@@ -15,8 +15,27 @@ export const UI_NEW = {
   kasgeld: { label: 'Nieuwe mutatie', event: 'kiosk-kasgeld-new' },
 };
 
+const CASH_MASK = 'linear-gradient(to right, transparent 0%, #000 45%)';
+
+// Kasgeld-illustratie (munten + bankbiljet) in plaats van de villa.
+const CashArt = () => (
+  <svg viewBox="0 0 220 140" className="absolute -right-2 bottom-0 h-[92%] w-auto max-w-none pointer-events-none" aria-hidden="true"
+    style={{ WebkitMaskImage: CASH_MASK, maskImage: CASH_MASK }}>
+    <g fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="22" y="38" width="124" height="66" rx="8" transform="rotate(-8 84 71)" fill="#fff" fillOpacity="0.18" />
+      <circle cx="84" cy="71" r="16" transform="rotate(-8 84 71)" />
+      <path d="M40 54h10M118 88h10" transform="rotate(-8 84 71)" />
+      <ellipse cx="170" cy="112" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="98" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="84" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="70" rx="30" ry="9" fill="#fff" fillOpacity="0.4" />
+      <path d="M170 64v12M165 67h8" />
+    </g>
+  </svg>
+);
+
 // Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
-export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children }) {
+export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children, art }) {
   useEffect(() => {
     document.body.classList.add('kiosk-popup-active');
     return () => document.body.classList.remove('kiosk-popup-active');
@@ -24,7 +43,7 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
   return (
     <div className="pb-8" data-testid={testId}>
       <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />
-      <UiHero icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />
+      <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />
       {newItem && (
         <div className="mt-3 px-2">
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(newItem.event))} data-testid={`${testId}-new`}
