@@ -81,8 +81,8 @@ export function PrinterLamp({ className = '', testid = 'kiosk-printer-lamp' }) {
   const level = !on ? 'off' : okRows.every((r) => r.paper === 'empty') ? 'empty'
     : okRows.some((r) => r.paper === 'low' || r.paper === 'empty') ? 'low' : 'ok';
   const label = { off: 'Bonprinter niet verbonden', empty: 'Papier leeg', low: 'Papier bijna op', ok: 'Bonprinter verbonden' }[level];
-  const lampCls = { off: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]', empty: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] animate-pulse',
-    low: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-pulse', ok: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]' }[level];
+  const lampCls = { off: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] printer-lamp-blink', empty: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] printer-lamp-blink',
+    low: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] printer-lamp-blink', ok: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)] printer-lamp-blink' }[level];
 
   return (
     <>
@@ -90,7 +90,7 @@ export function PrinterLamp({ className = '', testid = 'kiosk-printer-lamp' }) {
         data-active={on ? 'true' : 'false'} data-level={level}
         className={`w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors relative ${className}`}>
         <Printer className="w-4 h-4" />
-        <span className={`absolute right-1 bottom-1 w-2.5 h-2.5 rounded-full ring-2 ring-white/90 ${lampCls}`} />
+        <span className={`absolute right-1 bottom-1 w-3 h-3 rounded-full ring-2 ring-white ${lampCls}`} />
       </button>
       {open && createPortal((
         <div className="fixed inset-0 z-[130] bg-black/40 flex items-start justify-end p-3" onClick={() => setOpen(false)} data-testid="kiosk-printer-lamp-panel">
