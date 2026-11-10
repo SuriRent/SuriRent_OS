@@ -847,7 +847,7 @@ function ApartmentSelect({
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi && !isDesk
           ? 'grid grid-cols-1 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
-          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             if (isUi && !isDesk) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
