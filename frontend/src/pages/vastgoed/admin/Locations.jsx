@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
+import { UiHero, UiStat } from '../../../components/KioskInvoicesUi';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { MapPin, Plus, Pencil, Trash2, X, Check, Loader2, Building2, Image as ImageIcon, Search, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -80,7 +81,7 @@ function LocationForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Locations({ embedded = false, kioskLayout = false, ui = false, onBack }) {
+export default function Locations({ embedded = false, kioskLayout = false, ui = false, page = false, onBack }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded || kioskLayout);
   // SWR cache — tabwissel toont instant vanuit cache
   const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
@@ -288,16 +289,22 @@ export default function Locations({ embedded = false, kioskLayout = false, ui = 
     const occ = items.reduce((s, l) => s + (l.apartments_occupied || 0), 0);
     const tabs = [{ v: 'all', label: 'Alle' }, { v: 'active', label: 'Actief' }, { v: 'empty', label: 'Leeg' }];
     return (
-      <div className="space-y-3" data-testid="locations-page">
-        <div className="grid grid-cols-3 gap-2">
-          {[['Locaties', items.length, 'bg-orange-100 text-[#FF5C00]', MapPin], ['Appartementen', totalApts, 'bg-sky-100 text-sky-600', Building2], ['Bezet', `${occ} / ${totalApts}`, 'bg-emerald-500 text-white', Check]].map(([label, val, tone, Icon]) => (
-            <div key={label} className="rounded-2xl bg-white p-2.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] flex flex-col items-center text-center gap-1">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>
-              <span className="text-[10px] font-bold text-slate-500 leading-tight">{label}</span>
-              <span className="text-[15px] font-black text-[#1B2A5C] leading-none">{val}</span>
-            </div>
-          ))}
+      <div className={page ? 'space-y-3 pb-8' : 'space-y-3'} data-testid="locations-page">
+        {page && <div style={{ paddingTop: 'max(var(--kiosk-sat), 10px)' }} />}
+        {page && <UiHero icon={<MapPin className="w-7 h-7" strokeWidth={2} />} title="Locaties Overzicht" sub={`Totaal: ${items.length} locaties`} />}
+        <div className={`grid grid-cols-3 gap-1.5 ${page ? 'px-2' : ''}`}>
+          <UiStat Icon={MapPin} tone="bg-orange-100 text-[#FF5C00]" label="Locaties" value={items.length} />
+          <UiStat Icon={Building2} tone="bg-sky-100 text-sky-600" label="Appartementen" value={totalApts} />
+          <UiStat Icon={Check} tone="bg-emerald-500 text-white" label="Bezet" value={`${occ} / ${totalApts}`} bar={`${totalApts ? Math.min(100, Math.round((occ / totalApts) * 100)) : 0}%`} barTone="bg-emerald-500" />
         </div>
+        {page && (
+          <div className="px-2">
+            <button type="button" onClick={() => { setDetailId(null); setCreating(true); }} data-testid="kiosk-loc-new-mobile"
+              className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-sm font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+              <Plus className="h-4 w-4" /> Nieuwe locatie
+            </button>
+          </div>
+        )}
         <label className="flex items-center gap-3 h-12 rounded-2xl bg-white px-4 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
           <Search className="w-5 h-5 text-[#1B2A5C]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek locatie of adres…" data-testid="loc-search"
