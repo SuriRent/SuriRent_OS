@@ -37,6 +37,7 @@ import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
+import KioskUiAdminPage, { UI_NEW } from '../../components/KioskUiAdminPage';
 const KioskBonPage = lazy(() => import('./admin/KioskBonPage'));
 const KioskSettingsPage = lazy(() => import('./admin/KioskSettingsPage'));
 import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../components/KioskFx';
@@ -5258,6 +5259,9 @@ function TenantInfoModal({ apartment, mode, onClose }) {
   );
 }
 
+const UI_NEW_PAGES = ['onderhoud', 'werknemers', 'notificaties', 'borg'];
+const UI_ADMIN_STEPS = ['facturen', 'locaties', 'huurders', 'appartementen', 'contracten', 'betalingen', 'regelingen', ...UI_NEW_PAGES].map((x) => `admin:${x}`);
+
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
   const [top, setTop] = useState(0);
@@ -5270,6 +5274,18 @@ function KioskUiPageShell({ children, testId }) {
       <div className="kiosk-ui">{children}</div>
     </div>
   ), document.body);
+}
+
+function KioskUiAdminStep({ id, onBack, children }) {
+  const meta = KIOSK_ADMIN_PAGES[id] || {};
+  const Page = meta.Page;
+  return (
+    <KioskUiPageShell testId={`kiosk-popup-${id}`}>
+      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack} testId={`kiosk-ui-${id}`}>
+        {children || (Page ? <Page embedded /> : null)}
+      </KioskUiAdminPage>
+    </KioskUiPageShell>
+  );
 }
 
 function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false, fullscreenMobile = false }) {
@@ -6409,7 +6425,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && (step === 'admin:facturen' || step === 'admin:locaties')));
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
@@ -6619,7 +6635,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiAdminStep id="appartementen" onBack={goBack} /> : <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />)
               : (
                 <div className="h-full min-h-0 kiosk-admin-skin">
                   <KioskApartmentsPanel
@@ -6633,7 +6649,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiAdminStep id="huurders" onBack={goBack} /> : <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
@@ -6643,17 +6659,17 @@ export default function KioskLayout() {
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiAdminStep id="contracten" onBack={goBack} /> : <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:betalingen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiAdminStep id="betalingen" onBack={goBack} /> : <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:regelingen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiAdminStep id="regelingen" onBack={goBack} /> : <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
@@ -6673,10 +6689,18 @@ export default function KioskLayout() {
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
-            <KioskAdminPage id={step.slice(6)} onBack={goBack} />
+            isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
+              ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
+              : <KioskAdminPage id={step.slice(6)} onBack={goBack} />
           )}
           {step === 'kasgeld' && (
-            isMobileViewport ? (
+            isMobileViewport && isUi ? (
+              <KioskUiPageShell testId="kiosk-popup-kasgeld">
+                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" Icon={Wallet} newItem={UI_NEW.kasgeld} onBack={goBack} testId="kiosk-ui-kasgeld">
+                  <KasgeldPanel embedded />
+                </KioskUiAdminPage>
+              </KioskUiPageShell>
+            ) : isMobileViewport ? (
               <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
                 wide xwide tall fullscreenMobile
                 footer={(
@@ -6690,9 +6714,13 @@ export default function KioskLayout() {
             ) : <KasgeldPanel />
           )}
           {step === 'stroom' && hasAdminAccess && (
+            isMobileViewport && isUi ? (
+              <KioskUiAdminStep id="stroom" onBack={goBack}><PowerControl /></KioskUiAdminStep>
+            ) : (
             <div className="h-full overflow-y-auto bg-orange-500 kiosk-admin-skin" data-testid="kiosk-stroom">
               <PowerControl kiosk />
             </div>
+            )
           )}
           {step === 'overview' && apartment && (
             <TenantOverview key={apartment.id} apartment={apartment} onBack={reset}
