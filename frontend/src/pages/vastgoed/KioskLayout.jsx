@@ -6050,7 +6050,7 @@ export default function KioskLayout() {
     };
   }, []);
   useEffect(() => {
-    const apply = (t) => { if (['white', 'orange', 'green', 'ui', 'wave'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (['white', 'orange', 'green', 'ui'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
@@ -6063,7 +6063,7 @@ export default function KioskLayout() {
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isUi = kioskTheme === 'ui';
-  const isWhite = kioskTheme === 'white' || kioskTheme === 'wave' || isUi;
+  const isWhite = kioskTheme === 'white' || isUi;
   const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
@@ -6077,7 +6077,7 @@ export default function KioskLayout() {
   }, [isWhite, isGreen, isUi]);
   useEffect(() => {
     const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : (savedTheme === 'ui' || savedTheme === 'wave') ? '#F6F7FB' : '#FFFFFF';
+    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : savedTheme === 'ui' ? '#F6F7FB' : '#FFFFFF';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -6340,7 +6340,7 @@ export default function KioskLayout() {
   };
 
 
-  const themeCtx = useMemo(() => ({ theme: (kioskTheme === 'ui' || kioskTheme === 'wave') ? 'white' : kioskTheme, rawTheme: kioskTheme, isUi: kioskTheme === 'ui', toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
+  const themeCtx = useMemo(() => ({ theme: kioskTheme === 'ui' ? 'white' : kioskTheme, rawTheme: kioskTheme, isUi: kioskTheme === 'ui', toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
@@ -6602,7 +6602,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}${isUi ? ' kiosk-ui' : ''}${kioskTheme === 'wave' ? ' kiosk-wave' : ''}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : (isUi || kioskTheme === 'wave') ? undefined : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}${isUi ? ' kiosk-ui' : ''}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isUi ? undefined : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
