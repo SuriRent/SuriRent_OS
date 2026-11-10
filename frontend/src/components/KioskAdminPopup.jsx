@@ -31,7 +31,7 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
   }, [bodyCls]);
   const footer = nw ? (
     <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(nw.event))} data-testid={`kiosk-popup-${id}-new`}
-      className="w-full h-12 rounded-xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2">
+      className={`w-full text-white font-black inline-flex items-center justify-center gap-2 bg-[#FF5C00] ${id === 'locaties' ? 'h-11 rounded-2xl text-xs shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]' : 'h-12 rounded-xl text-sm'}`}>
       <Plus className="w-4 h-4" /> {nw.label}
     </button>
   ) : null;
