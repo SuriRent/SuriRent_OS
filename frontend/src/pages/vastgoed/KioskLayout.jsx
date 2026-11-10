@@ -3477,7 +3477,8 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel({ embedded = false }) {
+function KasgeldPanel({ embedded = false, ui = false }) {
+  const [uiQ, setUiQ] = useState('');
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3591,7 +3592,113 @@ function KasgeldPanel({ embedded = false }) {
           md+: horizontal 3:2 row match van het Financieel-overzicht patroon
           (Recente mutaties links breed, Kasgeld rechts smaller). We gebruiken
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
-      {embedded && (
+      {embedded && ui && (() => {
+        const q = uiQ.trim().toLowerCase();
+        const list = q ? visibleItems.filter((it) => `${it.description || ''} ${it.category || ''} ${it.method || ''} ${it.created_by_name || ''}`.toLowerCase().includes(q)) : visibleItems;
+        const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const kStat = (cur, Icon, tone) => (
+          <div key={cur} className="kiosk-ui-stat rounded-2xl bg-white px-2 py-2.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5" strokeWidth={2.6} /></span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-slate-600 truncate leading-tight">{cur}</p>
+                <p className="text-[12.5px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
+              </div>
+            </div>
+          </div>
+        );
+        return (
+          <div data-testid="kasgeld-fx" className="kiosk-ui-hero">
+            <div className="relative z-0 rounded-b-xl -mx-1 px-4 pt-8 pb-14 text-white">
+              <svg className="absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
+                <defs><linearGradient id="kuiWaveKas" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
+                <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWaveKas)" />
+              </svg>
+              <svg viewBox="0 0 220 140" className="absolute -right-2 bottom-3 h-[62%] w-auto max-w-none pointer-events-none -z-10" aria-hidden="true"
+                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%)', maskImage: 'linear-gradient(to right, transparent, #000 40%)' }}>
+                <g fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="22" y="38" width="124" height="66" rx="8" transform="rotate(-8 84 71)" fill="#fff" fillOpacity="0.18" />
+                  <circle cx="84" cy="71" r="16" transform="rotate(-8 84 71)" />
+                  <ellipse cx="170" cy="112" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+                  <ellipse cx="170" cy="98" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+                  <ellipse cx="170" cy="84" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+                  <ellipse cx="170" cy="70" rx="30" ry="9" fill="#fff" fillOpacity="0.4" />
+                  <path d="M170 64v12M165 67h8" />
+                </g>
+              </svg>
+              <div className="relative flex items-center gap-3 min-w-0">
+                <span className="shrink-0 w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md"><Wallet className="w-7 h-7" strokeWidth={2} /></span>
+                <div className="min-w-0">
+                  <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
+                  <p className="text-[13px] font-normal text-white/90">Totaal: {items.length} mutaties</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 -mt-9 relative px-0.5">
+              {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
+              {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
+              {kStat('EUR', Coins, 'bg-sky-500 text-white')}
+            </div>
+            <div className="flex items-center gap-2 pt-3 pb-3">
+              <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
+                <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
+                <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek mutatie..." data-testid="kasgeld-search"
+                  className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+              </label>
+              <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
+                <SlidersHorizontal className="w-5 h-5" />
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="Filter" data-testid="kasgeld-filter"
+                  className="absolute inset-0 opacity-0 w-full h-full">
+                  <option value="all">Alles</option>
+                  <option value="kasgeld">Handmatig</option>
+                  <option value="payment">Betalingen</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn" aria-label="Nieuwe mutatie"
+                className="shrink-0 w-12 h-12 rounded-2xl bg-[#FF5C00] text-white flex items-center justify-center shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+                <Plus className="w-6 h-6" strokeWidth={2.6} />
+              </button>
+            </div>
+            {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
+            {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
+            {!err && !loading && list.length === 0 && <p className="text-center text-slate-500 py-10 text-sm" data-testid="kasgeld-empty">Nog geen mutaties.</p>}
+            <div className="grid grid-cols-1 gap-2.5">
+              {list.map((it) => {
+                const isIn = it.type === 'in';
+                const d = it.entry_date || it.created_at;
+                const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                const creator = (it.created_by_name || '').trim();
+                const editable = canManage && it.source !== 'payment';
+                return (
+                  <div key={it.id} data-testid={`kasgeld-row-${it.id}`} className="kiosk-ui-card w-full rounded-[16px] bg-white px-3 py-2 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`shrink-0 rounded-full w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                        {isIn ? <ArrowDownLeft className="w-6 h-6" strokeWidth={2.6} /> : <ArrowUpRight className="w-6 h-6" strokeWidth={2.6} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[16px] font-extrabold text-[#1B2A5C] truncate leading-tight">{it.description || it.category || '—'}</p>
+                        <p className="text-[13px] text-slate-600 font-medium truncate">{[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`].filter(Boolean).join(' · ')}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-[13px] font-bold text-white whitespace-nowrap ${it.excluded_from_balance ? 'bg-slate-500' : isIn ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                        {isIn ? '+' : '−'}{fmtMoney(it.amount, it.currency)}
+                      </span>
+                      {editable && (
+                        <>
+                          <button type="button" onClick={() => setEditing(it)} data-testid={`kasgeld-row-edit-${it.id}`} aria-label="Bewerken"
+                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => removeEntry(it)} data-testid={`kasgeld-row-delete-${it.id}`} aria-label="Verwijderen"
+                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-red-500 flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+      {embedded && !ui && (
         <div className="space-y-4" data-testid="kasgeld-fx">
           <FxStats testId="kasgeld-fx-stats" items={[
             ['SRD', Number(balances.SRD || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'orange'],
@@ -6696,8 +6803,8 @@ export default function KioskLayout() {
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
               <KioskUiPageShell testId="kiosk-popup-kasgeld">
-                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" Icon={Wallet} art="cash" newItem={UI_NEW.kasgeld} onBack={goBack} testId="kiosk-ui-kasgeld">
-                  <KasgeldPanel embedded />
+                <KioskUiAdminPage title="Kasgeld" label="Kasgeld"                 Icon={Wallet} bare onBack={goBack} testId="kiosk-ui-kasgeld">
+                                  <KasgeldPanel embedded ui />
                 </KioskUiAdminPage>
               </KioskUiPageShell>
             ) : isMobileViewport ? (

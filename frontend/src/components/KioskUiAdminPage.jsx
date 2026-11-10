@@ -35,7 +35,7 @@ const CashArt = () => (
 );
 
 // Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
-export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children, art }) {
+export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children, art, bare }) {
   useEffect(() => {
     document.body.classList.add('kiosk-popup-active');
     return () => document.body.classList.remove('kiosk-popup-active');
@@ -43,8 +43,8 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
   return (
     <div className="pb-8" data-testid={testId}>
       <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />
-      <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />
-      {newItem && (
+      {!bare && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
+      {newItem && !bare && (
         <div className="mt-3 px-2">
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(newItem.event))} data-testid={`${testId}-new`}
             className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
