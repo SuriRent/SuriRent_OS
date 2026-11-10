@@ -380,8 +380,41 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
+function UiLocMenu({ opts, wrapClass, children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('touchstart', h);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h); };
+  }, [open]);
+  const items = [
+    ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
+    ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
+  ];
+  return (
+    <div ref={ref} className={wrapClass}>
+      {children(() => setOpen((o) => !o))}
+      {open && (
+        <div data-testid="kiosk-ui-location-menu" className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left">
+          {items.map((it) => (
+            <button key={it.id} type="button" onClick={() => { setOpen(false); opts.onPick(it.id); }}
+              data-testid={`kiosk-ui-location-${it.id}`}
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${opts.currentId === it.id ? 'bg-orange-50' : ''}`}>
+              <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate flex-1">{it.label}</span>
+              {opts.currentId === it.id && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DesktopKioskHeader({
-  currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch,
+  currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
   currentApartment, tenant, title = 'Kies uw appartement',
 }) {
   let company = null;
@@ -403,12 +436,20 @@ function DesktopKioskHeader({
         </span>
       </div>
       {isUi && <span className="hidden md:block w-px h-9 bg-slate-300 shrink-0" aria-hidden="true" />}
-      <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
-        className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-        {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
-        <span className="truncate">{locLabel}</span>
-        {isUi && currentStep !== 'stroom' && <ChevronDown className="w-4 h-4 shrink-0" />}
-      </button>
+      {(() => {
+        const useMenu = isUi && locOpts && totalGroups > 1 && currentStep === 'select';
+        const btn = (onClick) => (
+          <button type="button" onClick={onClick} data-testid="back-to-locations"
+            className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+            {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
+            <span className="truncate">{locLabel}</span>
+            {isUi && currentStep !== 'stroom' && <ChevronDown className="w-4 h-4 shrink-0" />}
+          </button>
+        );
+        return useMenu
+          ? <UiLocMenu opts={locOpts} wrapClass="hidden md:flex flex-1 min-w-0 relative">{(toggle) => btn(toggle)}</UiLocMenu>
+          : btn(totalGroups > 1 ? onLocations : undefined);
+      })()}
       {isUi && onSearch && (
         <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
           className="hidden md:flex flex-1 min-w-0 max-w-[420px] h-11 items-center gap-2 rounded-full bg-slate-100/80 px-4 text-slate-400 text-[15px]">
@@ -514,7 +555,7 @@ function VillaArt({ className = '' }) {
   );
 }
 
-function UiHero({ apartments, locationName }) {
+function UiHero({ apartments, locationName, locOpts }) {
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
@@ -538,13 +579,21 @@ function UiHero({ apartments, locationName }) {
   );
   return (
     <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
-      {locationName && (
-        <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
+      {locationName && (() => {
+        const pill = (onClick) => (
+          <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
             <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span><ChevronDown className="w-4 h-4 shrink-0" />
-          </span>
-        </div>
-      )}
+          </button>
+        );
+        return (
+          <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
+            {locOpts
+              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+              : pill(undefined)}
+          </div>
+        );
+      })()}
       <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
       <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
@@ -652,6 +701,7 @@ function ApartmentSelect({
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
   const showLocationPicker = totalGroups > 1 && selectedLocationId === null;
+  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
   }, [onLocationSelectionChange, selectedLocationId]);
@@ -759,7 +809,7 @@ function ApartmentSelect({
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
-        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
@@ -772,7 +822,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && <UiHero apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
