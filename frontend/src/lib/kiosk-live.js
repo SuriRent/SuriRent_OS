@@ -119,6 +119,9 @@ function connect() {
     else if (msg.type === 'id_scan') {
       window.dispatchEvent(new CustomEvent('kiosk-id-scan', { detail: msg }));
     }
+    else if (msg.type === 'kiosk_theme') {
+      window.dispatchEvent(new CustomEvent('kiosk-theme', { detail: msg.theme }));
+    }
     else if (msg.type === 'device_config') {
       // Live printer-keuze (Instellingen → Kiosk apparaten); bewaard voor offline.
       if (msg.printer) localStorage.setItem('kiosk_printer', msg.printer); else localStorage.removeItem('kiosk_printer');

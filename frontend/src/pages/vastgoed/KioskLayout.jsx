@@ -6049,37 +6049,18 @@ export default function KioskLayout() {
       if (isAndroid) root.classList.remove('kiosk-android-device');
     };
   }, []);
-  const hasUserSession = () => {
-    try { return !!localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1'; } catch { return false; }
-  };
   useEffect(() => {
-    // Thema is per gebruiker (account), niet per bedrijf: elke rol kiest zelf.
-    // Wordt bij elke (her)login opnieuw opgehaald, zodat het thema de gebruiker
-    // volgt naar elk apparaat.
-    const sync = () => {
-      if (!hasUserSession()) return;
-      api.get('/auth/me/kiosk-theme').then(({ data }) => {
-        const t = ['orange', 'white', 'ui'].includes(data?.theme) ? data.theme : null;
-        if (t) { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); return; }
-        const local = localStorage.getItem('kiosk_theme');
-        if (['orange', 'white', 'ui'].includes(local)) api.put('/auth/me/kiosk-theme', { theme: local }).catch(() => {});
-      }).catch(() => {});
-    };
-    sync();
-    window.addEventListener('kiosk-employee-changed', sync);
-    window.addEventListener('storage', sync);
-    window.addEventListener('focus', sync);
-    return () => {
-      window.removeEventListener('kiosk-employee-changed', sync);
-      window.removeEventListener('storage', sync);
-      window.removeEventListener('focus', sync);
-    };
+    const apply = (t) => { if (['white', 'orange', 'green', 'ui'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
+    const onWs = (e) => apply(e.detail);
+    window.addEventListener('kiosk-theme', onWs);
+    return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
     const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
-    if (hasUserSession()) api.put('/auth/me/kiosk-theme', { theme: next }).catch(() => {});
+    api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isUi = kioskTheme === 'ui';
   const isWhite = kioskTheme === 'white' || isUi;
