@@ -40,7 +40,7 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
       wide xwide tall fullscreenMobile>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
         {inst ? <Page embedded section={inst.id} /> : (
-          <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4" data-testid={`kiosk-popup-${id}-content`}><Page embedded /></div></KioskFxCtx.Provider>
+          <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4" data-testid={`kiosk-popup-${id}-content`}><Page embedded ui={id === 'locaties'} /></div></KioskFxCtx.Provider>
         )}
       </Suspense>
     </Shell>
