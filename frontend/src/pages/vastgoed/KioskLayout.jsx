@@ -30,6 +30,7 @@ import NumPad from '../../components/NumPad';
 import KioskEmployeePush from '../../components/KioskEmployeePush';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt, printTextLines } from '../../lib/kiosk-print';
+import { PrinterLamp } from '../../components/PrinterLamp';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
@@ -306,7 +307,7 @@ function KioskSettingsMenu() {
   return (
     <>
       <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-        className={`${isUi ? 'flex shadow-md bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
+        className={`${isUi ? 'hidden md:flex md:bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
         {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
       </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
@@ -450,12 +451,7 @@ function DesktopKioskHeader({
           ? <UiLocMenu opts={locOpts} wrapClass="hidden md:flex flex-1 min-w-0 relative">{(toggle) => btn(toggle)}</UiLocMenu>
           : btn(totalGroups > 1 ? onLocations : undefined);
       })()}
-      {isUi && onSearch && (
-        <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
-          className="hidden md:flex flex-1 min-w-0 max-w-[420px] h-11 items-center gap-2 rounded-full bg-slate-100/80 px-4 text-slate-400 text-[15px]">
-          <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" /> <span className="truncate">Zoek huurder...</span>
-        </button>
-      )}
+
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
           <div className="hidden md:flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
@@ -471,11 +467,12 @@ function DesktopKioskHeader({
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
-        {!isUi && <HeaderLive />}
+        <HeaderLive />
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskEmployeePush />
+        {isUi && <PrinterLamp className="md:!hidden !w-10 !h-10 !bg-white !text-[#1B2A5C] shadow-md" />}
         <KioskSettingsMenu />
       </div>
     </div>
@@ -534,27 +531,6 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function VillaArt({ className = '' }) {
-  return (
-    <svg viewBox="0 0 240 150" className={className} aria-hidden="true">
-      <ellipse cx="120" cy="140" rx="112" ry="9" fill="#000" opacity="0.08" />
-      <rect x="30" y="62" width="120" height="76" rx="4" fill="#fff" />
-      <rect x="130" y="40" width="80" height="98" rx="4" fill="#FFE3CC" />
-      <path d="M22 66 L90 22 L158 66 Z" fill="#FF7A1F" />
-      <path d="M124 44 L170 14 L216 44 Z" fill="#E85D00" />
-      <rect x="44" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
-      <rect x="80" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
-      <rect x="146" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
-      <rect x="178" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
-      <rect x="146" y="98" width="24" height="40" rx="3" fill="#1B2A5C" />
-      <rect x="112" y="96" width="22" height="42" rx="3" fill="#8A5A3B" />
-      <circle cx="16" cy="118" r="16" fill="#3FAE5A" />
-      <rect x="14" y="128" width="4" height="12" fill="#6B4423" />
-      <circle cx="226" cy="122" r="13" fill="#3FAE5A" />
-    </svg>
-  );
-}
-
 function UiHero({ apartments, locationName, locOpts }) {
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
@@ -594,7 +570,6 @@ function UiHero({ apartments, locationName, locOpts }) {
           </div>
         );
       })()}
-      <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
       <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
@@ -847,7 +822,7 @@ function ApartmentSelect({
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi && !isDesk
           ? 'grid grid-cols-1 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
-          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             if (isUi && !isDesk) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
@@ -5299,6 +5274,20 @@ function TenantInfoModal({ apartment, mode, onClose }) {
   );
 }
 
+function KioskUiPageShell({ children, testId }) {
+  useWhitePageBehindModal(767);
+  const [top, setTop] = useState(0);
+  useEffect(() => {
+    const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
+    if (h) setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
+  }, []);
+  return createPortal((
+    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+      <div className="kiosk-ui">{children}</div>
+    </div>
+  ), document.body);
+}
+
 function KioskModalShell({ title, subtitle = 'Beheer deze gegevens', Icon, testId, onClose, children, footer, wide = false, tall = false, xwide = false, fullscreenMobile = false }) {
   const [host, setHost] = useState(null);
   const modalRef = useRef(null);
@@ -6475,7 +6464,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:'));
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && step === 'admin:facturen'));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
@@ -6724,7 +6713,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiPageShell testId="kiosk-popup-facturen"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.facturen.Page embedded ui onBack={goBack} /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:bon' && hasAdminAccess && (
