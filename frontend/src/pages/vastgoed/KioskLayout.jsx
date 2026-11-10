@@ -527,7 +527,7 @@ function UiHero({ apartments, locationName }) {
         <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
         <div className="min-w-0">
           <p className="text-[11px] md:text-[12px] font-medium text-slate-600 truncate leading-tight">{label}</p>
-          <p className="text-[13.5px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
+          <p className="text-[12.5px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
         </div>
         {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
       </div>
@@ -539,15 +539,19 @@ function UiHero({ apartments, locationName }) {
   return (
     <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
       {locationName && (
-        <div className="md:hidden flex justify-center -mt-1 mb-2">
+        <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
             <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span><ChevronDown className="w-4 h-4 shrink-0" />
           </span>
         </div>
       )}
       <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
-      <div className="relative overflow-hidden rounded-tl-[64px] rounded-tr-xl rounded-b-xl md:rounded-none -mx-1 px-4 pt-5 pb-14 md:mx-0 md:p-0 md:overflow-visible text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A00] via-[#FF8A2B] to-[#FFB066] md:bg-none md:flex md:items-center md:justify-between md:gap-4">
-        <img src={villaM} alt="" className="md:hidden absolute right-0 bottom-0 h-[88%] w-auto pointer-events-none" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 45%)', maskImage: 'linear-gradient(to right, transparent, #000 45%)' }} />
+      <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+        <svg className="md:hidden absolute inset-0 w-full h-full -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
+          <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
+        </svg>
+        <img src={villaM} alt="" className="md:hidden absolute right-0 bottom-3 h-[62%] w-auto pointer-events-none -z-10" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%)', maskImage: 'linear-gradient(to right, transparent, #000 40%)' }} />
         <div className="relative flex items-center gap-3 min-w-0">
           <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
             <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
@@ -565,7 +569,7 @@ function UiHero({ apartments, locationName }) {
           {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
         </div>
       </div>
-      <div className="md:hidden grid grid-cols-[1fr_1fr_1.3fr] gap-2 -mt-9 relative px-0.5">
+      <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
         {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
         {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
         {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
