@@ -534,27 +534,6 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function VillaArt({ className = '' }) {
-  return (
-    <svg viewBox="0 0 240 150" className={className} aria-hidden="true">
-      <ellipse cx="120" cy="140" rx="112" ry="9" fill="#000" opacity="0.08" />
-      <rect x="30" y="62" width="120" height="76" rx="4" fill="#fff" />
-      <rect x="130" y="40" width="80" height="98" rx="4" fill="#FFE3CC" />
-      <path d="M22 66 L90 22 L158 66 Z" fill="#FF7A1F" />
-      <path d="M124 44 L170 14 L216 44 Z" fill="#E85D00" />
-      <rect x="44" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
-      <rect x="80" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
-      <rect x="146" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
-      <rect x="178" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
-      <rect x="146" y="98" width="24" height="40" rx="3" fill="#1B2A5C" />
-      <rect x="112" y="96" width="22" height="42" rx="3" fill="#8A5A3B" />
-      <circle cx="16" cy="118" r="16" fill="#3FAE5A" />
-      <rect x="14" y="128" width="4" height="12" fill="#6B4423" />
-      <circle cx="226" cy="122" r="13" fill="#3FAE5A" />
-    </svg>
-  );
-}
-
 function UiHero({ apartments, locationName, locOpts }) {
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
@@ -594,7 +573,6 @@ function UiHero({ apartments, locationName, locOpts }) {
           </div>
         );
       })()}
-      <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
       <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
