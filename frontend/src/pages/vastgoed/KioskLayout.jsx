@@ -450,12 +450,7 @@ function DesktopKioskHeader({
           ? <UiLocMenu opts={locOpts} wrapClass="hidden md:flex flex-1 min-w-0 relative">{(toggle) => btn(toggle)}</UiLocMenu>
           : btn(totalGroups > 1 ? onLocations : undefined);
       })()}
-      {isUi && onSearch && (
-        <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
-          className="hidden md:flex flex-1 min-w-0 max-w-[420px] h-11 items-center gap-2 rounded-full bg-slate-100/80 px-4 text-slate-400 text-[15px]">
-          <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" /> <span className="truncate">Zoek huurder...</span>
-        </button>
-      )}
+
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
           <div className="hidden md:flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
@@ -471,7 +466,7 @@ function DesktopKioskHeader({
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
-        {!isUi && <HeaderLive />}
+        <HeaderLive />
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
