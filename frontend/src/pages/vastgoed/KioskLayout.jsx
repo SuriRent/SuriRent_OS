@@ -3657,10 +3657,6 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
                   <option value="payment">Betalingen</option>
                 </select>
               </label>
-              <button type="button" onClick={() => setShowForm(true)} data-testid="kasgeld-new-btn" aria-label="Nieuwe mutatie"
-                className="shrink-0 w-12 h-12 rounded-2xl bg-[#FF5C00] text-white flex items-center justify-center shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
-                <Plus className="w-6 h-6" strokeWidth={2.6} />
-              </button>
             </div>
             {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
@@ -6818,11 +6814,19 @@ export default function KioskLayout() {
           )}
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
-              <KioskUiPageShell testId="kiosk-popup-kasgeld">
-                <KioskUiAdminPage title="Kasgeld" label="Kasgeld"                 Icon={Wallet} bare onBack={goBack} testId="kiosk-ui-kasgeld">
-                <KasgeldPanel embedded ui onBack={goBack} />
-                </KioskUiAdminPage>
-              </KioskUiPageShell>
+              <KioskModalShell title="Kasgeld" subtitle="Kasoverzicht en mutaties" Icon={Wallet}
+                testId="kiosk-popup-kasgeld" onClose={goBack} wide xwide tall fullscreenMobile
+                footer={(
+                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-kasgeld-new'))}
+                    data-testid="kiosk-popup-kasgeld-new"
+                    className="w-full h-12 rounded-2xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+                    <Plus className="w-5 h-5" strokeWidth={2.6} /> Nieuwe Mutatie
+                  </button>
+                )}>
+                <div className="kiosk-ui w-full overflow-x-hidden">
+                  <KasgeldPanel embedded ui onBack={goBack} />
+                </div>
+              </KioskModalShell>
             ) : isMobileViewport ? (
               <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
                 wide xwide tall fullscreenMobile
