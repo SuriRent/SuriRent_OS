@@ -1,7 +1,7 @@
 import { ArrowLeft, Search, Loader2, CalendarPlus, FilePlus2, FileSignature, Banknote, MessageCircle, ChevronRight, Check, AlertCircle, Calendar, User, X } from 'lucide-react';
 import villaM from '../ui-villa-m.png';
 import { fmtAmount } from '../pages/vastgoed/admin/invoices/helpers';
-import { SeverityPills, CreditBadge } from './KioskInvoiceExtras';
+import { CreditBadge } from './KioskInvoiceExtras';
 import { TenantPhoto } from './KioskFx';
 
 const NAVY = 'text-[#1B2A5C]';
@@ -104,7 +104,6 @@ export function UiInvoicesList({
           </button>
         ))}
       </div>
-      <div className="mt-2 px-2"><SeverityPills value={severity} onChange={setSeverity} testPrefix="kiosk-inv" /></div>
       <div className="mt-3 px-2 space-y-3">
         {error && <p role="alert" className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
         {!data && !error && <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" />}

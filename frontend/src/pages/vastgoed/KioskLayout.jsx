@@ -5276,8 +5276,13 @@ function TenantInfoModal({ apartment, mode, onClose }) {
 
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
+  const [top, setTop] = useState(0);
+  useEffect(() => {
+    const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
+    if (h) setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
+  }, []);
   return createPortal((
-    <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
       <div className="kiosk-ui">{children}</div>
     </div>
   ), document.body);
