@@ -41,8 +41,8 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
     return () => document.body.classList.remove('kiosk-popup-active');
   }, []);
   return (
-    <div className="pb-8" data-testid={testId}>
-      <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />
+    <div className="pb-8 overflow-x-hidden" data-testid={testId}>
+      {!bare && <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />}
       {!bare && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
       {newItem && !bare && (
         <div className="mt-3 px-2">
