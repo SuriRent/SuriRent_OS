@@ -469,9 +469,9 @@ function UiAptCard({ a, onOpen }) {
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-[18px] bg-white px-3 py-2.5 transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-[16px] bg-white px-3 py-2 transition active:scale-[0.99] md:hover:-translate-y-0.5">
       <div className={`flex items-center gap-3 w-full min-w-0`}>
-        <div className={`shrink-0 rounded-full overflow-hidden w-[58px] h-[58px] flex items-center justify-center ring-4 ring-white shadow-md ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
+        <div className={`shrink-0 rounded-full overflow-hidden w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
           {src && !vacant
             ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             : <Home className={`w-7 h-7 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
@@ -483,8 +483,8 @@ function UiAptCard({ a, onOpen }) {
             <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
           </p>
         </div>
-        <UiStatusPill a={a} />
-        <span className="shrink-0 w-9 h-9 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center">
+        <UiStatusPill a={a} className="w-[118px] shrink-0" />
+        <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center">
           <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
         </span>
       </div>
@@ -522,12 +522,12 @@ function UiHero({ apartments, locationName }) {
   const cur = occ.find((a) => a.currency)?.currency || 'SRD';
   const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
   const stat = (key, Icon, tone, label, value, bar, barTone) => (
-    <div key={key} className="kiosk-ui-stat rounded-2xl bg-white p-2 md:px-4 md:py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className={`shrink-0 w-8 h-8 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-4 h-4 md:w-6 md:h-6" strokeWidth={2.6} /></span>
+    <div key={key} className="kiosk-ui-stat rounded-2xl     bg-white px-2 py-2.5 md:px-4 md:py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
+          <div className="flex items-center gap-1.5 md:gap-2.5 min-w-0">
+        <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
         <div className="min-w-0">
           <p className="text-[11px] md:text-[12px] font-medium text-slate-600 truncate leading-tight">{label}</p>
-          <p className="text-[15px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
+          <p className="text-[13.5px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
         </div>
         {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
       </div>
@@ -546,11 +546,12 @@ function UiHero({ apartments, locationName }) {
         </div>
       )}
       <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
-      <div className="relative overflow-hidden rounded-3xl md:rounded-none px-3 pt-3 pb-9 md:p-0 md:overflow-visible text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A00] via-[#FF8A2B] to-[#FFB066] md:bg-none md:flex md:items-center md:justify-between md:gap-4">
-        <img src={villaM} alt="" className="md:hidden absolute right-0 bottom-0 h-[80%] w-auto pointer-events-none" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 45%)', maskImage: 'linear-gradient(to right, transparent, #000 45%)' }} />
+      <div className="relative overflow-hidden rounded-tl-[64px] rounded-tr-xl rounded-b-xl md:rounded-none -mx-1 px-4 pt-5 pb-14 md:mx-0 md:p-0 md:overflow-visible text-white md:text-slate-900 bg-gradient-to-r from-[#FF7A00] via-[#FF8A2B] to-[#FFB066] md:bg-none md:flex md:items-center md:justify-between md:gap-4">
+        <img src={villaM} alt="" className="md:hidden absolute right-0 bottom-0 h-[88%] w-auto pointer-events-none" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 45%)', maskImage: 'linear-gradient(to right, transparent, #000 45%)' }} />
         <div className="relative flex items-center gap-3 min-w-0">
           <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
-            <Home className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2.4} fill="currentColor" />
+            <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
+            <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
           </span>
           <div className="min-w-0">
             <h2 className="text-[19px] md:text-3xl font-semibold md:font-bold tracking-tight leading-tight truncate">Appartementen Overzicht</h2>
@@ -564,7 +565,7 @@ function UiHero({ apartments, locationName }) {
           {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
         </div>
       </div>
-      <div className="md:hidden grid grid-cols-3 gap-2 -mt-6 relative px-1">
+      <div className="md:hidden grid grid-cols-[1fr_1fr_1.3fr] gap-2 -mt-9 relative px-0.5">
         {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
         {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
         {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
