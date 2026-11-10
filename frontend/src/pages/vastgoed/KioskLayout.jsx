@@ -5261,12 +5261,15 @@ function TenantInfoModal({ apartment, mode, onClose }) {
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
   const [top, setTop] = useState(0);
+  const [bottom, setBottom] = useState(0);
   useEffect(() => {
     const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
     if (h) setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
+    const n = document.querySelector('[data-testid="kiosk-mobile-bottom-bar"]');
+    if (n) setBottom(Math.max(0, Math.round(window.innerHeight - n.getBoundingClientRect().top)));
   }, []);
   return createPortal((
-    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+    <div className="fixed inset-x-0 z-[120] overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, bottom, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
       <div className="kiosk-ui">{children}</div>
     </div>
   ), document.body);
@@ -6396,7 +6399,7 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const showMobileKioskBar = !step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step);
+  const showMobileKioskBar = (!step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step)) || step === 'admin:facturen';
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -6826,7 +6829,7 @@ export default function KioskLayout() {
               { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
               { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
               { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
-              { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'inv', label: 'Facturen', Icon: FileSignature, on: step === 'admin:facturen', fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
               { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
             ].map(({ id, label, Icon, on, fn }) => (
               <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
