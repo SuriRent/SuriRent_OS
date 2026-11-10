@@ -1631,3 +1631,20 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button { border-radius: 1rem; min-height: 2.5rem; font-weight: 900; background-color: #FFFFFF; color: #1B2A5C; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
 .kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button[class*="bg-[#FF5C00]"] { background-color: #FF5C00; color: #FFFFFF; }
 .kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
+
+/* UI-Thema mobiel: Fx-bouwstenen (rijen, stats, zoek, detailkop) in Facturen-stijl */
+.kiosk-ui .kiosk-ui-admin .fx-stats { gap: 0.625rem; }
+.kiosk-ui .kiosk-ui-admin .fx-stat { background: #FFFFFF; border-radius: 1.5rem; padding: 0.875rem 1rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div:first-child { color: #8A94B0; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div:last-child { font-size: 1.125rem; color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-red-600 { color: #DC2626; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-emerald-600 { color: #059669; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-orange-600, .kiosk-ui .kiosk-ui-admin .fx-stat > div.text-amber-600 { color: #FF5C00; }
+.kiosk-ui .kiosk-ui-admin .fx-search { background: #FFFFFF; border: 0; border-radius: 9999px; height: 3rem; padding: 0 1rem; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); }
+.kiosk-ui .kiosk-ui-admin .kiosk-fx-row { background: #FFFFFF; border: 0; border-radius: 1.5rem; padding: 0.875rem 1rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .kiosk-fx-row .text-slate-900 { color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-header { background: #FFFFFF; border-radius: 1.5rem; padding: 1rem 1.25rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .fx-header .text-slate-900 { color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-back { background: #FFFFFF; border-radius: 9999px; padding: 0.5rem 0.875rem; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); }
+.kiosk-ui .kiosk-ui-admin button.bg-\[\#FF5C00\]:not([data-testid$="-filter-bar"] > button) { border-radius: 1rem; }
+.kiosk-ui .kiosk-ui-admin .border.border-slate-200:is(.rounded-xl, .rounded-2xl):not(.kiosk-fx-row):not(.fx-search) { border-color: transparent; background: #FFFFFF; border-radius: 1.5rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }

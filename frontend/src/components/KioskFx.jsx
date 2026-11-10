@@ -60,9 +60,9 @@ export const FX_TONE = { red: 'text-red-600', amber: 'text-amber-600', orange: '
 
 export function FxStats({ items, testId }) {
   return (
-    <div className="grid grid-cols-3 gap-2" data-testid={testId}>
+    <div className="fx-stats grid grid-cols-3 gap-2" data-testid={testId}>
       {items.map(([l, v, tone], i) => (
-        <div key={l} className="        rounded-xl bg-slate-50 px-3.5 py-4 sm:px-3 sm:py-2 min-w-0" data-testid={`${testId}-${i}`}>
+        <div key={l} className="fx-stat rounded-xl bg-slate-50 px-3.5 py-4 sm:px-3 sm:py-2 min-w-0" data-testid={`${testId}-${i}`}>
                   <div className="text-xs sm:text-[10px] font-bold uppercase tracking-wide text-slate-400 truncate">{l}</div>
                   <div className={`text-lg sm:text-sm mt-0.5 sm:mt-0 font-black truncate ${FX_TONE[tone] || 'text-slate-900'}`}>{v}</div>
         </div>
@@ -86,7 +86,7 @@ export function FxTabs({ tabs, value, onChange, testPrefix }) {
 
 export function FxSearch({ value, onChange, placeholder, testId }) {
   return (
-    <label className="flex items-center gap-2 h-11 rounded-xl border border-slate-200 px-3">
+    <label className="fx-search flex items-center gap-2 h-11 rounded-xl border border-slate-200 px-3">
       <Search className="w-4 h-4 text-slate-400" />
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} data-testid={testId}
         className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
@@ -155,14 +155,14 @@ export function FxEmpty({ text, testId }) {
 export function FxBack({ onClick, label, testId }) {
   return (
     <button type="button" onClick={onClick} data-testid={testId}
-      className="inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {label}</button>
+      className="fx-back inline-flex items-center gap-1.5 text-sm font-black text-[#FF5C00]"><ArrowLeft className="w-4 h-4" /> {label}</button>
   );
 }
 
 // Kopkaart van een detailpagina (zoals huurder-kop in Facturen).
 export function FxHeader({ title, sub, label, amount, tone, children, testId }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3 flex items-center justify-between gap-3" data-testid={testId}>
+    <div className="fx-header rounded-xl bg-slate-50 px-4 py-3 flex items-center justify-between gap-3" data-testid={testId}>
       <div className="min-w-0">
         <div className="text-base font-black text-slate-900 truncate">{title}</div>
         {sub && <div className="text-xs text-slate-500 truncate">{sub}</div>}
