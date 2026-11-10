@@ -65,10 +65,11 @@ function pct(n, total) { return `${total ? Math.min(100, Math.round((n / total) 
 
 export function UiInvoicesList({
   groups, s, month, q, setQ, tab, setTab, tabs, severity, setSeverity, data, error, credits, creditOf,
-  onOpen, onRemind, generate, busy, onNew,
+  onOpen, onRemind, generate, busy, onNew, onBack,
 }) {
   return (
     <div className="pb-8" data-testid="kiosk-ui-invoices">
+      <UiBar title="Facturen" onBack={onBack} testId="kiosk-admin-page-back" />
       <UiHero icon={<FileSignature className="w-7 h-7" strokeWidth={2} />} title="Facturen Overzicht" sub={`Totaal: ${groups.length} huurders`} />
       <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-1 px-2 mt-2" data-testid="kiosk-inv-mobile-stats">
         <UiStat Icon={AlertCircle} tone="bg-red-500 text-white" label="Achterstand" value={`${s.openCount || 0} / ${s.allCount || 0}`}
