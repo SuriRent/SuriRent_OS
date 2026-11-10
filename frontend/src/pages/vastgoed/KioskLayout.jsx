@@ -307,7 +307,7 @@ function KioskSettingsMenu() {
   return (
     <>
       <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-        className={`${isUi ? 'flex shadow-md bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
+        className={`${isUi ? 'hidden md:flex md:bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
         {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
       </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
@@ -472,6 +472,7 @@ function DesktopKioskHeader({
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskEmployeePush />
+        {isUi && <PrinterLamp className="md:!hidden !w-10 !h-10 !bg-white !text-[#1B2A5C] shadow-md" />}
         <KioskSettingsMenu />
       </div>
     </div>
@@ -564,11 +565,8 @@ function UiHero({ apartments, locationName, locOpts }) {
         return (
           <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
             {locOpts
-              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-[calc(100%-5.5rem)]">{(toggle) => pill(toggle)}</UiLocMenu>
+              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
               : pill(undefined)}
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex">
-              <PrinterLamp className="!w-9 !h-9 !bg-white !text-[#1B2A5C] shadow" />
-            </div>
           </div>
         );
       })()}
