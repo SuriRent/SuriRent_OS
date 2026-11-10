@@ -3477,7 +3477,7 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel({ embedded = false, ui = false }) {
+function KasgeldPanel({ embedded = false, ui = false, onBack }) {
   const [uiQ, setUiQ] = useState('');
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
@@ -6818,7 +6818,7 @@ export default function KioskLayout() {
             isMobileViewport && isUi ? (
               <KioskUiPageShell testId="kiosk-popup-kasgeld">
                 <KioskUiAdminPage title="Kasgeld" label="Kasgeld"                 Icon={Wallet} bare onBack={goBack} testId="kiosk-ui-kasgeld">
-                                  <KasgeldPanel embedded ui />
+                <KasgeldPanel embedded ui onBack={goBack} />
                 </KioskUiAdminPage>
               </KioskUiPageShell>
             ) : isMobileViewport ? (
