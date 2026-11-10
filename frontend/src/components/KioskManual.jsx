@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, X } from 'lucide-react';
 import { useWhitePageBehindModal } from '../lib/ios-status-bar';
+import { UiBar, UiHero } from './KioskInvoicesUi';
 
 const SECTIONS = [
   {
@@ -112,7 +113,11 @@ export default function KioskManual({ onClose }) {
       data-testid="kiosk-manual-overlay" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="kiosk-manual-title"
         className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-[#F7F8FA] md:h-auto md:max-h-[96dvh] md:rounded-3xl md:shadow-2xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 pb-3 sm:px-6"
+        <div className="md:hidden bg-[#F4F6FB] shrink-0 pb-2" data-testid="kiosk-manual-ui-head">
+          <UiBar title="Handleiding" onBack={onClose} testId="kiosk-manual-close-ui" />
+          <UiHero icon={<BookOpen className="w-7 h-7" strokeWidth={2} />} title="Handleiding A tot Z" sub="Voor kioskmedewerkers en beheerders" />
+        </div>
+        <header className="hidden md:flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 pb-3 sm:px-6"
           style={{ paddingTop: 'max(var(--kiosk-sat), 12px)' }}>
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-[#FF5C00]">

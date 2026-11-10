@@ -1,0 +1,62 @@
+import { Suspense, useEffect } from 'react';
+import { Loader2, Plus } from 'lucide-react';
+import { KioskFxCtx } from './KioskFx';
+import { UiBar, UiHero } from './KioskInvoicesUi';
+
+export const UI_NEW = {
+  onderhoud: { label: 'Nieuw ticket', event: 'kiosk-maint-new' },
+  borg: { label: 'Nieuwe borg', event: 'kiosk-dep-new' },
+  contracten: { label: 'Nieuw contract', event: 'kiosk-contract-new' },
+  regelingen: { label: 'Nieuwe regeling', event: 'kiosk-plan-new' },
+  betalingen: { label: 'Nieuwe betaling', event: 'quick-pay-open' },
+  appartementen: { label: 'Nieuw appartement', event: 'kiosk-apt-new' },
+  huurders: { label: 'Nieuwe huurder', event: 'kiosk-tenant-new' },
+  werknemers: { label: 'Nieuw toevoegen', event: 'kiosk-emp-new' },
+  kasgeld: { label: 'Nieuwe mutatie', event: 'kiosk-kasgeld-new' },
+};
+
+const CASH_MASK = 'linear-gradient(to right, transparent 0%, #000 45%)';
+
+// Kasgeld-illustratie (munten + bankbiljet) in plaats van de villa.
+const CashArt = () => (
+  <svg viewBox="0 0 220 140" className="absolute -right-2 bottom-0 h-[92%] w-auto max-w-none pointer-events-none" aria-hidden="true"
+    style={{ WebkitMaskImage: CASH_MASK, maskImage: CASH_MASK }}>
+    <g fill="none" stroke="#fff" strokeOpacity="0.85" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="22" y="38" width="124" height="66" rx="8" transform="rotate(-8 84 71)" fill="#fff" fillOpacity="0.18" />
+      <circle cx="84" cy="71" r="16" transform="rotate(-8 84 71)" />
+      <path d="M40 54h10M118 88h10" transform="rotate(-8 84 71)" />
+      <ellipse cx="170" cy="112" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="98" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="84" rx="30" ry="9" fill="#fff" fillOpacity="0.28" />
+      <ellipse cx="170" cy="70" rx="30" ry="9" fill="#fff" fillOpacity="0.4" />
+      <path d="M170 64v12M165 67h8" />
+    </g>
+  </svg>
+);
+
+// Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
+export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children, art, bare }) {
+  useEffect(() => {
+    document.body.classList.add('kiosk-popup-active');
+    return () => document.body.classList.remove('kiosk-popup-active');
+  }, []);
+  return (
+    <div className="pb-8 overflow-x-hidden" data-testid={testId}>
+      {!bare && <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />}
+      {!bare && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
+      {newItem && !bare && (
+        <div className="mt-3 px-2">
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(newItem.event))} data-testid={`${testId}-new`}
+            className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+            <Plus className="h-4 w-4" /> {newItem.label}
+          </button>
+        </div>
+      )}
+      <div className={bare ? '' : 'mt-3 px-2'}>
+        <Suspense fallback={<Loader2 className="mx-auto my-16 h-7 w-7 animate-spin text-[#FF5C00]" />}>
+          <KioskFxCtx.Provider value><div className="kiosk-fx kiosk-ui-admin space-y-3">{children}</div></KioskFxCtx.Provider>
+        </Suspense>
+      </div>
+    </div>
+  );
+}

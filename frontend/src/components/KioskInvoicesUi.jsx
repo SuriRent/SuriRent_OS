@@ -29,11 +29,13 @@ export function UiBar({ title, onBack, testId }) {
   );
 }
 
-export function UiHero({ icon, title, sub, children }) {
+export function UiHero({ icon, title, sub, children, art }) {
   return (
     <div className="relative mx-2 rounded-3xl overflow-hidden bg-gradient-to-r from-[#FF6A00] via-[#FF8A2B] to-[#FFC08A] px-4 py-5 text-white shadow-[0_14px_28px_-16px_rgba(255,106,0,0.8)]">
-      <img src={villaM} alt="" className="absolute -right-4 bottom-0 h-[90%] w-auto max-w-none pointer-events-none"
-        style={{ WebkitMaskImage: VILLA_MASK, maskImage: VILLA_MASK, WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+      {art || (
+        <img src={villaM} alt="" className="absolute -right-4 bottom-0 h-[90%] w-auto max-w-none pointer-events-none"
+          style={{ WebkitMaskImage: VILLA_MASK, maskImage: VILLA_MASK, WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+      )}
       <div className="relative flex items-center gap-3 min-w-0">
         <span className="shrink-0 w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md">{icon}</span>
         <div className="min-w-0">

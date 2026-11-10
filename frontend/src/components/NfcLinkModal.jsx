@@ -4,6 +4,7 @@ import { ChevronRight, Loader2, Nfc, Search, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { subscribeNfc } from '../lib/nfc-bus';
 import { FxStats, TenantPhoto } from './KioskFx';
+import { UiBar, UiHero } from './KioskInvoicesUi';
 import useVisualViewportPosition from '../lib/use-visual-viewport-position';
 import { useWhitePageBehindModal } from '../lib/ios-status-bar';
 
@@ -52,7 +53,11 @@ export function NfcLinkModal({ uid: initialUid, onLinked, onClose }) {
     <div className="keyboard-opaque-backdrop fixed inset-0 z-[140] overflow-hidden bg-white sm:bg-black/50 sm:backdrop-blur-md flex flex-col sm:items-center sm:justify-center sm:p-4" data-testid="nfc-link-modal"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={sheetRef} className="kiosk-standard-form absolute inset-x-0 top-0 w-full h-full sm:static sm:inset-auto sm:h-auto sm:max-w-[42rem] sm:max-h-[90dvh] bg-white sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex-none flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
+        <div className="sm:hidden bg-[#F4F6FB] shrink-0 pb-2" data-testid="nfc-ui-head">
+          <UiBar title="NFC-tag" onBack={onClose} testId="nfc-link-close-ui" />
+          <UiHero icon={<Nfc className="w-7 h-7" strokeWidth={2} />} title="NFC-tag koppelen" sub="Kies de huurder voor de gescande tag" />
+        </div>
+        <div className="hidden sm:flex flex-none items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat, 0px), 16px)' }}>
           <div className="flex min-w-0 items-center gap-3">
             <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">

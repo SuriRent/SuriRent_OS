@@ -173,20 +173,11 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
 .power-glow { animation: power-glow 1.1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .power-glow { animation: none; box-shadow: 0 0 16px 4px rgba(var(--glow), 0.6); } }
 /* KIOSK oranje modus — lichte balken boven/onder, donker oranje midden (zoals de witte modus-indeling). */
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) { background-color: #EF5600 !important; }
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) .h-full.bg-orange-500,
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) .h-full.bg-\[\#FF5C00\] { background-color: #EF5600; }
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) .kiosk-head-wrap { background-color: #FF6B1A; }
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) [data-testid="kiosk-desktop-header"] {
-  background-color: #FF6B1A;
-  border-bottom: 1px solid rgba(224,78,0,0.4);
-  box-shadow: 0 10px 30px -14px rgba(120,30,0,0.45);
-  position: relative; z-index: 2;
-  margin-left: -1.5vw; margin-right: -1.5vw;
-  padding-left: calc(1.5vw + 0.5rem); padding-right: calc(1.5vw + 0.5rem);
-  margin-bottom: 0.75rem;
-}
-.kiosk-fullscreen:not(.kiosk-white):not(.kiosk-green) .kiosk-head-wrap [data-testid="kiosk-desktop-header"] { margin-bottom: 0; }
+
+
+
+
+
 .kiosk-white .h-full > .animate-spin.text-white { color: #FF5C00; }
 .kiosk-white .kiosk-chrome .text-white,
 .kiosk-white .kiosk-chrome [class*="text-white/"] { color: #0F172A; }
@@ -202,52 +193,28 @@ body.kiosk-mode.kiosk-white-body { background-color: #FFFFFF; }
   box-shadow: 0 0 0 1px #E2E8F0, 0 10px 28px -14px rgba(15, 23, 42, 0.18);
 }
 /* KIOSK groene modus — lichte mint achtergrond, witte kaarten en groene accenten. */
-body.kiosk-mode.kiosk-green-active { background-color: #F2F8F4; }
-.kiosk-fullscreen.kiosk-green { background-color: #F2F8F4 !important; }
-.kiosk-green .h-full.bg-orange-500,
-.kiosk-green .h-full.bg-\[\#FF5C00\] { background-color: #F2F8F4 !important; }
-.kiosk-green .kiosk-head-wrap,
-.kiosk-fullscreen.kiosk-green [data-testid="kiosk-desktop-header"] { background-color: #E7F3EA; }
-.kiosk-fullscreen.kiosk-green [data-testid="kiosk-desktop-header"] {
-  border-bottom: 1px solid #D5E8DA;
-  box-shadow: 0 10px 30px -14px rgba(20, 83, 45, 0.18);
-  position: relative; z-index: 2;
-  margin-left: -1.5vw; margin-right: -1.5vw;
-  padding-left: calc(1.5vw + 0.5rem); padding-right: calc(1.5vw + 0.5rem);
-  margin-bottom: 0.75rem;
-}
-.kiosk-fullscreen.kiosk-green .kiosk-head-wrap [data-testid="kiosk-desktop-header"] { margin-bottom: 0; }
-.kiosk-green .kiosk-chrome .text-white,
-.kiosk-green .kiosk-chrome [class*="text-white/"] { color: #173B2A; }
-.kiosk-green .kiosk-chrome svg.text-white,
-.kiosk-green .kiosk-chrome [data-testid^="kiosk-theme-toggle"] { color: #087A55; }
-.kiosk-green .kiosk-chrome [class*="bg-white/"] { background-color: #DCEFE2; color: #087A55; }
-.kiosk-green .kiosk-content-scroll .bg-white.rounded-2xl,
-.kiosk-green .kiosk-content-scroll .bg-white.rounded-3xl,
-.kiosk-green .kiosk-content-scroll button[class*="bg-white/"] {
-  background-color: #FFFFFF;
-  box-shadow: 0 0 0 1px #DCEBE0, 0 10px 28px -14px rgba(20, 83, 45, 0.16);
-}
-.kiosk-sheet-green.bg-orange-500 { background-color: #F2F8F4; }
-.kiosk-sheet-green .text-white { color: #173B2A; }
-.kiosk-sheet-green svg.text-white { color: #087A55; }
-.kiosk-sheet-green [class*="bg-white/"] { background-color: #E7F3EA; }
-.kiosk-sheet-green [class*="bg-orange-"] { background-color: #DCEFE2; }
-.kiosk-sheet-green [class*="text-orange-"] { color: #087A55; }
-.kiosk-sheet-green button[class*="bg-white"] { box-shadow: 0 0 0 1px #DCEBE0, 0 8px 20px -12px rgba(20, 83, 45, 0.18); }
-.kiosk-sheet-green button[data-testid="kiosk-add-sheet-close"] svg { color: #173B2A; }
-.kiosk-green button[class*="bg-[#FF5C00]"],
-.kiosk-green button[class*="bg-orange-500"],
-.kiosk-green button[class*="bg-orange-600"] { background-color: #00845D !important; }
-.kiosk-green [class*="text-[#FF5C00]"],
-.kiosk-green [class*="text-orange-500"],
-.kiosk-green [class*="text-orange-600"] { color: #087A55 !important; }
-body.kiosk-green-active button[class*="bg-[#FF5C00]"],
-body.kiosk-green-active button[class*="bg-orange-500"],
-body.kiosk-green-active button[class*="bg-orange-600"] { background-color: #00845D !important; }
-body.kiosk-green-active [class*="text-[#FF5C00]"],
-body.kiosk-green-active [class*="text-orange-500"],
-body.kiosk-green-active [class*="text-orange-600"] { color: #087A55 !important; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* Witte modus: zachte golvende achtergrond, glazen balken. */
 .kiosk-fullscreen.kiosk-white {
   background-color: #F4F5F7 !important;
@@ -294,30 +261,15 @@ nav.kiosk-white-nav button[data-active="true"] * { color: #FFFFFF !important; }
   nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 }
 /* The active kiosk root theme is authoritative if the body theme class lags. */
-.kiosk-fullscreen[data-theme="orange"] { background-color: #EF5600 !important; }
+
 /* Mobiel: staande golvende achtergrond; effen oranje lagen doorzichtig. */
 @media (max-width: 767px) {
-  .kiosk-fullscreen[data-theme="orange"] {
-    background-image: var(--kiosk-orange-bg-portrait, none); background-size: cover; background-position: center;
-  }
-  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
-  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
-  .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap {
-    background: linear-gradient(180deg, rgba(255,150,40,0.6), rgba(255,107,26,0.4)) !important;
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgba(255,255,255,0.45);
-    box-shadow: 0 8px 24px -12px rgba(120,30,0,0.45);
-  }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] {
-    background: transparent !important; border-bottom: 0; backdrop-filter: none;
-  }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] button:not([data-testid="back-to-locations"]):not([data-testid="kiosk-header-search"]) {
-    background: linear-gradient(180deg, #FFB45A 0%, #FF7A1A 100%) !important;
-    border: 1.5px solid rgba(255,255,255,0.65);
-    box-shadow: 0 5px 12px -4px rgba(120,30,0,0.55), inset 0 1px 0 rgba(255,255,255,0.7);
-    color: #fff;
-  }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
+  
+  
+  
+  
+  
+  
   nav[data-testid="kiosk-mobile-bottom-bar"].bg-\[\#FF6B1A\] {
     background: linear-gradient(180deg, rgba(255,140,40,0.55), rgba(230,80,0,0.8)) !important;
     backdrop-filter: blur(8px);
@@ -329,26 +281,12 @@ nav.kiosk-white-nav button[data-active="true"] * { color: #FFFFFF !important; }
 }
 /* Desktop (md+): golvende achtergrond, glazen balken, glanzende knoppen. Mobiel blijft ongewijzigd. */
 @media (min-width: 768px) {
-  .kiosk-fullscreen[data-theme="orange"] {
-    background-image: var(--kiosk-orange-bg, none); background-size: cover; background-position: center;
-  }
-  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-orange-500,
-  .kiosk-fullscreen[data-theme="orange"] .h-full.bg-\[\#FF5C00\] { background-color: transparent !important; }
-  .kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap { background: transparent !important; }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] {
-    background: linear-gradient(180deg, rgba(255,150,40,0.55), rgba(255,107,26,0.35)) !important;
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgba(255,255,255,0.45);
-    box-shadow: 0 8px 24px -12px rgba(120,30,0,0.45);
-  }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-10"],
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] button[class*="rounded-full"][class*="w-11"] {
-    background: linear-gradient(180deg, #FFB45A 0%, #FF7A1A 100%) !important;
-    border: 1.5px solid rgba(255,255,255,0.65);
-    box-shadow: 0 5px 12px -4px rgba(120,30,0,0.55), inset 0 1px 0 rgba(255,255,255,0.7);
-    color: #fff;
-  }
-  .kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-admin-menu-btn"] { border-radius: 14px !important; }
+  
+  
+  
+  
+  
+  
   nav[data-testid="kiosk-bottom-bar"].bg-\[\#FF6B1A\] {
     background: linear-gradient(180deg, rgba(255,140,40,0.55), rgba(230,80,0,0.75)) !important;
     backdrop-filter: blur(8px);
@@ -363,14 +301,9 @@ nav.kiosk-white-nav button[data-active="true"] * { color: #FFFFFF !important; }
     box-shadow: 0 6px 16px -4px rgba(120,30,0,0.6), inset 0 -2px 0 rgba(255,92,0,0.15);
   }
 }
-.kiosk-fullscreen[data-theme="orange"] .kiosk-head-wrap,
-.kiosk-fullscreen[data-theme="orange"] [data-testid="kiosk-desktop-header"] { background-color: #FF6B1A !important; }
-.kiosk-fullscreen[data-theme="orange"] button[class*="bg-[#FF5C00]"],
-.kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-500"],
-.kiosk-fullscreen[data-theme="orange"] button[class*="bg-orange-600"] { background-color: #FF5C00 !important; }
-.kiosk-fullscreen[data-theme="orange"] [class*="text-[#FF5C00]"],
-.kiosk-fullscreen[data-theme="orange"] [class*="text-orange-500"],
-.kiosk-fullscreen[data-theme="orange"] [class*="text-orange-600"] { color: #FF5C00 !important; }
+
+
+
 /* Beheer-pagina's in de kiosk: aanraakvriendelijke kiosk-stijl (groter, oranje accenten). */
 :is(.kiosk-admin-skin, body.kiosk-admin-active .ksm-root) { font-size: 16px; }
 body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root h2,
@@ -708,7 +641,7 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   border-top: 1px solid rgba(15, 23, 42, 0.1);
   box-shadow: 0 -8px 18px -18px rgba(15, 23, 42, 0.4);
 }
-.kiosk-sheet-green .kiosk-add-sheet-footer { border-top-color: #D5E8DA; }
+
 .kiosk-sheet-white.bg-orange-500 { background-color: #F4F5F7; }
 .kiosk-sheet-white .text-white { color: #0F172A; }
 .kiosk-sheet-white svg.text-white { color: #FF5C00; }
@@ -723,19 +656,7 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   .kiosk-modal-white .kiosk-modal-head svg { color: #FF5C00; }
   .kiosk-modal-white .kiosk-modal-head button svg { color: #64748B; }
 }
-@media (max-width: 639px) {
-  .kiosk-modal-green .kiosk-modal-head { background-color: #E7F3EA; border-color: #D5E8DA; }
-  .kiosk-modal-green .kiosk-modal-head h3 { color: #173B2A; }
-  .kiosk-modal-green .kiosk-modal-head [class*="bg-white/"] { background-color: #DCEFE2; }
-  .kiosk-modal-green .kiosk-modal-head svg { color: #087A55; }
-  .kiosk-modal-green .kiosk-modal-head button svg { color: #496B56; }
-  .kiosk-modal-green button[class*="bg-[#FF5C00]"],
-  .kiosk-modal-green button[class*="bg-orange-500"],
-  .kiosk-modal-green button[class*="bg-orange-600"] { background-color: #00845D !important; }
-  .kiosk-modal-green [class*="text-[#FF5C00]"],
-  .kiosk-modal-green [class*="text-orange-500"],
-  .kiosk-modal-green [class*="text-orange-600"] { color: #087A55 !important; }
-  }
+
   .kiosk-modal-footer > button { min-height: 3.5rem; border-radius: 1rem; font-size: 1rem; }
   .kiosk-modal-footer > button[class*="bg-[#FF5C00]"],
   .kiosk-modal-footer > button[class*="bg-orange-500"] {
@@ -1702,3 +1623,39 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 @keyframes printer-lamp-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
 .printer-lamp-blink { animation: printer-lamp-blink 1s steps(1, end) infinite; }
 @media (max-width: 767px) { .kiosk-ui [data-testid="kiosk-toolbar"] { display: none !important; } }
+
+/* UI-Thema: beheer-pagina's (mobiel) in dezelfde stijl als Facturen */
+.kiosk-ui .kiosk-ui-admin .bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl) { border-radius: 1.5rem; border-color: transparent; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin [data-testid*="-row-"] p.font-black,
+.kiosk-ui .kiosk-ui-admin [data-testid*="-card-"] p.font-black { color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button { border-radius: 1rem; min-height: 2.5rem; font-weight: 900; background-color: #FFFFFF; color: #1B2A5C; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+.kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button[class*="bg-[#FF5C00]"] { background-color: #FF5C00; color: #FFFFFF; }
+.kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
+
+/* UI-Thema mobiel: Fx-bouwstenen (rijen, stats, zoek, detailkop) in Facturen-stijl */
+.kiosk-ui .kiosk-ui-admin .fx-stats { gap: 0.625rem; }
+.kiosk-ui .kiosk-ui-admin .fx-stat { background: #FFFFFF; border-radius: 1.5rem; padding: 0.875rem 1rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div:first-child { color: #8A94B0; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div:last-child { font-size: 1.125rem; color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-red-600 { color: #DC2626; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-emerald-600 { color: #059669; }
+.kiosk-ui .kiosk-ui-admin .fx-stat > div.text-orange-600, .kiosk-ui .kiosk-ui-admin .fx-stat > div.text-amber-600 { color: #FF5C00; }
+.kiosk-ui .kiosk-ui-admin .fx-search { background: #FFFFFF; border: 0; border-radius: 9999px; height: 3rem; padding: 0 1rem; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); }
+.kiosk-ui .kiosk-ui-admin .kiosk-fx-row { background: #FFFFFF; border: 0; border-radius: 1.5rem; padding: 0.875rem 1rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .kiosk-fx-row .text-slate-900 { color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-header { background: #FFFFFF; border-radius: 1.5rem; padding: 1rem 1.25rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+.kiosk-ui .kiosk-ui-admin .fx-header .text-slate-900 { color: #1B2A5C; }
+.kiosk-ui .kiosk-ui-admin .fx-back { background: #FFFFFF; border-radius: 9999px; padding: 0.5rem 0.875rem; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); }
+.kiosk-ui .kiosk-ui-admin button.bg-\[\#FF5C00\]:not([data-testid$="-filter-bar"] > button) { border-radius: 1rem; }
+.kiosk-ui .kiosk-ui-admin .border.border-slate-200:is(.rounded-xl, .rounded-2xl):not(.kiosk-fx-row):not(.fx-search) { border-color: transparent; background: #FFFFFF; border-radius: 1.5rem; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
+/* UI-Thema mobiel: popup-formulieren van de beheerpagina's in UI-stijl (bottom sheet) */
+@media (max-width: 767px) {
+  body.kiosk-popup-active .ui-modal-root > [class*="fixed"][class*="inset-0"] { z-index: 200 !important; background: rgba(27, 42, 92, 0.45) !important; backdrop-filter: none !important; align-items: flex-end !important; justify-content: center !important; padding: 0 !important; }
+  body.kiosk-popup-active .ui-modal-root > [class*="fixed"][class*="inset-0"] > div { width: 100% !important; max-width: 100% !important; max-height: 92vh !important; overflow-y: auto; background: #F4F6FB !important; border: 0 !important; border-radius: 1.75rem 1.75rem 0 0 !important; box-shadow: 0 -16px 40px -20px rgba(15, 23, 42, 0.5) !important; color: #1B2A5C; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  body.kiosk-popup-active .ui-modal-root h1, body.kiosk-popup-active .ui-modal-root h2, body.kiosk-popup-active .ui-modal-root h3 { color: #1B2A5C !important; font-weight: 900; }
+  body.kiosk-popup-active .ui-modal-root label, body.kiosk-popup-active .ui-modal-root .text-slate-500, body.kiosk-popup-active .ui-modal-root .text-slate-600 { color: #6B7794; }
+  body.kiosk-popup-active .ui-modal-root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), body.kiosk-popup-active .ui-modal-root select, body.kiosk-popup-active .ui-modal-root textarea { background: #FFFFFF !important; border: 0 !important; border-radius: 1rem !important; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); color: #1B2A5C; min-height: 3rem; }
+  body.kiosk-popup-active .ui-modal-root button[class*="bg-[#FF5C00]"], body.kiosk-popup-active .ui-modal-root button[class*="bg-orange-"], body.kiosk-popup-active .ui-modal-root button[type="submit"] { border-radius: 1rem !important; min-height: 3rem; font-weight: 900; }
+  body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-100"], body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-200"], body.kiosk-popup-active .ui-modal-root button[class*="border-slate"] { background: #FFFFFF !important; border-radius: 1rem !important; border-color: transparent !important; color: #1B2A5C; font-weight: 900; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+  body.kiosk-popup-active .ui-modal-root .bg-slate-50, body.kiosk-popup-active .ui-modal-root .bg-slate-100:not(button), body.kiosk-popup-active .ui-modal-root .bg-white:is(.rounded-xl, .rounded-2xl) { background: #FFFFFF !important; border-radius: 1.25rem !important; border-color: transparent !important; }
+}

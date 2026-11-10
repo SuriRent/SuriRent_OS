@@ -20,5 +20,5 @@ export default function Modal({ children, open = true }) {
     return () => { document.body.style.overflow = prev; };
   }, [open]);
   if (!open) return null;
-  return createPortal(children, document.body);
+  return createPortal(<div className="ui-modal-root" style={{ display: 'contents' }}>{children}</div>, document.body);
 }

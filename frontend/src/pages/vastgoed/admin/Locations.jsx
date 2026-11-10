@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FxStats, FxTabs, FxSearch, FxRow, FxEmpty } from '../../../components/KioskFx';
+import { UiBar, UiHero, UiStat } from '../../../components/KioskInvoicesUi';
 import { useEmbedConfirm } from '../../../components/EmbedConfirm';
 import { MapPin, Plus, Pencil, Trash2, X, Check, Loader2, Building2, Image as ImageIcon, Search, ChevronRight, ArrowLeft } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
@@ -80,7 +81,7 @@ function LocationForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Locations({ embedded = false, kioskLayout = false, onBack }) {
+export default function Locations({ embedded = false, kioskLayout = false, ui = false, page = false, onBack }) {
   const [askConfirm, confirmNode] = useEmbedConfirm(embedded || kioskLayout);
   // SWR cache — tabwissel toont instant vanuit cache
   const { data: itemsRaw, mutate: refetch, isLoading } = useApiSWR('/locations');
@@ -277,6 +278,75 @@ export default function Locations({ embedded = false, kioskLayout = false, onBac
               <ArrowLeft className="h-4 w-4" /> Terug naar kiosk
             </button>
           </aside>
+        </div>
+        {sharedModals}
+      </div>
+    );
+  }
+
+  if (embedded && ui) {
+    const totalApts = items.reduce((s, l) => s + (l.apartments_total || 0), 0);
+    const occ = items.reduce((s, l) => s + (l.apartments_occupied || 0), 0);
+    const tabs = [{ v: 'all', label: 'Alle' }, { v: 'active', label: 'Actief' }, { v: 'empty', label: 'Leeg' }];
+    return (
+      <div className="space-y-3 pb-8" data-testid="locations-page">
+        <UiBar title="Locaties" onBack={onBack} testId="kiosk-admin-page-back" />
+        <UiHero icon={<MapPin className="w-7 h-7" strokeWidth={2} />} title="Locaties Overzicht" sub={`Totaal: ${items.length} locaties`} />
+        <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 px-2">
+          <UiStat Icon={MapPin} tone="bg-orange-100 text-[#FF5C00]" label="Locaties" value={items.length} />
+          <UiStat Icon={Check} tone="bg-emerald-500 text-white" label="Bezet" value={`${occ} / ${totalApts}`}
+            bar={`${totalApts ? Math.min(100, Math.round((occ / totalApts) * 100)) : 0}%`} barTone="bg-emerald-500" />
+          <UiStat Icon={Building2} tone="bg-sky-100 text-sky-600" label="Appartementen" value={totalApts} />
+        </div>
+        <div className="px-2">
+          <button type="button" onClick={() => { setDetailId(null); setCreating(true); }} data-testid="kiosk-loc-new-mobile"
+            className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+            <Plus className="h-4 w-4" /> Nieuwe locatie
+          </button>
+        </div>
+        <div className="px-2">
+        <label className="flex items-center gap-3 h-12 rounded-2xl bg-white px-4 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
+          <Search className="w-5 h-5 text-[#1B2A5C]" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek locatie of adres…" data-testid="loc-search"
+            className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" />
+          {q && <button type="button" onClick={() => setQ('')} aria-label="Wissen"><X className="w-4 h-4 text-slate-400" /></button>}
+        </label>
+        </div>
+        <div className="px-2 flex gap-1.5">
+          {tabs.map((f) => (
+            <button key={f.v} type="button" onClick={() => setFilter(f.v)} data-testid={`loc-filter-${f.v}`}
+              className={`flex-1 min-w-max px-3 h-10 rounded-2xl text-xs font-black transition-colors ${filter === f.v ? 'bg-[#FF5C00] text-white shadow' : 'bg-white text-[#1B2A5C] shadow-sm'}`}>
+              {f.label} ({counts[f.v]})
+            </button>
+          ))}
+        </div>
+        <div className="px-2 space-y-3">
+        {loading ? <Loader2 className="mx-auto my-8 h-7 w-7 animate-spin text-[#FF5C00]" /> : filtered.length === 0 ? (
+          <p className="py-8 text-center text-sm font-semibold text-slate-500" data-testid="loc-empty">Geen locaties gevonden.</p>
+        ) : filtered.map((l) => {
+          const act = (l.apartments_total || 0) > 0;
+          return (
+            <div key={l.id} role="button" tabIndex={0} onClick={() => setDetailId(l.id)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailId(l.id); }}
+              data-testid={`loc-row-${l.id}`}
+              className="flex items-center gap-3 rounded-3xl bg-white p-3 shadow-[0_10px_26px_-16px_rgba(15,23,42,0.4)] cursor-pointer">
+              {l.photo_url ? (
+                <img src={l.photo_url} alt={l.name} className="h-[52px] w-[52px] shrink-0 rounded-2xl object-cover bg-slate-100" loading="lazy"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-[#FF5C00]"><MapPin className="h-6 w-6" /></span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate                 text-[17px] font-extrabold leading-tight text-[#1B2A5C]">{l.name}</p>
+                                <p className="truncate text-[14px] text-slate-500">{l.address || '—'}</p>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                <span className={`rounded-full px-3 py-1.5 text-[12px] font-extrabold whitespace-nowrap ${act ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{act ? 'Actief' : 'Leeg'}</span>
+                <span className="text-[10px] font-bold text-slate-500">{l.apartments_occupied || 0} / {l.apartments_total || 0} bezet</span>
+              </div>
+              <span className="shrink-0 w-9 h-9 rounded-full bg-[#F1F3F9] flex items-center justify-center"><ChevronRight className="w-4 h-4 text-[#1B2A5C]" /></span>
+            </div>
+          );
+        })}
         </div>
         {sharedModals}
       </div>
