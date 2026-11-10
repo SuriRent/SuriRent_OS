@@ -11119,7 +11119,7 @@ class KioskThemeIn(BaseModel):
 @api.get("/auth/me/kiosk-theme")
 async def me_get_kiosk_theme(user=Depends(get_current_user)):
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
-    return {"theme": u.get("kiosk_theme") if u.get("kiosk_theme") in ("orange", "ui") else "white"}
+    return {"theme": u.get("kiosk_theme") if u.get("kiosk_theme") in ("orange", "white", "ui") else None}
 
 
 @api.put("/auth/me/kiosk-theme")

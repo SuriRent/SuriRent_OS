@@ -6056,9 +6056,10 @@ export default function KioskLayout() {
     // Thema is per gebruiker (account), niet per bedrijf: elke rol kiest zelf.
     if (!hasUserSession()) return;
     api.get('/auth/me/kiosk-theme').then(({ data }) => {
-      const t = data?.theme === 'orange' || data?.theme === 'ui' ? data.theme : 'white';
-      setKioskTheme(t);
-      localStorage.setItem('kiosk_theme', t);
+      const t = ['orange', 'white', 'ui'].includes(data?.theme) ? data.theme : null;
+      if (t) { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); return; }
+      const local = localStorage.getItem('kiosk_theme');
+      if (['orange', 'white', 'ui'].includes(local)) api.put('/auth/me/kiosk-theme', { theme: local }).catch(() => {});
     }).catch(() => {});
   }, []);
   const toggleTheme = useCallback(() => {
