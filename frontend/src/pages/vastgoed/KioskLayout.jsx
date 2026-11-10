@@ -1,7 +1,8 @@
 import { KioskAdminOnboarding } from '../../components/KioskAdminOnboarding';
+import villaM from '../../ui-villa-m.png';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
@@ -15,7 +16,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, LayoutGrid,
+  BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -292,7 +293,7 @@ function KioskBell() {
 
 // Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
 function KioskSettingsMenu() {
-  const { isAdmin } = useContext(KioskThemeCtx);
+  const { isAdmin, isUi } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
@@ -305,8 +306,8 @@ function KioskSettingsMenu() {
   return (
     <>
       <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-        className="hidden md:flex w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15">
-        <SettingsIcon className="w-6 h-6" />
+        className={`${isUi ? 'flex shadow-md bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
+        {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
       </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
@@ -361,10 +362,10 @@ function HeaderLive() {
 }
 
 function ThemeToggle({ testId, className = '' }) {
-  const { theme, toggle } = useContext(KioskThemeCtx);
+  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid={testId}
       aria-label={nextTheme} title={nextTheme}
@@ -379,13 +380,48 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
+function UiLocMenu({ opts, wrapClass, children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('touchstart', h);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h); };
+  }, [open]);
+  const items = [
+    ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
+    ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
+  ];
+  return (
+    <div ref={ref} className={wrapClass}>
+      {children(() => setOpen((o) => !o))}
+      {open && (
+        <div data-testid="kiosk-ui-location-menu" className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left">
+          {items.map((it) => (
+            <button key={it.id} type="button" onClick={() => { setOpen(false); opts.onPick(it.id); }}
+              data-testid={`kiosk-ui-location-${it.id}`}
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${opts.currentId === it.id ? 'bg-orange-50' : ''}`}>
+              <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate flex-1">{it.label}</span>
+              {opts.currentId === it.id && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DesktopKioskHeader({
-  currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch,
+  currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
   currentApartment, tenant, title = 'Kies uw appartement',
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
+  const { isUi } = useContext(KioskThemeCtx);
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
+  const locLabel = currentStep === 'stroom' ? title : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
   return (
     <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
       <KioskAdminMenu returnTo={{
@@ -399,11 +435,27 @@ function DesktopKioskHeader({
           {company?.name || 'Kiosk'}
         </span>
       </div>
-      <button type="button" onClick={totalGroups > 1 ? onLocations : undefined} data-testid="back-to-locations"
-        className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
-        {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
-        <span className="truncate">{currentStep === 'stroom' ? title : loc ? `${loc}  •  ${title}` : title}</span>
-      </button>
+      {isUi && <span className="hidden md:block w-px h-9 bg-slate-300 shrink-0" aria-hidden="true" />}
+      {(() => {
+        const useMenu = isUi && locOpts && totalGroups > 1 && currentStep === 'select';
+        const btn = (onClick) => (
+          <button type="button" onClick={onClick} data-testid="back-to-locations"
+            className={`hidden md:flex min-w-0 items-center justify-center gap-2 text-white font-semibold text-base lg:text-lg ${currentStep === 'stroom' ? 'mx-auto px-8 py-2.5 rounded-full bg-black/20 border border-white/30 shadow-lg font-black' : 'flex-1'} ${totalGroups > 1 ? 'hover:opacity-80' : 'cursor-default'}`}>
+            {currentStep === 'stroom' ? <Zap className="w-5 h-5 shrink-0" fill="currentColor" /> : loc && <MapPin className="w-5 h-5 shrink-0" />}
+            <span className="truncate">{locLabel}</span>
+            {isUi && currentStep !== 'stroom' && <ChevronDown className="w-4 h-4 shrink-0" />}
+          </button>
+        );
+        return useMenu
+          ? <UiLocMenu opts={locOpts} wrapClass="hidden md:flex flex-1 min-w-0 relative">{(toggle) => btn(toggle)}</UiLocMenu>
+          : btn(totalGroups > 1 ? onLocations : undefined);
+      })()}
+      {isUi && onSearch && (
+        <button type="button" onClick={onSearch} data-testid="kiosk-ui-header-search"
+          className="hidden md:flex flex-1 min-w-0 max-w-[420px] h-11 items-center gap-2 rounded-full bg-slate-100/80 px-4 text-slate-400 text-[15px]">
+          <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" /> <span className="truncate">Zoek huurder...</span>
+        </button>
+      )}
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {tenant && (
           <div className="hidden md:flex items-center gap-2 rounded-full bg-white/95 pl-1 pr-3 py-1 max-w-[40vw]" data-testid="kiosk-header-tenant">
@@ -419,7 +471,7 @@ function DesktopKioskHeader({
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
         )}
-        <HeaderLive />
+        {!isUi && <HeaderLive />}
         <ThemeToggle testId="kiosk-theme-toggle" className="hidden md:flex" />
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
@@ -430,10 +482,165 @@ function DesktopKioskHeader({
   );
 }
 
+const UI_FILTERS = [
+  { id: 'all', label: 'Alle' }, { id: 'paid', label: 'Betaald' }, { id: 'partial', label: 'Gedeeltelijk' },
+  { id: 'unpaid', label: 'Niet betaald' }, { id: 'vacant', label: 'Vrij' },
+];
+
+function uiAptStatus(a) {
+  if (!a.tenant_id) return 'vacant';
+  if (a.tenant_deposit_pending) return 'deposit';
+  return a.pay_status === 'paid' ? 'paid' : a.pay_status === 'partial' ? 'partial' : 'unpaid';
+}
+
+function UiStatusPill({ a, className = '' }) {
+  const s = uiAptStatus(a);
+  const base = `inline-flex items-center justify-center gap-1.5 rounded-full px-3 md:px-4 py-1 md:py-1.5 text-[13px] md:text-[15px] font-bold text-white whitespace-nowrap ${className}`;
+  if (s === 'vacant') return <span className={`${base} bg-slate-700`} data-testid={`apt-${a.number}-link`}><ArrowRight className="w-4 h-4" strokeWidth={3} /> Beschikbaar</span>;
+  if (s === 'deposit') return <span className={`${base} bg-sky-600`} data-testid={`apt-${a.number}-deposit-pending`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Wacht op borg</span>;
+  if (s === 'paid') return <span className={`${base} bg-emerald-600`} data-testid={`apt-${a.number}-paid`}><Check className="w-4 h-4" strokeWidth={3} /> Betaald</span>;
+  if (s === 'partial') return <span className={`${base} bg-amber-500`} data-testid={`apt-${a.number}-partial`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Gedeeltelijk</span>;
+  return <span className={`${base} bg-red-500`} data-testid={`apt-${a.number}-unpaid`}><X className="w-4 h-4" strokeWidth={3} /> Niet betaald</span>;
+}
+
+// UI-thema: lijst-rij op telefoon, kaart op desktop/tablet.
+function UiAptCard({ a, onOpen }) {
+  const vacant = !a.tenant_id;
+  const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
+  const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
+  return (
+    <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
+      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-[16px] bg-white px-3 py-2 transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className={`flex items-center gap-3 w-full min-w-0`}>
+        <div className={`shrink-0 rounded-full overflow-hidden w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
+          {src && !vacant
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <Home className={`w-7 h-7 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[18px] font-extrabold text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
+          <p className={`flex items-center gap-1.5 text-[15px] text-slate-700 font-medium truncate`}>
+            {!vacant && <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />}
+            <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
+          </p>
+        </div>
+        <UiStatusPill a={a} className="w-[118px] shrink-0" />
+        <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center">
+          <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
+        </span>
+      </div>
+
+    </button>
+  );
+}
+
+function VillaArt({ className = '' }) {
+  return (
+    <svg viewBox="0 0 240 150" className={className} aria-hidden="true">
+      <ellipse cx="120" cy="140" rx="112" ry="9" fill="#000" opacity="0.08" />
+      <rect x="30" y="62" width="120" height="76" rx="4" fill="#fff" />
+      <rect x="130" y="40" width="80" height="98" rx="4" fill="#FFE3CC" />
+      <path d="M22 66 L90 22 L158 66 Z" fill="#FF7A1F" />
+      <path d="M124 44 L170 14 L216 44 Z" fill="#E85D00" />
+      <rect x="44" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
+      <rect x="80" y="80" width="26" height="30" rx="3" fill="#BFE3F5" />
+      <rect x="146" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
+      <rect x="178" y="60" width="24" height="26" rx="3" fill="#BFE3F5" />
+      <rect x="146" y="98" width="24" height="40" rx="3" fill="#1B2A5C" />
+      <rect x="112" y="96" width="22" height="42" rx="3" fill="#8A5A3B" />
+      <circle cx="16" cy="118" r="16" fill="#3FAE5A" />
+      <rect x="14" y="128" width="4" height="12" fill="#6B4423" />
+      <circle cx="226" cy="122" r="13" fill="#3FAE5A" />
+    </svg>
+  );
+}
+
+function UiHero({ apartments, locationName, locOpts }) {
+  const occ = apartments.filter((a) => a.tenant_id);
+  const paid = occ.filter((a) => a.pay_status === 'paid').length;
+  const unpaid = occ.length - paid;
+  const rent = occ.reduce((s, a) => s + (Number(a.rent_amount) || 0), 0);
+  const cur = occ.find((a) => a.currency)?.currency || 'SRD';
+  const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
+  const stat = (key, Icon, tone, label, value, bar, barTone) => (
+    <div key={key} className="kiosk-ui-stat rounded-2xl     bg-white px-2 py-2.5 md:px-4 md:py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
+          <div className="flex items-center gap-1.5 md:gap-2.5 min-w-0">
+        <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
+        <div className="min-w-0">
+          <p className="text-[11px] md:text-[12px] font-medium text-slate-600 truncate leading-tight">{label}</p>
+          <p className="text-[12.5px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
+        </div>
+        {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
+      </div>
+      {bar !== undefined && (
+        <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} /></div>
+      )}
+    </div>
+  );
+  return (
+    <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
+      {locationName && (() => {
+        const pill = (onClick) => (
+          <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
+            <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span><ChevronDown className="w-4 h-4 shrink-0" />
+          </button>
+        );
+        return (
+          <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
+            {locOpts
+              ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+              : pill(undefined)}
+          </div>
+        );
+      })()}
+      <VillaArt className="hidden md:block fixed right-6 bottom-24 w-72 pointer-events-none -z-10 opacity-90" />
+      <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+        <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
+          <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
+        </svg>
+        <img src={villaM} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none pointer-events-none -z-10" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+        <div className="relative flex items-center gap-3 min-w-0">
+          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
+            <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
+            <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[19px] md:text-3xl font-semibold md:font-bold tracking-tight leading-tight truncate">Appartementen Overzicht</h2>
+            <p className="text-[13px] md:text-base font-normal text-white/90 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
+          </div>
+        </div>
+        
+        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
+          {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
+          {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+          {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
+        </div>
+      </div>
+      <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
+        {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
+        {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+        {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
+      </div>
+    </div>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange,
 }) {
+  const { isUi } = useContext(KioskThemeCtx);
+  const [uiQ, setUiQ] = useState('');
+  const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const on = () => setIsDesk(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const [uiFilter, setUiFilter] = useState('all');
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -494,6 +701,7 @@ function ApartmentSelect({
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
   const showLocationPicker = totalGroups > 1 && selectedLocationId === null;
+  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
   }, [onLocationSelectionChange, selectedLocationId]);
@@ -528,6 +736,11 @@ function ApartmentSelect({
     selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
+  const shown = !isUi ? visible : visible.filter((a) => {
+    const term = uiQ.trim().toLowerCase();
+    if (uiFilter !== 'all' && uiAptStatus(a) !== uiFilter) return false;
+    return !term || `${a.number} ${a.tenant_name || ''}`.toLowerCase().includes(term);
+  });
 
   // ----- Location picker view -----
   if (showLocationPicker) {
@@ -596,8 +809,8 @@ function ApartmentSelect({
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
-        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
-      <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0">
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts} />
+      <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
             className="flex items-center gap-1 text-white/90 font-bold bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs">
@@ -609,13 +822,34 @@ function ApartmentSelect({
         </span>
       </div>
 
+      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && (
+        <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
+          <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
+            <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
+            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." data-testid="kiosk-ui-search"
+              className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+          </label>
+          <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
+            <SlidersHorizontal className="w-5 h-5" />
+            <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
+              className="absolute inset-0 opacity-0 w-full h-full">
+              {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2">
-          {visible.map((a) => {
+        <div className={isUi && !isDesk
+          ? 'grid grid-cols-1 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
+          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+          {shown.map((a) => {
+            if (isUi && !isDesk) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
@@ -685,7 +919,7 @@ function ApartmentSelect({
             </button>
             );
           })}
-          {visible.length === 0 && (
+          {shown.length === 0 && (
             <div className="col-span-full bg-white/90 rounded-2xl p-10 text-center">
               <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-semibold">Geen appartementen op deze locatie.</p>
@@ -5525,10 +5759,10 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
 function SheetThemeButton() {
-  const { theme, toggle } = useContext(KioskThemeCtx);
+  const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = white ? 'Groene modus' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
@@ -5805,7 +6039,7 @@ export default function KioskLayout() {
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   const [kioskTheme, setKioskTheme] = useState(() => {
     const stored = localStorage.getItem('kiosk_theme');
-    return stored === 'orange' ? 'orange' : 'white';
+    return ['orange', 'ui'].includes(stored) ? stored : 'white';
   });
   useEffect(() => {
     const root = document.documentElement;
@@ -5815,33 +6049,40 @@ export default function KioskLayout() {
       if (isAndroid) root.classList.remove('kiosk-android-device');
     };
   }, []);
+  const hasUserSession = () => {
+    try { return !!localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1'; } catch { return false; }
+  };
   useEffect(() => {
-    const apply = (t) => { if (t === 'white' || t === 'orange' || t === 'green') { t = t === 'orange' ? 'orange' : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
-    api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
-    const onWs = (e) => apply(e.detail);
-    window.addEventListener('kiosk-theme', onWs);
-    return () => window.removeEventListener('kiosk-theme', onWs);
+    // Thema is per gebruiker (account), niet per bedrijf: elke rol kiest zelf.
+    if (!hasUserSession()) return;
+    api.get('/auth/me/kiosk-theme').then(({ data }) => {
+      const t = data?.theme === 'orange' || data?.theme === 'ui' ? data.theme : 'white';
+      setKioskTheme(t);
+      localStorage.setItem('kiosk_theme', t);
+    }).catch(() => {});
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : 'orange';
+    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
-    api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
+    if (hasUserSession()) api.put('/auth/me/kiosk-theme', { theme: next }).catch(() => {});
   }, [kioskTheme]);
-  const isWhite = kioskTheme === 'white';
+  const isUi = kioskTheme === 'ui';
+  const isWhite = kioskTheme === 'white' || isUi;
   const isGreen = false;
   const isOrange = kioskTheme === 'orange';
   useEffect(() => {
-    const bg = isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
+    const bg = isUi ? '#F6F7FB' : isWhite ? '#FFFFFF' : isGreen ? '#F2F8F4' : '#FF5C00';
     document.documentElement.style.backgroundColor = bg;
     document.body.style.backgroundColor = bg;
     document.body.classList.toggle('kiosk-white-body', isWhite);
+    document.body.classList.toggle('kiosk-ui-body', isUi);
     document.body.classList.toggle('kiosk-green-active', isGreen);
     setIosStatusBar(bg);
-  }, [isWhite, isGreen]);
+  }, [isWhite, isGreen, isUi]);
   useEffect(() => {
     const savedTheme = localStorage.getItem('kiosk_theme');
-    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : '#FFFFFF';
+    const BODY_BG = savedTheme === 'orange' ? '#FF5C00' : savedTheme === 'ui' ? '#F6F7FB' : '#FFFFFF';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
     const prevBodyBg = document.body.style.backgroundColor;
@@ -5852,7 +6093,7 @@ export default function KioskLayout() {
     return () => {
       setIosStatusBar('#F7F8FA');
       document.body.classList.remove('kiosk-mode');
-      document.body.classList.remove('kiosk-white-body', 'kiosk-green-active');
+      document.body.classList.remove('kiosk-white-body', 'kiosk-green-active', 'kiosk-ui-body');
       document.documentElement.style.backgroundColor = prevHtmlBg;
       document.body.style.backgroundColor = prevBodyBg;
     };
@@ -6104,7 +6345,7 @@ export default function KioskLayout() {
   };
 
 
-  const themeCtx = useMemo(() => ({ theme: kioskTheme, toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
+  const themeCtx = useMemo(() => ({ theme: kioskTheme === 'ui' ? 'white' : kioskTheme, rawTheme: kioskTheme, isUi: kioskTheme === 'ui', toggle: toggleTheme, isAdmin: hasAdminAccess }), [kioskTheme, toggleTheme, hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
@@ -6366,7 +6607,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
+    <div className={`kiosk-fullscreen ${isWhite ? 'kiosk-white bg-white' : isGreen ? 'kiosk-green bg-[#F2F8F4]' : 'bg-orange-500'}${isUi ? ' kiosk-ui' : ''}`} data-testid="kiosk-root" data-theme={kioskTheme} style={isOrange ? { '--kiosk-orange-bg': 'url(/kiosk-orange-bg.png)', '--kiosk-orange-bg-portrait': 'url(/kiosk-orange-bg-portrait.png)' } : isUi ? undefined : isWhite ? { '--kiosk-white-bg': 'url(/kiosk-white-bg.jpg)', '--kiosk-white-bg-portrait': 'url(/kiosk-white-bg-portrait.jpg)' } : undefined}>
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -6647,8 +6888,28 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {showMobileKioskBar && !keyboardOpen && <div className="hidden min-[390px]:block md:hidden h-14" aria-hidden="true" />}
-      {showMobileKioskBar && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {showMobileKioskBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
+      {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
+        <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
+          <div className="grid grid-cols-5 items-stretch">
+            {[
+              { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
+              { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
+              { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
+              { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
+            ].map(({ id, label, Icon, on, fn }) => (
+              <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
+                <Icon className="w-6 h-6" strokeWidth={2} />
+                <span className="text-[10.5px] font-semibold leading-tight whitespace-nowrap">{label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      ), document.body)}
+      {showMobileKioskBar && !isUi && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
@@ -6697,11 +6958,17 @@ export default function KioskLayout() {
       {showDesktopBar && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t ${isWhite ? 'kiosk-white-nav ' : ''}${isGreen || isWhite ? 'bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]' : 'bg-[#FF6B1A] border-[#E04E00]/40 shadow-[0_-10px_30px_-14px_rgba(120,30,0,0.45)]'}`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className="flex items-stretch gap-1 px-2 py-2">
-            <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />
+          <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
+            {isUi ? (
+              <button type="button" onClick={() => { if (canBack) goBack(); }} data-testid="kiosk-ui-bar-back" data-active="true"
+                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1.5 rounded-2xl py-2.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
+                <LayoutGrid className="w-7 h-7" strokeWidth={2} />
+                <span className="text-[11px] lg:text-sm font-bold leading-tight">Terug</span>
+              </button>
+            ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white={isWhite} green={isGreen} />}
             {(tenantBar ? tenantBarItems : [
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
-              { id: 'apartments', label: 'Appartementen', icon: Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
+              { id: 'apartments', label: 'Appartementen', icon: isUi ? Building2 : Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
@@ -6712,14 +6979,17 @@ export default function KioskLayout() {
               const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
-                <button key={id} type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
+                <Fragment key={id}>
+                {isUi && <span className="self-center h-10 w-px bg-slate-300/80 shrink-0" aria-hidden="true" />}
+                <button type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? (isGreen ? 'bg-[#00845D] text-white shadow-md' : isWhite ? 'bg-[#FF5C00] text-white shadow-md' : 'bg-white text-[#F26A12] shadow-md') : (isGreen ? 'text-slate-600 bg-[#F1F8F4] hover:bg-emerald-50 hover:text-emerald-800' : isWhite ? 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]' : 'text-white bg-white/[0.06] hover:bg-white/15')}`}>
                   <Icon className="w-7 h-7" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
+                </Fragment>
               );
             })}
-            <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} green={isGreen} />
+            {!isUi && <KioskHistBtn dir="next" disabled={!canFwd} onClick={() => goHist(1)} white={isWhite} green={isGreen} />}
           </div>
         </nav>
       ), document.body)}

@@ -1521,3 +1521,176 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 @media (max-width: 767px) {
   [data-testid="kiosk-toolbar"]:not(:has(> button)) { display: none; }
 }
+
+/* ===== Kiosk UI thema (bovenop wit) ===== */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background: #F6F7FB !important;
+  background-image:
+    radial-gradient(120% 40% at 50% 108%, rgba(255,122,24,0.28) 0%, rgba(255,122,24,0) 70%),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+}
+.kiosk-ui [data-testid="kiosk-desktop-header"] {
+  background: #fff !important;
+  border-radius: 22px;
+  margin: 8px 10px 0;
+  box-shadow: 0 10px 30px -16px rgba(15,23,42,0.35);
+  border: 0 !important;
+}
+.kiosk-ui .kiosk-header-search {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+  color: #fff !important;
+  border-radius: 14px;
+}
+.kiosk-ui .kiosk-ui-card {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 12px 28px -18px rgba(15,23,42,0.4);
+  border: 1px solid rgba(15,23,42,0.04);
+}
+.kiosk-ui .kiosk-ui-stat {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px -16px rgba(15,23,42,0.4);
+}
+.kiosk-ui nav.kiosk-white-nav,
+.kiosk-ui [data-testid="kiosk-bottom-bar"] {
+  background: #fff !important;
+  border-radius: 24px !important;
+  box-shadow: 0 14px 34px -16px rgba(15,23,42,0.4) !important;
+}
+@media (max-width: 767px) {
+  .kiosk-ui .kiosk-mobile-has-bar { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+  .kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0; border-radius: 18px; }
+}
+
+/* UI thema mobiel: header zonder zwevende balk, oranje banner die uitvloeit */
+@media (max-width: 767px) {
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0 !important; background: transparent !important; box-shadow: none !important; border: 0 !important; backdrop-filter: none !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-header-settings"] { background: #fff !important; box-shadow: 0 6px 14px -8px rgba(15,23,42,0.4) !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-header-settings"] svg { color: #1B2A5C !important; }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-head-wrap { background: transparent !important; box-shadow: none !important; border: 0 !important; }
+  .kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"] { font-size: 20px !important; font-weight: 800 !important; }
+  .kiosk-ui .kiosk-ui-card { border-radius: 20px !important; box-shadow: 0 6px 16px -12px rgba(15,23,42,0.35); }
+}
+
+/* UI thema: header-tekst + locatiepil */
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"],
+.kiosk-ui [data-testid="kiosk-desktop-header"] > div > svg { color: #1B2A5C !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] > div > svg.lucide-house,
+.kiosk-ui [data-testid="kiosk-desktop-header"] > div > svg.lucide-home { color: #FF5C00 !important; }
+.kiosk-ui [data-testid="back-to-locations"] {
+  flex: 0 1 auto !important;
+  margin: 0 auto 0 8px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: #F1F3F9;
+  color: #1B2A5C !important;
+  font-size: 14px !important;
+}
+.kiosk-ui [data-testid="back-to-locations"] svg { color: #FF5C00; }
+
+/* UI thema v2: golf-achtergrond, platte onderbalk, header */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 300' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23FFB36B'/%3E%3Cstop offset='1' stop-color='%23FF6A00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 230 C300 280 700 300 1000 190 C1250 100 1450 90 1600 120 L1600 300 L0 300 Z' fill='url(%23g)'/%3E%3Cpath d='M0 120 C250 200 600 230 900 150 C1200 70 1450 70 1600 40 L1600 300 L0 300 Z' fill='%23FFD9B8' opacity='0.45'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-position: bottom center, center !important;
+  background-size: 100% 260px, 100% 100% !important;
+}
+.kiosk-ui [data-testid="kiosk-bottom-bar"] {
+  border-radius: 24px 24px 0 0 !important;
+  border: 0 !important;
+}
+.kiosk-ui nav.kiosk-white-nav button:not([data-active="true"]) { background: transparent !important; }
+.kiosk-ui .kiosk-ui-bar > button { flex: 1 1 0; }
+.kiosk-ui .kiosk-ui-bar > button[data-testid="kiosk-ui-bar-back"] { flex: 0 0 auto; }
+.kiosk-ui [data-testid="kiosk-ui-header-search"] { color: #94A3B8 !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-company"] { font-size: 26px; }
+
+/* UI thema v3: exact ontwerp */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background-image:
+    url("./ui-bg.jpg"),
+    radial-gradient(circle at -2% 14%, rgba(255,140,40,0.55) 0, rgba(255,170,90,0.25) 6%, rgba(255,200,150,0) 14%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 120' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23FFB36B'/%3E%3Cstop offset='1' stop-color='%23FF8A2B'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 40 C150 110 300 120 420 100 L800 120 L800 120 L0 120 Z' fill='url(%23g)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0 bottom 0, 0 0, left bottom, center !important;
+  background-size: auto 34%, 100% 100%, 45% 90px, 100% 100% !important;
+}
+.kiosk-ui nav.kiosk-white-nav,
+.kiosk-ui [data-testid="kiosk-bottom-bar"] { background: #fff !important; }
+.kiosk-ui nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+.kiosk-ui nav.kiosk-white-nav button[data-active="true"],
+.kiosk-ui nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+  border-radius: 18px; box-shadow: 0 8px 18px -8px rgba(255,92,0,0.7) !important; color: #fff !important;
+}
+.kiosk-ui nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] * { color: #fff !important; }
+.kiosk-ui nav.kiosk-white-nav button:not([data-active="true"]) { color: #1B2A5C; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid^="kiosk-theme-toggle"] { background: #FFF1E8 !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid^="kiosk-theme-toggle"] svg { color: #FF5C00 !important; }
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-settings"] {
+  background: #fff; box-shadow: 0 6px 16px -8px rgba(15,23,42,0.4); color: #1B2A5C !important;
+}
+.kiosk-ui [data-testid="kiosk-desktop-header"] [data-testid="kiosk-header-settings"] svg { color: #1B2A5C !important; }
+
+/* UI thema v4 */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background-image:
+    url("./ui-bg.jpg"),
+    url("./ui-bg.jpg"),
+    radial-gradient(ellipse 14% 22% at 0% 16%, rgba(255,140,40,0.7) 0, rgba(255,170,90,0.3) 55%, rgba(255,200,150,0) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 120' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23FFB36B'/%3E%3Cstop offset='1' stop-color='%23FF8A2B'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 70 C150 110 300 120 420 105 L800 120 L0 120 Z' fill='url(%23g)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #F8F9FD 0%, #EEF1F8 100%) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0 bottom 10vh, left 0 bottom 10vh, 0 0, left 0 bottom 10vh, center !important;
+  background-size: 58% auto, 22% auto, 100% 100%, 45% 60px, 100% 100% !important;
+}
+.kiosk-ui, body.kiosk-ui-body nav.kiosk-white-nav { font-family: 'Plus Jakarta Sans','Inter','Segoe UI',system-ui,sans-serif; }
+.kiosk-ui [data-testid="kiosk-header-company"], .kiosk-ui-hero h2, .kiosk-ui-card p, .kiosk-ui-stat p {
+  letter-spacing: 0 !important; font-weight: 800;
+}
+.kiosk-ui [data-testid="kiosk-subscription-bell"] button {
+  width: 46px; height: 46px; border-radius: 9999px; background: #fff !important;
+  box-shadow: 0 6px 16px -8px rgba(15,23,42,0.4); color: #1B2A5C !important;
+}
+body.kiosk-ui-body nav.kiosk-white-nav, body.kiosk-ui-body [data-testid="kiosk-bottom-bar"] {
+  background: #fff !important; border: 0 !important; border-radius: 24px 24px 0 0 !important;
+  box-shadow: 0 -10px 30px -16px rgba(15,23,42,0.3) !important;
+}
+body.kiosk-ui-body nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]) {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; color: #1B2A5C;
+}
+body.kiosk-ui-body nav.kiosk-white-nav button:not(.bg-white):not([data-testid="kiosk-mobile-bar-plus"]):not([data-active="true"]) svg { color: #1B2A5C; }
+body.kiosk-ui-body nav.kiosk-white-nav button[data-active="true"],
+body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+  border-radius: 18px !important; box-shadow: 0 8px 18px -8px rgba(255,92,0,0.7) !important;
+}
+body.kiosk-ui-body nav.kiosk-white-nav button[data-active="true"] *,
+body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"] * { color: #fff !important; }
+
+/* UI thema v5: officiele achtergrond */
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background-color: #F4F7FD !important;
+  background-image: url("./ui-bg.jpg") !important;
+  background-repeat: no-repeat !important;
+  background-position: center bottom !important;
+  background-size: cover !important;
+}
+
+/* UI thema v6 */
+.kiosk-ui-card p, .kiosk-ui-stat p, .kiosk-ui-hero p { font-weight: 500 !important; }
+.kiosk-ui-card p:first-child { font-weight: 800 !important; }
+.kiosk-ui-stat p:last-child { font-weight: 800 !important; }
+.kiosk-ui-hero h2 { font-weight: 700 !important; }
+.kiosk-ui [data-testid="back-to-locations"] { background: transparent !important; padding: 8px 4px; }
+.kiosk-ui [data-testid="back-to-locations"] svg:last-child { background: #F1F3F9; border-radius: 9999px; padding: 3px; width: 24px; height: 24px; color: #1B2A5C; }
+body.kiosk-ui-body nav.kiosk-white-nav button[data-active="true"]:not(.zz1):not(.zz2):not(.zz3),
+body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:not(.zz1):not(.zz2):not(.zz3) {
+  background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+}
