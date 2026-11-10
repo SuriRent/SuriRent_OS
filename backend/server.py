@@ -11116,16 +11116,19 @@ class KioskThemeIn(BaseModel):
     theme: Literal["orange", "white", "ui"]
 
 
-@api.get("/auth/me/kiosk-theme")
-async def me_get_kiosk_theme(user=Depends(get_current_user)):
-    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
-    return {"theme": u.get("kiosk_theme") if u.get("kiosk_theme") in ("orange", "ui") else "white"}
+@api.get("/kiosk/theme")
+async def kiosk_get_theme(_session=Depends(get_kiosk_session)):
+    c = await db.companies.find_one({"id": _session["company_id"]}, {"_id": 0, "kiosk_theme": 1}) or {}
+    return {"theme": c.get("kiosk_theme") if c.get("kiosk_theme") in ("orange", "ui") else "white"}
 
 
-@api.put("/auth/me/kiosk-theme")
-async def me_set_kiosk_theme(body: KioskThemeIn, user=Depends(get_current_user)):
-    await db.users.update_one({"id": user["id"]}, {"$set": {"kiosk_theme": body.theme}})
+@api.put("/kiosk/theme")
+async def kiosk_set_theme(body: KioskThemeIn, _session=Depends(get_kiosk_session)):
+    cid = _session["company_id"]
+    await db.companies.update_one({"id": cid}, {"$set": {"kiosk_theme": body.theme}})
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "kiosk_theme", "theme": body.theme})
     return {"theme": body.theme}
+
 
 
 @api.get("/kiosk/locations")

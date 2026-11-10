@@ -6049,23 +6049,18 @@ export default function KioskLayout() {
       if (isAndroid) root.classList.remove('kiosk-android-device');
     };
   }, []);
-  const hasUserSession = () => {
-    try { return !!localStorage.getItem('admin_token') || localStorage.getItem('kiosk_admin_cookie') === '1'; } catch { return false; }
-  };
   useEffect(() => {
-    // Thema is per gebruiker (account), niet per bedrijf: elke rol kiest zelf.
-    if (!hasUserSession()) return;
-    api.get('/auth/me/kiosk-theme').then(({ data }) => {
-      const t = data?.theme === 'orange' || data?.theme === 'ui' ? data.theme : 'white';
-      setKioskTheme(t);
-      localStorage.setItem('kiosk_theme', t);
-    }).catch(() => {});
+    const apply = (t) => { if (['white', 'orange', 'green', 'ui'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
+    const onWs = (e) => apply(e.detail);
+    window.addEventListener('kiosk-theme', onWs);
+    return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
     const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
-    if (hasUserSession()) api.put('/auth/me/kiosk-theme', { theme: next }).catch(() => {});
+    api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
   }, [kioskTheme]);
   const isUi = kioskTheme === 'ui';
   const isWhite = kioskTheme === 'white' || isUi;
