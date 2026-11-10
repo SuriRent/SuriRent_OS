@@ -21,7 +21,15 @@ export function appUrl() {
   return (process.env.REACT_APP_APP_URL || '').replace(/\/$/, '');
 }
 
+export function isStandalonePwa() {
+  try {
+    return typeof window !== 'undefined' && (!!window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true);
+  } catch { return false; }
+}
+
+// Een geinstalleerde PWA blijft op het domein waar hij is geinstalleerd; een redirect naar het app-domein opent anders een browservenster.
 export function isMarketingHost() {
+  if (isStandalonePwa()) return false;
   const expected = marketingHost();
   if (!expected) return false;
   const current = _norm(typeof window !== 'undefined' ? window.location.hostname : '');
@@ -48,7 +56,7 @@ export function buildAppUrl(path = '/') {
  * stays relative for preview).
  */
 export function appLink(path = '/') {
-  const url = appUrl();
+  const url = isStandalonePwa() ? '' : appUrl();
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (url) return `${url}${cleanPath}`;
   return cleanPath;
