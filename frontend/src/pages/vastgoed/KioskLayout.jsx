@@ -365,7 +365,7 @@ function ThemeToggle({ testId, className = '' }) {
   const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : rawTheme === 'wave' ? 'UI thema' : white ? 'Golf-achtergrond' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid={testId}
       aria-label={nextTheme} title={nextTheme}
@@ -5762,7 +5762,7 @@ function SheetThemeButton() {
   const { theme, rawTheme, toggle } = useContext(KioskThemeCtx);
   const white = theme === 'white';
   const green = theme === 'green';
-  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : rawTheme === 'wave' ? 'UI thema' : white ? 'Golf-achtergrond' : green ? 'Oranje modus' : 'Witte modus';
+  const nextTheme = rawTheme === 'ui' ? 'Oranje modus' : white ? 'UI thema' : 'Witte modus';
   return (
     <button type="button" onClick={toggle} data-testid="kiosk-sheet-theme-toggle"
       aria-label={nextTheme}
@@ -6039,7 +6039,7 @@ export default function KioskLayout() {
   // .kiosk-fullscreen zelf heeft orange bg (#FF5C00) en dekt de rest af.
   const [kioskTheme, setKioskTheme] = useState(() => {
     const stored = localStorage.getItem('kiosk_theme');
-    return ['orange', 'ui', 'wave'].includes(stored) ? stored : 'white';
+    return ['orange', 'ui'].includes(stored) ? stored : 'white';
   });
   useEffect(() => {
     const root = document.documentElement;
@@ -6050,14 +6050,14 @@ export default function KioskLayout() {
     };
   }, []);
   useEffect(() => {
-    const apply = (t) => { if (['white', 'orange', 'green', 'ui', 'wave'].includes(t)) { t = t === 'orange' || t === 'ui' || t === 'wave' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
+    const apply = (t) => { if (['white', 'orange', 'green', 'ui', 'wave'].includes(t)) { t = t === 'orange' || t === 'ui' ? t : 'white'; setKioskTheme(t); localStorage.setItem('kiosk_theme', t); } };
     api.get('/kiosk/theme').then(({ data }) => apply(data?.theme)).catch(() => {});
     const onWs = (e) => apply(e.detail);
     window.addEventListener('kiosk-theme', onWs);
     return () => window.removeEventListener('kiosk-theme', onWs);
   }, []);
   const toggleTheme = useCallback(() => {
-    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'wave' : kioskTheme === 'wave' ? 'ui' : 'orange';
+    const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
     setKioskTheme(next);
     localStorage.setItem('kiosk_theme', next);
     api.put('/kiosk/theme', { theme: next }).catch(() => { setKioskTheme(kioskTheme); localStorage.setItem('kiosk_theme', kioskTheme); });
