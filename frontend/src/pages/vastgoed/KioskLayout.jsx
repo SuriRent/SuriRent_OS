@@ -6054,26 +6054,13 @@ export default function KioskLayout() {
   };
   useEffect(() => {
     // Thema is per gebruiker (account), niet per bedrijf: elke rol kiest zelf.
-    // Wordt bij elke (her)login opnieuw opgehaald, zodat het thema de gebruiker
-    // volgt naar elk apparaat.
-    const sync = () => {
-      if (!hasUserSession()) return;
-      api.get('/auth/me/kiosk-theme').then(({ data }) => {
-        const t = ['orange', 'white', 'ui'].includes(data?.theme) ? data.theme : null;
-        if (t) { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); return; }
-        const local = localStorage.getItem('kiosk_theme');
-        if (['orange', 'white', 'ui'].includes(local)) api.put('/auth/me/kiosk-theme', { theme: local }).catch(() => {});
-      }).catch(() => {});
-    };
-    sync();
-    window.addEventListener('kiosk-employee-changed', sync);
-    window.addEventListener('storage', sync);
-    window.addEventListener('focus', sync);
-    return () => {
-      window.removeEventListener('kiosk-employee-changed', sync);
-      window.removeEventListener('storage', sync);
-      window.removeEventListener('focus', sync);
-    };
+    if (!hasUserSession()) return;
+    api.get('/auth/me/kiosk-theme').then(({ data }) => {
+      const t = ['orange', 'white', 'ui'].includes(data?.theme) ? data.theme : null;
+      if (t) { setKioskTheme(t); localStorage.setItem('kiosk_theme', t); return; }
+      const local = localStorage.getItem('kiosk_theme');
+      if (['orange', 'white', 'ui'].includes(local)) api.put('/auth/me/kiosk-theme', { theme: local }).catch(() => {});
+    }).catch(() => {});
   }, []);
   const toggleTheme = useCallback(() => {
     const next = kioskTheme === 'orange' ? 'white' : kioskTheme === 'white' ? 'ui' : 'orange';
