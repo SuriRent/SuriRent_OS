@@ -20671,7 +20671,8 @@ async def pwa_manifest(request: Request, role: str = "beheer", slug: str | None 
         import re as _re
         if _re.match(r"^[a-z0-9][a-z0-9-]{0,62}$", slug):
             base["start_url"] = _slug_aware_start_url(role, slug)
-            base["scope"] = f"/{slug}/"
+            # Scope "/" (niet "/{slug}/"): na inloggen gaat de app naar /kiosk of /admin; buiten de scope opent iOS een browservenster.
+            base["scope"] = "/"
             base["id"] = f"/{slug}/?role={role}"
             if role == "beheer":
                 for shortcut in base.get("shortcuts", []):
