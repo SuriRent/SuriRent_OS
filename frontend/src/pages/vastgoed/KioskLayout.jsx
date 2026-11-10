@@ -6409,7 +6409,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && step === 'admin:facturen'));
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && (step === 'admin:facturen' || step === 'admin:locaties')));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
@@ -6638,7 +6638,7 @@ export default function KioskLayout() {
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
             isMobileViewport
-              ? <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />
+              ? (isUi ? <KioskUiPageShell testId="kiosk-popup-locaties"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.locaties.Page embedded ui onBack={goBack} /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />)
               : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
