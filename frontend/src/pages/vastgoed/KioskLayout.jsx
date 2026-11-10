@@ -6464,7 +6464,7 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:'));
+  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && step === 'admin:facturen'));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
