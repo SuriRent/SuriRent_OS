@@ -4341,19 +4341,12 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
         {isIn ? <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} /> : <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm sm:text-base font-bold text-slate-900 truncate" data-testid={`kasgeld-row-title-${item.id}`}>
+        <p className="text-sm sm:text-base font-bold text-slate-900 break-words md:truncate" data-testid={`kasgeld-row-title-${item.id}`}>
           {item.description || item.category || '—'}
         </p>
-        <p className="text-xs text-slate-500 mt-0.5 truncate">
+        <p className="text-xs text-slate-500 mt-0.5 break-words md:truncate">
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
-          {creator && (
-            <>
-              {' · '}
-              <span className="text-slate-600" data-testid={`kasgeld-row-creator-${item.id}`}>
-                Door {creator}
-              </span>
-            </>
-          )}
+          {creator && <><span className="hidden sm:inline">{' · '}</span><span className="mt-0.5 block break-words text-[11px] text-slate-600 sm:mt-0 sm:inline sm:break-normal sm:text-xs" data-testid={`kasgeld-row-creator-${item.id}`}>Door {creator}</span></>}
         </p>
       </div>
       <div className="kiosk-cash-row-values flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
