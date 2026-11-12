@@ -1,10 +1,12 @@
 import base64
+from types import SimpleNamespace
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 import push_service
+from push_service import PushResult
 
 
 def _encoded_private_key():
@@ -40,3 +42,27 @@ def test_vapid_public_key_requires_private_key(monkeypatch):
     monkeypatch.setattr(push_service, "VAPID_PUBLIC_KEY", "")
 
     assert push_service.get_vapid_public_key() == ""
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [(410, PushResult.EXPIRED), (503, PushResult.FAILED)],
+)
+def test_send_push_only_marks_gone_endpoints_expired(monkeypatch, status, expected):
+    class FakeWebPushException(Exception):
+        response = SimpleNamespace(status_code=status)
+
+    def fail_push(**_kwargs):
+        raise FakeWebPushException("provider error")
+
+    monkeypatch.setattr(push_service, "WebPushException", FakeWebPushException)
+    monkeypatch.setattr(push_service, "_get_vapid", lambda: object())
+    monkeypatch.setattr(push_service, "webpush", fail_push)
+
+    result = push_service.send_push(
+        {"endpoint": "https://push.example/subscription", "keys": {}},
+        "Test",
+        "Testmelding",
+    )
+
+    assert result is expected

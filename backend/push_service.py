@@ -9,10 +9,18 @@ instance en gebruiken die voor elke push.
 import os
 import json
 import base64
+from enum import Enum
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from py_vapid import Vapid01
 from pywebpush import webpush, WebPushException
+
+
+class PushResult(Enum):
+    SENT = "sent"
+    EXPIRED = "expired"
+    FAILED = "failed"
+
 
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_PEM_B64 = os.environ.get("VAPID_PRIVATE_KEY_B64", "")
@@ -53,14 +61,14 @@ def get_vapid_public_key() -> str:
     return derived_key
 
 
-def send_push(subscription: dict, title: str, body: str, data: dict | None = None) -> bool:
+def send_push(subscription: dict, title: str, body: str, data: dict | None = None) -> PushResult:
     """Stuur een Web Push naar één subscription.
 
-    Retourneert True bij succes, False bij elke fout. De caller verwijdert
-    de subscription bij False (verlopen/ongeldig).
+    Alleen verlopen endpoints worden als EXPIRED gemarkeerd; tijdelijke fouten
+    mogen geen werkende toestelregistratie verwijderen.
     """
     if not subscription or not subscription.get("endpoint"):
-        return False
+        return PushResult.EXPIRED
     payload = json.dumps({
         "title": title, "body": body, "data": data or {},
     })
@@ -77,12 +85,12 @@ def send_push(subscription: dict, title: str, body: str, data: dict | None = Non
             headers={"Urgency": "high"},
             timeout=10,
         )
-        return True
+        return PushResult.SENT
     except WebPushException as e:
-        # 410 = expired, 4xx = bad request. Caller schoont op.
+        # Alleen 404/410 geven aan dat de browser-subscription verlopen is.
         status = e.response.status_code if e.response is not None else "n/a"
         print(f"[push] WebPushException status={status}: {str(e)[:200]}")
-        return False
+        return PushResult.EXPIRED if status in (404, 410) else PushResult.FAILED
     except Exception as e:
         print(f"[push] Unexpected error: {type(e).__name__}: {e}")
-        return False
+        return PushResult.FAILED

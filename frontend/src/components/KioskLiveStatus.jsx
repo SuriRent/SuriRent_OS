@@ -2,6 +2,7 @@ import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Bluetooth, Printer, Receipt, X } from 'lucide-react';
 import { BtPrinterCard } from './BtPrinterCard';
+import { getKioskEmployee } from './KioskEmployee';
 import { getSavedPrinter } from '../lib/bt-printer';
 import { subscribeKioskLive, getKioskLiveState, startKioskLive, stopKioskLive, setKioskOverlayOpen } from '../lib/kiosk-live';
 import { KioskPrintsOverlay } from './KioskPrintsOverlay';
@@ -71,11 +72,17 @@ function KtpPairPill() {
 // Statusbolletje (alleen beheerder-kiosk) + bonnen-venster. Rendert los van
 // de rest van de kiosk via een externe store.
 function KioskLiveStatusInner({ isAdmin }) {
+  const [hasEmployeeSession, setHasEmployeeSession] = useState(() => Boolean(getKioskEmployee()));
   useEffect(() => {
-    startKioskLive(isAdmin ? 'admin' : 'employee');
-    ensurePrinterRegistered();
+    const refresh = () => setHasEmployeeSession(Boolean(getKioskEmployee()));
+    window.addEventListener('kiosk-employee-changed', refresh);
+    return () => window.removeEventListener('kiosk-employee-changed', refresh);
+  }, []);
+  useEffect(() => {
+    startKioskLive(hasEmployeeSession || !isAdmin ? 'employee' : 'admin');
     return () => stopKioskLive();
-  }, [isAdmin]);
+  }, [isAdmin, hasEmployeeSession]);
+  useEffect(() => { ensurePrinterRegistered(); }, []);
   const s = useSyncExternalStore(subscribeKioskLive, getKioskLiveState);
   useApprovalNotifySync({ enabled: isAdmin });
 
