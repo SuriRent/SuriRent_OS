@@ -3468,6 +3468,36 @@ function RowSlim({ label, value }) {
 // mutaties met per-maand accordion. Werkt zowel op mobiel (compacte
 // stack) als desktop (bredere layout).
 //
+// Inline currency flags used by the mobile balance cards.
+function CurrencyFlag({ currency }) {
+  const label = currency === 'SRD' ? 'Suriname' : currency === 'USD' ? 'Verenigde Staten' : 'Europese Unie';
+  return (
+    <svg viewBox="0 0 60 40" className="h-full w-full" role="img" aria-label={`Vlag van ${label}`} xmlns="http://www.w3.org/2000/svg">
+      {currency === 'SRD' ? (
+        <>
+          <rect width="60" height="40" fill="#377E3F" />
+          <path d="M0 8h60v4H0zm0 20h60v4H0z" fill="#fff" />
+          <rect y="12" width="60" height="16" fill="#B40A2D" />
+          <path d="m30 15 1.8 5.3h5.6l-4.5 3.3 1.7 5.4-4.6-3.3-4.6 3.3 1.7-5.4-4.5-3.3h5.6z" fill="#ECC81D" />
+        </>
+      ) : currency === 'USD' ? (
+        <>
+          <rect width="60" height="40" fill="#fff" />
+          {Array.from({ length: 7 }, (_, index) => <rect key={index} y={index * (40 / 13) * 2} width="60" height={40 / 13} fill="#B22234" />)}
+          <rect width="25" height="21.5" fill="#3C3B6E" />
+          {[5, 10, 15, 20].map((x) => [4, 9, 14, 19].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="0.8" fill="#fff" />))}
+        </>
+      ) : (
+        <>
+          <rect width="60" height="40" fill="#003399" />
+          {[[30, 10], [35, 11.3], [38.7, 15], [40, 20], [38.7, 25], [35, 28.7], [30, 30], [25, 28.7], [21.3, 25], [20, 20], [21.3, 15], [25, 11.3]]
+            .map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.25" fill="#FFCC00" />)}
+        </>
+      )}
+    </svg>
+  );
+}
+
 // Data-flow (ongewijzigd):
 //   GET /kiosk/kasgeld/balance → { SRD, USD, EUR } totaal-saldi
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
@@ -3621,46 +3651,69 @@ function KasgeldPanel({ embedded = false, ui = false }) {
         })).filter((group) => group.items.length > 0);
         const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const filteredCount = groups.reduce((count, group) => count + group.items.length, 0);
-        const kStat = (cur, Icon, tone) => (
-          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2 py-3.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-4 h-4" strokeWidth={2.6} /></span>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-600 truncate leading-tight">{cur}</p>
-                <p className="text-[13px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
-              </div>
+        const sourceCounts = {
+          all: items.length,
+          kasgeld: items.filter((it) => (it.source || 'kasgeld') === 'kasgeld').length,
+          payment: items.filter((it) => it.source === 'payment').length,
+        };
+        const kStat = (cur, cardTone, glowTone, codeTone) => (
+          <div key={cur} className={`kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border px-2.5 py-3 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.5)] ${cardTone}`} data-testid={`kasgeld-bal-${cur}`}>
+            <span aria-hidden="true" className={`absolute -right-5 -top-6 h-16 w-16 rounded-full ${glowTone}`} />
+            <div className="relative flex items-center justify-between gap-1.5">
+              <span className="flex h-7 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/80 bg-white shadow-sm"><CurrencyFlag currency={cur} /></span>
+              <span className={`rounded-full bg-white/75 px-2 py-1 text-[9px] font-extrabold tracking-wider ${codeTone}`}>{cur}</span>
             </div>
+            <p className="relative mt-3 text-[9px] font-semibold text-slate-500">Huidig saldo</p>
+            <p className="relative mt-0.5 truncate text-[14px] font-black leading-tight tabular-nums text-[#1B2A5C]" title={money(balances[cur])}>{money(balances[cur])}</p>
+          </div>
+        );
+        const balancesCards = (
+          <div className="grid grid-cols-3 gap-1.5 px-0.5">
+            {kStat('SRD', 'border-orange-100 bg-gradient-to-br from-orange-50 to-white', 'bg-orange-200/35', 'text-orange-700')}
+            {kStat('USD', 'border-emerald-100 bg-gradient-to-br from-emerald-50 to-white', 'bg-emerald-200/35', 'text-emerald-700')}
+            {kStat('EUR', 'border-sky-100 bg-gradient-to-br from-sky-50 to-white', 'bg-sky-200/35', 'text-sky-700')}
           </div>
         );
         return (
-          <div data-testid="kasgeld-fx" className="space-y-3">
-            <div className="grid grid-cols-3 gap-1.5 relative px-0.5">
-              {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
-              {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
-              {kStat('EUR', Coins, 'bg-sky-500 text-white')}
-            </div>
-            <div className="flex items-center justify-between px-1 pt-1">
-              <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" data-testid="kasgeld-count-badge">
-                {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-100 bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4 focus-within:border-orange-200">
-                <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
+          <div data-testid="kasgeld-fx" className="space-y-4">
+            {balancesCards}
+            <section className="space-y-3 rounded-3xl border border-slate-100 bg-white p-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.28)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">Zoek en filter je kasbewegingen</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-[#FF5C00]" data-testid="kasgeld-count-badge">
+                  {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
+                </span>
+              </div>
+              <label className="flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3.5 transition focus-within:border-orange-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+                <Search className="h-5 w-5 shrink-0 text-[#1B2A5C]" />
                 <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek mutatie..." data-testid="kasgeld-search"
-                  className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+                  className="w-full min-w-0 bg-transparent text-[15px] text-slate-800 outline-none placeholder:text-slate-400" />
+                {uiQ && <button type="button" onClick={() => setUiQ('')} aria-label="Zoekopdracht wissen" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>}
               </label>
-              <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
-                <SlidersHorizontal className="w-5 h-5" />
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="Filter" data-testid="kasgeld-filter"
-                  className="absolute inset-0 opacity-0 w-full h-full">
-                  <option value="all">Alles</option>
-                  <option value="kasgeld">Handmatig</option>
-                  <option value="payment">Betalingen</option>
-                </select>
-              </label>
-            </div>
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filter mutaties" data-testid="kasgeld-filter">
+                {[
+                  ['all', 'Alles'],
+                  ['kasgeld', 'Handmatig'],
+                  ['payment', 'Betalingen'],
+                ].map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setSourceFilter(value)}
+                    data-testid={`kasgeld-filter-${value}`} aria-pressed={sourceFilter === value}
+                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition active:scale-[0.98] ${
+                      sourceFilter === value
+                        ? 'bg-gradient-to-r from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_6px_14px_-8px_rgba(255,92,0,0.8)]'
+                        : 'border border-slate-100 bg-white text-slate-600 shadow-[0_4px_12px_-9px_rgba(15,23,42,0.35)] hover:bg-slate-50'
+                    }`}>
+                    {label}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${sourceFilter === value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      {sourceCounts[value]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
             {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
             {!err && !loading && groups.length === 0 && (
