@@ -3495,10 +3495,33 @@ function KasgeldPanel({ embedded = false, ui = false }) {
 
   // Huidige maand als default-focus voor de accordion én het
   // "Oktober 2026 ▼" selector-pil in de overzicht-card.
-  const now = new Date();
-  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [currentKey, setCurrentKey] = useState(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
   const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
+  useEffect(() => {
+    if (!embedded || !ui) return undefined;
+    const refreshMonth = () => {
+      const date = new Date();
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      setCurrentKey((current) => current === key ? current : key);
+    };
+    const interval = window.setInterval(refreshMonth, 60_000);
+    window.addEventListener('focus', refreshMonth);
+    document.addEventListener('visibilitychange', refreshMonth);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshMonth);
+      document.removeEventListener('visibilitychange', refreshMonth);
+    };
+  }, [embedded, ui]);
+  useEffect(() => {
+    if (!embedded || !ui) return;
+    setSelectedMonth(currentKey);
+    setExpandedMonths(new Set([currentKey]));
+  }, [currentKey, embedded, ui]);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
@@ -3562,6 +3585,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
 
   const toggleMonth = (key) => {
     setExpandedMonths((prev) => {
+      if (embedded && ui) return prev.has(key) ? new Set() : new Set([key]);
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -3571,6 +3595,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   const pickMonth = (key) => {
     setSelectedMonth(key);
     setExpandedMonths((prev) => {
+      if (embedded && ui) return new Set([key]);
       const next = new Set(prev);
       next.add(key);
       return next;
@@ -3590,10 +3615,14 @@ function KasgeldPanel({ embedded = false, ui = false }) {
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
       {embedded && ui && (() => {
         const q = uiQ.trim().toLowerCase();
-        const list = q ? visibleItems.filter((it) => `${it.description || ''} ${it.category || ''} ${it.method || ''} ${it.created_by_name || ''}`.toLowerCase().includes(q)) : visibleItems;
+        const groups = monthGroups.map((group) => ({
+          ...group,
+          items: q ? group.items.filter((it) => `${it.description || ''} ${it.category || ''} ${it.method || ''} ${it.created_by_name || ''}`.toLowerCase().includes(q)) : group.items,
+        })).filter((group) => group.items.length > 0);
         const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const filteredCount = groups.reduce((count, group) => count + group.items.length, 0);
         const kStat = (cur, Icon, tone) => (
-          <div key={cur} className="kiosk-ui-stat rounded-2xl bg-white px-2 py-2.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2.5 py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5" strokeWidth={2.6} /></span>
               <div className="min-w-0">
@@ -3610,8 +3639,14 @@ function KasgeldPanel({ embedded = false, ui = false }) {
               {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
               {kStat('EUR', Coins, 'bg-sky-500 text-white')}
             </div>
-            <div className="flex items-center gap-2 pt-3 pb-3">
-              <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
+            <div className="flex items-center justify-between px-1 pt-1">
+              <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" data-testid="kasgeld-count-badge">
+                {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-100 bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4 focus-within:border-orange-200">
                 <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
                 <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek mutatie..." data-testid="kasgeld-search"
                   className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
@@ -3628,44 +3663,43 @@ function KasgeldPanel({ embedded = false, ui = false }) {
             </div>
             {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
-            {!err && !loading && list.length === 0 && <p className="text-center text-slate-500 py-10 text-sm" data-testid="kasgeld-empty">Nog geen mutaties.</p>}
+            {!err && !loading && groups.length === 0 && (
+              <p className="rounded-2xl bg-white py-10 text-center text-sm font-semibold text-slate-500" data-testid="kasgeld-empty">
+                {q ? 'Geen mutaties gevonden.' : 'Nog geen mutaties.'}
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-2.5">
-              {list.map((it, idx) => {
-                const mk = (x) => { const dd = new Date(x.entry_date || x.created_at); return isNaN(dd) ? '' : `${MONTHS_NL[dd.getMonth()]} ${dd.getFullYear()}`; };
-                const monthLabel = mk(it);
-                const showMonth = monthLabel && (idx === 0 || mk(list[idx - 1]) !== monthLabel);
-                const isIn = it.type === 'in';
-                const d = it.entry_date || it.created_at;
-                const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                const creator = (it.created_by_name || '').trim();
-                const editable = canManage && it.source !== 'payment';
+              {groups.map((g) => {
+                const isOpen = expandedMonths.has(g.key);
+                const isCurrent = g.key === currentKey;
                 return (
-                  <Fragment key={it.id}>
-                  {showMonth && <p className="px-1 pt-2 text-[13px] font-bold uppercase tracking-wide text-[#1B2A5C]/70 capitalize" data-testid={`kasgeld-month-${monthLabel}`}>{monthLabel}</p>}
-                  <div data-testid={`kasgeld-row-${it.id}`} className="kiosk-ui-card w-full rounded-[16px] bg-white px-3 py-2 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`shrink-0 rounded-full w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                        {isIn ? <ArrowDownLeft className="w-6 h-6" strokeWidth={2.6} /> : <ArrowUpRight className="w-6 h-6" strokeWidth={2.6} />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[16px] font-extrabold text-[#1B2A5C] leading-tight line-clamp-2 break-words">{it.description || it.category || '—'}</p>
-                        <p className="text-[13px] text-slate-600 font-medium truncate">{[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant'].filter(Boolean).join(' · ')}</p>
-                        {creator && <p className="flex items-center gap-1 text-[12px] text-slate-500 truncate"><User className="w-3 h-3 shrink-0" /><span className="truncate">{creator}</span></p>}
-                      </div>
-                      <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[12.5px] font-bold text-white whitespace-nowrap ${it.excluded_from_balance ? 'bg-slate-500' : isIn ? 'bg-emerald-600' : 'bg-red-500'}`}>
-                        {isIn ? '+' : '−'}{fmtMoney(it.amount, it.currency)}
+                  <div key={g.key} className={`overflow-hidden rounded-2xl border bg-white shadow-[0_8px_22px_-14px_rgba(15,23,42,0.3)] ${isCurrent ? 'border-orange-200' : 'border-slate-100'}`}
+                    data-testid={`kasgeld-month-${g.key}`}>
+                    <button type="button" onClick={() => toggleMonth(g.key)}
+                      data-testid={`kasgeld-month-toggle-${g.key}`}
+                      aria-expanded={isOpen}
+                      className="flex min-h-16 w-full items-center gap-3 px-3 py-3 text-left active:bg-slate-50">
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isCurrent ? 'bg-orange-50 text-[#FF5C00]' : 'bg-slate-100 text-slate-500'}`}>
+                        <Calendar className="h-5 w-5" />
                       </span>
-                      {editable && (
-                        <>
-                          <button type="button" onClick={() => setEditing(it)} data-testid={`kasgeld-row-edit-${it.id}`} aria-label="Bewerken"
-                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
-                          <button type="button" onClick={() => removeEntry(it)} data-testid={`kasgeld-row-delete-${it.id}`} aria-label="Verwijderen"
-                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-red-500 flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
-                        </>
-                      )}
-                    </div>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-black capitalize text-[#1B2A5C]">{g.label}</span>
+                          {isCurrent && <span className="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-extrabold text-[#FF5C00]">HUIDIGE MAAND</span>}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium text-slate-500">{g.items.length} {g.items.length === 1 ? 'mutatie' : 'mutaties'}</span>
+                      </span>
+                      <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div id={`kasgeld-month-items-${g.key}`} className="border-t border-slate-100 px-2 py-1" data-testid={`kasgeld-month-items-${g.key}`}>
+                        {g.items.map((it) => (
+                          <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush
+                            onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  </Fragment>
                 );
               })}
             </div>
