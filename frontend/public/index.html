@@ -390,8 +390,9 @@
       (function () {
         try {
           var isSuperadmin = document.documentElement.getAttribute('data-pwa-role') === 'superadmin';
-          var BRAND = isSuperadmin ? '#F3F8F5' : '#FF5C00';
-          var CONTRAST = isSuperadmin ? '#047857' : '#FFFFFF';
+          var isKiosk = document.documentElement.getAttribute('data-pwa-role') === 'kiosk';
+          var BRAND = isSuperadmin ? '#F3F8F5' : (isKiosk ? '#F6F7FB' : '#FF5C00');
+          var CONTRAST = isSuperadmin ? '#047857' : (isKiosk ? '#FF5C00' : '#FFFFFF');
           document.documentElement.style.setProperty('--pwa-splash-bg', BRAND);
           document.documentElement.style.setProperty('--pwa-splash-fg', CONTRAST);
           window.__PWA_BG = BRAND;
