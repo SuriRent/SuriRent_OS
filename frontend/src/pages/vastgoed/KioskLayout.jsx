@@ -514,15 +514,48 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function UiAptHeroCard({ a, onOpen }) {
+function UiAptHeroCard({ a, onOpen, onQuickPay }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   const status = uiAptStatus(a);
+  const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
+  const [dueError, setDueError] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState('');
+  useEffect(() => {
+    if (!a.tenant_id || status === 'paid' || status === 'deposit') {
+      setDue(status === 'paid' ? { amount: 0 } : null);
+      setDueError(false);
+      return undefined;
+    }
+    let active = true;
+    setDue(null);
+    setDueError(false);
+    loadCachedOverview(a.tenant_id)
+      .then(({ data }) => { if (active) setDue({ amount: buildPaymentOverview(data).total_due }); })
+      .catch(() => { if (active) setDueError(true); });
+    return () => { active = false; };
+  }, [a, status]);
+
   const actionLabel = status === 'vacant' ? 'Huurder koppelen'
     : status === 'deposit' ? 'Borg bekijken'
       : status === 'paid' ? 'Overzicht openen'
         : 'Afrekenen';
+  const handleAction = async () => {
+    if (status !== 'unpaid' && status !== 'partial') {
+      onOpen();
+      return;
+    }
+    setPayError('');
+    setPayLoading(true);
+    try {
+      await onQuickPay(a);
+    } catch (error) {
+      setPayError(formatError(error));
+      setPayLoading(false);
+    }
+  };
 
   return (
     <article className="kiosk-ui-card overflow-hidden rounded-[24px] border border-white/80 bg-white shadow-[0_12px_28px_-18px_rgba(15,23,42,0.45)]"
@@ -547,16 +580,25 @@ function UiAptHeroCard({ a, onOpen }) {
       </button>
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{vacant ? 'Status' : 'Huur p/m'}</p>
-          <p className="truncate text-sm font-extrabold text-[#1B2A5C]">
-            {vacant ? 'Beschikbaar' : fmtMoney(a.rent_amount || 0, a.currency || 'SRD')}
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {vacant ? 'Status' : 'Totaal openstaand'}
+          </p>
+          <p className="truncate text-sm font-extrabold text-[#1B2A5C]" data-testid={`apt-${a.number}-hero-due`}>
+            {vacant ? 'Beschikbaar'
+              : status === 'deposit' ? 'Borg nog niet betaald'
+                : dueError ? 'Bedrag niet beschikbaar'
+                  : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
           </p>
         </div>
-        <button type="button" onClick={onOpen} data-testid={`apt-${a.number}-hero-action`}
+        <button type="button" onClick={handleAction} disabled={payLoading}
+          aria-label={status === 'unpaid' || status === 'partial' ? `${actionLabel}: ${a.number}` : actionLabel}
+          data-testid={`apt-${a.number}-hero-action`}
           className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-black text-white shadow-[0_8px_18px_-10px_rgba(255,92,0,0.9)] active:scale-[0.98]">
-          {actionLabel}<ChevronRight className="h-4 w-4" strokeWidth={2.8} />
+          {payLoading ? 'Openen…' : actionLabel}
+          {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" strokeWidth={2.8} />}
         </button>
       </div>
+      {payError && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">{payError}</p>}
     </article>
   );
 }
@@ -579,7 +621,7 @@ function writeKioskHeroImage(slug, url) {
   } catch { /* localStorage may be unavailable or full */ }
 }
 
-function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
+function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compact = false }) {
   const [heroImage, setHeroImage] = useState(() => ({
     slug: companySlug,
     url: readKioskHeroImage(companySlug),
@@ -691,7 +733,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
           </div>
         );
       })()}
-      <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+      {!compact && <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
@@ -738,24 +780,23 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
           {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
           {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
         </div>
-      </div>
-      <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
+      </div>}
+      {!compact && <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
         {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
         {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
         {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
-      </div>
+      </div>}
     </div>
   );
 }
 
 function ApartmentSelect({
-  onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
-  selectedLocationId, onLocationSelectionChange,
+  onSelect, onQuickPay, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
+  selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
   const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
-  const [uiCardView, setUiCardView] = useState(false);
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
@@ -864,6 +905,7 @@ function ApartmentSelect({
     if (uiFilter !== 'all' && uiAptStatus(a) !== uiFilter) return false;
     return !term || `${a.number} ${a.tenant_name || ''}`.toLowerCase().includes(term);
   });
+  const kioskCardMode = isUi && !isDesk && uiCardView;
 
   // ----- Location picker view -----
   if (showLocationPicker) {
@@ -945,7 +987,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
+      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} compact={kioskCardMode} />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -953,7 +995,7 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={() => setUiCardView((current) => !current)}
+          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
             title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
             className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
@@ -975,7 +1017,7 @@ function ApartmentSelect({
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
+      <div className={`flex-1 min-h-0 overflow-auto ${kioskCardMode ? 'pb-4' : 'pb-32 md:pb-28'}`}>
         <div className={isUi && !isDesk
           ? `grid ${uiCardView ? 'grid-cols-1 gap-3' : 'grid-cols-1 items-start gap-2.5 sm:gap-3'} px-1 sm:px-2 md:px-5 md:pt-1`
           : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
@@ -983,7 +1025,7 @@ function ApartmentSelect({
             if (isUi && !isDesk) {
               const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
               return uiCardView
-                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} />
+                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} onQuickPay={onQuickPay} />
                 : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
             }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
@@ -1401,9 +1443,19 @@ function NotesModal({ tenantId, tenantName, onClose, onCountChange }) {
 // Huurder-overzicht alvast ophalen bij het aantikken (start tijdens de schermovergang).
 const _ovPrefetch = new Map();
 const fetchOverview = (tid) => api.get(`/kiosk/tenants/${tid}/overview`);
+function loadCachedOverview(tid) {
+  const hit = _ovPrefetch.get(tid);
+  if (hit && Date.now() - hit.at < 15000) return hit.p;
+  const p = fetchOverview(tid);
+  _ovPrefetch.set(tid, { p, at: Date.now() });
+  p.catch(() => {
+    if (_ovPrefetch.get(tid)?.p === p) _ovPrefetch.delete(tid);
+  });
+  return p;
+}
 function prefetchOverview(tid) {
   if (!tid) return;
-  _ovPrefetch.set(tid, { p: fetchOverview(tid), at: Date.now() });
+  loadCachedOverview(tid);
 }
 // Betaling via beheer → prefetch-cache weg, zodat de kiosk vers ophaalt.
 const clearOverviewPrefetch = () => _ovPrefetch.clear();
@@ -1413,6 +1465,77 @@ function takeOverview(tid) {
   const hit = _ovPrefetch.get(tid);
   _ovPrefetch.delete(tid);
   return hit && Date.now() - hit.at < 15000 ? hit.p : fetchOverview(tid);
+}
+
+function buildPaymentOverview(data) {
+  const openInvoices = Array.isArray(data.open_invoices) ? data.open_invoices : [];
+  const currentInvoices = Array.isArray(data.current_invoices) ? data.current_invoices : [];
+  const futureInvoices = Array.isArray(data.future_invoices) ? data.future_invoices : [];
+  const openInvoicesTotal = Number(data.open_invoices_total || 0);
+  const currentInvoicesTotal = Number(data.current_invoices_total || 0);
+  const currentInvoice = data.current_month_invoice || currentInvoices[0] || null;
+  const currentMonthAmount = currentInvoices.length > 0
+    ? currentInvoicesTotal
+    : (currentInvoice ? Number(currentInvoice.outstanding || 0) : 0);
+
+  return {
+    ...data,
+    total_due: currentMonthAmount + openInvoicesTotal,
+    open_invoices: openInvoices,
+    open_invoices_total: openInvoicesTotal,
+    current_invoices: currentInvoices,
+    current_invoices_total: currentInvoicesTotal,
+    future_invoices: futureInvoices,
+    future_invoices_total: Number(data.future_invoices_total || 0),
+    current_month_invoice: currentInvoice,
+  };
+}
+
+function buildQuickPayPayload(overview, paymentPlans = []) {
+  const activePlans = paymentPlans.filter((plan) => plan.status === 'active');
+  const planLinkedInvoiceIds = new Set(activePlans.flatMap((plan) => plan.invoice_ids || []));
+  const currentInvoices = overview.current_invoices.length > 0
+    ? overview.current_invoices
+    : (overview.current_month_invoice ? [overview.current_month_invoice] : []);
+  const invoices = [...overview.open_invoices, ...currentInvoices]
+    .filter((invoice, index, list) => invoice?.id && !planLinkedInvoiceIds.has(invoice.id)
+      && list.findIndex((item) => item.id === invoice.id) === index)
+    .sort((a, b) => (a.period_year || 0) - (b.period_year || 0)
+      || (a.period_month || 0) - (b.period_month || 0));
+  const planItems = activePlans.flatMap((plan) => (plan.installments || [])
+    .filter((installment) => installment.status === 'pending')
+    .map((installment) => ({
+      plan_id: plan.id,
+      seq: installment.sequence,
+      amount: Number(installment.amount || 0),
+      due_date: installment.due_date,
+    })))
+    .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
+  const periods = [...new Set(invoices
+    .map((invoice) => invoice.period_month
+      ? `${MONTHS_NL[invoice.period_month - 1]} ${invoice.period_year || ''}`.trim()
+      : null)
+    .filter(Boolean))];
+  const firstInvoice = invoices[0];
+  const nextPeriod = overview.balance?.next_period;
+  const plainAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.outstanding || 0), 0);
+  const planAmount = planItems.reduce((sum, item) => sum + item.amount, 0);
+
+  return {
+    tenant_id: overview.tenant.id,
+    apartment_id: overview.apartment.id,
+    amount: plainAmount + planAmount,
+    plain_amount: plainAmount,
+    currency: overview.balance?.currency || overview.apartment.currency || 'SRD',
+    category: 'huur',
+    method: 'contant',
+    period_month: firstInvoice?.period_month || nextPeriod?.month || null,
+    period_year: firstInvoice?.period_year || nextPeriod?.year || null,
+    note: periods.length > 0 ? `Huur ${periods.join(', ')}`
+      : (planItems.length > 0 ? 'Betalingsregeling' : 'Huurbetaling'),
+    plan_items: planItems.map(({ plan_id, seq, amount }) => ({ plan_id, seq, amount })),
+    invoice_ids: invoices.map((invoice) => invoice.id),
+  };
 }
 
 function OverviewTenantPhoto({ src, name }) {
@@ -1520,14 +1643,11 @@ function TenantOverview({ apartment, onBack, onPay }) {
   // Totaal openstaand = achterstand + huidige maand
   // (vooruit gefactureerd NIET meegerekend — dat is toekomst, geen schuld nu)
   // (Internet-item is verwijderd op 2026-02-22)
-  const totalDue = currentMonthAmount + openRent;
+  const paymentOverview = buildPaymentOverview(data);
+  const totalDue = paymentOverview.total_due;
   const allPaid = totalDue <= 0;
   actRef.current = {
-    pay: () => onPay({ ...data, total_due: totalDue,
-      open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
-      current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
-      future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
-      current_month_invoice: currentInvoice }),
+    pay: () => onPay(paymentOverview),
     history: () => setShowHistory(true),
   };
   const cur = balance.currency || apt.currency || 'SRD';
@@ -1708,13 +1828,9 @@ function TenantOverview({ apartment, onBack, onPay }) {
                   <p className="text-xs text-slate-500 mb-3 max-w-xs">
                     Betaal je eerste maand ({nextLabel}) alvast vooruit — {fmtMoney(firstMonthRent, cur)} voor huisnummer {apt.number}
                   </p>
-                  <button onClick={() => onPay({ ...data, total_due: firstMonthRent, isAdvance: true,
+                  <button onClick={() => onPay({ ...paymentOverview, total_due: firstMonthRent, isAdvance: true,
                     prefill_advance_amount: firstMonthRent,
-                    advance_period_month: nextM, advance_period_year: nextY,
-                    open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
-                    current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
-                    future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
-                    current_month_invoice: currentInvoice })}
+                    advance_period_month: nextM, advance_period_year: nextY })}
                     data-testid="overview-first-month-btn"
                     className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-base font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 active:scale-[0.98]">
                     Vooruit betalen voor {nextLabel} <ArrowRight className="w-5 h-5" />
@@ -1743,11 +1859,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
                     </div>
                   )}
                   {!credit && <div className="h-3" />}
-                  <button onClick={() => onPay({ ...data, total_due: 0, isAdvance: true,
-                    open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
-                    current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
-                    future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
-                    current_month_invoice: currentInvoice })}
+                  <button onClick={() => onPay({ ...paymentOverview, total_due: 0, isAdvance: true })}
                     data-testid="overview-advance-pay-btn"
                     className="mt-2 w-full max-w-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 text-sm active:scale-[0.98]">
                     Vooruitbetaling registreren
@@ -1766,11 +1878,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
               </div>
               <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-slate-400">Te betalen</p>
               <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mt-1 mb-6">{fmtMoney(totalDue, cur)}</p>
-              <button onClick={() => onPay({ ...data, total_due: totalDue,
-                open_invoices: openInvoices, open_invoices_total: openInvoicesTotal,
-                current_invoices: currentInvoices, current_invoices_total: currentInvoicesTotal,
-                future_invoices: futureInvoices, future_invoices_total: futureInvoicesTotal,
-                current_month_invoice: currentInvoice })}
+              <button onClick={() => onPay(paymentOverview)}
                 data-testid="overview-pay-btn"
                 className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-base sm:text-lg font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 sm:py-3.5 active:scale-[0.98]">
                 Volgende <ArrowRight className="w-5 h-5" />
@@ -3169,21 +3277,37 @@ async function sendApkPrint(data, paymentId) {
   try { bridge(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
 }
 
-function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
+function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess }) {
   const { tenant, apartment: apt } = overview;
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [amount, setAmount] = useState(Number(payload.amount || 0));
+  const [showAmountEditor, setShowAmountEditor] = useState(false);
+  const [amountDraft, setAmountDraft] = useState(String(payload.amount || ''));
+  const [amountErr, setAmountErr] = useState('');
+  const confirmPayload = amount === Number(payload.amount)
+    ? payload
+    : {
+      ...payload,
+      amount,
+      plain_amount: amount,
+      plan_items: [],
+    invoice_ids: [],
+      note: amount < Number(payload.amount)
+        ? `Gedeeltelijke betaling — ${fmtMoney(amount, payload.currency || 'SRD')}`
+        : payload.note,
+    };
 
   useEffect(() => { if (payload.stripe_paid) submit(); }, []);
   const submit = async () => {
     setLoading(true); setErr('');
     try {
-      const planItems = payload.plan_items || [];
+      const planItems = confirmPayload.plan_items || [];
       let planReceipt = '';
       let planPayment = null;
       for (const pi of planItems) {
         const pr = await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
-          method: payload.method,
+          method: confirmPayload.method,
           amount: pi.amount,
           note: `Operator Kiosk — termijn ${pi.seq}`,
         });
@@ -3191,9 +3315,9 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         planPayment = planPayment || pr?.data?.payment || null;
       }
       let data;
-      const plainAmount = payload.plain_amount != null ? payload.plain_amount : payload.amount;
+      const plainAmount = confirmPayload.plain_amount != null ? confirmPayload.plain_amount : confirmPayload.amount;
       if (plainAmount && plainAmount > 0) {
-        const plainPayload = { ...payload, amount: plainAmount };
+        const plainPayload = { ...confirmPayload, amount: plainAmount };
         delete plainPayload.plan_items; delete plainPayload.plain_amount; delete plainPayload.stripe_paid;
         const res = await api.post(withKioskEmployee('/kiosk/payments'), plainPayload);
         data = res.data;
@@ -3206,8 +3330,8 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
       if (isKtpDevice()) sendApkPrint({
         naam: tenant?.name || '',
         appartement: apt?.number || '',
-        bedrag: fmtMoney(payload.amount, payload.currency || 'SRD'),
-        methode: METHOD_LABELS[payload.method] || payload.method || '',
+        bedrag: fmtMoney(confirmPayload.amount, confirmPayload.currency || 'SRD'),
+        methode: METHOD_LABELS[confirmPayload.method] || confirmPayload.method || '',
         datum: fmtPrintDate(new Date()),
         kwitantie: data?.receipt_number || data?.payment?.receipt_number || planReceipt || '',
       }, data?.id || data?.payment?.id);
@@ -3234,16 +3358,26 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
         <div className="bg-white rounded-3xl w-full max-w-xl p-6 sm:p-8 shadow-2xl">
           <div className="bg-slate-900 rounded-2xl p-6 mb-5 text-white text-center">
             <p className="text-xs font-bold uppercase tracking-widest text-white/60">Te betalen</p>
-            <p className="text-5xl font-extrabold tracking-tight mt-2 text-orange-400">{fmtMoney(payload.amount, payload.currency)}</p>
+            <p className="text-5xl font-extrabold tracking-tight mt-2 text-orange-400">{fmtMoney(confirmPayload.amount, confirmPayload.currency)}</p>
             <p className="text-sm text-white/80 mt-2 capitalize">
-              {payload.note || payload.category}
-              {payload.period_month ? ` · ${MONTHS_NL[payload.period_month - 1]} ${payload.period_year}` : ''}
+              {confirmPayload.note || confirmPayload.category}
+              {confirmPayload.period_month ? ` · ${MONTHS_NL[confirmPayload.period_month - 1]} ${confirmPayload.period_year}` : ''}
             </p>
           </div>
+          {quickPay && (
+            <button type="button" onClick={() => {
+              setAmountDraft(String(confirmPayload.amount));
+              setAmountErr('');
+              setShowAmountEditor(true);
+            }} disabled={loading} data-testid="quick-pay-change-amount"
+              className="w-full h-12 mb-4 rounded-xl border-2 border-orange-200 bg-orange-50 text-[#FF5C00] font-extrabold flex items-center justify-center gap-2 disabled:opacity-50">
+              <Hash className="w-5 h-5" /> Ander bedrag invoeren
+            </button>
+          )}
           <div className="space-y-2 mb-5">
             <Row label="Huurder" value={tenant.name} />
             <Row label="Appartement" value={`Appt. ${apt.number}`} />
-            <Row label="Betaalwijze" value={String(payload.method || '').toUpperCase()} />
+            <Row label="Betaalwijze" value={String(confirmPayload.method || '').toUpperCase()} />
           </div>
           {err && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{err}</div>}
           <button onClick={submit} disabled={loading} data-testid="confirm-submit"
@@ -3253,6 +3387,39 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess }) {
           </button>
         </div>
       </div>
+      {showAmountEditor && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4"
+          onClick={(event) => { if (event.target === event.currentTarget) setShowAmountEditor(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="quick-pay-amount-title"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <h3 id="quick-pay-amount-title" className="text-lg font-black text-slate-900">Ander bedrag invoeren</h3>
+            <p className="mt-1 text-sm text-slate-500">Openstaand: {fmtMoney(overview.total_due, confirmPayload.currency)}</p>
+            <label className="mt-4 block text-sm font-bold text-slate-700" htmlFor="quick-pay-amount-input">
+              Bedrag ({confirmPayload.currency})
+            </label>
+            <input id="quick-pay-amount-input" type="text" inputMode="decimal" autoFocus
+              value={amountDraft} onChange={(event) => setAmountDraft(event.target.value)}
+              data-testid="quick-pay-amount-input"
+              className="mt-1 h-12 w-full rounded-xl border-2 border-slate-200 px-3 text-xl font-extrabold text-slate-900 outline-none focus:border-orange-400" />
+            {amountErr && <p role="alert" className="mt-2 text-sm font-semibold text-red-600">{amountErr}</p>}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setShowAmountEditor(false)}
+                className="h-11 rounded-xl bg-slate-100 font-bold text-slate-700">Annuleren</button>
+              <button type="button" data-testid="quick-pay-amount-apply"
+                onClick={() => {
+                  const parsed = Number(amountDraft.trim().replace(',', '.'));
+                  if (!Number.isFinite(parsed) || parsed <= 0) {
+                    setAmountErr('Voer een bedrag groter dan nul in.');
+                    return;
+                  }
+                  setAmount(Number(parsed.toFixed(2)));
+                  setShowAmountEditor(false);
+                }}
+                className="h-11 rounded-xl bg-[#FF5C00] font-extrabold text-white">Bedrag gebruiken</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -6669,6 +6836,15 @@ export default function KioskLayout() {
   const [selectedLocationId, setSelectedLocationId] = useState(() => {
     try { return sessionStorage.getItem('kiosk_sel_loc') || null; } catch { return null; }
   });
+  const [kioskCardView, setKioskCardView] = useState(() => {
+    try { return localStorage.getItem('kiosk_card_view') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try {
+      if (kioskCardView) localStorage.setItem('kiosk_card_view', '1');
+      else localStorage.removeItem('kiosk_card_view');
+    } catch { /* local preference is optional */ }
+  }, [kioskCardView]);
   useEffect(() => {
     try {
       if (selectedLocationId) sessionStorage.setItem('kiosk_sel_loc', selectedLocationId);
@@ -6784,7 +6960,9 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const showMobileKioskBar = !step.startsWith('admin:') && ['select', 'kasgeld', 'stroom'].includes(step);
+  const showMobileKioskBar = !step.startsWith('admin:')
+    && ['select', 'kasgeld', 'stroom'].includes(step)
+    && !(isUi && isMobileViewport && kioskCardView);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -7000,7 +7178,29 @@ export default function KioskLayout() {
             <ApartmentSelect key={apartmentsReloadKey}
               selectedLocationId={selectedLocationId}
               onLocationSelectionChange={setSelectedLocationId}
+              uiCardView={kioskCardView}
+              onUiCardViewChange={setKioskCardView}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
+              onQuickPay={async (a) => {
+                const [{ data }, { data: paymentPlans }] = await Promise.all([
+                  loadCachedOverview(a.tenant_id),
+                  api.get(`/kiosk/tenants/${a.tenant_id}/payment-plans`),
+                ]);
+                const paymentOverview = buildPaymentOverview(data);
+                const quickPayPayload = buildQuickPayPayload(
+                  paymentOverview,
+                  Array.isArray(paymentPlans) ? paymentPlans : [],
+                );
+                setApartment(a);
+                if (quickPayPayload.amount > 0) {
+                  setOverview({ ...paymentOverview, total_due: quickPayPayload.amount, quick_pay: true });
+                  setPaymentPayload(quickPayPayload);
+                  setStep('confirm');
+                } else {
+                  setOverview(paymentOverview);
+                  setStep('overview');
+                }
+              }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
               onKasgeld={() => setStep('kasgeld')}
@@ -7110,7 +7310,14 @@ export default function KioskLayout() {
               onConfirm={(p) => { setPaymentPayload(p); setStep('confirm'); }} />
           )}
           {step === 'confirm' && paymentPayload && overview && (
-            <PaymentConfirm payload={paymentPayload} overview={overview} onBack={() => setStep('method')}
+            <PaymentConfirm payload={paymentPayload} overview={overview} quickPay={overview.quick_pay}
+              onBack={() => {
+                if (!overview.quick_pay) { setStep('method'); return; }
+                setApartment(null);
+                setOverview(null);
+                setPaymentPayload(null);
+                setStep('select');
+              }}
               onSuccess={(r) => { setPaymentResult(r); setStep('receipt'); }} />
           )}
           {step === 'receipt' && paymentResult && (
