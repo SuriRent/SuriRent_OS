@@ -214,7 +214,11 @@
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <!-- "default": behoudt de effen iOS-statusbalk zonder translucente blur. -->
+    <!-- "black-translucent": de statusbalk wordt doorzichtig, de app-content
+         vloeit eronder door. Hierdoor toont de Kiosk zijn oranje achtergrond
+         achter de iPhone-klok/batterij (matcht de huisstijl). In de Admin
+         blijft de witte header doorlopen — iOS rendert de klok wel wit,
+         maar admin-gebruikers gebruiken vooral de in-app navigatie. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Beheer" />
     <meta name="format-detection" content="telephone=no" />

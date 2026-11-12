@@ -1612,30 +1612,6 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .kiosk-ui .kiosk-ui-admin [data-testid="apt-filter-bar"] > button { flex: 0 0 auto !important; min-width: max-content; height: 2.25rem; min-height: 2.25rem; padding: 0 0.875rem; border-radius: 9999px; }
 .kiosk-ui .kiosk-ui-admin [data-testid^="apt-row-"].kiosk-fx-row { border: 1px solid #F1F5F9; border-radius: 1rem; padding: 0.75rem; box-shadow: 0 8px 22px -14px rgba(15, 23, 42, 0.3); }
 .kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
-@media (max-width: 767px) {
-  html.kiosk-apartment-overview-page,
-  html.kiosk-apartment-overview-page body {
-    background-color: #F4F7FD !important;
-    background-image:
-      linear-gradient(180deg, transparent 0%, transparent 70%, #F4F7FD 86%, #F4F7FD 100%),
-      url("./apartment-overview-bg.jpeg") !important;
-    background-repeat: no-repeat, no-repeat !important;
-    background-position: center top, center top !important;
-    background-size: 100% 100svh, auto 100svh !important;
-  }
-  .kiosk-fullscreen.kiosk-white.kiosk-ui.kiosk-apartment-overview {
-    background: transparent !important;
-  }
-  .kiosk-apartment-overview .kiosk-ui-hero-art > svg,
-  .kiosk-apartment-overview .kiosk-ui-hero-art > img { display: none !important; }
-  .kiosk-apartment-overview .kiosk-ui-hero-art {
-    margin-top: 0 !important; padding-top: 1rem !important; padding-bottom: 3.5rem !important;
-    color: #1B2A5C !important; background: transparent !important; border-radius: 0 !important;
-  }
-  .kiosk-apartment-overview .kiosk-ui-hero-art h2,
-  .kiosk-apartment-overview .kiosk-ui-hero-art p { color: #FFFFFF !important; }
-  .kiosk-apartment-overview [data-testid="kiosk-ui-hero"] + div { margin-top: 0 !important; }
-}
 
 /* UI-Thema mobiel: Fx-bouwstenen (rijen, stats, zoek, detailkop) in Facturen-stijl */
 .kiosk-ui .kiosk-ui-admin .fx-stats { gap: 0.625rem; }

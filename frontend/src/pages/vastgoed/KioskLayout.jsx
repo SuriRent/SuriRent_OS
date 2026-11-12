@@ -551,7 +551,7 @@ function UiHero({ apartments, locationName, locOpts }) {
           </div>
         );
       })()}
-      <div className="kiosk-ui-hero-art relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+      <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
@@ -6224,12 +6224,6 @@ export default function KioskLayout() {
     setIosStatusBar(bg);
   }, []);
   useEffect(() => {
-    const root = document.documentElement;
-    if (step !== 'select') return undefined;
-    root.classList.add('kiosk-apartment-overview-page');
-    return () => root.classList.remove('kiosk-apartment-overview-page');
-  }, [step]);
-  useEffect(() => {
     const BODY_BG = '#F6F7FB';
     document.body.classList.add('kiosk-mode');
     const prevHtmlBg = document.documentElement.style.backgroundColor;
@@ -6246,6 +6240,8 @@ export default function KioskLayout() {
       document.body.style.backgroundColor = prevBodyBg;
     };
   }, []);
+
+
   // ===================================================================
   // NFC TAP-LISTENER (USB HID-kaartlezer)
   // ===================================================================
@@ -6756,8 +6752,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui ${step === 'select' ? 'kiosk-apartment-overview' : ''}`}
-      data-testid="kiosk-root" data-theme="ui">
+    <div className="kiosk-fullscreen kiosk-white bg-white kiosk-ui" data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
