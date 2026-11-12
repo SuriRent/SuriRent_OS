@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" style="background-color:#FF5C00;">
   <head>
     <script>
       // Markeer het browserplatform vroeg zodat globale CSS platformverschillen
@@ -305,8 +305,13 @@
             assistent: { name: 'SuriRent Assistent', theme: '#FFFFFF', icon: 'assistent' }
           };
           var p = (location.pathname || '').toLowerCase();
-          var sub = p;
-          if (p.indexOf('/c/') === 0) sub = '/' + p.split('/').slice(3).join('/');
+          var RESERVED = ['admin','kiosk','login','demo','huurder','klant','onderteken','onderteken-huurder','qr-link','c','api','assets','static','vastgoed','superadmin','assistent'];
+          var pathParts = p.split('/').filter(Boolean);
+          var firstSegment = pathParts[0] || '';
+          var routeStart = firstSegment === 'c' ? 2
+            : firstSegment && RESERVED.indexOf(firstSegment) === -1 ? 1
+            : 0;
+          var sub = '/' + pathParts.slice(routeStart).join('/');
           var role = 'beheer';
           if (sub === '/superadmin' || sub.indexOf('/superadmin/') === 0) role = 'superadmin';
           else if (sub === '/assistent' || sub.indexOf('/assistent') === 0) role = 'assistent';
@@ -351,7 +356,6 @@
           var manifest = document.querySelector('link[rel="manifest"]');
           // Detecteer bedrijfs-slug uit pad: /<slug>/login etc.
           // Reserved slugs (admin, kiosk, login, etc.) zijn geen bedrijfs-slug.
-          var RESERVED = ['admin','kiosk','login','demo','huurder','klant','onderteken','qr-link','c','api','assets'];
           var slug = '';
           var seg = p.split('/').filter(Boolean);
           if (seg.length > 0 && RESERVED.indexOf(seg[0]) === -1) {
@@ -389,9 +393,6 @@
       })();
     </script>
     <style>
-      html[data-pwa-standalone="true"] #__pwa_splash { display: none !important; }
-    </style>
-    <style>
       html[data-pwa-role="superadmin"],
       html[data-pwa-role="superadmin"] body {
         background-color: #F3F8F5 !important;
@@ -404,8 +405,8 @@
         try {
           var isSuperadmin = document.documentElement.getAttribute('data-pwa-role') === 'superadmin';
           var isKiosk = document.documentElement.getAttribute('data-pwa-role') === 'kiosk';
-          var BRAND = isSuperadmin ? '#F3F8F5' : (isKiosk ? '#F6F7FB' : '#FF5C00');
-          var CONTRAST = isSuperadmin ? '#047857' : (isKiosk ? '#FF5C00' : '#FFFFFF');
+          var BRAND = isSuperadmin ? '#F3F8F5' : '#FF5C00';
+          var CONTRAST = isSuperadmin ? '#047857' : '#FFFFFF';
           document.documentElement.style.setProperty('--pwa-splash-bg', BRAND);
           document.documentElement.style.setProperty('--pwa-splash-fg', CONTRAST);
           window.__PWA_BG = BRAND;
@@ -495,7 +496,7 @@
          window.__hidePwaSplash() dismisst nadat auth + tenant-resolve
          zijn afgerond. Zo geen tussentijdse "cream + ring spinner" flikker
          meer tijdens PWA-opstart. -->
-    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--pwa-splash-bg, #FF5C00);z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;transition:opacity 0.3s ease-out;pointer-events:none;">
+    <div id="__pwa_splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--pwa-splash-bg, #FF5C00);z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;pointer-events:none;">
       <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;animation:__pwaSplashPulse 1.4s ease-in-out infinite;">
         <svg data-pwa-splash-icon="home" width="112" height="112" viewBox="0 0 24 24" fill="none" stroke="var(--pwa-splash-fg, #FFFFFF)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="SuriRent">
           <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" fill="#FFFFFF" fill-opacity="0.18"/>
@@ -530,22 +531,23 @@
       </style>
     </div>
     <script>
-      // Publieke helper — App.js roept dit aan zodra de auth-check +
-      // tenant-resolve klaar zijn (of na een safety-timeout). We fade
-      // uit i.p.v. hard verwijderen zodat er geen frame-drop is.
+      // Publieke helper — App.js roept dit aan zodra auth en route-resolve klaar zijn.
       window.__hidePwaSplash = function () {
         try {
           var el = document.getElementById('__pwa_splash');
           if (!el || el.__hidden) return;
           el.__hidden = true;
-          el.style.opacity = '0';
-          setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 320);
+          if (el.parentNode) el.parentNode.removeChild(el);
         } catch (e) { /* no-op */ }
       };
       // Safety-net: als App.js om welke reden dan ook nooit __hidePwaSplash
       // aanroept, verdwijnt de splash na 6s automatisch zodat de user niet
       // vast komt te zitten op de splash.
-      setTimeout(function () { try { window.__hidePwaSplash && window.__hidePwaSplash(); } catch(e){} }, 6000);
+      setTimeout(function () {
+        try {
+          if (!window.__pwaSplashHeld && window.__hidePwaSplash) window.__hidePwaSplash();
+        } catch(e) {}
+      }, 6000);
     </script>
     <div id="root"></div>
   </body>
