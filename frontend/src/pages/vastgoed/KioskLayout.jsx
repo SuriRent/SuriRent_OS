@@ -623,7 +623,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
             <button type="button" onClick={() => heroInputRef.current?.click()} disabled={heroLoading || heroUploading}
               aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
               data-testid="kiosk-ui-hero-image-edit"
-              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] -z-10 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
+              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] z-20 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
               <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none"
                 style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
               <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
