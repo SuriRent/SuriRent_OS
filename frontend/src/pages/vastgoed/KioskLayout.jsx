@@ -4496,7 +4496,10 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
-  useVisualViewportPosition(sheetRef, 640, { settleDelay: ui ? 120 : 0 });
+  useVisualViewportPosition(sheetRef, 640, {
+    settleDelay: ui ? 120 : 0,
+    pinToTop: ui && step === 'details',
+  });
 
   useEffect(() => {
     const body = document.body;
@@ -4571,7 +4574,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
       data-testid="kasgeld-overlay">
       <div ref={sheetRef}
         className={`absolute inset-0 flex justify-center ${ui
-          ? 'items-end sm:items-center sm:p-4'
+          ? `${step === 'details' ? 'items-start' : 'items-end'} sm:items-center sm:p-4`
           : 'items-stretch sm:items-center sm:p-4'}`}>
       <div onClick={(e) => e.stopPropagation()}
         className={`bg-white w-full flex flex-col overflow-hidden ${ui
