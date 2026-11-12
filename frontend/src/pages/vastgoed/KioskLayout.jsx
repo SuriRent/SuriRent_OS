@@ -398,25 +398,32 @@ function UiLocMenu({ opts, wrapClass, children }) {
 
 function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
-  currentApartment, tenant, title = 'Kies uw appartement',
+  currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
+  const logoUrl = compactBranding ? resolveLogoUrl(company?.branding?.logo_url || company?.logo_url) : '';
   const { isUi } = useContext(KioskThemeCtx);
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   const locLabel = currentStep === 'stroom' || currentStep === 'kasgeld'
     ? title
     : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
   return (
-    <div className="kiosk-chrome flex items-center gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]" data-testid="kiosk-desktop-header">
-      <KioskAdminMenu returnTo={{
+    <div className={`kiosk-chrome flex items-center ${compactBranding ? 'gap-2 pl-2 pr-2 py-1.5' : 'gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]'}`}
+      data-testid="kiosk-desktop-header">
+      {!hideAdminMenu && <KioskAdminMenu returnTo={{
         step: currentStep || 'select',
         location: currentLocationId || null,
         apartment: currentApartment || null,
-      }} />
-      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 md:flex-none md:shrink-0">
-        <Home className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" strokeWidth={2.2} />
-        <span className="text-xl md:text-2xl lg:text-3xl font-black text-white tracking-tight truncate" data-testid="kiosk-header-company">
+      }} />}
+      <div className={`flex items-center ${compactBranding ? 'min-w-0 flex-1 gap-1.5' : 'min-w-0 flex-1 gap-2 md:gap-3 md:flex-none md:shrink-0'}`}>
+        {logoUrl
+          ? <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1">
+            <img src={logoUrl} alt="" className="h-full w-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          </span>
+          : <Home className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" strokeWidth={2.2} />}
+        <span className={`${compactBranding ? 'min-w-0 flex-1 text-[15px]' : 'text-xl md:text-2xl lg:text-3xl'} font-black text-white tracking-tight truncate`}
+          data-testid="kiosk-header-company">
           {company?.name || 'Kiosk'}
         </span>
       </div>
@@ -517,7 +524,6 @@ function UiAptCard({ a, onOpen }) {
 function UiAptHeroCard({ a, onOpen, onQuickPay }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
-  const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   const status = uiAptStatus(a);
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
   const [dueError, setDueError] = useState(false);
@@ -586,17 +592,22 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
           className="flex min-w-0 flex-1 flex-col justify-center gap-2 text-left text-[#1B2A5C]">
           <span className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FFF1E8] text-[#FF5C00]">
-              {src && !vacant
-                ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-hero-photo`}
-                  className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                : <Building2 className="h-5 w-5" />}
-            </span>
+            {vacant
+              ? <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FFF1E8] text-[#FF5C00]">
+                <Building2 className="h-5 w-5" />
+              </span>
+              : <OverviewTenantPhoto src={photo} name={a.tenant_name} testid={`apt-${a.number}-hero-photo`} />}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-base font-extrabold leading-tight">{a.number}</span>
               <span className="mt-0.5 block truncate text-[13px] font-medium leading-tight text-slate-500">
                 {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
               </span>
+              {!vacant && a.tenant_phone && (
+                <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-slate-500">
+                  <Smartphone className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{a.tenant_phone}</span>
+                </span>
+              )}
             </span>
             <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold leading-none ${statusTone}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
@@ -1009,9 +1020,10 @@ function ApartmentSelect({
       {!kioskCardMode && <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />}
       {/* Mobile: kleine titel links, onder de knoppen */}
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
-      {!kioskCardMode && <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
+      <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
-        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts} />}
+        onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
+        hideAdminMenu={kioskCardMode} compactBranding={kioskCardMode} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
@@ -1047,7 +1059,6 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
-          {kioskCardMode && <PrinterLamp className="!h-12 !w-12 !rounded-2xl !bg-white !text-[#1B2A5C] shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)]" />}
         </div>
       )}
 
@@ -1576,12 +1587,12 @@ function buildQuickPayPayload(overview, paymentPlans = []) {
   };
 }
 
-function OverviewTenantPhoto({ src, name }) {
+function OverviewTenantPhoto({ src, name, testid = 'overview-tenant-photo' }) {
   const [bad, setBad] = useState(false);
   const url = src && !/^https?:/.test(src) ? `${process.env.REACT_APP_BACKEND_URL}${src}` : src;
   const ini = (name || '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return (
-    <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-orange-100 ring-4 ring-orange-50 flex items-center justify-center" data-testid="overview-tenant-photo">
+    <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-orange-100 ring-4 ring-orange-50 flex items-center justify-center" data-testid={testid}>
       {url && !bad
         ? <img src={url} alt={name || ''} className="w-full h-full object-cover" onError={() => setBad(true)} />
         : <span className="text-base sm:text-lg font-black text-[#FF5C00]">{ini}</span>}
