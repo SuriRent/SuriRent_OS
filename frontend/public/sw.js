@@ -65,24 +65,14 @@ self.addEventListener('activate', (event) => {
     );
     await self.clients.claim();
 
-    // ALLEEN bij een SW UPDATE (niet first install) forceren we alle open
-    // tabs om DIRECT te herladen zodat ze de nieuwe bundle.js + manifest URL
-    // pakken. Anders blijft het oude tabblad de gecachete (verkeerde) PWA
-    // manifest serveren tot de gebruiker zelf refresht — wat catastrofaal
-    // is voor PWA install (Chrome/iOS captures de manifest start_url AT
-    // THE MOMENT OF INSTALL, en dat moment zou dan een oude manifest URL
-    // gebruiken die naar /manifest-beheer.json wijst zonder slug).
+    // On update, notify controlled pages. The page reloads once on
+    // controllerchange; navigating clients here as well can cause a second
+    // startup/splash cycle.
     if (hadPreviousController) {
       try {
         const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const c of clients) {
           try { c.postMessage({ type: 'SW_ACTIVATED', version: CACHE_VERSION, reload: true }); } catch { /* noop */ }
-          const path = new URL(c.url).pathname;
-          const segments = path.split('/').filter(Boolean);
-          const isStartupPage = path === '/' || segments[segments.length - 1] === 'login';
-          if (isStartupPage && typeof c.navigate === 'function') {
-            try { await c.navigate(c.url); } catch (e) { console.warn('[sw] update navigation failed', e); }
-          }
         }
       } catch { /* noop */ }
     }
@@ -210,7 +200,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(RUNTIME_CACHE).then(async (cache) => {
         // Race: netwerk vs. 2s timeout. Winnaar wordt geserveerd.
-        const networkPromise = fetch(req).then((res) => {
+        const networkPromise = fetch(req.url, {
+          cache: 'no-store',
+          credentials: req.credentials,
+          headers: req.headers,
+        }).then((res) => {
           if (res && res.status === 200) {
             cache.put(req, res.clone()).catch(() => {});
           }
@@ -218,7 +212,7 @@ self.addEventListener('fetch', (event) => {
         });
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(async () => {
-            const cached = await cache.match(req) || await cache.match('/');
+            const cached = await caches.match(req) || await caches.match('/');
             resolve(cached || null);
           }, 2000);
         });
