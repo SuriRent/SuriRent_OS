@@ -50,7 +50,7 @@ import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
-import { setIosStatusBar, useWhitePageBehindModal } from '../../lib/ios-status-bar';
+import { setIosStatusBar, setIosStatusBarStyle, useWhitePageBehindModal } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
 import useVisualViewportPosition from '../../lib/use-visual-viewport-position';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
@@ -3523,13 +3523,13 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   const visibleItems = useMemo(() => (sourceFilter === 'all' ? items
     : items.filter((it) => (it.source || 'kasgeld') === sourceFilter)), [items, sourceFilter]);
 
-  // Huidige maand als default voor de selector; maandaccordions starten ingeklapt.
+  // Huidige maand als default-focus voor de accordion en maandselector.
   const [currentKey, setCurrentKey] = useState(() => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
-  const [expandedMonths, setExpandedMonths] = useState(() => new Set());
+  const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
   useEffect(() => {
     if (!embedded || !ui) return undefined;
     const refreshMonth = () => {
@@ -3549,7 +3549,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   useEffect(() => {
     if (!embedded || !ui) return;
     setSelectedMonth(currentKey);
-    setExpandedMonths(new Set());
+    setExpandedMonths(new Set([currentKey]));
   }, [currentKey, embedded, ui]);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -4576,6 +4576,16 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
       window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
+  useEffect(() => {
+    if (!ui || step !== 'amount' || saved) return undefined;
+    const statusBarMetas = Array.from(document.querySelectorAll('meta[name="apple-mobile-web-app-status-bar-style"]'))
+      .map((meta) => [meta, meta.getAttribute('content')]);
+    setIosStatusBarStyle('black-translucent');
+    return () => statusBarMetas.forEach(([meta, content]) => {
+      if (content === null) meta.removeAttribute('content');
+      else meta.setAttribute('content', content);
+    });
+  }, [ui, step, saved]);
 
   const goNext = () => {
     const n = parseFloat(String(amount).replace(',', '.'));

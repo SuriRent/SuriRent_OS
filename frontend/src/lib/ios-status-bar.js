@@ -9,6 +9,11 @@ export function setIosStatusBar(color) {
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
 }
 
+export function setIosStatusBarStyle(style) {
+  if (!isIOS) return;
+  document.querySelectorAll('meta[name="apple-mobile-web-app-status-bar-style"]').forEach((m) => m.setAttribute('content', style));
+}
+
 // Schermvullende witte popups: html/body-achtergrond en statusbalk tijdelijk wit,
 // anders schemert de oranje pagina erachter door als waas onder de iPhone-klok.
 let whiteDepth = 0;
