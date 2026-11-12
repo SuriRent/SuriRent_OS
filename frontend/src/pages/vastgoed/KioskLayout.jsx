@@ -4496,9 +4496,10 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
+  const fullPageDetails = ui && step === 'details';
   useVisualViewportPosition(sheetRef, 640, {
     settleDelay: ui ? 120 : 0,
-    pinToTop: ui && step === 'details',
+    pinToTop: fullPageDetails,
   });
 
   useEffect(() => {
@@ -4574,13 +4575,15 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
       data-testid="kasgeld-overlay">
       <div ref={sheetRef}
         className={`absolute inset-0 flex justify-center ${ui
-          ? `${step === 'details' ? 'items-start' : 'items-end'} sm:items-center sm:p-4`
+          ? `${fullPageDetails ? 'items-stretch' : 'items-end'} sm:items-center sm:p-4`
           : 'items-stretch sm:items-center sm:p-4'}`}>
       <div onClick={(e) => e.stopPropagation()}
         className={`bg-white w-full flex flex-col overflow-hidden ${ui
-          ? 'rounded-t-[28px] shadow-2xl sm:max-w-md sm:rounded-2xl'
+          ? fullPageDetails
+            ? 'h-full rounded-none shadow-none sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl sm:shadow-2xl'
+            : 'rounded-t-[28px] shadow-2xl sm:max-w-md sm:rounded-2xl'
           : 'h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'}`}
-        style={ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 24px)' } : undefined}
+        style={ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 24px)' } : undefined}
         data-testid="kasgeld-form">
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
@@ -4658,8 +4661,10 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className={`${ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
+          <div className={`${fullPageDetails
+            ? 'flex-1 min-h-0 px-4 py-3 gap-3 sm:px-5 sm:py-4'
+            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
             <div className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
