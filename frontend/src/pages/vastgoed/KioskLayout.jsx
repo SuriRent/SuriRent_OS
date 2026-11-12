@@ -586,61 +586,70 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
   };
 
   return (
-    <article className="kiosk-ui-card overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_22px_-16px_rgba(27,42,92,0.38)]"
+    <article className="kiosk-ui-card overflow-hidden rounded-[22px] border border-white bg-white shadow-[0_12px_28px_-20px_rgba(27,42,92,0.55)] ring-1 ring-slate-200/80"
       data-testid={`apt-${a.number}-hero-card`}>
-      <div className="flex items-stretch gap-3 p-2.5">
+      <div className={`h-1 ${
+        status === 'paid' ? 'bg-emerald-400'
+          : status === 'partial' ? 'bg-amber-400'
+            : status === 'deposit' ? 'bg-sky-400'
+              : status === 'vacant' ? 'bg-slate-300'
+                : 'bg-gradient-to-r from-[#FF7A1A] via-[#FF9B45] to-[#FFE4D1]'
+      }`} />
+      <div className="flex items-center gap-3 px-3 py-2.5">
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
-          className="flex min-w-0 flex-1 flex-col justify-center gap-2 text-left text-[#1B2A5C]">
-          <span className="flex min-w-0 items-center gap-2.5">
+          className="flex min-w-0 flex-1 items-center gap-3 text-left text-[#1B2A5C]">
             {vacant
               ? <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FFF1E8] text-[#FF5C00]">
                 <Building2 className="h-5 w-5" />
               </span>
               : <OverviewTenantPhoto src={photo} name={a.tenant_name} testid={`apt-${a.number}-hero-photo`} />}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-base font-extrabold leading-tight">{a.number}</span>
+              <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
+              <span className="block truncate text-[17px] font-extrabold leading-tight">{a.number}</span>
               <span className="mt-0.5 block truncate text-[13px] font-medium leading-tight text-slate-500">
                 {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
               </span>
               {!vacant && a.tenant_phone && (
-                <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-slate-500">
+                <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] font-semibold leading-tight text-slate-500">
                   <Smartphone className="h-3 w-3 shrink-0" />
                   <span className="truncate">{a.tenant_phone}</span>
                 </span>
               )}
             </span>
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold leading-none ${statusTone}`}>
+        </button>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-extrabold leading-none ${statusTone}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
               {statusLabel}
-            </span>
-          </span>
-          <span className="ml-[54px] flex min-w-0 items-baseline gap-2">
-            <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">
-              {vacant ? 'Status' : 'Openstaand'}
-            </span>
-            <span className={`truncate text-[15px] font-extrabold leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
-              data-testid={`apt-${a.number}-hero-due`}>
-              {vacant ? 'Beschikbaar'
-                : status === 'deposit' ? 'Borg nog niet betaald'
-                  : dueError ? 'Bedrag niet beschikbaar'
-                    : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
-            </span>
-          </span>
-        </button>
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2.5 border-t border-slate-100 bg-slate-50/70 px-3 py-2.5">
+        <div className={`min-w-0 flex-1 rounded-xl px-3 py-1.5 ${isPaymentAction ? 'bg-orange-50' : 'bg-white'}`}>
+          <p className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
+            {vacant ? 'Status' : 'Totaal openstaand'}
+          </p>
+          <p className={`truncate text-[15px] font-black leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
+            data-testid={`apt-${a.number}-hero-due`}>
+            {vacant ? 'Beschikbaar'
+              : status === 'deposit' ? 'Borg nog niet betaald'
+                : dueError ? 'Bedrag niet beschikbaar'
+                  : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+          </p>
+        </div>
         <button type="button" onClick={handleAction} disabled={payLoading}
           aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
           data-testid={`apt-${a.number}-hero-action`}
-          className={`flex w-[88px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[10px] font-extrabold leading-tight transition active:scale-[0.98] disabled:opacity-60 ${
+          className={`inline-flex min-h-11 shrink-0 items-center justify-between gap-2 rounded-xl px-3 text-[11px] font-extrabold transition active:scale-[0.98] disabled:opacity-60 ${
             isPaymentAction
-              ? 'bg-[#FF5C00] text-white shadow-[0_5px_12px_-7px_rgba(255,92,0,0.75)]'
-              : 'border border-slate-200 bg-slate-50 text-[#1B2A5C]'
+              ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
+              : 'border border-slate-200 bg-white text-[#1B2A5C]'
           }`}>
-          <span className={`flex h-7 w-7 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-white'}`}>
-            {payLoading
-              ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <ChevronRight className="h-4 w-4" strokeWidth={2.8} />}
+          <span className="inline-flex items-center gap-2">
+            {payLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {payLoading ? 'Openen…' : actionLabel}
           </span>
-          <span>{payLoading ? 'Openen…' : actionLabel}</span>
+          {!payLoading && <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-slate-100'}`}>
+            <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
+          </span>}
         </button>
       </div>
       {payError && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">{payError}</p>}
