@@ -1617,7 +1617,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     background-color: #F4F7FD !important;
     background-image: url("./apartment-overview-bg.jpeg") !important;
     background-repeat: no-repeat !important;
-    background-position: center center !important;
+    background-position: center top !important;
     background-size: cover !important;
   }
   .kiosk-apartment-overview .kiosk-ui-hero-art > svg,
