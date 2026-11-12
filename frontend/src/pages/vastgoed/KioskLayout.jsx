@@ -5569,10 +5569,13 @@ const UI_ADMIN_STEPS = ['facturen', 'locaties', 'huurders', 'appartementen', 'co
 
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
-  const [top, setTop] = useState(0);
+  const [top, setTop] = useState(null);
   useLayoutEffect(() => {
     const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
-    if (!h) return undefined;
+    if (!h) {
+      setTop(0);
+      return undefined;
+    }
     const updateTop = () => setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
     updateTop();
     const observer = new ResizeObserver(updateTop);
@@ -5584,7 +5587,7 @@ function KioskUiPageShell({ children, testId }) {
     };
   }, []);
   return createPortal((
-    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top: top ?? 0, visibility: top === null ? 'hidden' : undefined, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
       <div className="kiosk-ui w-full overflow-x-hidden">{children}</div>
     </div>
   ), document.body);
