@@ -23,6 +23,7 @@
     "postbuild": "node scripts/inline-landing-content.js",
     "test": "craco test"
   },
+  "proxy": "https://sandbox.surirent.sr",
   "browserslist": {
     "production": [
       ">0.2%",

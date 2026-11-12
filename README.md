@@ -115,7 +115,7 @@ De Compose-stack vereist dezelfde secrets en URL-variabelen als de Coolify-deplo
 
 - Frontend: Node.js 22 en npm. In `frontend/`: `npm install`, daarna `npm start` voor de ontwikkelserver of `npm run build` voor een productiebuild.
 - Backend: Python 3.11. Installeer `backend/requirements.txt` en start vanuit `backend/` met `uvicorn server:app --reload --host 0.0.0.0 --port 8000`.
-- De backend vereist ten minste `MONGO_URL`, `DB_NAME` en `JWT_SECRET`; voor functies voor PDF-beveiliging stel je ook `PDF_AES_PASSWORD` in. Voor afzonderlijke frontendontwikkeling stel je `REACT_APP_BACKEND_URL` in op de backend-origin.
+- De backend vereist ten minste `MONGO_URL`, `DB_NAME` en `JWT_SECRET`; voor functies voor PDF-beveiliging stel je ook `PDF_AES_PASSWORD` in. Voor afzonderlijke frontendontwikkeling stel je `REACT_APP_BACKEND_URL` in op de backend-origin. Zonder die variabele gebruikt de frontend `/api`; de development-server proxy't dit standaard naar de sandbox (`https://sandbox.surirent.sr`). Voor een lokaal draaiende backend stel je de proxy-target in op `http://localhost:8000`.
 
 ## Beheer en onderhoud
 

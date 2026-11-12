@@ -4565,16 +4565,22 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   return createPortal((
     <div
       onClick={saved ? onSaved : onClose}
-      className="keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/60 sm:backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
+      ref={sheetRef}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden flex justify-center ${ui
+        ? 'items-end bg-slate-950/35 backdrop-blur-sm sm:items-center sm:bg-black/60 sm:p-4'
+        : 'items-stretch bg-white sm:items-center sm:bg-black/60 sm:backdrop-blur-md sm:p-4'}`}
       data-testid="kasgeld-overlay">
-      <div ref={sheetRef} onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
+      <div onClick={(e) => e.stopPropagation()}
+        className={`bg-white w-full flex flex-col overflow-hidden ${ui
+          ? 'max-h-[94dvh] rounded-t-[28px] shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'
+          : 'h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'}`}
         data-testid="kasgeld-form">
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
             titel toch onder de notch/statusbalk zit. */}
-        <div className="flex-none flex items-center justify-between gap-3 px-5 pb-4 border-b border-slate-100"
-          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
+        <div className={`relative flex-none flex items-center justify-between gap-3 ${ui ? 'px-4 sm:px-5 pb-3 sm:pb-4' : 'px-5 pb-4'} border-b border-slate-100`}
+          style={{ paddingTop: `max(var(--kiosk-sat), ${ui ? '24px' : '16px'})` }}>
+          {ui && <div aria-hidden="true" className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" />}
           <div className="flex min-w-0 items-center gap-3">
             {step === 'details' && !saved && (
               <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
@@ -4582,20 +4588,21 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
                 <ChevronLeft className="w-5 h-5 text-slate-700" />
               </button>
             )}
-            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
-              <Wallet className="w-8 h-8 text-orange-600" strokeWidth={2.5} />
+            <div className={`${ui ? 'w-11 h-11 sm:w-14 sm:h-14' : 'w-14 h-14'} shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center`}>
+              <Wallet className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} text-orange-600`} strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-xl font-black leading-tight text-slate-900">
+              <h3 className={`${ui ? 'text-lg sm:text-xl' : 'text-xl'} font-black leading-tight text-slate-900`}>
                 {saved ? 'Kasgeld bon' : step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
               </h3>
-              <p className="mt-1 text-sm leading-tight text-slate-500">
+              <p className={`${ui ? 'mt-0.5 text-xs sm:text-sm' : 'mt-1 text-sm'} leading-tight text-slate-500`}>
                 {step === 'amount' && !saved ? 'Voer het bedrag in en kies de valuta' : step === 'details' && !saved ? 'Voeg een omschrijving en categorie toe' : 'Overzicht van de kasmutatie'}
               </p>
             </div>
           </div>
-          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-            <X className="w-7 h-7 text-slate-700" />
+          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" aria-label="Sluiten"
+            className={`${ui ? 'w-11 h-11 sm:w-14 sm:h-14 rounded-full sm:rounded-2xl' : 'w-14 h-14 rounded-2xl'} shrink-0 bg-slate-100 hover:bg-slate-200 flex items-center justify-center`}>
+            <X className={`${ui ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-7 h-7'} text-slate-700`} />
           </button>
         </div>
 
@@ -4605,13 +4612,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : step === 'amount' ? (
           /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
-          <div className={`flex-1 min-h-0 overflow-y-auto px-5 ${ui ? 'py-3 space-y-3' : 'py-4 space-y-4'}`}
+          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-180px)] px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
             style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
                 <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-                  className={`${ui ? 'h-12 sm:h-14 text-sm sm:text-base gap-1.5' : 'h-14 text-base gap-2'} rounded-2xl border font-black inline-flex items-center justify-center ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-                  <span className={`${ui ? 'text-lg sm:text-xl' : 'text-xl'}`} aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
+                  className={`${ui ? 'h-11 sm:h-14 text-xs sm:text-base gap-1 sm:gap-1.5' : 'h-14 text-base gap-2'} rounded-2xl border font-black inline-flex items-center justify-center transition ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                  {!ui && <span className="text-xl" aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>}
                   {c}
                 </button>
               ))}
@@ -4619,41 +4626,41 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
 
             <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
               <button onClick={() => changeType('in')} data-testid="kasgeld-type-in"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? `${ui ? 'bg-emerald-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
-                <ArrowUpRight className="w-5 h-5" /> Inkomsten
+                className={`${ui ? 'h-11 sm:h-12 text-sm sm:text-base gap-1.5 sm:gap-2' : 'h-12 text-base gap-2'} rounded-xl font-black inline-flex items-center justify-center transition ${type === 'in' ? `${ui ? 'bg-emerald-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
+                <ArrowUpRight className={`${ui ? 'w-4 h-4 sm:w-5 sm:h-5' : 'w-5 h-5'}`} /> Inkomsten
               </button>
               <button onClick={() => changeType('out')} data-testid="kasgeld-type-out"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? `${ui ? 'bg-red-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
-                <ArrowDownLeft className="w-5 h-5" /> Uitgaven
+                className={`${ui ? 'h-11 sm:h-12 text-sm sm:text-base gap-1.5 sm:gap-2' : 'h-12 text-base gap-2'} rounded-xl font-black inline-flex items-center justify-center transition ${type === 'out' ? `${ui ? 'bg-red-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
+                <ArrowDownLeft className={`${ui ? 'w-4 h-4 sm:w-5 sm:h-5' : 'w-5 h-5'}`} /> Uitgaven
               </button>
             </div>
 
             <div data-testid="kasgeld-amount-display"
-              className={`w-full ${ui ? 'min-h-[68px] sm:min-h-[76px]' : 'min-h-[76px]'} px-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
-              <div className="flex items-center gap-3">
-                <Coins className="w-8 h-8 shrink-0" />
-                <span className="text-xs font-black uppercase tracking-wider">Bedrag</span>
+              className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
+              <div className={`flex items-center ${ui ? 'gap-2 sm:gap-3' : 'gap-3'}`}>
+                <Coins className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} shrink-0`} />
+                <span className={`${ui ? 'text-[10px] sm:text-xs' : 'text-xs'} font-black uppercase tracking-wider`}>Bedrag</span>
               </div>
-              <span className="text-3xl sm:text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
+              <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-3xl sm:text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
             <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad"
-              buttonClassName={ui ? '!h-14 !rounded-xl !text-2xl' : '!h-16 !rounded-2xl !text-3xl'} />
+              buttonClassName={ui ? '!h-12 sm:!h-14 !rounded-xl sm:!rounded-2xl !text-xl sm:!text-2xl' : '!h-16 !rounded-2xl !text-3xl'} />
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className={`flex-1 min-h-0 overflow-y-auto flex flex-col px-5 ${ui ? 'py-3 gap-3' : 'py-4 gap-4'}`}
+          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-180px)] px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
-            <div className={`w-full min-h-[76px] rounded-2xl border-2 px-4 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-              <div className="flex items-center gap-3">
-                <Coins className="w-8 h-8 shrink-0" />
-                <span className="text-xs font-black uppercase tracking-wider">{type === 'in' ? 'Inkomsten' : 'Uitgaand'}</span>
+            <div className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              <div className={`flex items-center ${ui ? 'gap-2 sm:gap-3' : 'gap-3'}`}>
+                <Coins className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} shrink-0`} />
+                <span className={`${ui ? 'text-[10px] sm:text-xs' : 'text-xs'} font-black uppercase tracking-wider`}>{type === 'in' ? 'Inkomsten' : 'Uitgaand'}</span>
               </div>
-              <span className="text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
+              <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
             <label className="block">
@@ -4694,7 +4701,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
         )}
 
         {!saved && (
-          <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
+          <div className={`flex-none ${ui ? 'px-4 sm:px-5' : 'px-5'} pt-3 border-t border-slate-100 bg-white`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {step === 'amount' ? (
               <button onClick={goNext} data-testid="kasgeld-next-btn"

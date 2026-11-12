@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const baseURL = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
 
 // httpOnly auth cookies (access_token / kiosk_token / tenant_token) worden
 // door de backend gezet bij login en automatisch meegestuurd via
