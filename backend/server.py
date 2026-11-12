@@ -17847,7 +17847,7 @@ async def verify_pdf_token(token: str):
 # =====================================================================
 # PWA Push Notifications
 # =====================================================================
-from push_service import get_vapid_public_key, send_push  # noqa: E402
+from push_service import PushResult, get_vapid_public_key, send_push  # noqa: E402
 
 
 async def _deep_link(d: dict) -> str:
@@ -17968,10 +17968,12 @@ async def _notify_tenant(tenant_id: str, title: str, body: str, data: dict | Non
         payload = {"audience": "tenant", "url": "/kiosk/huurder", **(data or {})}
 
         async def _one(sub):
-            ok = await asyncio.to_thread(send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload)
-            if not ok:
+            result = await asyncio.to_thread(
+                send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload,
+            )
+            if result is PushResult.EXPIRED:
                 await db.tenant_push_subs.delete_one({"endpoint": sub["endpoint"]})
-            return ok
+            return result is PushResult.SENT
 
         res = await asyncio.gather(*[_one(s) for s in subs], return_exceptions=True)
         return sum(1 for r in res if r is True)
@@ -18099,10 +18101,12 @@ async def _notify_kiosk_employees(company_id: str, title: str, body: str, data: 
         payload = {"audience": "kiosk", "url": "/kiosk", **(data or {})}
 
         async def _one(sub):
-            ok = await asyncio.to_thread(send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload)
-            if not ok:
+            result = await asyncio.to_thread(
+                send_push, {"endpoint": sub["endpoint"], "keys": sub["keys"]}, title, body, payload,
+            )
+            if result is PushResult.EXPIRED:
                 await db.emp_push_subs.delete_one({"endpoint": sub["endpoint"]})
-            return ok
+            return result is PushResult.SENT
 
         res = await asyncio.gather(*[_one(s) for s in subs], return_exceptions=True)
         return sum(1 for r in res if r is True)
@@ -18196,10 +18200,20 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
     # Vind alle admin/owner/boekhouder users van deze company. Boekhouders
     # hebben dezelfde betalingsverwerkings-rechten als admins (geen approval
     # nodig) dus krijgen ook real-time meldingen.
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0, "contact_email": 1}) or {}
+    contact_email = str(company.get("contact_email") or "").strip()
+    user_query = {"role": {"$in": ["admin", "owner", "boekhouder"]}}
+    if contact_email:
+        user_query["$or"] = [
+            {"company_id": company_id},
+            {"email": {"$regex": f"^{re.escape(contact_email)}$", "$options": "i"}},
+        ]
+    else:
+        user_query["company_id"] = company_id
     admin_ids = []
     push_cat = _push_category(data)
     async for u in db.users.find(
-        {"company_id": company_id, "role": {"$in": ["admin", "owner", "boekhouder"]}},
+        user_query,
         {"_id": 0, "id": 1, "push_prefs": 1},
     ):
         if push_cat and (u.get("push_prefs") or {}).get(push_cat) is False:
@@ -18234,10 +18248,12 @@ async def _notify_company_admins(company_id: str, title: str, body: str, data: d
         info = {"endpoint": sub["endpoint"], "keys": sub["keys"]}
         # pywebpush is blocking sync — run in threadpool zodat we niet
         # andere subs blokkeren tijdens 1 trage push.
-        ok = await asyncio.to_thread(send_push, info, title, body, _with_action_token(data, sub.get("user_id"), company_id))
-        if not ok:
+        result = await asyncio.to_thread(
+            send_push, info, title, body, _with_action_token(data, sub.get("user_id"), company_id),
+        )
+        if result is PushResult.EXPIRED:
             await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
-        return ok
+        return result is PushResult.SENT
 
     results = await asyncio.gather(*[_send_one(s) for s in subs], return_exceptions=True)
     return sum(1 for r in results if r is True)
@@ -18273,16 +18289,16 @@ async def _notify_superadmins(category: str, title: str, body: str, data: dict |
         payload_data = {"audience": "superadmin", **(data or {})}
 
         async def _send_one(sub):
-            ok = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 send_push,
                 {"endpoint": sub["endpoint"], "keys": sub["keys"]},
                 title,
                 body,
                 payload_data,
             )
-            if not ok:
+            if result is PushResult.EXPIRED:
                 await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
-            return ok
+            return result is PushResult.SENT
 
         results = await asyncio.gather(*[_send_one(sub) for sub in subs], return_exceptions=True)
         failures = [result for result in results if isinstance(result, BaseException)]
@@ -18770,12 +18786,13 @@ async def push_test(body: PushTestIn, user=Depends(get_current_user)):
     cursor = db.push_subs.find({"user_id": user["id"]}, {"_id": 0})
     async for sub in cursor:
         sub_info = {"endpoint": sub["endpoint"], "keys": sub["keys"]}
-        ok = send_push(sub_info, body.title, body.body, {"kind": "test", "url": "/admin/notifications"})
-        if ok:
+        result = send_push(sub_info, body.title, body.body, {"kind": "test", "url": "/admin/notifications"})
+        if result is PushResult.SENT:
             sent += 1
         else:
             failed += 1
-            await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
+            if result is PushResult.EXPIRED:
+                await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
     total = await db.push_subs.count_documents({"user_id": user["id"]})
     return {"sent": sent, "failed": failed, "remaining_devices": total}
 
@@ -18790,13 +18807,16 @@ async def push_notify_overdue(user=Depends(get_current_user)):
     msg = _overdue_summary_text(overdue)
     sent = 0
     async for sub in db.push_subs.find({"user_id": user["id"]}, {"_id": 0}):
-        if send_push(
+        result = send_push(
             {"endpoint": sub["endpoint"], "keys": sub["keys"]},
             "Achterstallige huur",
             msg,
             {"kind": "overdue", "count": len(overdue), "url": "/admin/invoices"},
-        ):
+        )
+        if result is PushResult.SENT:
             sent += 1
+        elif result is PushResult.EXPIRED:
+            await db.push_subs.delete_one({"endpoint": sub["endpoint"]})
     return {"sent": sent, "overdue_count": len(overdue), "message": msg}
 
 
