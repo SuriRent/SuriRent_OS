@@ -19,15 +19,18 @@ export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
         element.style.width = '';
         element.style.height = '';
         element.style.bottom = '';
+        element.style.removeProperty('--visual-viewport-height');
         return;
       }
 
+      const height = Math.round(viewport?.height || window.innerHeight);
       element.style.position = 'absolute';
       element.style.top = `${Math.round(viewport?.offsetTop || 0)}px`;
       element.style.left = `${Math.round(viewport?.offsetLeft || 0)}px`;
       element.style.width = `${Math.round(viewport?.width || window.innerWidth)}px`;
-      element.style.height = `${Math.round(viewport?.height || window.innerHeight)}px`;
+      element.style.height = `${height}px`;
       element.style.bottom = 'auto';
+      element.style.setProperty('--visual-viewport-height', `${height}px`);
     };
 
     const scheduleUpdate = () => {
@@ -50,6 +53,7 @@ export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', scheduleUpdate);
       if (frame) window.cancelAnimationFrame(frame);
+      element.style.removeProperty('--visual-viewport-height');
     };
   }, [ref, mobileBreakpoint]);
 }

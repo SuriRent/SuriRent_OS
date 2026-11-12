@@ -4575,8 +4575,9 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           : 'items-stretch sm:items-center sm:p-4'}`}>
       <div onClick={(e) => e.stopPropagation()}
         className={`bg-white w-full flex flex-col overflow-hidden ${ui
-          ? 'max-h-[94dvh] rounded-t-[28px] shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'
+          ? 'rounded-t-[28px] shadow-2xl sm:max-w-md sm:rounded-2xl'
           : 'h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'}`}
+        style={ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 24px)' } : undefined}
         data-testid="kasgeld-form">
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
@@ -4615,8 +4616,8 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : step === 'amount' ? (
           /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
-          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-220px)] px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
-            style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className={`${ui ? 'flex-none px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
+            style={{ WebkitOverflowScrolling: 'touch', ...(ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
                 <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
@@ -4654,8 +4655,8 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-220px)] px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+          <div className={`${ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
             <div className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
