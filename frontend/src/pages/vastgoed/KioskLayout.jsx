@@ -513,33 +513,63 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
+function kioskHeroCacheKey(slug) {
+  return slug ? `pwa_kiosk_hero_image:${slug}` : '';
+}
+
+function readKioskHeroImage(slug) {
+  if (!slug) return '';
+  try { return localStorage.getItem(kioskHeroCacheKey(slug)) || ''; } catch { return ''; }
+}
+
+function writeKioskHeroImage(slug, url) {
+  const key = kioskHeroCacheKey(slug);
+  if (!key) return;
+  try {
+    if (url) localStorage.setItem(key, url);
+    else localStorage.removeItem(key);
+  } catch { /* localStorage may be unavailable or full */ }
+}
+
 function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
-  const [heroImageUrl, setHeroImageUrl] = useState('');
-  const [heroLoading, setHeroLoading] = useState(Boolean(companySlug));
+  const [heroImage, setHeroImage] = useState(() => ({
+    slug: companySlug,
+    url: readKioskHeroImage(companySlug),
+    loading: Boolean(companySlug && !readKioskHeroImage(companySlug)),
+  }));
+  const cachedHeroImageUrl = readKioskHeroImage(companySlug);
+  const heroImageUrl = heroImage.slug === companySlug ? heroImage.url : cachedHeroImageUrl;
+  const heroLoading = Boolean(companySlug && !heroImageUrl && (
+    heroImage.slug !== companySlug || heroImage.loading
+  ));
   const [heroUploading, setHeroUploading] = useState(false);
   const [heroError, setHeroError] = useState('');
   const heroInputRef = useRef(null);
   useEffect(() => {
     let active = true;
     if (!companySlug) {
-      setHeroImageUrl('');
-      setHeroLoading(false);
+      setHeroImage({ slug: '', url: '', loading: false });
       return () => { active = false; };
     }
-    setHeroLoading(true);
+    const cachedUrl = readKioskHeroImage(companySlug);
+    setHeroImage({ slug: companySlug, url: cachedUrl, loading: !cachedUrl });
     setHeroError('');
     api.get(`/public/companies/${encodeURIComponent(companySlug)}/branding`)
       .then(({ data }) => {
         if (active) {
-          setHeroImageUrl(data?.kiosk_hero_image_url || '');
+          const url = data?.kiosk_hero_image_url || '';
+          writeKioskHeroImage(companySlug, url);
+          setHeroImage({ slug: companySlug, url, loading: false });
           setHeroError('');
         }
       })
       .catch((e) => {
-        if (active) setHeroError(`Huisafbeelding laden mislukt: ${formatError(e)}`);
-      })
-      .finally(() => {
-        if (active) setHeroLoading(false);
+        if (active) {
+          setHeroImage((current) => current.slug === companySlug
+            ? { ...current, loading: false }
+            : current);
+          setHeroError(`Huisafbeelding laden mislukt: ${formatError(e)}`);
+        }
       });
     return () => { active = false; };
   }, [companySlug]);
@@ -557,7 +587,8 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (!data?.url) throw new Error('De server gaf geen afbeeldingsadres terug.');
-      setHeroImageUrl(data.url);
+      writeKioskHeroImage(companySlug, data.url);
+      setHeroImage({ slug: companySlug, url: data.url, loading: false });
     } catch (e) {
       const message = e?.response?.status === 404
         ? 'De uploadfunctie is nog niet beschikbaar op de verbonden backend.'
@@ -569,7 +600,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
     }
   };
 
-  const heroImageSrc = heroImageUrl ? resolveLogoUrl(heroImageUrl) : villaM;
+  const heroImageSrc = heroImageUrl ? resolveLogoUrl(heroImageUrl) : heroLoading ? '' : villaM;
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
@@ -624,8 +655,9 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
               aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
               data-testid="kiosk-ui-hero-image-edit"
               className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] z-20 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
-              <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none"
+              {heroImageSrc && <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none"
                 style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+              }
               <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
                 {heroUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               </span>
@@ -634,7 +666,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
               data-testid="kiosk-ui-hero-image-input" onChange={uploadHeroImage} />
           </>
         ) : (
-          <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none -z-10"
+          heroImageSrc && <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none -z-10"
             style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
         )}
         {isAdmin && heroError && (
