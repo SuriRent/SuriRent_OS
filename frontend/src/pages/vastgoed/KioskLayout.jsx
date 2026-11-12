@@ -4565,11 +4565,14 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   return createPortal((
     <div
       onClick={saved ? onSaved : onClose}
-      ref={sheetRef}
-      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden flex justify-center ${ui
-        ? 'items-end bg-slate-950/35 backdrop-blur-sm sm:items-center sm:bg-black/60 sm:p-4'
-        : 'items-stretch bg-white sm:items-center sm:bg-black/60 sm:backdrop-blur-md sm:p-4'}`}
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden ${ui
+        ? 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
+        : 'bg-white sm:bg-black/60 sm:backdrop-blur-md'}`}
       data-testid="kasgeld-overlay">
+      <div ref={sheetRef}
+        className={`absolute inset-0 flex justify-center ${ui
+          ? 'items-end sm:items-center sm:p-4'
+          : 'items-stretch sm:items-center sm:p-4'}`}>
       <div onClick={(e) => e.stopPropagation()}
         className={`bg-white w-full flex flex-col overflow-hidden ${ui
           ? 'max-h-[94dvh] rounded-t-[28px] shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'
@@ -4612,7 +4615,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : step === 'amount' ? (
           /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
-          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-180px)] px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
+          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-220px)] px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
             style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
@@ -4651,7 +4654,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-180px)] px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+          <div className={`${ui ? 'flex-none max-h-[calc(94dvh-220px)] px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
@@ -4702,7 +4705,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
 
         {!saved && (
           <div className={`flex-none ${ui ? 'px-4 sm:px-5' : 'px-5'} pt-3 border-t border-slate-100 bg-white`}
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+            style={{ paddingBottom: ui ? 'max(env(safe-area-inset-bottom, 0px), 24px)' : 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {step === 'amount' ? (
               <button onClick={goNext} data-testid="kasgeld-next-btn"
                 disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
@@ -4720,6 +4723,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   ), document.body);
