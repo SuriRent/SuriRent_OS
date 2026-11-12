@@ -4543,6 +4543,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
+  const keyboardOpen = useKeyboardOpen();
   const fullPageDetails = ui && step === 'details';
   useVisualViewportPosition(sheetRef, 640, {
     settleDelay: ui ? 120 : 0,
@@ -4618,7 +4619,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
     <div
       onClick={saved ? onSaved : onClose}
       className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden ${ui
-        ? 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
+        ? `bg-slate-950/35 ${keyboardOpen ? 'backdrop-blur-none' : 'backdrop-blur-sm'} sm:bg-black/60`
         : 'bg-white sm:bg-black/60 sm:backdrop-blur-md'}`}
       data-testid="kasgeld-overlay">
       <div ref={sheetRef}
@@ -4751,7 +4752,8 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
               <label className="block min-w-0 w-full">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
+                  className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12 appearance-none text-center' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}
+                  style={ui ? { width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', WebkitAppearance: 'none' } : undefined} />
               </label>
             )}
 
