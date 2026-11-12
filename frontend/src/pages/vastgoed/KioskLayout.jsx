@@ -542,12 +542,27 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
     : status === 'deposit' ? 'Borg bekijken'
       : status === 'paid' ? 'Overzicht openen'
         : 'Afrekenen';
+  const isPaymentAction = status === 'unpaid' || status === 'partial';
+  const statusLabel = {
+    vacant: 'Vrij',
+    deposit: 'Borg',
+    paid: 'Betaald',
+    partial: 'Deels',
+    unpaid: 'Open',
+  }[status];
   const statusTone = {
-    vacant: '!text-slate-600',
-    deposit: '!text-sky-700',
-    paid: '!text-emerald-700',
-    partial: '!text-amber-800',
-    unpaid: '!text-rose-700',
+    vacant: 'bg-slate-100 text-slate-600',
+    deposit: 'bg-sky-50 text-sky-700',
+    paid: 'bg-emerald-50 text-emerald-700',
+    partial: 'bg-amber-50 text-amber-700',
+    unpaid: 'bg-rose-50 text-rose-700',
+  }[status];
+  const statusDot = {
+    vacant: 'bg-slate-400',
+    deposit: 'bg-sky-500',
+    paid: 'bg-emerald-500',
+    partial: 'bg-amber-500',
+    unpaid: 'bg-rose-500',
   }[status];
   const handleAction = async () => {
     if (status !== 'unpaid' && status !== 'partial') {
@@ -565,53 +580,56 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
   };
 
   return (
-    <article className="kiosk-ui-card overflow-hidden rounded-[22px] border border-white/90 bg-white/85 shadow-[0_10px_26px_-18px_rgba(27,42,92,0.3)] backdrop-blur-md"
+    <article className="kiosk-ui-card overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_22px_-16px_rgba(27,42,92,0.38)]"
       data-testid={`apt-${a.number}-hero-card`}>
-      <div aria-hidden="true" className="h-1 bg-gradient-to-r from-[#FF5C00] via-[#FF9B45] to-transparent" />
-      <div className="p-3">
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left text-[#1B2A5C]">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50 text-[#FF5C00]">
+      <div className="flex items-stretch gap-3 p-2.5">
+        <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
+          className="flex min-w-0 flex-1 flex-col justify-center gap-2 text-left text-[#1B2A5C]">
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FFF1E8] text-[#FF5C00]">
               {src && !vacant
                 ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-hero-photo`}
                   className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 : <Building2 className="h-5 w-5" />}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
-              <span className="block truncate text-lg font-extrabold leading-tight">{a.number}</span>
-              <span className="mt-0.5 block truncate text-sm font-medium text-slate-500">{vacant ? 'Vrij' : a.tenant_name}</span>
+              <span className="block truncate text-base font-extrabold leading-tight">{a.number}</span>
+              <span className="mt-0.5 block truncate text-[13px] font-medium leading-tight text-slate-500">
+                {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
+              </span>
             </span>
-          </button>
-          <span className="shrink-0">
-            <UiStatusPill a={a} className={`max-w-[108px] !px-2 !py-1 !text-[10px] ${statusTone}`} />
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold leading-none ${statusTone}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+              {statusLabel}
+            </span>
           </span>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white/70 px-3 py-2.5">
-        <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-[#F5F7FC] px-3 py-2">
-          <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">
-            {vacant ? 'Status' : 'Totaal openstaand'}
-          </p>
-          <p className="mt-0.5 truncate text-base font-black leading-tight text-[#1B2A5C]" data-testid={`apt-${a.number}-hero-due`}>
-            {vacant ? 'Beschikbaar'
-              : status === 'deposit' ? 'Borg nog niet betaald'
-                : dueError ? 'Bedrag niet beschikbaar'
-                  : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
-          </p>
-        </div>
+          <span className="ml-[54px] flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">
+              {vacant ? 'Status' : 'Openstaand'}
+            </span>
+            <span className={`truncate text-[15px] font-extrabold leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
+              data-testid={`apt-${a.number}-hero-due`}>
+              {vacant ? 'Beschikbaar'
+                : status === 'deposit' ? 'Borg nog niet betaald'
+                  : dueError ? 'Bedrag niet beschikbaar'
+                    : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+            </span>
+          </span>
+        </button>
         <button type="button" onClick={handleAction} disabled={payLoading}
-          aria-label={status === 'unpaid' || status === 'partial' ? `${actionLabel}: ${a.number}` : actionLabel}
+          aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
           data-testid={`apt-${a.number}-hero-action`}
-          className="inline-flex min-h-12 shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] px-3.5 text-xs font-extrabold text-white shadow-[0_6px_14px_-10px_rgba(255,92,0,0.65)] transition active:scale-[0.98] disabled:opacity-60">
-          <span className="inline-flex items-center gap-2">
-            {payLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {payLoading ? 'Openen…' : actionLabel}
+          className={`flex w-[88px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[10px] font-extrabold leading-tight transition active:scale-[0.98] disabled:opacity-60 ${
+            isPaymentAction
+              ? 'bg-[#FF5C00] text-white shadow-[0_5px_12px_-7px_rgba(255,92,0,0.75)]'
+              : 'border border-slate-200 bg-slate-50 text-[#1B2A5C]'
+          }`}>
+          <span className={`flex h-7 w-7 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-white'}`}>
+            {payLoading
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <ChevronRight className="h-4 w-4" strokeWidth={2.8} />}
           </span>
-          {!payLoading && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-            <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
-          </span>}
+          <span>{payLoading ? 'Openen…' : actionLabel}</span>
         </button>
       </div>
       {payError && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">{payError}</p>}
