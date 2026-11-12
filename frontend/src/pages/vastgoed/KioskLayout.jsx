@@ -565,36 +565,36 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
   };
 
   return (
-    <article className="kiosk-ui-card overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_10px_26px_-18px_rgba(27,42,92,0.42)]"
+    <article className="kiosk-ui-card overflow-hidden rounded-[22px] border border-white/90 bg-white/85 shadow-[0_10px_26px_-18px_rgba(27,42,92,0.3)] backdrop-blur-md"
       data-testid={`apt-${a.number}-hero-card`}>
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#FF6500] via-[#FF7A1A] to-[#FF9B45] px-3 py-3 text-white">
-        <span aria-hidden="true" className="absolute -right-8 -top-12 h-32 w-32 rounded-full bg-white/15 blur-2xl" />
-        <div className="relative z-10 flex items-center gap-3">
+      <div aria-hidden="true" className="h-1 bg-gradient-to-r from-[#FF5C00] via-[#FF9B45] to-transparent" />
+      <div className="p-3">
+        <div className="flex items-center gap-3">
           <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left text-white">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/70 bg-white/95 text-[#FF5C00] shadow-sm">
+            className="flex min-w-0 flex-1 items-center gap-3 text-left text-[#1B2A5C]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50 text-[#FF5C00]">
               {src && !vacant
                 ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-hero-photo`}
                   className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 : <Building2 className="h-5 w-5" />}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-white/75">Appartement</span>
-              <span className="block truncate text-xl font-black leading-tight">{a.number}</span>
-              <span className="mt-0.5 block truncate text-sm font-semibold text-white/90">{vacant ? 'Vrij' : a.tenant_name}</span>
+              <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
+              <span className="block truncate text-lg font-extrabold leading-tight">{a.number}</span>
+              <span className="mt-0.5 block truncate text-sm font-medium text-slate-500">{vacant ? 'Vrij' : a.tenant_name}</span>
             </span>
           </button>
           <span className="shrink-0">
-            <UiStatusPill a={a} className={`max-w-[108px] !bg-white/95 !px-2 !py-1 !text-[10px] ${statusTone}`} />
+            <UiStatusPill a={a} className={`max-w-[108px] !px-2 !py-1 !text-[10px] ${statusTone}`} />
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 bg-white px-3 py-3">
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
+      <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white/70 px-3 py-2.5">
+        <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-[#F5F7FC] px-3 py-2">
+          <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">
             {vacant ? 'Status' : 'Totaal openstaand'}
           </p>
-          <p className="mt-0.5 truncate text-lg font-black leading-tight text-[#1B2A5C]" data-testid={`apt-${a.number}-hero-due`}>
+          <p className="mt-0.5 truncate text-base font-black leading-tight text-[#1B2A5C]" data-testid={`apt-${a.number}-hero-due`}>
             {vacant ? 'Beschikbaar'
               : status === 'deposit' ? 'Borg nog niet betaald'
                 : dueError ? 'Bedrag niet beschikbaar'
@@ -604,12 +604,12 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
         <button type="button" onClick={handleAction} disabled={payLoading}
           aria-label={status === 'unpaid' || status === 'partial' ? `${actionLabel}: ${a.number}` : actionLabel}
           data-testid={`apt-${a.number}-hero-action`}
-          className="inline-flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-xl bg-[#1B2A5C] px-3.5 text-xs font-extrabold text-white shadow-[0_6px_14px_-10px_rgba(27,42,92,0.85)] transition active:scale-[0.98] disabled:opacity-60">
+          className="inline-flex min-h-12 shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] px-3.5 text-xs font-extrabold text-white shadow-[0_6px_14px_-10px_rgba(255,92,0,0.65)] transition active:scale-[0.98] disabled:opacity-60">
           <span className="inline-flex items-center gap-2">
             {payLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {payLoading ? 'Openen…' : actionLabel}
           </span>
-          {!payLoading && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[#FF9B45]">
+          {!payLoading && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
             <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
           </span>}
         </button>
