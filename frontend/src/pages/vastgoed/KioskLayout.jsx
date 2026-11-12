@@ -3473,7 +3473,7 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel({ embedded = false, ui = false, onBack }) {
+function KasgeldPanel({ embedded = false, ui = false }) {
   const [uiQ, setUiQ] = useState('');
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
@@ -3604,40 +3604,8 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
           </div>
         );
         return (
-          <div data-testid="kasgeld-fx" className="kiosk-ui-hero">
-            <div className="relative z-0 rounded-b-xl -mx-1 -mt-5 px-4 pt-14 pb-14 text-white">
-              <svg className="absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
-                <defs><linearGradient id="kuiWaveKas" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
-                <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWaveKas)" />
-              </svg>
-              <svg viewBox="0 0 200 130" className="absolute -right-3 bottom-2 h-[72%] w-auto max-w-none pointer-events-none -z-10" aria-hidden="true"
-                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 30%)' }}>
-                <g strokeLinecap="round" strokeLinejoin="round">
-                  <g transform="rotate(-10 70 60)">
-                    <rect x="12" y="24" width="124" height="68" rx="9" fill="#34D399" stroke="#047857" strokeWidth="3" />
-                    <rect x="22" y="34" width="104" height="48" rx="5" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="2" />
-                    <circle cx="74" cy="58" r="16" fill="#10B981" stroke="#fff" strokeOpacity="0.9" strokeWidth="2.5" />
-                    <text x="74" y="65" textAnchor="middle" fontSize="20" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">$</text>
-                  </g>
-                  {[112, 99, 86, 73].map((y, i) => (
-                    <g key={y}>
-                      <ellipse cx="150" cy={y + 7} rx="32" ry="10" fill="#B45309" />
-                      <ellipse cx="150" cy={y} rx="32" ry="10" fill={i === 3 ? '#FCD34D' : '#FBBF24'} stroke="#B45309" strokeWidth="2.5" />
-                    </g>
-                  ))}
-                  <ellipse cx="150" cy="73" rx="20" ry="6" fill="none" stroke="#B45309" strokeOpacity="0.55" strokeWidth="2" />
-                </g>
-              </svg>
-              <div className="relative flex items-center gap-3 min-w-0">
-                <button type="button" onClick={onBack} aria-label="Terug" data-testid="kiosk-admin-page-back"
-                  className="shrink-0 w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-6 h-6" strokeWidth={2.6} /></button>
-                <div className="min-w-0">
-                  <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
-                  <p className="text-[13px] font-normal text-white/90 truncate">Totaal: {items.length} mutaties</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 -mt-9 relative px-0.5">
+          <div data-testid="kasgeld-fx" className="space-y-3">
+            <div className="grid grid-cols-3 gap-1.5 relative px-0.5">
               {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
               {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
               {kStat('EUR', Coins, 'bg-sky-500 text-white')}
@@ -6548,8 +6516,9 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const isMobileUiApartments = isMobileViewport && isUi && step === 'admin:appartementen';
-  const showTopHead = step !== 'check' && step !== 'select' && !isMobileUiApartments
+  const isMobileUiPage = isMobileViewport && isUi
+    && (step === 'admin:appartementen' || step === 'kasgeld');
+  const showTopHead = step !== 'check' && step !== 'select' && !isMobileUiPage
     && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
@@ -6817,19 +6786,12 @@ export default function KioskLayout() {
           )}
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
-              <KioskModalShell title="Kasgeld" subtitle="Kasoverzicht en mutaties" Icon={Wallet}
-                testId="kiosk-popup-kasgeld" onClose={goBack} wide xwide tall fullscreenMobile
-                footer={(
-                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-kasgeld-new'))}
-                    data-testid="kiosk-popup-kasgeld-new"
-                    className="w-full h-12 rounded-2xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
-                    <Plus className="w-5 h-5" strokeWidth={2.6} /> Nieuwe Mutatie
-                  </button>
-                )}>
-                <div className="kiosk-ui w-full overflow-x-hidden">
-                  <KasgeldPanel embedded ui onBack={goBack} />
-                </div>
-              </KioskModalShell>
+              <KioskUiPageShell testId="kiosk-popup-kasgeld">
+                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" subtitle="Kasoverzicht en mutaties"
+                  Icon={Wallet} newItem={UI_NEW.kasgeld} onClose={goBack} testId="kiosk-ui-kasgeld">
+                  <div className="kiosk-ui w-full overflow-x-hidden"><KasgeldPanel embedded ui /></div>
+                </KioskUiAdminPage>
+              </KioskUiPageShell>
             ) : isMobileViewport ? (
               <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
                 wide xwide tall fullscreenMobile

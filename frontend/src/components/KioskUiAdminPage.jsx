@@ -35,7 +35,7 @@ const CashArt = () => (
 );
 
 // Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
-export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, onClose, testId, children, art, bare }) {
+export default function KioskUiAdminPage({ title, label, subtitle = 'Beheer deze gegevens', Icon, newItem, onBack, onClose, testId, children, art, bare }) {
   useEffect(() => {
     document.body.classList.add('kiosk-popup-active');
     return () => document.body.classList.remove('kiosk-popup-active');
@@ -51,7 +51,7 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-xl font-black leading-tight text-slate-900">{`${label || title} Overzicht`}</h2>
-              <p className="mt-1 truncate text-sm leading-tight text-slate-500">Beheer deze gegevens</p>
+              <p className="mt-1 truncate text-sm leading-tight text-slate-500">{subtitle}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
