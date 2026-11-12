@@ -11,75 +11,93 @@ export function useRegisterServiceWorker() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
+    let disposed = false;
+    let registration = null;
+    let interval = null;
+    const hadController = !!navigator.serviceWorker.controller;
+    let pendingReload = false;
+    let reloadStarted = false;
+
+    const safeReload = () => {
+      if (reloadStarted) return;
+      const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
+      if (onKiosk && !window.__kioskSafeToReload) { pendingReload = true; return; }
+      if (document.visibilityState !== 'visible') { pendingReload = true; return; }
+      pendingReload = false;
+      reloadStarted = true;
+      window.location.reload();
+    };
+    const onKioskSafeToReload = () => {
+      if (pendingReload) safeReload();
+    };
+    const onServiceWorkerMessage = (event) => {
+      if (!hadController || event.data?.type !== 'SW_ACTIVATED' || !event.data.reload) return;
+      pendingReload = true;
+      safeReload();
+    };
+    const onControllerChange = () => {
+      if (!hadController) return;
+      pendingReload = true;
+      safeReload();
+    };
+    const checkForUpdates = () => {
+      if (!disposed) registration?.update().catch(() => {});
+    };
+    const onFocus = () => checkForUpdates();
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (pendingReload) safeReload();
+      checkForUpdates();
+    };
+    const activate = (newWorker) => {
+      const checkState = () => {
+        if (newWorker.state === 'installed' && hadController) {
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      };
+      newWorker.addEventListener('statechange', checkState);
+      checkState();
+    };
+    const onUpdateFound = () => {
+      if (registration?.installing) activate(registration.installing);
+    };
+
+    window.addEventListener('kiosk-safe-to-reload', onKioskSafeToReload);
+    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     // Register on window load so we don't compete with critical render.
     const onReady = async () => {
       try {
-        const reg = await navigator.serviceWorker.register('/sw.js');
+        registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+        if (disposed) return;
+        if (registration.waiting) activate(registration.waiting);
+        if (registration.installing) activate(registration.installing);
+        registration.addEventListener('updatefound', onUpdateFound);
 
-        // Activate new workers immediately, but only reload the kiosk at a safe step.
-        let pendingReload = false;
-        const safeReload = () => {
-          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
-          if (onKiosk && !window.__kioskSafeToReload) { pendingReload = true; return; }
-          if (document.visibilityState !== 'visible') { pendingReload = true; return; }
-          pendingReload = false;
-          window.location.reload();
-        };
-        const onKioskSafeToReload = () => {
-          if (pendingReload) safeReload();
-        };
-        window.addEventListener('kiosk-safe-to-reload', onKioskSafeToReload);
-        const onServiceWorkerMessage = (event) => {
-          if (event.data?.type !== 'SW_ACTIVATED' || !event.data.reload) return;
-          pendingReload = true;
-          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
-          if (onKiosk && document.visibilityState === 'visible') safeReload();
-        };
-        navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
-        const activate = (newWorker) => {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        };
-        if (reg.waiting) activate(reg.waiting);
-        reg.addEventListener('updatefound', () => {
-          if (reg.installing) activate(reg.installing);
-        });
-
-        // A kiosk update waits for the safe start screen; other pages wait until
-        // the user returns to the app before refreshing.
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          pendingReload = true;
-          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
-          if (onKiosk && document.visibilityState === 'visible') safeReload();
-        });
-        document.addEventListener('visibilitychange', () => {
-          if (pendingReload && document.visibilityState === 'visible') {
-            safeReload();
-          }
-        });
-
-        // Periodieke check voor nieuwe versies zodat de nieuwe SW snel
-        // klaar staat (60s actieve tab + bij focus / visibility changes).
-        const checkForUpdates = () => { reg.update().catch(() => {}); };
-        const interval = setInterval(checkForUpdates, 60_000);
-        window.addEventListener('focus', checkForUpdates);
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') checkForUpdates();
-        });
-        return () => {
-          clearInterval(interval);
-          window.removeEventListener('focus', checkForUpdates);
-        };
+        // Check at startup rather than waiting for the browser's next periodic check.
+        checkForUpdates();
+        interval = setInterval(checkForUpdates, 60_000);
       } catch (err) {
         console.warn('Service worker registration failed:', err);
       }
-      return undefined;
     };
     if (document.readyState === 'complete') onReady();
     else window.addEventListener('load', onReady, { once: true });
+
+    return () => {
+      disposed = true;
+      if (interval) clearInterval(interval);
+      registration?.removeEventListener('updatefound', onUpdateFound);
+      window.removeEventListener('load', onReady);
+      window.removeEventListener('kiosk-safe-to-reload', onKioskSafeToReload);
+      navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage);
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 }
 

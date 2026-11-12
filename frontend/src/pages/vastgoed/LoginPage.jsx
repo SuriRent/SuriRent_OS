@@ -17,6 +17,23 @@ import RegisterModal from '../../components/RegisterModal';
 import PwaOnboarding, { PWA_ONBOARDING_KEY } from '../../components/PwaOnboarding';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 
+function getPwaResumeRole(searchParams) {
+  if (!isStandalonePWA() || searchParams.get('pick') === '1'
+    || searchParams.get('view') || searchParams.get('loggedout') === '1') return null;
+  const target = (searchParams.get('target') || '').toLowerCase();
+  const role = target === 'admin' ? 'admin'
+    : target === 'kiosk' ? 'kiosk'
+    : getPreferredRole();
+  if (!role) return null;
+  const tokenKey = role === 'admin' ? 'admin_token'
+    : role === 'tenant' ? 'tenant_token'
+    : 'kiosk_token';
+  try {
+    return localStorage.getItem(tokenKey) ? role : null;
+  } catch {
+    return null;
+  }
+}
 
 // =============================================================================
 // LoginPage — orchestreert branding-detection en kiest welke auth-view (PIN of
@@ -24,10 +41,23 @@ import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 // /app/frontend/src/pages/vastgoed/auth/ voor onderhoudbaarheid.
 // =============================================================================
 export default function LoginPage() {
-  useHidePwaSplash();
   const navigate = useBrandedNavigate();
   const [searchParams] = useSearchParams();
   const { user, loading, refresh } = useAuth();
+  const pwaResumeRole = getPwaResumeRole(searchParams);
+  const [skipRedirect, setSkipRedirect] = useState(false);
+  const hasPendingQr = (() => {
+    try { return !!sessionStorage.getItem('pending_qr_token'); } catch { return false; }
+  })();
+  const pwaResuming = isStandalonePWA() && (
+    loading || !!pwaResumeRole || (!!user && !skipRedirect && !hasPendingQr && searchParams.get('loggedout') !== '1')
+  );
+  useHidePwaSplash(!pwaResuming);
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.__pwaSplashHeld = pwaResuming;
+    return () => { window.__pwaSplashHeld = false; };
+  }, [pwaResuming]);
   // Initial view from ?view=admin or ?view=register query string (e.g. when arriving
   // from the Kiosk "Beheerder" button or a marketing CTA). Defaults to PIN keypad.
   const initialView = (() => {
@@ -49,7 +79,6 @@ export default function LoginPage() {
   })();
   const [view, setView] = useState(initialView);
   const isKioskLogin = (searchParams.get('target') || '').toLowerCase() === 'kiosk';
-  const [skipRedirect, setSkipRedirect] = useState(false);
   // Als de PIN succesvol was gaan we in "authenticating"-mode: we tonen
   // een oranje overlay met het huis-icoon + spinner totdat de navigatie
   // naar /admin is afgerond. Zonder deze mask flitst de numpad tussen
@@ -152,6 +181,8 @@ export default function LoginPage() {
   // flikkering op Android tussen /login → /admin. Centrale waarde
   // (#FFFFFF donker-oranje) staat in index.html.
   useEffect(() => {
+    if (pwaResuming) return undefined;
+
     const primary = (branding?.primary_color || '#FF5C00');
     document.body.classList.add('login-mode');
     setIosStatusBar(getComputedStyle(document.body).getPropertyValue('--login-bg').trim() || '#FF5C00');
@@ -165,7 +196,7 @@ export default function LoginPage() {
       document.body.style.removeProperty('--login-bg');
       document.documentElement.style.removeProperty('--login-bg');
     };
-  }, [branding]);
+  }, [branding, pwaResuming]);
 
   // PWA bedrijfs-context fallback. Wanneer iOS Safari de oude (verkeerde)
   // start_url heeft gecaptured (`/login` zonder slug) maar de gebruiker
@@ -239,23 +270,8 @@ export default function LoginPage() {
   // If the URL contains an explicit `target`, prefer that over the stored role so
   // the Beheer-shortcut always opens the management-enabled kiosk.
   useEffect(() => {
-    if (!isStandalonePWA()) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('pick') === '1') return; // explicit override: show login picker
-    if (params.get('view')) return; // explicit view override → respect it
-    const targetParam = (params.get('target') || '').toLowerCase();
-    const role = targetParam === 'admin' ? 'admin'
-      : targetParam === 'kiosk' ? 'kiosk'
-      : getPreferredRole();
-    if (!role) return;
-    const tokenKey = role === 'admin' ? 'admin_token'
-      : role === 'tenant' ? 'tenant_token'
-      : 'kiosk_token';
-    let hasToken = false;
-    try { hasToken = !!localStorage.getItem(tokenKey); } catch { /* ignore */ }
-    if (!hasToken) return;
-    navigate(routeForRole(role), { replace: true });
-  }, [navigate]);
+    if (pwaResumeRole) navigate(routeForRole(pwaResumeRole), { replace: true });
+  }, [navigate, pwaResumeRole]);
 
   // Bij ?loggedout=1 (uit doLogout) → forceer AuthProvider om /auth/me
   // opnieuw op te halen. Als de cookies correct zijn gewist retourneert
@@ -283,9 +299,13 @@ export default function LoginPage() {
       let hasPendingQr = false;
       try { hasPendingQr = !!sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
       if (hasPendingQr) return;
-      enterKioskAfterLogin(user, { fallback: () => navigate('/admin', { replace: true }) });
+      enterKioskAfterLogin(user, { fallback: () => navigate('/admin', { replace: true }), navigate });
     }
   }, [user, loading, navigate, skipRedirect, searchParams]);
+
+  if (pwaResuming) {
+    return <div className="min-h-screen" style={{ background: 'transparent' }} />;
+  }
 
   // ────────────────────────────────────────────────────────────────────
   // PWA Onboarding heeft voorrang op alle andere views — alleen voor
@@ -349,7 +369,7 @@ export default function LoginPage() {
       // Na het verversen opent de beheerder dezelfde kioskbeheeromgeving.
       let me = null;
       try { me = await refresh(); } catch { /* niet-fataal */ }
-      await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }) });
+      await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }), navigate });
     } else {
       navigate('/kiosk', { replace: true });
     }
