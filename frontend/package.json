@@ -20,7 +20,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "postbuild": "node scripts/inline-landing-content.js",
+    "postbuild": "node scripts/inline-landing-content.js && node scripts/version-service-worker.js",
     "test": "craco test"
   },
   "proxy": "https://sandbox.surirent.sr",

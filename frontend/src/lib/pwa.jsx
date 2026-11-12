@@ -16,23 +16,19 @@ export function useRegisterServiceWorker() {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js');
 
-        // Stille update-strategie met AUTO-RELOAD-AT-NEXT-VISIBLE.
-        // Wanneer een nieuwe SW gevonden wordt:
-        //   1) installeert hij in de achtergrond,
-        //   2) we sturen SKIP_WAITING zodat hij meteen actief wordt,
-        //   3) bij `controllerchange` reloaden we de pagina ALLEEN wanneer
-        //      de pagina niet zichtbaar is OF de gebruiker net is terug-
-        //      gekomen (visibility changes). Hierdoor krijgen gebruikers
-        //      snel nieuwe fixes (bv. device QR token backfill) zonder
-        //      midden in een actie te worden gestoord.
+        // Activate new workers immediately, but only reload the kiosk at a safe step.
         let pendingReload = false;
-        // Kiosk: nooit herladen midden in een sessie (huurdergegevens blijven staan).
-        // Alleen op het startscherm (KioskLayout zet window.__kioskSafeToReload).
         const safeReload = () => {
           const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
           if (onKiosk && !window.__kioskSafeToReload) { pendingReload = true; return; }
+          if (document.visibilityState !== 'visible') { pendingReload = true; return; }
+          pendingReload = false;
           window.location.reload();
         };
+        const onKioskSafeToReload = () => {
+          if (pendingReload) safeReload();
+        };
+        window.addEventListener('kiosk-safe-to-reload', onKioskSafeToReload);
         const activate = (newWorker) => {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -45,19 +41,15 @@ export function useRegisterServiceWorker() {
           if (reg.installing) activate(reg.installing);
         });
 
-        // Controllerchange = nieuwe SW is nu de actieve controller.
-        // We reloaden als de pagina niet zichtbaar is, of markeren een
-        // pending reload voor de volgende visibility-return.
+        // A kiosk update waits for the safe start screen; other pages wait until
+        // the user returns to the app before refreshing.
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (document.visibilityState === 'hidden') {
-            safeReload();
-          } else {
-            pendingReload = true;
-          }
+          pendingReload = true;
+          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
+          if (onKiosk && document.visibilityState === 'visible') safeReload();
         });
         document.addEventListener('visibilitychange', () => {
           if (pendingReload && document.visibilityState === 'visible') {
-            pendingReload = false;
             safeReload();
           }
         });
