@@ -6246,11 +6246,6 @@ export default function KioskLayout() {
       document.body.style.backgroundColor = prevBodyBg;
     };
   }, []);
-  useEffect(() => {
-    setIosStatusBar(step === 'select' ? 'transparent' : '#F6F7FB');
-  }, [step]);
-
-
   // ===================================================================
   // NFC TAP-LISTENER (USB HID-kaartlezer)
   // ===================================================================
