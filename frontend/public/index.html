@@ -300,7 +300,7 @@
           var ROLES = {
             beheer:    { name: 'Beheer',         theme: '#F7F8FA', icon: 'beheer'    },
             superadmin:{ name: 'Superadmin',      theme: '#F3F8F5', icon: 'superadmin' },
-            kiosk:     { name: 'Kiosk',          theme: '#FFFFFF', icon: 'kioskpwa'  },
+            kiosk:     { name: 'Kiosk',          theme: '#F6F7FB', icon: 'kioskpwa'  },
             huurder:   { name: 'Huurder',        theme: '#FFFFFF', icon: 'huurder'   },
             assistent: { name: 'SuriRent Assistent', theme: '#FFFFFF', icon: 'assistent' }
           };
@@ -316,14 +316,24 @@
           else if (sub.indexOf('/admin') === 0) role = 'beheer';
           else if (sub.indexOf('/kiosk/huurder') === 0) role = 'huurder';
           else if (sub === '/kiosk' || sub.indexOf('/kiosk/') === 0 || sub.indexOf('/kiosk') === 0) role = 'kiosk';
+          var isStandalone = !!((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+            || (window.navigator && window.navigator.standalone === true)
+            || (new URLSearchParams(location.search).get('source') === 'pwa'));
           // /login route met target hint → leid af
           if (sub === '/login' || sub.indexOf('/login') === 0) {
             var qs = location.search || '';
             if (qs.indexOf('target=kiosk') !== -1) role = 'kiosk';
             else if (qs.indexOf('target=huurder') !== -1) role = 'huurder';
             else if (qs.indexOf('view=admin') !== -1 || qs.indexOf('target=admin') !== -1) role = 'beheer';
-            else role = 'beheer';
+            else if (isStandalone) {
+              var preferredRole = '';
+              try { preferredRole = localStorage.getItem('pwa_preferred_role') || ''; } catch (e) {}
+              role = preferredRole === 'admin' ? 'beheer'
+                : preferredRole === 'tenant' ? 'huurder'
+                : 'kiosk';
+            } else role = 'beheer';
           }
+          if (isStandalone) document.documentElement.setAttribute('data-pwa-standalone', 'true');
           var cfg = ROLES[role];
           document.documentElement.setAttribute('data-pwa-role', role);
           if (role === 'superadmin') {
@@ -378,6 +388,9 @@
         } catch (e) { /* no-op */ }
       })();
     </script>
+    <style>
+      html[data-pwa-standalone="true"] #__pwa_splash { display: none !important; }
+    </style>
     <style>
       html[data-pwa-role="superadmin"],
       html[data-pwa-role="superadmin"] body {

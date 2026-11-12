@@ -152,6 +152,24 @@ export default function LoginPage() {
   // flikkering op Android tussen /login → /admin. Centrale waarde
   // (#FFFFFF donker-oranje) staat in index.html.
   useEffect(() => {
+    let willRedirectToSavedPwaRole = false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const target = (params.get('target') || '').toLowerCase();
+      const role = target === 'admin' ? 'admin'
+        : target === 'kiosk' ? 'kiosk'
+        : getPreferredRole();
+      const tokenKey = role === 'admin' ? 'admin_token'
+        : role === 'tenant' ? 'tenant_token'
+        : 'kiosk_token';
+      willRedirectToSavedPwaRole = isStandalonePWA()
+        && params.get('pick') !== '1'
+        && !params.get('view')
+        && !!role
+        && !!localStorage.getItem(tokenKey);
+    } catch { /* Continue with the normal login appearance. */ }
+    if (willRedirectToSavedPwaRole) return undefined;
+
     const primary = (branding?.primary_color || '#FF5C00');
     document.body.classList.add('login-mode');
     setIosStatusBar(getComputedStyle(document.body).getPropertyValue('--login-bg').trim() || '#FF5C00');
