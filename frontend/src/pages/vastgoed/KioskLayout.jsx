@@ -3829,7 +3829,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
       )}
 
       {showForm && (
-        <KasgeldMutationModal canBackdate={canManage} onClose={() => setShowForm(false)}
+        <KasgeldMutationModal ui={ui} canBackdate={canManage} onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); load(); }} />
       )}
       {editing && (
@@ -4449,7 +4449,7 @@ function KasgeldMonthPicker({ groups, selected, onPick, onClose }) {
     </div>, document.body);
 }
 
-function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
+function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = false }) {
   const [step, setStep] = useState('amount');  // 'amount' | 'details'
   const [type, setType] = useState('in');
   const [amount, setAmount] = useState('');
@@ -4571,13 +4571,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
           </div>
         ) : step === 'amount' ? (
           /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
+          <div className={`flex-1 min-h-0 overflow-y-auto px-5 ${ui ? 'py-3 space-y-3' : 'py-4 space-y-4'}`}
             style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
                 <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-                  className={`h-14 rounded-2xl border font-black text-base inline-flex items-center justify-center gap-2 ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-                  <span className="text-xl" aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
+                  className={`${ui ? 'h-12 sm:h-14 text-sm sm:text-base gap-1.5' : 'h-14 text-base gap-2'} rounded-2xl border font-black inline-flex items-center justify-center ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                  <span className={`${ui ? 'text-lg sm:text-xl' : 'text-xl'}`} aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
                   {c}
                 </button>
               ))}
@@ -4585,17 +4585,17 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
 
             <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
               <button onClick={() => changeType('in')} data-testid="kasgeld-type-in"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
+                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? `${ui ? 'bg-emerald-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
                 <ArrowUpRight className="w-5 h-5" /> Inkomsten
               </button>
               <button onClick={() => changeType('out')} data-testid="kasgeld-type-out"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
+                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? `${ui ? 'bg-red-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
                 <ArrowDownLeft className="w-5 h-5" /> Uitgaven
               </button>
             </div>
 
             <div data-testid="kasgeld-amount-display"
-              className={`w-full min-h-[76px] px-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
+              className={`w-full ${ui ? 'min-h-[68px] sm:min-h-[76px]' : 'min-h-[76px]'} px-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
               <div className="flex items-center gap-3">
                 <Coins className="w-8 h-8 shrink-0" />
                 <span className="text-xs font-black uppercase tracking-wider">Bedrag</span>
@@ -4604,13 +4604,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
             </div>
 
             <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad"
-              buttonClassName="!h-16 !rounded-2xl !text-3xl" />
+              buttonClassName={ui ? '!h-14 !rounded-xl !text-2xl' : '!h-16 !rounded-2xl !text-3xl'} />
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-5 py-4 gap-4"
+          <div className={`flex-1 min-h-0 overflow-y-auto flex flex-col px-5 ${ui ? 'py-3 gap-3' : 'py-4 gap-4'}`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
@@ -4630,14 +4630,14 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
                 placeholder="Bijv. schoonmaakspullen"
                 autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                 enterKeyHint="next"
-                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base" />
+                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
             </label>
 
             <label className="block">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Categorie</span>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
-                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
+                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
                 {KASGELD_CATEGORIES[type].map(({ group, options }) => (
                   <optgroup key={group} label={group}>
                     {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -4650,7 +4650,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
               <label className="block">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white" />
+                  className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
               </label>
             )}
 
@@ -4665,15 +4665,15 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
             {step === 'amount' ? (
               <button onClick={goNext} data-testid="kasgeld-next-btn"
                 disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
-                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-4 shadow-lg shadow-orange-200 disabled:opacity-50">
-                <CheckCircle className="w-7 h-7" />
+                className={`w-full ${ui ? 'h-14 text-base bg-[#FF5C00] hover:bg-[#E05200] gap-3' : 'h-16 text-lg bg-orange-500 hover:bg-orange-600 gap-4'} rounded-2xl text-white font-black inline-flex items-center justify-center shadow-lg shadow-orange-200 disabled:opacity-50`}>
+                <CheckCircle className={`${ui ? 'w-6 h-6' : 'w-7 h-7'}`} />
                 <span className="h-8 w-px bg-white/40" />
                 Volgende
-                <ArrowRight className="w-7 h-7" />
+                <ArrowRight className={`${ui ? 'w-6 h-6' : 'w-7 h-7'}`} />
               </button>
             ) : (
               <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-3 shadow-lg shadow-orange-200 disabled:opacity-50">
+                className={`w-full ${ui ? 'h-14 text-base bg-[#FF5C00] hover:bg-[#E05200]' : 'h-16 text-lg bg-orange-500 hover:bg-orange-600'} rounded-2xl text-white font-black inline-flex items-center justify-center gap-3 shadow-lg shadow-orange-200 disabled:opacity-50`}>
                 {saving ? <><Loader2 className="w-5 h-5 animate-spin" /> Opslaan…</> : <><CheckCircle className="w-6 h-6" /> Opslaan</>}
               </button>
             )}
