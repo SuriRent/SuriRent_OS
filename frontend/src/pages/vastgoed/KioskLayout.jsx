@@ -3622,12 +3622,12 @@ function KasgeldPanel({ embedded = false, ui = false }) {
         const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const filteredCount = groups.reduce((count, group) => count + group.items.length, 0);
         const kStat = (cur, Icon, tone) => (
-          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2.5 py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2 py-3.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5" strokeWidth={2.6} /></span>
+              <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-4 h-4" strokeWidth={2.6} /></span>
               <div className="min-w-0">
-                <p className="text-[11px] font-medium text-slate-600 truncate leading-tight">{cur}</p>
-                <p className="text-[12.5px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
+                <p className="text-xs font-medium text-slate-600 truncate leading-tight">{cur}</p>
+                <p className="text-[13px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
               </div>
             </div>
           </div>
