@@ -6739,7 +6739,7 @@ export default function KioskLayout() {
                     className="rounded-xl bg-white px-5 py-3 font-black text-[#0B1B3F]">Terug naar SuriRent</button>
                 </>
               ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
-            </motion.div>
+            </div>
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
