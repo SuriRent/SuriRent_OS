@@ -4496,7 +4496,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
-  useVisualViewportPosition(sheetRef);
+  useVisualViewportPosition(sheetRef, 640, { settleDelay: ui ? 120 : 0 });
 
   useEffect(() => {
     const body = document.body;

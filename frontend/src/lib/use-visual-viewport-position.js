@@ -1,12 +1,15 @@
 import { useLayoutEffect } from 'react';
 
-export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
+export default function useVisualViewportPosition(ref, mobileBreakpoint = 640, options = {}) {
+  const { settleDelay = 0 } = options;
+
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
 
     const viewport = window.visualViewport;
     let frame = 0;
+    let updateTimer = 0;
 
     const update = () => {
       frame = 0;
@@ -33,11 +36,20 @@ export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
       element.style.setProperty('--visual-viewport-height', `${height}px`);
     };
 
-    const scheduleUpdate = () => {
+    const scheduleFrame = () => {
       if (!frame) frame = window.requestAnimationFrame(update);
     };
 
-    scheduleUpdate();
+    const scheduleUpdate = () => {
+      if (settleDelay > 0) {
+        window.clearTimeout(updateTimer);
+        updateTimer = window.setTimeout(scheduleFrame, settleDelay);
+      } else {
+        scheduleFrame();
+      }
+    };
+
+    scheduleFrame();
     if (viewport) {
       viewport.addEventListener('resize', scheduleUpdate);
       viewport.addEventListener('scroll', scheduleUpdate);
@@ -52,8 +64,9 @@ export default function useVisualViewportPosition(ref, mobileBreakpoint = 640) {
       }
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', scheduleUpdate);
+      window.clearTimeout(updateTimer);
       if (frame) window.cancelAnimationFrame(frame);
       element.style.removeProperty('--visual-viewport-height');
     };
-  }, [ref, mobileBreakpoint]);
+  }, [ref, mobileBreakpoint, settleDelay]);
 }
