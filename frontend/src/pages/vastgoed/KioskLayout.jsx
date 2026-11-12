@@ -6224,15 +6224,10 @@ export default function KioskLayout() {
     setIosStatusBar(bg);
   }, []);
   useEffect(() => {
-    const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-    if (!meta) return undefined;
-    const previousStyle = meta.getAttribute('content');
-    const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent || '')
-      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIos && step === 'select') meta.setAttribute('content', 'black-translucent');
-    return () => {
-      if (isIos) meta.setAttribute('content', previousStyle || 'default');
-    };
+    const root = document.documentElement;
+    if (step !== 'select') return undefined;
+    root.classList.add('kiosk-apartment-overview-page');
+    return () => root.classList.remove('kiosk-apartment-overview-page');
   }, [step]);
   useEffect(() => {
     const BODY_BG = '#F6F7FB';

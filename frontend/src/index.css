@@ -1613,12 +1613,15 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .kiosk-ui .kiosk-ui-admin [data-testid^="apt-row-"].kiosk-fx-row { border: 1px solid #F1F5F9; border-radius: 1rem; padding: 0.75rem; box-shadow: 0 8px 22px -14px rgba(15, 23, 42, 0.3); }
 .kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
 @media (max-width: 767px) {
-  .kiosk-fullscreen.kiosk-white.kiosk-ui.kiosk-apartment-overview {
-    background-color: #F4F7FD !important;
+  html.kiosk-apartment-overview-page,
+  html.kiosk-apartment-overview-page body {
     background-image: url("./apartment-overview-bg.jpeg") !important;
     background-repeat: no-repeat !important;
     background-position: center top !important;
-    background-size: cover !important;
+    background-size: auto 100svh !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui.kiosk-apartment-overview {
+    background: transparent !important;
   }
   .kiosk-apartment-overview .kiosk-ui-hero-art > svg,
   .kiosk-apartment-overview .kiosk-ui-hero-art > img { display: none !important; }
