@@ -6329,19 +6329,28 @@ export default function KioskLayout() {
   }, []);
   useEffect(() => {
     const BODY_BG = '#F6F7FB';
+    const html = document.documentElement;
+    const body = document.body;
+    const previousOverflow = { html: html.style.overflow, body: body.style.overflow };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    html.scrollTop = 0;
+    body.scrollTop = 0;
     document.body.classList.add('kiosk-mode');
-    const prevHtmlBg = document.documentElement.style.backgroundColor;
-    const prevBodyBg = document.body.style.backgroundColor;
-    document.documentElement.style.backgroundColor = BODY_BG;
-    document.body.style.backgroundColor = BODY_BG;
+    const prevHtmlBg = html.style.backgroundColor;
+    const prevBodyBg = body.style.backgroundColor;
+    html.style.backgroundColor = BODY_BG;
+    body.style.backgroundColor = BODY_BG;
     // iPhone-PWA: statusbalk effen oranje achter klok/batterij (zoals Expo Go).
     setIosStatusBar(BODY_BG);
     return () => {
       setIosStatusBar('#F7F8FA');
-      document.body.classList.remove('kiosk-mode');
-      document.body.classList.remove('kiosk-white-body', 'kiosk-ui-body');
-      document.documentElement.style.backgroundColor = prevHtmlBg;
-      document.body.style.backgroundColor = prevBodyBg;
+      body.classList.remove('kiosk-mode');
+      body.classList.remove('kiosk-white-body', 'kiosk-ui-body');
+      html.style.backgroundColor = prevHtmlBg;
+      body.style.backgroundColor = prevBodyBg;
+      html.style.overflow = previousOverflow.html;
+      body.style.overflow = previousOverflow.body;
     };
   }, []);
 
