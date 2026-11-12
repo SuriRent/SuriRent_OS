@@ -29,6 +29,13 @@ export function useRegisterServiceWorker() {
           if (pendingReload) safeReload();
         };
         window.addEventListener('kiosk-safe-to-reload', onKioskSafeToReload);
+        const onServiceWorkerMessage = (event) => {
+          if (event.data?.type !== 'SW_ACTIVATED' || !event.data.reload) return;
+          pendingReload = true;
+          const onKiosk = /\/kiosk(\/|$)/.test(window.location.pathname);
+          if (onKiosk && document.visibilityState === 'visible') safeReload();
+        };
+        navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
         const activate = (newWorker) => {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {

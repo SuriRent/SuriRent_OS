@@ -6831,7 +6831,7 @@ export default function KioskLayout() {
 
   // Service-worker update mag de kiosk alleen op het startscherm herladen.
   useEffect(() => {
-    window.__kioskSafeToReload = step === 'select' && !apartment;
+    window.__kioskSafeToReload = step === 'check' || (step === 'select' && !apartment);
     if (window.__kioskSafeToReload) {
       window.dispatchEvent(new Event('kiosk-safe-to-reload'));
     }
