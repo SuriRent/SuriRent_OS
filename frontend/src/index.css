@@ -1609,6 +1609,8 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .kiosk-ui .kiosk-ui-admin [data-testid*="-card-"] p.font-black { color: #1B2A5C; }
 .kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button { border-radius: 1rem; min-height: 2.5rem; font-weight: 900; background-color: #FFFFFF; color: #1B2A5C; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
 .kiosk-ui .kiosk-ui-admin [data-testid$="-filter-bar"] > button[class*="bg-[#FF5C00]"] { background-color: #FF5C00; color: #FFFFFF; }
+.kiosk-ui .kiosk-ui-admin [data-testid="apt-filter-bar"] > button { flex: 0 0 auto !important; min-width: max-content; height: 2.25rem; min-height: 2.25rem; padding: 0 0.875rem; border-radius: 9999px; }
+.kiosk-ui .kiosk-ui-admin [data-testid^="apt-row-"].kiosk-fx-row { border: 1px solid #F1F5F9; border-radius: 1rem; padding: 0.75rem; box-shadow: 0 8px 22px -14px rgba(15, 23, 42, 0.3); }
 .kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
 
 /* UI-Thema mobiel: Fx-bouwstenen (rijen, stats, zoek, detailkop) in Facturen-stijl */

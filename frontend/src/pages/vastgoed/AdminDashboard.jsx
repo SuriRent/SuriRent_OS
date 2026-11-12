@@ -2201,7 +2201,7 @@ function NfcCardField({ apartmentId, currentValue }) {
 }
 
 // ============== Apartments ==============
-function ApartmentForm({ initial, onCancel, onSaved }) {
+function ApartmentForm({ initial, onCancel, onSaved, kioskUi = false }) {
   const [data, setData] = useState(initial || { number: '', address: '', rent_amount: 0, currency: 'SRD', location_id: '', photo_url: '', show_tenant_photo: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2232,10 +2232,32 @@ function ApartmentForm({ initial, onCancel, onSaved }) {
   return (
     <KeyboardSafeModal onClose={onCancel} testId="apartment-modal" maxWidthClass="sm:max-w-lg">
       <KeyboardSafeModal.Header>
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-black text-slate-900">{initial ? 'Appartement bewerken' : 'Nieuw appartement'}</h3>
-          <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
-        </div>
+        {kioskUi ? (
+          <div className="flex items-center justify-between gap-3" data-testid="apt-form-header">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+                <Home className="w-7 h-7 text-orange-600" strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-xl font-black leading-tight text-slate-900">
+                  {initial ? 'Appartement bewerken' : 'Nieuw appartement'}
+                </h3>
+                <p className="mt-1 truncate text-sm leading-tight text-slate-500">
+                  {initial ? 'Beheer de gegevens van dit appartement' : 'Voeg een appartement toe aan uw overzicht'}
+                </p>
+              </div>
+            </div>
+            <button type="button" onClick={onCancel} aria-label="Sluiten"
+              className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+              <X className="w-6 h-6 text-slate-700" strokeWidth={2.5} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black text-slate-900">{initial ? 'Appartement bewerken' : 'Nieuw appartement'}</h3>
+            <button onClick={onCancel} className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
+          </div>
+        )}
       </KeyboardSafeModal.Header>
       <KeyboardSafeModal.Body>
         {error && <div className="mb-4 p-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
@@ -2373,7 +2395,7 @@ export function Apartments({ embedded = false }) {
   const sharedModals = (
     <>
       {(creating || editing) && (
-        <ApartmentForm initial={editing} onCancel={() => { setEditing(null); setCreating(false); }}
+        <ApartmentForm initial={editing} kioskUi={embedded} onCancel={() => { setEditing(null); setCreating(false); }}
           onSaved={() => { setEditing(null); setCreating(false); load(); }} />
       )}
       {assignFor && (
@@ -2444,6 +2466,15 @@ export function Apartments({ embedded = false }) {
     occupied: bySearch.filter((a) => a.status === 'occupied').length,
     vacant: bySearch.filter((a) => a.status !== 'occupied').length,
   };
+  const occupiedCount = items.filter((a) => a.status === 'occupied').length;
+  const occupiedRent = items
+    .filter((a) => a.status === 'occupied')
+    .reduce((sum, a) => sum + Number(a.rent_amount || 0), 0);
+  const aptStats = [
+    { label: 'Appartementen', code: 'TOTAAL', value: String(items.length), Icon: Building2, cardTone: 'border-orange-100 bg-gradient-to-br from-orange-50 to-white', glowTone: 'bg-orange-200/35', codeTone: 'text-orange-700', iconTone: 'text-orange-600' },
+    { label: 'Bezet', code: 'BEZET', value: `${occupiedCount} / ${items.length}`, Icon: KeySquare, cardTone: 'border-emerald-100 bg-gradient-to-br from-emerald-50 to-white', glowTone: 'bg-emerald-200/35', codeTone: 'text-emerald-700', iconTone: 'text-emerald-600' },
+    { label: 'Huur p/m', code: items[0]?.currency || 'SRD', value: occupiedRent.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), Icon: Banknote, cardTone: 'border-sky-100 bg-gradient-to-br from-sky-50 to-white', glowTone: 'bg-sky-200/35', codeTone: 'text-sky-700', iconTone: 'text-sky-600' },
+  ];
 
   return (
     <div className={`space-y-4 ${embedded ? '' : 'pb-24 sm:pb-6'}`} data-testid="apartments-page">
@@ -2467,19 +2498,79 @@ export function Apartments({ embedded = false }) {
       </div>
 
       {embedded && (
-        <>
-          <FxStats testId="apt-fx-stats" items={[
-            ['Appartementen', items.length, 'orange'],
-            ['Bezet', `${items.filter((a) => a.status === 'occupied').length} van ${items.length}`, 'green'],
-            ['Huur p/m', fmtMoney(items.filter((a) => a.status === 'occupied').reduce((s, a) => s + Number(a.rent_amount || 0), 0), items[0]?.currency), 'slate']]} />
-          <FxTabs testPrefix="apt" value={filter} onChange={setFilter} tabs={[
-            { v: 'all', label: 'Alles', count: counts.all },
-            { v: 'occupied', label: 'Bezet', count: counts.occupied },
-            { v: 'vacant', label: 'Beschikbaar', count: counts.vacant }]} />
-          <FxSearch value={q} onChange={setQ} placeholder="Zoek op nummer, adres of huurder…" testId="apt-search" />
-        </>
+        <div className="grid grid-cols-3 gap-1.5 px-0.5" data-testid="apt-fx-stats">
+          {aptStats.map(({ label, code, value, Icon, cardTone, glowTone, codeTone, iconTone }, i) => (
+            <div key={label} className={`kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border px-2.5 py-3 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.5)] ${cardTone}`}
+              data-testid={`apt-fx-stats-${i}`}>
+              <span aria-hidden="true" className={`absolute -right-5 -top-6 h-16 w-16 rounded-full ${glowTone}`} />
+              <div className="relative flex items-center justify-between gap-1.5">
+                <span className="flex h-7 w-9 shrink-0 items-center justify-center rounded-md border border-white/80 bg-white shadow-sm">
+                  <Icon className={`h-4 w-4 ${iconTone}`} />
+                </span>
+                <span className={`rounded-full bg-white/75 px-2 py-1 text-[9px] font-extrabold tracking-wider ${codeTone}`}>{code}</span>
+              </div>
+              <p className="relative mt-3 text-[9px] font-semibold text-slate-500">{label}</p>
+              <p className="relative mt-0.5 truncate text-[14px] font-black leading-tight tabular-nums text-[#1B2A5C]" title={value}>{value}</p>
+            </div>
+          ))}
+        </div>
       )}
-      {!embedded && <>
+      {embedded ? (
+        <section className="space-y-3 rounded-3xl border border-slate-100 bg-white p-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.28)]"
+          data-testid="apt-list-panel">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="font-black tracking-tight text-slate-900">Appartementen</h2>
+              <p className="text-sm text-slate-500">Zoek en filter appartementen</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-[#FF5C00]"
+              data-testid="apt-list-count">{filtered.length} {filtered.length === 1 ? 'appartement' : 'appartementen'}</span>
+          </div>
+          <label className="flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3.5 transition focus-within:border-orange-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+            <Search className="h-5 w-5 shrink-0 text-[#1B2A5C]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek appartement..."
+              data-testid="apt-search"
+              className="w-full min-w-0 bg-transparent text-[15px] text-slate-800 outline-none placeholder:text-slate-400" />
+            {q && <button type="button" onClick={() => setQ('')} aria-label="Zoekopdracht wissen"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>}
+          </label>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filter appartementen"
+            data-testid="apt-filter-bar">
+            {[
+              ['all', 'Alles', counts.all],
+              ['occupied', 'Bezet', counts.occupied],
+              ['vacant', 'Beschikbaar', counts.vacant],
+            ].map(([value, label, count]) => (
+              <button key={value} type="button" onClick={() => setFilter(value)}
+                data-testid={`apt-filter-${value}`} aria-pressed={filter === value}
+                className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition active:scale-[0.98] ${
+                  filter === value
+                    ? 'bg-gradient-to-r from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_6px_14px_-8px_rgba(255,92,0,0.8)]'
+                    : 'border border-slate-100 bg-white text-slate-600 shadow-[0_4px_12px_-9px_rgba(15,23,42,0.35)] hover:bg-slate-50'
+                }`}>
+                {label}
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${filter === value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
+          {!loaded ? (
+            <ListSkeleton rows={5} testid="apts-skeleton" />
+          ) : filtered.length === 0 ? (
+            <FxEmpty text="Geen appartementen gevonden." testId="apts-empty" />
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((a) => (
+                <ApartmentRow key={a.id} a={a} onOpen={() => setDetailId(a.id)} />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
       {/* Zoek + filter pillen */}
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -2504,11 +2595,10 @@ export function Apartments({ embedded = false }) {
           </button>
         ))}
       </div>
-      </>}
 
       {!loaded ? (
         <ListSkeleton rows={5} testid="apts-skeleton" />
-      ) : filtered.length === 0 ? (embedded ? <FxEmpty text="Geen appartementen gevonden." testId="apts-empty" /> :
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm" data-testid="apts-empty">
           <Building2 className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500 font-semibold">Geen appartementen gevonden.</p>
@@ -2519,6 +2609,8 @@ export function Apartments({ embedded = false }) {
             <ApartmentRow key={a.id} a={a} onOpen={() => setDetailId(a.id)} />
           ))}
         </div>
+      )}
+        </>
       )}
 
       {sharedModals}
@@ -2590,7 +2682,99 @@ function ApartmentRow({ a, onOpen }) {
 function ApartmentDetail({ apt, onBack, onEdit, onAssign, onRemoveTenant, onPlate, onDelete }) {
   const a = apt;
   const occupied = a.status === 'occupied';
-  const base = process.env.REACT_APP_BACKEND_URL;
+  const fx = useContext(KioskFxCtx);
+  if (fx) {
+    return (
+      <div className="space-y-3 pb-16" data-testid="apt-detail-page">
+        <button onClick={onBack} data-testid="apt-detail-back"
+          className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#FF5C00] shadow-[0_4px_12px_-8px_rgba(15,23,42,0.35)]">
+          <ArrowLeft className="h-4 w-4" /> Terug
+        </button>
+
+        <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm" data-testid="apt-detail-summary">
+          {a.photo_url && (
+            <div className="relative h-48 w-full bg-slate-100 sm:h-64">
+              <img src={a.photo_url} alt={a.number} loading="lazy"
+                className="h-full w-full object-cover"
+                onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
+              <span className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide text-white ring-2 ring-white ${
+                occupied ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}>
+                {occupied ? 'Bezet' : 'Beschikbaar'}
+              </span>
+            </div>
+          )}
+          <div className="p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF5C00]">Appartement</p>
+                <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900">{a.number}</h1>
+                <p className="mt-1 truncate text-sm text-slate-500">{a.address || '—'}</p>
+                {!a.photo_url && (
+                  <span className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                    occupied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {occupied ? 'Bezet' : 'Beschikbaar'}
+                  </span>
+                )}
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Maandhuur</p>
+                <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">{fmtMoney(a.rent_amount, a.currency)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section className="space-y-3 rounded-3xl bg-white p-4 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.28)]">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-black tracking-tight text-slate-900">Huurder</h2>
+            <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${
+              a.tenant_name ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}>{a.tenant_name ? 'Toegewezen' : 'Niet toegewezen'}</span>
+          </div>
+          {a.tenant_name ? (
+            <>
+              <FxRow title={a.tenant_name} sub={a.tenant_phone || a.tenant_email || 'Geen contact'}
+                tenantId={a.tenant_id} status="Huurder" tone="slate" />
+              <button onClick={onRemoveTenant} data-testid="apt-detail-remove-tenant"
+                className="h-10 w-full rounded-2xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100">
+                Loskoppelen
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500">Er is nog geen huurder aan dit appartement gekoppeld.</p>
+              <button onClick={onAssign} data-testid="apt-detail-assign"
+                className="h-11 w-full rounded-2xl bg-orange-50 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+                + Huurder toewijzen
+              </button>
+            </>
+          )}
+        </section>
+
+        <section className="space-y-3 rounded-3xl bg-white p-4 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.28)]">
+          <h2 className="text-sm font-black tracking-tight text-slate-900">Appartement beheren</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onEdit} data-testid="apt-detail-edit"
+              className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-orange-50 text-sm font-bold text-[#FF5C00] hover:bg-orange-100">
+              <Pencil className="h-4 w-4" /> Bewerk
+            </button>
+            {a.tenant_id && (
+              <button onClick={onPlate} data-testid="apt-detail-plate"
+                className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-amber-50 text-sm font-bold text-amber-700 hover:bg-amber-100">
+                <span className="text-base font-black">★</span> Plaat
+              </button>
+            )}
+            <button onClick={onDelete} data-testid="apt-detail-delete"
+              className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-red-50 text-sm font-bold text-red-600 hover:bg-red-100">
+              <Trash2 className="h-4 w-4" /> Verwijder
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="apt-detail-page">
       {/* Terug-knop — exact patroon van PlanDetail */}
