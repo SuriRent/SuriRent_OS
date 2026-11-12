@@ -4344,9 +4344,9 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm sm:text-base font-bold text-slate-900 break-words md:truncate" data-testid={`kasgeld-row-title-${item.id}`}>
-          {paymentTitleParts ? <><span className="block truncate">{paymentTitleParts[1]}</span><span className="block whitespace-nowrap text-[13px] leading-tight">{paymentTitleParts[2]}</span></> : title}
+          {paymentTitleParts ? <>{paymentTitleParts[1]} — <span className="whitespace-nowrap">{paymentTitleParts[2]}</span></> : title}
         </p>
-        <p className="text-xs text-slate-500 mt-0.5 break-words md:truncate">
+        <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words md:truncate">
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
           {creator && <><span className="hidden sm:inline">{' · '}</span><span className="mt-0.5 block break-words text-[11px] text-slate-600 sm:mt-0 sm:inline sm:break-normal sm:text-xs" data-testid={`kasgeld-row-creator-${item.id}`}>Door {creator}</span></>}
         </p>
