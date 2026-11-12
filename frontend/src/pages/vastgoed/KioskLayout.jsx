@@ -576,27 +576,31 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
   const rent = occ.reduce((s, a) => s + (Number(a.rent_amount) || 0), 0);
   const cur = occ.find((a) => a.currency)?.currency || 'SRD';
   const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
-  const stat = (key, Icon, tone, label, value, bar, barTone) => (
-    <div key={key} className="kiosk-ui-stat rounded-2xl     bg-white px-2 py-2.5 md:px-4 md:py-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
-          <div className="flex items-center gap-1.5 md:gap-2.5 min-w-0">
-        <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
+  const stat = (key, Icon, tone, label, value, bar, barTone) => {
+    const glowTone = key === 'paid' ? 'bg-emerald-400/15' : key === 'late' ? 'bg-rose-400/15' : 'bg-orange-400/15';
+    return (
+    <div key={key} className="kiosk-ui-stat kiosk-hero-stat relative overflow-hidden rounded-[20px] border bg-white px-2.5 py-2.5 md:px-4 md:py-3 min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
+      <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${glowTone}`} />
+      <div className="relative flex items-center gap-2 md:gap-2.5 min-w-0">
+        <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-xl flex items-center justify-center shadow-sm ring-1 ring-white/80 ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
         <div className="min-w-0">
-          <p className="text-[11px] md:text-[12px] font-medium text-slate-600 truncate leading-tight">{label}</p>
-          <p className="text-[12.5px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap">{value}</p>
+          <p className="text-[10px] md:text-[12px] font-semibold text-slate-500 truncate leading-tight">{label}</p>
+          <p className="text-[14px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight tracking-tight whitespace-nowrap">{value}</p>
         </div>
         {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
       </div>
       {bar !== undefined && (
-        <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} /></div>
+        <div className="relative mt-2.5 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} /></div>
       )}
     </div>
-  );
+    );
+  };
   return (
     <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
       {locationName && (() => {
         const pill = (onClick) => (
           <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 shadow px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] max-w-full">
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/85 px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] shadow-[0_10px_24px_-16px_rgba(15,23,42,0.55)] backdrop-blur-xl max-w-full">
             <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span><ChevronDown className="w-4 h-4 shrink-0" />
           </button>
         );
@@ -608,18 +612,19 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
           </div>
         );
       })()}
-      <div className="relative z-0 md:overflow-visible -mt-9 md:mt-0 rounded-b-xl md:rounded-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+      <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
         </svg>
+        <div aria-hidden="true" className="md:hidden absolute -right-12 -top-20 -z-10 h-48 w-48 rounded-full bg-white/20 blur-3xl" />
         {isAdmin ? (
           <>
             <button type="button" onClick={() => heroInputRef.current?.click()} disabled={heroLoading || heroUploading}
               aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
               data-testid="kiosk-ui-hero-image-edit"
-              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] -z-10 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
-              <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover pointer-events-none"
+              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] z-20 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
+              <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none"
                 style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
               <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
                 {heroUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -629,7 +634,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
               data-testid="kiosk-ui-hero-image-input" onChange={uploadHeroImage} />
           </>
         ) : (
-          <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover pointer-events-none -z-10"
+          <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none -z-10"
             style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
         )}
         {isAdmin && heroError && (
@@ -638,25 +643,25 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
           </p>
         )}
         <div className="relative z-10 flex items-center gap-3 min-w-0">
-          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
+          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full border border-white/70 md:border-0 bg-white/90 md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF5C00] md:text-white shadow-[0_12px_24px_-14px_rgba(126,47,0,0.55)] backdrop-blur-sm">
             <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
             <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-[19px] md:text-3xl font-semibold md:font-bold tracking-tight leading-tight truncate">Appartementen Overzicht</h2>
-            <p className="text-[13px] md:text-base font-normal text-white/90 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
+            <h2 className="text-[19px] md:text-3xl font-semibold md:font-bold tracking-tight leading-tight truncate drop-shadow-sm">Appartementen Overzicht</h2>
+            <p className="text-[13px] md:text-base font-normal text-white/75 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
           </div>
         </div>
         
         <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
-          {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
-          {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+          {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
+          {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
           {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
         </div>
       </div>
       <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
-        {stat('paid', Check, 'bg-emerald-500 text-white', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-emerald-500')}
-        {stat('late', AlertCircle, 'bg-red-500 text-white', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-red-500')}
+        {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
+        {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
         {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
       </div>
     </div>
