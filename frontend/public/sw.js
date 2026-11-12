@@ -77,6 +77,12 @@ self.addEventListener('activate', (event) => {
         const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const c of clients) {
           try { c.postMessage({ type: 'SW_ACTIVATED', version: CACHE_VERSION, reload: true }); } catch { /* noop */ }
+          const path = new URL(c.url).pathname;
+          const segments = path.split('/').filter(Boolean);
+          const isStartupPage = path === '/' || segments[segments.length - 1] === 'login';
+          if (isStartupPage && typeof c.navigate === 'function') {
+            try { await c.navigate(c.url); } catch (e) { console.warn('[sw] update navigation failed', e); }
+          }
         }
       } catch { /* noop */ }
     }
