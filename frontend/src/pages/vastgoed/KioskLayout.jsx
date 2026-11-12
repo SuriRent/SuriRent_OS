@@ -3473,7 +3473,7 @@ function RowSlim({ label, value }) {
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
 //   POST /kiosk/kasgeld        → nieuwe mutatie via KasgeldMutationModal
 // =====================================================================
-function KasgeldPanel({ embedded = false, ui = false, onBack }) {
+function KasgeldPanel({ embedded = false, ui = false }) {
   const [uiQ, setUiQ] = useState('');
   const [balances, setBalances] = useState({ SRD: 0, USD: 0, EUR: 0 });
   const [items, setItems] = useState([]);
@@ -3495,10 +3495,33 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
 
   // Huidige maand als default-focus voor de accordion én het
   // "Oktober 2026 ▼" selector-pil in de overzicht-card.
-  const now = new Date();
-  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [currentKey, setCurrentKey] = useState(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
   const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
+  useEffect(() => {
+    if (!embedded || !ui) return undefined;
+    const refreshMonth = () => {
+      const date = new Date();
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      setCurrentKey((current) => current === key ? current : key);
+    };
+    const interval = window.setInterval(refreshMonth, 60_000);
+    window.addEventListener('focus', refreshMonth);
+    document.addEventListener('visibilitychange', refreshMonth);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshMonth);
+      document.removeEventListener('visibilitychange', refreshMonth);
+    };
+  }, [embedded, ui]);
+  useEffect(() => {
+    if (!embedded || !ui) return;
+    setSelectedMonth(currentKey);
+    setExpandedMonths(new Set([currentKey]));
+  }, [currentKey, embedded, ui]);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
@@ -3562,6 +3585,7 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
 
   const toggleMonth = (key) => {
     setExpandedMonths((prev) => {
+      if (embedded && ui) return prev.has(key) ? new Set() : new Set([key]);
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -3571,6 +3595,7 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
   const pickMonth = (key) => {
     setSelectedMonth(key);
     setExpandedMonths((prev) => {
+      if (embedded && ui) return new Set([key]);
       const next = new Set(prev);
       next.add(key);
       return next;
@@ -3590,60 +3615,38 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
           `md:order-*` om op desktop de volgorde te wisselen zonder HTML-swap. */}
       {embedded && ui && (() => {
         const q = uiQ.trim().toLowerCase();
-        const list = q ? visibleItems.filter((it) => `${it.description || ''} ${it.category || ''} ${it.method || ''} ${it.created_by_name || ''}`.toLowerCase().includes(q)) : visibleItems;
+        const groups = monthGroups.map((group) => ({
+          ...group,
+          items: q ? group.items.filter((it) => `${it.description || ''} ${it.category || ''} ${it.method || ''} ${it.created_by_name || ''}`.toLowerCase().includes(q)) : group.items,
+        })).filter((group) => group.items.length > 0);
         const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const filteredCount = groups.reduce((count, group) => count + group.items.length, 0);
         const kStat = (cur, Icon, tone) => (
-          <div key={cur} className="kiosk-ui-stat rounded-2xl bg-white px-2 py-2.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
+          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2 py-3.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-3.5 h-3.5" strokeWidth={2.6} /></span>
+              <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-4 h-4" strokeWidth={2.6} /></span>
               <div className="min-w-0">
-                <p className="text-[11px] font-medium text-slate-600 truncate leading-tight">{cur}</p>
-                <p className="text-[12.5px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
+                <p className="text-xs font-medium text-slate-600 truncate leading-tight">{cur}</p>
+                <p className="text-[13px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
               </div>
             </div>
           </div>
         );
         return (
-          <div data-testid="kasgeld-fx" className="kiosk-ui-hero">
-            <div className="relative z-0 rounded-b-xl -mx-1 -mt-5 px-4 pt-14 pb-14 text-white">
-              <svg className="absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
-                <defs><linearGradient id="kuiWaveKas" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
-                <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWaveKas)" />
-              </svg>
-              <svg viewBox="0 0 200 130" className="absolute -right-3 bottom-2 h-[72%] w-auto max-w-none pointer-events-none -z-10" aria-hidden="true"
-                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 30%)' }}>
-                <g strokeLinecap="round" strokeLinejoin="round">
-                  <g transform="rotate(-10 70 60)">
-                    <rect x="12" y="24" width="124" height="68" rx="9" fill="#34D399" stroke="#047857" strokeWidth="3" />
-                    <rect x="22" y="34" width="104" height="48" rx="5" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="2" />
-                    <circle cx="74" cy="58" r="16" fill="#10B981" stroke="#fff" strokeOpacity="0.9" strokeWidth="2.5" />
-                    <text x="74" y="65" textAnchor="middle" fontSize="20" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">$</text>
-                  </g>
-                  {[112, 99, 86, 73].map((y, i) => (
-                    <g key={y}>
-                      <ellipse cx="150" cy={y + 7} rx="32" ry="10" fill="#B45309" />
-                      <ellipse cx="150" cy={y} rx="32" ry="10" fill={i === 3 ? '#FCD34D' : '#FBBF24'} stroke="#B45309" strokeWidth="2.5" />
-                    </g>
-                  ))}
-                  <ellipse cx="150" cy="73" rx="20" ry="6" fill="none" stroke="#B45309" strokeOpacity="0.55" strokeWidth="2" />
-                </g>
-              </svg>
-              <div className="relative flex items-center gap-3 min-w-0">
-                <button type="button" onClick={onBack} aria-label="Terug" data-testid="kiosk-admin-page-back"
-                  className="shrink-0 w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#FF6A00] shadow-md active:scale-95 transition"><ArrowLeft className="w-6 h-6" strokeWidth={2.6} /></button>
-                <div className="min-w-0">
-                  <h2 className="text-[19px] font-semibold tracking-tight leading-tight truncate">Kasgeld Overzicht</h2>
-                  <p className="text-[13px] font-normal text-white/90 truncate">Totaal: {items.length} mutaties</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 -mt-9 relative px-0.5">
+          <div data-testid="kasgeld-fx" className="space-y-3">
+            <div className="grid grid-cols-3 gap-1.5 relative px-0.5">
               {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
               {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
               {kStat('EUR', Coins, 'bg-sky-500 text-white')}
             </div>
-            <div className="flex items-center gap-2 pt-3 pb-3">
-              <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
+            <div className="flex items-center justify-between px-1 pt-1">
+              <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" data-testid="kasgeld-count-badge">
+                {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-100 bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4 focus-within:border-orange-200">
                 <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
                 <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek mutatie..." data-testid="kasgeld-search"
                   className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
@@ -3660,44 +3663,43 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
             </div>
             {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
-            {!err && !loading && list.length === 0 && <p className="text-center text-slate-500 py-10 text-sm" data-testid="kasgeld-empty">Nog geen mutaties.</p>}
+            {!err && !loading && groups.length === 0 && (
+              <p className="rounded-2xl bg-white py-10 text-center text-sm font-semibold text-slate-500" data-testid="kasgeld-empty">
+                {q ? 'Geen mutaties gevonden.' : 'Nog geen mutaties.'}
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-2.5">
-              {list.map((it, idx) => {
-                const mk = (x) => { const dd = new Date(x.entry_date || x.created_at); return isNaN(dd) ? '' : `${MONTHS_NL[dd.getMonth()]} ${dd.getFullYear()}`; };
-                const monthLabel = mk(it);
-                const showMonth = monthLabel && (idx === 0 || mk(list[idx - 1]) !== monthLabel);
-                const isIn = it.type === 'in';
-                const d = it.entry_date || it.created_at;
-                const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                const creator = (it.created_by_name || '').trim();
-                const editable = canManage && it.source !== 'payment';
+              {groups.map((g) => {
+                const isOpen = expandedMonths.has(g.key);
+                const isCurrent = g.key === currentKey;
                 return (
-                  <Fragment key={it.id}>
-                  {showMonth && <p className="px-1 pt-2 text-[13px] font-bold uppercase tracking-wide text-[#1B2A5C]/70 capitalize" data-testid={`kasgeld-month-${monthLabel}`}>{monthLabel}</p>}
-                  <div data-testid={`kasgeld-row-${it.id}`} className="kiosk-ui-card w-full rounded-[16px] bg-white px-3 py-2 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)]">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`shrink-0 rounded-full w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                        {isIn ? <ArrowDownLeft className="w-6 h-6" strokeWidth={2.6} /> : <ArrowUpRight className="w-6 h-6" strokeWidth={2.6} />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[16px] font-extrabold text-[#1B2A5C] leading-tight line-clamp-2 break-words">{it.description || it.category || '—'}</p>
-                        <p className="text-[13px] text-slate-600 font-medium truncate">{[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant'].filter(Boolean).join(' · ')}</p>
-                        {creator && <p className="flex items-center gap-1 text-[12px] text-slate-500 truncate"><User className="w-3 h-3 shrink-0" /><span className="truncate">{creator}</span></p>}
-                      </div>
-                      <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[12.5px] font-bold text-white whitespace-nowrap ${it.excluded_from_balance ? 'bg-slate-500' : isIn ? 'bg-emerald-600' : 'bg-red-500'}`}>
-                        {isIn ? '+' : '−'}{fmtMoney(it.amount, it.currency)}
+                  <div key={g.key} className={`overflow-hidden rounded-2xl border bg-white shadow-[0_8px_22px_-14px_rgba(15,23,42,0.3)] ${isCurrent ? 'border-orange-200' : 'border-slate-100'}`}
+                    data-testid={`kasgeld-month-${g.key}`}>
+                    <button type="button" onClick={() => toggleMonth(g.key)}
+                      data-testid={`kasgeld-month-toggle-${g.key}`}
+                      aria-expanded={isOpen}
+                      className="flex min-h-16 w-full items-center gap-3 px-3 py-3 text-left active:bg-slate-50">
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isCurrent ? 'bg-orange-50 text-[#FF5C00]' : 'bg-slate-100 text-slate-500'}`}>
+                        <Calendar className="h-5 w-5" />
                       </span>
-                      {editable && (
-                        <>
-                          <button type="button" onClick={() => setEditing(it)} data-testid={`kasgeld-row-edit-${it.id}`} aria-label="Bewerken"
-                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
-                          <button type="button" onClick={() => removeEntry(it)} data-testid={`kasgeld-row-delete-${it.id}`} aria-label="Verwijderen"
-                            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-red-500 flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
-                        </>
-                      )}
-                    </div>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-black capitalize text-[#1B2A5C]">{g.label}</span>
+                          {isCurrent && <span className="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-extrabold text-[#FF5C00]">HUIDIGE MAAND</span>}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium text-slate-500">{g.items.length} {g.items.length === 1 ? 'mutatie' : 'mutaties'}</span>
+                      </span>
+                      <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div id={`kasgeld-month-items-${g.key}`} className="border-t border-slate-100 px-2 py-1" data-testid={`kasgeld-month-items-${g.key}`}>
+                        {g.items.map((it) => (
+                          <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush
+                            onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  </Fragment>
                 );
               })}
             </div>
@@ -3861,7 +3863,7 @@ function KasgeldPanel({ embedded = false, ui = false, onBack }) {
       )}
 
       {showForm && (
-        <KasgeldMutationModal canBackdate={canManage} onClose={() => setShowForm(false)}
+        <KasgeldMutationModal ui={ui} canBackdate={canManage} onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); load(); }} />
       )}
       {editing && (
@@ -4481,7 +4483,7 @@ function KasgeldMonthPicker({ groups, selected, onPick, onClose }) {
     </div>, document.body);
 }
 
-function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
+function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = false }) {
   const [step, setStep] = useState('amount');  // 'amount' | 'details'
   const [type, setType] = useState('in');
   const [amount, setAmount] = useState('');
@@ -4494,7 +4496,11 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
-  useVisualViewportPosition(sheetRef);
+  const fullPageDetails = ui && step === 'details';
+  useVisualViewportPosition(sheetRef, 640, {
+    settleDelay: ui ? 120 : 0,
+    pinToTop: fullPageDetails,
+  });
 
   useEffect(() => {
     const body = document.body;
@@ -4563,16 +4569,28 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
   return createPortal((
     <div
       onClick={saved ? onSaved : onClose}
-      className="keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden bg-white sm:bg-black/60 sm:backdrop-blur-md flex items-stretch sm:items-center justify-center sm:p-4"
+      className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden ${ui
+        ? 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
+        : 'bg-white sm:bg-black/60 sm:backdrop-blur-md'}`}
       data-testid="kasgeld-overlay">
-      <div ref={sheetRef} onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden"
+      <div ref={sheetRef}
+        className={`absolute inset-0 flex justify-center ${ui
+          ? `${fullPageDetails ? 'items-stretch' : 'items-end'} sm:items-center sm:p-4`
+          : 'items-stretch sm:items-center sm:p-4'}`}>
+      <div onClick={(e) => e.stopPropagation()}
+        className={`bg-white w-full flex flex-col overflow-hidden ${ui
+          ? fullPageDetails
+            ? 'h-full rounded-none shadow-none sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl sm:shadow-2xl'
+            : 'rounded-t-[28px] shadow-2xl sm:max-w-md sm:rounded-2xl'
+          : 'h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl'}`}
+        style={ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 24px)' } : undefined}
         data-testid="kasgeld-form">
         {/* Sticky header — safe-area-top padding INSIDE de witte modal,
             zodat het witte oppervlak tot bovenaan het scherm reikt en de
             titel toch onder de notch/statusbalk zit. */}
-        <div className="flex-none flex items-center justify-between gap-3 px-5 pb-4 border-b border-slate-100"
-          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
+        <div className={`relative flex-none flex items-center justify-between gap-3 ${ui ? 'px-4 sm:px-5 pb-3 sm:pb-4' : 'px-5 pb-4'} border-b border-slate-100`}
+          style={{ paddingTop: `max(var(--kiosk-sat), ${ui ? '24px' : '16px'})` }}>
+          {ui && <div aria-hidden="true" className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" />}
           <div className="flex min-w-0 items-center gap-3">
             {step === 'details' && !saved && (
               <button onClick={() => { setErr(''); setStep('amount'); }} data-testid="kasgeld-back-btn"
@@ -4580,20 +4598,21 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
                 <ChevronLeft className="w-5 h-5 text-slate-700" />
               </button>
             )}
-            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
-              <Wallet className="w-8 h-8 text-orange-600" strokeWidth={2.5} />
+            <div className={`${ui ? 'w-11 h-11 sm:w-14 sm:h-14' : 'w-14 h-14'} shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center`}>
+              <Wallet className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} text-orange-600`} strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-xl font-black leading-tight text-slate-900">
+              <h3 className={`${ui ? 'text-lg sm:text-xl' : 'text-xl'} font-black leading-tight text-slate-900`}>
                 {saved ? 'Kasgeld bon' : step === 'amount' ? 'Nieuwe kasmutatie' : 'Omschrijving'}
               </h3>
-              <p className="mt-1 text-sm leading-tight text-slate-500">
+              <p className={`${ui ? 'mt-0.5 text-xs sm:text-sm' : 'mt-1 text-sm'} leading-tight text-slate-500`}>
                 {step === 'amount' && !saved ? 'Voer het bedrag in en kies de valuta' : step === 'details' && !saved ? 'Voeg een omschrijving en categorie toe' : 'Overzicht van de kasmutatie'}
               </p>
             </div>
           </div>
-          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-            <X className="w-7 h-7 text-slate-700" />
+          <button onClick={saved ? onSaved : onClose} data-testid="kasgeld-form-close" aria-label="Sluiten"
+            className={`${ui ? 'w-11 h-11 sm:w-14 sm:h-14 rounded-full sm:rounded-2xl' : 'w-14 h-14 rounded-2xl'} shrink-0 bg-slate-100 hover:bg-slate-200 flex items-center justify-center`}>
+            <X className={`${ui ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-7 h-7'} text-slate-700`} />
           </button>
         </div>
 
@@ -4603,13 +4622,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
           </div>
         ) : step === 'amount' ? (
           /* ============ STEP 1: Valuta + type + bedrag (NumPad) ============ */
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4"
-            style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className={`${ui ? 'flex-none px-4 py-3 space-y-3 sm:px-5 sm:py-4 sm:space-y-4' : 'flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4'} overflow-y-auto`}
+            style={{ WebkitOverflowScrolling: 'touch', ...(ui ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             <div className="grid grid-cols-3 gap-2">
               {['SRD', 'USD', 'EUR'].map((c) => (
                 <button key={c} onClick={() => setCurrency(c)} data-testid={`kasgeld-cur-${c}`}
-                  className={`h-14 rounded-2xl border font-black text-base inline-flex items-center justify-center gap-2 ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-                  <span className="text-xl" aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
+                  className={`${ui ? 'h-11 sm:h-14 text-xs sm:text-base gap-1 sm:gap-1.5' : 'h-14 text-base gap-2'} rounded-2xl border font-black inline-flex items-center justify-center transition ${currency === c ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                  {!ui && <span className="text-xl" aria-hidden="true">{c === 'SRD' ? '🇸🇷' : c === 'USD' ? '🇺🇸' : '🇪🇺'}</span>}
                   {c}
                 </button>
               ))}
@@ -4617,41 +4636,43 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
 
             <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
               <button onClick={() => changeType('in')} data-testid="kasgeld-type-in"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'in' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
-                <ArrowUpRight className="w-5 h-5" /> Inkomsten
+                className={`${ui ? 'h-11 sm:h-12 text-sm sm:text-base gap-1.5 sm:gap-2' : 'h-12 text-base gap-2'} rounded-xl font-black inline-flex items-center justify-center transition ${type === 'in' ? `${ui ? 'bg-emerald-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
+                <ArrowUpRight className={`${ui ? 'w-4 h-4 sm:w-5 sm:h-5' : 'w-5 h-5'}`} /> Inkomsten
               </button>
               <button onClick={() => changeType('out')} data-testid="kasgeld-type-out"
-                className={`h-12 rounded-xl font-black text-base inline-flex items-center justify-center gap-2 transition ${type === 'out' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600'}`}>
-                <ArrowDownLeft className="w-5 h-5" /> Uitgaven
+                className={`${ui ? 'h-11 sm:h-12 text-sm sm:text-base gap-1.5 sm:gap-2' : 'h-12 text-base gap-2'} rounded-xl font-black inline-flex items-center justify-center transition ${type === 'out' ? `${ui ? 'bg-red-500' : 'bg-orange-500'} text-white shadow-sm` : 'text-slate-600'}`}>
+                <ArrowDownLeft className={`${ui ? 'w-4 h-4 sm:w-5 sm:h-5' : 'w-5 h-5'}`} /> Uitgaven
               </button>
             </div>
 
             <div data-testid="kasgeld-amount-display"
-              className={`w-full min-h-[76px] px-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
-              <div className="flex items-center gap-3">
-                <Coins className="w-8 h-8 shrink-0" />
-                <span className="text-xs font-black uppercase tracking-wider">Bedrag</span>
+              className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 flex items-center justify-between gap-3 ${amountBorder}`}>
+              <div className={`flex items-center ${ui ? 'gap-2 sm:gap-3' : 'gap-3'}`}>
+                <Coins className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} shrink-0`} />
+                <span className={`${ui ? 'text-[10px] sm:text-xs' : 'text-xs'} font-black uppercase tracking-wider`}>Bedrag</span>
               </div>
-              <span className="text-3xl sm:text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
+              <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-3xl sm:text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
             <NumPad value={amount} onChange={setAmount} testIdPrefix="kasgeld-npad"
-              buttonClassName="!h-16 !rounded-2xl !text-3xl" />
+              buttonClassName={ui ? '!h-12 sm:!h-14 !rounded-xl sm:!rounded-2xl !text-xl sm:!text-2xl' : '!h-16 !rounded-2xl !text-3xl'} />
 
             {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="kasgeld-err">{err}</p>}
           </div>
         ) : (
           /* ============ STEP 2: Omschrijving + Categorie ============ */
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col px-5 py-4 gap-4"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+          <div className={`${fullPageDetails
+            ? 'flex-1 min-h-0 px-4 py-3 gap-3 sm:px-5 sm:py-4'
+            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
-            <div className={`w-full min-h-[76px] rounded-2xl border-2 px-4 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-              <div className="flex items-center gap-3">
-                <Coins className="w-8 h-8 shrink-0" />
-                <span className="text-xs font-black uppercase tracking-wider">{type === 'in' ? 'Inkomsten' : 'Uitgaand'}</span>
+            <div className={`w-full ${ui ? 'min-h-[64px] sm:min-h-[76px] px-3 sm:px-4' : 'min-h-[76px] px-4'} rounded-2xl border-2 py-3 flex items-center justify-between gap-3 ${type === 'in' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              <div className={`flex items-center ${ui ? 'gap-2 sm:gap-3' : 'gap-3'}`}>
+                <Coins className={`${ui ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} shrink-0`} />
+                <span className={`${ui ? 'text-[10px] sm:text-xs' : 'text-xs'} font-black uppercase tracking-wider`}>{type === 'in' ? 'Inkomsten' : 'Uitgaand'}</span>
               </div>
-              <span className="text-2xl font-black tabular-nums text-right">{currency} {amount || '0'}</span>
+              <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
             <label className="block">
@@ -4662,14 +4683,14 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
                 placeholder="Bijv. schoonmaakspullen"
                 autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                 enterKeyHint="next"
-                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base" />
+                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
             </label>
 
             <label className="block">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Categorie</span>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
-                className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white">
+                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
                 {KASGELD_CATEGORIES[type].map(({ group, options }) => (
                   <optgroup key={group} label={group}>
                     {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -4682,7 +4703,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
               <label className="block">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className="w-full h-14 px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white" />
+                  className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
               </label>
             )}
 
@@ -4692,25 +4713,26 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false }) {
         )}
 
         {!saved && (
-          <div className="flex-none px-5 pt-3 border-t border-slate-100 bg-white"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+          <div className={`flex-none ${ui ? 'px-4 sm:px-5' : 'px-5'} pt-3 border-t border-slate-100 bg-white`}
+            style={{ paddingBottom: ui ? 'max(env(safe-area-inset-bottom, 0px), 24px)' : 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {step === 'amount' ? (
               <button onClick={goNext} data-testid="kasgeld-next-btn"
                 disabled={!amount || parseFloat(String(amount).replace(',', '.')) <= 0}
-                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-4 shadow-lg shadow-orange-200 disabled:opacity-50">
-                <CheckCircle className="w-7 h-7" />
+                className={`w-full ${ui ? 'h-14 text-base bg-[#FF5C00] hover:bg-[#E05200] gap-3' : 'h-16 text-lg bg-orange-500 hover:bg-orange-600 gap-4'} rounded-2xl text-white font-black inline-flex items-center justify-center shadow-lg shadow-orange-200 disabled:opacity-50`}>
+                <CheckCircle className={`${ui ? 'w-6 h-6' : 'w-7 h-7'}`} />
                 <span className="h-8 w-px bg-white/40" />
                 Volgende
-                <ArrowRight className="w-7 h-7" />
+                <ArrowRight className={`${ui ? 'w-6 h-6' : 'w-7 h-7'}`} />
               </button>
             ) : (
               <button onClick={save} disabled={saving} data-testid="kasgeld-save"
-                className="w-full h-16 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-lg inline-flex items-center justify-center gap-3 shadow-lg shadow-orange-200 disabled:opacity-50">
+                className={`w-full ${ui ? 'h-14 text-base bg-[#FF5C00] hover:bg-[#E05200]' : 'h-16 text-lg bg-orange-500 hover:bg-orange-600'} rounded-2xl text-white font-black inline-flex items-center justify-center gap-3 shadow-lg shadow-orange-200 disabled:opacity-50`}>
                 {saving ? <><Loader2 className="w-5 h-5 animate-spin" /> Opslaan…</> : <><CheckCircle className="w-6 h-6" /> Opslaan</>}
               </button>
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   ), document.body);
@@ -5403,7 +5425,8 @@ function KioskUiAdminStep({ id, onBack, children }) {
   const Page = meta.Page;
   return (
     <KioskUiPageShell testId={`kiosk-popup-${id}`}>
-      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack} testId={`kiosk-ui-${id}`}>
+      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack}
+        onClose={id === 'appartementen' ? onBack : undefined} testId={`kiosk-ui-${id}`}>
         {children || (Page ? <Page embedded /> : null)}
       </KioskUiAdminPage>
     </KioskUiPageShell>
@@ -6547,7 +6570,10 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
+  const isMobileUiPage = isMobileViewport && isUi
+    && (step === 'admin:appartementen' || step === 'kasgeld');
+  const showTopHead = step !== 'check' && step !== 'select' && !isMobileUiPage
+    && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {
@@ -6739,7 +6765,7 @@ export default function KioskLayout() {
                     className="rounded-xl bg-white px-5 py-3 font-black text-[#0B1B3F]">Terug naar SuriRent</button>
                 </>
               ) : <Loader2 className="w-10 h-10 text-white animate-spin" />}
-            </motion.div>
+            </div>
           )}
           {step === 'select' && (
             <ApartmentSelect key={apartmentsReloadKey}
@@ -6814,19 +6840,12 @@ export default function KioskLayout() {
           )}
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
-              <KioskModalShell title="Kasgeld" subtitle="Kasoverzicht en mutaties" Icon={Wallet}
-                testId="kiosk-popup-kasgeld" onClose={goBack} wide xwide tall fullscreenMobile
-                footer={(
-                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kiosk-kasgeld-new'))}
-                    data-testid="kiosk-popup-kasgeld-new"
-                    className="w-full h-12 rounded-2xl bg-[#FF5C00] text-white font-black text-sm inline-flex items-center justify-center gap-2 shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
-                    <Plus className="w-5 h-5" strokeWidth={2.6} /> Nieuwe Mutatie
-                  </button>
-                )}>
-                <div className="kiosk-ui w-full overflow-x-hidden">
-                  <KasgeldPanel embedded ui onBack={goBack} />
-                </div>
-              </KioskModalShell>
+              <KioskUiPageShell testId="kiosk-popup-kasgeld">
+                <KioskUiAdminPage title="Kasgeld" label="Kasgeld" subtitle="Kasoverzicht en mutaties"
+                  Icon={Wallet} newItem={UI_NEW.kasgeld} onClose={goBack} testId="kiosk-ui-kasgeld">
+                  <div className="kiosk-ui w-full overflow-x-hidden"><KasgeldPanel embedded ui /></div>
+                </KioskUiAdminPage>
+              </KioskUiPageShell>
             ) : isMobileViewport ? (
               <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
                 wide xwide tall fullscreenMobile
@@ -6868,7 +6887,7 @@ export default function KioskLayout() {
           {step === 'receipt' && paymentResult && (
             <ReceiptScreen payment={paymentResult} overview={overview} onDone={reset} />
           )}
-      </div>
+      </motion.div>
 
       {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk desktop-bar.
           De mobile "+" FAB + Snel Toevoegen sheet zijn verwijderd (user
@@ -6975,18 +6994,19 @@ export default function KioskLayout() {
       {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-          <div className="grid grid-cols-5 items-stretch">
+          <div className="grid grid-cols-6 items-stretch">
             {[
               { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
               { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
               { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
               { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'kasgeld', label: 'Kasgeld', Icon: Database, on: step === 'kasgeld', fn: () => setStep('kasgeld') },
               { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
             ].map(({ id, label, Icon, on, fn }) => (
               <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
-                <Icon className="w-6 h-6" strokeWidth={2} />
-                <span className="text-[10.5px] font-semibold leading-tight whitespace-nowrap">{label}</span>
+                <Icon className="w-5 h-5" strokeWidth={2} />
+                <span className={`${id === 'apt' ? 'text-[8px] tracking-tighter' : 'text-[9px]'} font-semibold leading-tight whitespace-nowrap`}>{label}</span>
               </button>
             ))}
           </div>
