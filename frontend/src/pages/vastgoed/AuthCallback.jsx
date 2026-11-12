@@ -45,7 +45,7 @@ export default function AuthCallback() {
           const em = u?.email;
           if (em) { localStorage.setItem('device_user_email', em); localStorage.setItem('device_user_name', u?.name || em.split('@')[0]); }
         } catch { /* ignore */ }
-        const proceed = () => enterKioskAfterLogin(u, { fallback: () => nav('/admin', { replace: true, state: { user } }) });
+        const proceed = () => enterKioskAfterLogin(u, { fallback: () => nav('/admin', { replace: true, state: { user } }), navigate: nav });
         // Eerste login op dit apparaat: verplicht een persoonlijke PIN kiezen.
         const st = await api.get('/auth/personal-pin/status').then((x) => x.data).catch(() => null);
         if (st && st.has_pin === false && u?.role !== 'superadmin') { setPinNext(() => proceed); return; }

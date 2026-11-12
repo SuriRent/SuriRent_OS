@@ -299,7 +299,7 @@ export default function LoginPage() {
       let hasPendingQr = false;
       try { hasPendingQr = !!sessionStorage.getItem('pending_qr_token'); } catch { /* ignore */ }
       if (hasPendingQr) return;
-      enterKioskAfterLogin(user, { fallback: () => navigate('/admin', { replace: true }) });
+      enterKioskAfterLogin(user, { fallback: () => navigate('/admin', { replace: true }), navigate });
     }
   }, [user, loading, navigate, skipRedirect, searchParams]);
 
@@ -369,7 +369,7 @@ export default function LoginPage() {
       // Na het verversen opent de beheerder dezelfde kioskbeheeromgeving.
       let me = null;
       try { me = await refresh(); } catch { /* niet-fataal */ }
-      await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }) });
+      await enterKioskAfterLogin(me, { fallback: () => navigate('/admin', { replace: true }), navigate });
     } else {
       navigate('/kiosk', { replace: true });
     }

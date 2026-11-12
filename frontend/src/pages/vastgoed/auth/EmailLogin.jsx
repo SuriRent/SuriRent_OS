@@ -169,7 +169,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
           };
           // Beheerder/boekhouder → kiosk-beheer; superadmin → beheeromgeving.
           // Eerste login op dit apparaat: verplicht een persoonlijke PIN kiezen.
-          await afterPasswordLogin(loginResult?.user, { fallback: goAdmin, onNeedPin: (next) => setPinSetupNext(() => next) });
+          await afterPasswordLogin(loginResult?.user, { fallback: goAdmin, onNeedPin: (next) => setPinSetupNext(() => next), navigate });
         }
       } else {
         const result = await register({

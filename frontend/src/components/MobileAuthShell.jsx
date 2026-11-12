@@ -124,7 +124,7 @@ export function MobileEmailLogin({ onBack, onForgot, branding, onLoginStart, sho
         else navigate('/admin', { replace: true });
       };
       if (pendingQr) navigate(`/qr-link?token=${encodeURIComponent(pendingQr)}`);
-      else await afterPasswordLogin(res?.user, { fallback: goAdmin, onNeedPin: (next) => setPinNext(() => next) });
+      else await afterPasswordLogin(res?.user, { fallback: goAdmin, onNeedPin: (next) => setPinNext(() => next), navigate });
     } catch (err) {
       setError(formatError(err, 'Inloggen mislukt'));
     } finally { setLoading(false); }

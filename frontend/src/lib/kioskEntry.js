@@ -1,7 +1,7 @@
 import { api } from './api';
 
 // Na inloggen: beheerder/boekhouder gaat naar de kiosk in beheerdersmodus; superadmin naar /admin.
-export async function enterKioskAfterLogin(user, { slug = '', fallback } = {}) {
+export async function enterKioskAfterLogin(user, { slug = '', fallback, navigate } = {}) {
   const goAdmin = () => (fallback ? fallback() : window.location.assign(slug ? `/${slug}/admin` : '/admin'));
   if (!user || user.role === 'superadmin') return goAdmin();
   try {
@@ -12,15 +12,16 @@ export async function enterKioskAfterLogin(user, { slug = '', fallback } = {}) {
     localStorage.setItem('kiosk_company', JSON.stringify(data.company || {}));
     localStorage.setItem('pwa_preferred_role', 'kiosk');
     if (!localStorage.getItem('admin_token')) localStorage.setItem('kiosk_admin_cookie', '1');
-    window.location.assign('/kiosk');
+    if (navigate) navigate('/kiosk', { replace: true });
+    else window.location.assign(slug ? `/${slug}/kiosk` : '/kiosk');
   } catch {
     goAdmin();
   }
 }
 
 // Na e-mail+wachtwoord: eerst verplicht een persoonlijke PIN (behalve superadmin), dan door.
-export async function afterPasswordLogin(user, { fallback, onNeedPin }) {
-  const proceed = () => enterKioskAfterLogin(user, { fallback });
+export async function afterPasswordLogin(user, { fallback, onNeedPin, navigate }) {
+  const proceed = () => enterKioskAfterLogin(user, { fallback, navigate });
   if (user?.role !== 'superadmin') {
     let hasPin = true;
     try { hasPin = !!(await api.get('/auth/personal-pin/status')).data?.has_pin; } catch { /* ignore */ }
