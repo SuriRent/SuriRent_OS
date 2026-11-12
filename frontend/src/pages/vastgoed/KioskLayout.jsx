@@ -6994,18 +6994,19 @@ export default function KioskLayout() {
       {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-          <div className="grid grid-cols-5 items-stretch">
+          <div className="grid grid-cols-6 items-stretch">
             {[
               { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
               { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
               { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
               { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'kasgeld', label: 'Kasgeld', Icon: Database, on: step === 'kasgeld', fn: () => setStep('kasgeld') },
               { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
             ].map(({ id, label, Icon, on, fn }) => (
               <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
-                <Icon className="w-6 h-6" strokeWidth={2} />
-                <span className="text-[10.5px] font-semibold leading-tight whitespace-nowrap">{label}</span>
+                <Icon className="w-5 h-5" strokeWidth={2} />
+                <span className={`${id === 'apt' ? 'text-[8px] tracking-tighter' : 'text-[9px]'} font-semibold leading-tight whitespace-nowrap`}>{label}</span>
               </button>
             ))}
           </div>
