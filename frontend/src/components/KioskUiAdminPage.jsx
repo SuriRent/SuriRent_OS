@@ -43,14 +43,24 @@ export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, 
   return (
     <div className="pb-8 overflow-x-hidden" data-testid={testId}>
       {!bare && (onClose ? (
-        <div className="flex justify-end px-3 pb-2" style={{ paddingTop: 'max(var(--kiosk-sat), 14px)' }}>
+        <div className="flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
+          style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-14 h-14 shrink-0 rounded-2xl bg-orange-100 flex items-center justify-center">
+              {Icon && <Icon className="w-7 h-7 text-orange-600" strokeWidth={2.5} />}
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-xl font-black leading-tight text-slate-900">{`${label || title} Overzicht`}</h2>
+              <p className="mt-1 truncate text-sm leading-tight text-slate-500">Beheer deze gegevens</p>
+            </div>
+          </div>
           <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
-            className="w-11 h-11 rounded-2xl bg-white shadow-[0_6px_14px_-8px_rgba(15,23,42,0.45)] flex items-center justify-center text-[#FF5C00]">
-            <X className="w-5 h-5" strokeWidth={2.6} />
+            className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-7 h-7 text-slate-700" strokeWidth={2.5} />
           </button>
         </div>
       ) : <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />)}
-      {!bare && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
+      {!bare && !onClose && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
       {newItem && !bare && (
         <div className="mt-3 px-2">
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(newItem.event))} data-testid={`${testId}-new`}
