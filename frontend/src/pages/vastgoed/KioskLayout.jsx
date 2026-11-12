@@ -3523,14 +3523,13 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   const visibleItems = useMemo(() => (sourceFilter === 'all' ? items
     : items.filter((it) => (it.source || 'kasgeld') === sourceFilter)), [items, sourceFilter]);
 
-  // Huidige maand als default-focus voor de accordion én het
-  // "Oktober 2026 ▼" selector-pil in de overzicht-card.
+  // Huidige maand als default voor de selector; maandaccordions starten ingeklapt.
   const [currentKey, setCurrentKey] = useState(() => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedMonth, setSelectedMonth] = useState(currentKey);
-  const [expandedMonths, setExpandedMonths] = useState(() => new Set([currentKey]));
+  const [expandedMonths, setExpandedMonths] = useState(() => new Set());
   useEffect(() => {
     if (!embedded || !ui) return undefined;
     const refreshMonth = () => {
@@ -3550,7 +3549,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   useEffect(() => {
     if (!embedded || !ui) return;
     setSelectedMonth(currentKey);
-    setExpandedMonths(new Set([currentKey]));
+    setExpandedMonths(new Set());
   }, [currentKey, embedded, ui]);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
