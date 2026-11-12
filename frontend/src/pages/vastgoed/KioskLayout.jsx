@@ -5403,7 +5403,8 @@ function KioskUiAdminStep({ id, onBack, children }) {
   const Page = meta.Page;
   return (
     <KioskUiPageShell testId={`kiosk-popup-${id}`}>
-      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack} testId={`kiosk-ui-${id}`}>
+      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack}
+        onClose={id === 'appartementen' ? onBack : undefined} testId={`kiosk-ui-${id}`}>
         {children || (Page ? <Page embedded /> : null)}
       </KioskUiAdminPage>
     </KioskUiPageShell>
@@ -6547,7 +6548,9 @@ export default function KioskLayout() {
     ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
-  const showTopHead = step !== 'check' && step !== 'select' && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
+  const isMobileUiApartments = isMobileViewport && isUi && step === 'admin:appartementen';
+  const showTopHead = step !== 'check' && step !== 'select' && !isMobileUiApartments
+    && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
   useEffect(() => {
     const onNav = (e) => {

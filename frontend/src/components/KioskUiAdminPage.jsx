@@ -1,5 +1,5 @@
 import { Suspense, useEffect } from 'react';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 import { KioskFxCtx } from './KioskFx';
 import { UiBar, UiHero } from './KioskInvoicesUi';
 
@@ -35,14 +35,21 @@ const CashArt = () => (
 );
 
 // Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
-export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, testId, children, art, bare }) {
+export default function KioskUiAdminPage({ title, label, Icon, newItem, onBack, onClose, testId, children, art, bare }) {
   useEffect(() => {
     document.body.classList.add('kiosk-popup-active');
     return () => document.body.classList.remove('kiosk-popup-active');
   }, []);
   return (
     <div className="pb-8 overflow-x-hidden" data-testid={testId}>
-      {!bare && <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />}
+      {!bare && (onClose ? (
+        <div className="flex justify-end px-3 pb-2" style={{ paddingTop: 'max(var(--kiosk-sat), 14px)' }}>
+          <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
+            className="w-11 h-11 rounded-2xl bg-white shadow-[0_6px_14px_-8px_rgba(15,23,42,0.45)] flex items-center justify-center text-[#FF5C00]">
+            <X className="w-5 h-5" strokeWidth={2.6} />
+          </button>
+        </div>
+      ) : <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />)}
       {!bare && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
       {newItem && !bare && (
         <div className="mt-3 px-2">
