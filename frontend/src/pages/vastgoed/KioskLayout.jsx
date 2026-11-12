@@ -3,7 +3,7 @@ import villaM from '../../ui-villa-m.png';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
 import { motion } from 'framer-motion';
@@ -14,12 +14,13 @@ import {
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
+  UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
   BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { resolveLogoUrl } from '../../lib/branding';
 import { postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -512,7 +513,63 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function UiHero({ apartments, locationName, locOpts }) {
+function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
+  const [heroImageUrl, setHeroImageUrl] = useState('');
+  const [heroLoading, setHeroLoading] = useState(Boolean(companySlug));
+  const [heroUploading, setHeroUploading] = useState(false);
+  const [heroError, setHeroError] = useState('');
+  const heroInputRef = useRef(null);
+  useEffect(() => {
+    let active = true;
+    if (!companySlug) {
+      setHeroImageUrl('');
+      setHeroLoading(false);
+      return () => { active = false; };
+    }
+    setHeroLoading(true);
+    setHeroError('');
+    api.get(`/public/companies/${encodeURIComponent(companySlug)}/branding`)
+      .then(({ data }) => {
+        if (active) {
+          setHeroImageUrl(data?.kiosk_hero_image_url || '');
+          setHeroError('');
+        }
+      })
+      .catch((e) => {
+        if (active) setHeroError(`Huisafbeelding laden mislukt: ${formatError(e)}`);
+      })
+      .finally(() => {
+        if (active) setHeroLoading(false);
+      });
+    return () => { active = false; };
+  }, [companySlug]);
+
+  const uploadHeroImage = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setHeroError('');
+    setHeroUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/companies/me/kiosk-hero-image', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (!data?.url) throw new Error('De server gaf geen afbeeldingsadres terug.');
+      setHeroImageUrl(data.url);
+    } catch (e) {
+      const message = e?.response?.status === 404
+        ? 'De uploadfunctie is nog niet beschikbaar op de verbonden backend.'
+        : formatError(e);
+      setHeroError(`Huisafbeelding uploaden mislukt: ${message}`);
+    } finally {
+      setHeroUploading(false);
+      input.value = '';
+    }
+  };
+
+  const heroImageSrc = heroImageUrl ? resolveLogoUrl(heroImageUrl) : villaM;
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
@@ -556,8 +613,31 @@ function UiHero({ apartments, locationName, locOpts }) {
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
         </svg>
-        <img src={villaM} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none pointer-events-none -z-10" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
-        <div className="relative flex items-center gap-3 min-w-0">
+        {isAdmin ? (
+          <>
+            <button type="button" onClick={() => heroInputRef.current?.click()} disabled={heroLoading || heroUploading}
+              aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
+              data-testid="kiosk-ui-hero-image-edit"
+              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] -z-10 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
+              <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover pointer-events-none"
+                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+              <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
+                {heroUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              </span>
+            </button>
+            <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+              data-testid="kiosk-ui-hero-image-input" onChange={uploadHeroImage} />
+          </>
+        ) : (
+          <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover pointer-events-none -z-10"
+            style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+        )}
+        {isAdmin && heroError && (
+          <p role="alert" className="absolute bottom-1 right-2 z-20 max-w-[65%] rounded-lg bg-white/95 px-2 py-1 text-[10px] font-semibold text-red-700 shadow">
+            {heroError}
+          </p>
+        )}
+        <div className="relative z-10 flex items-center gap-3 min-w-0">
           <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
             <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
             <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
@@ -587,7 +667,8 @@ function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange,
 }) {
-  const { isUi } = useContext(KioskThemeCtx);
+  const { isUi, isAdmin } = useContext(KioskThemeCtx);
+  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -778,7 +859,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -3468,6 +3549,36 @@ function RowSlim({ label, value }) {
 // mutaties met per-maand accordion. Werkt zowel op mobiel (compacte
 // stack) als desktop (bredere layout).
 //
+// Inline currency flags used by the mobile balance cards.
+function CurrencyFlag({ currency }) {
+  const label = currency === 'SRD' ? 'Suriname' : currency === 'USD' ? 'Verenigde Staten' : 'Europese Unie';
+  return (
+    <svg viewBox="0 0 60 40" className="h-full w-full" role="img" aria-label={`Vlag van ${label}`} xmlns="http://www.w3.org/2000/svg">
+      {currency === 'SRD' ? (
+        <>
+          <rect width="60" height="40" fill="#377E3F" />
+          <path d="M0 8h60v4H0zm0 20h60v4H0z" fill="#fff" />
+          <rect y="12" width="60" height="16" fill="#B40A2D" />
+          <path d="m30 15 1.8 5.3h5.6l-4.5 3.3 1.7 5.4-4.6-3.3-4.6 3.3 1.7-5.4-4.5-3.3h5.6z" fill="#ECC81D" />
+        </>
+      ) : currency === 'USD' ? (
+        <>
+          <rect width="60" height="40" fill="#fff" />
+          {Array.from({ length: 7 }, (_, index) => <rect key={index} y={index * (40 / 13) * 2} width="60" height={40 / 13} fill="#B22234" />)}
+          <rect width="25" height="21.5" fill="#3C3B6E" />
+          {[5, 10, 15, 20].map((x) => [4, 9, 14, 19].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="0.8" fill="#fff" />))}
+        </>
+      ) : (
+        <>
+          <rect width="60" height="40" fill="#003399" />
+          {[[30, 10], [35, 11.3], [38.7, 15], [40, 20], [38.7, 25], [35, 28.7], [30, 30], [25, 28.7], [21.3, 25], [20, 20], [21.3, 15], [25, 11.3]]
+            .map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.25" fill="#FFCC00" />)}
+        </>
+      )}
+    </svg>
+  );
+}
+
 // Data-flow (ongewijzigd):
 //   GET /kiosk/kasgeld/balance → { SRD, USD, EUR } totaal-saldi
 //   GET /kiosk/kasgeld         → laatste 200 mutations (shared endpoint)
@@ -3493,8 +3604,7 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   const visibleItems = useMemo(() => (sourceFilter === 'all' ? items
     : items.filter((it) => (it.source || 'kasgeld') === sourceFilter)), [items, sourceFilter]);
 
-  // Huidige maand als default-focus voor de accordion én het
-  // "Oktober 2026 ▼" selector-pil in de overzicht-card.
+  // Huidige maand als default-focus voor de accordion en maandselector.
   const [currentKey, setCurrentKey] = useState(() => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -3621,46 +3731,69 @@ function KasgeldPanel({ embedded = false, ui = false }) {
         })).filter((group) => group.items.length > 0);
         const money = (n) => Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const filteredCount = groups.reduce((count, group) => count + group.items.length, 0);
-        const kStat = (cur, Icon, tone) => (
-          <div key={cur} className="kiosk-ui-stat rounded-2xl border border-slate-100 bg-white px-2 py-3.5 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.35)] min-w-0" data-testid={`kasgeld-bal-${cur}`}>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${tone}`}><Icon className="w-4 h-4" strokeWidth={2.6} /></span>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-600 truncate leading-tight">{cur}</p>
-                <p className="text-[13px] font-extrabold text-[#1B2A5C] leading-tight whitespace-nowrap truncate">{money(balances[cur])}</p>
-              </div>
+        const sourceCounts = {
+          all: items.length,
+          kasgeld: items.filter((it) => (it.source || 'kasgeld') === 'kasgeld').length,
+          payment: items.filter((it) => it.source === 'payment').length,
+        };
+        const kStat = (cur, cardTone, glowTone, codeTone) => (
+          <div key={cur} className={`kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border px-2.5 py-3 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.5)] ${cardTone}`} data-testid={`kasgeld-bal-${cur}`}>
+            <span aria-hidden="true" className={`absolute -right-5 -top-6 h-16 w-16 rounded-full ${glowTone}`} />
+            <div className="relative flex items-center justify-between gap-1.5">
+              <span className="flex h-7 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/80 bg-white shadow-sm"><CurrencyFlag currency={cur} /></span>
+              <span className={`rounded-full bg-white/75 px-2 py-1 text-[9px] font-extrabold tracking-wider ${codeTone}`}>{cur}</span>
             </div>
+            <p className="relative mt-3 text-[9px] font-semibold text-slate-500">Huidig saldo</p>
+            <p className="relative mt-0.5 truncate text-[14px] font-black leading-tight tabular-nums text-[#1B2A5C]" title={money(balances[cur])}>{money(balances[cur])}</p>
+          </div>
+        );
+        const balancesCards = (
+          <div className="grid grid-cols-3 gap-1.5 px-0.5">
+            {kStat('SRD', 'border-orange-100 bg-gradient-to-br from-orange-50 to-white', 'bg-orange-200/35', 'text-orange-700')}
+            {kStat('USD', 'border-emerald-100 bg-gradient-to-br from-emerald-50 to-white', 'bg-emerald-200/35', 'text-emerald-700')}
+            {kStat('EUR', 'border-sky-100 bg-gradient-to-br from-sky-50 to-white', 'bg-sky-200/35', 'text-sky-700')}
           </div>
         );
         return (
-          <div data-testid="kasgeld-fx" className="space-y-3">
-            <div className="grid grid-cols-3 gap-1.5 relative px-0.5">
-              {kStat('SRD', Wallet, 'bg-orange-100 text-[#FF5C00]')}
-              {kStat('USD', Banknote, 'bg-emerald-500 text-white')}
-              {kStat('EUR', Coins, 'bg-sky-500 text-white')}
-            </div>
-            <div className="flex items-center justify-between px-1 pt-1">
-              <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600" data-testid="kasgeld-count-badge">
-                {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex-1 min-w-0 h-12 rounded-2xl border border-slate-100 bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4 focus-within:border-orange-200">
-                <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
+          <div data-testid="kasgeld-fx" className="space-y-4">
+            {balancesCards}
+            <section className="space-y-3 rounded-3xl border border-slate-100 bg-white p-3 shadow-[0_8px_22px_-14px_rgba(15,23,42,0.28)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black tracking-tight text-[#1B2A5C]">Mutaties</h3>
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">Zoek en filter je kasbewegingen</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-[#FF5C00]" data-testid="kasgeld-count-badge">
+                  {filteredCount} {filteredCount === 1 ? 'mutatie' : 'mutaties'}
+                </span>
+              </div>
+              <label className="flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3.5 transition focus-within:border-orange-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+                <Search className="h-5 w-5 shrink-0 text-[#1B2A5C]" />
                 <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek mutatie..." data-testid="kasgeld-search"
-                  className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+                  className="w-full min-w-0 bg-transparent text-[15px] text-slate-800 outline-none placeholder:text-slate-400" />
+                {uiQ && <button type="button" onClick={() => setUiQ('')} aria-label="Zoekopdracht wissen" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>}
               </label>
-              <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
-                <SlidersHorizontal className="w-5 h-5" />
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="Filter" data-testid="kasgeld-filter"
-                  className="absolute inset-0 opacity-0 w-full h-full">
-                  <option value="all">Alles</option>
-                  <option value="kasgeld">Handmatig</option>
-                  <option value="payment">Betalingen</option>
-                </select>
-              </label>
-            </div>
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filter mutaties" data-testid="kasgeld-filter">
+                {[
+                  ['all', 'Alles'],
+                  ['kasgeld', 'Handmatig'],
+                  ['payment', 'Betalingen'],
+                ].map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setSourceFilter(value)}
+                    data-testid={`kasgeld-filter-${value}`} aria-pressed={sourceFilter === value}
+                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition active:scale-[0.98] ${
+                      sourceFilter === value
+                        ? 'bg-gradient-to-r from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_6px_14px_-8px_rgba(255,92,0,0.8)]'
+                        : 'border border-slate-100 bg-white text-slate-600 shadow-[0_4px_12px_-9px_rgba(15,23,42,0.35)] hover:bg-slate-50'
+                    }`}>
+                    {label}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${sourceFilter === value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      {sourceCounts[value]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
             {err && <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm" data-testid="kasgeld-err">{err}</div>}
             {!err && loading && <Loader2 className="w-6 h-6 text-slate-300 mx-auto animate-spin my-6" data-testid="kasgeld-loading" />}
             {!err && !loading && groups.length === 0 && (
@@ -4280,6 +4413,8 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
   const creator = (item.created_by_name || '').trim();
+  const title = item.description || item.category || '—';
+  const paymentTitleParts = item.source === 'payment' ? title.match(/^(.*?)\s+—\s+(.+\s·\sMaand\s.+)$/) : null;
   return (
     <div className={`kiosk-cash-row flex items-center gap-3 ${flush ? 'px-0' : 'px-3 sm:px-4'} py-3`} data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
@@ -4288,19 +4423,12 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
         {isIn ? <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} /> : <ArrowDownLeft className="w-5 h-5" strokeWidth={2.5} />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm sm:text-base font-bold text-slate-900 truncate" data-testid={`kasgeld-row-title-${item.id}`}>
-          {item.description || item.category || '—'}
+        <p className="text-sm sm:text-base font-bold text-slate-900 break-words md:truncate" data-testid={`kasgeld-row-title-${item.id}`}>
+          {paymentTitleParts ? <>{paymentTitleParts[1]} — <span className="whitespace-nowrap">{paymentTitleParts[2]}</span></> : title}
         </p>
-        <p className="text-xs text-slate-500 mt-0.5 truncate">
+        <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words md:truncate">
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
-          {creator && (
-            <>
-              {' · '}
-              <span className="text-slate-600" data-testid={`kasgeld-row-creator-${item.id}`}>
-                Door {creator}
-              </span>
-            </>
-          )}
+          {creator && <><span className="hidden sm:inline">{' · '}</span><span className="mt-0.5 block break-words text-[11px] text-slate-600 sm:mt-0 sm:inline sm:break-normal sm:text-xs" data-testid={`kasgeld-row-creator-${item.id}`}>Door {creator}</span></>}
         </p>
       </div>
       <div className="kiosk-cash-row-values flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
@@ -4496,6 +4624,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
   const [err, setErr] = useState('');
   const sheetRef = useRef(null);
   const descInputRef = useRef(null);
+  const keyboardOpen = useKeyboardOpen();
   const fullPageDetails = ui && step === 'details';
   useVisualViewportPosition(sheetRef, 640, {
     settleDelay: ui ? 120 : 0,
@@ -4529,16 +4658,17 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
       window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
-
   const goNext = () => {
     const n = parseFloat(String(amount).replace(',', '.'));
     if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
     setErr('');
-    setStep('details');
-    // Focus description field zodra step 2 gerenderd is. Autofocus met
-    // 200ms delay omdat iOS de focus soms negeert als hij tijdens de
-    // transition wordt gezet.
-    setTimeout(() => descInputRef.current?.focus(), 220);
+    if (ui) {
+      flushSync(() => setStep('details'));
+      descInputRef.current?.focus({ preventScroll: true });
+    } else {
+      setStep('details');
+      setTimeout(() => descInputRef.current?.focus(), 220);
+    }
   };
 
   const save = async () => {
@@ -4570,7 +4700,9 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
     <div
       onClick={saved ? onSaved : onClose}
       className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden ${ui
-        ? 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
+        ? keyboardOpen
+          ? 'bg-white backdrop-blur-none'
+          : 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
         : 'bg-white sm:bg-black/60 sm:backdrop-blur-md'}`}
       data-testid="kasgeld-overlay">
       <div ref={sheetRef}
@@ -4663,7 +4795,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           /* ============ STEP 2: Omschrijving + Categorie ============ */
           <div className={`${fullPageDetails
             ? 'flex-1 min-h-0 px-4 py-3 gap-3 sm:px-5 sm:py-4'
-            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 min-w-0 w-full overflow-y-auto flex flex-col`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
@@ -4675,7 +4807,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
               <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
-            <label className="block">
+            <label className="block min-w-0 w-full">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Omschrijving *</span>
               <input ref={descInputRef}
                 value={description} onChange={(e) => setDescription(e.target.value)}
@@ -4683,14 +4815,14 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
                 placeholder="Bijv. schoonmaakspullen"
                 autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                 enterKeyHint="next"
-                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
+                className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
             </label>
 
-            <label className="block">
+            <label className="block min-w-0 w-full">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Categorie</span>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
-                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
+                className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
                 {KASGELD_CATEGORIES[type].map(({ group, options }) => (
                   <optgroup key={group} label={group}>
                     {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -4700,10 +4832,11 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
             </label>
 
             {canBackdate && (
-              <label className="block">
+              <label className="block min-w-0 w-full">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
+                  className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12 appearance-none text-center' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}
+                  style={ui ? { width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', WebkitAppearance: 'none' } : undefined} />
               </label>
             )}
 

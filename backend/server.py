@@ -4634,6 +4634,7 @@ def _company_branding_response(c: dict, *, include_private: bool = False) -> dic
         "app_name": b.get("app_name") or c.get("name") or "Vastgoed Kiosk",
         "primary_color": _hex_color(b.get("primary_color")),
         "logo_url": b.get("logo_url") or "",
+        "kiosk_hero_image_url": b.get("kiosk_hero_image_url") or "",
         "tagline": b.get("tagline") or "",
         # PDF-sjabloon voor kwitantie/factuur: midnight_gold (default),
         # charcoal_gold, forest_gold, sunset_gold. Tenant kiest in
@@ -5002,6 +5003,59 @@ async def upload_branding_asset(file: UploadFile = File(...),
         "uploaded_at": iso(now_utc()),
     })
     return {"id": asset_id, "url": f"/api/landing/asset/{asset_id}"}
+
+
+@api.post("/companies/me/kiosk-hero-image")
+async def upload_kiosk_hero_image(file: UploadFile = File(...),
+                                  user=Depends(require_role("admin"))):
+    """Upload and persist the company-wide apartment kiosk hero image."""
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
+    if ctype not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        raise HTTPException(status_code=400, detail="Kies een afbeelding (JPG, PNG, WebP of GIF).")
+    raw = await file.read(MAX_LANDING_ASSET_BYTES + 1)
+    if not raw:
+        raise HTTPException(status_code=400, detail="Het afbeeldingsbestand is leeg.")
+    if len(raw) > MAX_LANDING_ASSET_BYTES:
+        raise HTTPException(status_code=413, detail="Afbeelding groter dan 5 MB.")
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+
+        image = Image.open(io.BytesIO(raw))
+        image = ImageOps.exif_transpose(image)
+        image = ImageOps.fit(image, (608, 360), method=Image.Resampling.LANCZOS)
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+        resized = io.BytesIO()
+        image.save(resized, format="WEBP", quality=92, method=6)
+        raw = resized.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError) as e:
+        raise HTTPException(status_code=400, detail="De afbeelding kan niet worden verwerkt.") from e
+
+    asset_id = new_id()
+    url = f"/api/landing/asset/{asset_id}"
+    await db.landing_assets.insert_one({
+        "id": asset_id,
+        "filename": file.filename or f"asset-{asset_id}",
+        "content_type": "image/webp",
+        "size": len(raw),
+        "data_b64": base64.b64encode(raw).decode("ascii"),
+        "scope": "company",
+        "company_id": cid,
+        "uploaded_by": user.get("email"),
+        "uploaded_at": iso(now_utc()),
+    })
+    result = await db.companies.update_one({"id": cid}, {"$set": {
+        "branding.kiosk_hero_image_url": url,
+        "branding.updated_at": iso(now_utc()),
+        "branding.updated_by": user.get("email"),
+    }})
+    if not result.matched_count:
+        await db.landing_assets.delete_one({"id": asset_id})
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    return {"id": asset_id, "url": url}
 
 
 @api.post("/companies/me/landlord-signature")
