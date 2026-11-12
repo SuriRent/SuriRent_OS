@@ -4619,7 +4619,9 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
     <div
       onClick={saved ? onSaved : onClose}
       className={`keyboard-opaque-backdrop fixed inset-0 z-[120] overflow-hidden ${ui
-        ? `bg-slate-950/35 ${keyboardOpen ? 'backdrop-blur-none' : 'backdrop-blur-sm'} sm:bg-black/60`
+        ? keyboardOpen
+          ? 'bg-white backdrop-blur-none'
+          : 'bg-slate-950/35 backdrop-blur-sm sm:bg-black/60'
         : 'bg-white sm:bg-black/60 sm:backdrop-blur-md'}`}
       data-testid="kasgeld-overlay">
       <div ref={sheetRef}
