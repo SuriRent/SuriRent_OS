@@ -14,12 +14,13 @@ import {
   Smartphone, CreditCard, ShieldCheck, Clock as ClockIcon, Printer, Download,
   User, UserRound, Settings as SettingsIcon, Hash, CheckCircle, Calendar,
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
-  UserPlus, Wrench, Nfc, Camera, ArrowUpRight, ArrowDownLeft, ChevronDown,
+  UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
   BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
+import { resolveLogoUrl } from '../../lib/branding';
 import { postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -512,7 +513,63 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function UiHero({ apartments, locationName, locOpts }) {
+function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin }) {
+  const [heroImageUrl, setHeroImageUrl] = useState('');
+  const [heroLoading, setHeroLoading] = useState(Boolean(companySlug));
+  const [heroUploading, setHeroUploading] = useState(false);
+  const [heroError, setHeroError] = useState('');
+  const heroInputRef = useRef(null);
+  useEffect(() => {
+    let active = true;
+    if (!companySlug) {
+      setHeroImageUrl('');
+      setHeroLoading(false);
+      return () => { active = false; };
+    }
+    setHeroLoading(true);
+    setHeroError('');
+    api.get(`/public/companies/${encodeURIComponent(companySlug)}/branding`)
+      .then(({ data }) => {
+        if (active) {
+          setHeroImageUrl(data?.kiosk_hero_image_url || '');
+          setHeroError('');
+        }
+      })
+      .catch((e) => {
+        if (active) setHeroError(`Huisafbeelding laden mislukt: ${formatError(e)}`);
+      })
+      .finally(() => {
+        if (active) setHeroLoading(false);
+      });
+    return () => { active = false; };
+  }, [companySlug]);
+
+  const uploadHeroImage = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setHeroError('');
+    setHeroUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/companies/me/kiosk-hero-image', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (!data?.url) throw new Error('De server gaf geen afbeeldingsadres terug.');
+      setHeroImageUrl(data.url);
+    } catch (e) {
+      const message = e?.response?.status === 404
+        ? 'De uploadfunctie is nog niet beschikbaar op de verbonden backend.'
+        : formatError(e);
+      setHeroError(`Huisafbeelding uploaden mislukt: ${message}`);
+    } finally {
+      setHeroUploading(false);
+      input.value = '';
+    }
+  };
+
+  const heroImageSrc = heroImageUrl ? resolveLogoUrl(heroImageUrl) : villaM;
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
@@ -556,8 +613,31 @@ function UiHero({ apartments, locationName, locOpts }) {
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
         </svg>
-        <img src={villaM} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none pointer-events-none -z-10" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
-        <div className="relative flex items-center gap-3 min-w-0">
+        {isAdmin ? (
+          <>
+            <button type="button" onClick={() => heroInputRef.current?.click()} disabled={heroLoading || heroUploading}
+              aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
+              data-testid="kiosk-ui-hero-image-edit"
+              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] -z-10 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
+              <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover pointer-events-none"
+                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+              <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
+                {heroUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              </span>
+            </button>
+            <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+              data-testid="kiosk-ui-hero-image-input" onChange={uploadHeroImage} />
+          </>
+        ) : (
+          <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover pointer-events-none -z-10"
+            style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+        )}
+        {isAdmin && heroError && (
+          <p role="alert" className="absolute bottom-1 right-2 z-20 max-w-[65%] rounded-lg bg-white/95 px-2 py-1 text-[10px] font-semibold text-red-700 shadow">
+            {heroError}
+          </p>
+        )}
+        <div className="relative z-10 flex items-center gap-3 min-w-0">
           <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full bg-white md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF6A00] md:text-white shadow-md">
             <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
             <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
@@ -587,7 +667,8 @@ function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange,
 }) {
-  const { isUi } = useContext(KioskThemeCtx);
+  const { isUi, isAdmin } = useContext(KioskThemeCtx);
+  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -778,7 +859,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 sm:px-2 pb-3">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
