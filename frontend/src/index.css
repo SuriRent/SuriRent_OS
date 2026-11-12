@@ -460,27 +460,6 @@ body:is(.kiosk-admin-active, .kiosk-popup-active) .ksm-root label { font-size: 0
   .kiosk-admin-skin [data-testid^="emp-card-"] > div:last-child button svg,
   .kiosk-admin-skin [data-testid^="sal-row-"] > div:last-child button svg { width: 1rem; height: 1rem; }
 }
-@media (max-width: 640px) {
-  .kiosk-cash-row {
-    display: grid;
-    grid-template-columns: 2.5rem minmax(0, 1fr);
-    gap: 0.5rem;
-    padding: 0.625rem;
-  }
-  .kiosk-cash-row-values {
-    grid-column: 2;
-    width: 100%;
-    min-width: 0;
-    align-items: flex-end;
-  }
-  .kiosk-cash-row-amount {
-    max-width: 100%;
-    min-width: 0;
-    font-size: clamp(0.6875rem, 3.5vw, 0.875rem);
-    white-space: nowrap;
-    text-align: right;
-  }
-}
 @media (max-width: 420px) {
   .kiosk-admin-skin .kiosk-finance-row {
     display: grid;

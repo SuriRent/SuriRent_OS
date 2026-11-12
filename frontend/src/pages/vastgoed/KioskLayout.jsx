@@ -4333,6 +4333,8 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const sourceLabel = item.source === 'payment' ? (item.method || 'Betaling') : 'Contant';
   const creator = (item.created_by_name || '').trim();
+  const title = item.description || item.category || '—';
+  const paymentTitleParts = item.source === 'payment' ? title.match(/^(.*?)\s+—\s+(.+\s·\sMaand\s.+)$/) : null;
   return (
     <div className={`kiosk-cash-row flex items-center gap-3 ${flush ? 'px-0' : 'px-3 sm:px-4'} py-3`} data-testid={`kasgeld-row-${item.id}`}>
       <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
@@ -4342,7 +4344,7 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm sm:text-base font-bold text-slate-900 break-words md:truncate" data-testid={`kasgeld-row-title-${item.id}`}>
-          {item.description || item.category || '—'}
+          {paymentTitleParts ? <><span className="block truncate">{paymentTitleParts[1]}</span><span className="block whitespace-nowrap text-[13px] leading-tight">{paymentTitleParts[2]}</span></> : title}
         </p>
         <p className="text-xs text-slate-500 mt-0.5 break-words md:truncate">
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
