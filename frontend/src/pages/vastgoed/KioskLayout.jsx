@@ -17,6 +17,7 @@ import {
   UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
   BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
+  LayoutList,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -513,6 +514,53 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
+function UiAptHeroCard({ a, onOpen }) {
+  const vacant = !a.tenant_id;
+  const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
+  const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
+  const status = uiAptStatus(a);
+  const actionLabel = status === 'vacant' ? 'Huurder koppelen'
+    : status === 'deposit' ? 'Borg bekijken'
+      : status === 'paid' ? 'Overzicht openen'
+        : 'Afrekenen';
+
+  return (
+    <article className="kiosk-ui-card overflow-hidden rounded-[24px] border border-white/80 bg-white shadow-[0_12px_28px_-18px_rgba(15,23,42,0.45)]"
+      data-testid={`apt-${a.number}-hero-card`}>
+      <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
+        className="relative flex w-full items-center gap-3 overflow-hidden bg-gradient-to-r from-[#FF6A00] via-[#FF8A2B] to-[#FFC08A] px-4 py-4 text-left text-white">
+        <span aria-hidden="true" className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/20 blur-2xl" />
+        <span className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white/80 bg-white/90 text-[#FF5C00] shadow-md">
+          {src && !vacant
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-hero-photo`}
+              className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <Home className="h-7 w-7" />}
+        </span>
+        <span className="relative z-10 min-w-0 flex-1">
+          <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-white/80">Appartement</span>
+          <span className="block truncate text-xl font-black leading-tight">{a.number}</span>
+          <span className="block truncate text-sm font-medium text-white/90">{vacant ? 'Vrij' : a.tenant_name}</span>
+        </span>
+        <span className="relative z-10 shrink-0">
+          <UiStatusPill a={a} className="max-w-[118px] !px-2.5 !text-[11px]" />
+        </span>
+      </button>
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{vacant ? 'Status' : 'Huur p/m'}</p>
+          <p className="truncate text-sm font-extrabold text-[#1B2A5C]">
+            {vacant ? 'Beschikbaar' : fmtMoney(a.rent_amount || 0, a.currency || 'SRD')}
+          </p>
+        </div>
+        <button type="button" onClick={onOpen} data-testid={`apt-${a.number}-hero-action`}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-black text-white shadow-[0_8px_18px_-10px_rgba(255,92,0,0.9)] active:scale-[0.98]">
+          {actionLabel}<ChevronRight className="h-4 w-4" strokeWidth={2.8} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function kioskHeroCacheKey(slug) {
   return slug ? `pwa_kiosk_hero_image:${slug}` : '';
 }
@@ -707,6 +755,7 @@ function ApartmentSelect({
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
   const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
+  const [uiCardView, setUiCardView] = useState(false);
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
@@ -904,6 +953,14 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
           </label>
+          <button type="button" onClick={() => setUiCardView((current) => !current)}
+            aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
+            title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
+            className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+              uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
+            }`}>
+            {uiCardView ? <LayoutList className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+          </button>
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
             <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
@@ -920,10 +977,15 @@ function ApartmentSelect({
 
       <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
         <div className={isUi && !isDesk
-          ? 'grid grid-cols-1 items-start gap-2.5 sm:gap-3 md:gap-3 px-1 sm:px-2 md:px-5 md:pt-1'
+          ? `grid ${uiCardView ? 'grid-cols-1 gap-3' : 'grid-cols-1 items-start gap-2.5 sm:gap-3'} px-1 sm:px-2 md:px-5 md:pt-1`
           : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
-            if (isUi && !isDesk) return <UiAptCard key={a.id} a={a} onOpen={() => (a.tenant_id ? onSelect(a) : setLinkApt(a))} />;
+            if (isUi && !isDesk) {
+              const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
+              return uiCardView
+                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} />
+                : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
+            }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
