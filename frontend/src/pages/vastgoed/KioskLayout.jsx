@@ -3,7 +3,7 @@ import villaM from '../../ui-villa-m.png';
 import { KioskContractSignModal } from '../../components/KioskContractSign';
 import PhotoUpload from '../../components/PhotoUpload';
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createContext, useContext, lazy, Suspense, Fragment } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
 import { publicMarketingUrl } from '../../lib/env';
 import { motion } from 'framer-motion';
@@ -4580,11 +4580,13 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
     const n = parseFloat(String(amount).replace(',', '.'));
     if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
     setErr('');
-    setStep('details');
-    // Focus description field zodra step 2 gerenderd is. Autofocus met
-    // 200ms delay omdat iOS de focus soms negeert als hij tijdens de
-    // transition wordt gezet.
-    setTimeout(() => descInputRef.current?.focus(), 220);
+    if (ui) {
+      flushSync(() => setStep('details'));
+      descInputRef.current?.focus({ preventScroll: true });
+    } else {
+      setStep('details');
+      setTimeout(() => descInputRef.current?.focus(), 220);
+    }
   };
 
   const save = async () => {
@@ -4709,7 +4711,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
           /* ============ STEP 2: Omschrijving + Categorie ============ */
           <div className={`${fullPageDetails
             ? 'flex-1 min-h-0 px-4 py-3 gap-3 sm:px-5 sm:py-4'
-            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 overflow-y-auto flex flex-col`}
+            : ui ? 'flex-none px-4 py-3 gap-3 sm:px-5 sm:py-4' : 'flex-1 min-h-0 px-5 py-4 gap-4'} min-h-0 min-w-0 w-full overflow-y-auto flex flex-col`}
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)', ...(ui && !fullPageDetails ? { maxHeight: 'calc(var(--visual-viewport-height, 94dvh) - 220px)' } : {}) }}>
             {/* Samenvatting bedrag → altijd zichtbaar zodat operator ziet
                 voor welke transactie hij de omschrijving invult. */}
@@ -4721,7 +4723,7 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
               <span className={`${ui ? 'text-xl sm:text-2xl' : 'text-2xl'} min-w-0 truncate font-black tabular-nums text-right`}>{currency} {amount || '0'}</span>
             </div>
 
-            <label className="block">
+            <label className="block min-w-0 w-full">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Omschrijving *</span>
               <input ref={descInputRef}
                 value={description} onChange={(e) => setDescription(e.target.value)}
@@ -4729,14 +4731,14 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
                 placeholder="Bijv. schoonmaakspullen"
                 autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                 enterKeyHint="next"
-                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
+                className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base`} />
             </label>
 
-            <label className="block">
+            <label className="block min-w-0 w-full">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Categorie</span>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 data-testid="kasgeld-input-cat"
-                className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
+                className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`}>
                 {KASGELD_CATEGORIES[type].map(({ group, options }) => (
                   <optgroup key={group} label={group}>
                     {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -4746,10 +4748,10 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
             </label>
 
             {canBackdate && (
-              <label className="block">
+              <label className="block min-w-0 w-full">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-600 block mb-2">Boekdatum</span>
                 <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} data-testid="kasgeld-input-date"
-                  className={`w-full ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
+                  className={`block w-full min-w-0 max-w-full box-border ${ui ? 'h-12' : 'h-14'} px-4 rounded-2xl border-2 border-slate-200 focus:border-orange-500 outline-none text-base bg-white`} />
               </label>
             )}
 
