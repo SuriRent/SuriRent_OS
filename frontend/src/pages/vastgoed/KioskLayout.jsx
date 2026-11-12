@@ -5569,25 +5569,8 @@ const UI_ADMIN_STEPS = ['facturen', 'locaties', 'huurders', 'appartementen', 'co
 
 function KioskUiPageShell({ children, testId }) {
   useWhitePageBehindModal(767);
-  const [top, setTop] = useState(null);
-  useLayoutEffect(() => {
-    const h = document.querySelector('[data-testid="kiosk-desktop-header"]');
-    if (!h) {
-      setTop(0);
-      return undefined;
-    }
-    const updateTop = () => setTop(Math.max(0, Math.round(h.getBoundingClientRect().bottom)));
-    updateTop();
-    const observer = new ResizeObserver(updateTop);
-    observer.observe(h);
-    window.addEventListener('resize', updateTop);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', updateTop);
-    };
-  }, []);
   return createPortal((
-    <div className="fixed inset-x-0 bottom-0 z-[120] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ top: top ?? 0, visibility: top === null ? 'hidden' : undefined, WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
+    <div className="fixed inset-0 z-[120] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#F4F6FB]" style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-testid={testId}>
       <div className="kiosk-ui w-full overflow-x-hidden">{children}</div>
     </div>
   ), document.body);
@@ -6744,7 +6727,7 @@ export default function KioskLayout() {
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
   const isMobileUiPage = isMobileViewport && isUi
-    && (step === 'admin:appartementen' || step === 'kasgeld');
+    && (step === 'kasgeld' || (step.startsWith('admin:') && UI_ADMIN_STEPS.includes(step)));
   const showTopHead = step !== 'check' && step !== 'select' && !isMobileUiPage
     && !(isMobileViewport && step.startsWith('admin:') && !(isUi && UI_ADMIN_STEPS.includes(step)));
   useWhitePageBehindModal(767, step.startsWith('admin:'));
