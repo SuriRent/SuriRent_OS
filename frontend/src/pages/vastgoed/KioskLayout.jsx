@@ -6832,7 +6832,9 @@ export default function KioskLayout() {
   // Service-worker update mag de kiosk alleen op het startscherm herladen.
   useEffect(() => {
     window.__kioskSafeToReload = step === 'select' && !apartment;
-    return () => { window.__kioskSafeToReload = true; };
+    if (window.__kioskSafeToReload) {
+      window.dispatchEvent(new Event('kiosk-safe-to-reload'));
+    }
   }, [step, apartment]);
 
   return (
