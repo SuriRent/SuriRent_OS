@@ -6868,7 +6868,7 @@ export default function KioskLayout() {
           {step === 'receipt' && paymentResult && (
             <ReceiptScreen payment={paymentResult} overview={overview} onDone={reset} />
           )}
-      </div>
+      </motion.div>
 
       {/* Snelle aanmaak modals — beschikbaar vanaf de Kiosk desktop-bar.
           De mobile "+" FAB + Snel Toevoegen sheet zijn verwijderd (user
