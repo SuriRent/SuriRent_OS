@@ -50,7 +50,7 @@ import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
 import { isKtpDevice } from '../../lib/ktp-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
-import { setIosStatusBar, setIosStatusBarStyle, useWhitePageBehindModal } from '../../lib/ios-status-bar';
+import { setIosStatusBar, useWhitePageBehindModal } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
 import useVisualViewportPosition from '../../lib/use-visual-viewport-position';
 import { KtpPrintButton } from '../../components/KtpPrintButton';
@@ -4576,17 +4576,6 @@ function KasgeldMutationModal({ onClose, onSaved, canBackdate = false, ui = fals
       window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
-  useEffect(() => {
-    if (!ui || step !== 'amount' || saved) return undefined;
-    const statusBarMetas = Array.from(document.querySelectorAll('meta[name="apple-mobile-web-app-status-bar-style"]'))
-      .map((meta) => [meta, meta.getAttribute('content')]);
-    setIosStatusBarStyle('black-translucent');
-    return () => statusBarMetas.forEach(([meta, content]) => {
-      if (content === null) meta.removeAttribute('content');
-      else meta.setAttribute('content', content);
-    });
-  }, [ui, step, saved]);
-
   const goNext = () => {
     const n = parseFloat(String(amount).replace(',', '.'));
     if (!n || n <= 0) { setErr('Bedrag moet groter dan 0 zijn'); return; }
