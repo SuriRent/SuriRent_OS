@@ -1218,19 +1218,6 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
-          {onEnableNfc && (
-            <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
-              title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
-              data-testid="kiosk-web-nfc-enable"
-              disabled={webNfcStatus === 'starting'}
-              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
-                webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
-                  : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
-                    : 'bg-white text-[#1B2A5C]'
-              }`}>
-              {webNfcStatus === 'starting' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Nfc className="w-5 h-5" />}
-            </button>
-          )}
         </div>
       )}
       {isUi && onEnableNfc && isDesk && (
