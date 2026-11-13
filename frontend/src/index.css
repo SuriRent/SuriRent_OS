@@ -1678,3 +1678,2154 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-item svg { color: currentColor !important; }
   body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-active * { color: #FF5C00 !important; }
 }
+
+@media (min-width: 768px) {
+  .kiosk-pos-layout {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) clamp(300px, 28vw, 380px);
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: #F5F6F8;
+    color: #17213C;
+  }
+  .kiosk-pos-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 20px 10px;
+    border-right: 1px solid #ECEEF2;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-brand,
+  .kiosk-pos-rail-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+  .kiosk-pos-brand {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    background: #FFF0E8;
+    color: #F26A12;
+  }
+  .kiosk-pos-rail-group,
+  .kiosk-pos-rail-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .kiosk-pos-rail-bottom { margin-top: auto; }
+  .kiosk-pos-rail-button {
+    width: 46px;
+    height: 46px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: #A0A6B2;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+  .kiosk-pos-rail-button:hover,
+  .kiosk-pos-rail-button.active {
+    background: #FFF0E8;
+    color: #A00842;
+  }
+  .kiosk-pos-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .kiosk-pos-topbar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: 108px;
+    padding: 20px 26px;
+    border-bottom: 1px solid #ECEEF2;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-greeting { min-width: 200px; }
+  .kiosk-pos-eyebrow {
+    margin: 0 0 6px;
+    color: #9299A7;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .kiosk-pos-greeting h1 {
+    margin: 0;
+    color: #171923;
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .kiosk-pos-greeting > p:last-child {
+    margin: 5px 0 0;
+    color: #8A909C;
+    font-size: 12px;
+  }
+  .kiosk-pos-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: min(360px, 30vw);
+    height: 46px;
+    min-width: 180px;
+    margin-left: auto;
+    padding: 0 14px;
+    border: 1px solid #F1F2F4;
+    border-radius: 13px;
+    background: #F8F9FB;
+    color: #9299A7;
+  }
+  .kiosk-pos-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #17213C;
+    font-size: 13px;
+  }
+  .kiosk-pos-search input::placeholder { color: #A3A8B1; }
+  .kiosk-pos-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .kiosk-pos-switch-layout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #ECEEF2;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #4B5362;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .kiosk-pos-catalog {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 24px 26px 30px;
+  }
+  .kiosk-pos-catalog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .kiosk-pos-catalog-heading h2 {
+    margin: 0;
+    color: #171923;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  .kiosk-pos-catalog-heading p {
+    margin: 4px 0 0;
+    color: #9299A7;
+    font-size: 12px;
+  }
+  .kiosk-pos-location-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 280px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid #E8EAF0;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #465064;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .kiosk-pos-location-button svg:first-child { color: #F26A12; }
+  .kiosk-pos-categories {
+    display: flex;
+    gap: 9px;
+    margin: 20px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .kiosk-pos-categories::-webkit-scrollbar { display: none; }
+  .kiosk-pos-category {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid #ECEEF2;
+    border-radius: 11px;
+    background: #FFFFFF;
+    color: #697283;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .kiosk-pos-category strong {
+    display: inline-flex;
+    min-width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: 7px;
+    background: #F1F2F5;
+    color: #626B7B;
+    font-size: 10px;
+  }
+  .kiosk-pos-category.active {
+    border-color: #A00842;
+    background: #A00842;
+    color: #FFFFFF;
+  }
+  .kiosk-pos-category.active strong {
+    background: rgba(255, 255, 255, 0.18);
+    color: #FFFFFF;
+  }
+  .kiosk-pos-apartment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    align-content: start;
+    gap: 14px;
+  }
+  .kiosk-pos-apartment-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+    min-height: 142px;
+    padding: 16px;
+    border: 1px solid #ECEEF2;
+    border-radius: 16px;
+    background: #FFFFFF;
+    text-align: left;
+    box-shadow: 0 6px 18px -16px rgba(25, 33, 55, 0.35);
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  }
+  .kiosk-pos-apartment-card:hover {
+    transform: translateY(-2px);
+    border-color: #F3A17A;
+    box-shadow: 0 12px 24px -18px rgba(160, 8, 66, 0.35);
+  }
+  .kiosk-pos-apartment-card.selected {
+    border-color: #A00842;
+    box-shadow: 0 0 0 2px rgba(160, 8, 66, 0.12), 0 12px 24px -18px rgba(160, 8, 66, 0.38);
+  }
+  .kiosk-pos-card-top,
+  .kiosk-pos-card-person {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .kiosk-pos-card-top {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .kiosk-pos-apartment-number {
+    overflow: hidden;
+    color: #171923;
+    font-size: 17px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kiosk-pos-card-top [data-testid^="apt-"] {
+    flex: 0 0 auto;
+    padding: 7px 9px;
+    font-size: 9px;
+  }
+  .kiosk-pos-card-top [data-testid^="apt-"] svg {
+    width: 12px;
+    height: 12px;
+  }
+  .kiosk-pos-card-person { gap: 11px; }
+  .kiosk-pos-card-avatar {
+    display: flex;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #F3F4F6;
+    color: #A00842;
+  }
+  .kiosk-pos-card-avatar > div,
+  .kiosk-pos-card-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+  }
+  .kiosk-pos-card-avatar.vacant { color: #9299A7; }
+  .kiosk-pos-card-name,
+  .kiosk-pos-card-location {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kiosk-pos-card-name {
+    color: #303747;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .kiosk-pos-card-location {
+    margin-top: 4px;
+    color: #9AA0AA;
+    font-size: 10px;
+  }
+  .kiosk-pos-empty-results {
+    display: flex;
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 50px 20px;
+    color: #9399A5;
+    text-align: center;
+  }
+  .kiosk-pos-empty-results strong { color: #4E5665; font-size: 14px; }
+  .kiosk-pos-empty-results span { font-size: 12px; }
+  .kiosk-pos-error {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #FFF0F0;
+    color: #B42318;
+    font-size: 12px;
+  }
+  .kiosk-pos-order {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 28px 24px 22px;
+    border-left: 1px solid #ECEEF2;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-order-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .kiosk-pos-order-header h2 {
+    margin: 0;
+    color: #171923;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .kiosk-pos-order-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 14px 0 20px;
+    color: #8D94A1;
+    font-size: 11px;
+  }
+  .kiosk-pos-order-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px;
+    border: 1px solid #F0F1F4;
+    border-radius: 13px;
+    background: #FFFFFF;
+    box-shadow: 0 5px 16px -14px rgba(25, 33, 55, 0.35);
+  }
+  .kiosk-pos-order-photo {
+    display: flex;
+    width: 66px;
+    height: 66px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #F3F4F6;
+  }
+  .kiosk-pos-order-photo > div,
+  .kiosk-pos-order-photo img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+  }
+  .kiosk-pos-order-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 20px;
+    color: #7E8694;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .kiosk-pos-order-status > span:first-child { flex: 1; }
+  .kiosk-pos-order-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 16px 0;
+    border-top: 1px dashed #D9DDE4;
+    border-bottom: 1px dashed #D9DDE4;
+  }
+  .kiosk-pos-order-total > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .kiosk-pos-order-total span { color: #89909C; font-size: 11px; }
+  .kiosk-pos-order-total strong { color: #A00842; font-size: 15px; }
+  .kiosk-pos-order-empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 26px;
+    color: #9BA1AC;
+    text-align: center;
+  }
+  .kiosk-pos-order-empty > span {
+    display: flex;
+    width: 64px;
+    height: 64px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 18px;
+    background: #F5F6F8;
+  }
+  .kiosk-pos-order-empty strong { color: #424A59; font-size: 14px; }
+  .kiosk-pos-order-empty p { max-width: 220px; margin: 0; font-size: 12px; line-height: 1.5; }
+  .kiosk-pos-order-footer { margin-top: auto; }
+  .kiosk-pos-order-hint {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+    color: #9299A7;
+    font-size: 11px;
+  }
+  .kiosk-pos-order-hint strong { color: #323A49; font-size: 12px; }
+  .kiosk-pos-continue {
+    display: flex;
+    width: 100%;
+    min-height: 50px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
+    background: #A00842;
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 800;
+    transition: background-color 120ms ease;
+  }
+  .kiosk-pos-continue:hover:not(:disabled) { background: #820638; }
+  .kiosk-pos-continue:disabled { background: #E5E7EB; color: #9AA0AA; cursor: not-allowed; }
+
+  .kiosk-pos-checkout {
+    overflow: hidden;
+    padding: 20px 18px 16px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-order-header {
+    flex: 0 0 auto;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-order-header h2 { font-size: 19px; }
+  .kiosk-pos-order-back {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #E8EAF0;
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: #4B5362;
+  }
+  .kiosk-pos-checkout-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-back-to-catalog {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    margin-left: auto;
+    padding: 0 14px;
+    border: 1px solid #ECEEF2;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #4B5362;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .kiosk-pos-workflow-loading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #778092;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .kiosk-pos-pay-select {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: #FFFFFF;
+    box-shadow: none;
+  }
+  .kiosk-pos-payment-body {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) clamp(290px, 30vw, 370px);
+    gap: 0;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+  .kiosk-pos-payment-body > div:first-child {
+    min-width: 0;
+    min-height: 0;
+    padding: 30px;
+    border-radius: 0;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-pay-select [data-testid="payselect-tenant"] { padding: 0 0 20px; }
+  .kiosk-pos-pay-select [data-testid="payselect-tenant"] h3 { font-size: 25px; }
+  .kiosk-pos-pay-select [data-testid="payselect-tenant"] p { font-size: 14px; }
+  .kiosk-pos-pay-select [data-testid="pay-select-all"] {
+    min-height: 64px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+    font-size: 17px;
+  }
+  .kiosk-pos-pay-select [data-testid="pay-select-all"] > span:last-child { font-size: 18px; }
+  .kiosk-pos-pay-select .flex.flex-col.gap-1.sm\\:gap-1\\.5 {
+    flex: 1;
+    min-height: 0;
+    background: #FFFFFF;
+    border: 1px solid #ECEEF2;
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .kiosk-pos-pay-select [data-testid^="pay-open-"],
+  .kiosk-pos-pay-select [data-testid^="pay-current-"],
+  .kiosk-pos-pay-select [data-testid^="pay-future-"],
+  .kiosk-pos-pay-select [data-testid^="pay-plan-"],
+  .kiosk-pos-pay-select [data-testid^="pay-type-"] {
+    min-height: 74px;
+    border-radius: 13px;
+    padding: 14px 16px;
+  }
+  .kiosk-pos-pay-select [data-testid^="pay-open-"] span.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-current-"] span.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-future-"] span.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-plan-"] p.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-type-"] span.text-sm { font-size: 16px; }
+  .kiosk-pos-pay-select [data-testid^="pay-open-"] p.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-current-"] p.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-future-"] p.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-plan-"] p.text-sm,
+  .kiosk-pos-pay-select [data-testid^="pay-type-"] p.text-sm { font-size: 17px; }
+  .kiosk-pos-payment-summary {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 30px;
+    border-left: 1px solid #ECEEF2;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-payment-lines {
+    display: flex;
+    min-height: 52px;
+    max-height: 190px;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 18px;
+    overflow-y: auto;
+  }
+  .kiosk-pos-payment-line {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    color: #667085;
+    font-size: 15px;
+  }
+  .kiosk-pos-payment-line strong { color: #273149; font-size: 15px; white-space: nowrap; }
+  .kiosk-pos-payment-empty { margin: 0; color: #9299A7; font-size: 15px; line-height: 1.5; }
+  .kiosk-pos-custom-amount {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 22px;
+    color: #677082;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .kiosk-pos-custom-amount small { color: #9AA0AA; font-weight: 600; }
+  .kiosk-pos-custom-amount input {
+    width: 100%;
+    height: 58px;
+    padding: 0 16px;
+    border: 1px solid #E1E4EA;
+    border-radius: 10px;
+    outline: none;
+    color: #1B2A5C;
+    font-size: 24px;
+    font-weight: 800;
+  }
+  .kiosk-pos-custom-amount input:focus { border-color: #A00842; box-shadow: 0 0 0 3px rgba(160, 8, 66, 0.1); }
+  .kiosk-pos-touch-keypad {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .kiosk-pos-touch-keypad button {
+    min-height: 48px;
+    border: 1px solid #ECEEF2;
+    border-radius: 8px;
+    background: #F8F9FB;
+    color: #273149;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .kiosk-pos-touch-keypad button:hover { border-color: #F3A17A; background: #FFF4EE; }
+  .kiosk-pos-payment-summary .kiosk-pos-order-total { margin-top: auto; }
+  .kiosk-pos-payment-summary .kiosk-pos-order-total { font-size: 16px; }
+  .kiosk-pos-payment-summary .kiosk-pos-order-total strong { font-size: 25px; }
+  .kiosk-pos-payment-summary > .kiosk-pos-continue { min-height: 66px; margin-top: 18px; font-size: 18px; }
+
+  .kiosk-pos-method {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-method-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 0;
+  }
+  .kiosk-pos-method-panel {
+    width: 100%;
+    min-height: 100%;
+    padding: 20px 24px;
+    border: 0;
+    border-radius: 0;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-stage-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid #ECEEF2;
+  }
+  .kiosk-pos-stage-summary h2 {
+    margin: 0;
+    color: #1B2A5C;
+    font-size: 30px;
+    font-weight: 900;
+  }
+  .kiosk-pos-stage-summary > div:first-child > span {
+    display: block;
+    margin-top: 6px;
+    color: #788195;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .kiosk-pos-stage-total {
+    display: flex;
+    min-width: 220px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: #FFF1E8;
+  }
+  .kiosk-pos-stage-total span { color: #8C6470; font-size: 13px; font-weight: 700; }
+  .kiosk-pos-stage-total strong { color: #A00842; font-size: 27px; font-weight: 900; }
+  .kiosk-pos-stage-summary .kiosk-pos-eyebrow { margin-bottom: 8px; }
+  .kiosk-pos-stage-summary .kiosk-pos-stage-total { flex: 0 0 auto; }
+  .kiosk-pos-stage-actions { display: flex; align-items: center; gap: 12px; }
+  .kiosk-pos-step-back {
+    display: inline-flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 18px;
+    border: 1px solid #DDE1E8;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #34405A;
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .kiosk-pos-step-back:hover { background: #F7F8FA; border-color: #C7CDD8; }
+  .kiosk-pos-method-grid {
+    display: grid;
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .kiosk-pos-method-card {
+    display: flex;
+    min-height: 245px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 28px;
+    border: 1px solid #ECEEF2;
+    border-radius: 16px;
+    background: #FFFFFF;
+    text-align: left;
+    box-shadow: 0 8px 20px -16px rgba(25, 33, 55, 0.4);
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  }
+  .kiosk-pos-method-card:hover {
+    transform: translateY(-2px);
+    border-color: #F3A17A;
+    box-shadow: 0 12px 24px -16px rgba(160, 8, 66, 0.28);
+  }
+  .kiosk-pos-method-card > div:first-child { width: 72px; height: 72px; margin: 0; border-radius: 18px; }
+  .kiosk-pos-method-card > div:first-child svg { width: 34px; height: 34px; }
+  .kiosk-pos-method-card p.text-lg { font-size: 25px; }
+  .kiosk-pos-method-card p.text-xs { color: #9299A7; font-size: 15px; }
+  .kiosk-pos-method-card > svg { display: none; }
+  .kiosk-pos-confirm {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-confirm-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 0;
+  }
+  .kiosk-pos-confirm-card {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 34px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .kiosk-pos-confirm-card > div:first-child { padding: 30px; border-radius: 18px; }
+  .kiosk-pos-confirm-card > div:first-child > p:first-child { font-size: 16px; }
+  .kiosk-pos-confirm-card > div:first-child > p:nth-child(2) { font-size: 56px; }
+  .kiosk-pos-confirm-card .row-label-value { min-height: 60px; padding: 14px 18px; }
+  .kiosk-pos-confirm-card .row-label-value span { font-size: 16px; }
+  .kiosk-pos-confirm-card [data-testid="confirm-submit"] { height: 72px; font-size: 22px; }
+  .kiosk-pos-receipt {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    padding: 0;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-receipt > .w-full { width: 100%; max-width: 760px; }
+  .kiosk-pos-receipt [data-testid="receipt-card"] {
+    max-width: none;
+    border: 1px solid #ECEEF2;
+    border-radius: 16px;
+    box-shadow: 0 10px 24px -20px rgba(25, 33, 55, 0.4);
+  }
+  .kiosk-pos-checkout .kiosk-pos-pay-select {
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .kiosk-pos-checkout .kiosk-pos-payment-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .kiosk-pos-checkout .kiosk-pos-payment-body > div:first-child {
+    flex: 0 0 auto;
+    padding: 6px 0 12px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="payselect-tenant"] { padding-bottom: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="payselect-tenant"] h3 { font-size: 19px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="payselect-tenant"] p { font-size: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select .flex.flex-col.gap-1.sm\\:gap-1\\.5 {
+    flex: 0 0 auto;
+    min-height: 100px;
+    max-height: 190px;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="pay-select-all"] {
+    min-height: 48px;
+    font-size: 14px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-open-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-current-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-future-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-plan-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-type-"] {
+    min-height: 58px;
+    padding: 10px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-payment-summary {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding: 12px 0 0;
+    border-top: 1px solid #ECEEF2;
+    border-left: 0;
+  }
+  .kiosk-pos-checkout .kiosk-pos-payment-summary .kiosk-pos-order-header { display: none; }
+  .kiosk-pos-checkout .kiosk-pos-payment-lines {
+    min-height: 0;
+    max-height: 90px;
+    margin-top: 0;
+  }
+  .kiosk-pos-checkout .kiosk-pos-custom-amount { margin-top: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-custom-amount input { height: 46px; font-size: 19px; }
+  .kiosk-pos-checkout .kiosk-pos-touch-keypad { gap: 5px; margin-top: 8px; }
+  .kiosk-pos-checkout .kiosk-pos-touch-keypad button { min-height: 36px; font-size: 15px; }
+  .kiosk-pos-checkout .kiosk-pos-payment-summary .kiosk-pos-order-total { margin-top: 10px; padding: 10px 0; }
+  .kiosk-pos-checkout .kiosk-pos-payment-summary .kiosk-pos-order-total strong { font-size: 19px; }
+  .kiosk-pos-checkout .kiosk-pos-payment-summary > .kiosk-pos-continue {
+    min-height: 52px;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-method-content {
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+  .kiosk-pos-checkout .kiosk-pos-method-panel { min-height: 0; padding: 4px 0; }
+  .kiosk-pos-checkout .kiosk-pos-stage-summary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-stage-summary h2 { font-size: 21px; overflow-wrap: anywhere; }
+  .kiosk-pos-checkout .kiosk-pos-stage-summary > div:first-child > span { font-size: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-stage-actions { align-items: stretch; flex-direction: column; gap: 8px; }
+  .kiosk-pos-checkout .kiosk-pos-stage-total { min-width: 0; padding: 10px 12px; }
+  .kiosk-pos-checkout .kiosk-pos-stage-total strong { font-size: 20px; }
+  .kiosk-pos-checkout .kiosk-pos-step-back { width: 100%; min-height: 44px; padding: 0 10px; font-size: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-method-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card {
+    min-height: 76px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 10px;
+  }
+  .kiosk-pos-checkout .kiosk-pos-method-card > div:first-child { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card > div:first-child svg { width: 23px; height: 23px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card p.text-lg { font-size: 15px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card p.text-xs { font-size: 11px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-content {
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card { height: auto; overflow: visible; padding: 0; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card > div:first-child { padding: 16px 12px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card > div:first-child > p:first-child { font-size: 11px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card > div:first-child > p:nth-child(2) { font-size: 30px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card .row-label-value { min-height: 44px; padding: 10px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card .row-label-value span { font-size: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card [data-testid="confirm-submit"] { height: 54px; font-size: 16px; }
+  .kiosk-pos-checkout .kiosk-pos-receipt { overflow-y: auto; }
+  .kiosk-pos-apartment-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+  .kiosk-pos-apartment-card {
+    position: relative;
+    min-height: 230px;
+    gap: 0;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 16px;
+    text-align: left;
+  }
+  .kiosk-pos-card-top {
+    position: relative;
+    z-index: 1;
+    align-items: flex-start;
+    margin-bottom: -48px;
+    padding: 12px;
+  }
+  .kiosk-pos-apartment-number {
+    max-width: 45%;
+    padding: 6px 9px;
+    border-radius: 8px;
+    background: rgba(25, 33, 55, 0.75);
+    color: #FFFFFF;
+    font-size: 13px;
+  }
+  .kiosk-pos-card-top [data-testid^="apt-"] { border: 1px solid rgba(255,255,255,.55); box-shadow: 0 3px 8px rgba(20,25,40,.12); }
+  .kiosk-pos-card-person { flex-direction: column; align-items: stretch; gap: 0; }
+  .kiosk-pos-card-avatar {
+    width: 100%;
+    height: 145px;
+    border-radius: 0;
+    background: linear-gradient(135deg, #F7E5D9, #F0F1F4);
+  }
+  .kiosk-pos-card-avatar.vacant { color: #C0A99D; }
+  .kiosk-pos-card-person > .min-w-0 {
+    display: flex;
+    min-height: 70px;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 15px;
+  }
+  .kiosk-pos-card-name { color: #252D3D; font-size: 14px; font-weight: 800; }
+  .kiosk-pos-card-location { margin-top: 5px; font-size: 11px; }
+  .kiosk-pos-card-person > svg { display: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .kiosk-pos-layout { grid-template-columns: 64px minmax(0, 1fr) 300px; }
+  .kiosk-pos-rail { padding-right: 8px; padding-left: 8px; }
+  .kiosk-pos-topbar { gap: 12px; padding-right: 16px; padding-left: 16px; }
+  .kiosk-pos-greeting { min-width: 150px; }
+  .kiosk-pos-greeting h1 { font-size: 19px; }
+  .kiosk-pos-greeting > p:last-child { display: none; }
+  .kiosk-pos-search { width: auto; min-width: 140px; }
+  .kiosk-pos-top-actions { gap: 6px; }
+  .kiosk-pos-switch-layout span { display: none; }
+  .kiosk-pos-catalog { padding-right: 16px; padding-left: 16px; }
+  .kiosk-pos-order { padding-right: 18px; padding-left: 18px; }
+  .kiosk-pos-payment-body { grid-template-columns: minmax(0, 1fr) 330px; }
+  .kiosk-pos-payment-body > div:first-child { padding: 20px; }
+  .kiosk-pos-payment-summary { padding: 20px; }
+  .kiosk-pos-method-panel { padding: 22px; }
+  .kiosk-pos-method-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .kiosk-pos-method-card { min-height: 205px; padding: 22px; }
+  .kiosk-pos-stage-summary h2 { font-size: 24px; }
+  .kiosk-pos-stage-total { min-width: 190px; }
+  .kiosk-pos-stage-total strong { font-size: 23px; }
+  .kiosk-pos-confirm-card { padding: 24px; }
+  .kiosk-pos-confirm-card > div:first-child > p:nth-child(2) { font-size: 44px; }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .kiosk-pos-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 14px;
+  }
+  .kiosk-pos-greeting { grid-row: 1; grid-column: 1; }
+  .kiosk-pos-top-actions { grid-row: 1; grid-column: 2; }
+  .kiosk-pos-search {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+  .kiosk-pos-back-to-catalog { grid-row: 2; grid-column: 1 / -1; justify-self: start; margin-left: 0; }
+}
+
+@media (min-width: 768px) {
+  .kiosk-pos-layout {
+    grid-template-columns: 72px minmax(0, 1fr) clamp(340px, 30vw, 420px);
+    background: #F5F6F8;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  .kiosk-pos-rail {
+    padding-right: 10px;
+    padding-left: 10px;
+    border-right: 1px solid #E5E7EB;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-brand {
+    background: linear-gradient(145deg, #F97316, #FB923C);
+    color: #FFFFFF;
+    box-shadow: 0 8px 18px -10px rgba(249, 115, 22, 0.8);
+  }
+  .kiosk-pos-rail-button {
+    border-radius: 14px;
+    color: #8A909C;
+  }
+  .kiosk-pos-rail-button.active {
+    background: #FFF1E8;
+    color: #FF5C00;
+    box-shadow: inset 3px 0 #FF5C00;
+  }
+  .kiosk-pos-rail-button:hover { background: #FFF7F2; color: #E65300; }
+  .kiosk-pos-topbar {
+    min-height: 96px;
+    border-bottom-color: #E8ECF2;
+    box-shadow: 0 6px 20px -20px rgba(24, 35, 62, 0.45);
+  }
+  .kiosk-pos-greeting h1 { color: #121A2B; font-size: 25px; }
+  .kiosk-pos-greeting .kiosk-pos-eyebrow { color: #F26A12; }
+  .kiosk-pos-search,
+  .kiosk-pos-switch-layout,
+  .kiosk-pos-location-button {
+    border-color: #E2E7EF;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px -10px rgba(24, 35, 62, 0.4);
+    transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  }
+  .kiosk-pos-search:focus-within {
+    border-color: #FF5C00;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(255, 92, 0, 0.12);
+  }
+  .kiosk-pos-switch-layout:hover,
+  .kiosk-pos-location-button:hover {
+    border-color: #FDBA74;
+    background: #FFF7ED;
+  }
+  .kiosk-pos-location-button svg:first-child { color: #FF5C00; }
+  .kiosk-pos-catalog { background: #F5F6F8; }
+  .kiosk-pos-catalog-heading h2 { font-size: 22px; }
+  .kiosk-pos-catalog-heading p { color: #7A8495; }
+  .kiosk-pos-category {
+    min-height: 40px;
+    border-color: #E2E7EF;
+    border-radius: 12px;
+    box-shadow: 0 3px 10px -9px rgba(24, 35, 62, 0.5);
+  }
+  .kiosk-pos-category.active {
+    border-color: #FF5C00;
+    background: #FF5C00;
+    box-shadow: 0 7px 16px -10px rgba(255, 92, 0, 0.7);
+  }
+  .kiosk-pos-apartment-grid { gap: 16px; }
+  .kiosk-pos-apartment-card {
+    position: relative;
+    min-height: 142px;
+    gap: 15px;
+    overflow: hidden;
+    padding: 16px;
+    border-color: #E2E7EF;
+    border-radius: 17px;
+    background: #FFFFFF;
+    box-shadow: 0 8px 22px -18px rgba(24, 35, 62, 0.55);
+  }
+  .kiosk-pos-apartment-card::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: #FF5C00;
+    content: "";
+    transform: scaleY(0);
+    transition: transform 140ms ease;
+  }
+  .kiosk-pos-apartment-card:hover {
+    transform: translateY(-2px);
+    border-color: #FDBA74;
+    box-shadow: 0 14px 28px -20px rgba(24, 35, 62, 0.6);
+  }
+  .kiosk-pos-apartment-card.selected {
+    border-color: #FDBA74;
+    background: #FFFBF7;
+    box-shadow: 0 0 0 2px rgba(255, 92, 0, 0.1), 0 14px 28px -20px rgba(255, 92, 0, 0.5);
+  }
+  .kiosk-pos-apartment-card.selected::before { transform: scaleY(1); }
+  .kiosk-pos-card-top {
+    position: static;
+    z-index: auto;
+    align-items: center;
+    margin-bottom: 0;
+    padding: 0;
+  }
+  .kiosk-pos-apartment-number {
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #121A2B;
+    font-size: 17px;
+  }
+  .kiosk-pos-card-top [data-testid^="apt-"] {
+    border: 0;
+    box-shadow: none;
+  }
+  .kiosk-pos-card-person {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .kiosk-pos-card-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    background: #F3F5F8;
+    color: #F26A12;
+  }
+  .kiosk-pos-card-person > .min-w-0 {
+    min-height: 0;
+    padding: 0;
+  }
+  .kiosk-pos-card-name { color: #263145; font-size: 13px; font-weight: 750; }
+  .kiosk-pos-card-location { margin-top: 4px; color: #8791A1; font-size: 11px; }
+  .kiosk-pos-card-person > svg { display: block; color: #9AA4B2; }
+  .kiosk-pos-order {
+    margin: 14px 14px 14px 0;
+    padding: 22px 18px 18px;
+    border: 1px solid #E7EAF1;
+    border-radius: 21px;
+    box-shadow: 0 18px 42px -30px rgba(27, 42, 92, 0.48);
+    background: #FFFFFF;
+  }
+  .kiosk-pos-order-header {
+    padding-bottom: 15px;
+    border-bottom: 1px solid #F0F2F6;
+  }
+  .kiosk-pos-order-header h2 { font-size: 22px; }
+  .kiosk-pos-order .kiosk-pos-eyebrow { color: #F26A12; }
+  .kiosk-pos-order-meta {
+    gap: 5px;
+    margin: 16px 0;
+    color: #7A8495;
+    font-size: 12px;
+  }
+  .kiosk-pos-order-card {
+    padding: 12px;
+    border-color: #E9ECF2;
+    border-radius: 16px;
+    background: #FAFBFD;
+    box-shadow: 0 8px 20px -18px rgba(27, 42, 92, 0.5);
+  }
+  .kiosk-pos-order-photo { border-radius: 13px; }
+  .kiosk-pos-order-status { margin-top: 18px; }
+  .kiosk-pos-order-total {
+    margin-top: 16px;
+    padding: 15px 13px;
+    border: 1px solid #FED7AA;
+    border-radius: 15px;
+    background: #FFF7ED;
+  }
+  .kiosk-pos-order-total strong { font-size: 17px; }
+  .kiosk-pos-order-footer {
+    margin-top: auto;
+    padding-top: 15px;
+    border-top: 1px solid #F0F2F6;
+  }
+  .kiosk-pos-continue {
+    min-height: 54px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #F97316, #EA580C);
+    box-shadow: 0 9px 18px -12px rgba(234, 88, 12, 0.75);
+    transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  }
+  .kiosk-pos-continue:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #EA580C, #C2410C);
+    box-shadow: 0 12px 22px -12px rgba(234, 88, 12, 0.8);
+  }
+  .kiosk-pos-order-back {
+    border-color: #FED7AA;
+    background: #FFF7ED;
+    color: #FF5C00;
+  }
+  .kiosk-pos-order-back:hover { background: #FFEDD5; }
+}
+
+@media (min-width: 768px) {
+  .kiosk-pos-layout {
+    grid-template-columns: 84px minmax(0, 1fr) clamp(360px, 30vw, 460px);
+  }
+  .kiosk-pos-rail { gap: 24px; padding: 24px 14px; }
+  .kiosk-pos-brand { width: 56px; height: 56px; border-radius: 18px; }
+  .kiosk-pos-rail-group,
+  .kiosk-pos-rail-bottom { gap: 14px; }
+  .kiosk-pos-rail-button { width: 56px; height: 56px; border-radius: 17px; }
+  .kiosk-pos-topbar { min-height: 112px; gap: 24px; padding: 24px 30px; }
+  .kiosk-pos-greeting { min-width: 220px; }
+  .kiosk-pos-eyebrow { font-size: 12px; }
+  .kiosk-pos-greeting h1 { font-size: 30px; }
+  .kiosk-pos-greeting > p:last-child { font-size: 14px; }
+  .kiosk-pos-search { height: 56px; min-width: 220px; padding: 0 18px; font-size: 15px; }
+  .kiosk-pos-search input { font-size: 15px; }
+  .kiosk-pos-switch-layout { height: 50px; padding: 0 15px; font-size: 14px; }
+  .kiosk-pos-top-actions { gap: 12px; }
+  .kiosk-pos-catalog { padding: 30px 32px 38px; }
+  .kiosk-pos-catalog-heading h2 { font-size: 28px; }
+  .kiosk-pos-catalog-heading p { margin-top: 6px; font-size: 14px; }
+  .kiosk-pos-location-button { height: 50px; padding: 0 16px; font-size: 14px; }
+  .kiosk-pos-categories { gap: 12px; margin: 24px 0 28px; }
+  .kiosk-pos-category { min-height: 50px; gap: 10px; padding: 0 16px; font-size: 14px; }
+  .kiosk-pos-category strong { min-width: 24px; height: 24px; font-size: 12px; }
+  .kiosk-pos-apartment-grid { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 20px; }
+  .kiosk-pos-apartment-card { min-height: 184px; gap: 20px; padding: 20px; border-radius: 20px; }
+  .kiosk-pos-apartment-number { font-size: 22px; }
+  .kiosk-pos-card-top [data-testid^="apt-"] { padding: 9px 12px; font-size: 11px; }
+  .kiosk-pos-card-top [data-testid^="apt-"] svg { width: 14px; height: 14px; }
+  .kiosk-pos-card-person { gap: 14px; }
+  .kiosk-pos-card-avatar { width: 60px; height: 60px; border-radius: 16px; }
+  .kiosk-pos-card-name { font-size: 16px; }
+  .kiosk-pos-card-location { margin-top: 5px; font-size: 13px; }
+  .kiosk-pos-card-person > svg { width: 22px; height: 22px; }
+  .kiosk-pos-order {
+    margin: 16px 16px 16px 0;
+    padding: 26px 22px 22px;
+    border-radius: 24px;
+  }
+  .kiosk-pos-order-header { padding-bottom: 18px; }
+  .kiosk-pos-order-header h2 { font-size: 28px; }
+  .kiosk-pos-order .kiosk-pos-eyebrow { font-size: 12px; }
+  .kiosk-pos-order-meta { gap: 7px; margin: 20px 0; font-size: 14px; }
+  .kiosk-pos-order-card { gap: 14px; padding: 14px; border-radius: 18px; }
+  .kiosk-pos-order-photo { width: 76px; height: 76px; border-radius: 16px; }
+  .kiosk-pos-order-card > .min-w-0 > p:first-child { font-size: 18px; }
+  .kiosk-pos-order-card > .min-w-0 > p:nth-child(2) { font-size: 16px; }
+  .kiosk-pos-order-card > .min-w-0 > p:nth-child(3) { font-size: 14px; }
+  .kiosk-pos-order-status { gap: 12px; margin-top: 22px; font-size: 14px; }
+  .kiosk-pos-order-status [data-testid^="apt-"] { padding: 9px 12px; font-size: 12px; }
+  .kiosk-pos-order-total { gap: 14px; margin-top: 20px; padding: 20px 16px; border-radius: 18px; }
+  .kiosk-pos-order-total span { font-size: 13px; }
+  .kiosk-pos-order-total strong { color: #EA580C; font-size: 22px; }
+  .kiosk-pos-order-footer { padding-top: 20px; }
+  .kiosk-pos-order-hint { gap: 7px; margin-bottom: 18px; font-size: 13px; }
+  .kiosk-pos-order-hint strong { font-size: 15px; }
+  .kiosk-pos-continue { min-height: 68px; gap: 14px; padding: 0 20px; border-radius: 17px; font-size: 17px; }
+  .kiosk-pos-continue svg { width: 24px; height: 24px; }
+  .kiosk-pos-checkout { padding: 24px 20px 20px; }
+  .kiosk-pos-checkout .kiosk-pos-order-header { margin-bottom: 18px; }
+  .kiosk-pos-checkout .kiosk-pos-order-header h2 { font-size: 26px; }
+  .kiosk-pos-order-back { width: 46px; height: 46px; border-radius: 13px; }
+  .kiosk-pos-order-back svg { width: 20px; height: 20px; }
+  .kiosk-pos-checkout-content { font-size: 15px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="payselect-tenant"] h3 { font-size: 24px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="payselect-tenant"] p { font-size: 15px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid="pay-select-all"] { min-height: 60px; font-size: 16px; }
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-open-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-current-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-future-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-plan-"],
+  .kiosk-pos-checkout .kiosk-pos-pay-select [data-testid^="pay-type-"] { min-height: 68px; padding: 12px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card { min-height: 88px; padding: 14px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card > div:first-child { width: 52px; height: 52px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card p.text-lg { font-size: 18px; }
+  .kiosk-pos-checkout .kiosk-pos-method-card p.text-xs { font-size: 13px; }
+  .kiosk-pos-checkout .kiosk-pos-stage-total { padding: 14px; }
+  .kiosk-pos-checkout .kiosk-pos-stage-total strong { font-size: 24px; }
+  .kiosk-pos-checkout .kiosk-pos-step-back { min-height: 52px; font-size: 14px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card > div:first-child > p:nth-child(2) { font-size: 36px; }
+  .kiosk-pos-checkout .kiosk-pos-confirm-card [data-testid="confirm-submit"] { height: 62px; font-size: 18px; }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .kiosk-pos-layout { grid-template-columns: 76px minmax(0, 1fr) 360px; }
+  .kiosk-pos-rail { padding-right: 10px; padding-left: 10px; }
+  .kiosk-pos-topbar { min-height: 100px; gap: 12px; padding: 18px; }
+  .kiosk-pos-greeting { min-width: 150px; }
+  .kiosk-pos-greeting h1 { font-size: 24px; }
+  .kiosk-pos-greeting > p:last-child { display: none; }
+  .kiosk-pos-search { min-width: 150px; }
+  .kiosk-pos-catalog { padding: 22px 20px 28px; }
+  .kiosk-pos-order { margin: 10px 10px 10px 0; padding: 22px 18px; }
+  .kiosk-pos-checkout { padding: 20px 16px; }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .kiosk-pos-layout { grid-template-columns: 64px minmax(0, 1fr) 320px; }
+  .kiosk-pos-topbar { gap: 8px; padding: 14px; }
+  .kiosk-pos-greeting { min-width: 0; }
+  .kiosk-pos-greeting h1 { font-size: 22px; }
+  .kiosk-pos-top-actions { gap: 5px; }
+  .kiosk-pos-order { margin: 8px 8px 8px 0; padding: 20px 16px; }
+  .kiosk-pos-checkout { padding: 18px 14px; }
+}
+
+@media (min-width: 768px) {
+  .kiosk-pos-layout > .kiosk-pos-order {
+    align-self: stretch;
+    margin: 0;
+    padding: 28px 24px;
+    border: 0;
+    border-left: 1px solid #E2E7EF;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .kiosk-pos-layout > .kiosk-pos-order.kiosk-pos-checkout { padding: 24px; }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .kiosk-pos-layout > .kiosk-pos-order { padding: 22px 18px; }
+  .kiosk-pos-layout > .kiosk-pos-order.kiosk-pos-checkout { padding: 20px 16px; }
+}
+
+@media (max-width: 767px) {
+  .kiosk-fullscreen.kiosk-alternate-layout .kiosk-content-scroll.kiosk-no-bar {
+    padding-bottom: 0 !important;
+  }
+  .kiosk-pos-layout.kiosk-pos-mobile-layout {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: #F5F6F8;
+    color: #17213C;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-rail { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-main {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-topbar {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #E8ECF2;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-greeting {
+    min-width: 0;
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-greeting .kiosk-pos-eyebrow {
+    margin-bottom: 2px;
+    color: #F26A12;
+    font-size: 9px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-greeting h1 {
+    color: #121A2B;
+    font-size: 20px;
+    line-height: 1.2;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-greeting > p:last-child { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-switch-layout {
+    height: 40px;
+    gap: 6px;
+    padding: 0 10px;
+    border-color: #FED7AA;
+    border-radius: 12px;
+    background: #FFF7ED;
+    color: #E65300;
+    font-size: 12px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-search,
+  .kiosk-pos-mobile-layout .kiosk-pos-back-to-catalog {
+    display: flex;
+    align-items: center;
+    grid-row: 2;
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 44px;
+    min-width: 0;
+    margin: 0;
+    border-color: #E2E7EF;
+    border-radius: 13px;
+    background: #F8F9FB;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-search {
+    display: none;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #17213C;
+    font-size: 14px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-search input::placeholder { color: #A3A8B1; }
+  .kiosk-pos-mobile-layout .kiosk-pos-back-to-catalog {
+    gap: 8px;
+    padding: 0 12px;
+    color: #E65300;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-catalog {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px calc(248px + env(safe-area-inset-bottom, 0px));
+    background: #F5F6F8;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-catalog-heading h2 {
+    color: #121A2B;
+    font-size: 19px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-catalog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-catalog-heading p {
+    margin-top: 3px;
+    color: #7A8495;
+    font-size: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-location-button {
+    display: flex;
+    align-items: center;
+    max-width: 52vw;
+    min-width: 0;
+    height: 38px;
+    padding: 0 9px;
+    border-color: #E2E7EF;
+    border-radius: 11px;
+    background: #FFFFFF;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-categories {
+    display: flex;
+    gap: 8px;
+    margin: 14px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-categories::-webkit-scrollbar { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-category {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    white-space: nowrap;
+    min-height: 38px;
+    gap: 6px;
+    padding: 0 11px;
+    border-color: #E2E7EF;
+    border-radius: 11px;
+    background: #FFFFFF;
+    color: #697283;
+    font-size: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-category.active {
+    border-color: #FF5C00;
+    background: #FF5C00;
+    color: #FFFFFF;
+    box-shadow: 0 6px 14px -9px rgba(255, 92, 0, 0.75);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-category strong {
+    display: inline-flex;
+    min-width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: 7px;
+    background: #F1F2F5;
+    color: #626B7B;
+    font-size: 10px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-category.active strong {
+    background: rgba(255, 255, 255, 0.18);
+    color: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-apartment-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 10px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-apartment-card {
+    display: flex;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 164px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    overflow: hidden;
+    padding: 0;
+    border-color: #E5E8EE;
+    border-radius: 15px;
+    background: #FFFFFF;
+    color: #17213C;
+    text-align: left;
+    box-shadow: 0 7px 18px -15px rgba(24, 35, 62, 0.55);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-apartment-card.selected {
+    border-color: #FF5C00;
+    box-shadow: 0 0 0 2px rgba(255, 92, 0, 0.13), 0 9px 20px -15px rgba(255, 92, 0, 0.7);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-top {
+    display: flex;
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 auto;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 4px;
+    margin: 0;
+    padding: 8px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-apartment-number {
+    max-width: 45%;
+    padding: 5px 7px;
+    border-radius: 7px;
+    background: rgba(18, 26, 43, 0.78);
+    color: #FFFFFF;
+    font-size: 12px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-top [data-testid^="apt-"] {
+    max-width: 65%;
+    padding: 5px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    font-size: 8px;
+    box-shadow: 0 3px 8px rgba(20, 25, 40, 0.12);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-top [data-testid^="apt-"] svg {
+    width: 11px;
+    height: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-person {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-avatar {
+    display: flex;
+    width: 100%;
+    height: 92px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 0;
+    background: linear-gradient(135deg, #F7E5D9, #F0F1F4);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-avatar > div,
+  .kiosk-pos-mobile-layout .kiosk-pos-card-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-avatar.vacant { color: #C0A99D; }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-person > .min-w-0 {
+    display: flex;
+    min-height: 68px;
+    flex-direction: column;
+    justify-content: center;
+    padding: 9px 10px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-name {
+    color: #252D3D;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-location {
+    margin-top: 4px;
+    color: #8791A1;
+    font-size: 10px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-person > svg { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order {
+    position: absolute;
+    z-index: 20;
+    inset: auto 0 0;
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    max-height: 220px;
+    grid-template-columns: minmax(0, 1fr) minmax(110px, 40%);
+    grid-template-rows: auto auto auto;
+    gap: 8px 10px;
+    overflow: hidden;
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid #E9ECF2;
+    border-bottom: 0;
+    border-radius: 21px 21px 0 0;
+    background: #FFFFFF;
+    box-shadow: 0 -12px 30px -22px rgba(27, 42, 92, 0.48);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    grid-column: 1 / -1;
+    padding: 0 0 7px;
+    border-bottom: 1px solid #F0F2F6;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-header h2 {
+    margin: 0;
+    color: #171923;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog .kiosk-pos-order-header > svg { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order .kiosk-pos-eyebrow {
+    margin-bottom: 2px;
+    color: #F26A12;
+    font-size: 8px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-meta,
+  .kiosk-pos-mobile-layout .kiosk-pos-order-status { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-card {
+    display: flex;
+    grid-column: 1;
+    gap: 9px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-photo {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    border-radius: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-card > .min-w-0 > p:first-child { font-size: 14px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-card > .min-w-0 > p:nth-child(2) { font-size: 11px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-card > .min-w-0 > p:nth-child(3) { display: none; }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog > .kiosk-pos-order > .kiosk-pos-order-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    grid-column: 2;
+    align-self: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid #FED7AA;
+    border-radius: 12px;
+    background: #FFF7ED;
+  }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog > .kiosk-pos-order > .kiosk-pos-order-total > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog > .kiosk-pos-order > .kiosk-pos-order-total span { font-size: 9px; }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog > .kiosk-pos-order > .kiosk-pos-order-total strong {
+    color: #EA580C;
+    font-size: 12px;
+  }
+  .kiosk-pos-mobile-layout.kiosk-pos-phase-catalog > .kiosk-pos-order > .kiosk-pos-order-total > svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-footer {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-hint { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-continue {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 46px;
+    gap: 8px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #F97316, #EA580C);
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: left;
+    box-shadow: 0 7px 16px -11px rgba(234, 88, 12, 0.8);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-empty {
+    display: flex;
+    align-items: center;
+    grid-column: 1 / -1;
+    flex-direction: row;
+    gap: 10px;
+    padding: 0;
+    text-align: left;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-empty > span,
+  .kiosk-pos-mobile-layout .kiosk-pos-order-empty p { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-empty strong {
+    color: #4E5665;
+    font-size: 12px;
+  }
+  .kiosk-pos-mobile-layout:not(.kiosk-pos-phase-catalog) > .kiosk-pos-main { display: none; }
+  .kiosk-pos-mobile-layout:not(.kiosk-pos-phase-catalog) > .kiosk-pos-order {
+    inset: 0;
+    display: flex;
+    max-height: none;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-checkout .kiosk-pos-order-header {
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-checkout .kiosk-pos-order-header h2 { font-size: 20px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-order-back {
+    width: 40px;
+    height: 40px;
+    border-color: #FED7AA;
+    background: #FFF7ED;
+    color: #FF5C00;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-checkout-content {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-body {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-body > div:first-child {
+    min-width: 0;
+    min-height: 0;
+    flex: 0 0 auto;
+    padding: 0;
+    border-radius: 0;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid="pay-select-all"] {
+    min-height: 48px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select .flex.flex-col.gap-1.sm\\:gap-1\\.5 {
+    min-height: 90px;
+    max-height: 190px;
+    flex: 0 0 auto;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid #ECEEF2;
+    border-radius: 13px;
+    background: #F8F9FB;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-open-"],
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-current-"],
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-future-"],
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-plan-"],
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-type-"] {
+    min-height: 58px;
+    gap: 8px;
+    padding: 9px;
+    border-radius: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-open-"] span.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-current-"] span.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-future-"] span.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-plan-"] p.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-type-"] span.text-sm { font-size: 13px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-open-"] p.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-current-"] p.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-future-"] p.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-plan-"] p.text-sm,
+  .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid^="pay-type-"] p.text-sm { font-size: 12px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-body > div:first-child > div[class*="md:hidden"] { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: visible;
+    margin-top: auto;
+    padding: 12px;
+    border: 1px solid #E8ECF2;
+    border-radius: 15px;
+    background: #FAFBFD;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-header { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-lines {
+    display: flex;
+    min-height: 0;
+    max-height: 72px;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    overflow-y: auto;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-line {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    color: #667085;
+    font-size: 12px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-line strong {
+    color: #273149;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-empty {
+    margin: 0;
+    color: #9299A7;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-custom-amount {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 10px;
+    color: #677082;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-custom-amount small {
+    color: #9AA0AA;
+    font-size: 10px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-custom-amount input {
+    width: 100%;
+    height: 42px;
+    padding: 0 10px;
+    border: 1px solid #E1E4EA;
+    border-radius: 10px;
+    outline: none;
+    color: #17213C;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-custom-amount input:focus {
+    border-color: #FF5C00;
+    box-shadow: 0 0 0 3px rgba(255, 92, 0, 0.1);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-touch-keypad {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 7px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-touch-keypad button {
+    min-height: 34px;
+    border: 1px solid #E8ECF2;
+    border-radius: 8px;
+    background: #F8F9FB;
+    color: #273149;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-total {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 9px 0 0;
+    padding: 8px 0 0;
+    border-top: 1px solid #E8ECF2;
+    border-bottom: 0;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-total > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-total span { font-size: 11px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-total strong {
+    color: #EA580C;
+    font-size: 19px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary .kiosk-pos-order-total > svg {
+    flex: 0 0 auto;
+    color: #FF5C00;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-summary > .kiosk-pos-continue {
+    min-height: 48px;
+    margin-top: 9px;
+    font-size: 14px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-content {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-panel {
+    width: 100%;
+    min-height: 0;
+    padding: 4px 0 12px;
+    border: 0;
+    border-radius: 0;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-summary {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #ECEEF2;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-summary h2 {
+    margin: 0;
+    color: #121A2B;
+    font-size: 19px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-summary > div:first-child > span {
+    display: block;
+    margin-top: 3px;
+    color: #788195;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-summary .kiosk-pos-eyebrow { margin-bottom: 4px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-actions {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-actions > .kiosk-pos-step-back { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-total {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #FFF7ED;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-total span { color: #8C6470; font-size: 11px; font-weight: 700; }
+  .kiosk-pos-mobile-layout .kiosk-pos-stage-total strong { color: #EA580C; font-size: 18px; font-weight: 900; }
+  .kiosk-pos-mobile-layout .kiosk-pos-step-back {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid #FED7AA;
+    border-radius: 11px;
+    background: #FFF7ED;
+    color: #E65300;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-grid {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-card {
+    display: flex;
+    width: 100%;
+    min-height: 72px;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 11px;
+    padding: 10px 12px;
+    border: 1px solid #E8ECF2;
+    border-radius: 13px;
+    background: #FFFFFF;
+    color: #17213C;
+    text-align: left;
+    box-shadow: 0 6px 16px -14px rgba(24, 35, 62, 0.55);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-card > div:first-child {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    border-radius: 12px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-card > div:first-child svg { width: 22px; height: 22px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-card p.text-lg {
+    margin: 0;
+    color: #17213C;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-method-card p.text-xs {
+    margin: 2px 0 0;
+    color: #788195;
+    font-size: 11px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    background: #FFFFFF;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-content {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    background: transparent;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card > div:first-child {
+    margin-bottom: 12px;
+    padding: 16px 12px;
+    border-radius: 15px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card > div:first-child > p:nth-child(2) { font-size: 30px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card .row-label-value {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    background: #F8F9FB;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card .row-label-value span { font-size: 12px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm-card [data-testid="confirm-submit"] {
+    height: 52px;
+    background: #F97316;
+    font-size: 15px;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-confirm .kiosk-pos-step-back { display: none; }
+  .kiosk-pos-mobile-layout .kiosk-pos-receipt {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    padding: 0;
+    background: #FFFFFF;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-receipt > .w-full { width: 100%; max-width: none; }
+}
