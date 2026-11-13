@@ -1035,13 +1035,20 @@ function ApartmentSelect({
     selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
-  const shown = !isUi ? visible : visible.filter((a) => {
+  const filtered = !isUi ? visible : visible.filter((a) => {
     const term = uiQ.trim().toLowerCase();
     if (uiFilter !== 'all' && uiAptStatus(a) !== uiFilter) return false;
     const location = locationsById.get(a.location_id);
     const searchText = `${a.number} ${a.tenant_name || ''} ${location?.name || ''} ${location?.address || ''}`;
     return !term || searchText.toLowerCase().includes(term);
   });
+  const shown = kioskCardMode
+    ? [
+      ...filtered.filter((a) => ['unpaid', 'partial', 'deposit'].includes(uiAptStatus(a))),
+      ...filtered.filter((a) => uiAptStatus(a) === 'vacant'),
+      ...filtered.filter((a) => uiAptStatus(a) === 'paid'),
+    ]
+    : filtered;
 
   // ----- Location picker view -----
   if (showLocationPicker) {
