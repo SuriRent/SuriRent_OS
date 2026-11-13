@@ -483,17 +483,17 @@ function uiAptStatus(a) {
 function UiStatusPill({ a, className = '' }) {
   const s = uiAptStatus(a);
   const styles = {
-    vacant: { label: 'Beschikbaar', icon: ArrowRight, tone: 'bg-slate-100 text-slate-600', testid: `apt-${a.number}-link` },
-    deposit: { label: 'Wacht op borg', icon: ClockIcon, tone: 'bg-sky-50 text-sky-700', testid: `apt-${a.number}-deposit-pending` },
-    paid: { label: 'Betaald', icon: Check, tone: 'bg-emerald-50 text-emerald-700', testid: `apt-${a.number}-paid` },
-    partial: { label: 'Gedeeltelijk', icon: ClockIcon, tone: 'bg-amber-50 text-amber-700', testid: `apt-${a.number}-partial` },
-    unpaid: { label: 'Niet betaald', icon: X, tone: 'bg-rose-50 text-rose-700', testid: `apt-${a.number}-unpaid` },
+    vacant: { label: 'Beschikbaar', icon: ArrowRight, tone: 'bg-slate-100 text-slate-700', testid: `apt-${a.number}-link` },
+    deposit: { label: 'Wacht op borg', icon: ClockIcon, tone: 'bg-sky-100 text-sky-800', testid: `apt-${a.number}-deposit-pending` },
+    paid: { label: 'Betaald', icon: Check, tone: 'bg-emerald-100 text-emerald-800', testid: `apt-${a.number}-paid` },
+    partial: { label: 'Gedeeltelijk', icon: ClockIcon, tone: 'bg-amber-100 text-amber-800', testid: `apt-${a.number}-partial` },
+    unpaid: { label: 'Niet betaald', icon: X, tone: 'bg-rose-100 text-rose-800', testid: `apt-${a.number}-unpaid` },
   }[s];
   const Icon = styles.icon;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold leading-none whitespace-nowrap ${styles.tone} ${className}`}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-extrabold leading-none whitespace-nowrap ${styles.tone} ${className}`}
       data-testid={styles.testid}>
-      <Icon className="h-3.5 w-3.5" strokeWidth={2.8} />
+      <Icon className="h-4 w-4" strokeWidth={2.8} />
       {styles.label}
     </span>
   );
@@ -525,8 +525,8 @@ function UiAptCard({ a, onOpen }) {
   }, [a, status]);
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      style={{ background: '#FFFFFF' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-[#E5EAF2] p-3 text-left shadow-[0_12px_28px_-16px_rgba(27,42,92,0.32)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
       <div className="flex min-w-0 items-center gap-2.5">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
@@ -557,18 +557,23 @@ function UiAptCard({ a, onOpen }) {
           <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
-        <span className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-[#E6EAF1] bg-[#F8FAFD] px-2.5 py-2">
+        <span className="flex min-w-0 flex-col gap-0.5">
           {vacant && <span className="text-xs font-semibold text-slate-400">Selecteer om huurder te koppelen</span>}
           {!vacant && (
-            <span className="flex min-w-0 items-center gap-2" data-testid={`apt-${a.number}-list-due`}>
-              <Wallet className={`h-3.5 w-3.5 shrink-0 ${status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-slate-400'}`} />
-              <span className={`truncate text-xs font-extrabold ${
-                status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-[#1B2A5C]'
+            <span className="flex min-w-0 flex-col" data-testid={`apt-${a.number}-list-due`}>
+              <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                {status === 'deposit' ? 'Borg' : 'Openstaand saldo'}
+              </span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Wallet className={`h-4 w-4 shrink-0 ${status === 'unpaid' || status === 'partial' ? 'text-[#C2410C]' : 'text-slate-500'}`} />
+                <span className={`truncate text-sm font-black ${
+                status === 'unpaid' || status === 'partial' ? 'text-[#C2410C]' : 'text-[#1B2A5C]'
               }`}>
                 {status === 'deposit' ? 'Borg nog niet betaald'
                   : dueError ? 'Bedrag niet beschikbaar'
                     : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+                </span>
               </span>
             </span>
           )}
@@ -606,8 +611,8 @@ function UiAptHeroCard({ a, onOpen }) {
         : 'Afrekenen';
   const isPaymentAction = status === 'unpaid' || status === 'partial';
   return (
-    <article style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
+    <article style={{ background: '#FFFFFF' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-[#E5EAF2] p-3 text-left shadow-[0_12px_28px_-16px_rgba(27,42,92,0.32)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
       data-testid={`apt-${a.number}-hero-card`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
@@ -637,7 +642,7 @@ function UiAptHeroCard({ a, onOpen }) {
           <UiStatusPill a={a} className="shrink-0" />
         </div>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-[#E6EAF1] bg-[#F8FAFD] px-2.5 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className={`-translate-x-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             isPaymentAction ? 'bg-orange-100 text-[#E65300]'
@@ -651,7 +656,7 @@ function UiAptHeroCard({ a, onOpen }) {
             <span className="block text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
               {vacant ? 'Status' : 'Totaal openstaand'}
             </span>
-            <span className={`block truncate text-[15px] font-black leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
+            <span className={`block truncate text-base font-black leading-tight ${isPaymentAction ? 'text-[#C2410C]' : 'text-[#1B2A5C]'}`}
               data-testid={`apt-${a.number}-hero-due`}>
               {vacant ? 'Beschikbaar'
                 : status === 'deposit' ? 'Borg nog niet betaald'
@@ -896,13 +901,94 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   );
 }
 
+function UiLocationPicker({ locationName, locOpts }) {
+  if (!locationName) return null;
+  const pill = (onClick) => (
+    <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
+      className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#1B2A5C] shadow-sm">
+      <MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" />
+      <span className="truncate">{locationName}</span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+    </button>
+  );
+  return (
+    <div className="relative z-10 flex justify-center px-1 py-1 sm:px-2 md:hidden">
+      {locOpts
+        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+        : pill(undefined)}
+    </div>
+  );
+}
+
+function UiStats({ apartments }) {
+  const tenantIds = useMemo(
+    () => [...new Set(apartments.filter((apartment) => apartment.tenant_id).map((apartment) => apartment.tenant_id))],
+    [apartments]
+  );
+  const [dueSummary, setDueSummary] = useState({ amount: null, error: false });
+  useEffect(() => {
+    let active = true;
+    if (!tenantIds.length) {
+      setDueSummary({ amount: 0, error: false });
+      return () => { active = false; };
+    }
+    setDueSummary({ amount: null, error: false });
+    Promise.all(tenantIds.map(async (tenantId) => {
+      const { data } = await loadCachedOverview(tenantId);
+      return buildPaymentOverview(data).total_due;
+    }))
+      .then((amounts) => {
+        if (active) setDueSummary({ amount: amounts.reduce((total, amount) => total + amount, 0), error: false });
+      })
+      .catch(() => {
+        if (active) setDueSummary({ amount: null, error: true });
+      });
+    return () => { active = false; };
+  }, [tenantIds]);
+
+  const occupied = apartments.filter((apartment) => apartment.tenant_id);
+  const paid = occupied.filter((apartment) => apartment.pay_status === 'paid').length;
+  const unpaid = occupied.length - paid;
+  const currency = occupied.find((apartment) => apartment.currency)?.currency || 'SRD';
+  const dueLabel = dueSummary.error
+    ? 'Niet beschikbaar'
+    : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, currency);
+  const percentage = (amount) => `${occupied.length ? Math.round((amount / occupied.length) * 100) : 0}%`;
+  const stat = (key, Icon, tone, label, value, bar, barTone) => (
+    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-2" data-testid={`kiosk-ui-stat-${key}`}>
+      <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${key === 'paid' ? 'bg-emerald-400/10' : key === 'late' ? 'bg-rose-400/10' : 'bg-orange-400/10'}`} />
+      <div className="relative flex min-w-0 flex-col items-start gap-0 sm:flex-row sm:items-center sm:gap-2">
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
+          <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
+        </span>
+        <div className="w-full min-w-0 sm:flex-1">
+          <p className="whitespace-normal break-words text-[9px] font-semibold leading-tight text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p>
+          <p title={String(value)} className="whitespace-normal break-words text-[11px] font-extrabold leading-tight tracking-tight text-[#1B2A5C] sm:text-[13px] md:text-[16px] xl:text-[20px]">{value}</p>
+        </div>
+      </div>
+      {bar !== undefined && (
+        <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} />
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-3 gap-1.5 px-1 pb-3 sm:gap-2 sm:px-2 md:gap-3 md:px-5" data-testid="kiosk-ui-stats">
+      {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occupied.length}`, percentage(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
+      {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occupied.length}`, percentage(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
+      {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueLabel)}
+    </div>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
-  hasAdminAccess = false,
+  hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
-  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1108,13 +1194,14 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
+      {isUi && !kioskCardMode && <UiLocationPicker locOpts={totalGroups > 1 ? locOpts : null} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && !kioskCardMode && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
             <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
-            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder, appartement of locatie..." data-testid="kiosk-ui-search"
-              className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
+              className="w-full min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400" />
           </label>
           <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
@@ -1131,6 +1218,36 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
+          {onEnableNfc && (
+            <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
+              title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
+              data-testid="kiosk-web-nfc-enable"
+              disabled={webNfcStatus === 'starting'}
+              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+                webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
+                  : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
+                    : 'bg-white text-[#1B2A5C]'
+              }`}>
+              {webNfcStatus === 'starting' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Nfc className="w-5 h-5" />}
+            </button>
+          )}
+        </div>
+      )}
+      {isUi && onEnableNfc && isDesk && (
+        <div className="hidden md:flex justify-end px-2 pb-2">
+          <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
+            title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
+            data-testid="kiosk-web-nfc-enable-desktop" disabled={webNfcStatus === 'starting'}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm transition ${
+              webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
+                : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
+                  : 'bg-white text-[#1B2A5C]'
+            }`}>
+            {webNfcStatus === 'starting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Nfc className="h-4 w-4" />}
+            {webNfcStatus === 'ready' ? 'NFC actief'
+              : webNfcStatus === 'unsupported' ? 'NFC niet ondersteund'
+                : 'NFC activeren'}
+          </button>
         </div>
       )}
 
@@ -6465,6 +6582,52 @@ export default function KioskLayout() {
   const [company, setCompany] = useState(getKioskCompany());
   const [nfcToast, setNfcToast] = useState(null); // {kind:'ok'|'err', msg}
   const [nfcLink, setNfcLink] = useState(null); // {uid} → koppelscherm open
+  const [webNfcStatus, setWebNfcStatus] = useState('idle');
+  const webNfcAbort = useRef(null);
+  const enableWebNfc = useCallback(async () => {
+    setNfcToast(null);
+    if (typeof window === 'undefined' || !('NDEFReader' in window)) {
+      setWebNfcStatus('unsupported');
+      setNfcToast({
+        kind: 'err',
+        msg: 'Deze browser ondersteunt NFC niet. Gebruik Android Chrome of de Kiosk-app; op iPhone werken NFC-tags met een URL.',
+      });
+      setTimeout(() => setNfcToast(null), 6000);
+      return;
+    }
+    if (!window.isSecureContext) {
+      setWebNfcStatus('error');
+      setNfcToast({ kind: 'err', msg: 'NFC vereist een beveiligde HTTPS-verbinding.' });
+      setTimeout(() => setNfcToast(null), 5000);
+      return;
+    }
+    webNfcAbort.current?.abort();
+    const abort = new AbortController();
+    webNfcAbort.current = abort;
+    setWebNfcStatus('starting');
+    try {
+      const reader = new window.NDEFReader();
+      reader.addEventListener('reading', (event) => {
+        const raw = event?.serialNumber || '';
+        const uid = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (uid.length >= 4) emitNfc(uid);
+        else {
+          setNfcToast({ kind: 'err', msg: 'Deze tag geeft geen kaart-ID door. Gebruik een geschikte NFC-tag of de Kiosk-app.' });
+          setTimeout(() => setNfcToast(null), 5000);
+        }
+      });
+      await reader.scan({ signal: abort.signal });
+      if (!abort.signal.aborted) setWebNfcStatus('ready');
+    } catch (error) {
+      abort.abort();
+      if (webNfcAbort.current === abort) webNfcAbort.current = null;
+      if (error?.name === 'AbortError') return;
+      setWebNfcStatus('error');
+      console.warn('Web NFC activeren mislukt:', error?.message || error);
+      setNfcToast({ kind: 'err', msg: 'NFC niet beschikbaar. Controleer of NFC aanstaat en probeer opnieuw.' });
+      setTimeout(() => setNfcToast(null), 4000);
+    }
+  }, []);
   // Modals voor snel aanmaken vanuit de Kiosk (alle beheerder-shortcuts)
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -6706,35 +6869,6 @@ export default function KioskLayout() {
     // Tag-ID's uit de Android-app (bestaand NFC-systeem van de APK)
     const unsubNfc = subscribeNfc(handleScan);
 
-    // === Web NFC API (Android Chrome) ===
-    // Wanneer de Kiosk draait op een Android-tablet/telefoon, kan de
-    // BUILT-IN NFC chip kaarten uitlezen via de Web NFC API. Vereist HTTPS
-    // en user-gesture om de scan te starten. iOS Safari ondersteunt dit
-    // NIET (Apple heeft Web NFC geblokkeerd). Voor iOS gebruik je in plaats
-    // daarvan NFC URL-tags die `https://<domain>/kiosk/nfc?c=<UID>` open.
-    let ndefReader = null;
-    let ndefAbort = null;
-    const startWebNfc = async () => {
-      if (typeof window === 'undefined' || !('NDEFReader' in window)) return;
-      try {
-        ndefReader = new window.NDEFReader();
-        ndefAbort = new AbortController();
-        await ndefReader.scan({ signal: ndefAbort.signal });
-        ndefReader.addEventListener('reading', (ev) => {
-          // serialNumber kan formaten als "04:a1:b2:c3:d4" hebben
-          const raw = ev?.serialNumber || '';
-          const uid = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (uid.length >= 6) emitNfc(uid);
-        });
-      } catch (err) {
-        // Permission denied of niet ondersteund — stille fallback (HID/URL werkt nog steeds)
-        if (err?.name !== 'AbortError') {
-          console.warn('Web NFC niet beschikbaar:', err?.message || err);
-        }
-      }
-    };
-    startWebNfc();
-
     const onKey = (e) => {
       // Skip als gebruiker actief in een invoerveld typt
       const tag = (e.target?.tagName || '').toLowerCase();
@@ -6768,7 +6902,9 @@ export default function KioskLayout() {
       window.removeEventListener('keydown', onKey);
       if (timer) clearTimeout(timer);
       // Stop de Web NFC scan op unmount / step-change
-      try { ndefAbort?.abort(); } catch (err) { /* noop */ }
+      webNfcAbort.current?.abort();
+      webNfcAbort.current = null;
+      setWebNfcStatus('idle');
     };
   }, [step]);
 
@@ -7257,6 +7393,8 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
+              onEnableNfc={enableWebNfc}
+              webNfcStatus={webNfcStatus}
               hasAdminAccess={hasAdminAccess}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
@@ -7488,19 +7626,31 @@ export default function KioskLayout() {
       {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-          <div className="grid grid-cols-6 items-stretch">
+          <div className="grid grid-cols-5 items-stretch">
             {[
-              { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
-              { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
-              { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
-              { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'loc', label: 'Locatie', Icon: MapPin, fn: () => setShowAddLocation(true) },
+              { id: 'apt', label: 'Appartement', Icon: Building2, fn: () => setShowAddApartment(true) },
+              { id: 'more', action: true },
+              { id: 'ten', label: 'Huurder', Icon: UserPlus, fn: () => setShowAddTenant(true) },
               { id: 'kasgeld', label: 'Kasgeld', Icon: Database, on: step === 'kasgeld', fn: () => setStep('kasgeld') },
-              { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
-            ].map(({ id, label, Icon, on, fn }) => (
+            ].map(({ id, label, Icon, on, fn, action }) => action ? (
+              <button key={id} type="button" onClick={() => setShowAddSheet(true)}
+                data-testid="kiosk-ui-bar-more" aria-label="Meer pagina's en acties"
+                aria-expanded={showAddSheet}
+                className="relative -mt-5 w-12 h-12 justify-self-center rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]">
+                <Plus className="w-6 h-6" strokeWidth={2.8} />
+              </button>
+            ) : (
               <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
-                <Icon className="w-5 h-5" strokeWidth={2} />
-                <span className={`${id === 'apt' ? 'text-[8px] tracking-tighter' : 'text-[9px]'} font-semibold leading-tight whitespace-nowrap`}>{label}</span>
+                aria-current={on ? 'page' : undefined}
+                className={`kiosk-ui-bottom-dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'kiosk-ui-bottom-dock-active bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
+                <span className="relative inline-flex">
+                  <Icon className="w-5 h-5" strokeWidth={2} />
+                  {(id === 'loc' || id === 'apt') && (
+                    <Plus className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-white text-[#FF5C00]" strokeWidth={3} />
+                  )}
+                </span>
+                <span className="text-[9px] font-semibold leading-tight text-center">{label}</span>
               </button>
             ))}
           </div>

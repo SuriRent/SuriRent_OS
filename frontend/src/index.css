@@ -1646,3 +1646,35 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-100"], body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-200"], body.kiosk-popup-active .ui-modal-root button[class*="border-slate"] { background: #FFFFFF !important; border-radius: 1rem !important; border-color: transparent !important; color: #1B2A5C; font-weight: 900; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
   body.kiosk-popup-active .ui-modal-root .bg-slate-50, body.kiosk-popup-active .ui-modal-root .bg-slate-100:not(button), body.kiosk-popup-active .ui-modal-root .bg-white:is(.rounded-xl, .rounded-2xl) { background: #FFFFFF !important; border-radius: 1.25rem !important; border-color: transparent !important; }
 }
+
+/* UI-thema mobiel: vaste onderbalk in de merk-kleuren */
+@media (max-width: 767px) {
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    padding: 8px 8px max(env(safe-area-inset-bottom, 0px), 8px) !important;
+    background: #FFFFFF !important;
+    border: 0;
+    border-top: 1px solid #E2E8F2;
+    border-radius: 20px 20px 0 0 !important;
+    box-shadow: 0 -8px 24px -14px rgba(27, 42, 92, 0.28) !important;
+    backdrop-filter: none;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-item {
+    min-height: 48px;
+    border-radius: 16px;
+    color: #1B2A5C !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-item:not(.kiosk-ui-bottom-dock-active) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-active {
+    background: #FFF1E8 !important;
+    color: #FF5C00 !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 92, 0, 0.08) !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-item svg { color: currentColor !important; }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-active * { color: #FF5C00 !important; }
+}
