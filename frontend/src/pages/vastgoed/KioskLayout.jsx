@@ -661,7 +661,6 @@ function UiAptHeroCard({ a, onOpen }) {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {isPaymentAction && <FinancialPrintButton tenantId={a.tenant_id} showLabel />}
           <button type="button" onClick={onOpen}
             aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
             data-testid={`apt-${a.number}-hero-action`}
@@ -906,7 +905,6 @@ function ApartmentSelect({
   const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const [mobileKioskMode, setMobileKioskMode] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const on = () => setIsDesk(mq.matches);
@@ -974,7 +972,7 @@ function ApartmentSelect({
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const modernMobileView = isUi && !isDesk && !mobileKioskMode;
+  const modernMobileView = isUi && !isDesk;
   const kioskCardMode = modernMobileView && uiCardView;
   const showLocationPicker = !kioskCardMode && totalGroups > 1 && selectedLocationId === null;
   const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
@@ -1110,7 +1108,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && !(mobileKioskMode && !isDesk) && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
+      {isUi && !kioskCardMode && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1118,14 +1116,14 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder, appartement of locatie..." data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
           </label>
-          {!mobileKioskMode && <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
+          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
             title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
             className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
               uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
             }`}>
             {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
-            </button>}
+          </button>
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
             <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
@@ -1133,14 +1131,6 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
-          <button type="button" onClick={() => setMobileKioskMode((current) => !current)}
-            aria-pressed={mobileKioskMode} aria-label={mobileKioskMode ? 'Mobiele weergave tonen' : 'Kioskweergave tonen'}
-            data-testid="kiosk-ui-desktop-mode-toggle"
-            className={`h-12 shrink-0 rounded-2xl px-3 text-xs font-extrabold shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] transition ${
-              mobileKioskMode ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
-            }`}>
-            Kiosk
-          </button>
         </div>
       )}
 
@@ -1365,13 +1355,13 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
 }
 
 // FinancialPrintButton — printer-icoon voor de financiële bon van de huurder.
-function FinancialPrintButton({ tenantId, showLabel = false }) {
+function FinancialPrintButton({ tenantId }) {
   const [printState, setPrintState] = useState(null);
+  const printOpts = usePrintOptions();
+  if (!printOpts.any) return null;
   return (
-    <span title={printState?.msg || 'Financiële bon printen'}
-      data-testid={showLabel ? `apt-${tenantId}-financial-print` : 'overview-fin-print'}>
-      <PrintChoiceMenu paymentId={showLabel ? `financial-${tenantId}` : 'fin'}
-        iconOnly={!showLabel} showLabel={showLabel} label="Print" includeBrowser
+    <span title={printState?.msg || 'Financiële bon printen'} data-testid="overview-fin-print">
+      <PrintChoiceMenu paymentId="fin" iconOnly
         remoteUrl={`/kiosk/tenants/${tenantId}/financial-remote-print`}
         printDataUrl={`/kiosk/tenants/${tenantId}/financial-print-data`}
         onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
