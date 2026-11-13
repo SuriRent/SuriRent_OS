@@ -7467,7 +7467,7 @@ export default function KioskLayout() {
             isMobileViewport && isUi ? (
               <KioskUiPageShell testId="kiosk-popup-kasgeld">
                 <KioskUiAdminPage title="Kasgeld" label="Kasgeld" subtitle="Kasoverzicht en mutaties"
-                  Icon={Wallet} newItem={UI_NEW.kasgeld} onClose={goBack} testId="kiosk-ui-kasgeld">
+                  Icon={Wallet} newItem={UI_NEW.kasgeld} newItemFixed onClose={goBack} testId="kiosk-ui-kasgeld">
                   <div className="kiosk-ui w-full overflow-x-hidden"><KasgeldPanel embedded ui /></div>
                 </KioskUiAdminPage>
               </KioskUiPageShell>
