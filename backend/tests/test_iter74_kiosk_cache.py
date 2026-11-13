@@ -14,7 +14,7 @@ KIOSK_PIN = "4321"
 
 APT_KEYS = {
     "id", "number", "address", "description", "photo_url", "rent_amount", "currency", "status",
-    "tenant_id", "tenant_name", "tenant_avatar_url", "tenant_id_photo_url",
+    "tenant_id", "tenant_name", "tenant_phone", "tenant_avatar_url", "tenant_id_photo_url",
     "show_tenant_photo", "location_id", "pay_status",
 }
 

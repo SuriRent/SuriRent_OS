@@ -11291,7 +11291,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
     docs = await db.apartments.find(q, proj).sort("number", 1).to_list(1000)
     tids = list({a["tenant_id"] for a in docs if a.get("tenant_id")})
     tenants, invoices = await asyncio.gather(
-        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "id_photo_url": 1, "deposit_required": 1, "deposit_status": 1}).to_list(len(tids) or 1),
+        db.tenants.find({"id": {"$in": tids}}, {"_id": 0, "id": 1, "name": 1, "phone": 1, "avatar_url": 1, "id_photo_url": 1, "deposit_required": 1, "deposit_status": 1}).to_list(len(tids) or 1),
         db.invoices.find(
             {"tenant_id": {"$in": tids}, "status": {"$nin": ["paid", "cancelled", "archived"]}, "kind": {"$in": [None, "huur"]}},
             {"_id": 0, "tenant_id": 1, "amount": 1, "paid_amount": 1, "period_month": 1, "period_year": 1},
@@ -11329,6 +11329,7 @@ async def _kiosk_apartments_compute(q: dict) -> list:
             "status": a["status"],
             "tenant_id": a.get("tenant_id"),
             "tenant_name": t.get("name"),
+            "tenant_phone": t.get("phone") or None,
             "tenant_avatar_url": t.get("avatar_url") or None,
             "tenant_deposit_pending": bool(t.get("deposit_required") and t.get("deposit_status") != "paid"),
             "tenant_id_photo_url": t.get("id_photo_url") or None,
