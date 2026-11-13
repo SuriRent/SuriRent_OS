@@ -992,6 +992,7 @@ function ApartmentSelect({
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
+  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1197,11 +1198,18 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && (!kioskCardMode || totalGroups > 0) && <UiLocationPicker
+      {isUi && !kioskCardMode && isDesk && <UiHero
+        locOpts={totalGroups > 1 ? locOpts : null}
+        apartments={visible}
+        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
+        companySlug={companySlug}
+        isAdmin={isAdmin}
+      />}
+      {isUi && !kioskCardMode && !isDesk && <UiLocationPicker
         locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
         locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
       />}
-      {isUi && !kioskCardMode && <UiStats apartments={visible} />}
+      {isUi && !kioskCardMode && !isDesk && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1226,24 +1234,6 @@ function ApartmentSelect({
           </label>
         </div>
       )}
-      {isUi && onEnableNfc && isDesk && (
-        <div className="hidden md:flex justify-end px-2 pb-2">
-          <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
-            title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
-            data-testid="kiosk-web-nfc-enable-desktop" disabled={webNfcStatus === 'starting'}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm transition ${
-              webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
-                : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
-                  : 'bg-white text-[#1B2A5C]'
-            }`}>
-            {webNfcStatus === 'starting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Nfc className="h-4 w-4" />}
-            {webNfcStatus === 'ready' ? 'NFC actief'
-              : webNfcStatus === 'unsupported' ? 'NFC niet ondersteund'
-                : 'NFC activeren'}
-          </button>
-        </div>
-      )}
-
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
