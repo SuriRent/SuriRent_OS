@@ -35,13 +35,13 @@ const CashArt = () => (
 );
 
 // Volledige-pagina in UI-Thema: balk met terug-knop, oranje hero, "Nieuw"-knop en de bestaande inhoud.
-export default function KioskUiAdminPage({ title, label, subtitle = 'Beheer deze gegevens', Icon, newItem, onBack, onClose, testId, children, art, bare }) {
+export default function KioskUiAdminPage({ title, label, subtitle = 'Beheer deze gegevens', Icon, newItem, newItemFixed = false, onBack, onClose, testId, children, art, bare }) {
   useEffect(() => {
     document.body.classList.add('kiosk-popup-active');
     return () => document.body.classList.remove('kiosk-popup-active');
   }, []);
   return (
-    <div className="pb-8 overflow-x-hidden" data-testid={testId}>
+    <div className={`${newItemFixed ? 'pb-28' : 'pb-8'} overflow-x-hidden`} data-testid={testId}>
       {!bare && (onClose ? (
         <div className="flex items-center justify-between gap-3 px-5 pb-4 bg-white border-b border-slate-100"
           style={{ paddingTop: 'max(var(--kiosk-sat), 16px)' }}>
@@ -62,9 +62,12 @@ export default function KioskUiAdminPage({ title, label, subtitle = 'Beheer deze
       ) : <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />)}
       {!bare && !onClose && <UiHero art={art === 'cash' ? <CashArt /> : undefined} icon={Icon ? <Icon className="w-7 h-7" strokeWidth={2} /> : null} title={`${label || title} Overzicht`} />}
       {newItem && !bare && (
-        <div className="mt-3 px-2">
+        <div className={newItemFixed
+          ? 'fixed inset-x-0 bottom-0 z-[130] border-t border-slate-100 bg-white px-4 pt-3 shadow-[0_-8px_24px_-16px_rgba(15,23,42,0.22)]'
+          : 'mt-3 px-2'}
+          style={newItemFixed ? { paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' } : undefined}>
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(newItem.event))} data-testid={`${testId}-new`}
-            className="w-full inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]">
+            className={`w-full inline-flex ${newItemFixed ? 'h-12' : 'h-11'} items-center justify-center gap-1.5 rounded-2xl bg-[#FF5C00] text-xs font-black text-white shadow-[0_10px_22px_-10px_rgba(255,92,0,0.8)]`}>
             <Plus className="h-4 w-4" /> {newItem.label}
           </button>
         </div>
