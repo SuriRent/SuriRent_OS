@@ -482,41 +482,65 @@ function uiAptStatus(a) {
 
 function UiStatusPill({ a, className = '' }) {
   const s = uiAptStatus(a);
-  const base = `inline-flex items-center justify-center gap-1.5 rounded-full px-3 md:px-4 py-1 md:py-1.5 text-[13px] md:text-[15px] font-bold text-white whitespace-nowrap ${className}`;
-  if (s === 'vacant') return <span className={`${base} bg-slate-700`} data-testid={`apt-${a.number}-link`}><ArrowRight className="w-4 h-4" strokeWidth={3} /> Beschikbaar</span>;
-  if (s === 'deposit') return <span className={`${base} bg-sky-600`} data-testid={`apt-${a.number}-deposit-pending`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Wacht op borg</span>;
-  if (s === 'paid') return <span className={`${base} bg-emerald-600`} data-testid={`apt-${a.number}-paid`}><Check className="w-4 h-4" strokeWidth={3} /> Betaald</span>;
-  if (s === 'partial') return <span className={`${base} bg-amber-500`} data-testid={`apt-${a.number}-partial`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Gedeeltelijk</span>;
-  return <span className={`${base} bg-red-500`} data-testid={`apt-${a.number}-unpaid`}><X className="w-4 h-4" strokeWidth={3} /> Niet betaald</span>;
+  const styles = {
+    vacant: { label: 'Beschikbaar', icon: ArrowRight, tone: 'bg-slate-100 text-slate-600', testid: `apt-${a.number}-link` },
+    deposit: { label: 'Wacht op borg', icon: ClockIcon, tone: 'bg-sky-50 text-sky-700', testid: `apt-${a.number}-deposit-pending` },
+    paid: { label: 'Betaald', icon: Check, tone: 'bg-emerald-50 text-emerald-700', testid: `apt-${a.number}-paid` },
+    partial: { label: 'Gedeeltelijk', icon: ClockIcon, tone: 'bg-amber-50 text-amber-700', testid: `apt-${a.number}-partial` },
+    unpaid: { label: 'Niet betaald', icon: X, tone: 'bg-rose-50 text-rose-700', testid: `apt-${a.number}-unpaid` },
+  }[s];
+  const Icon = styles.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold leading-none whitespace-nowrap ${styles.tone} ${className}`}
+      data-testid={styles.testid}>
+      <Icon className="h-3.5 w-3.5" strokeWidth={2.8} />
+      {styles.label}
+    </span>
+  );
 }
 
-// UI-thema: lijst-rij op telefoon, kaart op desktop/tablet.
+// UI-thema: compacte appartementkaart voor de mobiele overzichtslijst.
 function UiAptCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const initials = (a.tenant_name || '?').split(' ').filter(Boolean).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      className="kiosk-ui-card group w-full text-left flex flex-col relative rounded-[16px] bg-white px-3 py-2 transition active:scale-[0.99] md:hover:-translate-y-0.5">
-      <div className={`flex items-center gap-3 w-full min-w-0`}>
-        <div className={`shrink-0 rounded-full overflow-hidden w-[48px] h-[48px] flex items-center justify-center ring-2 ring-white shadow ${vacant ? 'bg-slate-100' : 'bg-orange-50'}`}>
-          {src && !vacant
-            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            : <Home className={`w-7 h-7 ${vacant ? 'text-slate-400' : 'text-orange-500'}`} />}
+      className="kiosk-ui-card group flex w-full flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
+          vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
+        }`}>
+          {src && !vacant && !photoFailed
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`}
+              className="h-full w-full object-cover" onError={() => setPhotoFailed(true)} />
+            : vacant
+              ? <Building2 className="h-5 w-5" />
+              : <span className="text-sm font-black">{initials}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[18px] font-extrabold text-[#1B2A5C] uppercase tracking-tight truncate leading-tight">{a.number}</p>
-          <p className={`flex items-center gap-1.5 text-[15px] text-slate-700 font-medium truncate`}>
-            {!vacant && <User className="w-4 h-4 shrink-0 text-[#1B2A5C]" />}
-            <span className="truncate">{vacant ? 'Vrij' : a.tenant_name}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[16px] font-extrabold uppercase leading-tight tracking-tight text-[#1B2A5C]">{a.number}</p>
+            <span className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
+          </div>
+          <p className="mt-1 truncate text-sm font-bold leading-tight text-slate-700">
+            {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
           </p>
         </div>
-        <UiStatusPill a={a} className="w-[118px] shrink-0" />
-        <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-[#1B2A5C] flex items-center justify-center">
-          <ChevronRight className="w-4 h-4" strokeWidth={2.6} />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[#1B2A5C] transition group-hover:bg-orange-50 group-hover:text-[#FF5C00]">
+          <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-
+      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+        <span className="flex min-w-0 items-center gap-2">
+          {!vacant && a.tenant_phone
+            ? <><Smartphone className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate text-xs font-semibold text-slate-500">{a.tenant_phone}</span></>
+            : <span className="text-xs font-semibold text-slate-400">{vacant ? 'Selecteer om huurder te koppelen' : 'Geen telefoonnummer'}</span>}
+        </span>
+        <UiStatusPill a={a} className="shrink-0" />
+      </div>
     </button>
   );
 }
