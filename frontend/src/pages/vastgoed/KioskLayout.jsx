@@ -523,17 +523,10 @@ function UiAptCard({ a, onOpen }) {
       .catch(() => { if (active) setDueError(true); });
     return () => { active = false; };
   }, [a, status]);
-  const cardStyle = {
-    vacant: { accent: '#CBD5E1', background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)' },
-    deposit: { accent: '#38BDF8', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%)' },
-    paid: { accent: '#34D399', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%)' },
-    partial: { accent: '#FBBF24', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFFBEB 100%)' },
-    unpaid: { accent: '#FB7185', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF1F2 100%)' },
-  }[status];
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      style={{ background: cardStyle.background, borderLeft: `4px solid ${cardStyle.accent}` }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-100 p-3 text-left shadow-[0_4px_14px_-10px_rgba(27,42,92,0.25)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
       <div className="flex min-w-0 items-center gap-2.5">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
@@ -564,7 +557,7 @@ function UiAptCard({ a, onOpen }) {
           <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-white/80 bg-[#FFF8F1]/90 px-2.5 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
         <span className="flex min-w-0 flex-col gap-1">
           {vacant && <span className="text-xs font-semibold text-slate-400">Selecteer om huurder te koppelen</span>}
           {!vacant && (
@@ -777,6 +770,11 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   const [heroUploading, setHeroUploading] = useState(false);
   const [heroError, setHeroError] = useState('');
   const heroInputRef = useRef(null);
+  const tenantIds = useMemo(
+    () => [...new Set(apartments.filter((a) => a.tenant_id).map((a) => a.tenant_id))],
+    [apartments]
+  );
+  const [dueSummary, setDueSummary] = useState({ amount: null, error: false });
   useEffect(() => {
     let active = true;
     if (!companySlug) {
@@ -805,6 +803,26 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
       });
     return () => { active = false; };
   }, [companySlug]);
+  useEffect(() => {
+    let active = true;
+    if (compact) return () => { active = false; };
+    if (!tenantIds.length) {
+      setDueSummary({ amount: 0, error: false });
+      return () => { active = false; };
+    }
+    setDueSummary({ amount: null, error: false });
+    Promise.all(tenantIds.map(async (tenantId) => {
+      const { data } = await loadCachedOverview(tenantId);
+      return buildPaymentOverview(data).total_due;
+    }))
+      .then((amounts) => {
+        if (active) setDueSummary({ amount: amounts.reduce((total, amount) => total + amount, 0), error: false });
+      })
+      .catch(() => {
+        if (active) setDueSummary({ amount: null, error: true });
+      });
+    return () => { active = false; };
+  }, [compact, tenantIds]);
 
   const uploadHeroImage = async (event) => {
     const input = event.currentTarget;
@@ -836,8 +854,10 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
-  const rent = occ.reduce((s, a) => s + (Number(a.rent_amount) || 0), 0);
   const cur = occ.find((a) => a.currency)?.currency || 'SRD';
+  const dueSummaryLabel = dueSummary.error
+    ? 'Niet beschikbaar'
+    : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, cur);
   const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
   const stat = (key, Icon, tone, label, value, bar, barTone) => {
     const glowTone = key === 'paid' ? 'bg-emerald-400/15' : key === 'late' ? 'bg-rose-400/15' : 'bg-orange-400/15';
@@ -920,13 +940,13 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
         <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
           {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
           {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
-          {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
+          {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
         </div>
       </div>}
       {!compact && <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
         {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
         {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
-        {stat('rent', Calendar, 'bg-orange-100 text-[#FF5C00]', 'Totaal huur', `${cur} ${Math.round(rent).toLocaleString('nl-NL')}`)}
+        {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
       </div>}
     </div>
   );
