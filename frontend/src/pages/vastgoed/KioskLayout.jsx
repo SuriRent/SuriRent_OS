@@ -363,7 +363,7 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
-function UiLocMenu({ opts, wrapClass, children }) {
+function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -378,11 +378,12 @@ function UiLocMenu({ opts, wrapClass, children }) {
     ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
     ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
   ];
+  const menuPosition = menuAlign === 'start' ? 'left-0' : 'left-1/2 -translate-x-1/2';
   return (
     <div ref={ref} className={wrapClass}>
       {children(() => setOpen((o) => !o))}
       {open && (
-        <div data-testid="kiosk-ui-location-menu" className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left">
+        <div data-testid="kiosk-ui-location-menu" className={`absolute z-50 top-full ${menuPosition} mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left`}>
           {items.map((it) => (
             <button key={it.id} type="button" onClick={() => { setOpen(false); opts.onPick(it.id); }}
               data-testid={`kiosk-ui-location-${it.id}`}
@@ -908,16 +909,16 @@ function UiLocationPicker({ locationName, locOpts }) {
   if (!locationName) return null;
   const pill = (onClick) => (
     <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
-      className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#1B2A5C] shadow-sm">
-      <MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" />
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#1B2A5C] shadow-sm">
+      <MapPin className="h-3.5 w-3.5 shrink-0 text-[#FF5C00]" />
       <span className="truncate">{locationName}</span>
-      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
     </button>
   );
   return (
-    <div className="relative z-10 flex justify-center px-1 py-1 sm:px-2 md:hidden">
+    <div className="relative z-10 flex justify-start px-1 pb-2 sm:px-2 md:hidden">
       {locOpts
-        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full" menuAlign="start">{(toggle) => pill(toggle)}</UiLocMenu>
         : pill(undefined)}
     </div>
   );
@@ -1205,10 +1206,6 @@ function ApartmentSelect({
         companySlug={companySlug}
         isAdmin={isAdmin}
       />}
-      {isUi && !kioskCardMode && !isDesk && <UiLocationPicker
-        locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
-        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
-      />}
       {isUi && !kioskCardMode && !isDesk && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
@@ -1234,6 +1231,10 @@ function ApartmentSelect({
           </label>
         </div>
       )}
+      {isUi && !isDesk && <UiLocationPicker
+        locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
+        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+      />}
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
