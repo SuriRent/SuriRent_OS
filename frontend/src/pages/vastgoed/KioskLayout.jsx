@@ -955,10 +955,10 @@ function UiStats({ apartments }) {
     : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, currency);
   const percentage = (amount) => `${occupied.length ? Math.round((amount / occupied.length) * 100) : 0}%`;
   const stat = (key, Icon, tone, label, value, bar, barTone) => (
-    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-2 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-2.5" data-testid={`kiosk-ui-stat-${key}`}>
+    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-2" data-testid={`kiosk-ui-stat-${key}`}>
       <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${key === 'paid' ? 'bg-emerald-400/10' : key === 'late' ? 'bg-rose-400/10' : 'bg-orange-400/10'}`} />
-      <div className="relative flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
-        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
+      <div className="relative flex min-w-0 flex-col items-start gap-0 sm:flex-row sm:items-center sm:gap-2">
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
           <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
         </span>
         <div className="w-full min-w-0 sm:flex-1">
@@ -967,7 +967,7 @@ function UiStats({ apartments }) {
         </div>
       </div>
       {bar !== undefined && (
-        <div className="relative mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} />
         </div>
       )}
