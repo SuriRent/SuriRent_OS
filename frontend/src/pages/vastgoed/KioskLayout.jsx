@@ -1173,7 +1173,7 @@ function ApartmentSelect({
 
   // ----- Apartment grid view -----
   return (
-    <div className={`h-full bg-orange-500 flex flex-col${isUi ? ' kiosk-ui-apartment-overview' : ''}`} style={{ padding: '0 1.5vw 0' }}>
+    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
       {/* Mobile: knoppen bovenaan in 1 rij */}
       {!kioskCardMode && <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />}
       {/* Mobile: kleine titel links, onder de knoppen */}
@@ -1200,8 +1200,8 @@ function ApartmentSelect({
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
             <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
-            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder, appartement of locatie..." data-testid="kiosk-ui-search"
-              className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
+              className="w-full min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400" />
           </label>
           <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
@@ -7626,19 +7626,31 @@ export default function KioskLayout() {
       {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-          <div className="grid grid-cols-6 items-stretch">
+          <div className="grid grid-cols-5 items-stretch">
             {[
-              { id: 'back', label: 'Terug', Icon: Home, on: step === 'select', fn: () => { if (canBack) goBack(); } },
-              { id: 'apt', label: 'Appartementen', Icon: Building2, fn: () => (hasAdminAccess ? setStep('admin:appartementen') : setShowAddApartment(true)) },
-              { id: 'ten', label: 'Huurders', Icon: Users, fn: () => (hasAdminAccess ? setStep('admin:huurders') : setShowAddTenant(true)) },
-              { id: 'inv', label: 'Facturen', Icon: FileSignature, fn: () => (hasAdminAccess ? setStep('admin:facturen') : setShowAddInvoice(true)) },
+              { id: 'loc', label: 'Locatie', Icon: MapPin, fn: () => setShowAddLocation(true) },
+              { id: 'apt', label: 'Appartement', Icon: Building2, fn: () => setShowAddApartment(true) },
+              { id: 'more', action: true },
+              { id: 'ten', label: 'Huurder', Icon: UserPlus, fn: () => setShowAddTenant(true) },
               { id: 'kasgeld', label: 'Kasgeld', Icon: Database, on: step === 'kasgeld', fn: () => setStep('kasgeld') },
-              { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
-            ].map(({ id, label, Icon, on, fn }) => (
+            ].map(({ id, label, Icon, on, fn, action }) => action ? (
+              <button key={id} type="button" onClick={() => setShowAddSheet(true)}
+                data-testid="kiosk-ui-bar-more" aria-label="Meer pagina's en acties"
+                aria-expanded={showAddSheet}
+                className="relative -mt-5 w-12 h-12 justify-self-center rounded-full flex items-center justify-center active:scale-95 transition-transform ring-4 ring-white bg-[#FF5C00] hover:bg-[#E05200] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)]">
+                <Plus className="w-6 h-6" strokeWidth={2.8} />
+              </button>
+            ) : (
               <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
-                <Icon className="w-5 h-5" strokeWidth={2} />
-                <span className={`${id === 'apt' ? 'text-[8px] tracking-tighter' : 'text-[9px]'} font-semibold leading-tight whitespace-nowrap`}>{label}</span>
+                aria-current={on ? 'page' : undefined}
+                className={`kiosk-ui-bottom-dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'kiosk-ui-bottom-dock-active bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
+                <span className="relative inline-flex">
+                  <Icon className="w-5 h-5" strokeWidth={2} />
+                  {(id === 'loc' || id === 'apt') && (
+                    <Plus className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-white text-[#FF5C00]" strokeWidth={3} />
+                  )}
+                </span>
+                <span className="text-[9px] font-semibold leading-tight text-center">{label}</span>
               </button>
             ))}
           </div>
