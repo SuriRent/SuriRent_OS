@@ -502,14 +502,23 @@ function UiStatusPill({ a, className = '' }) {
 // UI-thema: compacte appartementkaart voor de mobiele overzichtslijst.
 function UiAptCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
+  const status = uiAptStatus(a);
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const src = photo && !/^https?:/.test(photo) ? `${process.env.REACT_APP_BACKEND_URL}${photo}` : photo;
   const [photoFailed, setPhotoFailed] = useState(false);
   const initials = (a.tenant_name || '?').split(' ').filter(Boolean).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
+  const cardStyle = {
+    vacant: { accent: '#CBD5E1', background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)' },
+    deposit: { accent: '#38BDF8', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%)' },
+    paid: { accent: '#34D399', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%)' },
+    partial: { accent: '#FBBF24', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFFBEB 100%)' },
+    unpaid: { accent: '#FB7185', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF1F2 100%)' },
+  }[status];
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      className="kiosk-ui-card group flex w-full flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
-      <div className="flex min-w-0 items-center gap-3">
+      style={{ background: cardStyle.background, borderLeft: `4px solid ${cardStyle.accent}` }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-100 p-3 text-left shadow-[0_4px_14px_-10px_rgba(27,42,92,0.25)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className="flex min-w-0 items-center gap-2.5">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
         }`}>
@@ -533,7 +542,7 @@ function UiAptCard({ a, onOpen }) {
           <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-white/80 bg-[#FFF8F1]/90 px-2.5 py-2">
         <span className="flex min-w-0 items-center gap-2">
           {!vacant && a.tenant_phone
             ? <><Smartphone className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate text-xs font-semibold text-slate-500">{a.tenant_phone}</span></>
@@ -1054,7 +1063,7 @@ function ApartmentSelect({
     return 'unknown';
   };
 
-  const visible = (kioskCardMode ? apartments : showLocationPicker ? [] :
+  const visible = (kioskCardMode ? [...apartments] : showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
     selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
@@ -1066,9 +1075,11 @@ function ApartmentSelect({
     const searchText = `${a.number} ${a.tenant_name || ''} ${location?.name || ''} ${location?.address || ''}`;
     return !term || searchText.toLowerCase().includes(term);
   });
-  const shown = kioskCardMode
+  const shown = isUi && !isDesk
     ? [
-      ...filtered.filter((a) => ['unpaid', 'partial', 'deposit'].includes(uiAptStatus(a))),
+      ...filtered.filter((a) => uiAptStatus(a) === 'unpaid'),
+      ...filtered.filter((a) => uiAptStatus(a) === 'partial'),
+      ...filtered.filter((a) => uiAptStatus(a) === 'deposit'),
       ...filtered.filter((a) => uiAptStatus(a) === 'vacant'),
       ...filtered.filter((a) => uiAptStatus(a) === 'paid'),
     ]
