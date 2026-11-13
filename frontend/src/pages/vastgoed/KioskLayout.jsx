@@ -899,7 +899,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
-  hasAdminAccess = false,
+  hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
   const companySlug = getKioskCompany()?.slug;
@@ -1131,6 +1131,36 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
+          {onEnableNfc && (
+            <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
+              title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
+              data-testid="kiosk-web-nfc-enable"
+              disabled={webNfcStatus === 'starting'}
+              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+                webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
+                  : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
+                    : 'bg-white text-[#1B2A5C]'
+              }`}>
+              {webNfcStatus === 'starting' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Nfc className="w-5 h-5" />}
+            </button>
+          )}
+        </div>
+      )}
+      {isUi && onEnableNfc && isDesk && (
+        <div className="hidden md:flex justify-end px-2 pb-2">
+          <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
+            title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
+            data-testid="kiosk-web-nfc-enable-desktop" disabled={webNfcStatus === 'starting'}
+            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm transition ${
+              webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
+                : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
+                  : 'bg-white text-[#1B2A5C]'
+            }`}>
+            {webNfcStatus === 'starting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Nfc className="h-4 w-4" />}
+            {webNfcStatus === 'ready' ? 'NFC actief'
+              : webNfcStatus === 'unsupported' ? 'NFC niet ondersteund'
+                : 'NFC activeren'}
+          </button>
         </div>
       )}
 
@@ -6465,6 +6495,52 @@ export default function KioskLayout() {
   const [company, setCompany] = useState(getKioskCompany());
   const [nfcToast, setNfcToast] = useState(null); // {kind:'ok'|'err', msg}
   const [nfcLink, setNfcLink] = useState(null); // {uid} → koppelscherm open
+  const [webNfcStatus, setWebNfcStatus] = useState('idle');
+  const webNfcAbort = useRef(null);
+  const enableWebNfc = useCallback(async () => {
+    setNfcToast(null);
+    if (typeof window === 'undefined' || !('NDEFReader' in window)) {
+      setWebNfcStatus('unsupported');
+      setNfcToast({
+        kind: 'err',
+        msg: 'Deze browser ondersteunt NFC niet. Gebruik Android Chrome of de Kiosk-app; op iPhone werken NFC-tags met een URL.',
+      });
+      setTimeout(() => setNfcToast(null), 6000);
+      return;
+    }
+    if (!window.isSecureContext) {
+      setWebNfcStatus('error');
+      setNfcToast({ kind: 'err', msg: 'NFC vereist een beveiligde HTTPS-verbinding.' });
+      setTimeout(() => setNfcToast(null), 5000);
+      return;
+    }
+    webNfcAbort.current?.abort();
+    const abort = new AbortController();
+    webNfcAbort.current = abort;
+    setWebNfcStatus('starting');
+    try {
+      const reader = new window.NDEFReader();
+      reader.addEventListener('reading', (event) => {
+        const raw = event?.serialNumber || '';
+        const uid = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (uid.length >= 4) emitNfc(uid);
+        else {
+          setNfcToast({ kind: 'err', msg: 'Deze tag geeft geen kaart-ID door. Gebruik een geschikte NFC-tag of de Kiosk-app.' });
+          setTimeout(() => setNfcToast(null), 5000);
+        }
+      });
+      await reader.scan({ signal: abort.signal });
+      if (!abort.signal.aborted) setWebNfcStatus('ready');
+    } catch (error) {
+      abort.abort();
+      if (webNfcAbort.current === abort) webNfcAbort.current = null;
+      if (error?.name === 'AbortError') return;
+      setWebNfcStatus('error');
+      console.warn('Web NFC activeren mislukt:', error?.message || error);
+      setNfcToast({ kind: 'err', msg: 'NFC niet beschikbaar. Controleer of NFC aanstaat en probeer opnieuw.' });
+      setTimeout(() => setNfcToast(null), 4000);
+    }
+  }, []);
   // Modals voor snel aanmaken vanuit de Kiosk (alle beheerder-shortcuts)
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -6706,35 +6782,6 @@ export default function KioskLayout() {
     // Tag-ID's uit de Android-app (bestaand NFC-systeem van de APK)
     const unsubNfc = subscribeNfc(handleScan);
 
-    // === Web NFC API (Android Chrome) ===
-    // Wanneer de Kiosk draait op een Android-tablet/telefoon, kan de
-    // BUILT-IN NFC chip kaarten uitlezen via de Web NFC API. Vereist HTTPS
-    // en user-gesture om de scan te starten. iOS Safari ondersteunt dit
-    // NIET (Apple heeft Web NFC geblokkeerd). Voor iOS gebruik je in plaats
-    // daarvan NFC URL-tags die `https://<domain>/kiosk/nfc?c=<UID>` open.
-    let ndefReader = null;
-    let ndefAbort = null;
-    const startWebNfc = async () => {
-      if (typeof window === 'undefined' || !('NDEFReader' in window)) return;
-      try {
-        ndefReader = new window.NDEFReader();
-        ndefAbort = new AbortController();
-        await ndefReader.scan({ signal: ndefAbort.signal });
-        ndefReader.addEventListener('reading', (ev) => {
-          // serialNumber kan formaten als "04:a1:b2:c3:d4" hebben
-          const raw = ev?.serialNumber || '';
-          const uid = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (uid.length >= 6) emitNfc(uid);
-        });
-      } catch (err) {
-        // Permission denied of niet ondersteund — stille fallback (HID/URL werkt nog steeds)
-        if (err?.name !== 'AbortError') {
-          console.warn('Web NFC niet beschikbaar:', err?.message || err);
-        }
-      }
-    };
-    startWebNfc();
-
     const onKey = (e) => {
       // Skip als gebruiker actief in een invoerveld typt
       const tag = (e.target?.tagName || '').toLowerCase();
@@ -6768,7 +6815,9 @@ export default function KioskLayout() {
       window.removeEventListener('keydown', onKey);
       if (timer) clearTimeout(timer);
       // Stop de Web NFC scan op unmount / step-change
-      try { ndefAbort?.abort(); } catch (err) { /* noop */ }
+      webNfcAbort.current?.abort();
+      webNfcAbort.current = null;
+      setWebNfcStatus('idle');
     };
   }, [step]);
 
@@ -7257,6 +7306,8 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
+              onEnableNfc={enableWebNfc}
+              webNfcStatus={webNfcStatus}
               hasAdminAccess={hasAdminAccess}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
