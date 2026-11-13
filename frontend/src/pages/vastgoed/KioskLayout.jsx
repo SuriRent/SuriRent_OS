@@ -374,6 +374,7 @@ function UiLocMenu({ opts, wrapClass, children }) {
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h); };
   }, [open]);
   const items = [
+    ...(opts.includeAll ? [{ id: '__any__', label: 'Alle locaties' }] : []),
     ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
     ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
   ];
@@ -385,9 +386,11 @@ function UiLocMenu({ opts, wrapClass, children }) {
           {items.map((it) => (
             <button key={it.id} type="button" onClick={() => { setOpen(false); opts.onPick(it.id); }}
               data-testid={`kiosk-ui-location-${it.id}`}
-              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${opts.currentId === it.id ? 'bg-orange-50' : ''}`}>
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${
+                opts.currentId === it.id || (opts.includeAll && opts.currentId === null && it.id === '__any__') ? 'bg-orange-50' : ''
+              }`}>
               <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate flex-1">{it.label}</span>
-              {opts.currentId === it.id && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
+              {(opts.currentId === it.id || (opts.includeAll && opts.currentId === null && it.id === '__any__')) && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
             </button>
           ))}
         </div>
@@ -1061,7 +1064,7 @@ function ApartmentSelect({
   const modernMobileView = isUi && !isDesk;
   const kioskCardMode = modernMobileView && uiCardView;
   const showLocationPicker = !kioskCardMode && totalGroups > 1 && selectedLocationId === null;
-  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
+  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, includeAll: kioskCardMode, onPick: (id) => setSelectedLocationId(id) };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
   }, [onLocationSelectionChange, selectedLocationId]);
@@ -1091,9 +1094,9 @@ function ApartmentSelect({
       ? null
       : locations.find((l) => l.id === selectedLocationId);
 
-  const visible = (kioskCardMode ? [...apartments] : showLocationPicker ? [] :
+  const visible = (showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
-    selectedLocationId === '__any__' ? apartments :
+    selectedLocationId === '__any__' || (kioskCardMode && selectedLocationId === null) ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
   const filtered = !isUi ? visible : visible.filter((a) => {
@@ -1194,7 +1197,10 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && <UiLocationPicker locOpts={totalGroups > 1 ? locOpts : null} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && (!kioskCardMode || totalGroups > 0) && <UiLocationPicker
+        locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
+        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+      />}
       {isUi && !kioskCardMode && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
