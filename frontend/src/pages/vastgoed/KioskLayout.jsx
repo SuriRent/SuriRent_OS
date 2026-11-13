@@ -403,7 +403,7 @@ function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
 function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
   currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
-  alternateLayout = false, onToggleAlternateLayout,
+  alternateLayout = false, onToggleAlternateLayout, showMobileLayoutToggle = false,
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
@@ -464,7 +464,7 @@ function DesktopKioskHeader({
           </button>
         )}
         <HeaderLive />
-        {isUi && onToggleAlternateLayout && (
+        {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
           <button type="button" onClick={onToggleAlternateLayout}
             aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
             aria-pressed={alternateLayout}
@@ -477,6 +477,16 @@ function DesktopKioskHeader({
             }`}>
             <LayoutGrid className="h-4 w-4 shrink-0" />
             <span className="hidden xl:inline">{alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}</span>
+          </button>
+        )}
+        {isUi && onToggleAlternateLayout && showMobileLayoutToggle && (
+          <button type="button" onClick={onToggleAlternateLayout}
+            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
+            aria-pressed={alternateLayout}
+            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
+            data-testid="kiosk-layout-mode-toggle"
+            className="md:hidden w-9 h-9 shrink-0 rounded-xl border border-orange-100 bg-white text-[#FF5C00] shadow-sm flex items-center justify-center">
+            <LayoutGrid className="w-4 h-4" />
           </button>
         )}
         <span className="hidden md:block w-px h-8 bg-white/40" />
@@ -1403,45 +1413,66 @@ function ApartmentSelect({
         </aside>
 
         <main className="kiosk-pos-main">
-          <header className="kiosk-pos-topbar">
-            <div className="kiosk-pos-greeting">
-              <p className="kiosk-pos-eyebrow">{posPhase === 'catalog' ? (getKioskCompany()?.name || 'SuriRent') : `Appartement ${(posApartment || selectedApartment)?.number || ''}`}</p>
-              <h1>{posPhase === 'catalog' ? 'Kassa' :
-                posPhase === 'invoices' ? 'Selecteer facturen' :
-                  posPhase === 'method' ? 'Kies betaalmethode' :
-                    posPhase === 'confirm' ? 'Betaling controleren' : 'Betaling afgerond'}</h1>
-              <p>{posPhase === 'catalog' ? 'Selecteer een appartement om een bestelling te starten.' :
-                posPhase === 'invoices' ? 'Kies de openstaande facturen die u wilt afrekenen.' :
-                  posPhase === 'method' ? 'Kies hoe deze bestelling wordt betaald.' :
-                    posPhase === 'confirm' ? 'Controleer de gegevens en rond de betaling af.' : 'De betaling is verwerkt.'}</p>
+          {!isDesk && posPhase === 'catalog' ? (
+            <div className="kiosk-pos-original-mobile-head">
+              <DesktopKioskHeader
+                currentLocation={currentLocation}
+                currentStep="select"
+                currentLocationId={selectedLocationId}
+                totalGroups={totalGroups}
+                onLocations={() => setSelectedLocationId(null)}
+                onAdmin={onAdminAll || onAdmin}
+                locOpts={locOpts}
+                currentApartment={selectedApartment}
+                title="Appartementen"
+                hideAdminMenu={!hasAdminAccess}
+                compactBranding
+                alternateLayout
+                onToggleAlternateLayout={leavePosMode}
+                showMobileLayoutToggle
+              />
             </div>
-            {posPhase === 'catalog' ? <label className="kiosk-pos-search">
-              <Search className="h-5 w-5 shrink-0" />
-              <input value={uiQ} onChange={(e) => setUiQ(e.target.value)}
-                placeholder="Zoek appartement of huurder" aria-label="Zoek appartement of huurder"
-                data-testid="kiosk-pos-search" />
-            </label> : (
-              <button type="button" className="kiosk-pos-back-to-catalog" onClick={() => {
-                setPosPhase('catalog');
-                setPosOverviewError('');
-              }}>
-                <ArrowLeft className="h-4 w-4" />
-                Appartementen
-              </button>
-            )}
-            <div className="kiosk-pos-top-actions">
-              {isDesk && <HeaderLive />}
-              <button type="button" onClick={leavePosMode}
-                aria-label="Standaard indeling activeren" title="Standaard indeling"
-                aria-pressed="true" data-testid="kiosk-layout-mode-toggle"
-                className="kiosk-pos-switch-layout">
-                <LayoutGrid className="h-4 w-4" />
-                <span>{isDesk ? 'Standaard' : 'Kiosk'}</span>
-              </button>
-              {isDesk && <><KioskBell /><KioskEmployeePush /></>}
-              <KioskSettingsMenu />
-            </div>
-          </header>
+          ) : (
+            <header className="kiosk-pos-topbar">
+              <div className="kiosk-pos-greeting">
+                <p className="kiosk-pos-eyebrow">{posPhase === 'catalog' ? (getKioskCompany()?.name || 'SuriRent') : `Appartement ${(posApartment || selectedApartment)?.number || ''}`}</p>
+                <h1>{posPhase === 'catalog' ? 'Kassa' :
+                  posPhase === 'invoices' ? 'Selecteer facturen' :
+                    posPhase === 'method' ? 'Kies betaalmethode' :
+                      posPhase === 'confirm' ? 'Betaling controleren' : 'Betaling afgerond'}</h1>
+                <p>{posPhase === 'catalog' ? 'Selecteer een appartement om een bestelling te starten.' :
+                  posPhase === 'invoices' ? 'Kies de openstaande facturen die u wilt afrekenen.' :
+                    posPhase === 'method' ? 'Kies hoe deze bestelling wordt betaald.' :
+                      posPhase === 'confirm' ? 'Controleer de gegevens en rond de betaling af.' : 'De betaling is verwerkt.'}</p>
+              </div>
+              {posPhase === 'catalog' ? <label className="kiosk-pos-search">
+                <Search className="h-5 w-5 shrink-0" />
+                <input value={uiQ} onChange={(e) => setUiQ(e.target.value)}
+                  placeholder="Zoek appartement of huurder" aria-label="Zoek appartement of huurder"
+                  data-testid="kiosk-pos-search" />
+              </label> : (
+                <button type="button" className="kiosk-pos-back-to-catalog" onClick={() => {
+                  setPosPhase('catalog');
+                  setPosOverviewError('');
+                }}>
+                  <ArrowLeft className="h-4 w-4" />
+                  Appartementen
+                </button>
+              )}
+              <div className="kiosk-pos-top-actions">
+                {isDesk && <HeaderLive />}
+                <button type="button" onClick={leavePosMode}
+                  aria-label="Standaard indeling activeren" title="Standaard indeling"
+                  aria-pressed="true" data-testid="kiosk-layout-mode-toggle"
+                  className="kiosk-pos-switch-layout">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span>{isDesk ? 'Standaard' : 'Kiosk'}</span>
+                </button>
+                {isDesk && <><KioskBell /><KioskEmployeePush /></>}
+                <KioskSettingsMenu />
+              </div>
+            </header>
+          )}
 
           <div className="kiosk-pos-catalog">
             <div className="kiosk-pos-catalog-heading">
