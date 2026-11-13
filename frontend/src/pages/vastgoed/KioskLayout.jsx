@@ -524,18 +524,18 @@ function UiAptCard({ a, onOpen }) {
     return () => { active = false; };
   }, [a, status]);
   const cardStyle = {
-    vacant: { accent: '#CBD5E1', background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)', action: 'Huurder koppelen' },
-    deposit: { accent: '#38BDF8', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%)', action: 'Borg bekijken' },
-    paid: { accent: '#34D399', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%)', action: 'Overzicht openen' },
-    partial: { accent: '#FBBF24', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFFBEB 100%)', action: 'Afrekenen' },
-    unpaid: { accent: '#FB7185', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF1F2 100%)', action: 'Afrekenen' },
+    vacant: { accent: '#CBD5E1', background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)' },
+    deposit: { accent: '#38BDF8', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%)' },
+    paid: { accent: '#34D399', background: 'linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%)' },
+    partial: { accent: '#FBBF24', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFFBEB 100%)' },
+    unpaid: { accent: '#FB7185', background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF1F2 100%)' },
   }[status];
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      style={{ background: cardStyle.background, borderTop: `4px solid ${cardStyle.accent}` }}
-      className="kiosk-ui-card group flex w-full flex-col overflow-hidden rounded-[22px] border border-slate-100 text-left shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] transition active:scale-[0.995] md:hover:-translate-y-0.5 md:hover:shadow-md">
-      <div className="flex min-w-0 items-center gap-3 p-3.5">
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full ring-4 ring-white shadow-sm ${
+      style={{ background: cardStyle.background, borderLeft: `4px solid ${cardStyle.accent}` }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-100 p-3 text-left shadow-[0_4px_14px_-10px_rgba(27,42,92,0.25)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
         }`}>
           {src && !vacant && !photoFailed
@@ -547,47 +547,40 @@ function UiAptCard({ a, onOpen }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-[15px] font-extrabold uppercase leading-tight tracking-tight text-[#1B2A5C]">{a.number}</p>
+            <p className="truncate text-[16px] font-extrabold uppercase leading-tight tracking-tight text-[#1B2A5C]">{a.number}</p>
             <span className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
           </div>
-          <p className="mt-0.5 truncate text-[13px] font-bold leading-tight text-slate-700">
+          <p className="mt-1 truncate text-sm font-bold leading-tight text-slate-700">
             {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
           </p>
           {!vacant && a.tenant_phone && (
-            <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-semibold leading-tight text-slate-500">
-              <Smartphone className="h-3 w-3 shrink-0" />
+            <span className="mt-1 flex min-w-0 items-center gap-1 text-xs font-semibold leading-tight text-slate-500">
+              <Smartphone className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{a.tenant_phone}</span>
             </span>
           )}
         </div>
-        <UiStatusPill a={a} className="shrink-0 !px-2 !py-1.5 !text-[10px]" />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[#1B2A5C] transition group-hover:bg-orange-50 group-hover:text-[#FF5C00]">
+          <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
+        </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2.5 border-t border-slate-100 bg-slate-50/70 px-3.5 py-2.5">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
-            {vacant ? 'Status' : 'Totaal openstaand'}
-          </span>
-          <span className={`block truncate text-[13px] font-black leading-tight ${
-            status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-[#1B2A5C]'
-          }`} data-testid={`apt-${a.number}-list-due`}>
-            {vacant ? 'Beschikbaar'
-              : status === 'deposit' ? 'Borg nog niet betaald'
-                : dueError ? 'Bedrag niet beschikbaar'
-                  : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
-          </span>
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-white/80 bg-[#FFF8F1]/90 px-2.5 py-2">
+        <span className="flex min-w-0 flex-col gap-1">
+          {vacant && <span className="text-xs font-semibold text-slate-400">Selecteer om huurder te koppelen</span>}
+          {!vacant && (
+            <span className="flex min-w-0 items-center gap-2" data-testid={`apt-${a.number}-list-due`}>
+              <Wallet className={`h-3.5 w-3.5 shrink-0 ${status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-slate-400'}`} />
+              <span className={`truncate text-xs font-extrabold ${
+                status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-[#1B2A5C]'
+              }`}>
+                {status === 'deposit' ? 'Borg nog niet betaald'
+                  : dueError ? 'Bedrag niet beschikbaar'
+                    : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+              </span>
+            </span>
+          )}
         </span>
-        <span className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-xl px-3 text-[10px] font-extrabold ${
-          status === 'unpaid' || status === 'partial'
-            ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
-            : 'border border-slate-200 bg-white text-[#1B2A5C]'
-        }`}>
-          {cardStyle.action}
-          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
-            status === 'unpaid' || status === 'partial' ? 'bg-white/20' : 'bg-slate-100'
-          }`}>
-            <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
-          </span>
-        </span>
+        <UiStatusPill a={a} className="shrink-0" />
       </div>
     </button>
   );
