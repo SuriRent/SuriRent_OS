@@ -521,7 +521,7 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function UiAptHeroCard({ a, onOpen, onQuickPay }) {
+function UiAptHeroCard({ a, onOpen, onQuickPay, powerStatus }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const status = uiAptStatus(a);
@@ -563,6 +563,14 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
     partial: 'bg-amber-50 text-amber-700',
     unpaid: 'bg-rose-50 text-rose-700',
   }[status];
+  const powerBadge = powerStatus ? ({
+    on: { label: 'Stroom aan', tone: 'bg-emerald-50 text-emerald-700' },
+    off: { label: 'Stroom uit', tone: 'bg-rose-50 text-rose-700' },
+    unlinked: { label: 'Niet gekoppeld', tone: 'bg-slate-100 text-slate-500' },
+    unknown: { label: 'Onbekend', tone: 'bg-amber-50 text-amber-700' },
+    loading: { label: 'Stroom laden…', tone: 'bg-slate-100 text-slate-500' },
+    unavailable: { label: 'Niet beschikbaar', tone: 'bg-slate-100 text-slate-500' },
+  }[powerStatus]) : null;
   const statusDot = {
     vacant: 'bg-slate-400',
     deposit: 'bg-sky-500',
@@ -612,23 +620,43 @@ function UiAptHeroCard({ a, onOpen, onQuickPay }) {
               )}
             </span>
         </button>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-extrabold leading-none ${statusTone}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-              {statusLabel}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-extrabold leading-none ${statusTone}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+            {statusLabel}
+          </span>
+          {powerBadge && (
+            <span title={`Stroomstatus: ${powerBadge.label}`}
+              className={`inline-flex max-w-[112px] items-center gap-1 rounded-full px-2 py-1 text-[9px] font-extrabold leading-none ${powerBadge.tone}`}>
+              <Zap className={`h-3 w-3 shrink-0 ${powerStatus === 'on' ? 'text-emerald-600' : powerStatus === 'off' ? 'text-rose-600' : ''}`}
+                fill={powerStatus === 'on' ? 'currentColor' : 'none'} />
+              <span className="truncate">{powerBadge.label}</span>
+            </span>
+          )}
+        </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2.5 border-t border-slate-100 pt-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
-            {vacant ? 'Status' : 'Totaal openstaand'}
-          </p>
-          <p className={`truncate text-[15px] font-black leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
-            data-testid={`apt-${a.number}-hero-due`}>
-            {vacant ? 'Beschikbaar'
-              : status === 'deposit' ? 'Borg nog niet betaald'
-                : dueError ? 'Bedrag niet beschikbaar'
-                  : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
-          </p>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            isPaymentAction ? 'bg-orange-100 text-[#E65300]'
+              : status === 'paid' ? 'bg-emerald-50 text-emerald-600'
+                : status === 'deposit' ? 'bg-sky-50 text-sky-600'
+                  : 'bg-slate-100 text-slate-500'
+          }`}>
+            {vacant ? <Building2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
+              {vacant ? 'Status' : 'Totaal openstaand'}
+            </span>
+            <span className={`block truncate text-[15px] font-black leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
+              data-testid={`apt-${a.number}-hero-due`}>
+              {vacant ? 'Beschikbaar'
+                : status === 'deposit' ? 'Borg nog niet betaald'
+                  : dueError ? 'Bedrag niet beschikbaar'
+                    : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+            </span>
+          </span>
         </div>
         <button type="button" onClick={handleAction} disabled={payLoading}
           aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
@@ -842,6 +870,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
 function ApartmentSelect({
   onSelect, onQuickPay, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
+  hasAdminAccess = false,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
   const companySlug = getKioskCompany()?.slug;
@@ -858,6 +887,9 @@ function ApartmentSelect({
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
   const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
+  const [powerDevices, setPowerDevices] = useState(null);
+  const [powerDevicesLoading, setPowerDevicesLoading] = useState(false);
+  const [powerDevicesError, setPowerDevicesError] = useState(false);
   const locationsById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
   const setSelectedLocationId = onLocationSelectionChange;
   useEffect(() => {
@@ -909,6 +941,47 @@ function ApartmentSelect({
     }).finally(() => setLoading(false));
   }, [navigate]);
 
+  useEffect(() => {
+    if (!isUi || isDesk || !uiCardView || !hasAdminAccess) {
+      setPowerDevices(null);
+      setPowerDevicesLoading(false);
+      setPowerDevicesError(false);
+      return undefined;
+    }
+    let active = true;
+    const loadPowerDevices = () => {
+      setPowerDevicesLoading(true);
+      api.get('/power/devices')
+        .then(({ data }) => {
+          if (!active) return;
+          const devices = Array.isArray(data) ? data : [];
+          setPowerDevices(new Map(devices.map((device) => [device.apartment_id, device])));
+          setPowerDevicesError(false);
+        })
+        .catch(() => {
+          if (active) setPowerDevicesError(true);
+        })
+        .finally(() => {
+          if (active) setPowerDevicesLoading(false);
+        });
+    };
+    const onLiveChange = (event) => {
+      const paths = event.detail?.paths || [event.detail?.path];
+      if (paths.some((path) => !path || path.includes('/power'))) loadPowerDevices();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadPowerDevices();
+    };
+    loadPowerDevices();
+    window.addEventListener('surirent:live-change', onLiveChange);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      window.removeEventListener('surirent:live-change', onLiveChange);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [hasAdminAccess, isDesk, isUi, uiCardView]);
+
   const unassignedCount = useMemo(
     () => apartments.filter((a) => !a.location_id).length,
     [apartments]
@@ -945,6 +1018,17 @@ function ApartmentSelect({
     : selectedLocationId === '__any__'
       ? null
       : locations.find((l) => l.id === selectedLocationId);
+
+  const getPowerStatus = (apartmentId) => {
+    if (!hasAdminAccess) return null;
+    if (powerDevicesError) return 'unavailable';
+    if (powerDevicesLoading || !powerDevices) return 'loading';
+    const device = powerDevices.get(apartmentId);
+    if (!device) return 'unlinked';
+    if (device.on === true) return 'on';
+    if (device.on === false) return 'off';
+    return 'unknown';
+  };
 
   const visible = (kioskCardMode ? apartments : showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
@@ -1078,7 +1162,8 @@ function ApartmentSelect({
             if (isUi && !isDesk) {
               const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
               return uiCardView
-                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} onQuickPay={onQuickPay} />
+                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} onQuickPay={onQuickPay}
+                    powerStatus={getPowerStatus(a.id)} />
                 : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
             }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
@@ -7236,6 +7321,7 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
+              hasAdminAccess={hasAdminAccess}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onQuickPay={async (a) => {
                 const [{ data }, { data: paymentPlans }] = await Promise.all([
