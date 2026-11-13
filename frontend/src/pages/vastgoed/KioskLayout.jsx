@@ -16,8 +16,8 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, LayoutGrid, MoreHorizontal, SlidersHorizontal,
-  LayoutList,
+  BookOpen, MoreHorizontal, SlidersHorizontal, Tablet,
+  LayoutList, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -289,7 +289,7 @@ function KioskBell() {
 }
 
 // Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
-function KioskSettingsMenu({ dashboard = false }) {
+function KioskSettingsMenu() {
   const { isAdmin, isUi } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
@@ -302,20 +302,10 @@ function KioskSettingsMenu({ dashboard = false }) {
   }));
   return (
     <>
-      {dashboard ? (
-        <div className="flex flex-col items-center gap-1">
-          <button type="button" onClick={() => setOpen(true)} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-            className="w-10 h-10 rounded-full bg-slate-50 text-[#1B2A5C] flex items-center justify-center shadow-sm">
-            <SettingsIcon className="w-5 h-5" />
-          </button>
-          <span className="text-[10px] font-bold text-slate-600">Instellingen</span>
-        </div>
-      ) : (
-        <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
-          className={`${isUi ? 'hidden md:flex md:bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
-          {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
-        </button>
-      )}
+      <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
+        className={`${isUi ? 'hidden md:flex md:bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
+        {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
+      </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
   );
@@ -498,203 +488,6 @@ function UiStatusPill({ a, className = '' }) {
   if (s === 'paid') return <span className={`${base} bg-emerald-600`} data-testid={`apt-${a.number}-paid`}><Check className="w-4 h-4" strokeWidth={3} /> Betaald</span>;
   if (s === 'partial') return <span className={`${base} bg-amber-500`} data-testid={`apt-${a.number}-partial`}><ClockIcon className="w-4 h-4" strokeWidth={3} /> Gedeeltelijk</span>;
   return <span className={`${base} bg-red-500`} data-testid={`apt-${a.number}-unpaid`}><X className="w-4 h-4" strokeWidth={3} /> Niet betaald</span>;
-}
-
-function KioskHomeDashboard({
-  apartments, searchQuery, onSearchQueryChange, onShowApartments, onSearch, onPayments,
-  onKasgeld, onExit, onQuickPay,
-}) {
-  const company = getKioskCompany();
-  const logoUrl = resolveLogoUrl(company?.branding?.logo_url || company?.logo_url);
-  const occupied = apartments.filter((a) => a.tenant_id);
-  const outstanding = occupied.find((a) => ['unpaid', 'partial'].includes(uiAptStatus(a)));
-  const currentTenant = outstanding || occupied[0] || null;
-  const [now, setNow] = useState(() => new Date());
-  const [due, setDue] = useState(null);
-  const [dueError, setDueError] = useState('');
-  const [quickPayError, setQuickPayError] = useState('');
-  const [paying, setPaying] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    setDue(null);
-    setDueError('');
-    if (!currentTenant?.tenant_id) return () => { active = false; };
-    loadCachedOverview(currentTenant.tenant_id).then(({ data }) => {
-      if (active) setDue(buildPaymentOverview(data).total_due);
-    }).catch((error) => {
-      if (active) setDueError(formatError(error));
-    });
-    return () => { active = false; };
-  }, [currentTenant?.tenant_id]);
-
-  const statusCounts = apartments.reduce((counts, apartment) => {
-    const status = uiAptStatus(apartment);
-    if (status === 'paid') counts.paid += 1;
-    else if (status === 'partial') counts.partial += 1;
-    else if (status === 'unpaid' || status === 'deposit') counts.open += 1;
-    return counts;
-  }, { paid: 0, partial: 0, open: 0 });
-
-  const submitSearch = (event) => {
-    event.preventDefault();
-    onShowApartments();
-  };
-  const handleQuickPay = async () => {
-    if (!currentTenant || !onQuickPay) return;
-    setQuickPayError('');
-    setPaying(true);
-    try {
-      await onQuickPay(currentTenant);
-    } catch (error) {
-      setQuickPayError(formatError(error));
-    } finally {
-      setPaying(false);
-    }
-  };
-  const tenantPhoto = currentTenant?.tenant_avatar_url || currentTenant?.tenant_id_photo_url;
-  const tenantHasBalance = due === null || due > 0;
-  const tileClass = 'min-h-[104px] rounded-[20px] p-4 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.28)] transition active:scale-[0.98]';
-  const tileIconClass = 'w-10 h-10 rounded-2xl flex items-center justify-center';
-
-  return (
-    <div className="min-h-full bg-[#F4F7FD] flex flex-col" data-testid="kiosk-home-dashboard">
-      <header className="relative isolate min-h-[220px] overflow-hidden rounded-b-[30px] bg-gradient-to-br from-[#FF5C00] via-[#FF761A] to-[#FFA13A] px-4 pb-14 pt-3 text-white">
-        <img src={villaM} alt="" className="absolute inset-y-0 right-0 -z-10 h-full w-[62%] object-cover object-[62%_center] opacity-70 mix-blend-screen" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#FF5C00] via-[#FF7113]/90 to-transparent" />
-        <div className="relative z-10 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5 shadow-sm">
-              {logoUrl
-                ? <img src={logoUrl} alt="" className="h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-                : <Home className="h-6 w-6 text-[#FF5C00]" />}
-            </span>
-            <span className="truncate text-[17px] font-black tracking-tight">{company?.name || 'SuriRent'}</span>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-sm font-extrabold">{now.toLocaleTimeString('nl-SR', { hour: '2-digit', minute: '2-digit' })}</p>
-            <p className="text-[11px] font-semibold text-white/80">{now.toLocaleDateString('nl-SR', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-          </div>
-        </div>
-        <div className="relative z-10 mt-8 max-w-[75%]">
-          <h1 className="text-[34px] font-black leading-none tracking-tight drop-shadow-sm">Welkom!</h1>
-          <p className="mt-2 text-sm font-semibold text-white/90">Wat wilt u vandaag doen?</p>
-        </div>
-        <button type="button" onClick={onShowApartments}
-          className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/15 px-3 py-2 text-xs font-extrabold text-white backdrop-blur-sm"
-          data-testid="kiosk-home-apartments">
-          <Building2 className="h-4 w-4" /> Appartementen
-        </button>
-      </header>
-
-      <form onSubmit={submitSearch} className="relative z-10 mx-4 -mt-7 flex h-14 items-center gap-2 rounded-2xl bg-white px-4 shadow-[0_12px_30px_-18px_rgba(27,42,92,0.4)]">
-        <Search className="h-5 w-5 shrink-0 text-[#FF5C00]" />
-        <input value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)}
-          placeholder="Zoek huurder, appartement of locatie..." aria-label="Zoek huurder, appartement of locatie"
-          data-testid="kiosk-home-search" className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400" />
-        <button type="submit" aria-label="Zoeken" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1E8] text-[#FF5C00]">
-          <ArrowRight className="h-4 w-4" />
-        </button>
-      </form>
-
-      <main className="flex-1 space-y-4 px-4 pb-4 pt-4">
-        <div className="grid grid-cols-2 gap-3">
-          <button type="button" onClick={onShowApartments} data-testid="kiosk-home-action-payment"
-            className={`${tileClass} bg-[#FF5C00] text-white`}>
-            <span className={`${tileIconClass} bg-white/20`}><CreditCard className="h-5 w-5" /></span>
-            <span className="mt-3 block text-[15px] font-black">Nieuwe betaling</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-white/80">Kies een appartement</span>
-          </button>
-          <button type="button" onClick={onSearch} data-testid="kiosk-home-action-tenants"
-            className={`${tileClass} border border-slate-100 bg-white text-[#1B2A5C]`}>
-            <span className={`${tileIconClass} bg-blue-50 text-[#1B2A5C]`}><Users className="h-5 w-5" /></span>
-            <span className="mt-3 block text-[15px] font-black">Huurders</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-slate-500">Zoek een huurder</span>
-          </button>
-          <button type="button" onClick={onPayments} data-testid="kiosk-home-action-payments"
-            className={`${tileClass} border border-slate-100 bg-white text-[#1B2A5C]`}>
-            <span className={`${tileIconClass} bg-orange-50 text-[#FF5C00]`}><Receipt className="h-5 w-5" /></span>
-            <span className="mt-3 block text-[15px] font-black">Betalingen</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-slate-500">Bekijk transacties</span>
-          </button>
-          <button type="button" onClick={onKasgeld} data-testid="kiosk-home-action-cash"
-            className={`${tileClass} border border-slate-100 bg-white text-[#1B2A5C]`}>
-            <span className={`${tileIconClass} bg-emerald-50 text-emerald-600`}><Database className="h-5 w-5" /></span>
-            <span className="mt-3 block text-[15px] font-black">Kasoverzicht</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-slate-500">Open kasgeldbeheer</span>
-          </button>
-        </div>
-
-        <section className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-[0_8px_24px_-16px_rgba(27,42,92,0.28)]" aria-label="Betaalstatus">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-black text-[#1B2A5C]">Status appartementen</h2>
-              <p className="mt-0.5 text-[11px] font-medium text-slate-500">{apartments.length} appartementen totaal</p>
-            </div>
-            <button type="button" onClick={onShowApartments} className="text-xs font-extrabold text-[#FF5C00]">Bekijken</button>
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {[
-              { label: 'Betaald', count: statusCounts.paid, color: 'text-emerald-700 bg-emerald-50' },
-              { label: 'Gedeeltelijk', count: statusCounts.partial, color: 'text-amber-700 bg-amber-50' },
-              { label: 'Openstaand', count: statusCounts.open, color: 'text-rose-700 bg-rose-50' },
-            ].map((item) => (
-              <div key={item.label} className={`rounded-xl px-2 py-2 text-center ${item.color}`}>
-                <p className="text-xl font-black leading-none">{item.count}</p>
-                <p className="mt-1 text-[10px] font-bold">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[20px] bg-[#1B2A5C] p-4 text-white shadow-[0_12px_28px_-18px_rgba(27,42,92,0.8)]" data-testid="kiosk-home-current-tenant">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-white/15 ring-2 ring-white/30">
-              {currentTenant && <OverviewTenantPhoto src={tenantPhoto} name={currentTenant.tenant_name} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/65">Huidige huurder</p>
-              <p className="truncate text-sm font-black">{currentTenant?.tenant_name || 'Geen huurder gevonden'}</p>
-              <p className="text-xs font-semibold text-white/70">{currentTenant ? `Appartement ${currentTenant.number}` : 'Er zijn nog geen bezette appartementen'}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex items-end justify-between gap-3 border-t border-white/15 pt-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/65">Openstaand</p>
-              <p className="mt-0.5 text-xl font-black">{dueError ? 'Niet beschikbaar' : due === null ? 'Laden...' : fmtMoney(due, currentTenant?.currency || 'SRD')}</p>
-              {(dueError || quickPayError) && <p className="mt-1 text-[11px] font-semibold text-rose-200">{dueError || quickPayError}</p>}
-            </div>
-            <button type="button" onClick={tenantHasBalance ? handleQuickPay : onShowApartments}
-              disabled={!currentTenant || paying || (due === null && !dueError)}
-              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-[#FF5C00] px-4 text-sm font-black text-white shadow-sm transition active:scale-95 disabled:opacity-60"
-              data-testid="kiosk-home-current-tenant-action">
-              {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              {tenantHasBalance ? 'Afrekenen' : 'Appartementen'}
-            </button>
-          </div>
-        </section>
-      </main>
-
-      <footer className="sticky bottom-0 z-20 flex items-center justify-around border-t border-slate-100 bg-white/95 px-2 pt-2 shadow-[0_-8px_20px_-14px_rgba(27,42,92,0.3)] backdrop-blur"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-        <KioskSettingsMenu dashboard />
-        <div className="flex flex-col items-center gap-1">
-          <PrinterLamp className="!h-10 !w-10 !bg-slate-50 !text-[#1B2A5C] shadow-sm" />
-          <span className="text-[10px] font-bold text-slate-600">Printer</span>
-        </div>
-        <button type="button" onClick={onExit} data-testid="kiosk-home-exit"
-          className="flex flex-col items-center gap-1">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-600"><LogOut className="h-5 w-5" /></span>
-          <span className="text-[10px] font-bold text-slate-600">Afsluiten</span>
-        </button>
-      </footer>
-    </div>
-  );
 }
 
 // UI-thema: lijst-rij op telefoon, kaart op desktop/tablet.
@@ -1052,9 +845,8 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
 }
 
 function ApartmentSelect({
-  onSelect, onQuickPay, onAdmin, onAdminAll, onExit, onKasgeld, onSearch, onPayments,
+  onSelect, onQuickPay, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
-  kioskHomeMode, onKioskHomeModeChange,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
   const companySlug = getKioskCompany()?.slug;
@@ -1171,26 +963,6 @@ function ApartmentSelect({
     const searchText = `${a.number} ${a.tenant_name || ''} ${location?.name || ''} ${location?.address || ''}`;
     return !term || searchText.toLowerCase().includes(term);
   });
-  const showApartments = () => {
-    if (uiQ.trim()) setSelectedLocationId('__any__');
-    onKioskHomeModeChange(false);
-  };
-
-  if (isUi && kioskHomeMode) {
-    return (
-      <KioskHomeDashboard
-        apartments={apartments}
-        searchQuery={uiQ}
-        onSearchQueryChange={setUiQ}
-        onShowApartments={showApartments}
-        onSearch={onSearch}
-        onPayments={onPayments}
-        onKasgeld={onKasgeld}
-        onExit={onExit}
-        onQuickPay={onQuickPay}
-      />
-    );
-  }
 
   // ----- Location picker view -----
   if (showLocationPicker) {
@@ -1287,7 +1059,7 @@ function ApartmentSelect({
             className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
               uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
             }`}>
-            {uiCardView ? <LayoutList className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+            {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
           </button>
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
@@ -1296,11 +1068,6 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
-          <button type="button" onClick={() => onKioskHomeModeChange(true)}
-            aria-label="Kioskmodus openen" title="Kiosk mode" data-testid="kiosk-ui-home-mode"
-            className="relative shrink-0 w-12 h-12 rounded-2xl bg-[#1B2A5C] text-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center">
-            <Home className="w-5 h-5" />
-          </button>
         </div>
       )}
 
@@ -7130,7 +6897,6 @@ export default function KioskLayout() {
   const [kioskCardView, setKioskCardView] = useState(() => {
     try { return localStorage.getItem('kiosk_card_view') === '1'; } catch { return false; }
   });
-  const [kioskHomeMode, setKioskHomeMode] = useState(false);
   useEffect(() => {
     try {
       if (kioskCardView) localStorage.setItem('kiosk_card_view', '1');
@@ -7254,7 +7020,7 @@ export default function KioskLayout() {
   const showDesktopBar = step !== 'check';
   const showMobileKioskBar = !step.startsWith('admin:')
     && ['select', 'kasgeld', 'stroom'].includes(step)
-    && !(isUi && isMobileViewport && (kioskCardView || kioskHomeMode));
+    && !(isUi && isMobileViewport && kioskCardView);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -7472,8 +7238,6 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
-              kioskHomeMode={kioskHomeMode}
-              onKioskHomeModeChange={setKioskHomeMode}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onQuickPay={async (a) => {
                 const [{ data }, { data: paymentPlans }] = await Promise.all([
@@ -7499,7 +7263,6 @@ export default function KioskLayout() {
               onAdminAll={adminMode}
               onKasgeld={() => setStep('kasgeld')}
               onSearch={() => setSearchOpen(true)}
-              onPayments={() => setShowPaymentsViewer(true)}
               onExit={exit} />
           )}
           {step === 'admin:appartementen' && hasAdminAccess && (

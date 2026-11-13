@@ -11,6 +11,7 @@ export function useRegisterServiceWorker() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
+    if (process.env.NODE_ENV === 'development') return;
     let disposed = false;
     let registration = null;
     let interval = null;
