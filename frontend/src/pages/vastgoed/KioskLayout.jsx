@@ -896,13 +896,94 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   );
 }
 
+function UiLocationPicker({ locationName, locOpts }) {
+  if (!locationName) return null;
+  const pill = (onClick) => (
+    <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
+      className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#1B2A5C] shadow-sm">
+      <MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" />
+      <span className="truncate">{locationName}</span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+    </button>
+  );
+  return (
+    <div className="relative z-10 flex justify-center px-1 py-1 sm:px-2 md:hidden">
+      {locOpts
+        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+        : pill(undefined)}
+    </div>
+  );
+}
+
+function UiStats({ apartments }) {
+  const tenantIds = useMemo(
+    () => [...new Set(apartments.filter((apartment) => apartment.tenant_id).map((apartment) => apartment.tenant_id))],
+    [apartments]
+  );
+  const [dueSummary, setDueSummary] = useState({ amount: null, error: false });
+  useEffect(() => {
+    let active = true;
+    if (!tenantIds.length) {
+      setDueSummary({ amount: 0, error: false });
+      return () => { active = false; };
+    }
+    setDueSummary({ amount: null, error: false });
+    Promise.all(tenantIds.map(async (tenantId) => {
+      const { data } = await loadCachedOverview(tenantId);
+      return buildPaymentOverview(data).total_due;
+    }))
+      .then((amounts) => {
+        if (active) setDueSummary({ amount: amounts.reduce((total, amount) => total + amount, 0), error: false });
+      })
+      .catch(() => {
+        if (active) setDueSummary({ amount: null, error: true });
+      });
+    return () => { active = false; };
+  }, [tenantIds]);
+
+  const occupied = apartments.filter((apartment) => apartment.tenant_id);
+  const paid = occupied.filter((apartment) => apartment.pay_status === 'paid').length;
+  const unpaid = occupied.length - paid;
+  const currency = occupied.find((apartment) => apartment.currency)?.currency || 'SRD';
+  const dueLabel = dueSummary.error
+    ? 'Niet beschikbaar'
+    : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, currency);
+  const percentage = (amount) => `${occupied.length ? Math.round((amount / occupied.length) * 100) : 0}%`;
+  const stat = (key, Icon, tone, label, value, bar, barTone) => (
+    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-2.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-3" data-testid={`kiosk-ui-stat-${key}`}>
+      <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${key === 'paid' ? 'bg-emerald-400/10' : key === 'late' ? 'bg-rose-400/10' : 'bg-orange-400/10'}`} />
+      <div className="relative flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
+          <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
+        </span>
+        <div className="w-full min-w-0 sm:flex-1">
+          <p className="whitespace-normal break-words text-[9px] font-semibold leading-tight text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p>
+          <p title={String(value)} className="whitespace-normal break-words text-[11px] font-extrabold leading-tight tracking-tight text-[#1B2A5C] sm:text-[13px] md:text-[16px] xl:text-[20px]">{value}</p>
+        </div>
+      </div>
+      {bar !== undefined && (
+        <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} />
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-3 gap-1.5 px-1 pb-3 sm:gap-2 sm:px-2 md:gap-3 md:px-5" data-testid="kiosk-ui-stats">
+      {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occupied.length}`, percentage(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
+      {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occupied.length}`, percentage(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
+      {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueLabel)}
+    </div>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
-  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1108,7 +1189,8 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
+      {isUi && !kioskCardMode && <UiLocationPicker locOpts={totalGroups > 1 ? locOpts : null} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
+      {isUi && !kioskCardMode && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
