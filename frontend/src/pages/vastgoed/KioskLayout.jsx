@@ -363,7 +363,7 @@ const STEP_TITLES = {
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
 };
 
-function UiLocMenu({ opts, wrapClass, children }) {
+function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -374,20 +374,24 @@ function UiLocMenu({ opts, wrapClass, children }) {
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('touchstart', h); };
   }, [open]);
   const items = [
+    ...(opts.includeAll ? [{ id: '__any__', label: 'Alle locaties' }] : []),
     ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
     ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
   ];
+  const menuPosition = menuAlign === 'start' ? 'left-0' : 'left-1/2 -translate-x-1/2';
   return (
     <div ref={ref} className={wrapClass}>
       {children(() => setOpen((o) => !o))}
       {open && (
-        <div data-testid="kiosk-ui-location-menu" className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left">
+        <div data-testid="kiosk-ui-location-menu" className={`absolute z-50 top-full ${menuPosition} mt-2 min-w-[240px] max-w-[92vw] max-h-[60vh] overflow-auto rounded-2xl bg-white shadow-[0_18px_40px_-12px_rgba(15,23,42,0.45)] p-1.5 text-left`}>
           {items.map((it) => (
             <button key={it.id} type="button" onClick={() => { setOpen(false); opts.onPick(it.id); }}
               data-testid={`kiosk-ui-location-${it.id}`}
-              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${opts.currentId === it.id ? 'bg-orange-50' : ''}`}>
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-bold text-[#1B2A5C] hover:bg-orange-50 ${
+                opts.currentId === it.id || (opts.includeAll && opts.currentId === null && it.id === '__any__') ? 'bg-orange-50' : ''
+              }`}>
               <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate flex-1">{it.label}</span>
-              {opts.currentId === it.id && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
+              {(opts.currentId === it.id || (opts.includeAll && opts.currentId === null && it.id === '__any__')) && <Check className="w-4 h-4 text-[#FF5C00] shrink-0" />}
             </button>
           ))}
         </div>
@@ -905,16 +909,16 @@ function UiLocationPicker({ locationName, locOpts }) {
   if (!locationName) return null;
   const pill = (onClick) => (
     <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
-      className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#1B2A5C] shadow-sm">
-      <MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" />
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#1B2A5C] shadow-sm">
+      <MapPin className="h-3.5 w-3.5 shrink-0 text-[#FF5C00]" />
       <span className="truncate">{locationName}</span>
-      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
     </button>
   );
   return (
-    <div className="relative z-10 flex justify-center px-1 py-1 sm:px-2 md:hidden">
+    <div className="relative z-10 flex justify-start px-1 pb-2 sm:px-2 md:hidden">
       {locOpts
-        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
+        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full" menuAlign="start">{(toggle) => pill(toggle)}</UiLocMenu>
         : pill(undefined)}
     </div>
   );
@@ -955,7 +959,7 @@ function UiStats({ apartments }) {
     : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, currency);
   const percentage = (amount) => `${occupied.length ? Math.round((amount / occupied.length) * 100) : 0}%`;
   const stat = (key, Icon, tone, label, value, bar, barTone) => (
-    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-2" data-testid={`kiosk-ui-stat-${key}`}>
+    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-3" data-testid={`kiosk-ui-stat-${key}`}>
       <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${key === 'paid' ? 'bg-emerald-400/10' : key === 'late' ? 'bg-rose-400/10' : 'bg-orange-400/10'}`} />
       <div className="relative flex min-w-0 flex-col items-start gap-0 sm:flex-row sm:items-center sm:gap-2">
         <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
@@ -967,7 +971,7 @@ function UiStats({ apartments }) {
         </div>
       </div>
       {bar !== undefined && (
-        <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="relative mt-1 md:mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} />
         </div>
       )}
@@ -989,6 +993,7 @@ function ApartmentSelect({
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
+  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1061,7 +1066,7 @@ function ApartmentSelect({
   const modernMobileView = isUi && !isDesk;
   const kioskCardMode = modernMobileView && uiCardView;
   const showLocationPicker = !kioskCardMode && totalGroups > 1 && selectedLocationId === null;
-  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
+  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, includeAll: kioskCardMode, onPick: (id) => setSelectedLocationId(id) };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
   }, [onLocationSelectionChange, selectedLocationId]);
@@ -1091,9 +1096,9 @@ function ApartmentSelect({
       ? null
       : locations.find((l) => l.id === selectedLocationId);
 
-  const visible = (kioskCardMode ? [...apartments] : showLocationPicker ? [] :
+  const visible = (showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
-    selectedLocationId === '__any__' ? apartments :
+    selectedLocationId === '__any__' || (kioskCardMode && selectedLocationId === null) ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
   const filtered = !isUi ? visible : visible.filter((a) => {
@@ -1194,8 +1199,14 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && <UiLocationPicker locOpts={totalGroups > 1 ? locOpts : null} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} />}
-      {isUi && !kioskCardMode && <UiStats apartments={visible} />}
+      {isUi && !kioskCardMode && isDesk && <UiHero
+        locOpts={totalGroups > 1 ? locOpts : null}
+        apartments={visible}
+        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
+        companySlug={companySlug}
+        isAdmin={isAdmin}
+      />}
+      {isUi && !kioskCardMode && !isDesk && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1218,39 +1229,12 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
-          {onEnableNfc && (
-            <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
-              title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
-              data-testid="kiosk-web-nfc-enable"
-              disabled={webNfcStatus === 'starting'}
-              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
-                webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
-                  : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
-                    : 'bg-white text-[#1B2A5C]'
-              }`}>
-              {webNfcStatus === 'starting' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Nfc className="w-5 h-5" />}
-            </button>
-          )}
         </div>
       )}
-      {isUi && onEnableNfc && isDesk && (
-        <div className="hidden md:flex justify-end px-2 pb-2">
-          <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
-            title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
-            data-testid="kiosk-web-nfc-enable-desktop" disabled={webNfcStatus === 'starting'}
-            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm transition ${
-              webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
-                : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
-                  : 'bg-white text-[#1B2A5C]'
-            }`}>
-            {webNfcStatus === 'starting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Nfc className="h-4 w-4" />}
-            {webNfcStatus === 'ready' ? 'NFC actief'
-              : webNfcStatus === 'unsupported' ? 'NFC niet ondersteund'
-                : 'NFC activeren'}
-          </button>
-        </div>
-      )}
-
+      {isUi && !isDesk && <UiLocationPicker
+        locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
+        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+      />}
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
