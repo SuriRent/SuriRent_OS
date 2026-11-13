@@ -961,6 +961,7 @@ function ApartmentSelect({
   const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const [mobileKioskMode, setMobileKioskMode] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const on = () => setIsDesk(mq.matches);
@@ -1027,7 +1028,7 @@ function ApartmentSelect({
   }, [navigate]);
 
   useEffect(() => {
-    if (!isUi || isDesk || !uiCardView || !hasAdminAccess) {
+    if (!isUi || isDesk || mobileKioskMode || !uiCardView || !hasAdminAccess) {
       setPowerDevices(null);
       setPowerDevicesLoading(false);
       setPowerDevicesError(false);
@@ -1065,14 +1066,15 @@ function ApartmentSelect({
       window.removeEventListener('surirent:live-change', onLiveChange);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [hasAdminAccess, isDesk, isUi, uiCardView]);
+  }, [hasAdminAccess, isDesk, isUi, mobileKioskMode, uiCardView]);
 
   const unassignedCount = useMemo(
     () => apartments.filter((a) => !a.location_id).length,
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const kioskCardMode = isUi && !isDesk && uiCardView;
+  const modernMobileView = isUi && !isDesk && !mobileKioskMode;
+  const kioskCardMode = modernMobileView && uiCardView;
   const showLocationPicker = !kioskCardMode && totalGroups > 1 && selectedLocationId === null;
   const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, onPick: (id) => setSelectedLocationId(id) };
   useEffect(() => {
@@ -1218,7 +1220,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
+      {isUi && !kioskCardMode && !(mobileKioskMode && !isDesk) && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1226,14 +1228,14 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder, appartement of locatie..." data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
+          {!mobileKioskMode && <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
             title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
             className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
               uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
             }`}>
             {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
-          </button>
+            </button>}
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
             <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
@@ -1241,6 +1243,14 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
+          <button type="button" onClick={() => setMobileKioskMode((current) => !current)}
+            aria-pressed={mobileKioskMode} aria-label={mobileKioskMode ? 'Mobiele weergave tonen' : 'Kioskweergave tonen'}
+            data-testid="kiosk-ui-desktop-mode-toggle"
+            className={`h-12 shrink-0 rounded-2xl px-3 text-xs font-extrabold shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] transition ${
+              mobileKioskMode ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
+            }`}>
+            Kiosk
+          </button>
         </div>
       )}
 
@@ -1249,11 +1259,11 @@ function ApartmentSelect({
       )}
 
       <div className={`flex-1 min-h-0 overflow-auto ${kioskCardMode ? 'pb-4' : 'pb-32 md:pb-28'}`}>
-        <div className={isUi && !isDesk
+        <div className={modernMobileView
           ? `grid ${uiCardView ? 'grid-cols-1 gap-3' : 'grid-cols-1 items-start gap-2.5 sm:gap-3'} px-1 sm:px-2 md:px-5 md:pt-1`
           : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
-            if (isUi && !isDesk) {
+            if (modernMobileView) {
               const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
               return uiCardView
                 ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} onQuickPay={onQuickPay}
