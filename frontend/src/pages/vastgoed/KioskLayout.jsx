@@ -954,31 +954,30 @@ function UiStats({ apartments }) {
     ? 'Niet beschikbaar'
     : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, currency);
   const percentage = (amount) => `${occupied.length ? Math.round((amount / occupied.length) * 100) : 0}%`;
-  const stat = (key, Icon, tone, label, value, bar, barTone) => (
-    <div key={key} className="kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-2.5 py-2.5 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.35)] sm:px-3 md:px-4 md:py-3" data-testid={`kiosk-ui-stat-${key}`}>
-      <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${key === 'paid' ? 'bg-emerald-400/10' : key === 'late' ? 'bg-rose-400/10' : 'bg-orange-400/10'}`} />
-      <div className="relative flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone} sm:h-7 sm:w-7 md:h-9 md:w-9`}>
-          <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
+  const stat = (key, Icon, tone, label, value, ratio, valueTone) => (
+    <div key={key} className={`kiosk-ui-stat flex min-w-0 items-center gap-1.5 rounded-xl border border-slate-200/80 border-l-[3px] bg-white px-2 py-1.5 shadow-[0_6px_16px_-12px_rgba(27,42,92,0.3)] md:gap-2 md:rounded-2xl md:px-3 md:py-2 ${key === 'paid' ? 'border-l-emerald-400' : key === 'late' ? 'border-l-rose-400' : 'border-l-orange-400'}`} data-testid={`kiosk-ui-stat-${key}`}>
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone} md:h-8 md:w-8`}>
+          <Icon className="h-4 w-4" strokeWidth={2.6} />
         </span>
-        <div className="w-full min-w-0 sm:flex-1">
-          <p className="whitespace-normal break-words text-[9px] font-semibold leading-tight text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p>
-          <p title={String(value)} className="whitespace-normal break-words text-[11px] font-extrabold leading-tight tracking-tight text-[#1B2A5C] sm:text-[13px] md:text-[16px] xl:text-[20px]">{value}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[9px] font-bold leading-tight text-slate-500 md:text-[11px]">{label}</p>
+          <div className="flex min-w-0 items-baseline gap-1">
+            <p title={String(value)} className={`min-w-0 flex-1 truncate text-[12px] font-extrabold leading-tight tracking-tight md:text-[16px] ${valueTone}`}>{value}</p>
+            {ratio && (
+              <span className={`shrink-0 rounded-full px-1 py-0.5 text-[8px] font-extrabold leading-none md:text-[10px] ${key === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                {ratio}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-      {bar !== undefined && (
-        <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div className={`h-full rounded-full ${barTone}`} style={{ width: bar }} />
-        </div>
-      )}
     </div>
   );
 
   return (
     <div className="grid grid-cols-3 gap-1.5 px-1 pb-3 sm:gap-2 sm:px-2 md:gap-3 md:px-5" data-testid="kiosk-ui-stats">
-      {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occupied.length}`, percentage(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
-      {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occupied.length}`, percentage(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
-      {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueLabel)}
+      {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occupied.length}`, percentage(paid), 'text-emerald-800')}
+      {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occupied.length}`, percentage(unpaid), 'text-rose-800')}
+      {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Openstaand', dueLabel, null, 'text-[#C94B08]')}
     </div>
   );
 }
