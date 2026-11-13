@@ -579,14 +579,12 @@ function UiAptCard({ a, onOpen }) {
   );
 }
 
-function UiAptHeroCard({ a, onOpen, onQuickPay, powerStatus }) {
+function UiAptHeroCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const status = uiAptStatus(a);
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
   const [dueError, setDueError] = useState(false);
-  const [payLoading, setPayLoading] = useState(false);
-  const [payError, setPayError] = useState('');
   useEffect(() => {
     if (!a.tenant_id || status === 'paid' || status === 'deposit') {
       setDue(status === 'paid' ? { amount: 0 } : null);
@@ -607,56 +605,13 @@ function UiAptHeroCard({ a, onOpen, onQuickPay, powerStatus }) {
       : status === 'paid' ? 'Overzicht openen'
         : 'Afrekenen';
   const isPaymentAction = status === 'unpaid' || status === 'partial';
-  const statusLabel = {
-    vacant: 'Vrij',
-    deposit: 'Borg',
-    paid: 'Betaald',
-    partial: 'Deels',
-    unpaid: 'Open',
-  }[status];
-  const statusTone = {
-    vacant: 'bg-slate-100 text-slate-600',
-    deposit: 'bg-sky-50 text-sky-700',
-    paid: 'bg-emerald-50 text-emerald-700',
-    partial: 'bg-amber-50 text-amber-700',
-    unpaid: 'bg-rose-50 text-rose-700',
-  }[status];
-  const powerBadge = powerStatus ? ({
-    on: { label: 'Stroom aan', tone: 'bg-emerald-50 text-emerald-700' },
-    off: { label: 'Stroom uit', tone: 'bg-rose-50 text-rose-700' },
-    unlinked: { label: 'Niet gekoppeld', tone: 'bg-slate-100 text-slate-500' },
-    unknown: { label: 'Onbekend', tone: 'bg-amber-50 text-amber-700' },
-    loading: { label: 'Stroom laden…', tone: 'bg-slate-100 text-slate-500' },
-    unavailable: { label: 'Niet beschikbaar', tone: 'bg-slate-100 text-slate-500' },
-  }[powerStatus]) : null;
-  const statusDot = {
-    vacant: 'bg-slate-400',
-    deposit: 'bg-sky-500',
-    paid: 'bg-emerald-500',
-    partial: 'bg-amber-500',
-    unpaid: 'bg-rose-500',
-  }[status];
-  const handleAction = async () => {
-    if (status !== 'unpaid' && status !== 'partial') {
-      onOpen();
-      return;
-    }
-    setPayError('');
-    setPayLoading(true);
-    try {
-      await onQuickPay(a);
-    } catch (error) {
-      setPayError(formatError(error));
-      setPayLoading(false);
-    }
-  };
-
   return (
-    <article className="kiosk-ui-card group rounded-2xl border border-slate-100 bg-white p-3.5 shadow-[0_1px_4px_-2px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.995]"
+    <article style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
       data-testid={`apt-${a.number}-hero-card`}>
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left text-[#1B2A5C]">
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-[#1B2A5C]">
             {vacant
               ? <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
                 <Building2 className="h-5 w-5" />
@@ -664,38 +619,27 @@ function UiAptHeroCard({ a, onOpen, onQuickPay, powerStatus }) {
               : <OverviewTenantPhoto src={photo} name={a.tenant_name} testid={`apt-${a.number}-hero-photo`} variant="tile" />}
             <span className="min-w-0 flex-1">
               <span className="flex min-w-0 items-baseline gap-2">
-                <span className="truncate text-[15px] font-extrabold leading-tight">{a.number}</span>
+                <span className="truncate text-[16px] font-extrabold uppercase leading-tight tracking-tight">{a.number}</span>
                 <span className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
               </span>
-              <span className="mt-0.5 block truncate text-[13px] font-bold leading-tight text-slate-700">
+              <span className="mt-1 block truncate text-sm font-bold leading-tight text-slate-700">
                 {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
               </span>
               {!vacant && a.tenant_phone && (
-                <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-semibold leading-tight text-slate-500">
-                  <Smartphone className="h-3 w-3 shrink-0" />
+                <span className="mt-1 flex min-w-0 items-center gap-1 text-xs font-semibold leading-tight text-slate-500">
+                  <Smartphone className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{a.tenant_phone}</span>
                 </span>
               )}
             </span>
         </button>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-extrabold leading-none ${statusTone}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-            {statusLabel}
-          </span>
-          {powerBadge && (
-            <span title={`Stroomstatus: ${powerBadge.label}`}
-              className={`inline-flex max-w-[112px] items-center gap-1 rounded-full px-2 py-1 text-[9px] font-extrabold leading-none ${powerBadge.tone}`}>
-              <Zap className={`h-3 w-3 shrink-0 ${powerStatus === 'on' ? 'text-emerald-600' : powerStatus === 'off' ? 'text-rose-600' : ''}`}
-                fill={powerStatus === 'on' ? 'currentColor' : 'none'} />
-              <span className="truncate">{powerBadge.label}</span>
-            </span>
-          )}
+          <UiStatusPill a={a} className="shrink-0" />
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2.5 border-t border-slate-100 pt-3">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          <span className={`-translate-x-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             isPaymentAction ? 'bg-orange-100 text-[#E65300]'
               : status === 'paid' ? 'bg-emerald-50 text-emerald-600'
                 : status === 'deposit' ? 'bg-sky-50 text-sky-600'
@@ -716,24 +660,25 @@ function UiAptHeroCard({ a, onOpen, onQuickPay, powerStatus }) {
             </span>
           </span>
         </div>
-        <button type="button" onClick={handleAction} disabled={payLoading}
-          aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
-          data-testid={`apt-${a.number}-hero-action`}
-          className={`inline-flex min-h-10 shrink-0 items-center justify-between gap-2 rounded-xl px-3 text-[11px] font-extrabold transition active:scale-[0.98] disabled:opacity-60 ${
-            isPaymentAction
-              ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
-              : 'border border-slate-200 bg-slate-50 text-[#1B2A5C] hover:bg-slate-100'
-          }`}>
-          <span className="inline-flex items-center gap-2">
-            {payLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {payLoading ? 'Openen…' : actionLabel}
-          </span>
-          {!payLoading && <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-slate-100'}`}>
-            <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
-          </span>}
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isPaymentAction && <FinancialPrintButton tenantId={a.tenant_id} showLabel />}
+          <button type="button" onClick={onOpen}
+            aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
+            data-testid={`apt-${a.number}-hero-action`}
+            className={`inline-flex min-h-10 shrink-0 items-center justify-between gap-2 rounded-xl px-3 text-[11px] font-extrabold transition active:scale-[0.98] disabled:opacity-60 ${
+              isPaymentAction
+                ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
+                : 'border border-slate-200 bg-slate-50 text-[#1B2A5C] hover:bg-slate-100'
+            }`}>
+            <span className="inline-flex items-center gap-2">
+              {actionLabel}
+            </span>
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-slate-100'}`}>
+              <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
+            </span>
+          </button>
+        </div>
       </div>
-      {payError && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">{payError}</p>}
     </article>
   );
 }
@@ -953,7 +898,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
 }
 
 function ApartmentSelect({
-  onSelect, onQuickPay, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
+  onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
   hasAdminAccess = false,
 }) {
@@ -973,9 +918,6 @@ function ApartmentSelect({
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
   const [locations, setLocations] = useState(() => (cached?.locations || []).filter((l) => l.id !== '_none'));
-  const [powerDevices, setPowerDevices] = useState(null);
-  const [powerDevicesLoading, setPowerDevicesLoading] = useState(false);
-  const [powerDevicesError, setPowerDevicesError] = useState(false);
   const locationsById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
   const setSelectedLocationId = onLocationSelectionChange;
   useEffect(() => {
@@ -1027,47 +969,6 @@ function ApartmentSelect({
     }).finally(() => setLoading(false));
   }, [navigate]);
 
-  useEffect(() => {
-    if (!isUi || isDesk || mobileKioskMode || !uiCardView || !hasAdminAccess) {
-      setPowerDevices(null);
-      setPowerDevicesLoading(false);
-      setPowerDevicesError(false);
-      return undefined;
-    }
-    let active = true;
-    const loadPowerDevices = () => {
-      setPowerDevicesLoading(true);
-      api.get('/power/devices')
-        .then(({ data }) => {
-          if (!active) return;
-          const devices = Array.isArray(data) ? data : [];
-          setPowerDevices(new Map(devices.map((device) => [device.apartment_id, device])));
-          setPowerDevicesError(false);
-        })
-        .catch(() => {
-          if (active) setPowerDevicesError(true);
-        })
-        .finally(() => {
-          if (active) setPowerDevicesLoading(false);
-        });
-    };
-    const onLiveChange = (event) => {
-      const paths = event.detail?.paths || [event.detail?.path];
-      if (paths.some((path) => !path || path.includes('/power'))) loadPowerDevices();
-    };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') loadPowerDevices();
-    };
-    loadPowerDevices();
-    window.addEventListener('surirent:live-change', onLiveChange);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      active = false;
-      window.removeEventListener('surirent:live-change', onLiveChange);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [hasAdminAccess, isDesk, isUi, mobileKioskMode, uiCardView]);
-
   const unassignedCount = useMemo(
     () => apartments.filter((a) => !a.location_id).length,
     [apartments]
@@ -1105,17 +1006,6 @@ function ApartmentSelect({
     : selectedLocationId === '__any__'
       ? null
       : locations.find((l) => l.id === selectedLocationId);
-
-  const getPowerStatus = (apartmentId) => {
-    if (!hasAdminAccess) return null;
-    if (powerDevicesError) return 'unavailable';
-    if (powerDevicesLoading || !powerDevices) return 'loading';
-    const device = powerDevices.get(apartmentId);
-    if (!device) return 'unlinked';
-    if (device.on === true) return 'on';
-    if (device.on === false) return 'off';
-    return 'unknown';
-  };
 
   const visible = (kioskCardMode ? [...apartments] : showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
@@ -1266,8 +1156,7 @@ function ApartmentSelect({
             if (modernMobileView) {
               const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
               return uiCardView
-                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} onQuickPay={onQuickPay}
-                    powerStatus={getPowerStatus(a.id)} />
+                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} />
                 : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
             }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
@@ -1476,13 +1365,13 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
 }
 
 // FinancialPrintButton — printer-icoon voor de financiële bon van de huurder.
-function FinancialPrintButton({ tenantId }) {
+function FinancialPrintButton({ tenantId, showLabel = false }) {
   const [printState, setPrintState] = useState(null);
-  const printOpts = usePrintOptions();
-  if (!printOpts.any) return null;
   return (
-    <span title={printState?.msg || 'Financiële bon printen'} data-testid="overview-fin-print">
-      <PrintChoiceMenu paymentId="fin" iconOnly
+    <span title={printState?.msg || 'Financiële bon printen'}
+      data-testid={showLabel ? `apt-${tenantId}-financial-print` : 'overview-fin-print'}>
+      <PrintChoiceMenu paymentId={showLabel ? `financial-${tenantId}` : 'fin'}
+        iconOnly={!showLabel} showLabel={showLabel} label="Print" includeBrowser
         remoteUrl={`/kiosk/tenants/${tenantId}/financial-remote-print`}
         printDataUrl={`/kiosk/tenants/${tenantId}/financial-print-data`}
         onLocal={() => printFinancialReceipt({ tenantId, apiGet: (u, o) => api.get(u, o) })
@@ -1733,59 +1622,12 @@ function buildPaymentOverview(data) {
   };
 }
 
-function buildQuickPayPayload(overview, paymentPlans = []) {
-  const activePlans = paymentPlans.filter((plan) => plan.status === 'active');
-  const planLinkedInvoiceIds = new Set(activePlans.flatMap((plan) => plan.invoice_ids || []));
-  const currentInvoices = overview.current_invoices.length > 0
-    ? overview.current_invoices
-    : (overview.current_month_invoice ? [overview.current_month_invoice] : []);
-  const invoices = [...overview.open_invoices, ...currentInvoices]
-    .filter((invoice, index, list) => invoice?.id && !planLinkedInvoiceIds.has(invoice.id)
-      && list.findIndex((item) => item.id === invoice.id) === index)
-    .sort((a, b) => (a.period_year || 0) - (b.period_year || 0)
-      || (a.period_month || 0) - (b.period_month || 0));
-  const planItems = activePlans.flatMap((plan) => (plan.installments || [])
-    .filter((installment) => installment.status === 'pending')
-    .map((installment) => ({
-      plan_id: plan.id,
-      seq: installment.sequence,
-      amount: Number(installment.amount || 0),
-      due_date: installment.due_date,
-    })))
-    .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
-  const periods = [...new Set(invoices
-    .map((invoice) => invoice.period_month
-      ? `${MONTHS_NL[invoice.period_month - 1]} ${invoice.period_year || ''}`.trim()
-      : null)
-    .filter(Boolean))];
-  const firstInvoice = invoices[0];
-  const nextPeriod = overview.balance?.next_period;
-  const plainAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.outstanding || 0), 0);
-  const planAmount = planItems.reduce((sum, item) => sum + item.amount, 0);
-
-  return {
-    tenant_id: overview.tenant.id,
-    apartment_id: overview.apartment.id,
-    amount: plainAmount + planAmount,
-    plain_amount: plainAmount,
-    currency: overview.balance?.currency || overview.apartment.currency || 'SRD',
-    category: 'huur',
-    method: 'contant',
-    period_month: firstInvoice?.period_month || nextPeriod?.month || null,
-    period_year: firstInvoice?.period_year || nextPeriod?.year || null,
-    note: periods.length > 0 ? `Huur ${periods.join(', ')}`
-      : (planItems.length > 0 ? 'Betalingsregeling' : 'Huurbetaling'),
-    plan_items: planItems.map(({ plan_id, seq, amount }) => ({ plan_id, seq, amount })),
-    invoice_ids: invoices.map((invoice) => invoice.id),
-  };
-}
-
 function OverviewTenantPhoto({ src, name, testid = 'overview-tenant-photo', variant = 'circle' }) {
   const [bad, setBad] = useState(false);
   const url = src && !/^https?:/.test(src) ? `${process.env.REACT_APP_BACKEND_URL}${src}` : src;
   const ini = (name || '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const shape = variant === 'tile'
-    ? 'w-11 h-11 rounded-xl ring-2 ring-orange-50'
+    ? 'w-12 h-12 rounded-xl ring-2 ring-white'
     : 'w-12 h-12 sm:w-14 sm:h-14 rounded-full ring-4 ring-orange-50';
   return (
     <div className={`shrink-0 ${shape} overflow-hidden bg-orange-100 flex items-center justify-center`} data-testid={testid}>
@@ -7427,26 +7269,6 @@ export default function KioskLayout() {
               onUiCardViewChange={setKioskCardView}
               hasAdminAccess={hasAdminAccess}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
-              onQuickPay={async (a) => {
-                const [{ data }, { data: paymentPlans }] = await Promise.all([
-                  loadCachedOverview(a.tenant_id),
-                  api.get(`/kiosk/tenants/${a.tenant_id}/payment-plans`),
-                ]);
-                const paymentOverview = buildPaymentOverview(data);
-                const quickPayPayload = buildQuickPayPayload(
-                  paymentOverview,
-                  Array.isArray(paymentPlans) ? paymentPlans : [],
-                );
-                setApartment(a);
-                if (quickPayPayload.amount > 0) {
-                  setOverview({ ...paymentOverview, total_due: quickPayPayload.amount, quick_pay: true });
-                  setPaymentPayload(quickPayPayload);
-                  setStep('confirm');
-                } else {
-                  setOverview(paymentOverview);
-                  setStep('overview');
-                }
-              }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
               onKasgeld={() => setStep('kasgeld')}

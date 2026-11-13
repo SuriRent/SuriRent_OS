@@ -44,7 +44,7 @@ export function usePrintOptions(open = false) {
 }
 
 // Keuzemenu "Afdruk": via KT-V520 (WebSocket) of lokaal printvenster.
-export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false, iconOnly = false }) {
+export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remoteUrl, printDataUrl, showLabel = false, iconOnly = false, label = 'Bon printen', includeBrowser = false }) {
   const remotePath = remoteUrl || `/kiosk/print-log/by-payment/${paymentId}/remote-print`;
   const dataPath = printDataUrl || `/kiosk/payments/${paymentId}/print-data`;
   const [pos, setPos] = useState(null);
@@ -102,7 +102,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
   };
 
   const item = 'w-full text-left px-3 py-2.5 text-sm font-semibold flex items-center gap-2';
-  if (!builtIn && !first && !bt && !sending) return null;
+  if (!builtIn && !first && !bt && !includeBrowser && !sending) return null;
   return (
     <>
       <button ref={btnRef} data-testid={`history-print-${paymentId}`} onClick={toggle} disabled={disabled || sending}
@@ -113,7 +113,7 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
           ? 'shrink-0 whitespace-nowrap px-3 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-transform'
           : 'w-9 h-9 sm:w-auto sm:h-8 sm:px-2.5 rounded-full sm:rounded-lg bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-1 transition-transform'}>
         {disabled || sending ? <Loader2 className={iconOnly ? 'w-4 h-4 animate-spin' : 'w-4 h-4 sm:w-3 sm:h-3 animate-spin'} /> : <Printer className={iconOnly ? 'w-4 h-4' : 'w-4 h-4 sm:w-3 sm:h-3'} />}
-        {!iconOnly && <><span className={showLabel ? '' : 'hidden sm:inline'}>{showLabel ? 'Bon printen' : 'Afdruk'}</span> <ChevronDown className={`${showLabel ? '' : 'hidden sm:block'} w-3 h-3`} /></>}
+        {!iconOnly && <><span className={showLabel ? '' : 'hidden sm:inline'}>{showLabel ? label : 'Afdruk'}</span> <ChevronDown className={`${showLabel ? '' : 'hidden sm:block'} w-3 h-3`} /></>}
       </button>
       {pos && createPortal((
         <>
@@ -135,10 +135,10 @@ export function PrintChoiceMenu({ paymentId, disabled, onLocal, onStatus, remote
                   <span className="text-[11px] font-medium text-slate-400">{bt.name}</span></span>
               </button>
             )}
-            {builtIn && (
+            {(builtIn || includeBrowser) && (
               <button onClick={() => { setPos(null); onLocal(); }} data-testid={`history-print-local-${paymentId}`}
                 className={`${item} text-slate-800 hover:bg-orange-50`}>
-                <Smartphone className="w-4 h-4 text-slate-500" /> Ingebouwde printer
+                <Smartphone className="w-4 h-4 text-slate-500" /> {builtIn ? 'Ingebouwde printer' : 'Print via browser'}
               </button>
             )}
           </div>
