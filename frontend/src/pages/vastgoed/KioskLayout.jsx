@@ -409,7 +409,7 @@ function DesktopKioskHeader({
     ? title
     : loc ? (isUi && currentStep === 'select' ? loc : `${loc}  •  ${title}`) : title;
   return (
-    <div className={`kiosk-chrome flex items-center ${compactBranding ? 'gap-2 pl-2 pr-2 py-1.5' : 'gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]'}`}
+    <div className={`kiosk-chrome flex items-center ${isUi ? 'kiosk-ui-topbar' : ''} ${compactBranding ? 'gap-2 pl-2 pr-2 py-1.5' : 'gap-3 md:gap-6 pl-2 pr-2 py-2 md:py-3 md:min-h-[7vh]'}`}
       data-testid="kiosk-desktop-header">
       {!hideAdminMenu && <KioskAdminMenu returnTo={{
         step: currentStep || 'select',
@@ -503,6 +503,11 @@ function UiStatusPill({ a, className = '' }) {
 function UiAptCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
   const status = uiAptStatus(a);
+  const accent = status === 'paid' ? 'border-l-emerald-500'
+    : status === 'partial' ? 'border-l-amber-500'
+      : status === 'deposit' ? 'border-l-sky-500'
+        : status === 'vacant' ? 'border-l-slate-300'
+          : 'border-l-[#FF5C00]';
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
   const [dueError, setDueError] = useState(false);
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
@@ -525,8 +530,7 @@ function UiAptCard({ a, onOpen }) {
   }, [a, status]);
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      className={`kiosk-ui-card group flex w-full flex-col gap-3 rounded-[22px] border border-slate-200/80 border-l-[5px] ${accent} bg-white p-3.5 text-left shadow-[0_10px_26px_-20px_rgba(27,42,92,0.38)] transition hover:shadow-[0_14px_28px_-20px_rgba(27,42,92,0.45)] active:scale-[0.99]`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
@@ -557,7 +561,7 @@ function UiAptCard({ a, onOpen }) {
           <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#E7ECF5] bg-[#F4F7FD] px-3 py-2.5">
         <span className="flex min-w-0 flex-col gap-1">
           {vacant && <span className="text-xs font-semibold text-slate-400">Selecteer om huurder te koppelen</span>}
           {!vacant && (
@@ -583,6 +587,11 @@ function UiAptHeroCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
   const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
   const status = uiAptStatus(a);
+  const accent = status === 'paid' ? 'border-l-emerald-500'
+    : status === 'partial' ? 'border-l-amber-500'
+      : status === 'deposit' ? 'border-l-sky-500'
+        : status === 'vacant' ? 'border-l-slate-300'
+          : 'border-l-[#FF5C00]';
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
   const [dueError, setDueError] = useState(false);
   useEffect(() => {
@@ -606,8 +615,8 @@ function UiAptHeroCard({ a, onOpen }) {
         : 'Afrekenen';
   const isPaymentAction = status === 'unpaid' || status === 'partial';
   return (
-    <article style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
+    <article
+      className={`kiosk-ui-card group flex w-full flex-col gap-3 rounded-[22px] border border-slate-200/80 border-l-[5px] ${accent} bg-white p-3.5 text-left shadow-[0_10px_26px_-20px_rgba(27,42,92,0.38)] transition hover:shadow-[0_14px_28px_-20px_rgba(27,42,92,0.45)] active:scale-[0.99]`}
       data-testid={`apt-${a.number}-hero-card`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
@@ -637,7 +646,7 @@ function UiAptHeroCard({ a, onOpen }) {
           <UiStatusPill a={a} className="shrink-0" />
         </div>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#E7ECF5] bg-[#F4F7FD] px-3 py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className={`-translate-x-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             isPaymentAction ? 'bg-orange-100 text-[#E65300]'
@@ -667,7 +676,7 @@ function UiAptHeroCard({ a, onOpen }) {
             className={`inline-flex min-h-10 shrink-0 items-center justify-between gap-2 rounded-xl px-3 text-[11px] font-extrabold transition active:scale-[0.98] disabled:opacity-60 ${
               isPaymentAction
                 ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
-                : 'border border-slate-200 bg-slate-50 text-[#1B2A5C] hover:bg-slate-100'
+                : 'border border-[#E4EAF4] bg-white text-[#1B2A5C] hover:bg-[#F4F7FD]'
             }`}>
             <span className="inline-flex items-center gap-2">
               {actionLabel}
@@ -806,13 +815,13 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   const stat = (key, Icon, tone, label, value, bar, barTone) => {
     const glowTone = key === 'paid' ? 'bg-emerald-400/15' : key === 'late' ? 'bg-rose-400/15' : 'bg-orange-400/15';
     return (
-    <div key={key} className="kiosk-ui-stat kiosk-hero-stat relative overflow-hidden rounded-[20px] border bg-white px-2.5 py-2.5 md:px-4 md:py-3 min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
+    <div key={key} className="kiosk-ui-stat kiosk-hero-stat relative min-w-0 overflow-hidden rounded-2xl border border-white/90 bg-white/95 px-2.5 py-2.5 shadow-[0_8px_20px_-14px_rgba(4,12,35,0.5)] backdrop-blur md:px-4 md:py-3" data-testid={`kiosk-ui-stat-${key}`}>
       <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${glowTone}`} />
-      <div className="relative flex items-center gap-2 md:gap-2.5 min-w-0">
-        <span className={`shrink-0 w-7 h-7 md:w-11 md:h-11 rounded-xl flex items-center justify-center shadow-sm ring-1 ring-white/80 ${tone}`}><Icon className="w-3.5 h-3.5 md:w-6 md:h-6" strokeWidth={2.6} /></span>
-        <div className="min-w-0">
-          <p className="text-[10px] md:text-[12px] font-semibold text-slate-500 truncate leading-tight">{label}</p>
-          <p className="text-[14px] md:text-[22px] font-extrabold text-[#1B2A5C] leading-tight tracking-tight whitespace-nowrap">{value}</p>
+      <div className="relative flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-white/80 sm:h-7 sm:w-7 md:h-10 md:w-10 md:rounded-xl ${tone}`}><Icon className="h-3.5 w-3.5 md:h-5 md:w-5" strokeWidth={2.6} /></span>
+        <div className="w-full min-w-0 sm:flex-1">
+          <p className="whitespace-normal break-words text-[9px] font-semibold leading-tight text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p>
+          <p title={String(value)} className="whitespace-normal break-words text-[11px] font-extrabold leading-tight tracking-tight text-[#1B2A5C] sm:text-[13px] md:text-[16px] xl:text-[20px]">{value}</p>
         </div>
         {key === 'rent' && <ChevronDown className="hidden md:block ml-auto w-5 h-5 text-[#1B2A5C] shrink-0" />}
       </div>
@@ -823,75 +832,65 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
     );
   };
   return (
-    <div className="kiosk-ui-hero px-1 sm:px-2 md:px-5 md:pt-3 pb-3" data-testid="kiosk-ui-hero">
+    <div className="kiosk-ui-hero px-1 pb-3 sm:px-2 md:px-5 md:pt-4" data-testid="kiosk-ui-hero">
       {locationName && (() => {
         const pill = (onClick) => (
           <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/85 px-4 py-1.5 text-[13px] font-bold text-[#1B2A5C] shadow-[0_10px_24px_-16px_rgba(15,23,42,0.55)] backdrop-blur-xl max-w-full">
-            <MapPin className="w-4 h-4 text-[#FF5C00] shrink-0" /><span className="truncate">{locationName}</span><ChevronDown className="w-4 h-4 shrink-0" />
+            className="inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-[#1B2A5C] shadow-[0_8px_20px_-14px_rgba(27,42,92,0.45)] transition hover:border-orange-200 hover:bg-orange-50/50">
+            <MapPin className="h-4 w-4 shrink-0 text-[#FF5C00]" /><span className="truncate">{locationName}</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
           </button>
         );
         return (
-          <div className="md:hidden flex justify-center -mt-1 mb-2 relative z-10">
+          <div className="relative z-10 mb-2 flex justify-center md:mb-3 md:justify-start">
             {locOpts
               ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full">{(toggle) => pill(toggle)}</UiLocMenu>
               : pill(undefined)}
           </div>
         );
       })()}
-      {!compact && <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
-        <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
-          <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
-          <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
-        </svg>
-        <div aria-hidden="true" className="md:hidden absolute -right-12 -top-20 -z-10 h-48 w-48 rounded-full bg-white/20 blur-3xl" />
+      {!compact && <section className="relative isolate overflow-hidden rounded-[26px] bg-gradient-to-br from-[#17264F] via-[#1B2A5C] to-[#263B78] p-3.5 text-white shadow-[0_18px_38px_-24px_rgba(17,34,78,0.75)] sm:rounded-[30px] sm:p-5 md:p-6">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full bg-[#FF6A00]/35 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/4 h-48 w-48 rounded-full bg-blue-400/15 blur-3xl" />
         {isAdmin ? (
           <>
             <button type="button" onClick={() => heroInputRef.current?.click()} disabled={heroLoading || heroUploading}
               aria-label="Huisafbeelding wijzigen" title="Klik om de huisafbeelding te wijzigen"
               data-testid="kiosk-ui-hero-image-edit"
-              className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] z-20 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
-              {heroImageSrc && <img src={heroImageSrc} alt="" className="h-full w-full max-w-none object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none"
-                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
-              }
-              <span className="absolute right-8 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#FF5C00] shadow">
+              className="absolute right-0 top-0 z-10 h-[62%] w-[42%] cursor-pointer border-0 bg-transparent p-0 disabled:cursor-wait">
+              {heroImageSrc && <img src={heroImageSrc} alt="" className="h-full w-full object-cover opacity-60"
+                style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 48%)', maskImage: 'linear-gradient(to right, transparent, #000 48%)' }} />}
+              <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF5C00] shadow-lg">
                 {heroUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               </span>
             </button>
             <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
               data-testid="kiosk-ui-hero-image-input" onChange={uploadHeroImage} />
           </>
-        ) : (
-          heroImageSrc && <img src={heroImageSrc} alt="" className="md:hidden absolute -right-4 bottom-3 h-[62%] w-auto max-w-none aspect-[76/45] object-cover drop-shadow-[0_14px_24px_rgba(0,0,0,0.22)] pointer-events-none -z-10"
-            style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', maskImage: 'linear-gradient(to right, transparent, #000 40%), linear-gradient(to bottom, transparent, #000 30%)', WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }} />
+        ) : heroImageSrc && (
+          <img src={heroImageSrc} alt="" aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 h-[62%] w-[42%] object-cover opacity-45"
+            style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, #000 48%)', maskImage: 'linear-gradient(to right, transparent, #000 48%)' }} />
         )}
         {isAdmin && heroError && (
-          <p role="alert" className="absolute bottom-1 right-2 z-20 max-w-[65%] rounded-lg bg-white/95 px-2 py-1 text-[10px] font-semibold text-red-700 shadow">
+          <p role="alert" className="absolute bottom-2 right-2 z-20 max-w-[65%] rounded-lg bg-white/95 px-2 py-1 text-[10px] font-semibold text-red-700 shadow">
             {heroError}
           </p>
         )}
-        <div className="relative z-10 flex items-center gap-3 min-w-0">
-          <span className="shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-full border border-white/70 md:border-0 bg-white/90 md:bg-gradient-to-br md:from-[#FF8A2B] md:to-[#FF5C00] flex items-center justify-center text-[#FF5C00] md:text-white shadow-[0_12px_24px_-14px_rgba(126,47,0,0.55)] backdrop-blur-sm">
-            <Building2 className="w-7 h-7 md:hidden" strokeWidth={2} />
-            <Home className="hidden md:block w-8 h-8" strokeWidth={2.4} fill="currentColor" />
+        <div className="pointer-events-none relative z-10 flex min-h-[64px] items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FF6A00] text-white shadow-lg shadow-orange-950/20 sm:h-12 sm:w-12">
+            <Building2 className="h-6 w-6" strokeWidth={2.2} />
           </span>
           <div className="min-w-0">
-            <h2 className="text-[19px] md:text-3xl font-semibold md:font-bold tracking-tight leading-tight truncate drop-shadow-sm">Appartementen Overzicht</h2>
-            <p className="text-[13px] md:text-base font-normal text-white/75 md:text-slate-500">Totaal: {apartments.length} appartementen</p>
+            <h2 className="truncate text-lg font-extrabold tracking-tight sm:text-xl md:text-2xl">Appartementen Overzicht</h2>
+            <p className="mt-0.5 text-xs font-medium text-white/65 sm:text-sm">Totaal: {apartments.length} appartementen</p>
           </div>
         </div>
-        
-        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
+        <div className="relative z-10 mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
           {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
           {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
           {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
         </div>
-      </div>}
-      {!compact && <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
-        {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
-        {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
-        {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
-      </div>}
+      </section>}
     </div>
   );
 }
@@ -912,6 +911,7 @@ function ApartmentSelect({
     return () => mq.removeEventListener('change', on);
   }, []);
   const [uiFilter, setUiFilter] = useState('all');
+  const uiFilterLabel = UI_FILTERS.find((filter) => filter.id === uiFilter)?.label || 'Alle';
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -1030,7 +1030,7 @@ function ApartmentSelect({
   // ----- Location picker view -----
   if (showLocationPicker) {
     return (
-      <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
+      <div className={`h-full flex flex-col ${isUi ? 'bg-[#F4F7FD]' : 'bg-orange-500'}`} style={{ padding: '0 1.5vw 0' }}>
         {/* Mobile: knoppen bovenaan in 1 rij (matcht ontwerp) */}
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
@@ -1087,7 +1087,7 @@ function ApartmentSelect({
 
   // ----- Apartment grid view -----
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
+    <div className={`h-full flex flex-col ${isUi ? 'bg-[#F4F7FD]' : 'bg-orange-500'}`} style={{ padding: '0 1.5vw 0' }}>
       {/* Mobile: knoppen bovenaan in 1 rij */}
       {!kioskCardMode && <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />}
       {/* Mobile: kleine titel links, onder de knoppen */}
@@ -1110,40 +1110,46 @@ function ApartmentSelect({
 
       {isUi && !kioskCardMode && <UiHero locOpts={totalGroups > 1 ? locOpts : null} apartments={visible} locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''} companySlug={companySlug} isAdmin={isAdmin} />}
       {isUi && (
-        <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
-          <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
-            <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
-            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder, appartement of locatie..." data-testid="kiosk-ui-search"
-              className="w-full min-w-0 bg-transparent outline-none text-[15px] text-slate-800 placeholder:text-slate-400" />
+        <div className={`md:hidden flex min-w-0 items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
+          <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white px-3 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.45)] transition focus-within:border-orange-300 focus-within:ring-2 focus-within:ring-orange-100">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[#FF5C00]">
+              <Search className="h-4 w-4" />
+            </span>
+            <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek appartement of huurder..." data-testid="kiosk-ui-search"
+              className="w-full min-w-0 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
-            aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
-            title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
-            className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
-              uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
-            }`}>
-            {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
-          </button>
-          <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
-            <SlidersHorizontal className="w-5 h-5" />
+          <div className="flex shrink-0 items-center gap-1 rounded-2xl border border-slate-200/80 bg-white p-1 shadow-[0_8px_20px_-14px_rgba(27,42,92,0.45)]">
+            <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
+              aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
+              title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${
+                uiCardView ? 'bg-[#FF5C00] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+              }`}>
+              {uiCardView ? <LayoutList className="h-5 w-5" /> : <Tablet className="h-5 w-5" />}
+            </button>
+            <label className="relative flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl px-2 text-[#1B2A5C] transition hover:bg-orange-50">
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              <span className="hidden max-w-16 truncate text-[11px] font-bold sm:inline">{uiFilterLabel}</span>
+              {uiFilter !== 'all' && <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#FF5C00]" />}
             <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
               className="absolute inset-0 opacity-0 w-full h-full">
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
-          </label>
+            </label>
           {onEnableNfc && (
             <button type="button" onClick={onEnableNfc} aria-label={webNfcStatus === 'ready' ? 'NFC actief' : 'NFC activeren'}
               title={webNfcStatus === 'ready' ? 'NFC actief' : webNfcStatus === 'unsupported' ? 'NFC wordt niet ondersteund door deze browser' : 'NFC activeren'}
               data-testid="kiosk-web-nfc-enable"
               disabled={webNfcStatus === 'starting'}
-              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
                 webNfcStatus === 'ready' ? 'bg-emerald-500 text-white'
-                  : webNfcStatus === 'unsupported' ? 'bg-slate-200 text-slate-500'
-                    : 'bg-white text-[#1B2A5C]'
+                  : webNfcStatus === 'unsupported' ? 'bg-slate-100 text-slate-400'
+                    : 'text-slate-500 hover:bg-slate-50'
               }`}>
-              {webNfcStatus === 'starting' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Nfc className="w-5 h-5" />}
+              {webNfcStatus === 'starting' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Nfc className="h-5 w-5" />}
             </button>
           )}
+          </div>
         </div>
       )}
       {isUi && onEnableNfc && isDesk && (
@@ -7537,7 +7543,7 @@ export default function KioskLayout() {
           niet meer speelt. */}
       {showMobileKioskBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
       {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
-        <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
+        <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav kiosk-white-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
           <div className="grid grid-cols-6 items-stretch">
             {[
@@ -7548,7 +7554,7 @@ export default function KioskLayout() {
               { id: 'kasgeld', label: 'Kasgeld', Icon: Database, on: step === 'kasgeld', fn: () => setStep('kasgeld') },
               { id: 'more', label: 'Meer', Icon: MoreHorizontal, fn: () => setShowAddSheet(true) },
             ].map(({ id, label, Icon, on, fn }) => (
-              <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`}
+              <button key={id} type="button" onClick={fn} data-testid={`kiosk-ui-bar-${id}`} data-active={on ? 'true' : undefined}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 mx-0.5 min-w-0 active:scale-95 transition ${on ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C]'}`}>
                 <Icon className="w-5 h-5" strokeWidth={2} />
                 <span className={`${id === 'apt' ? 'text-[8px] tracking-tighter' : 'text-[9px]'} font-semibold leading-tight whitespace-nowrap`}>{label}</span>
