@@ -1609,6 +1609,11 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .printer-lamp-blink { animation: printer-lamp-blink 1s steps(1, end) infinite; }
 @media (max-width: 767px) { .kiosk-ui [data-testid="kiosk-toolbar"] { display: none !important; } }
 
+.kiosk-fullscreen.kiosk-white.kiosk-ui:has(.kiosk-ui-apartment-overview) {
+  background-color: #F4F6FA !important;
+  background-image: none !important;
+}
+
 /* UI-Thema: beheer-pagina's (mobiel) in dezelfde stijl als Facturen */
 .kiosk-ui .kiosk-ui-admin .bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl) { border-radius: 1.5rem; border-color: transparent; box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.4); }
 .kiosk-ui .kiosk-ui-admin [data-testid*="-row-"] p.font-black,

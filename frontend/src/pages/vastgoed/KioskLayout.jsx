@@ -483,17 +483,17 @@ function uiAptStatus(a) {
 function UiStatusPill({ a, className = '' }) {
   const s = uiAptStatus(a);
   const styles = {
-    vacant: { label: 'Beschikbaar', icon: ArrowRight, tone: 'bg-slate-100 text-slate-600', testid: `apt-${a.number}-link` },
-    deposit: { label: 'Wacht op borg', icon: ClockIcon, tone: 'bg-sky-50 text-sky-700', testid: `apt-${a.number}-deposit-pending` },
-    paid: { label: 'Betaald', icon: Check, tone: 'bg-emerald-50 text-emerald-700', testid: `apt-${a.number}-paid` },
-    partial: { label: 'Gedeeltelijk', icon: ClockIcon, tone: 'bg-amber-50 text-amber-700', testid: `apt-${a.number}-partial` },
-    unpaid: { label: 'Niet betaald', icon: X, tone: 'bg-rose-50 text-rose-700', testid: `apt-${a.number}-unpaid` },
+    vacant: { label: 'Beschikbaar', icon: ArrowRight, tone: 'bg-slate-100 text-slate-700', testid: `apt-${a.number}-link` },
+    deposit: { label: 'Wacht op borg', icon: ClockIcon, tone: 'bg-sky-100 text-sky-800', testid: `apt-${a.number}-deposit-pending` },
+    paid: { label: 'Betaald', icon: Check, tone: 'bg-emerald-100 text-emerald-800', testid: `apt-${a.number}-paid` },
+    partial: { label: 'Gedeeltelijk', icon: ClockIcon, tone: 'bg-amber-100 text-amber-800', testid: `apt-${a.number}-partial` },
+    unpaid: { label: 'Niet betaald', icon: X, tone: 'bg-rose-100 text-rose-800', testid: `apt-${a.number}-unpaid` },
   }[s];
   const Icon = styles.icon;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold leading-none whitespace-nowrap ${styles.tone} ${className}`}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-extrabold leading-none whitespace-nowrap ${styles.tone} ${className}`}
       data-testid={styles.testid}>
-      <Icon className="h-3.5 w-3.5" strokeWidth={2.8} />
+      <Icon className="h-4 w-4" strokeWidth={2.8} />
       {styles.label}
     </span>
   );
@@ -525,8 +525,8 @@ function UiAptCard({ a, onOpen }) {
   }, [a, status]);
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-      style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
+      style={{ background: '#FFFFFF' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-[#E5EAF2] p-3 text-left shadow-[0_12px_28px_-16px_rgba(27,42,92,0.32)] transition active:scale-[0.99] md:hover:-translate-y-0.5">
       <div className="flex min-w-0 items-center gap-2.5">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-2 ring-white ${
           vacant ? 'bg-slate-100 text-slate-400' : 'bg-orange-100 text-[#FF5C00]'
@@ -557,18 +557,23 @@ function UiAptCard({ a, onOpen }) {
           <ChevronRight className="h-4 w-4" strokeWidth={2.6} />
         </span>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
-        <span className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-[#E6EAF1] bg-[#F8FAFD] px-2.5 py-2">
+        <span className="flex min-w-0 flex-col gap-0.5">
           {vacant && <span className="text-xs font-semibold text-slate-400">Selecteer om huurder te koppelen</span>}
           {!vacant && (
-            <span className="flex min-w-0 items-center gap-2" data-testid={`apt-${a.number}-list-due`}>
-              <Wallet className={`h-3.5 w-3.5 shrink-0 ${status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-slate-400'}`} />
-              <span className={`truncate text-xs font-extrabold ${
-                status === 'unpaid' || status === 'partial' ? 'text-[#E65300]' : 'text-[#1B2A5C]'
+            <span className="flex min-w-0 flex-col" data-testid={`apt-${a.number}-list-due`}>
+              <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                {status === 'deposit' ? 'Borg' : 'Openstaand saldo'}
+              </span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Wallet className={`h-4 w-4 shrink-0 ${status === 'unpaid' || status === 'partial' ? 'text-[#C2410C]' : 'text-slate-500'}`} />
+                <span className={`truncate text-sm font-black ${
+                status === 'unpaid' || status === 'partial' ? 'text-[#C2410C]' : 'text-[#1B2A5C]'
               }`}>
                 {status === 'deposit' ? 'Borg nog niet betaald'
                   : dueError ? 'Bedrag niet beschikbaar'
                     : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
+                </span>
               </span>
             </span>
           )}
@@ -606,8 +611,8 @@ function UiAptHeroCard({ a, onOpen }) {
         : 'Afrekenen';
   const isPaymentAction = status === 'unpaid' || status === 'partial';
   return (
-    <article style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F7FC 100%)' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-slate-200/70 p-3 text-left shadow-[0_8px_24px_-16px_rgba(27,42,92,0.3)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
+    <article style={{ background: '#FFFFFF' }}
+      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-[#E5EAF2] p-3 text-left shadow-[0_12px_28px_-16px_rgba(27,42,92,0.32)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
       data-testid={`apt-${a.number}-hero-card`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
@@ -637,7 +642,7 @@ function UiAptHeroCard({ a, onOpen }) {
           <UiStatusPill a={a} className="shrink-0" />
         </div>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/80 px-2.5 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-[#E6EAF1] bg-[#F8FAFD] px-2.5 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className={`-translate-x-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             isPaymentAction ? 'bg-orange-100 text-[#E65300]'
@@ -651,7 +656,7 @@ function UiAptHeroCard({ a, onOpen }) {
             <span className="block text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
               {vacant ? 'Status' : 'Totaal openstaand'}
             </span>
-            <span className={`block truncate text-[15px] font-black leading-tight ${isPaymentAction ? 'text-[#E65300]' : 'text-[#1B2A5C]'}`}
+            <span className={`block truncate text-base font-black leading-tight ${isPaymentAction ? 'text-[#C2410C]' : 'text-[#1B2A5C]'}`}
               data-testid={`apt-${a.number}-hero-due`}>
               {vacant ? 'Beschikbaar'
                 : status === 'deposit' ? 'Borg nog niet betaald'
@@ -1168,7 +1173,7 @@ function ApartmentSelect({
 
   // ----- Apartment grid view -----
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
+    <div className={`h-full bg-orange-500 flex flex-col${isUi ? ' kiosk-ui-apartment-overview' : ''}`} style={{ padding: '0 1.5vw 0' }}>
       {/* Mobile: knoppen bovenaan in 1 rij */}
       {!kioskCardMode && <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />}
       {/* Mobile: kleine titel links, onder de knoppen */}
