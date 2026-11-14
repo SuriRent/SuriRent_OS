@@ -3215,122 +3215,16 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   }
   .kiosk-pos-mobile-layout .kiosk-pos-apartment-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
-    gap: 8px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-card {
-    display: grid;
-    width: 100%;
-    min-width: 0;
-    min-height: 78px;
-    grid-template-columns: 48px minmax(0, 1fr) 18px;
-    align-items: center;
-    gap: 0 10px;
-    padding: 8px 10px;
-    border: 1px solid #E5E8EE;
-    border-radius: 14px;
-    background: #FFFFFF;
-    color: #17213C;
-    text-align: left;
-    box-shadow: 0 5px 14px -12px rgba(24, 35, 62, 0.55);
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-card.selected {
-    border-color: #FF5C00;
-    box-shadow: 0 0 0 2px rgba(255, 92, 0, 0.12);
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-photo {
-    display: flex;
-    width: 48px;
-    height: 48px;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    border-radius: 12px;
-    background: #FFF1E8;
-    color: #FF5C00;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-photo img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-photo.vacant {
-    background: #F1F3F6;
-    color: #8690A0;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-photo > span {
-    font-size: 13px;
-    font-weight: 900;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-info {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-heading {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-heading > strong {
-    overflow: hidden;
-    color: #1B2A5C;
-    font-size: 13px;
-    font-weight: 900;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-card [data-testid^="apt-"] {
-    gap: 3px;
-    padding: 4px 6px;
-    font-size: 8px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-card [data-testid^="apt-"] svg {
-    width: 10px;
-    height: 10px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-name {
-    overflow: hidden;
-    color: #596477;
-    font-size: 11px;
-    font-weight: 700;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-balance {
-    display: flex;
-    min-width: 0;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 6px;
-    color: #788195;
-    font-size: 9px;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-balance strong {
-    overflow: hidden;
-    color: #C2410C;
-    font-size: 10px;
-    font-weight: 900;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-balance strong.paid { color: #047857; }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-balance > span { white-space: nowrap; }
-  .kiosk-pos-mobile-layout .kiosk-pos-compact-chevron {
-    width: 16px;
-    height: 16px;
-    color: #9AA3B2;
+    gap: 10px;
   }
   .kiosk-pos-mobile-layout .kiosk-pos-apartment-card {
     display: flex;
     position: relative;
     width: 100%;
     min-width: 0;
-    min-height: 164px;
+    min-height: 204px;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
@@ -3387,7 +3281,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   .kiosk-pos-mobile-layout .kiosk-pos-card-avatar {
     display: flex;
     width: 100%;
-    height: 92px;
+    height: 118px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
@@ -3404,7 +3298,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   .kiosk-pos-mobile-layout .kiosk-pos-card-avatar.vacant { color: #C0A99D; }
   .kiosk-pos-mobile-layout .kiosk-pos-card-person > .min-w-0 {
     display: flex;
-    min-height: 68px;
+    min-height: 82px;
     flex-direction: column;
     justify-content: center;
     padding: 9px 10px;
@@ -3419,6 +3313,31 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     color: #8791A1;
     font-size: 10px;
   }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-balance {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    margin-top: 5px;
+    font-size: 9px;
+    line-height: 1.2;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-balance > span {
+    overflow: hidden;
+    color: #8791A1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-balance > strong {
+    overflow: hidden;
+    color: #C2410C;
+    font-size: 10px;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-card-balance > strong.paid { color: #047857; }
   .kiosk-pos-mobile-layout .kiosk-pos-card-person > svg { display: none; }
   .kiosk-pos-mobile-layout .kiosk-pos-order {
     position: absolute;
