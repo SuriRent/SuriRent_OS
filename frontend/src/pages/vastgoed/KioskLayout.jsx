@@ -16,7 +16,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, MoreHorizontal, SlidersHorizontal, Tablet,
+  BookOpen, MoreHorizontal, SlidersHorizontal, Tablet, Monitor,
   LayoutList, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
@@ -464,21 +464,6 @@ function DesktopKioskHeader({
           </button>
         )}
         <HeaderLive />
-        {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
-          <button type="button" onClick={onToggleAlternateLayout}
-            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
-            aria-pressed={alternateLayout}
-            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
-            data-testid="kiosk-layout-mode-toggle"
-            className={`hidden md:flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-xs font-bold shadow-sm transition ${
-              alternateLayout
-                ? 'border-[#1B2A5C] bg-[#1B2A5C] text-white hover:bg-[#263A78]'
-                : 'border-slate-200 bg-white text-[#1B2A5C] hover:bg-slate-50'
-            }`}>
-            <LayoutGrid className="h-4 w-4 shrink-0" />
-            <span className="hidden xl:inline">{alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}</span>
-          </button>
-        )}
         {isUi && onToggleAlternateLayout && showMobileLayoutToggle && (
           <button type="button" onClick={onToggleAlternateLayout}
             aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
@@ -1084,10 +1069,11 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
           {stat('vacant', Building2, 'bg-slate-100 text-slate-600', 'Vrije appartementen', `${vacant} / ${apartments.length}`, pct(vacant, apartments.length), 'bg-gradient-to-r from-slate-300 to-slate-500')}
         </div>
       </div>}
-      {!compact && <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
+      {!compact && <div className="md:hidden grid grid-cols-2 gap-2 -mt-9 relative px-0.5">
         {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
         {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
         {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
+        {stat('vacant', Building2, 'bg-slate-100 text-slate-600', 'Vrije appartementen', `${vacant} / ${apartments.length}`, pct(vacant, apartments.length), 'bg-gradient-to-r from-slate-300 to-slate-500')}
       </div>}
     </div>
   );
@@ -1178,6 +1164,7 @@ function UiStats({ apartments }) {
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
+  desktopMobileView, onDesktopMobileViewChange,
   alternateLayout, onToggleAlternateLayout,
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
@@ -1260,7 +1247,7 @@ function ApartmentSelect({
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const modernMobileView = isUi && !isDesk;
+  const modernMobileView = isUi && !isDesk && !desktopMobileView;
   const alternatePosView = isUi && alternateLayout;
   const kioskCardMode = modernMobileView && uiCardView;
   const showLocationPicker = !kioskCardMode && !alternatePosView && totalGroups > 1 && selectedLocationId === null;
@@ -1697,14 +1684,14 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && isDesk && <UiHero
+      {isUi && !kioskCardMode && (isDesk || desktopMobileView) && <UiHero
         locOpts={totalGroups > 1 ? locOpts : null}
         apartments={visible}
         locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
         companySlug={companySlug}
         isAdmin={isAdmin}
       />}
-      {isUi && !kioskCardMode && !isDesk && <UiStats apartments={visible} />}
+      {isUi && !kioskCardMode && !isDesk && !desktopMobileView && <UiStats apartments={visible} />}
       {isUi && (
         <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1712,14 +1699,24 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
+          {!desktopMobileView && <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
             aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
             title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
             className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
               uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
             }`}>
             {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
-          </button>
+          </button>}
+            <button type="button" onClick={() => onDesktopMobileViewChange((current) => !current)}
+              aria-label={desktopMobileView ? 'Mobiele kioskweergave tonen' : 'Desktop kioskweergave tonen'}
+              aria-pressed={desktopMobileView}
+              title={desktopMobileView ? 'Mobiele kioskweergave' : 'Desktop kioskweergave'}
+              data-testid="kiosk-ui-desktop-mobile-toggle"
+              className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+                desktopMobileView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
+              }`}>
+              <Monitor className="w-5 h-5" />
+            </button>
           <button type="button" onClick={onToggleAlternateLayout}
             aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
             aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
@@ -7658,18 +7655,29 @@ export default function KioskLayout() {
   const [kioskCardView, setKioskCardView] = useState(() => {
     try { return localStorage.getItem('kiosk_card_view') === '1'; } catch { return false; }
   });
+  const [kioskDesktopMobileView, setKioskDesktopMobileView] = useState(() => {
+    try { return localStorage.getItem('kiosk_desktop_mobile_view') === '1'; } catch { return false; }
+  });
   const [kioskAlternateLayout, setKioskAlternateLayout] = useState(() => {
     try {
       return localStorage.getItem('kiosk_alternate_layout') === '1'
         || localStorage.getItem('kiosk_modern_theme') === '1';
     } catch { return false; }
   });
+  const mobilePosLayout = isUi && kioskAlternateLayout && isMobileViewport;
+  const desktopMobileLayout = isUi && kioskDesktopMobileView && isMobileViewport;
   useEffect(() => {
     try {
       if (kioskCardView) localStorage.setItem('kiosk_card_view', '1');
       else localStorage.removeItem('kiosk_card_view');
     } catch { /* local preference is optional */ }
   }, [kioskCardView]);
+  useEffect(() => {
+    try {
+      if (kioskDesktopMobileView) localStorage.setItem('kiosk_desktop_mobile_view', '1');
+      else localStorage.removeItem('kiosk_desktop_mobile_view');
+    } catch { /* local preference is optional */ }
+  }, [kioskDesktopMobileView]);
   useEffect(() => {
     try {
       if (kioskAlternateLayout) localStorage.setItem('kiosk_alternate_layout', '1');
@@ -7794,7 +7802,7 @@ export default function KioskLayout() {
   const showDesktopBar = step !== 'check';
   const showMobileKioskBar = !step.startsWith('admin:')
     && ['select', 'kasgeld', 'stroom'].includes(step)
-    && !(isUi && kioskAlternateLayout && step === 'select')
+    && !(mobilePosLayout && step === 'select')
     && !(isUi && isMobileViewport && kioskCardView);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
@@ -7940,7 +7948,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${kioskAlternateLayout ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
+    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${mobilePosLayout ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -7995,7 +8003,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(kioskAlternateLayout && step === 'select') ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(mobilePosLayout && step === 'select') ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -8014,11 +8022,19 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
-              alternateLayout={kioskAlternateLayout}
-              onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
+              alternateLayout={mobilePosLayout}
+              onToggleAlternateLayout={() => {
+                setKioskDesktopMobileView(false);
+                setKioskAlternateLayout((enabled) => !enabled);
+              }}
               onEnableNfc={enableWebNfc}
               webNfcStatus={webNfcStatus}
               hasAdminAccess={hasAdminAccess}
+              desktopMobileView={desktopMobileLayout}
+              onDesktopMobileViewChange={(update) => {
+                setKioskAlternateLayout(false);
+                setKioskDesktopMobileView(update);
+              }}
               onSelect={(a) => { prefetchOverview(a?.tenant_id); setApartment(a); setStep('overview'); }}
               onAdmin={hasAdminAccess ? adminMode : null}
               onAdminAll={adminMode}
@@ -8325,7 +8341,7 @@ export default function KioskLayout() {
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
-      {showDesktopBar && !(kioskAlternateLayout && step === 'select') && createPortal((
+      {showDesktopBar && !(mobilePosLayout && step === 'select') && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
