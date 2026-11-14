@@ -991,13 +991,16 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
   const occ = apartments.filter((a) => a.tenant_id);
   const paid = occ.filter((a) => a.pay_status === 'paid').length;
   const unpaid = occ.length - paid;
+  const vacant = apartments.filter((a) => !a.tenant_id).length;
   const cur = occ.find((a) => a.currency)?.currency || 'SRD';
   const dueSummaryLabel = dueSummary.error
     ? 'Niet beschikbaar'
     : dueSummary.amount === null ? 'Bedrag laden…' : fmtMoney(dueSummary.amount, cur);
-  const pct = (n) => `${occ.length ? Math.round((n / occ.length) * 100) : 0}%`;
+  const pct = (n, total = occ.length) => `${total ? Math.round((n / total) * 100) : 0}%`;
   const stat = (key, Icon, tone, label, value, bar, barTone) => {
-    const glowTone = key === 'paid' ? 'bg-emerald-400/15' : key === 'late' ? 'bg-rose-400/15' : 'bg-orange-400/15';
+    const glowTone = key === 'paid' ? 'bg-emerald-400/15'
+      : key === 'late' ? 'bg-rose-400/15'
+        : key === 'vacant' ? 'bg-slate-400/15' : 'bg-orange-400/15';
     return (
     <div key={key} className="kiosk-ui-stat kiosk-hero-stat relative overflow-hidden rounded-[20px] border bg-white px-2.5 py-2.5 md:px-4 md:py-3 min-w-0" data-testid={`kiosk-ui-stat-${key}`}>
       <span aria-hidden="true" className={`absolute -right-4 -top-5 h-16 w-16 rounded-full ${glowTone}`} />
@@ -1032,7 +1035,7 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
           </div>
         );
       })()}
-      {!compact && <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:items-center md:justify-between md:gap-4">
+      {!compact && <div className="relative z-0 isolate -mt-9 overflow-hidden rounded-[26px] shadow-[0_18px_36px_-26px_rgba(191,63,0,0.75)] md:mt-0 md:overflow-visible md:rounded-none md:shadow-none -mx-1 px-4 pt-14 pb-14 md:mx-0 md:p-0 text-white md:text-slate-900 md:flex md:flex-col md:items-stretch md:gap-4">
         <svg className="md:hidden absolute inset-y-0 -left-4 h-full w-[calc(100%+2rem)] max-w-none -z-10" viewBox="0 0 420 200" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="kuiWave" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#FF6A00" /><stop offset="0.55" stopColor="#FF8A2B" /><stop offset="1" stopColor="#FFC08A" /></linearGradient></defs>
           <path d="M0 0 C 70 52, 150 66, 420 66 L420 200 L0 200 Z" fill="url(#kuiWave)" />
@@ -1074,10 +1077,11 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
           </div>
         </div>
         
-        <div className="hidden md:grid grid-cols-3 gap-3 w-[min(760px,62vw)] shrink-0">
+        <div className="hidden md:grid grid-cols-4 gap-3 w-full max-w-[1440px] min-w-0">
           {stat('paid', Check, 'bg-emerald-100 text-emerald-700', 'Betaald deze maand', `${paid} / ${occ.length}`, pct(paid), 'bg-gradient-to-r from-emerald-400 to-emerald-600')}
           {stat('late', AlertCircle, 'bg-rose-100 text-rose-700', 'Achterstand', `${unpaid} / ${occ.length}`, pct(unpaid), 'bg-gradient-to-r from-rose-400 to-rose-600')}
           {stat('due', Wallet, 'bg-orange-100 text-[#FF5C00]', 'Totaal openstaand', dueSummaryLabel)}
+          {stat('vacant', Building2, 'bg-slate-100 text-slate-600', 'Vrije appartementen', `${vacant} / ${apartments.length}`, pct(vacant, apartments.length), 'bg-gradient-to-r from-slate-300 to-slate-500')}
         </div>
       </div>}
       {!compact && <div className="md:hidden grid grid-cols-[1fr_1fr_1.45fr] gap-1.5 -mt-9 relative px-0.5">
@@ -1745,7 +1749,7 @@ function ApartmentSelect({
       <div className={`flex-1 min-h-0 overflow-auto ${kioskCardMode ? 'pb-4' : 'pb-32 md:pb-28'}`}>
         <div className={modernMobileView
           ? `grid ${uiCardView ? 'grid-cols-1 gap-3' : 'grid-cols-1 items-start gap-2.5 sm:gap-3'} px-1 sm:px-2 md:px-5 md:pt-1`
-          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-3 xl:grid-cols-4' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             if (modernMobileView) {
               const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
@@ -1754,6 +1758,8 @@ function ApartmentSelect({
                 : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
             }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
+            const initials = (a.tenant_name || '?').trim().split(/\s+/).filter(Boolean)
+              .slice(0, 2).map((part) => part[0]).join('').toUpperCase();
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
               : null;
@@ -1777,24 +1783,27 @@ function ApartmentSelect({
             }
             return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
-              className="group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
+              className="group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-4 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               {photoSrc ? (
-                <div className="rounded-full overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">
+                <div className="relative rounded-full overflow-hidden w-14 h-14 md:w-16 md:h-16 mb-2 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">
+                  <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center text-base font-extrabold text-[#FF5C00]">
+                    {initials}
+                  </span>
                   <img src={photoSrc} alt={a.tenant_name || ''}
                     data-testid={`apt-${a.number}-photo`}
-                    className="w-full h-full object-cover"
+                    className="relative z-10 w-full h-full object-cover"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 </div>
               ) : (
-                <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
-                  <Building2 className="w-7 h-7 md:w-9 md:h-9 text-orange-500" />
+                <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-16 md:h-16 mb-2 bg-orange-50 group-hover:bg-orange-100">
+                  <Building2 className="w-6 h-6 md:w-7 md:h-7 text-orange-500" />
                 </div>
               )}
-              <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
-              <div className="flex items-center gap-1 md:gap-1.5 text-slate-700 mb-2 md:mb-3 max-w-full">
+              <span className="text-lg sm:text-xl md:text-xl font-black text-slate-900 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
+              <div className="flex items-center gap-1 md:gap-1.5 text-slate-700 mb-2 max-w-full">
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 shrink-0" />
-                <span className="text-xs sm:text-sm md:text-base truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px] md:max-w-[170px]">{a.tenant_name}</span>
+                <span className="text-xs sm:text-sm md:text-sm truncate text-slate-700 font-medium max-w-[100px] sm:max-w-[120px] md:max-w-[170px]">{a.tenant_name}</span>
               </div>
               {/* Betaal-status badge — dynamisch per huurder-status:
                    • paid    → Betaald    (groen)
@@ -1803,19 +1812,19 @@ function ApartmentSelect({
                   Wanneer er geen facturen zijn, valt de backend terug op
                   "paid" (geen achterstand). */}
               {a.tenant_deposit_pending ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-sky-600 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-deposit-pending`}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-sky-600 text-white md:text-sm md:px-4 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-deposit-pending`}>
                   <ClockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Wacht op borg
                 </span>
               ) : a.pay_status === 'paid' ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-paid`}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 text-white md:text-sm md:px-4 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-paid`}>
                   <Check className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Betaald
                 </span>
               ) : a.pay_status === 'partial' ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-500 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-partial`}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-500 text-white md:text-sm md:px-4 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-partial`}>
                   <ClockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Gedeeltelijk
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-red-500 text-white md:text-sm md:px-5 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-unpaid`}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-red-500 text-white md:text-sm md:px-4 md:py-1 rounded-full px-3 py-1" data-testid={`apt-${a.number}-unpaid`}>
                   <X className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Niet betaald
                 </span>
               )}
