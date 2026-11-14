@@ -3454,16 +3454,23 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     width: 100%;
     align-items: center;
     justify-content: space-between;
-    min-height: 46px;
-    gap: 8px;
-    padding: 0 14px;
-    border-radius: 12px;
+    min-height: 52px;
+    gap: 10px;
+    padding: 0 16px;
+    border-radius: 14px;
     background: linear-gradient(135deg, #F97316, #EA580C);
     color: #FFFFFF;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 800;
     text-align: left;
     box-shadow: 0 7px 16px -11px rgba(234, 88, 12, 0.8);
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-continue svg {
+    width: 22px;
+    height: 22px;
+    padding: 3px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.18);
   }
   .kiosk-pos-mobile-layout .kiosk-pos-order-empty {
     display: flex;
@@ -3541,6 +3548,29 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     border-radius: 0;
     background: #FFFFFF;
   }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-body-empty > div:first-child { flex: 1 1 auto; }
+  .kiosk-pos-mobile-layout .kiosk-pos-payment-body-empty .flex.flex-col.gap-1.sm\\:gap-1\\.5 {
+    display: flex;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-invoice-empty {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px;
+    color: #788195;
+    text-align: center;
+  }
+  .kiosk-pos-mobile-layout .kiosk-pos-invoice-empty svg { color: #FF5C00; }
+  .kiosk-pos-mobile-layout .kiosk-pos-invoice-empty strong { color: #1B2A5C; font-size: 15px; }
+  .kiosk-pos-mobile-layout .kiosk-pos-invoice-empty span { font-size: 12px; }
   .kiosk-pos-mobile-layout .kiosk-pos-pay-select [data-testid="pay-select-all"] {
     min-height: 48px;
     margin-bottom: 8px;
@@ -3708,6 +3738,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     min-height: 0;
     flex: 1;
     align-items: stretch;
+    flex-direction: column;
     justify-content: flex-start;
     overflow-y: auto;
     padding: 0;
@@ -3716,6 +3747,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   .kiosk-pos-mobile-layout .kiosk-pos-method-panel {
     width: 100%;
     min-height: 0;
+    margin-block: auto;
     padding: 4px 0 12px;
     border: 0;
     border-radius: 0;
@@ -3831,7 +3863,8 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     display: flex;
     min-height: 0;
     flex: 1;
-    align-items: flex-start;
+    align-items: stretch;
+    flex-direction: column;
     justify-content: flex-start;
     overflow-y: auto;
     padding: 0;
@@ -3840,6 +3873,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   .kiosk-pos-mobile-layout .kiosk-pos-confirm-card {
     width: 100%;
     height: auto;
+    margin-block: auto;
     overflow: visible;
     padding: 0;
     background: transparent;

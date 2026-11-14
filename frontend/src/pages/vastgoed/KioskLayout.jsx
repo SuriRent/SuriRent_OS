@@ -378,7 +378,7 @@ function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
     ...opts.locations.map((l) => ({ id: l.id, label: [l.name, l.address].filter(Boolean).join(', ') })),
     ...(opts.unassigned > 0 ? [{ id: '__none__', label: 'Overige' }] : []),
   ];
-  const menuPosition = menuAlign === 'start' ? 'left-0' : 'left-1/2 -translate-x-1/2';
+  const menuPosition = menuAlign === 'start' ? 'left-0' : menuAlign === 'end' ? 'right-0' : 'left-1/2 -translate-x-1/2';
   return (
     <div ref={ref} className={wrapClass}>
       {children(() => setOpen((o) => !o))}
@@ -1515,7 +1515,7 @@ function ApartmentSelect({
                 <p>{filtered.length} van {visible.length} appartementen</p>
               </div>
               {totalGroups > 1 && (
-                <UiLocMenu opts={locOpts} wrapClass="kiosk-pos-location-menu">
+                <UiLocMenu opts={locOpts} wrapClass="kiosk-pos-location-menu relative" menuAlign={isDesk ? 'center' : 'end'}>
                   {(toggle) => locationButton(toggle)}
                 </UiLocMenu>
               )}
@@ -2999,6 +2999,8 @@ function PaySelect({ overview, onBack, onConfirm, posLayout = false }) {
 
   const isDisabled = (id) => (amounts[id] || 0) <= 0;
   const enabled = PAY_ITEMS_TEMPLATE.filter((t) => !isDisabled(t.id));
+  const hasPayableItems = hasOpenInvoices || hasCurrentInvoices || hasFutureInvoices
+    || enabled.length > 0 || planInstallments.length > 0;
   // "Alles betalen" includeert: achterstand + huidige maand + boete + plan-termijnen.
   // Vooruit gefactureerd is OPT-IN (niet standaard mee-geselecteerd, want het is toekomst).
   // (Internet-item is verwijderd op 2026-02-22.)
@@ -3232,7 +3234,9 @@ function PaySelect({ overview, onBack, onConfirm, posLayout = false }) {
         </div>
       </div>}
 
-      <div className={posLayout ? 'kiosk-pos-payment-body' : 'flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2'}>
+      <div className={posLayout
+        ? `kiosk-pos-payment-body${hasPayableItems ? '' : ' kiosk-pos-payment-body-empty'}`
+        : 'flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2'}>
         {/* LEFT — Payment items */}
         <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col min-w-0 p-2 sm:p-3">
           <div className="hidden md:flex items-center gap-3 px-1 pb-3 mb-2 border-b border-slate-100" data-testid="payselect-tenant">
@@ -3271,6 +3275,13 @@ function PaySelect({ overview, onBack, onConfirm, posLayout = false }) {
               De knoppen ("Direct betalen" / "Regeling afspreken") én het
               "Ander bedrag" numpad blijven altijd zichtbaar daaronder. */}
           <div className="flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 overflow-y-auto bg-slate-50/60 border border-slate-100 rounded-xl p-1.5">
+            {!hasPayableItems && (
+              <div className="kiosk-pos-invoice-empty">
+                <Receipt className="h-8 w-8" />
+                <strong>Geen openstaande facturen</strong>
+                <span>Voer hieronder een bedrag in om verder te gaan.</span>
+              </div>
+            )}
             {/* Achterstallige huur — één regel per maand */}
             {hasOpenInvoices && (
               <>
@@ -4108,6 +4119,11 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
     } catch (e) { setErr(formatError(e)); playErrorBuzz(); }
     finally { setLoading(false); }
   };
+  const confirmPeriod = confirmPayload.period_month && confirmPayload.period_year
+    ? `${MONTHS_NL[confirmPayload.period_month - 1]} ${confirmPayload.period_year}` : '';
+  const confirmDescription = confirmPayload.note || confirmPayload.category;
+  const confirmPeriodSuffix = confirmPeriod && !String(confirmDescription || '').includes(confirmPeriod)
+    ? ` · ${confirmPeriod}` : '';
 
   return (
     <div className={posLayout ? 'kiosk-pos-confirm' : 'h-full bg-orange-500 flex flex-col'} style={posLayout ? undefined : { padding: '1.5vh 1.5vw 0' }}>
@@ -4127,9 +4143,8 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
           <div className="bg-slate-900 rounded-2xl p-6 mb-5 text-white text-center">
             <p className="text-xs font-bold uppercase tracking-widest text-white/60">Te betalen</p>
             <p className="text-5xl font-extrabold tracking-tight mt-2 text-orange-400">{fmtMoney(confirmPayload.amount, confirmPayload.currency)}</p>
-            <p className="text-sm text-white/80 mt-2 capitalize">
-              {confirmPayload.note || confirmPayload.category}
-              {confirmPayload.period_month ? ` · ${MONTHS_NL[confirmPayload.period_month - 1]} ${confirmPayload.period_year}` : ''}
+            <p className="text-sm text-white/80 mt-2">
+              {confirmDescription}{confirmPeriodSuffix}
             </p>
           </div>
           {quickPay && (
