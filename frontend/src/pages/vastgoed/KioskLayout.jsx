@@ -654,7 +654,7 @@ function PosSelectionPanel({
 }
 
 // UI-thema: compacte appartementkaart voor de mobiele overzichtslijst.
-function UiAptCard({ a, onOpen }) {
+function UiAptCard({ a, onOpen, selectionMode = false, selected = false }) {
   const vacant = !a.tenant_id;
   const status = uiAptStatus(a);
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
@@ -677,6 +677,38 @@ function UiAptCard({ a, onOpen }) {
       .catch(() => { if (active) setDueError(true); });
     return () => { active = false; };
   }, [a, status]);
+  if (selectionMode) {
+    const balance = vacant ? 'Beschikbaar'
+      : status === 'deposit' ? 'Borg nog niet betaald'
+        : dueError ? 'Bedrag niet beschikbaar'
+          : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…';
+    return (
+      <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
+        aria-pressed={selected}
+        className={`kiosk-pos-compact-card${selected ? ' selected' : ''}`}>
+        <span className={`kiosk-pos-compact-photo${vacant ? ' vacant' : ''}`}>
+          {src && !vacant && !photoFailed
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`}
+              onError={() => setPhotoFailed(true)} />
+            : vacant
+              ? <Building2 className="h-5 w-5" />
+              : <span>{initials}</span>}
+        </span>
+        <span className="kiosk-pos-compact-info">
+          <span className="kiosk-pos-compact-heading">
+            <strong>{a.number}</strong>
+            <UiStatusPill a={a} className="shrink-0" />
+          </span>
+          <span className="kiosk-pos-compact-name">{vacant ? 'Geen huurder gekoppeld' : a.tenant_name}</span>
+          <span className="kiosk-pos-compact-balance" data-testid={`apt-${a.number}-list-due`}>
+            <span>{vacant ? 'Beschikbaarheid' : status === 'deposit' ? 'Borg' : 'Openstaand saldo'}</span>
+            <strong className={status === 'paid' ? 'paid' : ''}>{balance}</strong>
+          </span>
+        </span>
+        <ChevronRight className="kiosk-pos-compact-chevron" />
+      </button>
+    );
+  }
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
       style={{ background: '#FFFFFF' }}
@@ -1499,39 +1531,16 @@ function ApartmentSelect({
             </nav>
             {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
             <section className="kiosk-pos-apartment-grid" aria-label="Appartementenlijst">
-              {filtered.map((a) => {
-                const vacant = !a.tenant_id;
-                const selected = posSelectionId === a.id;
-                return (
-                  <button type="button" key={a.id} onClick={() => setPosSelectionId(a.id)}
-                    data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-                    aria-pressed={selected}
-                    className={`kiosk-pos-apartment-card${selected ? ' selected' : ''}`}>
-                    <span className="kiosk-pos-card-top">
-                      <span className="kiosk-pos-apartment-number">{a.number}</span>
-                      <UiStatusPill a={a} />
-                    </span>
-                    <span className="kiosk-pos-card-person">
-                      <span className={`kiosk-pos-card-avatar${vacant ? ' vacant' : ''}`}>
-                        {vacant
-                          ? <Building2 className="h-6 w-6" />
-                          : <OverviewTenantPhoto src={a.tenant_avatar_url || a.tenant_id_photo_url}
-                            name={a.tenant_name} variant="tile" />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="kiosk-pos-card-name">{vacant ? 'Geen huurder gekoppeld' : a.tenant_name}</span>
-                        <span className="kiosk-pos-card-location">{locationsById.get(a.location_id)?.name || 'Geen locatie'}</span>
-                      </span>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-                    </span>
-                  </button>
-                );
-              })}
+              {filtered.map((a) => (
+                <UiAptCard key={a.id} a={a} selectionMode
+                  selected={posSelectionId === a.id}
+                  onOpen={() => setPosSelectionId(a.id)} />
+              ))}
               {filtered.length === 0 && (
                 <div className="kiosk-pos-empty-results">
                   <Building2 className="h-8 w-8" />
                   <strong>Geen appartementen gevonden</strong>
-                  <span>Pas de zoekopdracht of betaalstatus aan.</span>
+                  <span>Pas de locatie of betaalstatus aan.</span>
                 </div>
               )}
             </section>
