@@ -403,6 +403,7 @@ function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
 function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
   currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
+  alternateLayout = false, onToggleAlternateLayout, showMobileLayoutToggle = false,
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
@@ -463,6 +464,31 @@ function DesktopKioskHeader({
           </button>
         )}
         <HeaderLive />
+        {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
+          <button type="button" onClick={onToggleAlternateLayout}
+            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
+            aria-pressed={alternateLayout}
+            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
+            data-testid="kiosk-layout-mode-toggle"
+            className={`hidden md:flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-xs font-bold shadow-sm transition ${
+              alternateLayout
+                ? 'border-[#1B2A5C] bg-[#1B2A5C] text-white hover:bg-[#263A78]'
+                : 'border-slate-200 bg-white text-[#1B2A5C] hover:bg-slate-50'
+            }`}>
+            <LayoutGrid className="h-4 w-4 shrink-0" />
+            <span className="hidden xl:inline">{alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}</span>
+          </button>
+        )}
+        {isUi && onToggleAlternateLayout && showMobileLayoutToggle && (
+          <button type="button" onClick={onToggleAlternateLayout}
+            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
+            aria-pressed={alternateLayout}
+            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
+            data-testid="kiosk-layout-mode-toggle"
+            className="md:hidden w-9 h-9 shrink-0 rounded-xl border border-orange-100 bg-white text-[#FF5C00] shadow-sm flex items-center justify-center">
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        )}
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskEmployeePush />
@@ -503,8 +529,132 @@ function UiStatusPill({ a, className = '' }) {
   );
 }
 
+function PosSelectionPanel({
+  apartment, locationName, onContinue, loading = false, phase = 'catalog',
+  onBack, error, children,
+}) {
+  const status = apartment ? uiAptStatus(apartment) : null;
+  const [due, setDue] = useState(null);
+  const [dueError, setDueError] = useState(false);
+  const phaseLabel = {
+    invoices: 'FACTUURSELECTIE',
+    method: 'BETAALMETHODE',
+    confirm: 'BEVESTIGING',
+    receipt: 'BETALING AFGEROND',
+  }[phase];
+
+  useEffect(() => {
+    if (!apartment?.tenant_id || status === 'paid' || status === 'deposit') {
+      setDue(status === 'paid' ? { amount: 0 } : null);
+      setDueError(false);
+      return undefined;
+    }
+    let active = true;
+    setDue(null);
+    setDueError(false);
+    loadCachedOverview(apartment.tenant_id)
+      .then(({ data }) => { if (active) setDue({ amount: buildPaymentOverview(data).total_due }); })
+      .catch(() => { if (active) setDueError(true); });
+    return () => { active = false; };
+  }, [apartment, status]);
+
+  const vacant = apartment && !apartment.tenant_id;
+  const photo = apartment?.tenant_avatar_url || apartment?.tenant_id_photo_url;
+
+  return (
+    <aside className={`kiosk-pos-order${phase !== 'catalog' ? ' kiosk-pos-checkout' : ''}`} data-testid="kiosk-pos-order">
+      <header className="kiosk-pos-order-header">
+        <div>
+          <p className="kiosk-pos-eyebrow">{phase === 'catalog' ? 'SELECTIE' : phaseLabel}</p>
+          <h2>Afrekenen</h2>
+        </div>
+        {phase === 'catalog'
+          ? <MoreHorizontal className="h-5 w-5 text-slate-400" />
+          : phase === 'receipt'
+            ? <CheckCircle className="h-5 w-5 text-emerald-500" />
+            : <button type="button" onClick={onBack} className="kiosk-pos-order-back"
+              aria-label="Vorige betaalstap">
+              <ArrowLeft className="h-4 w-4" />
+            </button>}
+      </header>
+      {phase !== 'catalog' ? (
+        <div className="kiosk-pos-checkout-content">
+          {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
+          {loading && (
+            <div className="kiosk-pos-workflow-loading" role="status">
+              <Loader2 className="h-8 w-8 animate-spin text-[#A00842]" />
+              <span>Betalingsoverzicht laden…</span>
+            </div>
+          )}
+          {children}
+        </div>
+      ) : apartment ? (
+        <>
+          {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
+          <div className="kiosk-pos-order-meta">
+            <span>Appartement geselecteerd</span>
+            <span>{locationName || 'Alle locaties'}</span>
+          </div>
+          <article className="kiosk-pos-order-card">
+            <div className="kiosk-pos-order-photo">
+              {photo && !vacant
+                ? <OverviewTenantPhoto src={photo} name={apartment.tenant_name} variant="tile" />
+                : <Building2 className="h-8 w-8 text-[#1B2A5C]" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-base font-extrabold text-[#1B2A5C]">{apartment.number}</p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-700">
+                {vacant ? 'Geen huurder gekoppeld' : apartment.tenant_name}
+              </p>
+              {apartment.tenant_phone && (
+                <p className="mt-1 truncate text-xs text-slate-500">{apartment.tenant_phone}</p>
+              )}
+            </div>
+          </article>
+          <div className="kiosk-pos-order-status">
+            <span>Status</span>
+            <UiStatusPill a={apartment} />
+          </div>
+          <div className="kiosk-pos-order-total">
+            <div>
+              <span>{vacant ? 'Beschikbaarheid' : status === 'deposit' ? 'Borg' : 'Openstaand saldo'}</span>
+              <strong>
+                {vacant ? 'Beschikbaar'
+                  : status === 'deposit' ? 'Borg nog niet betaald'
+                    : dueError ? 'Bedrag niet beschikbaar'
+                      : due ? fmtMoney(due.amount, apartment.currency || 'SRD') : 'Bedrag laden…'}
+              </strong>
+            </div>
+            <Wallet className="h-5 w-5 text-[#FF5C00]" />
+          </div>
+        </>
+      ) : (
+        <div className="kiosk-pos-order-empty">
+          <span><Building2 className="h-7 w-7" /></span>
+          <strong>Nog geen appartement gekozen</strong>
+          <p>Selecteer een appartement om de huurder en betaalstatus te bekijken.</p>
+        </div>
+      )}
+      {phase === 'catalog' && <div className="kiosk-pos-order-footer">
+        <div className="kiosk-pos-order-hint">
+          <span>{apartment ? '1 appartement geselecteerd' : 'Selecteer een appartement'}</span>
+          <strong>{apartment ? 'Klaar voor de volgende stap' : 'Geen selectie'}</strong>
+        </div>
+        <button type="button" onClick={onContinue} disabled={!apartment || loading}
+          data-testid="kiosk-pos-continue"
+          className="kiosk-pos-continue">
+          {loading ? 'Overzicht laden…'
+            : !apartment ? 'Selecteer appartement'
+              : vacant ? 'Huurder koppelen' : status === 'deposit' ? 'Borg betalen' : 'Facturen selecteren'}
+          {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+        </button>
+      </div>}
+    </aside>
+  );
+}
+
 // UI-thema: compacte appartementkaart voor de mobiele overzichtslijst.
-function UiAptCard({ a, onOpen }) {
+function UiAptCard({ a, onOpen, selectionMode = false, selected = false, locationName }) {
   const vacant = !a.tenant_id;
   const status = uiAptStatus(a);
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
@@ -527,6 +677,40 @@ function UiAptCard({ a, onOpen }) {
       .catch(() => { if (active) setDueError(true); });
     return () => { active = false; };
   }, [a, status]);
+  if (selectionMode) {
+    const balance = vacant ? 'Beschikbaar'
+      : status === 'deposit' ? 'Borg nog niet betaald'
+        : dueError ? 'Bedrag niet beschikbaar'
+          : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…';
+    return (
+      <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
+        aria-pressed={selected}
+        className={`kiosk-pos-apartment-card${selected ? ' selected' : ''}`}>
+        <span className="kiosk-pos-card-top">
+          <span className="kiosk-pos-apartment-number">{a.number}</span>
+          <UiStatusPill a={a} />
+        </span>
+        <span className="kiosk-pos-card-person">
+          <span className={`kiosk-pos-card-avatar${vacant ? ' vacant' : ''}`}>
+          {src && !vacant && !photoFailed
+            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`}
+              onError={() => setPhotoFailed(true)} />
+            : vacant
+              ? <Building2 className="h-5 w-5" />
+              : <span className="text-sm font-black">{initials}</span>}
+          </span>
+          <span className="min-w-0">
+            <span className="kiosk-pos-card-name">{vacant ? 'Geen huurder gekoppeld' : a.tenant_name}</span>
+            <span className="kiosk-pos-card-location">{locationName || 'Geen locatie'}</span>
+            <span className="kiosk-pos-card-balance" data-testid={`apt-${a.number}-list-due`}>
+              <span>{vacant ? 'Beschikbaarheid' : status === 'deposit' ? 'Borg' : 'Openstaand saldo'}</span>
+              <strong className={status === 'paid' ? 'paid' : ''}>{balance}</strong>
+            </span>
+          </span>
+        </span>
+      </button>
+    );
+  }
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
       style={{ background: '#FFFFFF' }}
@@ -990,6 +1174,7 @@ function UiStats({ apartments }) {
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
+  alternateLayout, onToggleAlternateLayout,
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
@@ -1003,6 +1188,14 @@ function ApartmentSelect({
     return () => mq.removeEventListener('change', on);
   }, []);
   const [uiFilter, setUiFilter] = useState('all');
+  const [posSelectionId, setPosSelectionId] = useState(null);
+  const [posApartment, setPosApartment] = useState(null);
+  const [posPhase, setPosPhase] = useState('catalog');
+  const [posOverview, setPosOverview] = useState(null);
+  const [posOverviewLoading, setPosOverviewLoading] = useState(false);
+  const [posOverviewError, setPosOverviewError] = useState('');
+  const [posPayload, setPosPayload] = useState(null);
+  const [posPayment, setPosPayment] = useState(null);
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -1064,9 +1257,17 @@ function ApartmentSelect({
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
   const modernMobileView = isUi && !isDesk;
+  const alternatePosView = isUi && alternateLayout;
   const kioskCardMode = modernMobileView && uiCardView;
-  const showLocationPicker = !kioskCardMode && totalGroups > 1 && selectedLocationId === null;
-  const locOpts = { locations, unassigned: unassignedCount, currentId: selectedLocationId, includeAll: kioskCardMode, onPick: (id) => setSelectedLocationId(id) };
+  const showLocationPicker = !kioskCardMode && !alternatePosView && totalGroups > 1 && selectedLocationId === null;
+  const locOpts = {
+    locations, unassigned: unassignedCount, currentId: selectedLocationId,
+    includeAll: kioskCardMode || alternatePosView,
+    onPick: (id) => {
+      setSelectedLocationId(id);
+      if (alternatePosView) setPosSelectionId(null);
+    },
+  };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
   }, [onLocationSelectionChange, selectedLocationId]);
@@ -1083,6 +1284,24 @@ function ApartmentSelect({
   }, [loading, selectedLocationId, totalGroups, locations]);
 
   if (loading) {
+    if (alternatePosView) {
+      return (
+        <div className={`kiosk-pos-layout${isDesk ? '' : ' kiosk-pos-mobile-layout'}`} data-testid="kiosk-pos-layout-loading">
+          <aside className="kiosk-pos-rail">
+            <div className="kiosk-pos-brand"><Home className="h-7 w-7" /></div>
+          </aside>
+          <main className="kiosk-pos-main">
+            <header className="kiosk-pos-topbar">
+              <div className="kiosk-pos-greeting"><p className="kiosk-pos-eyebrow">SuriRent</p><h1>Appartementen</h1></div>
+            </header>
+            <div className="kiosk-pos-catalog flex items-center justify-center">
+              <Loader2 className="h-9 w-9 animate-spin text-[#A00842]" />
+            </div>
+          </main>
+          <aside className="kiosk-pos-order" aria-hidden="true" />
+        </div>
+      );
+    }
     return (
       <div className="h-full bg-orange-500 flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-white animate-spin" />
@@ -1098,7 +1317,7 @@ function ApartmentSelect({
 
   const visible = (showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
-    selectedLocationId === '__any__' || (kioskCardMode && selectedLocationId === null) ? apartments :
+    selectedLocationId === '__any__' || ((kioskCardMode || alternatePosView) && selectedLocationId === null) ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
   const filtered = !isUi ? visible : visible.filter((a) => {
@@ -1118,6 +1337,270 @@ function ApartmentSelect({
     ]
     : filtered;
 
+  if (alternatePosView) {
+    const selectedApartment = filtered.find((a) => a.id === posSelectionId) || null;
+    const posLocationName = currentLocation
+      ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ')
+      : selectedLocationId === '__none__' ? 'Overige' : 'Alle locaties';
+    const statusFilters = [
+      { id: 'all', label: 'Alle appartementen', Icon: LayoutGrid, count: visible.length },
+      { id: 'unpaid', label: 'Openstaand', Icon: AlertCircle, count: visible.filter((a) => uiAptStatus(a) === 'unpaid').length },
+      { id: 'partial', label: 'Gedeeltelijk', Icon: ClockIcon, count: visible.filter((a) => uiAptStatus(a) === 'partial').length },
+      { id: 'paid', label: 'Betaald', Icon: Check, count: visible.filter((a) => uiAptStatus(a) === 'paid').length },
+      { id: 'vacant', label: 'Vrij', Icon: Building2, count: visible.filter((a) => uiAptStatus(a) === 'vacant').length },
+    ];
+    const continueWithSelection = async () => {
+      if (!selectedApartment) return;
+      if (!selectedApartment.tenant_id) {
+        setLinkApt(selectedApartment);
+        return;
+      }
+      if (uiAptStatus(selectedApartment) === 'deposit') {
+        window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: {
+          ...selectedApartment,
+          id: selectedApartment.tenant_id,
+          name: selectedApartment.tenant_name,
+          apartment_id: selectedApartment.id,
+          apartment_number: selectedApartment.number,
+          rent_amount: selectedApartment.rent_amount,
+          currency: selectedApartment.currency,
+        } }));
+        return;
+      }
+      setPosApartment(selectedApartment);
+      setPosOverviewLoading(true);
+      setPosOverviewError('');
+      try {
+        const { data } = await loadCachedOverview(selectedApartment.tenant_id);
+        const overview = buildPaymentOverview(data);
+        setPosOverview({
+          ...overview,
+          apartment: overview.apartment || selectedApartment,
+          isAdvance: overview.isAdvance ?? overview.total_due <= 0,
+          tenant: overview.tenant || {
+            id: selectedApartment.tenant_id,
+            name: selectedApartment.tenant_name,
+            avatar_url: selectedApartment.tenant_avatar_url,
+          },
+        });
+        setPosPayload(null);
+        setPosPayment(null);
+        setPosPhase('invoices');
+      } catch (e) {
+        setPosOverviewError(formatError(e, 'Betalingsoverzicht laden mislukt'));
+      } finally {
+        setPosOverviewLoading(false);
+      }
+    };
+    const leavePosMode = () => {
+      setPosPhase('catalog');
+      onToggleAlternateLayout();
+    };
+    const locationButton = (toggle) => (
+      <button type="button" onClick={toggle} className="kiosk-pos-location-button">
+        <MapPin className="h-4 w-4" />
+        <span className="truncate">{posLocationName}</span>
+        <ChevronDown className="h-4 w-4 shrink-0" />
+      </button>
+    );
+
+    return (
+      <div className={`kiosk-pos-layout kiosk-pos-phase-${posPhase}${isDesk ? '' : ' kiosk-pos-mobile-layout'}`}
+        data-testid="kiosk-pos-layout">
+        <aside className="kiosk-pos-rail" aria-label="Kiosk navigatie">
+          <div className="kiosk-pos-brand" title={getKioskCompany()?.name || 'SuriRent'}>
+            <Home className="h-7 w-7" />
+          </div>
+          <div className="kiosk-pos-rail-group">
+            <button type="button" className="kiosk-pos-rail-button active" aria-label="Appartementen" title="Appartementen">
+              <LayoutGrid className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={() => { setSelectedLocationId(null); setPosSelectionId(null); }}
+              className="kiosk-pos-rail-button" aria-label="Alle locaties" title="Alle locaties">
+              <MapPin className="h-5 w-5" />
+            </button>
+            {onSearch && (
+              <button type="button" onClick={onSearch} className="kiosk-pos-rail-button"
+                aria-label="Huurder zoeken" title="Huurder zoeken">
+                <Search className="h-5 w-5" />
+              </button>
+            )}
+            {hasAdminAccess && (
+              <button type="button" onClick={onKasgeld} className="kiosk-pos-rail-button"
+                aria-label="Kasgeld" title="Kasgeld">
+                <Database className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+          <div className="kiosk-pos-rail-bottom">
+            {hasAdminAccess && (
+              <button type="button" onClick={onAdminAll || onAdmin} className="kiosk-pos-rail-button"
+                aria-label="Beheer" title="Beheer">
+                <SettingsIcon className="h-5 w-5" />
+              </button>
+            )}
+            <button type="button" onClick={onExit} className="kiosk-pos-rail-button"
+              aria-label="Uitloggen" title="Uitloggen">
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
+        </aside>
+
+        <main className="kiosk-pos-main">
+          {!isDesk && posPhase === 'catalog' ? (
+            <div className="kiosk-pos-original-mobile-head">
+              <DesktopKioskHeader
+                currentLocation={currentLocation}
+                currentStep="select"
+                currentLocationId={selectedLocationId}
+                totalGroups={totalGroups}
+                onLocations={() => setSelectedLocationId(null)}
+                onAdmin={onAdminAll || onAdmin}
+                locOpts={locOpts}
+                currentApartment={selectedApartment}
+                title="Appartementen"
+                hideAdminMenu={!hasAdminAccess}
+                compactBranding
+                alternateLayout
+                onToggleAlternateLayout={leavePosMode}
+                showMobileLayoutToggle
+              />
+            </div>
+          ) : (
+            <header className="kiosk-pos-topbar">
+              <div className="kiosk-pos-greeting">
+                <p className="kiosk-pos-eyebrow">{posPhase === 'catalog' ? (getKioskCompany()?.name || 'SuriRent') : `Appartement ${(posApartment || selectedApartment)?.number || ''}`}</p>
+                <h1>{posPhase === 'catalog' ? 'Kassa' :
+                  posPhase === 'invoices' ? 'Selecteer facturen' :
+                    posPhase === 'method' ? 'Kies betaalmethode' :
+                      posPhase === 'confirm' ? 'Betaling controleren' : 'Betaling afgerond'}</h1>
+                <p>{posPhase === 'catalog' ? 'Selecteer een appartement om een bestelling te starten.' :
+                  posPhase === 'invoices' ? 'Kies de openstaande facturen die u wilt afrekenen.' :
+                    posPhase === 'method' ? 'Kies hoe deze bestelling wordt betaald.' :
+                      posPhase === 'confirm' ? 'Controleer de gegevens en rond de betaling af.' : 'De betaling is verwerkt.'}</p>
+              </div>
+              {posPhase === 'catalog' ? <label className="kiosk-pos-search">
+                <Search className="h-5 w-5 shrink-0" />
+                <input value={uiQ} onChange={(e) => setUiQ(e.target.value)}
+                  placeholder="Zoek appartement of huurder" aria-label="Zoek appartement of huurder"
+                  data-testid="kiosk-pos-search" />
+              </label> : (
+                <button type="button" className="kiosk-pos-back-to-catalog" onClick={() => {
+                  setPosPhase('catalog');
+                  setPosOverviewError('');
+                }}>
+                  <ArrowLeft className="h-4 w-4" />
+                  Appartementen
+                </button>
+              )}
+              <div className="kiosk-pos-top-actions">
+                {isDesk && <HeaderLive />}
+                <button type="button" onClick={leavePosMode}
+                  aria-label="Standaard indeling activeren" title="Standaard indeling"
+                  aria-pressed="true" data-testid="kiosk-layout-mode-toggle"
+                  className="kiosk-pos-switch-layout">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span>{isDesk ? 'Standaard' : 'Kiosk'}</span>
+                </button>
+                {isDesk && <><KioskBell /><KioskEmployeePush /></>}
+                <KioskSettingsMenu />
+              </div>
+            </header>
+          )}
+
+          <div className="kiosk-pos-catalog">
+            <div className="kiosk-pos-catalog-heading">
+              <div>
+                <h2>Appartementen</h2>
+                <p>{filtered.length} van {visible.length} appartementen</p>
+              </div>
+              {totalGroups > 1 && (
+                <UiLocMenu opts={locOpts} wrapClass="kiosk-pos-location-menu">
+                  {(toggle) => locationButton(toggle)}
+                </UiLocMenu>
+              )}
+            </div>
+            <nav className="kiosk-pos-categories" aria-label="Filter op betaalstatus">
+              {statusFilters.map(({ id, label, Icon, count }) => (
+                <button key={id} type="button" onClick={() => setUiFilter(id)}
+                  aria-pressed={uiFilter === id}
+                  className={`kiosk-pos-category${uiFilter === id ? ' active' : ''}`}>
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                  <strong>{count}</strong>
+                </button>
+              ))}
+            </nav>
+            {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
+            <section className="kiosk-pos-apartment-grid" aria-label="Appartementenlijst">
+              {filtered.map((a) => (
+                <UiAptCard key={a.id} a={a} selectionMode
+                  selected={posSelectionId === a.id}
+                  locationName={locationsById.get(a.location_id)?.name}
+                  onOpen={() => setPosSelectionId(a.id)} />
+              ))}
+              {filtered.length === 0 && (
+                <div className="kiosk-pos-empty-results">
+                  <Building2 className="h-8 w-8" />
+                  <strong>Geen appartementen gevonden</strong>
+                  <span>Pas de locatie of betaalstatus aan.</span>
+                </div>
+              )}
+            </section>
+          </div>
+        </main>
+
+        <PosSelectionPanel
+          apartment={posPhase === 'catalog' ? selectedApartment : posApartment || selectedApartment}
+          locationName={posLocationName}
+          phase={posPhase}
+          onContinue={continueWithSelection}
+          onBack={() => {
+            setPosOverviewError('');
+            setPosPhase(posPhase === 'confirm' ? 'method' : posPhase === 'method' ? 'invoices' : 'catalog');
+          }}
+          loading={posOverviewLoading}
+          error={posOverviewError}
+        >
+          {posOverview && posPhase === 'invoices' && (
+            <PaySelect posLayout overview={posOverview}
+              onBack={() => setPosPhase('catalog')}
+              onConfirm={(payload) => { setPosPayload(payload); setPosPhase('method'); }} />
+          )}
+          {posOverview && posPayload && posPhase === 'method' && (
+            <MethodSelect posLayout payload={posPayload} overview={posOverview}
+              onBack={() => setPosPhase('invoices')}
+              onConfirm={(payload) => { setPosPayload(payload); setPosPhase('confirm'); }} />
+          )}
+          {posOverview && posPayload && posPhase === 'confirm' && (
+            <PaymentConfirm posLayout payload={posPayload} overview={posOverview}
+              onBack={() => setPosPhase('method')}
+              onSuccess={(payment) => { setPosPayment(payment); setPosPhase('receipt'); reloadSelect(); }} />
+          )}
+          {posOverview && posPayment && posPhase === 'receipt' && (
+            <ReceiptScreen posLayout payment={posPayment} overview={posOverview}
+              onDone={() => {
+                setPosPhase('catalog');
+                setPosSelectionId(null);
+                setPosApartment(null);
+                setPosOverview(null);
+                setPosPayload(null);
+                setPosPayment(null);
+                reloadSelect();
+              }} />
+          )}
+        </PosSelectionPanel>
+        {linkApt && <LinkTenantModal apartment={linkApt} onClose={() => setLinkApt(null)}
+          onLinked={(d) => {
+            setLinkApt(null); reloadSelect();
+            window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: {
+              id: d.tenant_id, name: d.tenant_name, apartment_id: d.apartment_id,
+              apartment_number: d.apartment_number, rent_amount: d.rent_amount, currency: d.currency } }));
+          }} />}
+      </div>
+    );
+  }
+
   // ----- Location picker view -----
   if (showLocationPicker) {
     return (
@@ -1126,9 +1609,19 @@ function ApartmentSelect({
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
         <DesktopKioskHeader title="Kies een locatie" currentStep="select" totalGroups={1}
-          onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
+          onAdmin={onAdminAll || onAdmin} onSearch={onSearch}
+          alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
         <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center justify-between gap-2">
           <span className="text-xl font-black text-white tracking-tight">Kies een locatie</span>
+          {isUi && <button type="button" onClick={onToggleAlternateLayout}
+            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
+            aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
+            data-testid="kiosk-ui-pos-toggle-location"
+            className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center shadow-md ${
+              alternateLayout ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#FF5C00]'
+            }`}>
+            <CreditCard className="w-5 h-5" />
+          </button>}
         </div>
         <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
@@ -1186,7 +1679,8 @@ function ApartmentSelect({
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
-        hideAdminMenu={kioskCardMode} compactBranding={kioskCardMode} />
+        hideAdminMenu={kioskCardMode} compactBranding={kioskCardMode}
+        alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
@@ -1221,6 +1715,15 @@ function ApartmentSelect({
               uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
             }`}>
             {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
+          </button>
+          <button type="button" onClick={onToggleAlternateLayout}
+            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
+            aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
+            data-testid="kiosk-ui-pos-toggle"
+            className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
+              alternateLayout ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#FF5C00]'
+            }`}>
+            <CreditCard className="w-5 h-5" />
           </button>
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
@@ -2399,7 +2902,7 @@ const PAY_ITEMS_TEMPLATE = [
   { id: 'boete', label: 'Boetes', icon: AlertCircle, desc: 'Openstaande boetes' },
 ];
 
-function PaySelect({ overview, onBack, onConfirm }) {
+function PaySelect({ overview, onBack, onConfirm, posLayout = false }) {
   const { tenant, apartment: apt, balance, total_due, isAdvance = false,
     prefill_advance_amount: prefillAdvance = 0,
     open_invoices: openInvoices = [], open_invoices_total: openInvoicesTotal = 0,
@@ -2533,6 +3036,23 @@ function PaySelect({ overview, onBack, onConfirm }) {
   const hasCustom = custom && parseFloat(custom) > 0;
   const activeAmount = hasCustom ? parseFloat(custom) : selectedTotal;
   const canProceed = activeAmount > 0;
+  const posSummaryItems = hasCustom
+    ? [{ key: 'custom', label: isAdvance ? 'Vooruitbetaling' : 'Handmatig bedrag', amount: activeAmount }]
+    : [
+      ...selectedInvItems.map((inv) => ({
+        key: invItemKey(inv),
+        label: `Huur ${inv.period_month ? `${MONTHS_NL[inv.period_month - 1]} ${inv.period_year}` : 'factuur'}`,
+        amount: Number(inv.outstanding || 0),
+      })),
+      ...selectedPlanItems.map((item) => ({
+        key: planItemKey(item), label: `Regeling · termijn ${item.seq}`, amount: Number(item.amount || 0),
+      })),
+      ...(selectedSynCurrent > 0 ? [{ key: 'current-rent', label: 'Huur · huidige maand', amount: selectedSynCurrent }] : []),
+      ...selectedPlainKeys.map((key) => ({
+        key, label: PAY_ITEMS_TEMPLATE.find((item) => item.id === key)?.label || key,
+        amount: Number(amounts[key] || 0),
+      })),
+    ];
 
   const buildDescription = () => {
     const labels = [];
@@ -2699,8 +3219,8 @@ function PaySelect({ overview, onBack, onConfirm }) {
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 md:pt-3">
-      <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 py-2">
+    <div className={posLayout ? 'kiosk-pos-pay-select' : 'h-full bg-orange-500 flex flex-col px-3 sm:px-6 pt-2 md:pt-3'}>
+      {!posLayout && <div className="kiosk-chrome md:hidden flex items-center justify-between flex-wrap gap-2 py-2">
         <button onClick={onBack} data-testid="payselect-back-btn"
           className="flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -2710,9 +3230,9 @@ function PaySelect({ overview, onBack, onConfirm }) {
           <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
         </div>
-      </div>
+      </div>}
 
-      <div className="flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2">
+      <div className={posLayout ? 'kiosk-pos-payment-body' : 'flex-1 flex flex-col md:flex-row gap-2 sm:gap-3 min-h-0 pb-2'}>
         {/* LEFT — Payment items */}
         <div className="bg-white rounded-2xl flex-1 md:flex-[3] flex flex-col min-w-0 p-2 sm:p-3">
           <div className="hidden md:flex items-center gap-3 px-1 pb-3 mb-2 border-b border-slate-100" data-testid="payselect-tenant">
@@ -3000,10 +3520,12 @@ function PaySelect({ overview, onBack, onConfirm }) {
               getoond in de "Direct betalen" + "Regeling afspreken" knoppen
               hieronder, dus een aparte samenvatting is overbodig. */}
 
-          <button onClick={handleNext} disabled={!canProceed} data-testid="payment-next-btn"
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-3 sm:py-3.5 mt-1.5 text-sm sm:text-base font-bold">
-            <span>Direct betalen — {fmt(activeAmount)}</span> <ArrowRight className="w-5 h-5" />
-          </button>
+          {!posLayout && (
+            <button onClick={handleNext} disabled={!canProceed} data-testid="payment-next-btn"
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] py-3 sm:py-3.5 mt-1.5 text-sm sm:text-base font-bold">
+              <span>Direct betalen — {fmt(activeAmount)}</span> <ArrowRight className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Regeling-afspraak knop: alleen tonen wanneer er échte facturen
               geselecteerd zijn (achterstand / huidige / vooruit). Werkt NIET
@@ -3063,7 +3585,51 @@ function PaySelect({ overview, onBack, onConfirm }) {
           </div>
         </div>
 
-        {/* RIGHT — Desktop keypad */}
+        {posLayout ? (
+          <aside className="kiosk-pos-payment-summary" data-testid="kiosk-pos-payment-summary">
+            <header className="kiosk-pos-order-header">
+              <div>
+                <p className="kiosk-pos-eyebrow">CURRENT ORDER</p>
+                <h2>Factuurselectie</h2>
+              </div>
+              <Receipt className="h-5 w-5 text-[#A00842]" />
+            </header>
+            <div className="kiosk-pos-payment-lines">
+              {posSummaryItems.length === 0 ? (
+                <p className="kiosk-pos-payment-empty">Selecteer een factuur of voer een bedrag in.</p>
+              ) : posSummaryItems.map((item) => (
+                <div className="kiosk-pos-payment-line" key={item.key}>
+                  <span>{item.label}</span>
+                  <strong>{fmt(item.amount)}</strong>
+                </div>
+              ))}
+            </div>
+            <label className="kiosk-pos-custom-amount">
+              <span>Handmatig bedrag <small>({cur})</small></span>
+              <input value={custom} onChange={(event) => {
+                const [whole, ...fraction] = event.target.value.replace(/[^\d.]/g, '').split('.');
+                setCustom(fraction.length ? `${whole}.${fraction.join('')}` : whole);
+                setSelected(new Set());
+              }} inputMode="decimal" aria-label="Handmatig bedrag" data-testid="kiosk-pos-custom-amount" />
+            </label>
+            <div className="kiosk-pos-touch-keypad" aria-label="Bedrag invoeren">
+              {['1','2','3','4','5','6','7','8','9','.','0','DEL'].map((key) => (
+                <button key={key} type="button" onClick={() => press(key)} data-testid={`kiosk-pos-key-${key}`}>
+                  {key}
+                </button>
+              ))}
+            </div>
+            <div className="kiosk-pos-order-total">
+              <div><span>Totaal</span><strong>{fmt(activeAmount)}</strong></div>
+              <Wallet className="h-5 w-5 text-[#A00842]" />
+            </div>
+            <button onClick={handleNext} disabled={!canProceed} data-testid="payment-next-btn"
+              className="kiosk-pos-continue">
+              Kies betaalmethode <ArrowRight className="h-5 w-5" />
+            </button>
+          </aside>
+        ) : (
+        /* RIGHT — Desktop keypad */
         <div className="bg-white rounded-2xl hidden md:flex flex-none md:flex-[2] flex-col min-w-0 p-4 sm:p-5">
           <h4 className="text-sm sm:text-base font-bold text-slate-900 mb-0.5">Bedrag invoeren</h4>
           <p className="text-xs text-slate-400 mb-3">Totaal openstaand: {fmt(total_due)}</p>
@@ -3083,6 +3649,7 @@ function PaySelect({ overview, onBack, onConfirm }) {
             ))}
           </div>
         </div>
+        )}
       </div>
 
       {planModalOpen && !planSuccess && (
@@ -3301,7 +3868,7 @@ function PlanArrangedReceipt({ plan, currency, tenant, onClose }) {
 // =====================================================================
 // Method select — Contant / Bankoverschrijving
 // =====================================================================
-function MethodSelect({ payload, overview, onBack, onConfirm }) {
+function MethodSelect({ payload, overview, onBack, onConfirm, posLayout = false }) {
   const { tenant, apartment: apt } = overview;
   const cur = payload.currency || 'SRD';
   const [stripeCfg, setStripeCfg] = useState(null);
@@ -3319,10 +3886,28 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Direct betalen op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Direct naar uw bank', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
   ];
+  const methodCards = methods.map((m) => {
+    const Icon = m.icon;
+    return (
+      <button key={m.v} onClick={() => pick(m)} data-testid={`method-${m.v}`}
+        className={posLayout ? 'kiosk-pos-method-card' : 'bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] sm:hover:scale-[1.03] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl'}>
+        <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shrink-0 sm:mb-4 ${
+          m.accent === 'red' ? 'bg-red-50 text-red-500' : m.accent === 'orange' ? 'bg-orange-50 text-[#FF5C00]' : m.accent === 'pink' ? 'bg-pink-50 text-[#CC0066]' : 'bg-emerald-50 text-emerald-500'
+        }`}>
+          <Icon className="w-7 h-7 sm:w-10 sm:h-10" />
+        </div>
+        <div className="min-w-0 flex-1 sm:flex-none">
+          <p className="text-lg sm:text-2xl font-extrabold text-slate-900">{m.l}</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">{m.sub}</p>
+        </div>
+        <ArrowRight className="w-5 h-5 text-slate-300 sm:hidden ml-auto shrink-0" />
+      </button>
+    );
+  });
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="kiosk-chrome flex md:grid md:grid-cols-3 items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+    <div className={posLayout ? 'kiosk-pos-method' : 'h-full bg-orange-500 flex flex-col'} style={posLayout ? undefined : { padding: '1.5vh 1.5vw 0' }}>
+      {!posLayout && <div className="kiosk-chrome flex md:grid md:grid-cols-3 items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="method-back"
           className="md:hidden flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -3334,28 +3919,33 @@ function MethodSelect({ payload, overview, onBack, onConfirm }) {
           <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
         </div>
-      </div>
-      <div className="flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto">
-        <div className={`grid grid-cols-1 gap-3 sm:gap-4 w-full px-2 ${methods.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-4 max-w-6xl' : 'sm:grid-cols-3 max-w-4xl'}`}>
-          {methods.map((m) => {
-            const Icon = m.icon;
-            return (
-              <button key={m.v} onClick={() => pick(m)} data-testid={`method-${m.v}`}
-                className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 flex sm:flex-col items-center sm:justify-center text-left sm:text-center gap-4 sm:gap-0 hover:scale-[1.02] sm:hover:scale-[1.03] active:scale-[0.98] transition sm:aspect-[3/4] shadow-2xl">
-                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shrink-0 sm:mb-4 ${
-                  m.accent === 'red' ? 'bg-red-50 text-red-500' : m.accent === 'orange' ? 'bg-orange-50 text-[#FF5C00]' : m.accent === 'pink' ? 'bg-pink-50 text-[#CC0066]' : 'bg-emerald-50 text-emerald-500'
-                }`}>
-                  <Icon className="w-7 h-7 sm:w-10 sm:h-10" />
+      </div>}
+      <div className={posLayout ? 'kiosk-pos-method-content' : 'flex-1 min-h-0 flex items-center justify-center pb-6 overflow-auto'}>
+        {posLayout ? (
+          <div className="kiosk-pos-method-panel">
+            <header className="kiosk-pos-stage-summary">
+              <div>
+                <p className="kiosk-pos-eyebrow">BESTELLING</p>
+                <h2>{tenant.name}</h2>
+                <span>Appartement {apt.number}</span>
+              </div>
+              <div className="kiosk-pos-stage-actions">
+                <div className="kiosk-pos-stage-total">
+                  <span>Te betalen</span>
+                  <strong>{fmtMoney(payload.amount, cur)}</strong>
                 </div>
-                <div className="min-w-0 flex-1 sm:flex-none">
-                  <p className="text-lg sm:text-2xl font-extrabold text-slate-900">{m.l}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">{m.sub}</p>
-                </div>
-                <ArrowRight className="w-5 h-5 text-slate-300 sm:hidden ml-auto shrink-0" />
-              </button>
-            );
-          })}
-        </div>
+                <button type="button" onClick={onBack} className="kiosk-pos-step-back">
+                  <ArrowLeft className="h-5 w-5" /> Facturen wijzigen
+                </button>
+              </div>
+            </header>
+            <div className="kiosk-pos-method-grid">{methodCards}</div>
+          </div>
+        ) : (
+          <div className={`grid grid-cols-1 gap-3 sm:gap-4 w-full px-2 ${methods.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-4 max-w-6xl' : 'sm:grid-cols-3 max-w-4xl'}`}>
+            {methodCards}
+          </div>
+        )}
       </div>
       {bankOpen && (
         <KioskBankTransferModal amount={payload.amount} currency={cur}
@@ -3455,7 +4045,7 @@ async function sendApkPrint(data, paymentId) {
   try { bridge(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
 }
 
-function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess }) {
+function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess, posLayout = false }) {
   const { tenant, apartment: apt } = overview;
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -3520,8 +4110,8 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
   };
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '1.5vh 1.5vw 0' }}>
-      <div className="kiosk-chrome flex md:grid md:grid-cols-3 items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
+    <div className={posLayout ? 'kiosk-pos-confirm' : 'h-full bg-orange-500 flex flex-col'} style={posLayout ? undefined : { padding: '1.5vh 1.5vw 0' }}>
+      {!posLayout && <div className="kiosk-chrome flex md:grid md:grid-cols-3 items-center justify-between flex-wrap gap-2 px-1 sm:px-2 py-2">
         <button onClick={onBack} data-testid="confirm-back"
           className="md:hidden flex items-center gap-1.5 text-white font-bold bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2">
           <ArrowLeft className="w-4 h-4" /> <span className="text-xs sm:text-sm">Terug</span>
@@ -3531,9 +4121,9 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
           <p className="text-xs sm:text-sm font-semibold">{tenant.name}</p>
           <p className="text-[10px] sm:text-xs opacity-70">Appt. {apt.number}</p>
         </div>
-      </div>
-      <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center pb-6">
-        <div className="bg-white rounded-3xl w-full max-w-xl p-6 sm:p-8 shadow-2xl">
+      </div>}
+      <div className={posLayout ? 'kiosk-pos-confirm-content' : 'flex-1 min-h-0 overflow-auto flex items-center justify-center pb-6'}>
+        <div className={posLayout ? 'kiosk-pos-confirm-card' : 'bg-white rounded-3xl w-full max-w-xl p-6 sm:p-8 shadow-2xl'}>
           <div className="bg-slate-900 rounded-2xl p-6 mb-5 text-white text-center">
             <p className="text-xs font-bold uppercase tracking-widest text-white/60">Te betalen</p>
             <p className="text-5xl font-extrabold tracking-tight mt-2 text-orange-400">{fmtMoney(confirmPayload.amount, confirmPayload.currency)}</p>
@@ -3557,6 +4147,12 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
             <Row label="Appartement" value={`Appt. ${apt.number}`} />
             <Row label="Betaalwijze" value={String(confirmPayload.method || '').toUpperCase()} />
           </div>
+          {posLayout && (
+            <button type="button" onClick={onBack} disabled={loading} data-testid="pos-confirm-back"
+              className="kiosk-pos-step-back w-full mb-4">
+              <ArrowLeft className="h-5 w-5" /> Betaalmethode wijzigen
+            </button>
+          )}
           {err && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{err}</div>}
           <button onClick={submit} disabled={loading} data-testid="confirm-submit"
             className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white text-lg font-extrabold rounded-xl flex items-center justify-center gap-2 transition disabled:opacity-50">
@@ -3796,7 +4392,7 @@ function FittedReceiptPreview({ paymentId, maxScale = 1, fancy = false }) {
   );
 }
 
-function ReceiptScreen({ payment, overview, onDone }) {
+function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
   // Bereken openstaand saldo NA deze betaling — refetch van backend voor
   // de echte stand (rekening houdend met openstaande maanden + nieuwe
   // huurperiode). Fallback: vorige overview min betaald bedrag.
@@ -3882,7 +4478,8 @@ function ReceiptScreen({ payment, overview, onDone }) {
   }, [onDone, partialInv, planMade]);
 
   return (
-    <div className="h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden">
+    <div className={posLayout ? 'kiosk-pos-receipt' : 'h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden'}>
+      {!posLayout && (
       <div className="kiosk-chrome text-center mb-2 shrink-0" data-testid="receipt-thanks">
         <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 flex items-center justify-center mx-auto mb-1 shadow-lg">
           <Check className="w-6 h-6 sm:w-9 sm:h-9 text-emerald-600" strokeWidth={3} />
@@ -3890,6 +4487,7 @@ function ReceiptScreen({ payment, overview, onDone }) {
         <h2 className="text-xl sm:text-3xl font-extrabold text-white leading-tight">Bedankt!</h2>
         <p className="text-xs sm:text-sm text-white/90">Uw betaling is succesvol verwerkt</p>
       </div>
+      )}
 
       <div className="w-full flex-1 min-h-0 flex flex-col items-center">
       <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
@@ -7036,12 +7634,25 @@ export default function KioskLayout() {
   const [kioskCardView, setKioskCardView] = useState(() => {
     try { return localStorage.getItem('kiosk_card_view') === '1'; } catch { return false; }
   });
+  const [kioskAlternateLayout, setKioskAlternateLayout] = useState(() => {
+    try {
+      return localStorage.getItem('kiosk_alternate_layout') === '1'
+        || localStorage.getItem('kiosk_modern_theme') === '1';
+    } catch { return false; }
+  });
   useEffect(() => {
     try {
       if (kioskCardView) localStorage.setItem('kiosk_card_view', '1');
       else localStorage.removeItem('kiosk_card_view');
     } catch { /* local preference is optional */ }
   }, [kioskCardView]);
+  useEffect(() => {
+    try {
+      if (kioskAlternateLayout) localStorage.setItem('kiosk_alternate_layout', '1');
+      else localStorage.removeItem('kiosk_alternate_layout');
+      localStorage.removeItem('kiosk_modern_theme');
+    } catch { /* local preference is optional */ }
+  }, [kioskAlternateLayout]);
   useEffect(() => {
     try {
       if (selectedLocationId) sessionStorage.setItem('kiosk_sel_loc', selectedLocationId);
@@ -7159,6 +7770,7 @@ export default function KioskLayout() {
   const showDesktopBar = step !== 'check';
   const showMobileKioskBar = !step.startsWith('admin:')
     && ['select', 'kasgeld', 'stroom'].includes(step)
+    && !(isUi && kioskAlternateLayout && step === 'select')
     && !(isUi && isMobileViewport && kioskCardView);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
@@ -7304,7 +7916,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className="kiosk-fullscreen kiosk-white bg-white kiosk-ui" data-testid="kiosk-root" data-theme="ui">
+    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${kioskAlternateLayout ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -7350,7 +7962,8 @@ export default function KioskLayout() {
         <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 z-10" style={{ top: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 0, padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} currentStep={step}
             currentLocationId={selectedLocationId} currentApartment={apartment}
-            totalGroups={1} onAdmin={adminMode}
+            totalGroups={1} onAdmin={adminMode} alternateLayout={kioskAlternateLayout}
+            onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
             tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
               ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
               : null}
@@ -7358,7 +7971,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(kioskAlternateLayout && step === 'select') ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -7377,6 +7990,8 @@ export default function KioskLayout() {
               onLocationSelectionChange={setSelectedLocationId}
               uiCardView={kioskCardView}
               onUiCardViewChange={setKioskCardView}
+              alternateLayout={kioskAlternateLayout}
+              onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
               onEnableNfc={enableWebNfc}
               webNfcStatus={webNfcStatus}
               hasAdminAccess={hasAdminAccess}
@@ -7686,7 +8301,7 @@ export default function KioskLayout() {
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
-      {showDesktopBar && createPortal((
+      {showDesktopBar && !(kioskAlternateLayout && step === 'select') && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
