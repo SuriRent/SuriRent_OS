@@ -6036,18 +6036,18 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
               placeholder="+597 8xx xxxx"
               className={modalInputCls(accent)} />
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
+          <div className="grid min-w-0 grid-cols-2 gap-2">
+            <label className="block min-w-0">
               <span className={modalLabelCls}>Geboortedatum</span>
               <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                data-testid="add-tenant-birth" className={modalInputCls(accent)} />
+                data-testid="add-tenant-birth" className={`${modalInputCls(accent)} min-w-0 max-w-full`} />
             </label>
-            <label className="block">
+            <label className="block min-w-0">
               <span className={modalLabelCls}>ID-nummer</span>
               <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)}
                 data-testid="add-tenant-id-number"
                 placeholder="XXXXXXX"
-                className={modalInputCls(accent)} />
+                className={`${modalInputCls(accent)} min-w-0 max-w-full`} />
             </label>
           </div>
           <label className="block">
