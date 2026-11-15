@@ -4233,7 +4233,7 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
 
   // Auto-return after the payment confirmation has been visible for a while.
   useEffect(() => {
-    const t = setTimeout(onDone, 15000);
+    const t = setTimeout(onDone, 5000);
     return () => clearTimeout(t);
   }, [onDone]);
 
