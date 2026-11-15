@@ -1521,25 +1521,6 @@ function ApartmentSelect({
         companySlug={companySlug}
         isAdmin={isAdmin}
       />}
-      {isUi && !isDesk && (
-        <>
-          <UiLocationPicker
-            locOpts={totalGroups > 1 ? locOpts : null}
-            locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
-          />
-          <div className="px-1 pb-3 pt-1 sm:px-2" data-testid="kiosk-ui-mobile-hero">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_8px_20px_-12px_rgba(255,92,0,0.7)]">
-                <Home className="h-6 w-6" strokeWidth={2.4} fill="currentColor" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="truncate text-xl font-bold tracking-tight text-[#1B2A5C]">Appartementen Overzicht</h2>
-                <p className="text-sm text-slate-500">Totaal: {visible.length} appartementen</p>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 pb-3 sm:px-2">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1564,6 +1545,12 @@ function ApartmentSelect({
             </select>
           </label>
         </div>
+      )}
+      {isUi && !isDesk && (
+        <UiLocationPicker
+          locOpts={totalGroups > 1 ? locOpts : null}
+          locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+        />
       )}
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
