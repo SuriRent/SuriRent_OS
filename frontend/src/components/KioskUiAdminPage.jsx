@@ -55,8 +55,8 @@ export default function KioskUiAdminPage({ title, label, subtitle = 'Beheer deze
             </div>
           </div>
           <button type="button" onClick={onClose} data-testid={`${testId}-close`} aria-label="Sluiten"
-            className="w-14 h-14 shrink-0 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
-            <X className="w-7 h-7 text-slate-700" strokeWidth={2.5} />
+            className="w-10 h-10 shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+            <X className="w-5 h-5 text-slate-700" strokeWidth={2.5} />
           </button>
         </div>
       ) : <UiBar title={title} onBack={onBack} testId="kiosk-admin-page-back" />)}

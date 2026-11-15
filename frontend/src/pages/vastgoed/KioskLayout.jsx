@@ -1005,6 +1005,58 @@ function UiLocationPicker({ locationName, locOpts }) {
   );
 }
 
+function KioskApartmentAvatar({ src, name, number, className }) {
+  const [failedSrc, setFailedSrc] = useState('');
+  return (
+    <div className={className}>
+      {src && failedSrc !== src ? (
+        <img src={src} alt={name || ''} data-testid={`apt-${number}-photo`}
+          className="h-full w-full object-cover" onError={() => setFailedSrc(src)} />
+      ) : (
+        <Building2 className="h-7 w-7 text-orange-500 md:h-9 md:w-9" aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+function KioskApartmentOpenAmount({ apartment }) {
+  const { tenant_id: tenantId, currency, number } = apartment;
+  const status = uiAptStatus(apartment);
+  const [amount, setAmount] = useState(() => status === 'paid' ? 0 : null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!tenantId || status === 'paid') {
+      setAmount(0);
+      setError(false);
+      return () => { active = false; };
+    }
+    setAmount(null);
+    setError(false);
+    loadCachedOverview(tenantId)
+      .then(({ data }) => {
+        if (active) setAmount(buildPaymentOverview(data).total_due);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      });
+    return () => { active = false; };
+  }, [tenantId, status]);
+
+  const label = error ? 'Bedrag niet beschikbaar'
+    : amount === null ? 'Bedrag laden…'
+      : fmtMoney(amount, currency || 'SRD');
+  return (
+    <span className={`mt-1 inline-flex max-w-full items-center justify-center gap-1 text-[11px] font-bold sm:text-xs md:text-sm ${
+      amount > 0 ? 'text-orange-700' : 'text-slate-600'
+    }`} data-testid={`apt-${number}-due`} aria-label={`Openstaand saldo: ${label}`} title={`Openstaand saldo: ${label}`}>
+      <Wallet className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, alternateLayout, onToggleAlternateLayout,
@@ -1538,7 +1590,7 @@ function ApartmentSelect({
       )}
 
       <div className={`flex-1 min-h-0 overflow-auto pb-32 md:pb-28 ${isDesk ? '' : 'no-scrollbar'}`}>
-        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 pt-2 sm:px-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
@@ -1566,18 +1618,12 @@ function ApartmentSelect({
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
               className="kiosk-ui-apartment-card group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              {photoSrc ? (
-                <div className="rounded-full overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">
-                  <img src={photoSrc} alt={a.tenant_name || ''}
-                    data-testid={`apt-${a.number}-photo`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                </div>
-              ) : (
-                <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
-                  <Building2 className="w-7 h-7 md:w-9 md:h-9 text-orange-500" />
-                </div>
-              )}
+              <KioskApartmentAvatar
+                src={photoSrc}
+                name={a.tenant_name}
+                number={a.number}
+                className="rounded-full flex items-center justify-center overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100 ring-4 ring-slate-100 group-hover:ring-orange-300"
+              />
               <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
               <div className="flex items-center gap-1 md:gap-1.5 text-slate-700 mb-2 md:mb-3 max-w-full">
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 shrink-0" />
@@ -1606,6 +1652,7 @@ function ApartmentSelect({
                   <X className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Niet betaald
                 </span>
               )}
+              <KioskApartmentOpenAmount apartment={a} />
             </button>
             );
           })}
@@ -4008,110 +4055,6 @@ function Row({ label, value }) {
   );
 }
 
-function PartialPlanSuggestion({ tenantId, partialInvoice, onClose, onPlanned }) {
-  const cur = (partialInvoice?.currency || 'SRD').toUpperCase();
-  const remaining = Number(partialInvoice?.outstanding || 0);
-  const fmt = (v) => fmtMoney(v, cur);
-  const [n, setN] = useState(2);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const monthly = useMemo(() => Math.round((remaining / n) * 100) / 100, [remaining, n]);
-
-  if (!partialInvoice || remaining <= 0) return null;
-
-  const monthName = partialInvoice.period_month
-    ? `${MONTHS_NL[partialInvoice.period_month - 1]} ${partialInvoice.period_year}`
-    : 'deze factuur';
-
-  const submit = async () => {
-    setBusy(true); setErr('');
-    try {
-      const { data } = await api.post('/kiosk/payment-plans/quick', {
-        tenant_id: tenantId,
-        invoice_id: partialInvoice.id,
-        total_amount: remaining,
-        num_installments: n,
-        currency: cur,
-      });
-      onPlanned?.(data);
-    } catch (e) {
-      setErr(formatError(e));
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      data-testid="partial-plan-suggestion"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0px)' }}>
-        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
-          <span className="w-10 h-1.5 rounded-full bg-slate-200" />
-        </div>
-        <div className="px-5 pt-3 sm:pt-6 pb-2 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-orange-500/25">
-            <Calendar className="w-6 h-6 text-white" />
-          </div>
-          <h3 className="text-xl font-extrabold text-slate-900">Resterend bedrag afspreken?</h3>
-          <p className="text-sm text-slate-500 mt-1">
-            Er staat nog <span className="font-extrabold text-orange-600">{fmt(remaining)}</span> open voor {monthName}.
-          </p>
-        </div>
-
-        <div className="px-5 py-3 flex-1 overflow-y-auto">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">In hoeveel termijnen?</p>
-          <div className="grid grid-cols-3 gap-2">
-            {[2, 3, 4].map((opt) => {
-              const sel = n === opt;
-              const per = Math.round((remaining / opt) * 100) / 100;
-              return (
-                <button key={opt} onClick={() => setN(opt)} data-testid={`partial-plan-n-${opt}`}
-                  className={`rounded-xl border-2 p-3 text-center transition ${
-                    sel ? 'border-orange-500 bg-orange-50 shadow-md shadow-orange-500/20'
-                      : 'border-slate-200 bg-white hover:border-orange-300'
-                  }`}>
-                  <p className={`text-2xl font-extrabold ${sel ? 'text-orange-600' : 'text-slate-700'}`}>{opt}×</p>
-                  <p className={`text-[10px] uppercase tracking-wider font-bold mt-0.5 ${sel ? 'text-orange-700' : 'text-slate-400'}`}>termijnen</p>
-                  <p className={`text-xs font-mono font-extrabold mt-1.5 ${sel ? 'text-orange-700' : 'text-slate-500'}`}>{fmt(per)}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
-            <div className="row-label-value mb-1">
-              <span className="text-slate-500 font-bold">Per maand</span>
-              <span className="font-extrabold text-slate-900 font-mono">{fmt(monthly)}</span>
-            </div>
-            <div className="row-label-value">
-              <span className="text-slate-500 font-bold">Eerste vervaldatum</span>
-              <span className="font-mono text-slate-700 font-semibold">~30 dagen vanaf vandaag</span>
-            </div>
-          </div>
-
-          {err && (
-            <div className="mt-3 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-              {err}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-slate-100 px-5 py-3 grid grid-cols-2 gap-2 shrink-0">
-          <button onClick={onClose} disabled={busy} data-testid="partial-plan-skip"
-            className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-50">
-            Nee, later
-          </button>
-          <button onClick={submit} disabled={busy} data-testid="partial-plan-confirm"
-            className="h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/25">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Maak regeling
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Bon-preview die zich schaalt naar de beschikbare hoogte (geen scrollen) en
 // horizontaal gecentreerd staat. Papier schuift recht van onder naar boven in.
 function FittedReceiptPreview({ paymentId, maxScale = 1, fancy = false }) {
@@ -4204,15 +4147,11 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
     return Math.max(0, prevDue - Number(payment.amount || 0));
   });
   const [remainingLoading, setRemainingLoading] = useState(true);
+  const [paymentOverviewAfter, setPaymentOverviewAfter] = useState(null);
   // E-mail status — null = bezig, {sent:true,to} = verstuurd, {sent:false} = overgeslagen/mislukt.
   const [emailStatus, setEmailStatus] = useState(null);
 
-  // Partial-betaling detectie: na de refetch checken we of er een factuur
-  // is die zojuist gedeeltelijk betaald is en nog open staat. Zo ja, tonen
-  // we de "regeling maken?"-suggestie BEFORE auto-done.
-  const [partialInv, setPartialInv] = useState(null);
-  const [planMade, setPlanMade] = useState(false);
-  const [bonOpen, setBonOpen] = useState(() => !(typeof window !== 'undefined' && window.innerWidth >= 768));
+  const [bonOpen, setBonOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
   useEffect(() => {
     const on = () => setIsDesktop(window.innerWidth >= 768);
@@ -4236,12 +4175,9 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
       : Promise.resolve();
     const ov = api.get(`/kiosk/tenants/${tid}/overview`)
       .then((r) => {
-        // Eerste partial-factuur uit de bijgewerkte overview pakken.
-        const invs = Array.isArray(r.data?.open_invoices) ? r.data.open_invoices : [];
-        const partial = invs.find((inv) => inv.is_partial && inv.outstanding > 0);
-        if (partial) setPartialInv(partial);
+        setPaymentOverviewAfter(r.data);
       })
-      .catch(() => { /* geen suggestie */ });
+      .catch(() => { /* summary falls back to the pre-payment overview */ });
     Promise.all([bon, ov]).finally(() => setRemainingLoading(false));
   }, [payment.tenant_id, payment.id, overview]);
 
@@ -4269,15 +4205,37 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
     if (!ok) openReceiptImage(payment.id);
   };
 
+  const receiptTenant = paymentOverviewAfter?.tenant || overview?.tenant || {};
+  const receiptApartment = paymentOverviewAfter?.apartment || overview?.apartment || {};
+  const paymentDateValue = payment.paid_at || payment.created_at;
+  const paymentDate = paymentDateValue && Number.isFinite(new Date(paymentDateValue).getTime())
+    ? new Date(paymentDateValue).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '—';
+  const invoiceCandidates = [
+    ...(overview?.open_invoices || []),
+    ...(overview?.current_invoices || []),
+    ...(overview?.future_invoices || []),
+  ];
+  const paymentInvoice = invoiceCandidates.find((invoice) => invoice.id === payment.invoice_id)
+    || invoiceCandidates.find((invoice) => invoice.invoice_number && invoice.invoice_number === payment.invoice_number)
+    || invoiceCandidates.find((invoice) => invoice.period_month === payment.period_month && invoice.period_year === payment.period_year);
+  const invoiceAmount = Number(paymentInvoice?.amount ?? receiptApartment.rent_amount ?? 0);
+  const invoicePaidBefore = paymentInvoice
+    ? Number(paymentInvoice.amount_paid ?? Math.max(0, invoiceAmount - Number(paymentInvoice.outstanding || 0)))
+    : 0;
+  const invoiceOutstandingBefore = paymentInvoice
+    ? Number(paymentInvoice.outstanding ?? Math.max(0, invoiceAmount - invoicePaidBefore))
+    : invoiceAmount;
+  const amountAppliedToInvoice = Math.min(Number(payment.amount || 0), invoiceOutstandingBefore);
+  const invoiceReceivedAfter = Math.min(invoiceAmount, invoicePaidBefore + amountAppliedToInvoice);
+  const invoiceRemainingAfter = Math.max(0, invoiceAmount - invoiceReceivedAfter);
+  const receivedCurrency = paymentOverviewAfter?.balance?.currency || overview?.balance?.currency || cur;
 
-  // Auto-terug naar beginscherm na 10 seconden. Pauzeer wanneer de partial-
-  // suggestie open is — anders verdwijnt de modal achter het home-scherm voor
-  // de huurder hem kan beantwoorden.
+  // Auto-return after the payment confirmation has been visible for a while.
   useEffect(() => {
-    if (partialInv && !planMade) return undefined;
-    const t = setTimeout(onDone, 15000);
+    const t = setTimeout(onDone, 10000);
     return () => clearTimeout(t);
-  }, [onDone, partialInv, planMade]);
+  }, [onDone]);
 
   return (
     <div className={posLayout ? 'kiosk-pos-receipt' : 'h-full bg-orange-500 flex flex-col items-center p-3 sm:p-6 overflow-hidden'}>
@@ -4293,6 +4251,65 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
 
       <div className="w-full flex-1 min-h-0 flex flex-col items-center">
       <div className="bg-white rounded-3xl w-full max-w-md p-3 sm:p-5 shadow-2xl flex-1 min-h-0 flex flex-col" data-testid="receipt-card">
+        {!posLayout && (
+          <div className="mb-2 shrink-0 space-y-2" data-testid="receipt-payment-summary">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm">
+              <OverviewTenantPhoto
+                src={receiptTenant.avatar_url || receiptTenant.id_photo_url}
+                name={receiptTenant.name || payment.tenant_name}
+                testid="receipt-summary-tenant-photo"
+              />
+              <div className="min-w-0">
+                <p className="truncate text-base font-extrabold text-[#1B2A5C]">
+                  {receiptTenant.name || payment.tenant_name || 'Huurder'}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-sm font-semibold text-slate-600">
+                  <Home className="h-4 w-4 shrink-0" />
+                  {receiptApartment.number || payment.apartment_number || 'Appartement'}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-emerald-200 rounded-2xl border border-emerald-100 bg-emerald-50 py-2.5">
+              <div className="flex min-w-0 items-center gap-2 px-2.5">
+                <CheckCircle className="h-5 w-5 shrink-0 text-emerald-600" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-slate-500">Bedrag</p>
+                  <p className="truncate text-sm font-extrabold text-[#1B2A5C]" data-testid="receipt-summary-amount">
+                    {fmtMoney(payment.amount, cur)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex min-w-0 items-center gap-2 px-2.5">
+                <Calendar className="h-5 w-5 shrink-0 text-[#1B2A5C]" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-slate-500">Datum</p>
+                  <p className="truncate text-sm font-extrabold text-[#1B2A5C]" data-testid="receipt-summary-date">{paymentDate}</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white px-3 py-2.5">
+              <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-extrabold text-[#1B2A5C]">
+                <FileText className="h-4 w-4" /> Overzicht van deze factuur
+              </h3>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span>Factuurbedrag</span>
+                  <strong className="text-slate-800">{fmtMoney(invoiceAmount, receivedCurrency)}</strong>
+                </div>
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span>Ontvangen op deze factuur</span>
+                  <strong className="text-emerald-700">{fmtMoney(invoiceReceivedAfter, receivedCurrency)}</strong>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-slate-100 pt-1 text-slate-600">
+                  <span>Openstaand op deze factuur</span>
+                  <strong className={invoiceRemainingAfter > 0 ? 'text-orange-700' : 'text-emerald-700'} data-testid="receipt-summary-remaining">
+                    {fmtMoney(invoiceRemainingAfter, receivedCurrency)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-center gap-2 mb-1 text-slate-400 shrink-0">
           <Printer className="w-3.5 h-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Bon Printer</span>
@@ -4369,16 +4386,6 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
       </div>
       </div>
 
-      {/* Partial-payment regeling suggestie — verschijnt na ~1.5s zodat de
-          huurder eerst de bevestiging "Bedankt!" ziet, dan een keuze maakt. */}
-      {partialInv && !planMade && (
-        <PartialPlanSuggestion
-          tenantId={payment.tenant_id || overview?.tenant?.id}
-          partialInvoice={partialInv}
-          onClose={() => setPartialInv(null)}
-          onPlanned={() => { setPlanMade(true); setPartialInv(null); }}
-        />
-      )}
     </div>
   );
 }
