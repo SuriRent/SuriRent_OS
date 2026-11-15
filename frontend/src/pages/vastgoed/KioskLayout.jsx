@@ -1005,6 +1005,58 @@ function UiLocationPicker({ locationName, locOpts }) {
   );
 }
 
+function KioskApartmentAvatar({ src, name, number, className }) {
+  const [failedSrc, setFailedSrc] = useState('');
+  return (
+    <div className={className}>
+      {src && failedSrc !== src ? (
+        <img src={src} alt={name || ''} data-testid={`apt-${number}-photo`}
+          className="h-full w-full object-cover" onError={() => setFailedSrc(src)} />
+      ) : (
+        <Building2 className="h-7 w-7 text-orange-500 md:h-9 md:w-9" aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+function KioskApartmentOpenAmount({ apartment }) {
+  const { tenant_id: tenantId, currency, number } = apartment;
+  const status = uiAptStatus(apartment);
+  const [amount, setAmount] = useState(() => status === 'paid' ? 0 : null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!tenantId || status === 'paid') {
+      setAmount(0);
+      setError(false);
+      return () => { active = false; };
+    }
+    setAmount(null);
+    setError(false);
+    loadCachedOverview(tenantId)
+      .then(({ data }) => {
+        if (active) setAmount(buildPaymentOverview(data).total_due);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      });
+    return () => { active = false; };
+  }, [tenantId, status]);
+
+  const label = error ? 'Bedrag niet beschikbaar'
+    : amount === null ? 'Bedrag laden…'
+      : fmtMoney(amount, currency || 'SRD');
+  return (
+    <span className={`mt-1 inline-flex max-w-full items-center justify-center gap-1 text-[11px] font-bold sm:text-xs md:text-sm ${
+      amount > 0 ? 'text-orange-700' : 'text-slate-600'
+    }`} data-testid={`apt-${number}-due`} aria-label={`Openstaand saldo: ${label}`} title={`Openstaand saldo: ${label}`}>
+      <Wallet className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
   selectedLocationId, onLocationSelectionChange, alternateLayout, onToggleAlternateLayout,
@@ -1566,18 +1618,12 @@ function ApartmentSelect({
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
               className="kiosk-ui-apartment-card group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              {photoSrc ? (
-                <div className="rounded-full overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">
-                  <img src={photoSrc} alt={a.tenant_name || ''}
-                    data-testid={`apt-${a.number}-photo`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                </div>
-              ) : (
-                <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100">
-                  <Building2 className="w-7 h-7 md:w-9 md:h-9 text-orange-500" />
-                </div>
-              )}
+              <KioskApartmentAvatar
+                src={photoSrc}
+                name={a.tenant_name}
+                number={a.number}
+                className="rounded-full flex items-center justify-center overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 group-hover:bg-orange-100 ring-4 ring-slate-100 group-hover:ring-orange-300"
+              />
               <span className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1 uppercase tracking-tight">{a.number}</span>
               <div className="flex items-center gap-1 md:gap-1.5 text-slate-700 mb-2 md:mb-3 max-w-full">
                 <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 shrink-0" />
@@ -1606,6 +1652,7 @@ function ApartmentSelect({
                   <X className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={3} /> Niet betaald
                 </span>
               )}
+              <KioskApartmentOpenAmount apartment={a} />
             </button>
             );
           })}
