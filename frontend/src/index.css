@@ -3915,3 +3915,62 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   }
   .kiosk-pos-mobile-layout .kiosk-pos-receipt > .w-full { width: 100%; max-width: none; }
 }
+
+.kiosk-fullscreen.kiosk-white.kiosk-ui {
+  background: #F3F4F6 !important;
+  background-image: none !important;
+}
+
+@media (max-width: 767px) {
+  .kiosk-fullscreen.kiosk-white.kiosk-ui {
+    background: linear-gradient(to bottom, #FFFFFF 0, #FFFFFF calc(var(--kiosk-sat) + 60px), #F3F4F6 calc(var(--kiosk-sat) + 60px)) !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-head-wrap {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+    background: #FFFFFF !important;
+    border-bottom: 1px solid #E8ECF2 !important;
+    box-shadow: 0 4px 12px -10px rgba(15, 23, 42, 0.25) !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui [data-testid="kiosk-desktop-header"] {
+    min-height: 58px !important;
+    margin: 0 !important;
+    padding: 6px 12px !important;
+    background: #FFFFFF !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav {
+    border-radius: 24px 24px 0 0 !important;
+    box-shadow: 0 -10px 30px -16px rgba(15, 23, 42, 0.3) !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-active {
+    background: linear-gradient(180deg, #FF8A2B, #FF5C00) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 8px 18px -8px rgba(255, 92, 0, 0.7) !important;
+  }
+  body.kiosk-ui-body nav.kiosk-ui-mobile-nav .kiosk-ui-bottom-dock-active * {
+    color: #FFFFFF !important;
+  }
+}
+
+@media (hover: none) and (max-width: 767px) {
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:hover {
+    transform: none !important;
+    background-color: #FFFFFF !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:not([data-testid$="-vacant"]):hover {
+    border-color: transparent !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card[data-testid$="-vacant"]:hover {
+    border-color: #CBD5E1 !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:active {
+    transform: scale(0.99) !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
