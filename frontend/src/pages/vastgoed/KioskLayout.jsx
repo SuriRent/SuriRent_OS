@@ -1590,7 +1590,7 @@ function ApartmentSelect({
       )}
 
       <div className={`flex-1 min-h-0 overflow-auto pb-32 md:pb-28 ${isDesk ? '' : 'no-scrollbar'}`}>
-        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 pt-2 sm:px-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
