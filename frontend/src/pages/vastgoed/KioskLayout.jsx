@@ -988,17 +988,18 @@ function UiHero({ apartments, locationName, locOpts, companySlug, isAdmin, compa
 function UiLocationPicker({ locationName, locOpts }) {
   if (!locationName) return null;
   const pill = (onClick) => (
-    <button type="button" onClick={onClick} data-testid="kiosk-ui-location-pill"
-      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#1B2A5C] shadow-sm">
+    <button type="button" onClick={onClick} title={locationName}
+      aria-label={`Locatie: ${locationName}`} data-testid="kiosk-ui-location-pill"
+      className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-2xl bg-white px-3 text-xs font-bold text-[#1B2A5C] shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)]">
       <MapPin className="h-3.5 w-3.5 shrink-0 text-[#FF5C00]" />
-      <span className="truncate">{locationName}</span>
+      <span>Locatie</span>
       <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
     </button>
   );
   return (
-    <div className="relative z-10 flex justify-start px-1 pb-2 sm:px-2 md:hidden">
+    <div className="relative shrink-0">
       {locOpts
-        ? <UiLocMenu opts={locOpts} wrapClass="relative max-w-full" menuAlign="start">{(toggle) => pill(toggle)}</UiLocMenu>
+        ? <UiLocMenu opts={locOpts} wrapClass="relative" menuAlign="end">{(toggle) => pill(toggle)}</UiLocMenu>
         : pill(undefined)}
     </div>
   );
@@ -1088,7 +1089,7 @@ function ApartmentSelect({
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const alternatePosView = isUi && alternateLayout;
+  const alternatePosView = isUi && isDesk && alternateLayout;
   const showLocationPicker = !alternatePosView && totalGroups > 1 && selectedLocationId === null;
   const locOpts = {
     locations, unassigned: unassignedCount, currentId: selectedLocationId,
@@ -1435,15 +1436,6 @@ function ApartmentSelect({
           alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
         <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center justify-between gap-2">
           <span className="text-xl font-black text-white tracking-tight">Kies een locatie</span>
-          {isUi && <button type="button" onClick={onToggleAlternateLayout}
-            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
-            aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
-            data-testid="kiosk-ui-pos-toggle-location"
-            className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center shadow-md ${
-              alternateLayout ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#FF5C00]'
-            }`}>
-            <CreditCard className="w-5 h-5" />
-          </button>}
         </div>
         <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-1 sm:px-2 max-w-5xl mx-auto pt-2">
@@ -1528,15 +1520,6 @@ function ApartmentSelect({
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={onToggleAlternateLayout}
-            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
-            aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
-            data-testid="kiosk-ui-pos-toggle"
-            className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
-              alternateLayout ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#FF5C00]'
-            }`}>
-            <CreditCard className="w-5 h-5" />
-          </button>
           <label className="relative shrink-0 w-12 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center text-[#1B2A5C]">
             <SlidersHorizontal className="w-5 h-5" />
             <select value={uiFilter} onChange={(e) => setUiFilter(e.target.value)} aria-label="Filter" data-testid="kiosk-ui-filter"
@@ -1544,13 +1527,11 @@ function ApartmentSelect({
               {UI_FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
           </label>
+          <UiLocationPicker
+            locOpts={totalGroups > 1 ? locOpts : null}
+            locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+          />
         </div>
-      )}
-      {isUi && !isDesk && (
-        <UiLocationPicker
-          locOpts={totalGroups > 1 ? locOpts : null}
-          locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
-        />
       )}
       {error && (
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
@@ -7581,8 +7562,7 @@ export default function KioskLayout() {
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
   const showMobileKioskBar = !step.startsWith('admin:')
-    && ['select', 'kasgeld', 'stroom'].includes(step)
-    && !(isUi && kioskAlternateLayout && step === 'select');
+    && ['select', 'kasgeld', 'stroom'].includes(step);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -7727,7 +7707,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${kioskAlternateLayout ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
+    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${kioskAlternateLayout && !isMobileViewport ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -7782,7 +7762,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(kioskAlternateLayout && step === 'select') ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -8110,7 +8090,7 @@ export default function KioskLayout() {
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
-      {showDesktopBar && !(kioskAlternateLayout && step === 'select') && createPortal((
+      {showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
