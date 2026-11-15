@@ -3915,3 +3915,10 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   }
   .kiosk-pos-mobile-layout .kiosk-pos-receipt > .w-full { width: 100%; max-width: none; }
 }
+
+@media (min-width: 768px) {
+  .kiosk-fullscreen.kiosk-white.kiosk-ui {
+    background: #F3F4F6 !important;
+    background-image: none !important;
+  }
+}
