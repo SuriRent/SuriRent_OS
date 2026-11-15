@@ -1522,7 +1522,7 @@ function ApartmentSelect({
         isAdmin={isAdmin}
       />}
       {isUi && (
-        <div className="md:hidden flex items-center gap-2 px-1 pb-3 sm:px-2">
+        <div className="md:hidden flex items-center gap-2 px-1 pt-2 pb-3 sm:px-2">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
             <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
@@ -1556,7 +1556,7 @@ function ApartmentSelect({
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
+      <div className={`flex-1 min-h-0 overflow-auto pb-32 md:pb-28 ${isDesk ? '' : 'no-scrollbar'}`}>
         <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
@@ -1569,7 +1569,7 @@ function ApartmentSelect({
             if (!a.tenant_id) {
               return (
                 <button key={a.id} onClick={() => setLinkApt(a)} data-testid={`apt-${a.number}-vacant`}
-                  className="group bg-white/90 flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white transition border-2 border-dashed border-slate-300 hover:border-orange-500">
+                  className="kiosk-ui-apartment-card group bg-white/90 flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 hover:bg-white transition border-2 border-dashed border-slate-300 hover:border-orange-500">
                   <div className="rounded-full flex items-center justify-center w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-slate-100 group-hover:bg-orange-50">
                     <Home className="w-7 h-7 md:w-9 md:h-9 text-slate-400 group-hover:text-orange-500" />
                   </div>
@@ -1583,7 +1583,7 @@ function ApartmentSelect({
             }
             return (
             <button key={a.id} onClick={() => onSelect(a)} data-testid={`apt-${a.number}`}
-              className="group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
+              className="kiosk-ui-apartment-card group bg-white flex flex-col items-center justify-center text-center rounded-2xl p-3 sm:p-4 md:py-5 hover:-translate-y-1 transition border-2 border-transparent hover:border-orange-500 shadow-[0_6px_18px_-6px_rgba(120,40,0,0.35)]"
               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               {photoSrc ? (
                 <div className="rounded-full overflow-hidden w-14 h-14 md:w-20 md:h-20 mb-2 md:mb-3 bg-orange-50 ring-4 ring-slate-100 group-hover:ring-orange-300">

@@ -3943,3 +3943,22 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
     color: #FFFFFF !important;
   }
 }
+
+@media (hover: none) and (max-width: 767px) {
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:hover {
+    transform: none !important;
+    background-color: #FFFFFF !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:not([data-testid$="-vacant"]):hover {
+    border-color: transparent !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card[data-testid$="-vacant"]:hover {
+    border-color: #CBD5E1 !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:active {
+    transform: scale(0.99) !important;
+  }
+  .kiosk-fullscreen.kiosk-white.kiosk-ui .kiosk-ui-apartment-card:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
