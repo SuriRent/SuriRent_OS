@@ -16,8 +16,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, MoreHorizontal, SlidersHorizontal, Tablet,
-  LayoutList, LayoutGrid,
+  BookOpen, MoreHorizontal, SlidersHorizontal, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -772,109 +771,6 @@ function UiAptCard({ a, onOpen, selectionMode = false, selected = false, locatio
   );
 }
 
-function UiAptHeroCard({ a, onOpen }) {
-  const vacant = !a.tenant_id;
-  const photo = a.tenant_avatar_url || a.tenant_id_photo_url;
-  const status = uiAptStatus(a);
-  const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
-  const [dueError, setDueError] = useState(false);
-  useEffect(() => {
-    if (!a.tenant_id || status === 'paid' || status === 'deposit') {
-      setDue(status === 'paid' ? { amount: 0 } : null);
-      setDueError(false);
-      return undefined;
-    }
-    let active = true;
-    setDue(null);
-    setDueError(false);
-    loadCachedOverview(a.tenant_id)
-      .then(({ data }) => { if (active) setDue({ amount: buildPaymentOverview(data).total_due }); })
-      .catch(() => { if (active) setDueError(true); });
-    return () => { active = false; };
-  }, [a, status]);
-
-  const actionLabel = status === 'vacant' ? 'Huurder koppelen'
-    : status === 'deposit' ? 'Borg bekijken'
-      : status === 'paid' ? 'Overzicht openen'
-        : 'Afrekenen';
-  const isPaymentAction = status === 'unpaid' || status === 'partial';
-  return (
-    <article style={{ background: '#FFFFFF' }}
-      className="kiosk-ui-card group flex w-full flex-col gap-2.5 rounded-2xl border border-[#E5EAF2] p-3 text-left shadow-[0_12px_28px_-16px_rgba(27,42,92,0.32)] transition active:scale-[0.99] md:hover:-translate-y-0.5"
-      data-testid={`apt-${a.number}-hero-card`}>
-      <div className="flex min-w-0 items-center gap-2.5">
-        <button type="button" onClick={onOpen} aria-label={`${a.number}: ${vacant ? 'Vrij' : a.tenant_name}`}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-[#1B2A5C]">
-            {vacant
-              ? <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-                <Building2 className="h-5 w-5" />
-              </span>
-              : <OverviewTenantPhoto src={photo} name={a.tenant_name} testid={`apt-${a.number}-hero-photo`} variant="tile" />}
-            <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-baseline gap-2">
-                <span className="truncate text-[16px] font-extrabold uppercase leading-tight tracking-tight">{a.number}</span>
-                <span className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Appartement</span>
-              </span>
-              <span className="mt-1 block truncate text-sm font-bold leading-tight text-slate-700">
-                {vacant ? 'Geen huurder gekoppeld' : a.tenant_name}
-              </span>
-              {!vacant && a.tenant_phone && (
-                <span className="mt-1 flex min-w-0 items-center gap-1 text-xs font-semibold leading-tight text-slate-500">
-                  <Smartphone className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{a.tenant_phone}</span>
-                </span>
-              )}
-            </span>
-        </button>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <UiStatusPill a={a} className="shrink-0" />
-        </div>
-      </div>
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-[#E6EAF1] bg-[#F8FAFD] px-2.5 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <span className={`-translate-x-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            isPaymentAction ? 'bg-orange-100 text-[#E65300]'
-              : status === 'paid' ? 'bg-emerald-50 text-emerald-600'
-                : status === 'deposit' ? 'bg-sky-50 text-sky-600'
-                  : 'bg-slate-100 text-slate-500'
-          }`}>
-            {vacant ? <Building2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
-              {vacant ? 'Status' : 'Totaal openstaand'}
-            </span>
-            <span className={`block truncate text-base font-black leading-tight ${isPaymentAction ? 'text-[#C2410C]' : 'text-[#1B2A5C]'}`}
-              data-testid={`apt-${a.number}-hero-due`}>
-              {vacant ? 'Beschikbaar'
-                : status === 'deposit' ? 'Borg nog niet betaald'
-                  : dueError ? 'Bedrag niet beschikbaar'
-                    : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…'}
-            </span>
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={onOpen}
-            aria-label={isPaymentAction ? `${actionLabel}: ${a.number}` : actionLabel}
-            data-testid={`apt-${a.number}-hero-action`}
-            className={`inline-flex min-h-10 shrink-0 items-center justify-between gap-2 rounded-xl px-3 text-[11px] font-extrabold transition active:scale-[0.98] disabled:opacity-60 ${
-              isPaymentAction
-                ? 'bg-gradient-to-r from-[#FF7A1A] to-[#FF5C00] text-white shadow-[0_6px_14px_-9px_rgba(255,92,0,0.8)]'
-                : 'border border-slate-200 bg-slate-50 text-[#1B2A5C] hover:bg-slate-100'
-            }`}>
-            <span className="inline-flex items-center gap-2">
-              {actionLabel}
-            </span>
-            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isPaymentAction ? 'bg-white/20' : 'bg-slate-100'}`}>
-              <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
-            </span>
-          </button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function kioskHeroCacheKey(slug) {
   return slug ? `pwa_kiosk_hero_image:${slug}` : '';
 }
@@ -1110,8 +1006,7 @@ function UiLocationPicker({ locationName, locOpts }) {
 
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
-  selectedLocationId, onLocationSelectionChange, uiCardView, onUiCardViewChange,
-  alternateLayout, onToggleAlternateLayout,
+  selectedLocationId, onLocationSelectionChange, alternateLayout, onToggleAlternateLayout,
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
@@ -1193,13 +1088,11 @@ function ApartmentSelect({
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const modernMobileView = isUi && !isDesk;
   const alternatePosView = isUi && alternateLayout;
-  const kioskCardMode = modernMobileView && uiCardView;
-  const showLocationPicker = !kioskCardMode && !alternatePosView && totalGroups > 1 && selectedLocationId === null;
+  const showLocationPicker = !alternatePosView && totalGroups > 1 && selectedLocationId === null;
   const locOpts = {
     locations, unassigned: unassignedCount, currentId: selectedLocationId,
-    includeAll: kioskCardMode || alternatePosView,
+    includeAll: alternatePosView,
     onPick: (id) => {
       setSelectedLocationId(id);
       if (alternatePosView) setPosSelectionId(null);
@@ -1254,7 +1147,7 @@ function ApartmentSelect({
 
   const visible = (showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
-    selectedLocationId === '__any__' || ((kioskCardMode || alternatePosView) && selectedLocationId === null) ? apartments :
+    selectedLocationId === '__any__' || (alternatePosView && selectedLocationId === null) ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
   const filtered = !isUi ? visible : visible.filter((a) => {
@@ -1264,15 +1157,7 @@ function ApartmentSelect({
     const searchText = `${a.number} ${a.tenant_name || ''} ${location?.name || ''} ${location?.address || ''}`;
     return !term || searchText.toLowerCase().includes(term);
   });
-  const shown = isUi && !isDesk
-    ? [
-      ...filtered.filter((a) => uiAptStatus(a) === 'unpaid'),
-      ...filtered.filter((a) => uiAptStatus(a) === 'partial'),
-      ...filtered.filter((a) => uiAptStatus(a) === 'deposit'),
-      ...filtered.filter((a) => uiAptStatus(a) === 'vacant'),
-      ...filtered.filter((a) => uiAptStatus(a) === 'paid'),
-    ]
-    : filtered;
+  const shown = filtered;
 
   if (alternatePosView) {
     const selectedApartment = filtered.find((a) => a.id === posSelectionId) || null;
@@ -1610,13 +1495,12 @@ function ApartmentSelect({
   return (
     <div className="h-full bg-orange-500 flex flex-col" style={{ padding: '0 1.5vw 0' }}>
       {/* Mobile: knoppen bovenaan in 1 rij */}
-      {!kioskCardMode && <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />}
+      <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
       {/* Mobile: kleine titel links, onder de knoppen */}
       {/* Desktop: bestaande header met terug-knop + gecentreerde titel */}
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
-        hideAdminMenu={kioskCardMode} compactBranding={kioskCardMode}
         alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
@@ -1630,7 +1514,7 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && !kioskCardMode && isDesk && <UiHero
+      {isUi && isDesk && <UiHero
         locOpts={totalGroups > 1 ? locOpts : null}
         apartments={visible}
         locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
@@ -1640,39 +1524,29 @@ function ApartmentSelect({
       {isUi && !isDesk && (
         <>
           <UiLocationPicker
-            locOpts={kioskCardMode || totalGroups > 1 ? locOpts : null}
-            locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : kioskCardMode || selectedLocationId === '__any__' ? 'Alle locaties' : ''}
+            locOpts={totalGroups > 1 ? locOpts : null}
+            locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
           />
-          {!kioskCardMode && (
-            <div className="px-1 pb-3 pt-1 sm:px-2" data-testid="kiosk-ui-mobile-hero">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_8px_20px_-12px_rgba(255,92,0,0.7)]">
-                  <Home className="h-6 w-6" strokeWidth={2.4} fill="currentColor" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="truncate text-xl font-bold tracking-tight text-[#1B2A5C]">Appartementen Overzicht</h2>
-                  <p className="text-sm text-slate-500">Totaal: {visible.length} appartementen</p>
-                </div>
+          <div className="px-1 pb-3 pt-1 sm:px-2" data-testid="kiosk-ui-mobile-hero">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF8A2B] to-[#FF5C00] text-white shadow-[0_8px_20px_-12px_rgba(255,92,0,0.7)]">
+                <Home className="h-6 w-6" strokeWidth={2.4} fill="currentColor" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-bold tracking-tight text-[#1B2A5C]">Appartementen Overzicht</h2>
+                <p className="text-sm text-slate-500">Totaal: {visible.length} appartementen</p>
               </div>
             </div>
-          )}
+          </div>
         </>
       )}
       {isUi && (
-        <div className={`md:hidden flex items-center gap-2 px-1 sm:px-2 ${kioskCardMode ? 'pb-2 pt-2' : 'pb-3'}`}>
+        <div className="md:hidden flex items-center gap-2 px-1 pb-3 sm:px-2">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
             <Search className="w-5 h-5 text-[#1B2A5C] shrink-0" />
             <input value={uiQ} onChange={(e) => setUiQ(e.target.value)} placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder, appartement of locatie" data-testid="kiosk-ui-search"
               className="w-full min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400" />
           </label>
-          <button type="button" onClick={() => onUiCardViewChange((current) => !current)}
-            aria-label={uiCardView ? 'Lijstweergave tonen' : 'Kaartweergave tonen'} aria-pressed={uiCardView}
-            title={uiCardView ? 'Lijstweergave' : 'Kaartweergave'} data-testid="kiosk-ui-view-toggle"
-            className={`relative shrink-0 w-12 h-12 rounded-2xl shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center justify-center transition ${
-              uiCardView ? 'bg-[#FF5C00] text-white' : 'bg-white text-[#1B2A5C]'
-            }`}>
-            {uiCardView ? <LayoutList className="w-5 h-5" /> : <Tablet className="w-5 h-5" />}
-          </button>
           <button type="button" onClick={onToggleAlternateLayout}
             aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
             aria-pressed={alternateLayout} title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
@@ -1695,17 +1569,9 @@ function ApartmentSelect({
         <div className="bg-white/95 text-red-600 rounded-lg text-center text-sm font-semibold mx-1 mb-2 py-2 px-3">{error}</div>
       )}
 
-      <div className={`flex-1 min-h-0 overflow-auto ${kioskCardMode ? 'pb-4' : 'pb-32 md:pb-28'}`}>
-        <div className={modernMobileView
-          ? `grid ${uiCardView ? 'grid-cols-1 gap-3' : 'grid-cols-1 items-start gap-2.5 sm:gap-3'} px-1 sm:px-2 md:px-5 md:pt-1`
-          : `grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
+      <div className="flex-1 min-h-0 overflow-auto pb-32 md:pb-28">
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2 md:pt-2 ${isUi ? 'lg:grid-cols-5' : 'lg:grid-cols-4 xl:grid-cols-5'}`}>
           {shown.map((a) => {
-            if (modernMobileView) {
-              const onOpen = () => (a.tenant_id ? onSelect(a) : setLinkApt(a));
-              return uiCardView
-                ? <UiAptHeroCard key={a.id} a={a} onOpen={onOpen} />
-                : <UiAptCard key={a.id} a={a} onOpen={onOpen} />;
-            }
             // De pasfoto komt uit Huurders (ID-kaart) en wordt altijd getoond.
             const photo = a.tenant_id
               ? (a.tenant_avatar_url || a.tenant_id_photo_url)
@@ -7599,21 +7465,12 @@ export default function KioskLayout() {
   const [selectedLocationId, setSelectedLocationId] = useState(() => {
     try { return sessionStorage.getItem('kiosk_sel_loc') || null; } catch { return null; }
   });
-  const [kioskCardView, setKioskCardView] = useState(() => {
-    try { return localStorage.getItem('kiosk_card_view') === '1'; } catch { return false; }
-  });
   const [kioskAlternateLayout, setKioskAlternateLayout] = useState(() => {
     try {
       return localStorage.getItem('kiosk_alternate_layout') === '1'
         || localStorage.getItem('kiosk_modern_theme') === '1';
     } catch { return false; }
   });
-  useEffect(() => {
-    try {
-      if (kioskCardView) localStorage.setItem('kiosk_card_view', '1');
-      else localStorage.removeItem('kiosk_card_view');
-    } catch { /* local preference is optional */ }
-  }, [kioskCardView]);
   useEffect(() => {
     try {
       if (kioskAlternateLayout) localStorage.setItem('kiosk_alternate_layout', '1');
@@ -7738,8 +7595,7 @@ export default function KioskLayout() {
   const showDesktopBar = step !== 'check';
   const showMobileKioskBar = !step.startsWith('admin:')
     && ['select', 'kasgeld', 'stroom'].includes(step)
-    && !(isUi && kioskAlternateLayout && step === 'select')
-    && !(isUi && isMobileViewport && kioskCardView);
+    && !(isUi && kioskAlternateLayout && step === 'select');
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
@@ -7956,8 +7812,6 @@ export default function KioskLayout() {
             <ApartmentSelect key={apartmentsReloadKey}
               selectedLocationId={selectedLocationId}
               onLocationSelectionChange={setSelectedLocationId}
-              uiCardView={kioskCardView}
-              onUiCardViewChange={setKioskCardView}
               alternateLayout={kioskAlternateLayout}
               onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
               onEnableNfc={enableWebNfc}
