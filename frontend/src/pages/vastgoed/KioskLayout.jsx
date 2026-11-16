@@ -287,7 +287,7 @@ function KioskBell() {
   );
 }
 
-// Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
+// Tandwiel rechtsboven opent de kiosk-instellingenweergave (alleen beheerder).
 function KioskSettingsMenu() {
   const { isAdmin, isUi } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
@@ -401,6 +401,7 @@ function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
 
 function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
+  searchValue, onSearchChange,
   currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
   alternateLayout = false, onToggleAlternateLayout, showMobileLayoutToggle = false,
 }) {
@@ -456,12 +457,21 @@ function DesktopKioskHeader({
             <span className="hidden sm:block text-sm font-black text-slate-800 truncate">{tenant.name}</span>
           </div>
         )}
-        {onSearch && (
+        {onSearchChange ? (
+          <label className="hidden md:flex h-10 w-48 lg:w-64 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-[#F26A12] shadow-sm focus-within:ring-2 focus-within:ring-white/60"
+            data-testid="kiosk-header-search">
+            <Search className="h-5 w-5 shrink-0" strokeWidth={2.4} />
+            <input type="search" value={searchValue || ''} onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder of appartement"
+              data-testid="kiosk-header-search-input"
+              className="w-full min-w-0 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+          </label>
+        ) : onSearch ? (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
             className="hidden md:flex h-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 items-center gap-2 md:px-4 font-bold transition-colors">
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
-        )}
+        ) : null}
         <HeaderLive />
         {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
           <button type="button" onClick={onToggleAlternateLayout}
@@ -1063,7 +1073,6 @@ function ApartmentSelect({
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
-  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1545,6 +1554,7 @@ function ApartmentSelect({
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
+        searchValue={uiQ} onSearchChange={setUiQ}
         alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
@@ -1558,13 +1568,6 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && isDesk && <UiHero
-        locOpts={totalGroups > 1 ? locOpts : null}
-        apartments={visible}
-        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
-        companySlug={companySlug}
-        isAdmin={isAdmin}
-      />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 pt-2 pb-3 sm:px-2">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1583,6 +1586,22 @@ function ApartmentSelect({
             locOpts={totalGroups > 1 ? locOpts : null}
             locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
           />
+        </div>
+      )}
+      {isUi && isDesk && (
+        <div className="flex items-center gap-2 overflow-x-auto px-1 pt-2 pb-1" role="group"
+          aria-label="Filter appartementen" data-testid="kiosk-desktop-filter">
+          {UI_FILTERS.map((filter) => (
+            <button key={filter.id} type="button" onClick={() => setUiFilter(filter.id)}
+              aria-pressed={uiFilter === filter.id} data-testid={`kiosk-desktop-filter-${filter.id}`}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                uiFilter === filter.id
+                  ? 'border-white bg-white text-[#F26A00] shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}>
+              {filter.label}
+            </button>
+          ))}
         </div>
       )}
       {error && (
@@ -6957,7 +6976,7 @@ export default function KioskLayout() {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
   const [supportActive, setSupportActive] = useState(false);
-  // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
+  // Start direct op de appartementkeuze.
   const [step, setStep] = useState(() => {
     const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
     return !isDemoLaunch && localStorage.getItem('kiosk_token') ? requestedAdminStep() : 'check';
@@ -7630,8 +7649,13 @@ export default function KioskLayout() {
       setDepositFor(null);
       setContractFor(null);
       if (route.type === 'settings') {
-        setStep('select');
-        setAdminPopup(`inst-${route.id}`);
+        if (window.innerWidth >= 768) {
+          setAdminPopup(null);
+          setStep(`admin:inst-${route.id}`);
+        } else {
+          setStep('select');
+          setAdminPopup(`inst-${route.id}`);
+        }
       } else if (route.type === 'page') {
         setStep('select');
         if (route.id === 'facturen') setStep('admin:facturen');
@@ -7849,7 +7873,7 @@ export default function KioskLayout() {
           )}
           {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
-              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} /></div>
+              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} user={user} /></div>
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
@@ -8100,11 +8124,11 @@ export default function KioskLayout() {
       {showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
+          <div className={`flex items-stretch gap-1 px-2 py-1${isUi ? ' kiosk-ui-bar' : ''}`}>
             {isUi ? (
               <button type="button" onClick={() => { if (canBack) goBack(); }} data-testid="kiosk-ui-bar-back" data-active="true"
-                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1.5 rounded-2xl py-2.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
-                <LayoutGrid className="w-7 h-7" strokeWidth={2} />
+                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1 rounded-2xl py-1.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
+                <LayoutGrid className="w-6 h-6" strokeWidth={2} />
                 <span className="text-[11px] lg:text-sm font-bold leading-tight">Terug</span>
               </button>
             ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white />}
@@ -8118,14 +8142,14 @@ export default function KioskLayout() {
               ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
-              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+              const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <Fragment key={id}>
                 {isUi && <span className="self-center h-10 w-px bg-slate-300/80 shrink-0" aria-hidden="true" />}
                 <button type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]'}`}>
-                  <Icon className="w-7 h-7" strokeWidth={1.8} />
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl py-1.5 px-1 transition-colors active:scale-95 ${active ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]'}`}>
+                  <Icon className="w-6 h-6" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
                 </Fragment>
