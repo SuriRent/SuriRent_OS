@@ -401,6 +401,7 @@ function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
 
 function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
+  searchValue, onSearchChange,
   currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
   alternateLayout = false, onToggleAlternateLayout, showMobileLayoutToggle = false,
 }) {
@@ -456,12 +457,21 @@ function DesktopKioskHeader({
             <span className="hidden sm:block text-sm font-black text-slate-800 truncate">{tenant.name}</span>
           </div>
         )}
-        {onSearch && (
+        {onSearchChange ? (
+          <label className="hidden md:flex h-10 w-48 lg:w-64 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-[#F26A12] shadow-sm focus-within:ring-2 focus-within:ring-white/60"
+            data-testid="kiosk-header-search">
+            <Search className="h-5 w-5 shrink-0" strokeWidth={2.4} />
+            <input type="search" value={searchValue || ''} onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Zoek huurder of appartement..." aria-label="Zoek huurder of appartement"
+              data-testid="kiosk-header-search-input"
+              className="w-full min-w-0 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+          </label>
+        ) : onSearch ? (
           <button type="button" onClick={onSearch} data-testid="kiosk-header-search" aria-label="Huurder zoeken"
             className="hidden md:flex h-10 md:w-auto justify-center rounded-full bg-white text-[#F26A12] hover:bg-white/90 items-center gap-2 md:px-4 font-bold transition-colors">
             <Search className="w-5 h-5" strokeWidth={2.4} /> <span className="hidden md:inline">Zoek huurder</span>
           </button>
-        )}
+        ) : null}
         <HeaderLive />
         {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
           <button type="button" onClick={onToggleAlternateLayout}
@@ -1063,7 +1073,6 @@ function ApartmentSelect({
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
-  const companySlug = getKioskCompany()?.slug;
   const [uiQ, setUiQ] = useState('');
   const [isDesk, setIsDesk] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   useEffect(() => {
@@ -1545,6 +1554,7 @@ function ApartmentSelect({
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
+        searchValue={uiQ} onSearchChange={setUiQ}
         alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
@@ -1558,13 +1568,6 @@ function ApartmentSelect({
         </span>
       </div>
 
-      {isUi && isDesk && <UiHero
-        locOpts={totalGroups > 1 ? locOpts : null}
-        apartments={visible}
-        locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : ''}
-        companySlug={companySlug}
-        isAdmin={isAdmin}
-      />}
       {isUi && (
         <div className="md:hidden flex items-center gap-2 px-1 pt-2 pb-3 sm:px-2">
           <label className="flex-1 min-w-0 h-12 rounded-2xl bg-white shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] flex items-center gap-2 px-4">
@@ -1583,6 +1586,22 @@ function ApartmentSelect({
             locOpts={totalGroups > 1 ? locOpts : null}
             locationName={currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : selectedLocationId === '__any__' ? 'Alle locaties' : ''}
           />
+        </div>
+      )}
+      {isUi && isDesk && (
+        <div className="flex items-center gap-2 overflow-x-auto px-1 pt-2 pb-1" role="group"
+          aria-label="Filter appartementen" data-testid="kiosk-desktop-filter">
+          {UI_FILTERS.map((filter) => (
+            <button key={filter.id} type="button" onClick={() => setUiFilter(filter.id)}
+              aria-pressed={uiFilter === filter.id} data-testid={`kiosk-desktop-filter-${filter.id}`}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                uiFilter === filter.id
+                  ? 'border-white bg-white text-[#F26A00] shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}>
+              {filter.label}
+            </button>
+          ))}
         </div>
       )}
       {error && (
@@ -6957,7 +6976,7 @@ export default function KioskLayout() {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
   const [supportActive, setSupportActive] = useState(false);
-  // Direct naar 'select' als er een token is: scheelt een exit+enter animatie.
+  // Start direct op de appartementkeuze.
   const [step, setStep] = useState(() => {
     const isDemoLaunch = new URLSearchParams(window.location.search).get('demo') === '1';
     return !isDemoLaunch && localStorage.getItem('kiosk_token') ? requestedAdminStep() : 'check';
@@ -8118,7 +8137,7 @@ export default function KioskLayout() {
               ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
-              const active = (id === 'dashboard' && step === 'select') || (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+              const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <Fragment key={id}>
