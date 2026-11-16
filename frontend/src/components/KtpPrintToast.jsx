@@ -67,8 +67,7 @@ export function KtpPrintToast() {
   return createPortal(
     <div key={toast.key} role="status" onClick={() => setToast(null)}
       data-testid={toast.ok ? 'ktp-print-toast-ok' : 'ktp-print-toast-error'}
-      style={{ paddingTop: 'max(env(safe-area-inset-top), 0px)' }}
-      className={`fixed top-0 inset-x-0 z-[10050] animate-in slide-in-from-top duration-300 ${toast.ok ? 'bg-emerald-600' : 'bg-red-600'} text-white shadow-lg`}>
+      className={`ktp-print-toast fixed z-[10050] animate-in slide-in-from-bottom duration-300 rounded-2xl ${toast.ok ? 'bg-emerald-600' : 'bg-red-600'} text-white shadow-lg`}>
       <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm sm:text-base font-bold">
         <Icon className="w-5 h-5 shrink-0" />
         <span data-testid="ktp-print-toast-msg">{toast.msg}</span>
