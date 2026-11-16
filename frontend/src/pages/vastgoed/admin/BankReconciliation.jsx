@@ -6,6 +6,7 @@ import { createWorker } from 'tesseract.js';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../../lib/api';
 import { parseBankStatementFile } from '../../../lib/bankStatementImport';
+import { matchBankTenant, normalizeBankText } from '../../../lib/bankStatementMatching';
 
 const CURRENCIES = ['SRD', 'USD', 'EUR'];
 const CATEGORIES = [
@@ -26,11 +27,6 @@ const NEXT_FIELD_LABEL = /^(bedrag|amount|datum|date|van|from|naar|to|rekening|a
 function todayIso() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function normalizeName(value) {
-  return String(value || '').toLowerCase().normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 function datePeriod(value) {
@@ -66,27 +62,6 @@ function extractDescription(ocrText) {
   if (inlineDescription) return inlineDescription.slice(0, 240);
   const nextLine = lines[labelIndex + 1] || '';
   return NEXT_FIELD_LABEL.test(nextLine) ? '' : nextLine.slice(0, 240);
-}
-
-function matchTenant(description, tenants) {
-  const normalizedDescription = normalizeName(description);
-  if (!normalizedDescription) return { tenantId: '', status: 'no-description' };
-
-  const matches = tenants.flatMap((tenant) => {
-    const name = normalizeName(tenant.name);
-    const apartment = normalizeName(tenant.apartment_number);
-    const nameMatch = name.length >= 4 && ` ${normalizedDescription} `.includes(` ${name} `);
-    const apartmentMatch = apartment.length >= 2 && ` ${normalizedDescription} `.includes(` ${apartment} `);
-    if (!nameMatch && !apartmentMatch) return [];
-    return [{ tenantId: tenant.id, score: nameMatch ? 2 : 1 }];
-  });
-  if (!matches.length) return { tenantId: '', status: 'unmatched' };
-
-  const bestScore = Math.max(...matches.map((match) => match.score));
-  const bestMatches = [...new Set(matches.filter((match) => match.score === bestScore).map((match) => match.tenantId))];
-  return bestMatches.length === 1
-    ? { tenantId: bestMatches[0], status: 'matched' }
-    : { tenantId: '', status: 'ambiguous' };
 }
 
 function getRowStatus(row) {
@@ -158,7 +133,7 @@ function BankReconciliation({ kioskLayout = false, embedded = false }) {
       let changed = false;
       const next = current.map((row) => {
         if (!(row.matchText || row.ocrText) || row.matchChecked || row.form.tenant_id) return row;
-        const result = matchTenant(row.matchText || row.description, tenants);
+        const result = matchBankTenant(row.matchText || row.description, tenants);
         changed = true;
         return {
           ...row,
@@ -282,7 +257,7 @@ function BankReconciliation({ kioskLayout = false, embedded = false }) {
             const importedRows = (data.transactions || []).map((item, index) => {
               const transaction = item.transaction || {};
               const matchText = [transaction.description, transaction.payer_name].filter(Boolean).join(' ');
-              const result = matchTenant(matchText, tenants);
+              const result = matchBankTenant(matchText, tenants);
               const date = transaction.date || todayIso();
               const displayName = transaction.description
                 || `${date} · ${fmtMoney(transaction.amount, transaction.currency || 'SRD')}`;
@@ -354,7 +329,7 @@ function BankReconciliation({ kioskLayout = false, embedded = false }) {
             ? (await worker.recognize(row.file)).data.text
             : await renderPdfPages(row.file, worker);
           const description = extractDescription(ocrText);
-          const result = matchTenant(description, tenants);
+          const result = matchBankTenant(description, tenants);
           setRows((current) => current.map((item) => item.id === row.id ? {
             ...item,
             status: 'ready',
@@ -410,9 +385,9 @@ function BankReconciliation({ kioskLayout = false, embedded = false }) {
   const activeRow = rows.find((row) => row.id === activeRowId) || rows[0] || null;
   const activeIndex = activeRow ? rows.findIndex((row) => row.id === activeRow.id) : -1;
   const selectedTenant = activeRow && tenants.find((tenant) => tenant.id === activeRow.form.tenant_id);
-  const tenantQuery = normalizeName(activeRow?.form.tenant_search);
+  const tenantQuery = normalizeBankText(activeRow?.form.tenant_search);
   const visibleTenants = sortedTenants.filter((tenant) => (
-    !tenantQuery || normalizeName(`${tenant.name} ${tenant.apartment_number || ''} ${tenant.phone || ''}`).includes(tenantQuery)
+    !tenantQuery || normalizeBankText(`${tenant.name} ${tenant.apartment_number || ''} ${tenant.phone || ''}`).includes(tenantQuery)
   ));
   const isPeriodPayment = activeRow && ['huur', 'vooruitbetaling'].includes(activeRow.form.category);
   const isActiveBusy = activeRow && ['queued', 'uploading', 'reading'].includes(activeRow.status);
