@@ -16,7 +16,7 @@ import {
   MessageCircle, StickyNote, Trash2, Pencil, Plus, Mic, ChevronLeft, ChevronRight,
   UserPlus, Wrench, Nfc, Camera, Upload, ArrowUpRight, ArrowDownLeft, ChevronDown,
   Landmark as LandmarkIcon, Users, Database, FileSignature,   Wifi, Sparkles, Zap,
-  BookOpen, MoreHorizontal, SlidersHorizontal, LayoutGrid,
+  BookOpen, SlidersHorizontal, LayoutGrid,
 } from 'lucide-react';
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
@@ -403,7 +403,6 @@ function DesktopKioskHeader({
   currentLocation, currentStep, currentLocationId, totalGroups, onLocations, onAdmin, onSearch, locOpts,
   searchValue, onSearchChange,
   currentApartment, tenant, title = 'Kies uw appartement', hideAdminMenu = false, compactBranding = false,
-  alternateLayout = false, onToggleAlternateLayout, showMobileLayoutToggle = false,
 }) {
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
@@ -473,31 +472,6 @@ function DesktopKioskHeader({
           </button>
         ) : null}
         <HeaderLive />
-        {isUi && onToggleAlternateLayout && !showMobileLayoutToggle && (
-          <button type="button" onClick={onToggleAlternateLayout}
-            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
-            aria-pressed={alternateLayout}
-            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
-            data-testid="kiosk-layout-mode-toggle"
-            className={`hidden md:flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-xs font-bold shadow-sm transition ${
-              alternateLayout
-                ? 'border-[#1B2A5C] bg-[#1B2A5C] text-white hover:bg-[#263A78]'
-                : 'border-slate-200 bg-white text-[#1B2A5C] hover:bg-slate-50'
-            }`}>
-            <LayoutGrid className="h-4 w-4 shrink-0" />
-            <span className="hidden xl:inline">{alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}</span>
-          </button>
-        )}
-        {isUi && onToggleAlternateLayout && showMobileLayoutToggle && (
-          <button type="button" onClick={onToggleAlternateLayout}
-            aria-label={alternateLayout ? 'Standaard kiosk activeren' : 'POS-weergave activeren'}
-            aria-pressed={alternateLayout}
-            title={alternateLayout ? 'Standaard kiosk' : 'POS-weergave'}
-            data-testid="kiosk-layout-mode-toggle"
-            className="md:hidden w-9 h-9 shrink-0 rounded-xl border border-orange-100 bg-white text-[#FF5C00] shadow-sm flex items-center justify-center">
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        )}
         <span className="hidden md:block w-px h-8 bg-white/40" />
         <KioskBell />
         <KioskEmployeePush />
@@ -538,132 +512,8 @@ function UiStatusPill({ a, className = '' }) {
   );
 }
 
-function PosSelectionPanel({
-  apartment, locationName, onContinue, loading = false, phase = 'catalog',
-  onBack, error, children,
-}) {
-  const status = apartment ? uiAptStatus(apartment) : null;
-  const [due, setDue] = useState(null);
-  const [dueError, setDueError] = useState(false);
-  const phaseLabel = {
-    invoices: 'FACTUURSELECTIE',
-    method: 'BETAALMETHODE',
-    confirm: 'BEVESTIGING',
-    receipt: 'BETALING AFGEROND',
-  }[phase];
-
-  useEffect(() => {
-    if (!apartment?.tenant_id || status === 'paid' || status === 'deposit') {
-      setDue(status === 'paid' ? { amount: 0 } : null);
-      setDueError(false);
-      return undefined;
-    }
-    let active = true;
-    setDue(null);
-    setDueError(false);
-    loadCachedOverview(apartment.tenant_id)
-      .then(({ data }) => { if (active) setDue({ amount: buildPaymentOverview(data).total_due }); })
-      .catch(() => { if (active) setDueError(true); });
-    return () => { active = false; };
-  }, [apartment, status]);
-
-  const vacant = apartment && !apartment.tenant_id;
-  const photo = apartment?.tenant_avatar_url || apartment?.tenant_id_photo_url;
-
-  return (
-    <aside className={`kiosk-pos-order${phase !== 'catalog' ? ' kiosk-pos-checkout' : ''}`} data-testid="kiosk-pos-order">
-      <header className="kiosk-pos-order-header">
-        <div>
-          <p className="kiosk-pos-eyebrow">{phase === 'catalog' ? 'SELECTIE' : phaseLabel}</p>
-          <h2>Afrekenen</h2>
-        </div>
-        {phase === 'catalog'
-          ? <MoreHorizontal className="h-5 w-5 text-slate-400" />
-          : phase === 'receipt'
-            ? <CheckCircle className="h-5 w-5 text-emerald-500" />
-            : <button type="button" onClick={onBack} className="kiosk-pos-order-back"
-              aria-label="Vorige betaalstap">
-              <ArrowLeft className="h-4 w-4" />
-            </button>}
-      </header>
-      {phase !== 'catalog' ? (
-        <div className="kiosk-pos-checkout-content">
-          {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
-          {loading && (
-            <div className="kiosk-pos-workflow-loading" role="status">
-              <Loader2 className="h-8 w-8 animate-spin text-[#A00842]" />
-              <span>Betalingsoverzicht laden…</span>
-            </div>
-          )}
-          {children}
-        </div>
-      ) : apartment ? (
-        <>
-          {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
-          <div className="kiosk-pos-order-meta">
-            <span>Appartement geselecteerd</span>
-            <span>{locationName || 'Alle locaties'}</span>
-          </div>
-          <article className="kiosk-pos-order-card">
-            <div className="kiosk-pos-order-photo">
-              {photo && !vacant
-                ? <OverviewTenantPhoto src={photo} name={apartment.tenant_name} variant="tile" />
-                : <Building2 className="h-8 w-8 text-[#1B2A5C]" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-extrabold text-[#1B2A5C]">{apartment.number}</p>
-              <p className="mt-1 truncate text-sm font-semibold text-slate-700">
-                {vacant ? 'Geen huurder gekoppeld' : apartment.tenant_name}
-              </p>
-              {apartment.tenant_phone && (
-                <p className="mt-1 truncate text-xs text-slate-500">{apartment.tenant_phone}</p>
-              )}
-            </div>
-          </article>
-          <div className="kiosk-pos-order-status">
-            <span>Status</span>
-            <UiStatusPill a={apartment} />
-          </div>
-          <div className="kiosk-pos-order-total">
-            <div>
-              <span>{vacant ? 'Beschikbaarheid' : status === 'deposit' ? 'Borg' : 'Openstaand saldo'}</span>
-              <strong>
-                {vacant ? 'Beschikbaar'
-                  : status === 'deposit' ? 'Borg nog niet betaald'
-                    : dueError ? 'Bedrag niet beschikbaar'
-                      : due ? fmtMoney(due.amount, apartment.currency || 'SRD') : 'Bedrag laden…'}
-              </strong>
-            </div>
-            <Wallet className="h-5 w-5 text-[#FF5C00]" />
-          </div>
-        </>
-      ) : (
-        <div className="kiosk-pos-order-empty">
-          <span><Building2 className="h-7 w-7" /></span>
-          <strong>Nog geen appartement gekozen</strong>
-          <p>Selecteer een appartement om de huurder en betaalstatus te bekijken.</p>
-        </div>
-      )}
-      {phase === 'catalog' && <div className="kiosk-pos-order-footer">
-        <div className="kiosk-pos-order-hint">
-          <span>{apartment ? '1 appartement geselecteerd' : 'Selecteer een appartement'}</span>
-          <strong>{apartment ? 'Klaar voor de volgende stap' : 'Geen selectie'}</strong>
-        </div>
-        <button type="button" onClick={onContinue} disabled={!apartment || loading}
-          data-testid="kiosk-pos-continue"
-          className="kiosk-pos-continue">
-          {loading ? 'Overzicht laden…'
-            : !apartment ? 'Selecteer appartement'
-              : vacant ? 'Huurder koppelen' : status === 'deposit' ? 'Borg betalen' : 'Facturen selecteren'}
-          {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
-        </button>
-      </div>}
-    </aside>
-  );
-}
-
 // UI-thema: compacte appartementkaart voor de mobiele overzichtslijst.
-function UiAptCard({ a, onOpen, selectionMode = false, selected = false, locationName }) {
+function UiAptCard({ a, onOpen }) {
   const vacant = !a.tenant_id;
   const status = uiAptStatus(a);
   const [due, setDue] = useState(() => status === 'paid' ? { amount: 0 } : null);
@@ -686,40 +536,6 @@ function UiAptCard({ a, onOpen, selectionMode = false, selected = false, locatio
       .catch(() => { if (active) setDueError(true); });
     return () => { active = false; };
   }, [a, status]);
-  if (selectionMode) {
-    const balance = vacant ? 'Beschikbaar'
-      : status === 'deposit' ? 'Borg nog niet betaald'
-        : dueError ? 'Bedrag niet beschikbaar'
-          : due ? fmtMoney(due.amount, a.currency || 'SRD') : 'Bedrag laden…';
-    return (
-      <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
-        aria-pressed={selected}
-        className={`kiosk-pos-apartment-card${selected ? ' selected' : ''}`}>
-        <span className="kiosk-pos-card-top">
-          <span className="kiosk-pos-apartment-number">{a.number}</span>
-          <UiStatusPill a={a} />
-        </span>
-        <span className="kiosk-pos-card-person">
-          <span className={`kiosk-pos-card-avatar${vacant ? ' vacant' : ''}`}>
-          {src && !vacant && !photoFailed
-            ? <img src={src} alt={a.tenant_name || ''} data-testid={`apt-${a.number}-photo`}
-              onError={() => setPhotoFailed(true)} />
-            : vacant
-              ? <Building2 className="h-5 w-5" />
-              : <span className="text-sm font-black">{initials}</span>}
-          </span>
-          <span className="min-w-0">
-            <span className="kiosk-pos-card-name">{vacant ? 'Geen huurder gekoppeld' : a.tenant_name}</span>
-            <span className="kiosk-pos-card-location">{locationName || 'Geen locatie'}</span>
-            <span className="kiosk-pos-card-balance" data-testid={`apt-${a.number}-list-due`}>
-              <span>{vacant ? 'Beschikbaarheid' : status === 'deposit' ? 'Borg' : 'Openstaand saldo'}</span>
-              <strong className={status === 'paid' ? 'paid' : ''}>{balance}</strong>
-            </span>
-          </span>
-        </span>
-      </button>
-    );
-  }
   return (
     <button type="button" onClick={onOpen} data-testid={vacant ? `apt-${a.number}-vacant` : `apt-${a.number}`}
       style={{ background: '#FFFFFF' }}
@@ -1069,7 +885,7 @@ function KioskApartmentOpenAmount({ apartment }) {
 
 function ApartmentSelect({
   onSelect, onAdmin, onAdminAll, onExit, onKasgeld, onSearch,
-  selectedLocationId, onLocationSelectionChange, alternateLayout, onToggleAlternateLayout,
+  selectedLocationId, onLocationSelectionChange,
   hasAdminAccess = false, onEnableNfc, webNfcStatus,
 }) {
   const { isUi, isAdmin } = useContext(KioskThemeCtx);
@@ -1082,14 +898,6 @@ function ApartmentSelect({
     return () => mq.removeEventListener('change', on);
   }, []);
   const [uiFilter, setUiFilter] = useState('all');
-  const [posSelectionId, setPosSelectionId] = useState(null);
-  const [posApartment, setPosApartment] = useState(null);
-  const [posPhase, setPosPhase] = useState('catalog');
-  const [posOverview, setPosOverview] = useState(null);
-  const [posOverviewLoading, setPosOverviewLoading] = useState(false);
-  const [posOverviewError, setPosOverviewError] = useState('');
-  const [posPayload, setPosPayload] = useState(null);
-  const [posPayment, setPosPayment] = useState(null);
   const navigate = useBrandedNavigate();
   const [cached] = useState(readKioskSelectCache);
   const [apartments, setApartments] = useState(() => cached?.apartments || []);
@@ -1150,15 +958,10 @@ function ApartmentSelect({
     [apartments]
   );
   const totalGroups = locations.length + (unassignedCount > 0 ? 1 : 0);
-  const alternatePosView = isUi && isDesk && alternateLayout;
-  const showLocationPicker = !alternatePosView && totalGroups > 1 && selectedLocationId === null;
+  const showLocationPicker = totalGroups > 1 && selectedLocationId === null;
   const locOpts = {
     locations, unassigned: unassignedCount, currentId: selectedLocationId,
-    includeAll: alternatePosView,
-    onPick: (id) => {
-      setSelectedLocationId(id);
-      if (alternatePosView) setPosSelectionId(null);
-    },
+    onPick: setSelectedLocationId,
   };
   useEffect(() => {
     onLocationSelectionChange(selectedLocationId);
@@ -1176,24 +979,6 @@ function ApartmentSelect({
   }, [loading, selectedLocationId, totalGroups, locations]);
 
   if (loading) {
-    if (alternatePosView) {
-      return (
-        <div className={`kiosk-pos-layout${isDesk ? '' : ' kiosk-pos-mobile-layout'}`} data-testid="kiosk-pos-layout-loading">
-          <aside className="kiosk-pos-rail">
-            <div className="kiosk-pos-brand"><Home className="h-7 w-7" /></div>
-          </aside>
-          <main className="kiosk-pos-main">
-            <header className="kiosk-pos-topbar">
-              <div className="kiosk-pos-greeting"><p className="kiosk-pos-eyebrow">SuriRent</p><h1>Appartementen</h1></div>
-            </header>
-            <div className="kiosk-pos-catalog flex items-center justify-center">
-              <Loader2 className="h-9 w-9 animate-spin text-[#A00842]" />
-            </div>
-          </main>
-          <aside className="kiosk-pos-order" aria-hidden="true" />
-        </div>
-      );
-    }
     return (
       <div className="h-full bg-orange-500 flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-white animate-spin" />
@@ -1209,7 +994,7 @@ function ApartmentSelect({
 
   const visible = (showLocationPicker ? [] :
     selectedLocationId === '__none__' ? apartments.filter((a) => !a.location_id) :
-    selectedLocationId === '__any__' || (alternatePosView && selectedLocationId === null) ? apartments :
+    selectedLocationId === '__any__' ? apartments :
     apartments.filter((a) => a.location_id === selectedLocationId)
   ).sort(sortApartments);
   const filtered = !isUi ? visible : visible.filter((a) => {
@@ -1221,270 +1006,6 @@ function ApartmentSelect({
   });
   const shown = filtered;
 
-  if (alternatePosView) {
-    const selectedApartment = filtered.find((a) => a.id === posSelectionId) || null;
-    const posLocationName = currentLocation
-      ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ')
-      : selectedLocationId === '__none__' ? 'Overige' : 'Alle locaties';
-    const statusFilters = [
-      { id: 'all', label: 'Alle appartementen', Icon: LayoutGrid, count: visible.length },
-      { id: 'unpaid', label: 'Openstaand', Icon: AlertCircle, count: visible.filter((a) => uiAptStatus(a) === 'unpaid').length },
-      { id: 'partial', label: 'Gedeeltelijk', Icon: ClockIcon, count: visible.filter((a) => uiAptStatus(a) === 'partial').length },
-      { id: 'paid', label: 'Betaald', Icon: Check, count: visible.filter((a) => uiAptStatus(a) === 'paid').length },
-      { id: 'vacant', label: 'Beschikbaar', Icon: Building2, count: visible.filter((a) => uiAptStatus(a) === 'vacant').length },
-    ];
-    const continueWithSelection = async () => {
-      if (!selectedApartment) return;
-      if (!selectedApartment.tenant_id) {
-        setLinkApt(selectedApartment);
-        return;
-      }
-      if (uiAptStatus(selectedApartment) === 'deposit') {
-        window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: {
-          ...selectedApartment,
-          id: selectedApartment.tenant_id,
-          name: selectedApartment.tenant_name,
-          apartment_id: selectedApartment.id,
-          apartment_number: selectedApartment.number,
-          rent_amount: selectedApartment.rent_amount,
-          currency: selectedApartment.currency,
-        } }));
-        return;
-      }
-      setPosApartment(selectedApartment);
-      setPosOverviewLoading(true);
-      setPosOverviewError('');
-      try {
-        const { data } = await loadCachedOverview(selectedApartment.tenant_id);
-        const overview = buildPaymentOverview(data);
-        setPosOverview({
-          ...overview,
-          apartment: overview.apartment || selectedApartment,
-          isAdvance: overview.isAdvance ?? overview.total_due <= 0,
-          tenant: overview.tenant || {
-            id: selectedApartment.tenant_id,
-            name: selectedApartment.tenant_name,
-            avatar_url: selectedApartment.tenant_avatar_url,
-          },
-        });
-        setPosPayload(null);
-        setPosPayment(null);
-        setPosPhase('invoices');
-      } catch (e) {
-        setPosOverviewError(formatError(e, 'Betalingsoverzicht laden mislukt'));
-      } finally {
-        setPosOverviewLoading(false);
-      }
-    };
-    const leavePosMode = () => {
-      setPosPhase('catalog');
-      onToggleAlternateLayout();
-    };
-    const locationButton = (toggle) => (
-      <button type="button" onClick={toggle} className="kiosk-pos-location-button">
-        <MapPin className="h-4 w-4" />
-        <span className="truncate">{posLocationName}</span>
-        <ChevronDown className="h-4 w-4 shrink-0" />
-      </button>
-    );
-
-    return (
-      <div className={`kiosk-pos-layout kiosk-pos-phase-${posPhase}${isDesk ? '' : ' kiosk-pos-mobile-layout'}`}
-        data-testid="kiosk-pos-layout">
-        <aside className="kiosk-pos-rail" aria-label="Kiosk navigatie">
-          <div className="kiosk-pos-brand" title={getKioskCompany()?.name || 'SuriRent'}>
-            <Home className="h-7 w-7" />
-          </div>
-          <div className="kiosk-pos-rail-group">
-            <button type="button" className="kiosk-pos-rail-button active" aria-label="Appartementen" title="Appartementen">
-              <LayoutGrid className="h-5 w-5" />
-            </button>
-            <button type="button" onClick={() => { setSelectedLocationId(null); setPosSelectionId(null); }}
-              className="kiosk-pos-rail-button" aria-label="Alle locaties" title="Alle locaties">
-              <MapPin className="h-5 w-5" />
-            </button>
-            {onSearch && (
-              <button type="button" onClick={onSearch} className="kiosk-pos-rail-button"
-                aria-label="Huurder zoeken" title="Huurder zoeken">
-                <Search className="h-5 w-5" />
-              </button>
-            )}
-            {hasAdminAccess && (
-              <button type="button" onClick={onKasgeld} className="kiosk-pos-rail-button"
-                aria-label="Kasgeld" title="Kasgeld">
-                <Database className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-          <div className="kiosk-pos-rail-bottom">
-            {hasAdminAccess && (
-              <button type="button" onClick={onAdminAll || onAdmin} className="kiosk-pos-rail-button"
-                aria-label="Beheer" title="Beheer">
-                <SettingsIcon className="h-5 w-5" />
-              </button>
-            )}
-            <button type="button" onClick={onExit} className="kiosk-pos-rail-button"
-              aria-label="Uitloggen" title="Uitloggen">
-              <LogOut className="h-5 w-5" />
-            </button>
-          </div>
-        </aside>
-
-        <main className="kiosk-pos-main">
-          {!isDesk && posPhase === 'catalog' ? (
-            <div className="kiosk-pos-original-mobile-head">
-              <DesktopKioskHeader
-                currentLocation={currentLocation}
-                currentStep="select"
-                currentLocationId={selectedLocationId}
-                totalGroups={totalGroups}
-                onLocations={() => setSelectedLocationId(null)}
-                onAdmin={onAdminAll || onAdmin}
-                locOpts={locOpts}
-                currentApartment={selectedApartment}
-                title="Appartementen"
-                hideAdminMenu={!hasAdminAccess}
-                compactBranding
-                alternateLayout
-                onToggleAlternateLayout={leavePosMode}
-                showMobileLayoutToggle
-              />
-            </div>
-          ) : (
-            <header className="kiosk-pos-topbar">
-              <div className="kiosk-pos-greeting">
-                <p className="kiosk-pos-eyebrow">{posPhase === 'catalog' ? (getKioskCompany()?.name || 'SuriRent') : `Appartement ${(posApartment || selectedApartment)?.number || ''}`}</p>
-                <h1>{posPhase === 'catalog' ? 'Kassa' :
-                  posPhase === 'invoices' ? 'Selecteer facturen' :
-                    posPhase === 'method' ? 'Kies betaalmethode' :
-                      posPhase === 'confirm' ? 'Betaling controleren' : 'Betaling afgerond'}</h1>
-                <p>{posPhase === 'catalog' ? 'Selecteer een appartement om een bestelling te starten.' :
-                  posPhase === 'invoices' ? 'Kies de openstaande facturen die u wilt afrekenen.' :
-                    posPhase === 'method' ? 'Kies hoe deze bestelling wordt betaald.' :
-                      posPhase === 'confirm' ? 'Controleer de gegevens en rond de betaling af.' : 'De betaling is verwerkt.'}</p>
-              </div>
-              {posPhase === 'catalog' ? <label className="kiosk-pos-search">
-                <Search className="h-5 w-5 shrink-0" />
-                <input value={uiQ} onChange={(e) => setUiQ(e.target.value)}
-                  placeholder="Zoek appartement of huurder" aria-label="Zoek appartement of huurder"
-                  data-testid="kiosk-pos-search" />
-              </label> : (
-                <button type="button" className="kiosk-pos-back-to-catalog" onClick={() => {
-                  setPosPhase('catalog');
-                  setPosOverviewError('');
-                }}>
-                  <ArrowLeft className="h-4 w-4" />
-                  Appartementen
-                </button>
-              )}
-              <div className="kiosk-pos-top-actions">
-                {isDesk && <HeaderLive />}
-                <button type="button" onClick={leavePosMode}
-                  aria-label="Standaard indeling activeren" title="Standaard indeling"
-                  aria-pressed="true" data-testid="kiosk-layout-mode-toggle"
-                  className="kiosk-pos-switch-layout">
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>{isDesk ? 'Standaard' : 'Kiosk'}</span>
-                </button>
-                {isDesk && <><KioskBell /><KioskEmployeePush /></>}
-                <KioskSettingsMenu />
-              </div>
-            </header>
-          )}
-
-          <div className="kiosk-pos-catalog">
-            <div className="kiosk-pos-catalog-heading">
-              <div>
-                <h2>Appartementen</h2>
-                <p>{filtered.length} van {visible.length} appartementen</p>
-              </div>
-              {totalGroups > 1 && (
-                <UiLocMenu opts={locOpts} wrapClass="kiosk-pos-location-menu relative" menuAlign={isDesk ? 'center' : 'end'}>
-                  {(toggle) => locationButton(toggle)}
-                </UiLocMenu>
-              )}
-            </div>
-            <nav className="kiosk-pos-categories" aria-label="Filter op betaalstatus">
-              {statusFilters.map(({ id, label, Icon, count }) => (
-                <button key={id} type="button" onClick={() => setUiFilter(id)}
-                  aria-pressed={uiFilter === id}
-                  className={`kiosk-pos-category${uiFilter === id ? ' active' : ''}`}>
-                  <Icon className="h-4 w-4" />
-                  <span>{label}</span>
-                  <strong>{count}</strong>
-                </button>
-              ))}
-            </nav>
-            {error && <p className="kiosk-pos-error" role="alert">{error}</p>}
-            <section className="kiosk-pos-apartment-grid" aria-label="Appartementenlijst">
-              {filtered.map((a) => (
-                <UiAptCard key={a.id} a={a} selectionMode
-                  selected={posSelectionId === a.id}
-                  locationName={locationsById.get(a.location_id)?.name}
-                  onOpen={() => setPosSelectionId(a.id)} />
-              ))}
-              {filtered.length === 0 && (
-                <div className="kiosk-pos-empty-results">
-                  <Building2 className="h-8 w-8" />
-                  <strong>Geen appartementen gevonden</strong>
-                  <span>Pas de locatie of betaalstatus aan.</span>
-                </div>
-              )}
-            </section>
-          </div>
-        </main>
-
-        <PosSelectionPanel
-          apartment={posPhase === 'catalog' ? selectedApartment : posApartment || selectedApartment}
-          locationName={posLocationName}
-          phase={posPhase}
-          onContinue={continueWithSelection}
-          onBack={() => {
-            setPosOverviewError('');
-            setPosPhase(posPhase === 'confirm' ? 'method' : posPhase === 'method' ? 'invoices' : 'catalog');
-          }}
-          loading={posOverviewLoading}
-          error={posOverviewError}
-        >
-          {posOverview && posPhase === 'invoices' && (
-            <PaySelect posLayout overview={posOverview}
-              onBack={() => setPosPhase('catalog')}
-              onConfirm={(payload) => { setPosPayload(payload); setPosPhase('method'); }} />
-          )}
-          {posOverview && posPayload && posPhase === 'method' && (
-            <MethodSelect posLayout payload={posPayload} overview={posOverview}
-              onBack={() => setPosPhase('invoices')}
-              onConfirm={(payload) => { setPosPayload(payload); setPosPhase('confirm'); }} />
-          )}
-          {posOverview && posPayload && posPhase === 'confirm' && (
-            <PaymentConfirm posLayout payload={posPayload} overview={posOverview}
-              onBack={() => setPosPhase('method')}
-              onSuccess={(payment) => { setPosPayment(payment); setPosPhase('receipt'); reloadSelect(); }} />
-          )}
-          {posOverview && posPayment && posPhase === 'receipt' && (
-            <ReceiptScreen posLayout payment={posPayment} overview={posOverview}
-              onDone={() => {
-                setPosPhase('catalog');
-                setPosSelectionId(null);
-                setPosApartment(null);
-                setPosOverview(null);
-                setPosPayload(null);
-                setPosPayment(null);
-                reloadSelect();
-              }} />
-          )}
-        </PosSelectionPanel>
-        {linkApt && <LinkTenantModal apartment={linkApt} onClose={() => setLinkApt(null)}
-          onLinked={(d) => {
-            setLinkApt(null); reloadSelect();
-            window.dispatchEvent(new CustomEvent('kiosk-deposit-open', { detail: {
-              id: d.tenant_id, name: d.tenant_name, apartment_id: d.apartment_id,
-              apartment_number: d.apartment_number, rent_amount: d.rent_amount, currency: d.currency } }));
-          }} />}
-      </div>
-    );
-  }
-
   // ----- Location picker view -----
   if (showLocationPicker) {
     return (
@@ -1493,8 +1014,7 @@ function ApartmentSelect({
         <MobileHeaderButtons onAdmin={onAdmin} onExit={onExit} onKasgeld={onKasgeld} />
         {/* Mobile: kleine titel links, onder de knoppen */}
         <DesktopKioskHeader title="Kies een locatie" currentStep="select" totalGroups={1}
-          onAdmin={onAdminAll || onAdmin} onSearch={onSearch}
-          alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
+          onAdmin={onAdminAll || onAdmin} onSearch={onSearch} />
         <div className="kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center justify-between gap-2">
           <span className="text-xl font-black text-white tracking-tight">Kies een locatie</span>
         </div>
@@ -1554,8 +1074,7 @@ function ApartmentSelect({
       <DesktopKioskHeader currentLocation={currentLocation} currentStep="select"
         currentLocationId={selectedLocationId} totalGroups={totalGroups}
         onLocations={() => setSelectedLocationId(null)} onAdmin={onAdminAll || onAdmin} onSearch={onSearch} locOpts={locOpts}
-        searchValue={uiQ} onSearchChange={setUiQ}
-        alternateLayout={alternateLayout} onToggleAlternateLayout={onToggleAlternateLayout} />
+        searchValue={uiQ} onSearchChange={setUiQ} />
       <div className={`kiosk-chrome md:hidden px-2 pt-1 pb-2 flex items-center gap-2 min-w-0${isUi ? ' !hidden' : ''}`}>
         {totalGroups > 1 && (
           <button onClick={() => setSelectedLocationId(null)} data-testid="back-to-locations-mobile"
@@ -7459,19 +6978,12 @@ export default function KioskLayout() {
   const [selectedLocationId, setSelectedLocationId] = useState(() => {
     try { return sessionStorage.getItem('kiosk_sel_loc') || null; } catch { return null; }
   });
-  const [kioskAlternateLayout, setKioskAlternateLayout] = useState(() => {
-    try {
-      return localStorage.getItem('kiosk_alternate_layout') === '1'
-        || localStorage.getItem('kiosk_modern_theme') === '1';
-    } catch { return false; }
-  });
   useEffect(() => {
     try {
-      if (kioskAlternateLayout) localStorage.setItem('kiosk_alternate_layout', '1');
-      else localStorage.removeItem('kiosk_alternate_layout');
+      localStorage.removeItem('kiosk_alternate_layout');
       localStorage.removeItem('kiosk_modern_theme');
     } catch { /* local preference is optional */ }
-  }, [kioskAlternateLayout]);
+  }, []);
   useEffect(() => {
     try {
       if (selectedLocationId) sessionStorage.setItem('kiosk_sel_loc', selectedLocationId);
@@ -7738,7 +7250,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className={`kiosk-fullscreen kiosk-white bg-white kiosk-ui${kioskAlternateLayout && !isMobileViewport ? ' kiosk-alternate-layout' : ''}`} data-testid="kiosk-root" data-theme="ui">
+    <div className="kiosk-fullscreen kiosk-white bg-white kiosk-ui" data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
@@ -7784,8 +7296,7 @@ export default function KioskLayout() {
         <div ref={headRef} className="kiosk-head-wrap absolute inset-x-0 z-10" style={{ top: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 0, padding: 'var(--kiosk-sat) 1.5vw 0' }}>
           <DesktopKioskHeader title={STEP_TITLES[step]} currentStep={step}
             currentLocationId={selectedLocationId} currentApartment={apartment}
-            totalGroups={1} onAdmin={adminMode} alternateLayout={kioskAlternateLayout}
-            onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
+            totalGroups={1} onAdmin={adminMode}
             tenant={apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm', 'receipt'].includes(step)
               ? { name: apartment.tenant_name, photo: apartment.tenant_avatar_url || apartment.tenant_id_photo_url }
               : null}
@@ -7793,7 +7304,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -7810,8 +7321,6 @@ export default function KioskLayout() {
             <ApartmentSelect key={apartmentsReloadKey}
               selectedLocationId={selectedLocationId}
               onLocationSelectionChange={setSelectedLocationId}
-              alternateLayout={kioskAlternateLayout}
-              onToggleAlternateLayout={() => setKioskAlternateLayout((enabled) => !enabled)}
               onEnableNfc={enableWebNfc}
               webNfcStatus={webNfcStatus}
               hasAdminAccess={hasAdminAccess}
@@ -8121,7 +7630,7 @@ export default function KioskLayout() {
 
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
-      {showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) && createPortal((
+      {showDesktopBar && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className={`flex items-stretch gap-1 px-2 py-1${isUi ? ' kiosk-ui-bar' : ''}`}>
