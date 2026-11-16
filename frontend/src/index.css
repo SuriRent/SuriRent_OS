@@ -3027,9 +3027,6 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 }
 
 @media (max-width: 767px) {
-  .kiosk-fullscreen.kiosk-alternate-layout .kiosk-content-scroll.kiosk-no-bar {
-    padding-bottom: 0 !important;
-  }
   .kiosk-pos-layout.kiosk-pos-mobile-layout {
     position: relative;
     display: flex;
