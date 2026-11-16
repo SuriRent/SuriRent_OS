@@ -15,6 +15,15 @@ describe('matchBankTenant', () => {
     expect(matchBankTenant(description, tenants)).toEqual({ tenantId, status: 'matched' });
   });
 
+  test.each([
+    ['HUUR J PERSAD', 'Persad J'],
+    ['HUUR R GOPAUL', 'Gopaul R'],
+  ])('matches a tenant name stored surname-first: %s', (description, name) => {
+    const apartment_number = '';
+    expect(matchBankTenant(description, [{ id: 'tenant', name, apartment_number }]))
+      .toEqual({ tenantId: 'tenant', status: 'matched' });
+  });
+
   test('uses the apartment number to disambiguate matching initials and surnames', () => {
     const similarTenants = [
       { id: 'ravi', name: 'Ravi Gopaul', apartment_number: 'Huis 5B' },

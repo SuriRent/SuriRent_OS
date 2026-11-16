@@ -59,13 +59,11 @@ function tenantNameMatches(description, tenantName) {
   const fullName = tokens.join(' ');
   if (fullName.length >= 4 && normalizedDescription.includes(` ${fullName} `)) return true;
 
-  const surname = tokens[tokens.length - 1];
-  const firstName = tokens[0];
   const descriptionTokens = new Set(normalizedDescription.trim().split(' '));
-  return surname.length >= 3
-    && descriptionTokens.has(surname)
-    && Boolean(firstName)
-    && descriptionTokens.has(firstName[0]);
+  return tokens.some((part, partIndex) => part.length >= 3
+    && descriptionTokens.has(part)
+    && tokens.some((otherPart, otherIndex) => otherIndex !== partIndex
+      && descriptionTokens.has(otherPart.length === 1 ? otherPart : otherPart[0])));
 }
 
 export function matchBankTenant(description, tenants) {
