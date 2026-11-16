@@ -7926,6 +7926,19 @@ class BankReconciliationRegisterIn(BaseModel):
     note: Optional[str] = Field(default="", max_length=2000)
 
 
+class BankReconciliationImportedTransactionIn(BaseModel):
+    date: str = Field(min_length=10, max_length=10)
+    amount: float = Field(gt=0)
+    currency: Literal["SRD", "USD", "EUR"] = "SRD"
+    description: Optional[str] = Field(default="", max_length=500)
+    payer_name: Optional[str] = Field(default="", max_length=160)
+    reference: Optional[str] = Field(default="", max_length=200)
+
+
+class BankReconciliationImportTransactionsIn(BaseModel):
+    transactions: List[BankReconciliationImportedTransactionIn] = Field(min_length=1, max_length=1000)
+
+
 @api.post("/tenant-portal/bank-statement-upload")
 async def tenant_bank_statement_upload(
     file: UploadFile = File(...), tenant=Depends(get_tenant_session)
@@ -7967,6 +7980,13 @@ async def get_bank_statement(asset_id: str, user=Depends(get_current_user)):
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Bankafschrift niet gevonden")
+    if not doc.get("data_b64") and doc.get("source_statement_id"):
+        doc = await db.bank_statements.find_one(
+            {"id": doc["source_statement_id"], **({"company_id": cid} if cid else {})},
+            {"_id": 0},
+        )
+        if not doc:
+            raise HTTPException(status_code=404, detail="Bronbankafschrift niet gevonden")
     try:
         data = base64.b64decode(doc["data_b64"])
     except Exception:
@@ -7979,7 +7999,7 @@ async def upload_bank_reconciliation_statement(
     file: UploadFile = File(...),
     user=Depends(require_role("admin", "superadmin")),
 ):
-    """Store one company-scoped payment proof for manual review."""
+    """Store a company-scoped payment proof or structured statement for review."""
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
@@ -7990,13 +8010,25 @@ async def upload_bank_reconciliation_statement(
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB.")
     ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
     allowed = ("image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf")
-    if ctype not in allowed:
-        raise HTTPException(status_code=400, detail="Alleen PDF, JPG, PNG of WEBP toegestaan.")
+    filename = (file.filename or "").strip()
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    structured_extensions = {"csv", "ofx", "mt940", "sta", "940", "txt"}
+    if ctype not in allowed and extension not in structured_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail="Alleen MT940, OFX, CSV, PDF, JPG, PNG of WEBP toegestaan.",
+        )
+    if extension == "csv":
+        ctype = "text/csv"
+    elif extension == "ofx":
+        ctype = "application/x-ofx"
+    elif extension in {"mt940", "sta", "940", "txt"}:
+        ctype = "text/plain"
 
     statement_id = new_id()
     await db.bank_statements.insert_one({
         "id": statement_id,
-        "filename": file.filename or f"afschrift-{statement_id}",
+        "filename": filename or f"afschrift-{statement_id}",
         "content_type": ctype,
         "data_b64": base64.b64encode(raw).decode("ascii"),
         "size": len(raw),
@@ -8005,7 +8037,116 @@ async def upload_bank_reconciliation_statement(
         "uploaded_at": iso(now_utc()),
         "reconciliation_status": "uploaded",
     })
-    return {"id": statement_id, "filename": file.filename, "size": len(raw)}
+    return {"id": statement_id, "filename": filename, "size": len(raw)}
+
+
+@api.post("/bank-reconciliation/{statement_id}/transactions")
+async def import_bank_reconciliation_transactions(
+    statement_id: str,
+    body: BankReconciliationImportTransactionsIn,
+    user=Depends(require_role("admin", "superadmin")),
+):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "company_id": cid}, {"_id": 0}
+    )
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bankafschrift niet gevonden")
+    extension = (statement.get("filename") or "").rsplit(".", 1)[-1].lower()
+    if extension not in {"csv", "ofx", "mt940", "sta", "940", "txt"}:
+        raise HTTPException(status_code=400, detail="Dit bestandstype ondersteunt geen transacties-import.")
+
+    if statement.get("transaction_import_status") == "imported":
+        existing = await db.bank_statements.find(
+            {"parent_statement_id": statement_id, "company_id": cid},
+            {"_id": 0},
+        ).sort("transaction_index", 1).to_list(length=1000)
+        return {"transactions": [
+            {
+                "id": item["id"],
+                "filename": item.get("filename"),
+                "size": item.get("size"),
+                "content_type": item.get("content_type"),
+                "transaction": item.get("imported_transaction"),
+            }
+            for item in existing
+        ]}
+
+    for transaction in body.transactions:
+        try:
+            datetime.strptime(transaction.date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Ongeldige transactiedatum.") from exc
+
+    import_id = new_id()
+    claim = await db.bank_statements.update_one(
+        {
+            "id": statement_id,
+            "company_id": cid,
+            "transaction_import_status": {"$nin": ["importing", "imported"]},
+        },
+        {"$set": {
+            "transaction_import_status": "importing",
+            "transaction_import_id": import_id,
+        }},
+    )
+    if not claim.modified_count:
+        raise HTTPException(status_code=409, detail="Dit bankafschrift wordt al geïmporteerd.")
+
+    transactions = []
+    for index, transaction in enumerate(body.transactions, start=1):
+        transaction_data = transaction.model_dump()
+        transactions.append({
+            "id": new_id(),
+            "filename": statement.get("filename"),
+            "content_type": statement.get("content_type"),
+            "size": statement.get("size"),
+            "company_id": cid,
+            "uploaded_by": statement.get("uploaded_by"),
+            "uploaded_at": statement.get("uploaded_at"),
+            "source_statement_id": statement_id,
+            "parent_statement_id": statement_id,
+            "transaction_import_id": import_id,
+            "transaction_index": index,
+            "imported_transaction": transaction_data,
+            "reconciliation_status": "uploaded",
+        })
+
+    try:
+        await db.bank_statements.insert_many(transactions)
+        await db.bank_statements.update_one(
+            {"id": statement_id, "company_id": cid, "transaction_import_id": import_id},
+            {"$set": {
+                "transaction_import_status": "imported",
+                "transaction_count": len(transactions),
+            }, "$unset": {"transaction_import_id": ""}},
+        )
+    except Exception:
+        await db.bank_statements.delete_many({
+            "parent_statement_id": statement_id,
+            "company_id": cid,
+            "transaction_import_id": import_id,
+        })
+        await db.bank_statements.update_one(
+            {"id": statement_id, "company_id": cid, "transaction_import_id": import_id},
+            {"$set": {"transaction_import_status": "failed"},
+             "$unset": {"transaction_import_id": ""}},
+        )
+        raise
+
+    return {"transactions": [
+        {
+            "id": item["id"],
+            "filename": item["filename"],
+            "size": item["size"],
+            "content_type": item["content_type"],
+            "transaction": item["imported_transaction"],
+        }
+        for item in transactions
+    ]}
 
 
 @api.post("/bank-reconciliation/{statement_id}/register", response_model=PaymentOut)

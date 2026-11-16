@@ -7381,12 +7381,15 @@ export default function KioskLayout() {
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskBonPage onBack={goBack} /></div>
             </Suspense>
           )}
+          {step === 'admin:bankreconciliatie' && hasAdminAccess && (
+            <KioskAdminPopup id="bankreconciliatie" Shell={KioskModalShell} onClose={goBack} />
+          )}
           {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} user={user} /></div>
             </Suspense>
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen' && step !== 'admin:bankreconciliatie'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
               ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
