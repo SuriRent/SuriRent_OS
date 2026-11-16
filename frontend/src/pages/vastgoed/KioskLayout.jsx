@@ -360,6 +360,7 @@ function HeaderLive() {
 const STEP_TITLES = {
   kasgeld: 'Kasgeldbeheer', stroom: 'Stroom', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
+  'admin:bankreconciliatie': 'Bankreconciliatie',
 };
 
 function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
@@ -7126,7 +7127,7 @@ export default function KioskLayout() {
         setStep('admin:facturen');
       }
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
-      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:regelingen') {
+      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:bankreconciliatie' || e.detail === 'admin:regelingen') {
         setAdminPopup(null);
         setStep(e.detail);
       }
@@ -7646,12 +7647,14 @@ export default function KioskLayout() {
               { id: 'apartments', label: 'Appartementen', icon: isUi ? Building2 : Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
+              ...(hasAdminAccess && user?.role !== 'boekhouder' ? [{ id: 'bankreconciliation', label: 'Bankreconciliatie', icon: LandmarkIcon, testid: 'kiosk-bank-reconciliation-btn-desktop', onClick: () => { openOnly(null); setStep('admin:bankreconciliatie'); } }] : []),
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
               ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (id === 'bankreconciliation' && step === 'admin:bankreconciliatie')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <Fragment key={id}>

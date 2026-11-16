@@ -435,6 +435,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
   const [tenantInvoices, setTenantInvoices] = useState([]);
   const [reassigning, setReassigning] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [openingBankProof, setOpeningBankProof] = useState(false);
 
   useEffect(() => {
     if (!p?.invoice_id) return;
@@ -470,6 +471,21 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
     } finally {
       setReassigning(false);
       setReassignOpen(false);
+    }
+  };
+
+  const openBankProof = async () => {
+    if (!p.bank_statement_id) return;
+    setOpeningBankProof(true);
+    try {
+      const { data } = await api.get(`/bank-statements/${p.bank_statement_id}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      alert(formatError(error) || 'Bankbewijs kon niet geopend worden.');
+    } finally {
+      setOpeningBankProof(false);
     }
   };
 
@@ -587,6 +603,31 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
           {p.approved_by && <DetailRow label="Goedgekeurd door" value={p.approved_by} />}
         </div>
       </div>}
+
+      {(!kioskMode || detailTab === 'overzicht') && p.method === 'bank' && p.bank_statement_id && (
+        <section className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm" data-testid="payment-bank-proof">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black text-slate-900">Bankbewijs</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Handmatig gecontroleerd · {p.bank_statement_filename || 'bewijs gekoppeld'}
+              </p>
+            </div>
+            <button type="button" onClick={openBankProof} disabled={openingBankProof}
+              data-testid="payment-bank-proof-open"
+              className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+              {openingBankProof ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {openingBankProof ? 'Openen…' : 'Bekijk bewijs'}
+            </button>
+          </div>
+          {(p.bank_payer_name || p.bank_reference) && (
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
+              {p.bank_payer_name && <p className="col-span-2"><strong className="text-slate-800">Naam op bewijs:</strong> {p.bank_payer_name}</p>}
+              {p.bank_reference && <p className="col-span-2"><strong className="text-slate-800">Bankreferentie:</strong> {p.bank_reference}</p>}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* SUB-CARD: GEKOPPELDE FACTUUR (indien aanwezig) */}
       {(!kioskMode || detailTab === 'factuur') && p.invoice_id && (
