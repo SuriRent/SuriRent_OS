@@ -500,7 +500,7 @@ function DesktopKioskHeader({
 
 const UI_FILTERS = [
   { id: 'all', label: 'Alle' }, { id: 'paid', label: 'Betaald' }, { id: 'partial', label: 'Gedeeltelijk' },
-  { id: 'unpaid', label: 'Niet betaald' }, { id: 'vacant', label: 'Vrij' },
+  { id: 'unpaid', label: 'Niet betaald' }, { id: 'vacant', label: 'Beschikbaar' },
 ];
 
 function uiAptStatus(a) {
@@ -1222,7 +1222,7 @@ function ApartmentSelect({
       { id: 'unpaid', label: 'Openstaand', Icon: AlertCircle, count: visible.filter((a) => uiAptStatus(a) === 'unpaid').length },
       { id: 'partial', label: 'Gedeeltelijk', Icon: ClockIcon, count: visible.filter((a) => uiAptStatus(a) === 'partial').length },
       { id: 'paid', label: 'Betaald', Icon: Check, count: visible.filter((a) => uiAptStatus(a) === 'paid').length },
-      { id: 'vacant', label: 'Vrij', Icon: Building2, count: visible.filter((a) => uiAptStatus(a) === 'vacant').length },
+      { id: 'vacant', label: 'Beschikbaar', Icon: Building2, count: visible.filter((a) => uiAptStatus(a) === 'vacant').length },
     ];
     const continueWithSelection = async () => {
       if (!selectedApartment) return;
