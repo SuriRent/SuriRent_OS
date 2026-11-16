@@ -17883,7 +17883,7 @@ PUSH_CATEGORIES = [
     ("kiosk_session", "Kiosk in-/uitloggen", "Medewerker ingelogd of uitgelogd in de kiosk."),
     ("billing", "Abonnement & SaaS-facturen", "Abonnement (bijna) verlopen en nieuwe SaaS-facturen."),
     ("deposits", "Borg", "Borg betaald of terugbetaald."),
-    ("bills", "Vaste betalingen (ESB/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
+    ("bills", "Vaste betalingen (EBS/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
 ]
 _PUSH_KIND_CATEGORY = {
     "deposit": "deposits", "bill_reminder": "bills",
@@ -18009,7 +18009,7 @@ EMP_PUSH_CATEGORIES = [
     ("deposit", "Borg", "Borg betaald of terugbetaald."),
     ("plans", "Betalingsregelingen", "Nieuwe betalingsregelingen en betaalde termijnen."),
     ("apartments", "Appartement beschikbaar", "Een appartement is vrijgekomen."),
-    ("bills", "Vaste betalingen (ESB/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
+    ("bills", "Vaste betalingen (EBS/SWM/Telesur)", "Herinnering dat stroom, water of internet betaald moet worden."),
 ]
 
 
@@ -18116,7 +18116,7 @@ async def _notify_kiosk_employees(company_id: str, title: str, body: str, data: 
         return 0
 
 
-# ---- Vaste maandelijkse betalingen (ESB / SWM / Telesur) ----
+# ---- Vaste maandelijkse betalingen (EBS / SWM / Telesur) ----
 BILL_DEFAULTS = [
     {"id": "esb", "provider": "EBS", "label": "Stroom", "day": 18, "days_before": 3, "enabled": False},
     {"id": "swm", "provider": "SWM", "label": "Water", "day": 18, "days_before": 3, "enabled": False},

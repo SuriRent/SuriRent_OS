@@ -82,7 +82,7 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
     <div className={`${CARD} relative overflow-hidden`} data-testid="saas-online-pay-box">
       <span aria-hidden className={`absolute left-0 inset-y-0 w-1 ${urgent ? 'bg-red-500' : 'bg-[#FF5C00]'}`} />
       <div className="px-5 pt-4 pb-3 flex items-center gap-3">
-        <span className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${urgent ? 'bg-red-100 text-red-500' : 'bg-orange-100 text-orange-500'}`}>
+        <span className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${urgent ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-[#162B45]'}`}>
           <Receipt className="w-5 h-5" />
         </span>
         <div className="flex-1 min-w-0">
@@ -96,9 +96,9 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
             className="text-xs font-bold text-[#FF5C00] hover:underline shrink-0">{allOn ? 'Niets selecteren' : 'Alles selecteren'}</button>
         )}
       </div>
-      <div className="mx-5 rounded-xl border border-orange-100 divide-y divide-orange-50">
+      <div className="mx-5 rounded-xl border border-slate-200 divide-y divide-slate-100">
         {openInvoices.map((i) => (
-          <label key={i.id} className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-orange-50/40 transition-colors" data-testid={`saas-pay-row-${i.id}`}>
+          <label key={i.id} className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors" data-testid={`saas-pay-row-${i.id}`}>
             <input type="checkbox" checked={sel.has(i.id)} onChange={() => toggle(i.id)} className="w-4 h-4 accent-[#FF5C00]"
               data-testid={`saas-pay-check-${i.id}`} />
             <span className="flex-1 min-w-0">
@@ -123,7 +123,7 @@ function PayBanner({ me, openInvoices, stripeOn, bankOn, onPayMany, onBankPay })
           {bankOn && (
             <button type="button" onClick={() => onBankPay(chosen[0].id)} disabled={chosen.length !== 1}
               data-testid="saas-pay-bank-btn"
-              className="h-11 px-4 rounded-xl border-2 border-slate-200 hover:border-[#FF5C00] hover:bg-orange-50 text-slate-800 font-bold text-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+              className="h-11 px-4 rounded-xl border-2 border-slate-200 hover:border-[#162B45] hover:bg-slate-50 text-slate-800 font-bold text-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
               <Landmark className="w-4 h-4" /> Bankoverschrijving
             </button>
           )}
@@ -166,7 +166,7 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
         </div>
       ) : hasOpen ? (
         <button onClick={onSetup} data-testid="autopay-setup"
-          className="h-10 px-4 rounded-xl bg-white border-2 border-orange-200 hover:bg-orange-50 text-[#FF6A1A] font-bold text-sm transition-colors shrink-0">
+          className="h-10 px-4 rounded-xl bg-[#162B45] hover:bg-[#213C5B] text-white font-bold text-sm transition-colors shrink-0">
           Betalen & kaart bewaren
         </button>
       ) : null}
@@ -177,24 +177,24 @@ function AutopayCard({ autopay, stripeOn, hasOpen, onToggle, onRemove, onSetup, 
 function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
   if (invoices.length === 0) return (
     <div className="p-10 flex flex-col items-center gap-3 text-center">
-      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><Receipt className="w-8 h-8" /></span>
+      <span className="w-16 h-16 rounded-3xl bg-slate-100 text-[#162B45] flex items-center justify-center"><Receipt className="w-8 h-8" /></span>
       <p className="text-base font-black text-slate-900">Nog geen facturen</p>
       <p className="text-sm text-slate-500">Zodra er een factuur is, verschijnt die hier.</p>
     </div>
   );
   return (
     <div data-testid="my-invoices-list">
-      <div className="hidden md:grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-orange-100">
+      <div className="hidden md:grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
         <span>Periode</span><span>Pakket</span><span className="text-right">Bedrag</span><span>Status</span><span className="w-[190px] text-right">Actie</span>
       </div>
-      <div className="divide-y divide-orange-50">
+      <div className="divide-y divide-slate-100">
         {invoices.map((inv) => {
           const paid = inv.status === 'paid';
           const open = isOpen(inv);
           const balanceDue = inv.balance_due ?? Math.max(Number(inv.amount || 0) - Number(inv.paid_amount || 0), 0);
           return (
             <div key={inv.id} data-testid={`my-invoice-${inv.id}`}
-              className="px-5 py-3.5 grid grid-cols-[1fr_auto] md:grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-x-4 gap-y-1 items-center hover:bg-orange-50/40 transition-colors">
+              className="px-5 py-3.5 grid grid-cols-[1fr_auto] md:grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-x-4 gap-y-1 items-center hover:bg-slate-50 transition-colors">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-slate-900">{fmtDate(inv.period_start)} â†’ {fmtDate(inv.period_end)}</p>
                 {inv.due_date && <p className="text-[11px] font-semibold text-orange-600">Uiterlijk betalen: {fmtDate(inv.due_date)}</p>}
@@ -232,13 +232,13 @@ function InvoicesPanel({ invoices, stripeOn, bankOn, onPay, onBankPay }) {
 function PaymentsPanel({ payments }) {
   if (payments.length === 0) return (
     <div className="p-10 flex flex-col items-center gap-3 text-center">
-      <span className="w-16 h-16 rounded-3xl bg-orange-50 text-[#FF5C00] flex items-center justify-center"><CreditCard className="w-8 h-8" /></span>
+      <span className="w-16 h-16 rounded-3xl bg-slate-100 text-[#162B45] flex items-center justify-center"><CreditCard className="w-8 h-8" /></span>
       <p className="text-base font-black text-slate-900">Nog geen betalingen</p>
       <p className="text-sm text-slate-500">Uw betalingen verschijnen hier.</p>
     </div>
   );
   return (
-    <div className="divide-y divide-orange-50" data-testid="my-payments-list">
+    <div className="divide-y divide-slate-100" data-testid="my-payments-list">
       {payments.map((p) => (
         <div key={p.id} className="px-5 py-3.5 flex items-center gap-3" data-testid={`my-payment-${p.id}`}>
           <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center shrink-0"><Banknote className="w-5 h-5" /></span>
@@ -260,9 +260,9 @@ function PlanCard({ plan, currentPlanId, onSelect, busy }) {
   const isCurrent = plan.id === currentPlanId;
   return (
     <div className={`relative rounded-2xl p-5 flex flex-col border transition-[border-color,box-shadow] ${
-      isCurrent ? 'border-[#FF5C00] bg-orange-50/40 shadow-[0_10px_25px_-12px_rgba(255,92,0,0.45)]' : 'border-orange-100 bg-white hover:border-orange-300'}`}
+      isCurrent ? 'border-[#162B45] bg-white shadow-[0_10px_25px_-12px_rgba(22,43,69,0.22)]' : 'border-slate-200 bg-white hover:border-slate-400'}`}
       data-testid={`plan-card-${plan.id}`}>
-      {isCurrent && <span className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FF5C00] text-white">Huidig</span>}
+      {isCurrent && <span className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#162B45] text-white">Huidig</span>}
       <p className="text-base font-black text-slate-900">{plan.name}</p>
       <p className="text-xs text-slate-500 mt-0.5 pr-14">{plan.description}</p>
       <p className="text-2xl font-black text-slate-900 mt-4 tracking-tight">{fmt(plan.amount, plan.currency)}<span className="text-xs font-semibold text-slate-400 ml-1">/ {intervalLabel(plan.interval)}</span></p>
@@ -273,7 +273,7 @@ function PlanCard({ plan, currentPlanId, onSelect, busy }) {
       </ul>
       {!isCurrent && (
         <button onClick={() => onSelect(plan)} disabled={busy} data-testid={`plan-select-${plan.id}`}
-          className="mt-4 w-full h-10 rounded-xl bg-white border-2 border-orange-200 hover:bg-orange-50 text-[#FF6A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
+          className="mt-4 w-full h-10 rounded-xl bg-[#162B45] hover:bg-[#213C5B] text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : plan.amount > 0 ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
           Kies {plan.name}
         </button>
@@ -322,7 +322,7 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
       <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={onFile} className="hidden" data-testid="saas-bank-proof-input" />
       {!result && (
         <button onClick={() => fileInput.current?.click()} disabled={busy} data-testid="saas-bank-proof-upload-btn"
-          className="mt-auto w-full h-24 rounded-2xl border-2 border-dashed border-orange-200 hover:border-[#FF5C00] hover:bg-orange-50/50 text-slate-600 hover:text-[#FF5C00] font-bold text-sm flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-colors">
+          className="mt-auto w-full h-24 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#162B45] hover:bg-slate-50 text-slate-600 hover:text-[#162B45] font-bold text-sm flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-colors">
           {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Scannenâ€¦</> : <><Upload className="w-5 h-5" /> Upload betaalbewijs<span className="text-[10px] font-semibold text-slate-400">JPG, PNG, WEBP of PDF Â· max 5 MB</span></>}
         </button>
       )}
@@ -353,12 +353,12 @@ function BankProofUploader({ invoice, onSuccess, onErr }) {
 
 function KV({ label, value, mono, onCopy, copied, wrap }) {
   return (
-    <div className="row-label-value items-center py-2.5 border-b border-orange-50 last:border-0">
+    <div className="row-label-value items-center py-2.5 border-b border-slate-100 last:border-0">
       <span className="text-slate-500 text-[13px]">{label}</span>
       <div className="flex items-center gap-1 min-w-0">
         <span className={`font-bold text-slate-900 text-[13px] ${wrap ? 'break-words whitespace-normal text-right' : 'truncate'} ${mono ? 'font-mono' : ''}`}>{value}</span>
         {onCopy && (
-          <button onClick={onCopy} title="KopiÃ«ren" className="p-1.5 rounded-lg text-slate-400 hover:text-[#FF5C00] hover:bg-orange-50 transition-colors shrink-0">
+          <button onClick={onCopy} title="KopiÃ«ren" className="p-1.5 rounded-lg text-slate-400 hover:text-[#162B45] hover:bg-slate-100 transition-colors shrink-0">
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
         )}
@@ -384,7 +384,7 @@ function BankPanel({ details, invoice, amount, currency, company, onSuccess, onE
     <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6 [&>*]:min-w-0" data-testid="saas-bank-box">
       <div>
         <div className="flex items-center gap-2 mb-1.5">
-          <Landmark className="w-4 h-4 text-[#FF5C00]" />
+          <Landmark className="w-4 h-4 text-[#162B45]" />
           <p className="text-sm font-black text-slate-900">Overschrijvingsgegevens</p>
         </div>
         <KV label="Bank" value={details.bank_name} />
@@ -516,7 +516,7 @@ export default function MijnAbonnement() {
         )}
       </section>
 
-      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-2 overflow-x-auto rounded-2xl bg-orange-50 p-1.5 no-scrollbar" data-testid="my-sub-tabs">
+      <nav aria-label="Abonnementsbeheer" className="flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm no-scrollbar" data-testid="my-sub-tabs">
         {[
           ['invoices', `Facturen (${invoices.length})`, 'my-sub-tab-invoices', Receipt],
           ['payments', `Betalingen (${payments.length})`, 'my-sub-tab-payments', CreditCard],
@@ -524,13 +524,13 @@ export default function MijnAbonnement() {
           ...(showBank ? [['bank', 'Bankoverschrijving', 'my-sub-tab-bank', Landmark]] : []),
         ].map(([v, lbl, tid, Icon]) => (
           <button key={v} type="button" onClick={() => setTab(v)} data-testid={tid}
-            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-extrabold transition-all ${tab === v ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 hover:bg-white'}`}>
+            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-3 text-sm font-bold transition-all ${tab === v ? 'bg-[#162B45] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
             <Icon className="h-4 w-4" />{lbl}
           </button>
         ))}
       </nav>
 
-      <div className="bg-white rounded-3xl border border-orange-100 shadow-sm overflow-hidden" data-testid={`my-sub-panel-${tab}`}>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" data-testid={`my-sub-panel-${tab}`}>
         {tab === 'invoices' && <InvoicesPanel invoices={invoices} stripeOn={stripeOn} bankOn={showBank}
           onPay={goPay} onBankPay={goBankPay} />}
         {tab === 'payments' && <PaymentsPanel payments={payments} />}

@@ -287,7 +287,7 @@ function KioskBell() {
   );
 }
 
-// Tandwiel rechtsboven: elke instelling apart als eigen popup (alleen beheerder).
+// Tandwiel rechtsboven opent de kiosk-instellingenweergave (alleen beheerder).
 function KioskSettingsMenu() {
   const { isAdmin, isUi } = useContext(KioskThemeCtx);
   const [open, setOpen] = useState(false);
@@ -7649,8 +7649,13 @@ export default function KioskLayout() {
       setDepositFor(null);
       setContractFor(null);
       if (route.type === 'settings') {
-        setStep('select');
-        setAdminPopup(`inst-${route.id}`);
+        if (window.innerWidth >= 768) {
+          setAdminPopup(null);
+          setStep(`admin:inst-${route.id}`);
+        } else {
+          setStep('select');
+          setAdminPopup(`inst-${route.id}`);
+        }
       } else if (route.type === 'page') {
         setStep('select');
         if (route.id === 'facturen') setStep('admin:facturen');
@@ -7868,7 +7873,7 @@ export default function KioskLayout() {
           )}
           {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
-              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} /></div>
+              <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} user={user} /></div>
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
@@ -8119,11 +8124,11 @@ export default function KioskLayout() {
       {showDesktopBar && !(kioskAlternateLayout && step === 'select' && !isMobileViewport) && createPortal((
         <nav ref={barRef} className={`hidden md:block fixed bottom-0 left-0 right-0 z-[110] border-t kiosk-white-nav bg-white border-slate-200 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]`}
           data-testid="kiosk-bottom-bar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className={`flex items-stretch gap-1 px-2 py-2${isUi ? ' kiosk-ui-bar' : ''}`}>
+          <div className={`flex items-stretch gap-1 px-2 py-1${isUi ? ' kiosk-ui-bar' : ''}`}>
             {isUi ? (
               <button type="button" onClick={() => { if (canBack) goBack(); }} data-testid="kiosk-ui-bar-back" data-active="true"
-                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1.5 rounded-2xl py-2.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
-                <LayoutGrid className="w-7 h-7" strokeWidth={2} />
+                className="shrink-0 w-[8.5vw] min-w-[72px] flex flex-col items-center justify-center gap-1 rounded-2xl py-1.5 px-1 bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md active:scale-95">
+                <LayoutGrid className="w-6 h-6" strokeWidth={2} />
                 <span className="text-[11px] lg:text-sm font-bold leading-tight">Terug</span>
               </button>
             ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white />}
@@ -8143,8 +8148,8 @@ export default function KioskLayout() {
                 <Fragment key={id}>
                 {isUi && <span className="self-center h-10 w-px bg-slate-300/80 shrink-0" aria-hidden="true" />}
                 <button type="button" onClick={onClick} data-testid={testid} data-active={active ? 'true' : undefined}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 px-1 transition-colors active:scale-95 ${active ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]'}`}>
-                  <Icon className="w-7 h-7" strokeWidth={1.8} />
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-xl py-1.5 px-1 transition-colors active:scale-95 ${active ? 'bg-[#FF5C00] text-white shadow-md' : 'text-slate-600 bg-slate-50 hover:bg-orange-50 hover:text-[#F26A12]'}`}>
+                  <Icon className="w-6 h-6" strokeWidth={1.8} />
                   <span className="text-[10px] lg:text-[11px] xl:text-sm font-semibold leading-tight text-center max-w-full truncate">{label}</span>
                 </button>
                 </Fragment>
