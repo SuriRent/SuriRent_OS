@@ -70,7 +70,7 @@ def test_init_rejects_too_large(super_session):
 
 
 # ---------- End-to-end upload + public download ----------
-APK_SIZE = 5 * 1024 * 1024 + 1234  # ~5MB — will need 2 chunks at 4MB chunk_size
+APK_SIZE = 5 * 1024 * 1024 + 1234  # ~5MB — requires 6 chunks at 1MB chunk_size
 APK_BYTES = _make_fake_apk(APK_SIZE)
 
 
@@ -84,7 +84,7 @@ def uploaded_release(super_session):
     data = r.json()
     uid = data["upload_id"]
     chunk_size = data["chunk_size"]
-    assert chunk_size == 4 * 1024 * 1024
+    assert chunk_size == 1 * 1024 * 1024
 
     # upload chunks (raw octet-stream)
     idx = 0

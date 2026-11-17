@@ -18,7 +18,6 @@ let getRequestSequence = 0;
 
 // Attach bearer token if present (fallback to cookie auth)
 api.interceptors.request.use((config) => {
-  config._t0 = performance.now(); // voor trage-verbinding detectie
   if ((config.method || 'get').toLowerCase() === 'get') {
     // Live app-data moet altijd opnieuw bij de backend worden gevalideerd,
     // niet uit de browser- of service-worker-cache komen.
@@ -60,14 +59,8 @@ const PUBLIC_401_PATHS = [
   '/auth/personal-pin/login', '/auth/register', '/auth/kiosk-pin',
   '/tenant-portal/login', '/tenant-portal/pin-login',
 ];
-// Meet duur van gewone GET-calls (geen blobs) voor de "Trage verbinding"-melding.
-const reportTiming = (cfg) => {
-  if (!cfg?._t0 || (cfg.method || 'get') !== 'get' || cfg.responseType === 'blob') return;
-  try { window.dispatchEvent(new CustomEvent('surirent:req-time', { detail: performance.now() - cfg._t0 })); } catch { /* noop */ }
-};
-
 api.interceptors.response.use(
-  (r) => { reportTiming(r.config); return r; },
+  (r) => r,
   (err) => {
     // Geen response (geen internet / server onbereikbaar) → offline-scherm laat zelf pingen.
     if (!err?.response && err?.code !== 'ERR_CANCELED') {
