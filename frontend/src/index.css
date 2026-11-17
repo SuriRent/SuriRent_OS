@@ -1466,6 +1466,9 @@ body:is(.kiosk-admin-active, .kiosk-popup-active, .kiosk-mode) .kiosk-standard-f
 }
 @media (max-width: 767px) {
   .kiosk-ui .kiosk-mobile-has-bar { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+  .kiosk-fullscreen .kiosk-content-scroll.kiosk-mobile-tenant-actions {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
   .kiosk-ui [data-testid="kiosk-desktop-header"] { margin: 6px 8px 0; border-radius: 18px; }
 }
 
