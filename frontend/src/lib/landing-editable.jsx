@@ -254,7 +254,7 @@ export function EditableText({ path, fallback, as: Tag = 'span', multiline = fal
  * naar de parent. De parent toont de Asset Library / file picker en stuurt
  * het resultaat (URL) terug via `landing-edit-image-reply`.
  */
-export function EditableImage({ path, fallback, alt = '', className = '', label, ...imgProps }) {
+export function EditableImage({ path, fallback, alt = '', className = '', wrapperClassName = '', label, ...imgProps }) {
   const { editMode, content, page, patch } = useEditable();
   const src = getPath(content, path, fallback);
 
@@ -288,7 +288,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
 
   return (
     <button type="button" onClick={requestUpload}
-      className="relative inline-block group cursor-pointer"
+      className={`relative group cursor-pointer ${wrapperClassName || 'inline-block'}`}
       data-edit-path={path}
       data-edit-kind="image"
       title="Klik om afbeelding te wijzigen">
