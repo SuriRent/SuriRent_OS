@@ -60,7 +60,7 @@ import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
-import { KIOSK_ADMIN_PAGES, KioskAdminPage } from '../../components/KioskAdminInvoices';
+import { KIOSK_ADMIN_PAGES } from '../../components/KioskAdminInvoices';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
 import CompanySupportNotice from '../../components/CompanySupportNotice';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
@@ -303,7 +303,7 @@ function KioskSettingsMenu() {
     <>
       <button type="button" onClick={() => navAdmin('inst-abonnement')} data-testid="kiosk-header-settings" aria-label="Instellingen" aria-expanded={open}
         className={`${isUi ? 'hidden md:flex md:bg-white' : 'hidden md:flex'} md:shadow-none w-10 h-10 rounded-full items-center justify-center text-white transition-colors hover:bg-white/15`}>
-        {isUi ? <User className="w-6 h-6" /> : <SettingsIcon className="w-6 h-6" />}
+        <SettingsIcon className="w-6 h-6" />
       </button>
       {open && <KioskMenuPanel wide title="Instellingen" Icon={SettingsIcon} items={items} onClose={close} testId="kiosk-settings-menu" />}
     </>
@@ -7100,9 +7100,9 @@ export default function KioskLayout() {
     || hist.current.i > 0 || (!stableStep && hist.current.i >= 0);
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
-  const showMobileKioskBar = !step.startsWith('admin:')
-    && ['select', 'kasgeld', 'stroom'].includes(step);
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
+  const showMobileKioskBar = tenantBar || (!step.startsWith('admin:')
+    && ['select', 'kasgeld', 'stroom'].includes(step));
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
     { id: 'overview', label: 'Overzicht', icon: Wallet, testid: 'kiosk-tb-overview', onClick: () => { openOnly(null); setTenantModal(null); setStep('overview'); } },
@@ -7305,7 +7305,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''} ${tenantBar ? 'kiosk-mobile-tenant-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -7335,46 +7335,37 @@ export default function KioskLayout() {
           {step === 'admin:appartementen' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiAdminStep id="appartementen" onBack={goBack} /> : <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />)
-              : (
-                <div className="h-full min-h-0 kiosk-admin-skin">
-                  <KioskApartmentsPanel
-                    onBack={goBack}
-                    onNewApartment={() => setShowAddApartment(true)}
-                    reloadKey={apartmentsReloadKey}
-                    onChanged={() => { invalidateKioskSelect(); setApartmentsReloadKey((key) => key + 1); }}
-                  />
-                </div>
-              )
+              : <KioskAdminPopup id="appartementen" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:huurders' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiAdminStep id="huurders" onBack={goBack} /> : <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="huurders" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="huurders" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:locaties' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiPageShell testId="kiosk-popup-locaties"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.locaties.Page embedded ui onBack={goBack} /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="locaties" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="locaties" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:contracten' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiAdminStep id="contracten" onBack={goBack} /> : <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="contracten" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="contracten" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:betalingen' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiAdminStep id="betalingen" onBack={goBack} /> : <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="betalingen" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="betalingen" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:regelingen' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiAdminStep id="regelingen" onBack={goBack} /> : <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="regelingen" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="regelingen" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:facturen' && hasAdminAccess && (
             isMobileViewport
               ? (isUi ? <KioskUiPageShell testId="kiosk-popup-facturen"><Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}><KioskFxCtx.Provider value><KIOSK_ADMIN_PAGES.facturen.Page embedded ui onBack={goBack} /></KioskFxCtx.Provider></Suspense></KioskUiPageShell> : <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />)
-              : <KioskAdminPage id="facturen" kioskLayout onBack={goBack} />
+              : <KioskAdminPopup id="facturen" Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'admin:bon' && hasAdminAccess && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
@@ -7393,7 +7384,7 @@ export default function KioskLayout() {
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
               ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
-              : <KioskAdminPage id={step.slice(6)} onBack={goBack} />
+              : <KioskAdminPopup id={step.slice(6)} Shell={KioskModalShell} onClose={goBack} />
           )}
           {step === 'kasgeld' && (
             isMobileViewport && isUi ? (
@@ -7403,7 +7394,7 @@ export default function KioskLayout() {
                   <div className="kiosk-ui w-full overflow-x-hidden"><KasgeldPanel embedded ui /></div>
                 </KioskUiAdminPage>
               </KioskUiPageShell>
-            ) : isMobileViewport ? (
+            ) : (
               <KioskModalShell title="Kasgeld" Icon={Wallet} testId="kiosk-popup-kasgeld" onClose={goBack}
                 wide xwide tall fullscreenMobile
                 footer={(
@@ -7414,7 +7405,7 @@ export default function KioskLayout() {
                 )}>
                 <KioskFxCtx.Provider value><div className="kiosk-fx space-y-4"><KasgeldPanel embedded /></div></KioskFxCtx.Provider>
               </KioskModalShell>
-            ) : <KasgeldPanel />
+            )
           )}
           {step === 'stroom' && hasAdminAccess && (
             isMobileViewport && isUi ? (
@@ -7554,8 +7545,27 @@ export default function KioskLayout() {
           direct onder document.body te mounten met safe-area padding; het
           `KioskAddSheet` opent fullscreen zodat het keyboard-shift probleem
           niet meer speelt. */}
-      {showMobileKioskBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
-      {showMobileKioskBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
+      {showMobileKioskBar && !tenantBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
+      {tenantBar && !keyboardOpen && !showAddSheet && createPortal((
+        <nav data-testid="kiosk-mobile-tenant-bar" aria-label="Appartement acties"
+          className="kiosk-white-nav md:hidden fixed bottom-0 left-0 right-0 z-[109] h-[52px] overflow-hidden border-t border-slate-200 bg-white shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
+          <div className={`grid h-full w-full ${hasAdminAccess ? 'grid-cols-5' : 'grid-cols-4'} items-stretch px-1`}>
+            {tenantBarItems.filter(({ id }) => !['overview', 'close', 'info'].includes(id)).map(({ id, label, icon: Icon, onClick }) => {
+              const active = (id === 'pay' && step !== 'overview') || id === tenantModal;
+              return (
+                <button key={id} type="button" onClick={onClick} data-testid={`kiosk-mobile-tb-${id}`}
+                  data-active={active ? 'true' : undefined}
+                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 active:scale-95 ${active ? 'bg-[#FF5C00] text-white' : 'text-slate-700 hover:bg-orange-50'}`}>
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
+                  <span className="max-w-full truncate whitespace-nowrap text-[8px] min-[390px]:text-[9px] font-semibold leading-none">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      ), document.body)}
+      {showMobileKioskBar && !tenantBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
           <div className="grid grid-cols-5 items-stretch">
@@ -7588,7 +7598,7 @@ export default function KioskLayout() {
           </div>
         </nav>
       ), document.body)}
-      {showMobileKioskBar && !isUi && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
+      {showMobileKioskBar && !tenantBar && !isUi && !keyboardOpen && !showAddSheet && !(showAddTenant || showAddApartment || showAddLocation || showAddContract || showAddInvoice || showPaymentsViewer || showAddMaintenance || nfcLink) && createPortal((
         <>
           <button
             type="button"
