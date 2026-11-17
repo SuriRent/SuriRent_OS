@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ChevronRight, Download, Lock, Menu, User, X, ShieldCheck, Cloud, Headphones,
   Users, CreditCard, BarChart3, Receipt, UserCheck, Tablet, Smartphone, ClipboardList,
-  FileText, Bell, Home as HomeIcon, MapPin, Wallet,
 } from 'lucide-react';
 import { EditableText, EditableImage, EditableLink, getPath, useEditable } from '../../../lib/landing-editable';
 import { translateMarketingText } from '../../../lib/marketing-language';
@@ -166,94 +165,23 @@ export function LandingHeader({ onLogin, onRegister }) {
   );
 }
 
-// ---------------- Mockups ----------------
-const MOCK_APARTMENTS = [
-  ['HUIS 7A', 'Asha Ramdjan', 'Gedeeltelijk', 'partial'],
-  ['HUIS 7B', 'Rakesh Soerodimedjo', 'Niet betaald', 'unpaid'],
-  ['HUIS 7C', 'Naomi Pengel', 'Niet betaald', 'unpaid'],
-  ['HUIS 7D', 'Jason Misiedjan', 'Niet betaald', 'unpaid'],
-  ['HUIS 7E', 'Shalini Jharap', 'Niet betaald', 'unpaid'],
-  ['HUIS 7F', 'Marvin Abrahams', 'Niet betaald', 'unpaid'],
-  ['HUIS 7G', 'Priya Soekhlal', 'Niet betaald', 'unpaid'],
-  ['HUIS 7H', 'Kevin Mungra', 'Niet betaald', 'unpaid'],
-  ['HUIS 7I', 'Amina Veldwijk', 'Betaald', 'paid'],
-  ['HUIS 7J', 'Rohan Jagesar', 'Betaald', 'paid'],
-];
-const MOCK_NAV = [[MapPin, 'Locaties'], [HomeIcon, 'Appartementen'], [Users, 'Huurders'], [FileText, 'Facturen'], [Wallet, 'Kasgeld']];
-
-function ApartmentCard({ apartment, index, compact = false }) {
-  const [unit, tenant, status, statusType] = apartment;
-  const statusClass = statusType === 'paid'
-    ? 'bg-emerald-600 text-white'
-    : statusType === 'partial' ? 'bg-amber-500 text-white' : 'bg-red-500 text-white';
-  return (
-    <div className={`flex min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg bg-white text-center shadow-[0_2px_8px_-5px_rgba(11,27,63,0.3)] ${compact ? 'gap-[2px] px-1 py-1' : 'gap-[3px] px-1.5 py-1.5'}`}>
-      <span className={`flex shrink-0 items-center justify-center rounded-full bg-orange-50 text-[#FF5C00] ${compact ? 'h-[17px] w-[17px]' : 'h-[27px] w-[27px]'}`}>
-        <HomeIcon className={compact ? 'h-[10px] w-[10px]' : 'h-[15px] w-[15px]'} strokeWidth={2.2} />
-      </span>
-      <EditableText path={`marketing.home.mockup.apartments.${index}.unit`} fallback={unit} as="div"
-        label={`Startpagina · Mockup woning ${index + 1}`} className={`max-w-full truncate font-black leading-none ${compact ? 'text-[6px]' : 'text-[9px]'}`} style={{ color: NAVY }} />
-      <div className={`flex max-w-full items-center justify-center gap-0.5 ${compact ? 'text-[5px]' : 'text-[7px]'} text-slate-600`}>
-        <Users className={compact ? 'h-[7px] w-[7px] shrink-0' : 'h-[9px] w-[9px] shrink-0'} />
-        <EditableText path={`marketing.home.mockup.apartments.${index}.tenant`} fallback={tenant} as="span"
-          label={`Startpagina · Mockup huurder ${index + 1}`} className="truncate" />
-      </div>
-      <EditableText path={`marketing.home.mockup.apartments.${index}.status`} fallback={status} as="span"
-        label={`Startpagina · Mockup betaalstatus ${index + 1}`}
-        className={`max-w-full truncate rounded-full font-extrabold leading-none ${statusClass} ${compact ? 'px-1 py-[2px] text-[4px]' : 'px-1.5 py-[3px] text-[6px]'}`} />
-    </div>
-  );
-}
-
-function BrandMark({ compact = false }) {
-  return (
-    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-white/15 ${compact ? 'h-[18px] w-[18px]' : 'h-[22px] w-[22px]'}`}>
-      <EditableImage path="v2.brand.logo_url" fallback="/kiosk-icons/mark-white.png" alt="" className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
-    </span>
-  );
-}
-
 function LaptopMockup() {
   return (
     <div className="w-[600px]" data-testid="hero-laptop">
-      <div className="rounded-t-[22px] bg-[#111827] p-[10px] pb-[12px] shadow-[0_40px_80px_-30px_rgba(11,27,63,0.55)]">
-          <div className="flex h-full flex-col bg-[#F04F00]">
-            <header className="flex h-[34px] shrink-0 items-center justify-between bg-[#FF5C00] px-2.5 text-white">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Menu className="h-3.5 w-3.5 shrink-0" />
-                <BrandMark />
-                <span className="truncate text-[9px] font-black">
-                  <EditableText path="marketing.home.mockup.app_title" fallback="SuriRent Appartementen" as="span" label="Startpagina · Mockup applicatienaam" />
-                </span>
-              </div>
-              <div className="mx-2 flex min-w-0 items-center gap-1 text-[7px] font-semibold">
-                <MapPin className="h-3 w-3 shrink-0" />
-                <EditableText path="marketing.home.mockup.location" fallback="Kewalbansingweg, #7, Paramaribo" as="span" label="Startpagina · Mockup locatie" className="truncate" />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="rounded-full bg-white px-2 py-1 text-[6px] font-bold text-[#E65300]"><EditableText path="marketing.home.mockup.search_label" fallback="Zoek huurder" as="span" label="Startpagina · Mockup zoekknop" /></span>
-                <Bell className="h-3 w-3" />
-              </div>
-            </header>
-            <main className="min-h-0 flex-1 overflow-hidden p-2">
-              <div className="grid h-full grid-cols-5 grid-rows-2 gap-1.5">
-                {MOCK_APARTMENTS.map((apartment, index) => (
-                  <ApartmentCard key={apartment[0]} apartment={apartment} index={index} />
-                ))}
-              </div>
-            </main>
-            <footer className="grid h-[30px] shrink-0 grid-cols-5 gap-[2px] bg-[#FF6A16] px-1 py-0.5">
-              {MOCK_NAV.map(([Icon, label], index) => (
-                <div key={label} className={`flex min-w-0 flex-col items-center justify-center gap-[1px] rounded-md text-white ${index === 1 ? 'bg-white/15' : ''}`}>
-                  <Icon className="h-3 w-3" />
-                  <EditableText path={`marketing.home.mockup.desktop_nav.${index}`} fallback={label} as="span" label={`Startpagina · Mockup desktopnavigatie ${index + 1}`} className="truncate text-[5px] font-bold" />
-                </div>
-              ))}
-            </footer>
-          </div>
+      <div className="rounded-t-[22px] bg-gradient-to-b from-[#272B31] to-[#090B0E] px-[11px] pt-[11px] pb-[16px] shadow-[0_40px_80px_-30px_rgba(11,27,63,0.55)]">
+        <div className="relative aspect-video overflow-hidden rounded-[8px] bg-white">
+          <EditableImage path="v3.hero.devices.laptop_screen" fallback="/marketing/device-laptop-screen.svg"
+            alt="SuriRent dashboard op een laptopscherm" label="Startpagina · Laptopscherm"
+            wrapperClassName="block h-full w-full" className="block h-full w-full object-cover"
+            data-testid="hero-laptop-screen" />
+          <span aria-hidden className="pointer-events-none absolute left-1/2 top-[3px] h-1 w-1 -translate-x-1/2 rounded-full bg-[#08090B]/70" />
         </div>
-      <div className="h-[14px] mx-[-36px] rounded-b-[14px] bg-gradient-to-b from-[#E5E7EB] to-[#9CA3AF] relative">
-        <span className="absolute left-1/2 -translate-x-1/2 top-0 w-[90px] h-[5px] rounded-b-md bg-[#9CA3AF]" />
+      </div>
+      <div className="relative mx-[-36px] h-[30px] rounded-b-[18px] border-t border-[#F8FAFC] bg-gradient-to-b from-[#E5E7EB] via-[#C4C8CE] to-[#858A92] shadow-[0_22px_30px_-20px_rgba(11,27,63,0.55)]">
+        <div aria-hidden className="absolute left-[22%] right-[22%] top-[4px] h-[8px] rounded-sm opacity-40"
+          style={{ backgroundImage: 'repeating-linear-gradient(90deg, #30343a 0 3px, transparent 3px 7px), repeating-linear-gradient(0deg, #30343a 0 2px, transparent 2px 6px)' }} />
+        <span aria-hidden className="absolute left-1/2 top-0 h-[3px] w-[104px] -translate-x-1/2 rounded-b-md bg-[#777D85]/80" />
+        <span aria-hidden className="absolute bottom-[3px] left-1/2 h-[8px] w-[104px] -translate-x-1/2 rounded-md border border-white/40 bg-white/20" />
       </div>
     </div>
   );
@@ -261,38 +189,13 @@ function LaptopMockup() {
 
 function PhoneMockup() {
   return (
-    <div className="w-[150px] rounded-[26px] bg-[#111827] p-[6px] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.6)]" data-testid="hero-phone">
-      <div className="rounded-[21px] bg-white overflow-hidden h-[318px] flex flex-col">
-        <div className="relative flex h-[18px] shrink-0 items-center justify-between bg-[#FF5C00] px-2.5 text-[6px] font-bold text-white">
-          <span>9:41</span>
-          <span className="absolute left-1/2 top-[3px] h-[9px] w-[38px] -translate-x-1/2 rounded-full bg-[#111827]" />
-          <span>● ● ●</span>
-        </div>
-        <header className="flex h-[28px] shrink-0 items-center justify-between bg-[#FF5C00] px-2 text-white">
-          <div className="flex min-w-0 items-center gap-1">
-            <BrandMark compact />
-            <span className="truncate text-[7px] font-black"><EditableText path="marketing.home.mockup.app_title" fallback="SuriRent Appartementen" as="span" label="Startpagina · Mockup applicatienaam" /></span>
-          </div>
-          <Bell className="h-3 w-3 shrink-0" />
-        </header>
-        <div className="flex h-[25px] shrink-0 items-center bg-[#E95100] px-2 text-[7px] font-bold text-white">
-          <EditableText path="marketing.home.mockup.location" fallback="Kewalbansingweg, #7" as="span" label="Startpagina · Mockup locatie" className="truncate" />
-        </div>
-        <main className="min-h-0 flex-1 overflow-hidden bg-[#F04F00] p-1.5">
-          <div className="grid h-full grid-cols-2 grid-rows-4 gap-1">
-            {[0, 1, 2, 3, 4, 5, 8, 9].map((index) => (
-              <ApartmentCard key={MOCK_APARTMENTS[index][0]} apartment={MOCK_APARTMENTS[index]} index={index} compact />
-            ))}
-          </div>
-        </main>
-        <footer className="grid h-[27px] shrink-0 grid-cols-4 bg-[#FF6A16] px-1 text-white">
-          {[[HomeIcon, 'Terug'], [Users, 'Huurders'], [Wallet, 'Kasgeld'], [ChevronRight, 'Volgende']].map(([Icon, label], index) => (
-            <div key={label} className={`flex min-w-0 flex-col items-center justify-center gap-[1px] ${index === 1 ? 'font-bold' : 'text-white/75'}`}>
-              <Icon className="h-3 w-3" />
-              <EditableText path={`marketing.home.mockup.phone_nav.${index}`} fallback={label} as="span" label={`Startpagina · Mockup telefoonnavigatie ${index + 1}`} className="truncate text-[5px]" />
-            </div>
-          ))}
-        </footer>
+    <div className="h-[340px] w-[164px] rotate-[3deg] rounded-[31px] border border-[#54575D] bg-gradient-to-br from-[#4B4D52] via-[#08090C] to-[#31343A] p-[5px] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.65)]" data-testid="hero-phone">
+      <div className="relative h-full w-full overflow-hidden rounded-[25px] bg-white">
+        <EditableImage path="v3.hero.devices.phone_screen" fallback="/marketing/device-phone-screen.svg"
+          alt="SuriRent-app op een telefoonscherm" label="Startpagina · Telefoonscherm"
+          wrapperClassName="block h-full w-full" className="block h-full w-full object-cover"
+          data-testid="hero-phone-screen" />
+        <span aria-hidden className="pointer-events-none absolute left-1/2 top-[6px] z-10 h-[10px] w-[52px] -translate-x-1/2 rounded-full bg-[#08090C]" />
       </div>
     </div>
   );
