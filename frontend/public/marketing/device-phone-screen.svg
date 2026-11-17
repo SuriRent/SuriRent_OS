@@ -1,62 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 900">
-  <rect width="430" height="900" fill="#f7f8fb"/>
-  <rect width="430" height="36" fill="#f35b0a"/>
-  <text x="30" y="24" fill="#fff" font-family="Arial,sans-serif" font-size="15" font-weight="700">9:41</text>
-  <text x="359" y="24" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700">● ● ●</text>
-  <rect y="36" width="430" height="92" fill="#f35b0a"/>
-  <rect x="24" y="56" width="49" height="49" rx="14" fill="#ffffff" fill-opacity=".2"/>
-  <path d="M36 81 48 69l13 12v16H36z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
-  <text x="88" y="84" fill="#fff" font-family="Arial,sans-serif" font-size="24" font-weight="700">SuriRent</text>
-  <circle cx="385" cy="80" r="20" fill="#ffffff" fill-opacity=".18"/>
-  <path d="M378 83h14l-2-3v-6a5 5 0 0 0-10 0v6z" fill="none" stroke="#fff" stroke-width="2.5"/>
-  <text x="28" y="177" fill="#16213a" font-family="Arial,sans-serif" font-size="26" font-weight="700">Welkom terug!</text>
-  <text x="28" y="204" fill="#78859b" font-family="Arial,sans-serif" font-size="16">Beheer uw appartementen.</text>
-  <g font-family="Arial,sans-serif">
-    <rect x="24" y="230" width="182" height="150" rx="20" fill="#fff" stroke="#e7ebf1"/>
-    <circle cx="67" cy="276" r="25" fill="#fff0e7"/>
-    <path d="M56 278h22v17H56zM59 274l8-8 9 8" fill="none" stroke="#f35b0a" stroke-width="3.5"/>
-    <text x="52" y="330" fill="#17233b" font-size="28" font-weight="700">24</text>
-    <text x="52" y="354" fill="#77849a" font-size="13">Appartementen</text>
-    <rect x="224" y="230" width="182" height="150" rx="20" fill="#fff" stroke="#e7ebf1"/>
-    <circle cx="267" cy="276" r="25" fill="#e9f8ef"/>
-    <circle cx="261" cy="272" r="6" fill="#1eaa6e"/><circle cx="274" cy="272" r="6" fill="#1eaa6e"/>
-    <path d="M250 290c1-9 6-13 11-13s10 4 11 13m-4 0c1-9 6-13 11-13s10 4 11 13" fill="none" stroke="#1eaa6e" stroke-width="3"/>
-    <text x="252" y="330" fill="#17233b" font-size="28" font-weight="700">178</text>
-    <text x="252" y="354" fill="#77849a" font-size="13">Huurders</text>
-    <rect x="24" y="398" width="182" height="150" rx="20" fill="#fff" stroke="#e7ebf1"/>
-    <circle cx="67" cy="444" r="25" fill="#eaf3ff"/>
-    <rect x="54" y="436" width="27" height="18" rx="3" fill="none" stroke="#2878e4" stroke-width="3"/>
-    <path d="M56 442h23" stroke="#2878e4" stroke-width="3"/>
-    <text x="52" y="498" fill="#17233b" font-size="25" font-weight="700">SRD 245k</text>
-    <text x="52" y="522" fill="#77849a" font-size="13">Ontvangen</text>
-    <rect x="224" y="398" width="182" height="150" rx="20" fill="#fff" stroke="#e7ebf1"/>
-    <circle cx="267" cy="444" r="25" fill="#f2edff"/>
-    <path d="M254 455v-17m13 17v-26m13 26v-11" stroke="#7b59d1" stroke-width="4" stroke-linecap="round"/>
-    <text x="252" y="498" fill="#17233b" font-size="24" font-weight="700">Rapportage</text>
-    <text x="252" y="522" fill="#77849a" font-size="13">Bekijk overzicht</text>
+  <rect width="430" height="900" fill="#f1f3f6"/>
+  <rect width="430" height="53" fill="#fff"/>
+  <path d="M0 52h430" stroke="#dfe4ec"/>
+  <rect x="10" y="8" width="36" height="36" rx="10" fill="#fff" stroke="#e5e9f0"/>
+  <path d="M18 19h20M18 26h20M18 33h20" stroke="#f35b0a" stroke-width="2.5"/>
+  <path d="M64 28 79 15l15 13v17H64z" fill="none" stroke="#f35b0a" stroke-width="3.5" stroke-linejoin="round"/>
+  <text x="103" y="34" fill="#1b2b54" font-family="Arial,sans-serif" font-size="17" font-weight="700">Demo Vastgoed N.V.</text>
+  <circle cx="405" cy="27" r="18" fill="#fff" stroke="#e8ecf2"/>
+  <path d="M399 31h12l-2-3v-5a4 4 0 0 0-8 0v5zM402 34a3 3 0 0 0 6 0" fill="none" stroke="#1b2b54" stroke-width="2"/>
+
+  <rect x="11" y="67" width="70" height="28" rx="8" fill="#fff" stroke="#dce3ec"/>
+  <path d="m27 81 6-6m-6 6 6 6m-6-6h14" fill="none" stroke="#f35b0a" stroke-width="2"/>
+  <text x="44" y="85" fill="#ed5b12" font-family="Arial,sans-serif" font-size="12" font-weight="700">Terug</text>
+
+  <rect x="8" y="103" width="414" height="291" rx="16" fill="#fff" stroke="#dfe5ee"/>
+  <circle cx="42" cy="141" r="25" fill="#ffeadb"/>
+  <text x="42" y="147" text-anchor="middle" fill="#f35b0a" font-family="Arial,sans-serif" font-size="15" font-weight="700">DL</text>
+  <text x="78" y="126" fill="#95a3b8" font-family="Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1">FINANCIEEL OVERZICHT</text>
+  <text x="78" y="150" fill="#101a30" font-family="Arial,sans-serif" font-size="17" font-weight="700">Dennis Linger</text>
+  <text x="78" y="170" fill="#71819c" font-family="Arial,sans-serif" font-size="13">Appt. HUIS 3A</text>
+  <rect x="376" y="128" width="32" height="32" rx="9" fill="#f1f4f8"/>
+  <path d="M385 136h10l4 4v13h-14zM395 136v5h4" fill="none" stroke="#34445a" stroke-width="1.8" stroke-linejoin="round"/>
+
+  <rect x="22" y="188" width="25" height="25" rx="7" fill="#ffeadb"/>
+  <path d="M28 195h12v11H28zM29 198h10m-10 3h7" fill="none" stroke="#f35b0a" stroke-width="2"/>
+  <text x="56" y="201" fill="#e95b16" font-family="Arial,sans-serif" font-size="13" font-weight="700">Achterstallige huur (2 maanden)</text>
+  <text x="56" y="221" fill="#ed5b12" font-family="Arial,sans-serif" font-size="12">sep, okt 2026</text>
+  <text x="405" y="208" text-anchor="end" fill="#e95b16" font-family="Arial,sans-serif" font-size="14" font-weight="700">SRD 10.000,00</text>
+  <path d="M20 237h390" stroke="#e8edf3"/>
+  <rect x="22" y="250" width="25" height="25" rx="7" fill="#f0f3f8"/>
+  <path d="M29 257h12v11H29zM31 254h8v3" fill="none" stroke="#71819c" stroke-width="2" stroke-linejoin="round"/>
+  <text x="56" y="263" fill="#111a2e" font-family="Arial,sans-serif" font-size="12" font-weight="700">Huidige maandhuur · november 2026</text>
+  <text x="56" y="281" fill="#59677d" font-family="Arial,sans-serif" font-size="11">Vervalt 9 nov</text>
+  <text x="405" y="269" text-anchor="end" fill="#111a2e" font-family="Arial,sans-serif" font-size="14" font-weight="700">SRD 5.000,00</text>
+  <path d="M20 348h390" stroke="#dfe5ee" stroke-width="2"/>
+  <text x="20" y="372" fill="#111a2e" font-family="Arial,sans-serif" font-size="14" font-weight="700">Totaal openstaand</text>
+  <text x="410" y="374" text-anchor="end" fill="#111a2e" font-family="Arial,sans-serif" font-size="16" font-weight="700">SRD 15.000,00</text>
+
+  <rect x="8" y="401" width="414" height="260" rx="16" fill="#fff" stroke="#dfe5ee"/>
+  <rect x="188" y="418" width="54" height="48" rx="13" fill="#ffeadb"/>
+  <path d="M198 432h27v19h-27zM198 437h27m-6 7h9v7h-9a3 3 0 0 1 0-7z" fill="none" stroke="#f35b0a" stroke-width="2.5" stroke-linejoin="round"/>
+  <text x="215" y="489" text-anchor="middle" fill="#95a3b8" font-family="Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="1">TE BETALEN</text>
+  <text x="215" y="527" text-anchor="middle" fill="#101a30" font-family="Arial,sans-serif" font-size="31" font-weight="700">SRD 15.000,00</text>
+  <rect x="26" y="540" width="378" height="42" rx="11" fill="#ff5b0b"/>
+  <text x="203" y="568" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="18" font-weight="700">Volgende</text>
+  <path d="M256 553h14m-6-6 6 6-6 6" fill="none" stroke="#fff" stroke-width="2"/>
+  <rect x="26" y="589" width="378" height="42" rx="11" fill="#f6f8fa"/>
+  <circle cx="112" cy="610" r="8" fill="none" stroke="#34445a" stroke-width="2"/>
+  <path d="M112 605v5l4 2" fill="none" stroke="#34445a" stroke-width="2"/>
+  <text x="127" y="616" fill="#34445a" font-family="Arial,sans-serif" font-size="14" font-weight="700">Betalingsgeschiedenis</text>
+
+  <rect y="671" width="430" height="229" rx="18" fill="#fff"/>
+  <path d="M0 672h430" stroke="#e2e7ee" stroke-width="2"/>
+  <g fill="none" stroke="#1b2b54" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="45" y="703" width="27" height="19" rx="3"/>
+    <path d="M45 709h27"/>
+    <path d="M151 701h22v26h-22zM156 707h12m-12 5h12m-12 5h8"/>
+    <rect x="257" y="703" width="19" height="27" rx="3"/>
+    <path d="M263 725h7"/>
+    <path d="m364 704 9-5v12h-9zm9 7 9-5v17h-9z"/>
   </g>
-  <text x="28" y="596" fill="#17233b" font-family="Arial,sans-serif" font-size="21" font-weight="700">Recente activiteit</text>
-  <rect x="24" y="616" width="382" height="110" rx="18" fill="#fff" stroke="#e7ebf1"/>
-  <circle cx="63" cy="668" r="23" fill="#e9f8ef"/>
-  <path d="M54 668h18m-9-9v18" stroke="#1eaa6e" stroke-width="3"/>
-  <text x="101" y="659" fill="#17233b" font-family="Arial,sans-serif" font-size="16" font-weight="700">Betaling ontvangen</text>
-  <text x="101" y="686" fill="#7b879a" font-family="Arial,sans-serif" font-size="14">Appartement 1A</text>
-  <text x="376" y="671" text-anchor="end" fill="#17a66b" font-family="Arial,sans-serif" font-size="15" font-weight="700">+ SRD 8.500</text>
-  <rect y="817" width="430" height="83" fill="#fff"/>
-  <path d="M0 817h430" stroke="#e7ebf1" stroke-width="2"/>
-  <g font-family="Arial,sans-serif" font-size="12" font-weight="700" text-anchor="middle">
-    <circle cx="68" cy="849" r="15" fill="#fff0e7"/>
-    <path d="M61 850h14v11H61zM63 847l5-5 5 5" fill="none" stroke="#f35b0a" stroke-width="2"/>
-    <text x="68" y="882" fill="#f35b0a">Home</text>
-    <circle cx="172" cy="849" r="15" fill="#f0f3f8"/>
-    <path d="M166 852h12v9h-12zM168 849l4-5 4 5" fill="none" stroke="#718098" stroke-width="2"/>
-    <text x="172" y="882" fill="#718098">Woningen</text>
-    <circle cx="277" cy="849" r="15" fill="#f0f3f8"/>
-    <circle cx="277" cy="846" r="4" fill="none" stroke="#718098" stroke-width="2"/>
-    <path d="M269 859c1-6 4-8 8-8s7 2 8 8" fill="none" stroke="#718098" stroke-width="2"/>
-    <text x="277" y="882" fill="#718098">Huurders</text>
-    <circle cx="382" cy="849" r="15" fill="#f0f3f8"/>
-    <path d="M374 843h16v13h-16zM377 847h10m-10 4h7" fill="none" stroke="#718098" stroke-width="2"/>
-    <text x="382" y="882" fill="#718098">Meer</text>
+  <g fill="#1b2b54" font-family="Arial,sans-serif" font-size="11" font-weight="700" text-anchor="middle">
+    <text x="58" y="746">Betalen</text>
+    <text x="162" y="746">Geschiedenis</text>
+    <text x="267" y="746">Contact</text>
+    <text x="376" y="746">Stroom</text>
   </g>
 </svg>
