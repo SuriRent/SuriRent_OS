@@ -182,6 +182,8 @@ class PaymentOut(BaseModel):
     bank_statement_filename: Optional[str] = None
     bank_statement_size: Optional[int] = None
     bank_statement_content_type: Optional[str] = None
+    bank_payer_name: Optional[str] = None
+    bank_reference: Optional[str] = None
     # OCR-resultaat (gevuld door achtergrond-task na bank upload)
     ocr_status: Optional[str] = None  # matched|mismatch|failed
     ocr_amount: Optional[float] = None

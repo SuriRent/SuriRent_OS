@@ -36,7 +36,8 @@ export function KioskAdminPopup({ id, Shell, onClose }) {
     </button>
   ) : null;
   return (
-    <Shell title={label} Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer}
+    <Shell title={label} subtitle={id === 'bankreconciliatie' ? 'MT940, OFX, CSV of PDF/afbeelding met OCR' : undefined}
+      Icon={Icon} testId={`kiosk-popup-${id}`} onClose={onClose} footer={footer}
       wide xwide tall fullscreenMobile>
       <Suspense fallback={<Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-16" />}>
         {inst ? <Page embedded section={inst.id} /> : (

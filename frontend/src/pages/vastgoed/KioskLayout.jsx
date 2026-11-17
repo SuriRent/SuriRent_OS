@@ -360,6 +360,7 @@ function HeaderLive() {
 const STEP_TITLES = {
   kasgeld: 'Kasgeldbeheer', stroom: 'Stroom', overview: 'Financieel overzicht', pay: 'Wat wilt u betalen?',
   method: 'Betaalmethode', confirm: 'Bevestigen', receipt: 'Kwitantie', 'admin:facturen': 'Facturen', 'admin:betalingen': 'Betalingen', 'admin:huurders': 'Huurders',
+  'admin:bankreconciliatie': 'Bankreconciliatie',
 };
 
 function UiLocMenu({ opts, wrapClass, children, menuAlign = 'center' }) {
@@ -7126,7 +7127,7 @@ export default function KioskLayout() {
         setStep('admin:facturen');
       }
       else if (e.detail === 'admin:nfc') setNfcLink({ uid: '' });
-      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:regelingen') {
+      else if (e.detail === 'admin:appartementen' || e.detail === 'admin:huurders' || e.detail === 'admin:locaties' || e.detail === 'admin:contracten' || e.detail === 'admin:betalingen' || e.detail === 'admin:bankreconciliatie' || e.detail === 'admin:regelingen') {
         setAdminPopup(null);
         setStep(e.detail);
       }
@@ -7380,12 +7381,15 @@ export default function KioskLayout() {
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskBonPage onBack={goBack} /></div>
             </Suspense>
           )}
+          {step === 'admin:bankreconciliatie' && hasAdminAccess && (
+            <KioskAdminPopup id="bankreconciliatie" Shell={KioskModalShell} onClose={goBack} />
+          )}
           {step.startsWith('admin:inst-') && hasAdminAccess && !isMobileViewport && (
             <Suspense fallback={<Loader2 className="w-8 h-8 text-white animate-spin mx-auto my-16" />}>
               <div className="h-full min-h-0 kiosk-admin-skin"><KioskSettingsPage id={step.slice(11)} onBack={goBack} user={user} /></div>
             </Suspense>
           )}
-          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen'
+          {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen' && step !== 'admin:bankreconciliatie'
             && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
             isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
               ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
@@ -7646,12 +7650,14 @@ export default function KioskLayout() {
               { id: 'apartments', label: 'Appartementen', icon: isUi ? Building2 : Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
               { id: 'invoices', label: 'Facturen', icon: FileSignature, testid: 'kiosk-add-invoice-btn-desktop', onClick: () => openOnly('add-invoice') },
+              ...(hasAdminAccess && user?.role !== 'boekhouder' ? [{ id: 'bankreconciliation', label: 'Bankreconciliatie', icon: LandmarkIcon, testid: 'kiosk-bank-reconciliation-btn-desktop', onClick: () => { openOnly(null); setStep('admin:bankreconciliatie'); } }] : []),
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
               ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (id === 'bankreconciliation' && step === 'admin:bankreconciliatie')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
                 <Fragment key={id}>
