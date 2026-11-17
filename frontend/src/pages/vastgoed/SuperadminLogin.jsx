@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Delete, KeyRound, LayoutDashboard, Loader2 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { formatError } from '../../lib/api';
+import { buildAppUrl } from '../../lib/env';
 import { setIosStatusBar } from '../../lib/ios-status-bar';
 
 const NUMPAD_LETTERS = {
@@ -14,13 +15,19 @@ export default function SuperadminLogin() {
   const navigate = useNavigate();
   const panelRef = useRef(null);
   const { user, loading: authLoading, loginSuperadminPin } = useAuth();
+  const appLoginUrl = buildAppUrl('/superadmin/login');
+  const redirectingToApp = appLoginUrl.startsWith('http');
   const [pin, setPin] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!authLoading && user?.role === 'superadmin') navigate('/admin/saas_overview', { replace: true });
-  }, [authLoading, navigate, user]);
+    if (redirectingToApp) {
+      window.location.replace(appLoginUrl);
+    } else if (!authLoading && user?.role === 'superadmin') {
+      navigate('/admin/saas_overview', { replace: true });
+    }
+  }, [appLoginUrl, authLoading, navigate, redirectingToApp, user]);
 
   useEffect(() => {
     panelRef.current?.focus();
@@ -42,6 +49,12 @@ export default function SuperadminLogin() {
       });
     };
   }, []);
+
+  if (redirectingToApp) {
+    return <main className="fixed inset-0 flex items-center justify-center bg-[#F3F8F5] text-sm font-semibold text-slate-600">
+      Superadminomgeving openen…
+    </main>;
+  }
 
   const verifyPin = async (value) => {
     setSubmitting(true);
