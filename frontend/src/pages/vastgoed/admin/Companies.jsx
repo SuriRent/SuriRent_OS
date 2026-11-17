@@ -14,6 +14,7 @@ const BILLING_STATUSES = {
   past_due: { label: 'Betaling open', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   cancelled: { label: 'Opgezegd', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
 };
+const PLATFORM_COMPANY_SLUG = 'surirent';
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -423,9 +424,12 @@ export default function Companies() {
   };
 
   const isSuper = user?.role === 'superadmin';
-  const scopedItems = activeCompanyId
-    ? items.filter((company) => company.id === activeCompanyId)
-    : items;
+  const customerItems = items.filter((company) => String(company.slug || '').toLowerCase() !== PLATFORM_COMPANY_SLUG);
+  const activeCompanyIsPlatform = customerItems.length !== items.length
+    && items.some((company) => company.id === activeCompanyId && String(company.slug || '').toLowerCase() === PLATFORM_COMPANY_SLUG);
+  const scopedItems = activeCompanyId && !activeCompanyIsPlatform
+    ? customerItems.filter((company) => company.id === activeCompanyId)
+    : customerItems;
   const visibleItems = scopedItems.filter((company) => {
     const term = query.trim().toLowerCase();
     const matchesQuery = !term || [

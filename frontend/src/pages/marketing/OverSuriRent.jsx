@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Building2, Users, FileText, Receipt, Bell, BarChart3, Check } from 'lucide-react';
 import { EditableProvider, EditableText, EditableLink, getPath, useEditable, useLandingContent } from '../../lib/landing-editable';
 import { translateMarketingText } from '../../lib/marketing-language';
+import { landingEditorParentOrigin } from '../../lib/env';
 
 /**
  * Publieke "Over SuriRent" pagina — full-content SEO landing die de gehele
@@ -18,7 +19,7 @@ export default function OverSuriRent() {
   const { content, loading } = useLandingContent(editMode);
   const onPatch = useCallback((patch) => {
     if (window.parent === window) return;
-    window.parent.postMessage({ type: 'landing-edit-patch', ...patch }, window.location.origin);
+    window.parent.postMessage({ type: 'landing-edit-patch', ...patch }, landingEditorParentOrigin());
   }, []);
 
   if (loading && !editMode) return <div className="min-h-screen bg-white" />;
