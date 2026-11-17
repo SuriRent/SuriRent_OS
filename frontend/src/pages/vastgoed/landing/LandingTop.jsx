@@ -170,7 +170,7 @@ function LaptopMockup() {
     <div className="w-[600px]" data-testid="hero-laptop">
       <div className="rounded-t-[22px] bg-gradient-to-b from-[#272B31] to-[#090B0E] px-[11px] pt-[11px] pb-[16px] shadow-[0_40px_80px_-30px_rgba(11,27,63,0.55)]">
         <div className="relative aspect-video overflow-hidden rounded-[8px] bg-white">
-          <EditableImage path="v3.hero.devices.laptop_screen" fallback="/marketing/device-laptop-screen.svg"
+          <EditableImage path="v3.hero.devices.laptop_screen" fallback="/marketing/device-laptop-screen.png"
             alt="SuriRent dashboard op een laptopscherm" label="Startpagina · Laptopscherm"
             wrapperClassName="block h-full w-full" className="block h-full w-full object-cover"
             data-testid="hero-laptop-screen" />
@@ -191,7 +191,7 @@ function PhoneMockup() {
   return (
     <div className="h-[340px] w-[164px] rotate-[3deg] rounded-[31px] border border-[#54575D] bg-gradient-to-br from-[#4B4D52] via-[#08090C] to-[#31343A] p-[5px] shadow-[0_30px_60px_-20px_rgba(11,27,63,0.65)]" data-testid="hero-phone">
       <div className="relative h-full w-full overflow-hidden rounded-[25px] bg-white">
-        <EditableImage path="v3.hero.devices.phone_screen" fallback="/marketing/device-phone-screen.svg"
+        <EditableImage path="v3.hero.devices.phone_screen" fallback="/marketing/device-phone-screen.jpg"
           alt="SuriRent-app op een telefoonscherm" label="Startpagina · Telefoonscherm"
           wrapperClassName="block h-full w-full" className="block h-full w-full object-cover"
           data-testid="hero-phone-screen" />
