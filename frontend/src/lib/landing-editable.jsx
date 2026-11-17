@@ -14,6 +14,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { translateMarketingNode } from './marketing-language';
+import { landingEditorParentOrigin } from './env';
 
 const EditableContext = createContext({
   editMode: false,
@@ -62,6 +63,7 @@ export function setPath(obj, path, value) {
 function registerEditableField(path, label, kind, value, page, metadata = {}) {
   if (typeof window === 'undefined' || window.parent === window) return;
   try {
+    const target = landingEditorParentOrigin();
     window.parent.postMessage({
       type: 'landing-edit-register',
       path,
@@ -70,7 +72,7 @@ function registerEditableField(path, label, kind, value, page, metadata = {}) {
       value: value == null ? '' : String(value),
       page,
       ...metadata,
-    }, window.location.origin);
+    }, target);
   } catch { /* editor is optional outside the admin iframe */ }
 }
 
@@ -117,11 +119,12 @@ export function EditableProvider({ editMode, initialContent, onPatch, enableLang
   useEffect(() => {
     if (!editMode || typeof window === 'undefined' || window.parent === window) return;
     try {
+      const target = landingEditorParentOrigin();
       window.parent.postMessage({
         type: 'landing-edit-page',
         page: location.pathname,
-      }, window.location.origin);
-      window.parent.postMessage({ type: 'landing-edit-ready' }, window.location.origin);
+      }, target);
+      window.parent.postMessage({ type: 'landing-edit-ready' }, target);
     } catch { /* editor is optional outside the admin iframe */ }
   }, [editMode, location.pathname]);
 
@@ -135,7 +138,7 @@ export function EditableProvider({ editMode, initialContent, onPatch, enableLang
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (ev.source !== window.parent || ev.origin !== window.location.origin || !data || typeof data !== 'object') return;
+      if (ev.source !== window.parent || ev.origin !== landingEditorParentOrigin() || !data || typeof data !== 'object') return;
       if (data.type === 'landing-edit-reset' && data.content) {
         setContent(data.content);
       }
@@ -148,7 +151,7 @@ export function EditableProvider({ editMode, initialContent, onPatch, enableLang
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (ev.source !== window.parent || ev.origin !== window.location.origin
+      if (ev.source !== window.parent || ev.origin !== landingEditorParentOrigin()
         || !data || data.type !== 'landing-edit-focus' || !data.path) return;
       const target = Array.from(document.querySelectorAll('[data-edit-path]'))
         .find((element) => element.dataset.editPath === data.path);
@@ -263,7 +266,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (ev.source !== window.parent || ev.origin !== window.location.origin
+      if (ev.source !== window.parent || ev.origin !== landingEditorParentOrigin()
         || !data || data.type !== 'landing-edit-image-reply') return;
       if (data.path === path && data.url) {
         patch(path, data.url);
@@ -275,7 +278,7 @@ export function EditableImage({ path, fallback, alt = '', className = '', label,
 
   const requestUpload = () => {
     try {
-      window.parent?.postMessage({ type: 'landing-edit-image-request', path, current: src }, window.location.origin);
+      window.parent?.postMessage({ type: 'landing-edit-image-request', path, current: src }, landingEditorParentOrigin());
     } catch { /* no-op */ }
   };
 
@@ -315,7 +318,7 @@ export function EditableMedia({ path, typePath, className = '', label = 'Foto of
     if (!editMode) return undefined;
     const handler = (ev) => {
       const data = ev?.data;
-      if (ev.source !== window.parent || ev.origin !== window.location.origin
+      if (ev.source !== window.parent || ev.origin !== landingEditorParentOrigin()
         || !data || data.type !== 'landing-edit-media-reply' || data.path !== path) return;
       patch(path, data.url || '');
       if (typePath) patch(typePath, data.mediaType || '');
@@ -332,7 +335,7 @@ export function EditableMedia({ path, typePath, className = '', label = 'Foto of
         typePath,
         current: src,
         mediaType,
-      }, window.location.origin);
+      }, landingEditorParentOrigin());
     } catch { /* editor is optional outside the admin iframe */ }
   };
   const mediaFitClass = fit === 'cover' ? 'object-cover' : 'object-contain';

@@ -21,6 +21,16 @@ export function appUrl() {
   return (process.env.REACT_APP_APP_URL || '').replace(/\/$/, '');
 }
 
+export function landingEditorParentOrigin() {
+  const configuredAppUrl = appUrl();
+  if (configuredAppUrl) {
+    try {
+      return new URL(configuredAppUrl).origin;
+    } catch { /* use the current origin when the app URL is not a valid URL */ }
+  }
+  return typeof window !== 'undefined' ? window.location.origin : '';
+}
+
 export function isStandalonePwa() {
   try {
     return typeof window !== 'undefined' && (!!window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true);

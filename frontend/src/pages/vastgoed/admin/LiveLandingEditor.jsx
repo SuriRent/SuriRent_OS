@@ -18,6 +18,7 @@ import {
   CheckCircle2, Loader2, Monitor, Smartphone, Tablet, Paintbrush, History,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
+import { publicMarketingUrl } from '../../../lib/env';
 
 const DEVICE_PRESETS = [
   { id: 'desktop', label: 'Desktop', icon: Monitor, w: '100%', h: '100%' },
@@ -57,7 +58,17 @@ function getPath(obj, path) {
 }
 
 function previewUrl(path) {
-  return `${path}?edit=1&landing=1&_t=${Date.now()}`;
+  const baseUrl = publicMarketingUrl() || window.location.origin;
+  const url = new URL(path, baseUrl);
+  url.searchParams.set('edit', '1');
+  url.searchParams.set('landing', '1');
+  url.searchParams.set('_t', Date.now());
+  return url.toString();
+}
+
+function marketingOrigin() {
+  const baseUrl = publicMarketingUrl() || window.location.origin;
+  return new URL(baseUrl).origin;
 }
 
 function assetPreviewUrl(value) {
@@ -68,6 +79,7 @@ function assetPreviewUrl(value) {
 
 export default function LiveLandingEditor() {
   const iframeRef = useRef(null);
+  const previewOrigin = marketingOrigin();
   const [draft, setDraft] = useState(null);            // content object van /superadmin/landing/content?mode=draft
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -108,7 +120,7 @@ export default function LiveLandingEditor() {
   useEffect(() => {
     const onMsg = (ev) => {
       const data = ev?.data;
-      if (ev.origin !== window.location.origin
+      if (ev.origin !== previewOrigin
         || ev.source !== iframeRef.current?.contentWindow
         || !data || typeof data !== 'object') return;
       if (data.type === 'landing-edit-ready') {
@@ -164,17 +176,17 @@ export default function LiveLandingEditor() {
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, []);
+  }, [previewOrigin]);
 
   // Stuur draft naar iframe bij elke reload (zodat hij ook draft toont, niet published).
   useEffect(() => {
     if (!iframeReady || !draft) return;
     try {
       iframeRef.current?.contentWindow?.postMessage(
-        { type: 'landing-edit-reset', content: draft }, window.location.origin,
+        { type: 'landing-edit-reset', content: draft }, previewOrigin,
       );
     } catch { /* no-op */ }
-  }, [iframeReady, draft]);
+  }, [iframeReady, draft, previewOrigin]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -270,7 +282,7 @@ export default function LiveLandingEditor() {
           imageReq.allowVideo
             ? { type: 'landing-edit-media-reply', path: imageReq.path, url, mediaType: data.content_type, typePath: imageReq.typePath }
             : { type: 'landing-edit-image-reply', path: imageReq.path, url },
-          window.location.origin,
+          previewOrigin,
         );
       } catch { /* no-op */ }
       setDraft((prev) => setPath(prev || {}, imageReq.path, url));
@@ -294,7 +306,7 @@ export default function LiveLandingEditor() {
 
   const focusField = (path) => {
     iframeRef.current?.contentWindow?.postMessage(
-      { type: 'landing-edit-focus', path }, window.location.origin,
+      { type: 'landing-edit-focus', path }, previewOrigin,
     );
   };
 
@@ -307,7 +319,7 @@ export default function LiveLandingEditor() {
       typePath: imageReq.typePath,
       url: '',
       mediaType: '',
-    }, window.location.origin);
+    }, previewOrigin);
     setDirty(true);
     setImageReq(null);
     showToast('Hero media verwijderd');

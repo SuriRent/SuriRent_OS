@@ -16,6 +16,7 @@ import StatusPill from '../../components/StatusPill';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { translateMarketingText } from '../../lib/marketing-language';
+import { landingEditorParentOrigin } from '../../lib/env';
 import { LandingHeader, LandingHero, LandingFeatures } from './landing/LandingTop';
 import { KioskShowcase, PriceAdvisor } from './landing/KioskPricing';
 import Handleiding from '../marketing/Handleiding';
@@ -1644,7 +1645,7 @@ export default function MarketingLandingV2() {
   // Patches doorsturen naar parent (LiveLandingEditor) zodat hij ze kan opslaan.
   const onPatch = useCallback((patch) => {
     try {
-      window.parent?.postMessage({ type: 'landing-edit-patch', ...patch }, window.location.origin);
+      window.parent?.postMessage({ type: 'landing-edit-patch', ...patch }, landingEditorParentOrigin());
     } catch { /* no-op */ }
   }, []);
 
@@ -1655,7 +1656,7 @@ export default function MarketingLandingV2() {
   useEffect(() => {
     if (!editMode) return;
     try {
-      const target = window.location.origin;
+      const target = landingEditorParentOrigin();
       window.parent?.postMessage({ type: 'landing-edit-ready' }, target);
     } catch (err) { console.error('landing-edit-ready postMessage failed', err); }
   }, [editMode, location.pathname]);
