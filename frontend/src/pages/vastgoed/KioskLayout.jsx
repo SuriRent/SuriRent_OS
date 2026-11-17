@@ -6400,11 +6400,11 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
-function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, tenantActions = null }) {
+function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
   // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
   // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
   // knopbalk gerenderd, NIET als cards.
-  const tiles = tenantActions || [
+  const tiles = [
     { key: 'manual',       label: 'Handleiding',       Icon: BookOpen },
     { key: 'tenant',      label: 'Nieuwe huurder',    Icon: UserPlus },
     { key: 'apartment',   label: 'Nieuw appartement', Icon: Home },
@@ -6434,9 +6434,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, tenantActions 
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
             <Plus className="w-6 h-6 text-white" strokeWidth={3} />
           </div>
-          <h3 className="text-xl font-black text-white" data-testid="kiosk-add-sheet-title">
-            {tenantActions ? 'Appartement acties' : 'Snel toevoegen'}
-          </h3>
+          <h3 className="text-xl font-black text-white" data-testid="kiosk-add-sheet-title">Snel toevoegen</h3>
         </div>
         <button onClick={onClose} data-testid="kiosk-add-sheet-close"
           className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center active:bg-white/30 transition">
@@ -6446,13 +6444,8 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, tenantActions 
       <div className="kiosk-add-sheet-scroll px-4 pt-1">
         <div className="grid grid-cols-2 gap-3">
           {tiles.map((t) => (
-            <button key={t.key}
-              onClick={() => {
-                if (!t.onAction) { onPick(t.key); return; }
-                onClose();
-                setTimeout(t.onAction, 100);
-              }}
-              data-testid={t.testId || `kiosk-tile-${t.key}`}
+            <button key={t.key} onClick={() => onPick(t.key)}
+              data-testid={`kiosk-tile-${t.key}`}
               className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 active:bg-white shadow-lg py-6 px-3 transition active:scale-95 min-h-[130px]">
               <span className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
                 <t.Icon className="w-7 h-7 text-orange-600" strokeWidth={2} />
@@ -6463,7 +6456,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, tenantActions 
         </div>
       </div>
 
-      {!tenantActions && <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
+      <div className="kiosk-add-sheet-footer flex-none px-4 pt-2"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         <div className="flex gap-2" data-testid="kiosk-sheet-actions">
         <div className="contents" data-testid="kiosk-sheet-actions-row">
@@ -6481,7 +6474,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, tenantActions 
         <KioskSheetLiveActions isAdmin={hasAdminAccess} onClose={onClose}>
         </KioskSheetLiveActions>
         </div>
-      </div>}
+      </div>
     </div>
   ), document.body);
 }
@@ -7108,8 +7101,8 @@ export default function KioskLayout() {
   const canFwd = hist.current.i < hist.current.list.length - 1;
   const showDesktopBar = step !== 'check';
   const tenantBar = !!apartment?.tenant_id && ['overview', 'pay', 'method', 'confirm'].includes(step);
-  const showMobileKioskBar = !step.startsWith('admin:')
-    && ['select', 'kasgeld', 'stroom'].includes(step);
+  const showMobileKioskBar = tenantBar || (!step.startsWith('admin:')
+    && ['select', 'kasgeld', 'stroom'].includes(step));
   const tenantAct = (a) => { openOnly(null); setTenantModal(null); window.dispatchEvent(new CustomEvent('kiosk-tenant-action', { detail: a })); };
   const tenantBarItems = [
     { id: 'overview', label: 'Overzicht', icon: Wallet, testid: 'kiosk-tb-overview', onClick: () => { openOnly(null); setTenantModal(null); setStep('overview'); } },
@@ -7312,7 +7305,7 @@ export default function KioskLayout() {
         </div>
       )}
       <motion.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''} ${tenantBar ? 'kiosk-mobile-tenant-actions' : ''}`}
+          className={`absolute inset-0 overflow-y-auto overflow-x-hidden mobile-safe-bottom kiosk-content-scroll ${showTopHead ? 'kiosk-has-head' : ''} ${showDesktopBar ? '' : 'kiosk-no-bar'} ${showMobileKioskBar ? 'kiosk-mobile-has-bar' : ''} ${tenantBar ? 'kiosk-mobile-tenant-bar' : ''}`}
           style={{ paddingTop: supportActive ? 'calc(var(--kiosk-sat) + 2.75rem)' : 'var(--kiosk-sat)', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
           {step === 'check' && (
             <div className="h-full bg-orange-500 flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -7541,12 +7534,6 @@ export default function KioskLayout() {
           onClose={() => setShowAddSheet(false)}
           onPick={handleSheetPick}
           hasAdminAccess={hasAdminAccess}
-          tenantActions={tenantBar ? [
-            { key: 'back', label: 'Terug', Icon: ChevronLeft, testId: 'kiosk-tenant-action-back', onAction: goBack },
-            ...tenantBarItems.map(({ id, label, icon: Icon, onClick }) => ({
-              key: id, label, Icon, testId: `kiosk-tenant-action-${id}`, onAction: onClick,
-            })),
-          ] : null}
         />
       )}
 
@@ -7560,12 +7547,23 @@ export default function KioskLayout() {
           niet meer speelt. */}
       {showMobileKioskBar && !tenantBar && !keyboardOpen && <div className={`${isUi ? 'md:hidden h-16' : 'hidden min-[390px]:block md:hidden h-14'}`} aria-hidden="true" />}
       {tenantBar && !keyboardOpen && !showAddSheet && createPortal((
-        <button type="button" onClick={() => setShowAddSheet(true)} data-testid="kiosk-mobile-tenant-plus"
-          aria-label="Appartement acties" aria-expanded={showAddSheet}
-          className="md:hidden fixed right-4 z-[110] flex h-14 w-14 items-center justify-center rounded-full bg-[#FF5C00] text-white shadow-[0_12px_28px_-8px_rgba(255,92,0,0.65)] active:scale-95"
-          style={{ bottom: 'max(env(safe-area-inset-bottom, 16px), 16px)' }}>
-          <Plus className="h-7 w-7" strokeWidth={2.8} />
-        </button>
+        <nav data-testid="kiosk-mobile-tenant-bar" aria-label="Appartement acties"
+          className="kiosk-white-nav md:hidden fixed bottom-0 left-0 right-0 z-[109] h-[52px] overflow-hidden border-t border-slate-200 bg-white shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
+          <div className={`grid h-full w-full ${hasAdminAccess ? 'grid-cols-5' : 'grid-cols-4'} items-stretch px-1`}>
+            {tenantBarItems.filter(({ id }) => !['overview', 'close', 'info'].includes(id)).map(({ id, label, icon: Icon, onClick }) => {
+              const active = (id === 'pay' && step !== 'overview') || id === tenantModal;
+              return (
+                <button key={id} type="button" onClick={onClick} data-testid={`kiosk-mobile-tb-${id}`}
+                  data-active={active ? 'true' : undefined}
+                  className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 active:scale-95 ${active ? 'bg-[#FF5C00] text-white' : 'text-slate-700 hover:bg-orange-50'}`}>
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
+                  <span className="max-w-full truncate whitespace-nowrap text-[8px] min-[390px]:text-[9px] font-semibold leading-none">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       ), document.body)}
       {showMobileKioskBar && !tenantBar && !keyboardOpen && !showAddSheet && isUi && createPortal((
         <nav data-testid="kiosk-mobile-bottom-bar" className="kiosk-ui-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[109] bg-white rounded-t-[26px] shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)] px-2 pt-2"
