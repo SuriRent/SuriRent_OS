@@ -44,6 +44,7 @@ from pdf_gen import (
     reminder_pdf_blue_house,
 )
 from invoice_payments import paid_amounts_by_invoice as _paid_amounts_by_invoice
+from invoice_payments import invoice_fine_amount, payment_invoice_ids, with_invoice_fine_label
 from document_images import pdf_first_page_jpeg
 from landing_content import (
     LANDING_DEFAULTS, DRAFT_ID, PUBLISHED_ID, merge_with_defaults,
@@ -9880,6 +9881,18 @@ async def _enrich_payment(p: dict, include_logo: bool = False) -> dict:
         except Exception:
             pass
     p["openstaand_periode"] = _format_periods(open_periods)
+    if p.get("company_id") and p.get("tenant_id"):
+        invoice_ids = payment_invoice_ids(p)
+        paid_at = p.get("paid_at") or p.get("created_at")
+        if invoice_ids and paid_at:
+            total_fine = 0.0
+            async for inv in db.invoices.find(
+                {"id": {"$in": list(invoice_ids)}, "company_id": p["company_id"],
+                 "tenant_id": p["tenant_id"], "charges.kind": "boete"},
+                {"_id": 0, "charges": 1},
+            ):
+                total_fine += invoice_fine_amount(inv, as_of=paid_at)
+            p["invoice_fine_amount"] = round(total_fine, 2)
     # Defensive backfill: één corrupt legacy-doc (bv. AI-insert zonder
     # receipt_number/paid_at) mag geen enkel endpoint meer crashen.
     if not p.get("receipt_number"):
@@ -11703,7 +11716,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             {"_id": 0, "id": 1, "period_month": 1, "period_year": 1,
              "amount_due": 1, "amount": 1, "paid_amount": 1, "currency": 1,
              "due_date": 1, "status": 1, "kind": 1, "label": 1,
-             "invoice_number": 1},
+             "invoice_number": 1, "charges": 1},
         ).sort([("period_year", 1), ("period_month", 1), ("due_date", 1)]).to_list(None),
         db.payments.find_one({"tenant_id": tenant_id, "status": "approved"}, {"_id": 1}),
         db.invoices.find_one({"tenant_id": tenant_id}, {"_id": 1}),
@@ -11755,6 +11768,7 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
             "amount": total,
             "amount_paid": paid,
             "outstanding": outstanding,
+            "fine_outstanding": round(min(outstanding, invoice_fine_amount(inv)), 2),
             "currency": inv.get("currency") or balance.get("currency") or "SRD",
             "due_date": inv.get("due_date"),
             "status": inv.get("status") or "open",
@@ -12794,8 +12808,13 @@ async def kiosk_tenant_financial_overview_jpg(tenant_id: str, _session=Depends(g
         "value": fmt(current_total),
         "muted": current_total <= 0,
     })
-    # Boetes — altijd 0 tonen zoals op scherm
-    rows.append({"label": "Boetes", "sub": "", "value": fmt(0), "muted": True})
+    for inv in open_invoices + current_invoices:
+        if inv.get("fine_outstanding", 0) > 0:
+            rows.append({
+                "label": "Waarvan boete",
+                "sub": month_label(inv.get("period_month"), inv.get("period_year")),
+                "value": _nl_money(inv.get("currency") or cur, inv["fine_outstanding"]),
+            })
     # Vooruit gefactureerd (informatief)
     if future_total > 0:
         n = len(future_invoices)
@@ -13719,11 +13738,20 @@ async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool
                 lines.append(L(title, bold=True))
                 for i in items:
                     lines += pair(period(i), money(i.get("outstanding")))
+                    if i.get("fine_outstanding", 0) > 0:
+                        lines += pair("Waarvan boete:", _nl_money(i.get("currency") or cur, i["fine_outstanding"]))
                 lines += pair("Subtotaal:", money(sub), bold=True)
                 lines.append(L(dash))
     else:
         lines += pair("Achterstand:", money(open_total))
         lines += pair("Huidig:", money(cur_total))
+        fines_by_currency = {}
+        for i in open_inv + cur_inv:
+            if i.get("fine_outstanding", 0) > 0:
+                currency = i.get("currency") or cur
+                fines_by_currency[currency] = fines_by_currency.get(currency, 0) + i["fine_outstanding"]
+        for currency, amount in fines_by_currency.items():
+            lines += pair("Waarvan boete:", _nl_money(currency, amount))
         lines.append(L(dash))
     if cfgo["show_credit"] and credit > 0:
         lines += pair("Tegoed:", money(credit))
@@ -13918,7 +13946,7 @@ async def _receipt_print_data(p: dict, force_ktp: bool = False) -> dict:
         "medewerker": _receipt_employee(p),
         "appartement": p.get("apartment_number") or "",
         "vestiging": (loc or {}).get("name") or p.get("location_name") or "",
-        "omschrijving": desc,
+        "omschrijving": with_invoice_fine_label(desc, p),
         "bedrag": money(p.get("amount")),
         "openstaand": money(p.get("outstanding_after")),
         "outstanding_after": float(p.get("outstanding_after") or 0),
@@ -14254,6 +14282,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
     if isinstance(pm, int) and 1 <= pm <= 12 and py:
         period_txt = f" — {_NL_MONTHS_FULL[pm - 1].capitalize()} {py}"
     desc = f"{category}{period_txt}"
+    desc_with_fine = with_invoice_fine_label(desc, p)
 
     if fmt == "thermal":
         return _render_receipt_html_thermal(
@@ -14263,7 +14292,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
             company_phone=company_phone, tenant_name=tenant_name,
             apartment_number=apartment_number, location_name=location_name,
             amount=amount, currency=currency, outstanding_after=outstanding_after,
-            method=method, note=note, desc=desc, fmt_money=fmt_money,
+            method=method, note=note, desc=desc_with_fine, fmt_money=fmt_money,
             preview=preview, company_email=p.get("company_email") or "",
             company_tagline=p.get("company_tagline") or "",
             company_kkf=p.get("kkf_number") or "",
@@ -14382,7 +14411,7 @@ def _render_receipt_html(p: dict, fmt: str = "a4", preview: bool = False, paper_
     <table>
       <thead><tr><th>Omschrijving</th><th style="text-align:right">Bedrag</th></tr></thead>
       <tbody>
-        <tr><td>{h(desc)}</td><td class="amt">{h(fmt_money(amount, currency))}</td></tr>
+        <tr><td>{h(desc_with_fine)}</td><td class="amt">{h(fmt_money(amount, currency))}</td></tr>
         <tr class="total"><td>Totaal ontvangen</td><td class="amt">{h(fmt_money(amount, currency))}</td></tr>
         <tr><td>Nog openstaand na deze betaling</td><td class="amt">{outstanding_line}</td></tr>
       </tbody>

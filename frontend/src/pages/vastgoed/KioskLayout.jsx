@@ -1709,6 +1709,15 @@ function TenantOverview({ apartment, onBack, onPay }) {
     history: () => setShowHistory(true),
   };
   const cur = balance.currency || apt.currency || 'SRD';
+  const fineBreakdown = (invoices) => invoices
+    .filter((invoice) => invoice.fine_outstanding > 0)
+    .map((invoice) => {
+      const period = invoice.period_month ? `${MONTHS_NL[invoice.period_month - 1]} ${invoice.period_year}` : '';
+      return {
+        id: invoice.id,
+        text: `Waarvan boete${period ? ` (${period})` : ''}: ${fmtMoney(invoice.fine_outstanding, invoice.currency || cur)}`,
+      };
+    });
 
   // Subtitel onder "Achterstallige huur" — toont de maanden compact.
   const monthsCovered = openInvoices.length;
@@ -1749,8 +1758,10 @@ function TenantOverview({ apartment, onBack, onPay }) {
       icon: Wallet,
       highlight: true,
       sub: openSub,
+      fineBreakdown: fineBreakdown(openInvoices),
     }] : []),
     { key: 'rent', label: currentMonthLabel, value: currentMonthAmount, icon: Home,
+      fineBreakdown: fineBreakdown(currentInvoices.length ? currentInvoices : (currentInvoice ? [currentInvoice] : [])),
       sub: currentInvoice && currentInvoice.due_date
         ? `Vervalt ${new Date(currentInvoice.due_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}`
         : '' },
@@ -1834,6 +1845,9 @@ function TenantOverview({ apartment, onBack, onPay }) {
                       <div className="min-w-0">
                         <p className={`text-sm ${it.highlight ? 'font-extrabold' : 'font-semibold'}`}>{it.label}</p>
                         {it.sub && <p className="text-[10px] mt-0.5">{it.sub}</p>}
+                        {it.fineBreakdown?.map(({ id, text }) => (
+                          <p key={id} className="text-xs font-semibold text-amber-700 mt-0.5">{text}</p>
+                        ))}
                         {it.info && <p className="text-[9px] mt-0.5 italic text-blue-400">informatief — telt niet mee</p>}
                       </div>
                     </div>
