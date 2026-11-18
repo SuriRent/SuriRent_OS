@@ -13422,11 +13422,37 @@ async def admin_stats(user=Depends(get_current_user)):
     return await _compute_admin_stats(user, sc)
 
 
+_KIOSK_UTILITY_PROVIDERS = ("ebs", "swm", "telesur")
+_KIOSK_UTILITY_CASH_FIELDS = {"_id": 0, "id": 1, "amount": 1, "description": 1, "entry_date": 1, "created_at": 1}
+
+
 class KioskUtilityAmounts(BaseModel):
     company_id: str
+    period: str
     ebs: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
     swm: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
     telesur: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+
+
+class KioskUtilityExpense(BaseModel):
+    company_id: str
+    period: str
+    provider: Literal["ebs", "swm", "telesur"]
+    entry_id: str = Field(min_length=1, max_length=128)
+    linked: bool
+
+
+def _kiosk_utility_period(period: Optional[str], now: datetime) -> str:
+    current = now.strftime("%Y-%m")
+    if period is None:
+        return current
+    if not re.fullmatch(r"[1-9][0-9]{3}-(0[1-9]|1[0-2])", period) or period > current:
+        raise HTTPException(status_code=400, detail="Kies een geldige maand die niet in de toekomst ligt.")
+    return period
+
+
+def _kiosk_utility_expense_filter(cid: str) -> dict:
+    return {"company_id": cid, "type": "out", "currency": "SRD", "amount": {"$gt": 0}}
 
 
 def _can_edit_kiosk_utilities(user: Optional[dict], cid: str) -> bool:
@@ -13435,19 +13461,16 @@ def _can_edit_kiosk_utilities(user: Optional[dict], cid: str) -> bool:
 
 
 @api.get("/kiosk/company-overview")
-async def kiosk_company_overview(request: Request, session=Depends(get_kiosk_session)):
+async def kiosk_company_overview(period: Optional[str] = None, session=Depends(get_kiosk_session)):
     cid = session["company_id"]
     sc = {"company_id": cid}
-    try:
-        user = await get_current_user_optional(request)
-    except HTTPException as exc:
-        if exc.status_code != 403:
-            raise
-        user = None
     now = now_utc().astimezone(timezone(timedelta(hours=-3)))
-    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    active_period = _kiosk_utility_period(None, now)
+    period = _kiosk_utility_period(period, now)
+    year, month = map(int, period.split("-"))
+    start = datetime(year, month, 1, tzinfo=now.tzinfo)
     end = (start + timedelta(days=32)).replace(day=1)
-    paid, settings, company, invoices = await asyncio.gather(
+    paid, settings, company, invoices, utility_entries = await asyncio.gather(
         _agg_by_currency(db.payments, [
             {"$match": {**sc, "status": "approved", "paid_at": {
                 "$gte": iso(start.astimezone(timezone.utc)), "$lt": iso(end.astimezone(timezone.utc)),
@@ -13456,12 +13479,16 @@ async def kiosk_company_overview(request: Request, session=Depends(get_kiosk_ses
                         "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
         ]),
         db.company_settings.find_one(sc, {"_id": 0, "invoicing.grace_workdays": 1}),
-        db.companies.find_one({"id": cid}, {"_id": 0, "kiosk_utility_amounts": 1}),
+        db.companies.find_one({"id": cid}, {"_id": 0, f"kiosk_utility_months.{period}": 1}),
         db.invoices.find(
             {**sc, "status": {"$in": sorted(_UNPAID_STATUSES)}, "archived": {"$ne": True}},
             {"_id": 0, "id": 1, "currency": 1, "amount_due": 1, "amount": 1, "paid_amount": 1,
              "period_month": 1, "period_year": 1, "due_date": 1},
         ).to_list(None),
+        db.kasgeld.find(
+            {**_kiosk_utility_expense_filter(cid), "kiosk_utility.period": period},
+            {**_KIOSK_UTILITY_CASH_FIELDS, "kiosk_utility.provider": 1},
+        ).sort("entry_date", -1).to_list(None),
     )
     if company is None:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
@@ -13495,12 +13522,23 @@ async def kiosk_company_overview(request: Request, session=Depends(get_kiosk_ses
             overdue[currency] = overdue.get(currency, 0) + rest
     return {
         "company_id": cid,
-        "can_edit_utilities": _can_edit_kiosk_utilities(user, cid),
+        "period": period,
+        "current_period": active_period,
         "paid": {currency: round(row["total"], 2) for currency, row in paid.items()},
         "outstanding": {currency: round(amount, 2) for currency, amount in outstanding.items()},
         "overdue": {currency: round(amount, 2) for currency, amount in overdue.items()},
-        "utilities": company.get("kiosk_utility_amounts") or {},
+        "utilities": (company.get("kiosk_utility_months") or {}).get(period) or {},
+        "utility_payments": {
+            provider: [entry for entry in utility_entries if entry["kiosk_utility"]["provider"] == provider]
+            for provider in _KIOSK_UTILITY_PROVIDERS
+        },
     }
+
+
+@api.get("/admin/kiosk-utility-amounts")
+async def kiosk_utility_edit_access(user=Depends(get_current_user_optional)):
+    cid = company_id_of(user) if user else None
+    return {"company_id": cid if _can_edit_kiosk_utilities(user, cid) else None}
 
 
 @api.put("/admin/kiosk-utility-amounts")
@@ -13508,15 +13546,45 @@ async def kiosk_save_utility_amounts(body: KioskUtilityAmounts, user=Depends(get
     cid = company_id_of(user)
     if not _can_edit_kiosk_utilities(user, body.company_id):
         raise HTTPException(status_code=403, detail="Je kunt bedragen alleen wijzigen als beheerder van dit bedrijf.")
-    amounts = body.model_dump(exclude={"company_id"})
+    period = _kiosk_utility_period(body.period, now_utc().astimezone(timezone(timedelta(hours=-3))))
+    amounts = body.model_dump(exclude={"company_id", "period"})
     if any(amount is not None and amount != round(amount, 2) for amount in amounts.values()):
         raise HTTPException(status_code=400, detail="Gebruik maximaal twee decimalen per bedrag.")
     result = await db.companies.update_one(
-        {"id": cid}, {"$set": {"kiosk_utility_amounts": amounts}},
+        {"id": cid}, {"$set": {f"kiosk_utility_months.{period}": amounts}},
     )
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     return {"utilities": amounts}
+
+
+@api.get("/admin/kiosk-utility-expenses")
+async def kiosk_utility_expense_candidates(company_id: str, user=Depends(get_current_user)):
+    if not _can_edit_kiosk_utilities(user, company_id):
+        raise HTTPException(status_code=403, detail="Je kunt alleen kasmutaties van je eigen bedrijf koppelen.")
+    return await db.kasgeld.find(
+        {**_kiosk_utility_expense_filter(company_id), "kiosk_utility": {"$exists": False}},
+        _KIOSK_UTILITY_CASH_FIELDS,
+    ).sort([("entry_date", -1), ("created_at", -1)]).to_list(100)
+
+
+@api.put("/admin/kiosk-utility-expenses")
+async def kiosk_link_utility_expense(body: KioskUtilityExpense, user=Depends(get_current_user)):
+    if not _can_edit_kiosk_utilities(user, body.company_id):
+        raise HTTPException(status_code=403, detail="Je kunt alleen kasmutaties van je eigen bedrijf koppelen.")
+    period = _kiosk_utility_period(body.period, now_utc().astimezone(timezone(timedelta(hours=-3))))
+    target = {"period": period, "provider": body.provider}
+    entry_filter = {**_kiosk_utility_expense_filter(body.company_id), "id": body.entry_id}
+    if body.linked:
+        entry_filter["$or"] = [{"kiosk_utility": {"$exists": False}}, {"kiosk_utility": target}]
+        update = {"$set": {"kiosk_utility": target}}
+    else:
+        entry_filter.update({"kiosk_utility.period": period, "kiosk_utility.provider": body.provider})
+        update = {"$unset": {"kiosk_utility": ""}}
+    result = await db.kasgeld.update_one(entry_filter, update)
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Deze kasuitgave is niet beschikbaar of is al aan een andere rekening gekoppeld.")
+    return {"ok": True}
 
 
 async def _agg_by_currency(coll, pipeline) -> dict:
