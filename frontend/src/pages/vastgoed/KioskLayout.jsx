@@ -36,6 +36,7 @@ import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
+import { KioskCompanyOverview } from '../../components/KioskCompanyOverview';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 import KioskUiAdminPage, { UI_NEW } from '../../components/KioskUiAdminPage';
@@ -6662,6 +6663,7 @@ export default function KioskLayout() {
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [showAddApartment, setShowAddApartment] = useState(false);
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showCompanyOverview, setShowCompanyOverview] = useState(false);
   const [showAddContract, setShowAddContract] = useState(false);
   const [showAddInvoice, setShowAddInvoice] = useState(false);
   const [showPaymentsViewer, setShowPaymentsViewer] = useState(false);
@@ -7091,10 +7093,14 @@ export default function KioskLayout() {
   }, [selectedLocationId]);
   const popupSetters = {
     'add-location': [showAddLocation, setShowAddLocation], 'add-apartment': [showAddApartment, setShowAddApartment],
+    'company-overview': [showCompanyOverview, setShowCompanyOverview],
     'add-tenant': [showAddTenant, setShowAddTenant], 'add-invoice': [showAddInvoice, setShowAddInvoice],
     'add-maintenance': [showAddMaintenance, setShowAddMaintenance], facturen: [showInvoicesModal, setShowInvoicesModal],
   };
   const popupKey = Object.keys(popupSetters).find((k) => popupSetters[k][0]) || adminPopup || null;
+  useEffect(() => {
+    if (isMobileViewport) setShowCompanyOverview(false);
+  }, [isMobileViewport]);
   const openOnly = (key) => {
     Object.entries(popupSetters).forEach(([k, [, set]]) => set(k === key));
     setAdminPopup(null);
@@ -7117,7 +7123,7 @@ export default function KioskLayout() {
   const applyEntry = (e) => {
     setApartment(e.apartment); setStep(e.step);
     setSelectedLocationId(e.location ?? null);
-    Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k));
+    Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k && (k !== 'company-overview' || !isMobileViewport)));
     setAdminPopup(e.popup && !popupSetters[e.popup] ? e.popup : null);
     setHistTick((t) => t + 1);
   };
@@ -7740,6 +7746,9 @@ export default function KioskLayout() {
         </>
       ), document.body)}
 
+      {showCompanyOverview && !isMobileViewport && showDesktopBar && (
+        <KioskCompanyOverview Shell={KioskModalShell} onClose={() => setShowCompanyOverview(false)} />
+      )}
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
       {showDesktopBar && createPortal((
@@ -7754,6 +7763,7 @@ export default function KioskLayout() {
               </button>
             ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white />}
             {(tenantBar ? tenantBarItems : [
+              { id: 'company-overview', label: 'Overzicht', icon: LayoutGrid, testid: 'kiosk-company-overview-btn', onClick: () => openOnly('company-overview') },
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: isUi ? Building2 : Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
@@ -7765,6 +7775,7 @@ export default function KioskLayout() {
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (id === 'company-overview' && showCompanyOverview)
                 || (id === 'bankreconciliation' && step === 'admin:bankreconciliatie')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
