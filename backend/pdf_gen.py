@@ -11,6 +11,7 @@ import hashlib
 import base64
 import os
 from datetime import datetime
+from invoice_payments import with_invoice_fine_label
 from reportlab.lib.pagesizes import A4, A6
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -1479,7 +1480,7 @@ def receipt_pdf(payment: dict) -> bytes:
         ("Datum", _fmt_date_nl(payment.get("paid_at"))),
         ("Huurder", payment.get("tenant_name", "")),
         ("Appartement", payment.get("apartment_number") or "—"),
-        ("Type betaling", (payment.get("category") or "").capitalize() or "Huurbetaling"),
+        ("Type betaling", with_invoice_fine_label((payment.get("category") or "").capitalize() or "Huurbetaling", payment)),
     ]
     if period:
         rows.append(("Betaling voor", period))
@@ -3255,7 +3256,12 @@ def receipt_pdf_blue_house(payment: dict) -> bytes:
     c.line(tbl_x + tbl_w - amt_col_w, tbl_top - 2 * row_h, tbl_x + tbl_w - amt_col_w, tbl_top - row_h)
     c.setFillColor(colors.black)
     c.setFont(_LUX_SANS, 11)
-    c.drawString(tbl_x + 5 * mm, tbl_top - 2 * row_h + 2.5 * mm, omschrijving)
+    fine_line = with_invoice_fine_label("", payment)
+    c.drawString(tbl_x + 5 * mm, tbl_top - 2 * row_h + (5 if fine_line else 2.5) * mm, omschrijving)
+    if fine_line:
+        c.setFont(_LUX_SANS, 9)
+        c.drawString(tbl_x + 5 * mm, tbl_top - 2 * row_h + 1.3 * mm, fine_line)
+        c.setFont(_LUX_SANS, 11)
     c.drawString(tbl_x + tbl_w - amt_col_w + 5 * mm, tbl_top - 2 * row_h + 2.5 * mm, _bh_fmt_money(amount, currency))
 
     # Totaal-rij (lichtblauw)

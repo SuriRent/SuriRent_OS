@@ -1610,6 +1610,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [showFine, setShowFine] = useState(false);
   const [dueReminder, setDueReminder] = useState(null);
 
   const reload = useCallback((fresh = false) => {
@@ -1617,6 +1618,7 @@ function TenantOverview({ apartment, onBack, onPay }) {
     (fresh ? fetchOverview(apartment.tenant_id) : takeOverview(apartment.tenant_id))
       .then((r) => {
         setData(r.data);
+        setErr('');
         // Toon de eerste due reminder als popup — zodra de medewerker deze
         // afhandelt (Behandeld/Later), pakken we de volgende.
         const rems = Array.isArray(r.data?.due_reminders) ? r.data.due_reminders : [];
@@ -1700,11 +1702,22 @@ function TenantOverview({ apartment, onBack, onPay }) {
   const paymentOverview = buildPaymentOverview(data);
   const totalDue = paymentOverview.total_due;
   const allPaid = totalDue <= 0;
+  const fineInvoices = [...openInvoices, ...currentInvoices]
+    .filter((invoice) => Number(invoice.outstanding || 0) > 0.005);
   actRef.current = {
     pay: () => onPay(paymentOverview),
     history: () => setShowHistory(true),
   };
   const cur = balance.currency || apt.currency || 'SRD';
+  const fineBreakdown = (invoices) => invoices
+    .filter((invoice) => invoice.fine_outstanding > 0)
+    .map((invoice) => {
+      const period = invoice.period_month ? `${MONTHS_NL[invoice.period_month - 1]} ${invoice.period_year}` : '';
+      return {
+        id: invoice.id,
+        text: `Waarvan boete${period ? ` (${period})` : ''}: ${fmtMoney(invoice.fine_outstanding, invoice.currency || cur)}`,
+      };
+    });
 
   // Subtitel onder "Achterstallige huur" — toont de maanden compact.
   const monthsCovered = openInvoices.length;
@@ -1745,8 +1758,10 @@ function TenantOverview({ apartment, onBack, onPay }) {
       icon: Wallet,
       highlight: true,
       sub: openSub,
+      fineBreakdown: fineBreakdown(openInvoices),
     }] : []),
     { key: 'rent', label: currentMonthLabel, value: currentMonthAmount, icon: Home,
+      fineBreakdown: fineBreakdown(currentInvoices.length ? currentInvoices : (currentInvoice ? [currentInvoice] : [])),
       sub: currentInvoice && currentInvoice.due_date
         ? `Vervalt ${new Date(currentInvoice.due_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}`
         : '' },
@@ -1830,6 +1845,9 @@ function TenantOverview({ apartment, onBack, onPay }) {
                       <div className="min-w-0">
                         <p className={`text-sm ${it.highlight ? 'font-extrabold' : 'font-semibold'}`}>{it.label}</p>
                         {it.sub && <p className="text-[10px] mt-0.5">{it.sub}</p>}
+                        {it.fineBreakdown?.map(({ id, text }) => (
+                          <p key={id} className="text-xs font-semibold text-amber-700 mt-0.5">{text}</p>
+                        ))}
                         {it.info && <p className="text-[9px] mt-0.5 italic text-blue-400">informatief — telt niet mee</p>}
                       </div>
                     </div>
@@ -1889,10 +1907,6 @@ function TenantOverview({ apartment, onBack, onPay }) {
                     className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-sm sm:text-base font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 active:scale-[0.98]">
                     Vooruit betalen voor {nextLabel} <ArrowRight className="w-5 h-5" />
                   </button>
-                  <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
-                    className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
-                    <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
-                  </button>
                 </>
                   );
                 })()
@@ -1918,10 +1932,6 @@ function TenantOverview({ apartment, onBack, onPay }) {
                     className="mt-2 w-full max-w-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 transition py-2.5 text-sm active:scale-[0.98]">
                     Vooruitbetaling registreren
                   </button>
-                  <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
-                    className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
-                    <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
-                  </button>
                 </>
               )}
             </>
@@ -1937,16 +1947,29 @@ function TenantOverview({ apartment, onBack, onPay }) {
                 className="w-full max-w-xs bg-orange-500 hover:bg-orange-600 text-white text-base sm:text-lg font-bold rounded-xl flex items-center justify-center gap-2 transition py-3 sm:py-3.5 active:scale-[0.98]">
                 Volgende <ArrowRight className="w-5 h-5" />
               </button>
-              <button onClick={() => setShowHistory(true)} data-testid="overview-history-btn"
-                className="mt-2 w-full max-w-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 py-2.5 text-sm">
-                <ClockIcon className="w-4 h-4" /> Betalingsgeschiedenis
-              </button>
             </>
+          )}
+          {fineInvoices.length > 0 && (
+            <button type="button" onClick={() => setShowFine(true)} data-testid="overview-create-fine-btn"
+              className="mt-3 w-full max-w-xs bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl border border-amber-200 flex items-center justify-center gap-2 py-2.5 text-sm">
+              <AlertCircle className="w-4 h-4" /> Boete aanmaken
+            </button>
           )}
         </div>
       </div>
 
       {showHistory && <PaymentHistoryModal tenant={tenant} apartment={apt} onClose={() => setShowHistory(false)} />}
+      {showFine && (
+        <CreateInvoiceFineModal
+          tenant={tenant}
+          invoices={fineInvoices}
+          onClose={() => setShowFine(false)}
+          onCreated={() => {
+            setShowFine(false);
+            window.dispatchEvent(new CustomEvent('kiosk-overview-invalidate', { detail: { tenant_id: tenant.id } }));
+          }}
+        />
+      )}
       {dueReminder && (
         <ReminderPopup
           tenantId={tenant.id}
@@ -1959,6 +1982,81 @@ function TenantOverview({ apartment, onBack, onPay }) {
           }} />
       )}
     </div>
+  );
+}
+
+function CreateInvoiceFineModal({ tenant, invoices, onClose, onCreated }) {
+  const [invoiceId, setInvoiceId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const invoice = invoices.find((item) => item.id === invoiceId);
+  const save = async (event) => {
+    event.preventDefault();
+    const numericAmount = Number(amount);
+    if (saving) return;
+    if (!invoice || !Number.isFinite(numericAmount) || numericAmount < 0.01) {
+      setError('Selecteer een factuur en vul een geldig boetebedrag in.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api.post(`/kiosk/tenants/${tenant.id}/invoices/${invoice.id}/fines`, { amount: numericAmount });
+      onCreated();
+    } catch (e) {
+      setError(formatError(e, 'Boete aanmaken is niet gelukt.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const invoiceLabel = (item) => {
+    const period = item.period_month ? `${MONTHS_NL[item.period_month - 1]} ${item.period_year}` : '';
+    const bucket = item.bucket === 'overdue' ? 'Achterstallig' : 'Huidige periode';
+    return [item.invoice_number, period, bucket, fmtMoney(item.outstanding, item.currency)].filter(Boolean).join(' · ');
+  };
+  return createPortal(
+    <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      data-testid="create-invoice-fine-modal">
+      <form onSubmit={save} role="dialog" aria-modal="true" aria-labelledby="create-invoice-fine-title"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <div>
+            <h2 id="create-invoice-fine-title" className="text-xl font-black text-slate-900">Boete aanmaken</h2>
+            <p className="text-sm text-slate-500 mt-1">{tenant.name}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} aria-label="Sluiten"
+            className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <label className="block text-sm font-bold text-slate-700 mb-1.5" htmlFor="fine-invoice">Factuur</label>
+        <select id="fine-invoice" value={invoiceId} onChange={(event) => setInvoiceId(event.target.value)} disabled={saving} required
+          data-testid="fine-invoice-select"
+          className="w-full h-12 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800">
+          <option value="" disabled>Kies een open factuur</option>
+          {invoices.map((item) => <option key={item.id} value={item.id}>{invoiceLabel(item)}</option>)}
+        </select>
+        <label className="block text-sm font-bold text-slate-700 mt-4 mb-1.5" htmlFor="fine-amount">
+          Boetebedrag {invoice?.currency ? `(${invoice.currency})` : ''}
+        </label>
+        <input id="fine-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required
+          value={amount} onChange={(event) => setAmount(event.target.value)} disabled={saving}
+          data-testid="fine-amount-input" placeholder="0,00"
+          className="w-full h-12 px-3 rounded-xl border border-slate-200 text-lg font-bold text-slate-900" />
+        <p className="text-xs text-slate-500 mt-2">De boete wordt aan de factuur toegevoegd en meegenomen in het openstaande saldo.</p>
+        {error && <p role="alert" className="text-sm text-red-600 mt-3">{error}</p>}
+        <div className="flex gap-3 mt-5">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="flex-1 h-11 rounded-xl bg-slate-100 text-slate-700 font-bold disabled:opacity-50">Annuleren</button>
+          <button type="submit" disabled={saving || !invoiceId}
+            className="flex-1 h-11 rounded-xl bg-[#FF5C00] text-white font-bold disabled:opacity-50">
+            {saving ? 'Opslaan…' : 'Boete toevoegen'}
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.body,
   );
 }
 
