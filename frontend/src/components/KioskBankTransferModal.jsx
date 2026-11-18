@@ -22,19 +22,64 @@ function CopyRow({ label, value, testId }) {
   );
 }
 
+export function BankTransferDetails({ data, amount, currency, description }) {
+  const amountTxt = fmtMoney(amount, currency);
+  return (
+    <div className="min-w-0 space-y-2.5">
+      <div className="rounded-2xl bg-orange-50 px-4 py-3">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">Te betalen</p>
+        <p className="text-3xl font-black text-slate-900" data-testid="bank-transfer-amount">{amountTxt}</p>
+      </div>
+      {data.company_name && <CopyRow label="Ten name van" value={data.company_name} testId="bank-transfer-company" />}
+      {data.accounts.map((account, index) => (
+        <CopyRow key={account.label} label={`Rekening ${account.label}`} value={account.value} testId={`bank-transfer-account-${index}`} />
+      ))}
+      {!data.accounts.length && (
+        <p className="flex items-center gap-2 text-sm font-semibold text-amber-700 bg-amber-50 rounded-xl px-4 py-3" data-testid="bank-transfer-no-accounts">
+          <AlertCircle className="w-4 h-4 shrink-0" /> Nog geen bankrekening ingesteld bij Instellingen → Bedrijf.
+        </p>
+      )}
+      <CopyRow label="Omschrijving" value={description} testId="bank-transfer-description" />
+    </div>
+  );
+}
+
 export function KioskBankTransferModal({ amount, currency, description, onClose, onDone }) {
   const [data, setData] = useState(null);
+  const [qrUrl, setQrUrl] = useState('');
+  const [qrError, setQrError] = useState('');
+  const [detailsError, setDetailsError] = useState('');
   useEffect(() => {
-    api.get('/kiosk/bank-details').then(({ data: d }) => setData(d)).catch(() => setData({ accounts: [] }));
-  }, []);
-  const amountTxt = fmtMoney(amount, currency);
-  const accounts = data?.accounts || [];
-  const qrText = [
-    data?.company_name && `Ontvanger: ${data.company_name}`,
-    ...accounts.map((a) => `Rekening (${a.label}): ${a.value}`),
-    `Bedrag: ${amountTxt}`,
-    `Omschrijving: ${description}`,
-  ].filter(Boolean).join('\n');
+    const controller = new AbortController();
+    const { signal } = controller;
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+    setData(null);
+    setQrUrl('');
+    setQrError('');
+    setDetailsError('');
+    api.get('/kiosk/bank-details', { signal }).then(async ({ data: details }) => {
+      if (signal.aborted) return;
+      setData(details);
+      if (!details.accounts.length) return;
+      if (loopback) {
+        setQrError('Deze lokale kiosk is niet bereikbaar vanaf je telefoon. Gebruik de bankgegevens hiernaast.');
+        return;
+      }
+      try {
+        const { data: share } = await api.post('/kiosk/bank-details/share', { amount, currency, description }, { signal });
+        if (signal.aborted) return;
+        const url = new URL('/bankgegevens', window.location.origin);
+        url.hash = share.token;
+        setData(share.bank_details);
+        setQrUrl(url.toString());
+      } catch {
+        if (!signal.aborted) setQrError('De QR-code kon niet worden gemaakt. Je kunt de bankgegevens handmatig kopiëren.');
+      }
+    }).catch(() => {
+      if (!signal.aborted) setDetailsError('De bankgegevens konden niet worden geladen.');
+    });
+    return () => controller.abort();
+  }, [amount, currency, description]);
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
@@ -52,28 +97,22 @@ export function KioskBankTransferModal({ amount, currency, description, onClose,
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
-          {!data ? <Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-10" /> : (
+          {detailsError ? <p role="alert" className="text-red-700">{detailsError}</p> : !data ? <Loader2 className="w-7 h-7 text-[#FF5C00] animate-spin mx-auto my-10" aria-label="Bankgegevens laden" /> : (
             <div className="flex flex-col sm:flex-row gap-5">
-              <div className="flex-1 min-w-0 space-y-2.5">
-                <div className="rounded-2xl bg-orange-50 px-4 py-3">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">Te betalen</p>
-                  <p className="text-3xl font-black text-slate-900" data-testid="bank-transfer-amount">{amountTxt}</p>
+              <div className="flex-1 min-w-0">
+                <BankTransferDetails data={data} amount={amount} currency={currency} description={description} />
+              </div>
+              {data.accounts.length > 0 && (
+                <div className="sm:w-56 flex flex-col items-center justify-center rounded-2xl border border-slate-100 p-3 shrink-0">
+                  {qrError ? <p role="alert" className="text-sm text-slate-600">{qrError}</p> : qrUrl ? (
+                    <>
+                      <QRCodeSVG value={qrUrl} size={196} level="M" marginSize={4}
+                        title="Open bankgegevens op je telefoon" data-testid="bank-transfer-qr" />
+                      <p className="text-xs text-slate-500 text-center mt-2">Scan met de camera van je telefoon. De link is 15 minuten geldig.</p>
+                    </>
+                  ) : <Loader2 className="w-6 h-6 text-orange-600 animate-spin" aria-label="QR-code maken" />}
                 </div>
-                {data.company_name && <CopyRow label="Ten name van" value={data.company_name} testId="bank-transfer-company" />}
-                {accounts.map((a, i) => (
-                  <CopyRow key={a.label} label={`Rekening ${a.label}`} value={a.value} testId={`bank-transfer-account-${i}`} />
-                ))}
-                {accounts.length === 0 && (
-                  <p className="flex items-center gap-2 text-sm font-semibold text-amber-700 bg-amber-50 rounded-xl px-4 py-3" data-testid="bank-transfer-no-accounts">
-                    <AlertCircle className="w-4 h-4 shrink-0" /> Nog geen bankrekening ingesteld bij Instellingen → Bedrijf.
-                  </p>
-                )}
-                <CopyRow label="Omschrijving" value={description} testId="bank-transfer-description" />
-              </div>
-              <div className="sm:w-52 flex flex-col items-center justify-center rounded-2xl border border-slate-100 p-4 shrink-0">
-                <QRCodeSVG value={qrText} size={168} level="M" data-testid="bank-transfer-qr" />
-                <p className="text-xs text-slate-500 text-center mt-2">Scan voor alle gegevens</p>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -81,7 +120,7 @@ export function KioskBankTransferModal({ amount, currency, description, onClose,
         <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
           <button type="button" onClick={onClose} data-testid="bank-transfer-cancel"
             className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">Annuleren</button>
-          <button type="button" onClick={onDone} disabled={!data} data-testid="bank-transfer-done"
+          <button type="button" onClick={onDone} disabled={!data || Boolean(detailsError)} data-testid="bank-transfer-done"
             className="flex-[2] h-12 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] font-bold text-white transition-colors disabled:opacity-50">Overboeking gedaan → verder</button>
         </div>
       </div>
