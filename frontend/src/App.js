@@ -58,6 +58,7 @@ const AdminDashboard = lazyWithRetry(() => import('./pages/vastgoed/AdminDashboa
 const KioskLayout = lazyWithRetry(() => import('./pages/vastgoed/KioskLayout'));
 const TenantKioskLayout = lazyWithRetry(() => import('./pages/vastgoed/TenantKioskLayout'));
 const ContractSignPage = lazyWithRetry(() => import('./pages/vastgoed/ContractSignPage'));
+const KioskBankDetailsPage = lazyWithRetry(() => import('./pages/vastgoed/KioskBankDetailsPage'));
 const TenantSignaturePage = lazyWithRetry(() => import('./pages/vastgoed/TenantSignaturePage'));
 const AuthCallback = lazyWithRetry(() => import('./pages/vastgoed/AuthCallback'));
 const QrLinkPage = lazyWithRetry(() => import('./pages/vastgoed/QrLinkPage'));
@@ -468,6 +469,7 @@ function HybridRoutes() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   useRegisterServiceWorker();
   useSheetSwipeToDismiss();
   // Globale tik-geluiden voor elke knop + keypad + text-input. Werkt
@@ -481,6 +483,9 @@ export default function App() {
   // custom_domain is van een bedrijf, renderen we DIRECT TenantPublicLanding
   // ipv de standaard routes. Skipt zichzelf op system hosts.
   const tenant = useTenantLandingResolver();
+  if (pathname === '/bankgegevens' || pathname === '/bankgegevens/') {
+    return <Suspense fallback={<RouteFallback />}><KioskBankDetailsPage /></Suspense>;
+  }
   // NB: we hiden de PWA HTML splash NIET meer op tenant.status change,
   // want daarna kan BrandedShell nog even bezig zijn met de company-
   // lookup wat een tweede spinner zou tonen. In plaats daarvan roept

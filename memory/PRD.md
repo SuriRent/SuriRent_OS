@@ -959,7 +959,7 @@ zichtbaar direct boven het toetsenbord, alleen body scrollt.
 - 2026-06: KIOSK kleurmodus Oranje/Wit (bedrijfsbreed): GET/PUT /api/kiosk/theme (companies.kiosk_theme) + WS "kiosk_theme" live sync; toggle (zon-icoon) in bovenbalk desktop + mobiele titelrij; CSS .kiosk-white/.kiosk-chrome in index.css.
 - 2026-06: Bonnen-van-vandaag bolletje + printerlampje (+KT-V520 koppelen) verplaatst van zwevende toolbar rechtsboven naar desktop-bovenbalk naast "Zoek huurder", op alle kiosk-pagina's (KioskHeaderLiveButtons).
 - 2026-06: Aantal bonnen van vandaag als getal IN het groene bolletje (GET /api/kiosk/print-log/count; ververst bij nieuwe print, sluiten overlay en elke minuut).
-- 2026-06: KIOSK Betaalmethode "Bankoverschrijving" opent venster (components/KioskBankTransferModal.jsx): bedrag, ten name van, bankrekening(en) SR/NL uit Instellingen → Bedrijf (GET /api/kiosk/bank-details), omschrijving, QR-code, kopieerknoppen; "Overboeking gedaan → verder" gaat naar Bevestigen.
+- KIOSK Betaalmethode "Bankoverschrijving" toont bedrag, tenaamstelling, bankrekening(en) SR/NL uit Instellingen → Bedrijf, en omschrijving. De QR-code opent de gegevens in de telefoonbrowser via een 15 minuten geldige link, zonder zelf te betalen. "Overboeking gedaan → verder" gaat naar Bevestigen.
 - 2026-06: Witte modus verfijnd: bovenbalk + menubalk wit, middengedeelte lichtgrijs (#F4F5F7) met witte kaarten.
 - 2026-06: Mobiel: kleurmodus-knop verplaatst van titelrij naar Snel toevoegen (+) sheet ("Witte modus"/"Oranje modus"); + FAB verborgen zolang sheet open is.
 - 2026-06: Snel toevoegen sheet volgt witte modus (lichtgrijs, witte tegels/knoppen, oranje accenten) via .kiosk-sheet-white.

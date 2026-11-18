@@ -334,7 +334,7 @@ def _kiosk_billing_request_is_allowed(request: Request) -> bool:
     path = request.url.path
     if path == "/api/kiosk/nfc-lookup":
         return True
-    if path in {"/api/kiosk/payments", "/api/kiosk/stripe/intent"}:
+    if path in {"/api/kiosk/payments", "/api/kiosk/stripe/intent", "/api/kiosk/bank-details/share"}:
         return True
     if re.fullmatch(r"/api/kiosk/payment-plans/[^/]+/installments/[^/]+/pay", path):
         return True
@@ -448,6 +448,7 @@ async def lifespan(app: FastAPI):
     await db.invoices.create_index([("company_id", 1), ("period_year", 1), ("period_month", 1)])
     await db.payment_plans.create_index("invoice_ids")
     await db.companies.create_index("slug", unique=True)
+    await db.kiosk_bank_shares.create_index("expires_at", expireAfterSeconds=0)
     await db.push_subs.create_index("user_id")
     await db.push_subs.create_index("endpoint", unique=True)
     await db.employees.create_index([("company_id", 1), ("active", 1), ("app_role", 1)])
@@ -11515,6 +11516,43 @@ async def kiosk_bank_details(_session=Depends(get_kiosk_session)):
                 for k, lbl in (("bank_account_sr", "Suriname"), ("bank_account_nl", "Nederland"))
                 if (c.get(k) or "").strip()]
     return {"company_name": c.get("name") or "", "accounts": accounts}
+
+
+class KioskBankShareIn(BaseModel):
+    amount: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
+    currency: Literal["SRD", "USD", "EUR"]
+    description: str = Field(max_length=400)
+
+
+class KioskBankShareToken(BaseModel):
+    token: str = Field(pattern=r"^[A-Za-z0-9_-]{32}$")
+
+
+@api.post("/kiosk/bank-details/share")
+async def kiosk_create_bank_share(body: KioskBankShareIn, response: Response, session=Depends(get_kiosk_session)):
+    details = await kiosk_bank_details(session)
+    if not details["accounts"]:
+        raise HTTPException(status_code=404, detail="Er is geen bankrekening ingesteld.")
+    token = secrets.token_urlsafe(24)
+    await db.kiosk_bank_shares.insert_one({
+        "_id": hashlib.sha256(token.encode()).hexdigest(),
+        "expires_at": now_utc() + timedelta(minutes=15),
+        "details": {**details, **body.model_dump()},
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return {"token": token, "bank_details": details}
+
+
+@api.post("/public/kiosk-bank-details")
+async def public_kiosk_bank_share(body: KioskBankShareToken, response: Response):
+    share = await db.kiosk_bank_shares.find_one({
+        "_id": hashlib.sha256(body.token.encode()).hexdigest(),
+        "expires_at": {"$gt": now_utc()},
+    }, {"_id": 0, "details": 1})
+    if not share:
+        raise HTTPException(status_code=404, detail="Deze link is verlopen of ongeldig.", headers={"Cache-Control": "no-store"})
+    response.headers["Cache-Control"] = "no-store"
+    return share["details"]
 
 
 
