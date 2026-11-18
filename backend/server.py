@@ -11850,6 +11850,93 @@ async def kiosk_tenant_overview(tenant_id: str, _session=Depends(get_kiosk_sessi
     }
 
 
+class KioskInvoiceFineCreate(BaseModel):
+    amount: float = Field(ge=0.01, le=1_000_000_000, allow_inf_nan=False)
+
+
+@api.post("/kiosk/tenants/{tenant_id}/invoices/{invoice_id}/fines")
+async def kiosk_create_invoice_fine(
+    tenant_id: str, invoice_id: str, body: KioskInvoiceFineCreate,
+    _session=Depends(get_kiosk_session),
+):
+    cid = _session["company_id"]
+    tenant = await db.tenants.find_one(
+        {"id": tenant_id, **kiosk_scope(_session)}, {"_id": 0, "id": 1},
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+
+    invoice_filter = {
+        "id": invoice_id,
+        "tenant_id": tenant_id,
+        "company_id": cid,
+        "archived": {"$ne": True},
+        "status": {"$in": sorted(_UNPAID_STATUSES)},
+    }
+    invoice = await db.invoices.find_one(
+        invoice_filter,
+        {"_id": 0, "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1},
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Open factuur niet gevonden")
+    invoice_total = invoice.get("amount_due")
+    if invoice_total is None:
+        invoice_total = invoice.get("amount") or 0
+    paid = invoice.get("paid_amount")
+    if paid is None:
+        paid = await _invoice_currently_paid(invoice_id)
+    outstanding = float(invoice_total) - float(paid)
+    if outstanding <= 0.005:
+        raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
+    if await db.payment_plans.find_one(
+        {"company_id": cid, "invoice_ids": invoice_id, "status": "active"}, {"_id": 1},
+    ):
+        raise HTTPException(status_code=409, detail="Deze factuur heeft een actieve betalingsregeling.")
+
+    amount = round(body.amount, 2)
+    if amount != body.amount:
+        raise HTTPException(status_code=400, detail="Vul een bedrag met maximaal twee decimalen in.")
+    charge = {
+        "id": str(uuid.uuid4()),
+        "kind": "boete",
+        "amount": amount,
+        "currency": invoice.get("currency") or "SRD",
+        "created_at": iso(now_utc()),
+        "created_by_name": _session.get("employee_name") or _session.get("name") or "",
+    }
+    updated = await db.invoices.update_one(
+        {
+            **invoice_filter,
+            "$expr": {
+                "$gt": [
+                    {"$subtract": [
+                        {"$ifNull": ["$amount_due", {"$ifNull": ["$amount", 0]}]},
+                        {"$ifNull": ["$paid_amount", paid]},
+                    ]},
+                    0.005,
+                ],
+            },
+        },
+        [
+            {"$set": {
+                "amount": {"$add": [{"$ifNull": ["$amount", 0]}, charge["amount"]]},
+                "amount_due": {
+                    "$add": [
+                        {"$ifNull": ["$amount_due", {"$ifNull": ["$amount", 0]}]},
+                        charge["amount"],
+                    ],
+                },
+                "charges": {
+                    "$concatArrays": [{"$ifNull": ["$charges", []]}, {"$literal": [charge]}],
+                },
+            }},
+        ],
+    )
+    if not updated.matched_count:
+        raise HTTPException(status_code=404, detail="Open factuur niet gevonden")
+    return {"ok": True, "charge": charge}
+
+
 # =====================================================================
 # Kiosk live-kanaal (WebSocket): medewerker-aanwezigheid + PRINT_RECEIPT
 # naar de kiosk van de beheerder. Cross-replica via event_bus.
