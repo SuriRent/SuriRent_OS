@@ -3987,13 +3987,13 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 }
 
 body.kiosk-orange-body {
-  --kiosk-orange-bar: #8E3518;
-  --kiosk-nav-active: #A63D16;
-  --kiosk-orange-ink: #FFF4EC;
+  --kiosk-orange-bar: var(--brand-primary, #FF5C00);
+  --kiosk-nav-active: #923000;
+  --kiosk-orange-ink: #291308;
 }
 
 .kiosk-fullscreen.kiosk-white.kiosk-ui[data-theme="orange"] {
-  background: linear-gradient(145deg, #B84A21, var(--kiosk-orange-bar)) !important;
+  background: var(--kiosk-orange-bar) !important;
 }
 
 .kiosk-fullscreen.kiosk-white.kiosk-ui[data-theme="orange"] :is(.kiosk-head-wrap, [data-testid="kiosk-desktop-header"]) {

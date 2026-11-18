@@ -6835,12 +6835,17 @@ export default function KioskLayout() {
   }, []);
   useLayoutEffect(() => {
     const orange = colorMode === 'orange';
-    const bg = orange ? '#8E3518' : '#F6F7FB';
+    const root = document.documentElement;
+    const bg = orange ? 'var(--brand-primary, #FF5C00)' : '#F6F7FB';
     document.body.classList.toggle('kiosk-orange-body', orange);
     document.body.classList.toggle('kiosk-white-body', !orange);
-    document.documentElement.style.backgroundColor = bg;
+    root.style.backgroundColor = bg;
     document.body.style.backgroundColor = bg;
-    setIosStatusBar(bg);
+    const updateStatusBar = () => setIosStatusBar(getComputedStyle(root).backgroundColor);
+    updateStatusBar();
+    if (!orange) return undefined;
+    window.addEventListener('branding-updated', updateStatusBar);
+    return () => window.removeEventListener('branding-updated', updateStatusBar);
   }, [colorMode]);
 
 
