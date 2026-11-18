@@ -13422,6 +13422,103 @@ async def admin_stats(user=Depends(get_current_user)):
     return await _compute_admin_stats(user, sc)
 
 
+class KioskUtilityAmounts(BaseModel):
+    company_id: str
+    ebs: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    swm: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    telesur: Optional[float] = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+
+
+def _can_edit_kiosk_utilities(user: Optional[dict], cid: str) -> bool:
+    return bool(user and cid and company_id_of(user) == cid
+                and user.get("role") in {"admin", "owner"} and not user.get("staff"))
+
+
+@api.get("/kiosk/company-overview")
+async def kiosk_company_overview(request: Request, session=Depends(get_kiosk_session)):
+    cid = session["company_id"]
+    sc = {"company_id": cid}
+    try:
+        user = await get_current_user_optional(request)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        user = None
+    now = now_utc().astimezone(timezone(timedelta(hours=-3)))
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start + timedelta(days=32)).replace(day=1)
+    paid, settings, company, invoices = await asyncio.gather(
+        _agg_by_currency(db.payments, [
+            {"$match": {**sc, "status": "approved", "paid_at": {
+                "$gte": iso(start.astimezone(timezone.utc)), "$lt": iso(end.astimezone(timezone.utc)),
+            }}},
+            {"$group": {"_id": {"$ifNull": ["$currency", "SRD"]},
+                        "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]),
+        db.company_settings.find_one(sc, {"_id": 0, "invoicing.grace_workdays": 1}),
+        db.companies.find_one({"id": cid}, {"_id": 0, "kiosk_utility_amounts": 1}),
+        db.invoices.find(
+            {**sc, "status": {"$in": sorted(_UNPAID_STATUSES)}, "archived": {"$ne": True}},
+            {"_id": 0, "id": 1, "currency": 1, "amount_due": 1, "amount": 1, "paid_amount": 1,
+             "period_month": 1, "period_year": 1, "due_date": 1},
+        ).to_list(None),
+    )
+    if company is None:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    grace = ((settings or {}).get("invoicing") or {}).get("grace_workdays")
+    missing_paid = [inv["id"] for inv in invoices if inv.get("paid_amount") is None]
+    legacy_paid = {}
+    if missing_paid:
+        rows = await db.payments.find(
+            {**sc, "status": "approved", "$or": [
+                {key: {"$in": missing_paid}} for key in ("invoice_id", "invoice_ids", "allocations.invoice_id")
+            ]},
+            {"_id": 0, "invoice_id": 1, "invoice_ids": 1, "allocations": 1, "amount": 1},
+        ).to_list(None)
+        legacy_paid = _paid_amounts_by_invoice(missing_paid, rows)
+    outstanding, overdue = {}, {}
+    for inv in invoices:
+        bucket = _classify_invoice_bucket(
+            inv.get("period_month"), inv.get("period_year"), now.date(),
+            grace if grace is not None else 10, due_date=inv.get("due_date"),
+        )
+        total = inv.get("amount_due")
+        paid_amount = inv.get("paid_amount")
+        if paid_amount is None:
+            paid_amount = legacy_paid.get(inv["id"], 0)
+        rest = round(float(total if total is not None else inv.get("amount") or 0) - float(paid_amount), 2)
+        if bucket == "future" or rest <= 0:
+            continue
+        currency = inv.get("currency") or "SRD"
+        outstanding[currency] = outstanding.get(currency, 0) + rest
+        if bucket == "overdue":
+            overdue[currency] = overdue.get(currency, 0) + rest
+    return {
+        "company_id": cid,
+        "can_edit_utilities": _can_edit_kiosk_utilities(user, cid),
+        "paid": {currency: round(row["total"], 2) for currency, row in paid.items()},
+        "outstanding": {currency: round(amount, 2) for currency, amount in outstanding.items()},
+        "overdue": {currency: round(amount, 2) for currency, amount in overdue.items()},
+        "utilities": company.get("kiosk_utility_amounts") or {},
+    }
+
+
+@api.put("/admin/kiosk-utility-amounts")
+async def kiosk_save_utility_amounts(body: KioskUtilityAmounts, user=Depends(get_current_user)):
+    cid = company_id_of(user)
+    if not _can_edit_kiosk_utilities(user, body.company_id):
+        raise HTTPException(status_code=403, detail="Je kunt bedragen alleen wijzigen als beheerder van dit bedrijf.")
+    amounts = body.model_dump(exclude={"company_id"})
+    if any(amount is not None and amount != round(amount, 2) for amount in amounts.values()):
+        raise HTTPException(status_code=400, detail="Gebruik maximaal twee decimalen per bedrag.")
+    result = await db.companies.update_one(
+        {"id": cid}, {"$set": {"kiosk_utility_amounts": amounts}},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    return {"utilities": amounts}
+
+
 async def _agg_by_currency(coll, pipeline) -> dict:
     out = {}
     async for r in coll.aggregate(pipeline):

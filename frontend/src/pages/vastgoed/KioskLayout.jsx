@@ -36,6 +36,7 @@ import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '
 import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
+import { KioskCompanyOverview } from '../../components/KioskCompanyOverview';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 import KioskUiAdminPage, { UI_NEW } from '../../components/KioskUiAdminPage';
@@ -64,6 +65,8 @@ import { KIOSK_ADMIN_PAGES } from '../../components/KioskAdminInvoices';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
 import CompanySupportNotice from '../../components/CompanySupportNotice';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
+import { buildNfcPayment } from '../../lib/kiosk-nfc-payment';
+import { buildConfirmPayment, canChangeConfirmAmount, parseConfirmAmount } from '../../lib/kiosk-confirm-payment';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 import { useAuth } from '../../lib/auth';
 const noop = () => {};
@@ -3527,7 +3530,7 @@ async function sendApkPrint(data, paymentId) {
   try { bridge(JSON.stringify(msg)); } catch (e) { console.warn('[APK PRINT_RECEIPT] mislukt', e); }
 }
 
-function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess, posLayout = false }) {
+function PaymentConfirm({ payload, overview, onBack, onSuccess, posLayout = false }) {
   const { tenant, apartment: apt } = overview;
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -3535,18 +3538,8 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
   const [showAmountEditor, setShowAmountEditor] = useState(false);
   const [amountDraft, setAmountDraft] = useState(String(payload.amount || ''));
   const [amountErr, setAmountErr] = useState('');
-  const confirmPayload = amount === Number(payload.amount)
-    ? payload
-    : {
-      ...payload,
-      amount,
-      plain_amount: amount,
-      plan_items: [],
-    invoice_ids: [],
-      note: amount < Number(payload.amount)
-        ? `Gedeeltelijke betaling — ${fmtMoney(amount, payload.currency || 'SRD')}`
-        : payload.note,
-    };
+  const canEditAmount = canChangeConfirmAmount(payload);
+  const confirmPayload = buildConfirmPayment(payload, amount);
 
   useEffect(() => { if (payload.stripe_paid) submit(); }, []);
   const submit = async () => {
@@ -3618,14 +3611,14 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
               {confirmDescription}{confirmPeriodSuffix}
             </p>
           </div>
-          {quickPay && (
+          {canEditAmount && (
             <button type="button" onClick={() => {
               setAmountDraft(String(confirmPayload.amount));
               setAmountErr('');
               setShowAmountEditor(true);
             }} disabled={loading} data-testid="quick-pay-change-amount"
               className="w-full h-12 mb-4 rounded-xl border-2 border-orange-200 bg-orange-50 text-[#FF5C00] font-extrabold flex items-center justify-center gap-2 disabled:opacity-50">
-              <Hash className="w-5 h-5" /> Ander bedrag invoeren
+              <Hash className="w-5 h-5" /> Ander bedrag kiezen
             </button>
           )}
           <div className="space-y-2 mb-5">
@@ -3650,10 +3643,19 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
       {showAmountEditor && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4"
           onClick={(event) => { if (event.target === event.currentTarget) setShowAmountEditor(false); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="quick-pay-amount-title"
+          <form role="dialog" aria-modal="true" aria-labelledby="quick-pay-amount-title"
+            onSubmit={(event) => {
+              event.preventDefault();
+              try {
+                setAmount(parseConfirmAmount(amountDraft, Number(payload.amount)));
+                setShowAmountEditor(false);
+              } catch (error) {
+                setAmountErr(error.message);
+              }
+            }}
             className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
-            <h3 id="quick-pay-amount-title" className="text-lg font-black text-slate-900">Ander bedrag invoeren</h3>
-            <p className="mt-1 text-sm text-slate-500">Openstaand: {fmtMoney(overview.total_due, confirmPayload.currency)}</p>
+            <h3 id="quick-pay-amount-title" className="text-lg font-black text-slate-900">Ander bedrag kiezen</h3>
+            <p className="mt-1 text-sm text-slate-500">Maximaal: {fmtMoney(payload.amount, confirmPayload.currency)}</p>
             <label className="mt-4 block text-sm font-bold text-slate-700" htmlFor="quick-pay-amount-input">
               Bedrag ({confirmPayload.currency})
             </label>
@@ -3665,19 +3667,10 @@ function PaymentConfirm({ payload, overview, quickPay = false, onBack, onSuccess
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => setShowAmountEditor(false)}
                 className="h-11 rounded-xl bg-slate-100 font-bold text-slate-700">Annuleren</button>
-              <button type="button" data-testid="quick-pay-amount-apply"
-                onClick={() => {
-                  const parsed = Number(amountDraft.trim().replace(',', '.'));
-                  if (!Number.isFinite(parsed) || parsed <= 0) {
-                    setAmountErr('Voer een bedrag groter dan nul in.');
-                    return;
-                  }
-                  setAmount(Number(parsed.toFixed(2)));
-                  setShowAmountEditor(false);
-                }}
+              <button type="submit" data-testid="quick-pay-amount-apply"
                 className="h-11 rounded-xl bg-[#FF5C00] font-extrabold text-white">Bedrag gebruiken</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>
@@ -6662,6 +6655,7 @@ export default function KioskLayout() {
   const [showAddTenant, setShowAddTenant] = useState(false);
   const [showAddApartment, setShowAddApartment] = useState(false);
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showCompanyOverview, setShowCompanyOverview] = useState(false);
   const [showAddContract, setShowAddContract] = useState(false);
   const [showAddInvoice, setShowAddInvoice] = useState(false);
   const [showPaymentsViewer, setShowPaymentsViewer] = useState(false);
@@ -6864,38 +6858,68 @@ export default function KioskLayout() {
   //     typt 80-200ms tussen toetsen),
   //   - de string ≥6 karakters lang is (NFC UID's zijn doorgaans 8-14
   //     hex chars).
-  // Op een match navigeren we DIRECT naar het overview-scherm; geen
-  // operator-actie meer nodig.
   useEffect(() => {
     if (step !== 'select') return undefined;  // alleen actief op picker
+    const controller = new AbortController();
+    const { signal } = controller;
     let buffer = '';
     let lastTs = 0;
     let timer = null;
+    let toastTimer = null;
+    let processing = false;
 
-    const handleScan = async (uid) => {
+    const showScanToast = (kind, msg) => {
+      clearTimeout(toastTimer);
+      setNfcToast({ kind, msg });
+      toastTimer = setTimeout(() => setNfcToast(null), 4000);
+    };
+    const handleScan = async (uid, fromUrl = false) => {
+      if (processing) return;
+      processing = true;
       try {
-        const { data } = await api.post('/kiosk/nfc-lookup', { card_id: uid });
+        const { data } = await api.post('/kiosk/nfc-lookup', { card_id: uid }, { signal });
+        if (signal.aborted) return;
         if (data?.found && data?.apartment) {
-          const apt = data.apartment;
-          // Verrijk met tenant-naam zodat de overview-card direct compleet is
-          if (data.tenant?.name && !apt.tenant_name) apt.tenant_name = data.tenant.name;
+          const apt = { ...data.apartment, tenant_name: data.apartment.tenant_name || data.tenant.name };
+          const tenantPath = `/kiosk/tenants/${data.tenant.id}`;
+          const [{ data: details }, { data: plans }] = await Promise.all([
+            api.get(`${tenantPath}/overview`, { signal }),
+            api.get(`${tenantPath}/payment-plans`, { signal }),
+          ]);
+          if (signal.aborted) return;
+          if (details.tenant?.id !== data.tenant.id || details.apartment?.id !== apt.id || !Array.isArray(plans)) {
+            showScanToast('err', 'De betaalgegevens zijn gewijzigd of niet beschikbaar. Scan de kaart opnieuw.');
+            return;
+          }
+          const paymentOverview = buildPaymentOverview(details);
+          const payload = buildNfcPayment(paymentOverview, plans);
           setApartment(apt);
-          setStep('overview');
-          setNfcToast({ kind: 'ok', msg: `Welkom — ${apt.tenant_name || `App. ${apt.number}`}` });
-        } else if (data && !data.found) {
-          // Onbekende tag → koppelscherm (medewerker kiest de huurder)
-          setNfcLink({ uid: data.card_id || uid });
-          return;
+          setPaymentPayload(payload);
+          setOverview(payload ? { ...paymentOverview, total_due: payload.amount, quick_pay: true } : null);
+          setNfcToast(null);
+          setStep(payload ? 'confirm' : 'overview');
+        } else if (data?.found === false) {
+          if (fromUrl) showScanToast('err', 'Kaart niet herkend.');
+          else setNfcLink({ uid: data.card_id || uid });
         } else {
-          setNfcToast({ kind: 'err', msg: 'Deze huurder heeft geen appartement.' });
+          showScanToast('err', 'Deze huurder heeft geen appartement.');
         }
       } catch (err) {
-        setNfcToast({ kind: 'err', msg: 'Kon kaart niet uitlezen. Probeer opnieuw.' });
+        if (!signal.aborted) showScanToast('err', formatError(err, 'Kon de betaalgegevens niet ophalen. Scan de kaart opnieuw.'));
+      } finally {
+        processing = false;
+        if (fromUrl && !signal.aborted) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('nfc');
+          window.history.replaceState(window.history.state, '', url);
+        }
       }
-      setTimeout(() => setNfcToast(null), 4000);
     };
     // Tag-ID's uit de Android-app (bestaand NFC-systeem van de APK)
     const unsubNfc = subscribeNfc(handleScan);
+    const url = new URL(window.location.href);
+    const uidFromUrl = (url.searchParams.get('nfc') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (uidFromUrl.length >= 6) handleScan(uidFromUrl, true);
 
     const onKey = (e) => {
       // Skip als gebruiker actief in een invoerveld typt
@@ -6926,55 +6950,17 @@ export default function KioskLayout() {
 
     window.addEventListener('keydown', onKey);
     return () => {
+      controller.abort();
       unsubNfc();
       window.removeEventListener('keydown', onKey);
       if (timer) clearTimeout(timer);
+      if (toastTimer) clearTimeout(toastTimer);
+      setNfcToast(null);
       // Stop de Web NFC scan op unmount / step-change
       webNfcAbort.current?.abort();
       webNfcAbort.current = null;
       setWebNfcStatus('idle');
     };
-  }, [step]);
-
-  // ===================================================================
-  // URL-TAG NFC (iOS Safari + Android — universele fallback)
-  // ===================================================================
-  // Wanneer een NFC-tag geprogrammeerd is met een URL als
-  // `https://<jouw-domain>/kiosk?nfc=04A1B2C3D4`, dan opent de
-  // telefoon (iOS én Android) automatisch Safari/Chrome naar die URL
-  // wanneer de huurder zijn telefoon tegen de tag tikt. Wij vangen de
-  // `?nfc=` query-param hier af en doen dezelfde lookup-flow.
-  useEffect(() => {
-    if (step !== 'select') return undefined;
-    try {
-      const url = new URL(window.location.href);
-      const uidFromUrl = (url.searchParams.get('nfc') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (uidFromUrl.length < 6) return undefined;
-      // Direct verwerken (zelfde flow als HID/Web NFC)
-      (async () => {
-        try {
-          const { data } = await api.post('/kiosk/nfc-lookup', { card_id: uidFromUrl });
-          if (data?.found && data?.apartment) {
-            const apt = data.apartment;
-            if (data.tenant?.name && !apt.tenant_name) apt.tenant_name = data.tenant.name;
-            setApartment(apt);
-            setStep('overview');
-            setNfcToast({ kind: 'ok', msg: `Welkom — ${apt.tenant_name || `App. ${apt.number}`}` });
-          } else {
-            setNfcToast({ kind: 'err', msg: 'Kaart niet herkend.' });
-          }
-        } catch (err) {
-          console.error('URL-tag NFC lookup failed', err);
-        }
-        setTimeout(() => setNfcToast(null), 4000);
-        // Wis de query-param uit de URL zodat refresh niet opnieuw triggert
-        try {
-          url.searchParams.delete('nfc');
-          window.history.replaceState({}, '', url.toString());
-        } catch (err) { /* noop */ }
-      })();
-    } catch (err) { console.error('URL-tag NFC parse failed', err); }
-    return undefined;
   }, [step]);
 
   const exit = useCallback(async () => {
@@ -7091,10 +7077,14 @@ export default function KioskLayout() {
   }, [selectedLocationId]);
   const popupSetters = {
     'add-location': [showAddLocation, setShowAddLocation], 'add-apartment': [showAddApartment, setShowAddApartment],
+    'company-overview': [showCompanyOverview, setShowCompanyOverview],
     'add-tenant': [showAddTenant, setShowAddTenant], 'add-invoice': [showAddInvoice, setShowAddInvoice],
     'add-maintenance': [showAddMaintenance, setShowAddMaintenance], facturen: [showInvoicesModal, setShowInvoicesModal],
   };
   const popupKey = Object.keys(popupSetters).find((k) => popupSetters[k][0]) || adminPopup || null;
+  useEffect(() => {
+    if (isMobileViewport) setShowCompanyOverview(false);
+  }, [isMobileViewport]);
   const openOnly = (key) => {
     Object.entries(popupSetters).forEach(([k, [, set]]) => set(k === key));
     setAdminPopup(null);
@@ -7117,7 +7107,7 @@ export default function KioskLayout() {
   const applyEntry = (e) => {
     setApartment(e.apartment); setStep(e.step);
     setSelectedLocationId(e.location ?? null);
-    Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k));
+    Object.entries(popupSetters).forEach(([k, [, set]]) => set(e.popup === k && (k !== 'company-overview' || !isMobileViewport)));
     setAdminPopup(e.popup && !popupSetters[e.popup] ? e.popup : null);
     setHistTick((t) => t + 1);
   };
@@ -7527,7 +7517,7 @@ export default function KioskLayout() {
               onConfirm={(p) => { setPaymentPayload(p); setStep('confirm'); }} />
           )}
           {step === 'confirm' && paymentPayload && overview && (
-            <PaymentConfirm payload={paymentPayload} overview={overview} quickPay={overview.quick_pay}
+            <PaymentConfirm payload={paymentPayload} overview={overview}
               onBack={() => {
                 if (!overview.quick_pay) { setStep('method'); return; }
                 setApartment(null);
@@ -7740,6 +7730,9 @@ export default function KioskLayout() {
         </>
       ), document.body)}
 
+      {showCompanyOverview && !isMobileViewport && showDesktopBar && (
+        <KioskCompanyOverview Shell={KioskModalShell} onClose={() => setShowCompanyOverview(false)} />
+      )}
       {/* Desktop bottom bar — via createPortal in document.body geplaatst.
           Fullscreen modals use a higher layer so their controls stay clear. */}
       {showDesktopBar && createPortal((
@@ -7754,6 +7747,7 @@ export default function KioskLayout() {
               </button>
             ) : <KioskHistBtn dir="back" disabled={!canBack} onClick={goBack} white />}
             {(tenantBar ? tenantBarItems : [
+              { id: 'company-overview', label: 'Overzicht', icon: LayoutGrid, testid: 'kiosk-company-overview-btn', onClick: () => openOnly('company-overview') },
               { id: 'locations', label: 'Locaties', icon: MapPin, testid: 'kiosk-add-location-btn-desktop', onClick: () => openOnly('add-location') },
               { id: 'apartments', label: 'Appartementen', icon: isUi ? Building2 : Home, testid: 'kiosk-add-apartment-btn-desktop', onClick: () => openOnly('add-apartment') },
               { id: 'tenants', label: 'Huurders', icon: Users, testid: 'kiosk-add-tenant-btn-desktop', onClick: () => openOnly('add-tenant') },
@@ -7765,6 +7759,7 @@ export default function KioskLayout() {
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')
+                || (id === 'company-overview' && showCompanyOverview)
                 || (id === 'bankreconciliation' && step === 'admin:bankreconciliatie')
                 || (tenantBar && ((id === 'overview' && step === 'overview' && !tenantModal) || (id === 'pay' && step !== 'overview') || (id === tenantModal)));
               return (
