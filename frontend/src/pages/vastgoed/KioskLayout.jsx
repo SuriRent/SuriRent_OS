@@ -37,7 +37,6 @@ import { getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskCompanyOverview } from '../../components/KioskCompanyOverview';
-import { KioskThemeToggle, useKioskColorMode } from '../../components/KioskThemeToggle';
 import { KioskPdfViewer } from '../../components/KioskPdfViewer';
 import { KioskAdminPopup } from '../../components/KioskAdminPopup';
 import KioskUiAdminPage, { UI_NEW } from '../../components/KioskUiAdminPage';
@@ -179,7 +178,7 @@ function MobileAddFab({ onOpen }) {
 // Apartment select (with optional inline location picker when ≥2 locations)
 // =====================================================================
 // Desktop-kop: logo + bedrijfsnaam, locatie · "Kies uw appartement", rechts huurders + beheer.
-const KioskThemeCtx = createContext({ colorMode: 'white', setColorMode: null, isUi: true, isAdmin: false });
+const KioskThemeCtx = createContext({ toggle: () => {}, isUi: true, isAdmin: false });
 
 // Beheerder-menu (dropdown) in de desktop-kop.
 const ADMIN_MENU_ITEMS = [
@@ -412,7 +411,7 @@ function DesktopKioskHeader({
   let company = null;
   try { company = JSON.parse(localStorage.getItem('kiosk_company') || 'null'); } catch { /* ignore */ }
   const logoUrl = compactBranding ? resolveLogoUrl(company?.branding?.logo_url || company?.logo_url) : '';
-  const { isUi, colorMode, setColorMode } = useContext(KioskThemeCtx);
+  const { isUi } = useContext(KioskThemeCtx);
   const loc = currentLocation ? [currentLocation.name, currentLocation.address].filter(Boolean).join(', ') : '';
   const locLabel = currentStep === 'stroom' || currentStep === 'kasgeld'
     ? title
@@ -481,7 +480,6 @@ function DesktopKioskHeader({
         <KioskBell />
         <KioskEmployeePush />
         {isUi && <PrinterLamp className="md:!hidden !w-10 !h-10 !bg-white !text-[#1B2A5C] shadow-md" />}
-        {setColorMode && <KioskThemeToggle colorMode={colorMode} onChange={setColorMode} />}
         <KioskSettingsMenu />
       </div>
     </div>
@@ -6812,8 +6810,16 @@ export default function KioskLayout() {
     };
   }, []);
   const isUi = true;
-  const [colorMode, setColorMode] = useKioskColorMode();
-  useLayoutEffect(() => {
+  useEffect(() => {
+    const bg = '#F6F7FB';
+    document.documentElement.style.backgroundColor = bg;
+    document.body.style.backgroundColor = bg;
+    document.body.classList.add('kiosk-white-body');
+    document.body.classList.add('kiosk-ui-body');
+    setIosStatusBar(bg);
+  }, []);
+  useEffect(() => {
+    const BODY_BG = '#F6F7FB';
     const html = document.documentElement;
     const body = document.body;
     const previousOverflow = { html: html.style.overflow, body: body.style.overflow };
@@ -6821,32 +6827,23 @@ export default function KioskLayout() {
     body.style.overflow = 'hidden';
     html.scrollTop = 0;
     body.scrollTop = 0;
-    body.classList.add('kiosk-mode', 'kiosk-ui-body');
+    document.body.classList.add('kiosk-mode');
     const prevHtmlBg = html.style.backgroundColor;
     const prevBodyBg = body.style.backgroundColor;
+    html.style.backgroundColor = BODY_BG;
+    body.style.backgroundColor = BODY_BG;
+    // iPhone-PWA: statusbalk effen oranje achter klok/batterij (zoals Expo Go).
+    setIosStatusBar(BODY_BG);
     return () => {
       setIosStatusBar('#F7F8FA');
-      body.classList.remove('kiosk-mode', 'kiosk-ui-body', 'kiosk-white-body', 'kiosk-orange-body');
+      body.classList.remove('kiosk-mode');
+      body.classList.remove('kiosk-white-body', 'kiosk-ui-body');
       html.style.backgroundColor = prevHtmlBg;
       body.style.backgroundColor = prevBodyBg;
       html.style.overflow = previousOverflow.html;
       body.style.overflow = previousOverflow.body;
     };
   }, []);
-  useLayoutEffect(() => {
-    const orange = colorMode === 'orange';
-    const root = document.documentElement;
-    const bg = orange ? 'var(--brand-primary, #FF5C00)' : '#F6F7FB';
-    document.body.classList.toggle('kiosk-orange-body', orange);
-    document.body.classList.toggle('kiosk-white-body', !orange);
-    root.style.backgroundColor = bg;
-    document.body.style.backgroundColor = bg;
-    const updateStatusBar = () => setIosStatusBar(getComputedStyle(root).backgroundColor);
-    updateStatusBar();
-    if (!orange) return undefined;
-    window.addEventListener('branding-updated', updateStatusBar);
-    return () => window.removeEventListener('branding-updated', updateStatusBar);
-  }, [colorMode]);
 
 
   // ===================================================================
@@ -7059,7 +7056,7 @@ export default function KioskLayout() {
   };
 
 
-  const themeCtx = useMemo(() => ({ isUi: true, colorMode, setColorMode, isAdmin: hasAdminAccess }), [colorMode, setColorMode, hasAdminAccess]);
+  const themeCtx = useMemo(() => ({ isUi: true, toggle: () => {}, isAdmin: hasAdminAccess }), [hasAdminAccess]);
   // Vorig/volgend scherm voor de pijlen in de menubalk (alleen stabiele schermen).
   const hist = useRef({ list: [], i: -1 });
   const [, setHistTick] = useState(0);
@@ -7342,7 +7339,7 @@ export default function KioskLayout() {
   return (
     <KioskThemeCtx.Provider value={themeCtx}>
     <ImpersonationBanner />
-    <div className="kiosk-fullscreen kiosk-white bg-white kiosk-ui" data-testid="kiosk-root" data-theme={colorMode}>
+    <div className="kiosk-fullscreen kiosk-white bg-white kiosk-ui" data-testid="kiosk-root" data-theme="ui">
       {!user?.original_user_id && user?.role !== 'superadmin' && (
         <div
           className={`absolute inset-x-0 top-0 z-[120] ${supportActive ? 'block' : 'hidden'}`}
