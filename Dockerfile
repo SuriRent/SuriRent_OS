@@ -29,7 +29,7 @@ RUN apt-get update \
         poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./requirements.txt
+COPY backend/requirements-docker.txt ./requirements.txt
 RUN pip install --no-cache-dir \
     --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
     -r requirements.txt
