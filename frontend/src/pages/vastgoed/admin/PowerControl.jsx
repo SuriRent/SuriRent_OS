@@ -11,7 +11,7 @@ function PowerTile({ device, unlinked = false }) {
     orange: { glow: '249,115,22', border: 'border-orange-400', head: 'bg-orange-700', ring: 'border-orange-200 bg-orange-500 text-white', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
   }[state];
   return (
-    <div className={`power-glow overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state} style={{ '--glow': th.glow }}>
+    <div className={`overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state} style={{ '--glow': th.glow }}>
       <div className={`flex items-center justify-center gap-2 px-3 py-2.5 text-white ${th.head}`}>
         <Home className="h-5 w-5 shrink-0" />
         <span className="truncate text-base font-black uppercase tracking-wide">{device.apartment_number}</span>
