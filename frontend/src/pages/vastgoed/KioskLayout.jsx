@@ -4078,6 +4078,22 @@ function KasgeldPanel({ embedded = false, ui = false }) {
   const canManage = role === 'admin' || role === 'superadmin';
   const [sourceFilter, setSourceFilter] = useState('all');
   const [editing, setEditing] = useState(null);
+  const [kasgeldPrintStatuses, setKasgeldPrintStatuses] = useState({});
+  const setKasgeldPrintStatus = (id, status) => setKasgeldPrintStatuses((prev) => ({ ...prev, [id]: status }));
+  const printKasgeld = async (id) => {
+    setKasgeldPrintStatus(id, { kind: 'sending', msg: 'Bon wordt voorbereid…' });
+    try {
+      const { data } = await api.get(`/kiosk/kasgeld/${id}/print-data`);
+      if (!Array.isArray(data.lines) || !data.lines.length) throw new Error('Er zijn geen kassabonregels beschikbaar.');
+      const printed = await printTextLines(data.lines, data);
+      if (!printed) throw new Error('De kassabon kon niet worden afgedrukt.');
+      setKasgeldPrintStatus(id, { kind: 'ok', msg: 'Kassabon verzonden naar de printer.' });
+    } catch (e) {
+      const msg = formatError(e);
+      setKasgeldPrintStatus(id, { kind: 'err', msg });
+      setErr(msg);
+    }
+  };
   const removeEntry = async (it) => {
     if (!window.confirm(`Mutatie "${it.description || it.category}" verwijderen?`)) return;
     try { await api.delete(`/kasgeld/${it.id}`); load(); } catch (e) { setErr(formatError(e)); }
@@ -4309,7 +4325,9 @@ function KasgeldPanel({ embedded = false, ui = false }) {
                       <div id={`kasgeld-month-items-${g.key}`} className="border-t border-slate-100 px-2 py-1" data-testid={`kasgeld-month-items-${g.key}`}>
                         {g.items.map((it) => (
                           <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush
-                            onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
+                            onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)}
+                            onPrint={printKasgeld} printStatus={kasgeldPrintStatuses[it.id]}
+                            onPrintStatus={setKasgeldPrintStatus} />
                         ))}
                       </div>
                     )}
@@ -4341,12 +4359,17 @@ function KasgeldPanel({ embedded = false, ui = false }) {
             return (
               <FxRow key={it.id} testId={`kasgeld-row-${it.id}`}
                 title={it.description || it.category || '—'}
-                sub={[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`].filter(Boolean).join(' · ')}
+                sub={[dateLabel, it.source === 'payment' ? (it.method || 'Betaling') : 'Contant', creator && `Door ${creator}`, kasgeldPrintStatuses[it.id]?.msg].filter(Boolean).join(' · ')}
                 amount={`${isIn ? '+' : '−'}${fmtMoney(it.amount, it.currency)}`}
                 status={it.excluded_from_balance ? 'Niet in saldo' : isIn ? 'Ontvangen' : 'Uitgave'}
                 tone={it.excluded_from_balance ? 'slate' : isIn ? 'green' : 'red'}
                 actions={canManage && it.source !== 'payment' ? (
                   <>
+                    <PrintChoiceMenu paymentId={`kasgeld-${it.id}`} iconOnly showLocal
+                      remoteUrl={`/kiosk/kasgeld/${it.id}/remote-print`}
+                      printDataUrl={`/kiosk/kasgeld/${it.id}/print-data`}
+                      onLocal={() => printKasgeld(it.id)}
+                      onStatus={(status) => setKasgeldPrintStatus(it.id, status)} />
                     <FxIconBtn onClick={() => setEditing(it)} title="Bewerken" testId={`kasgeld-row-edit-${it.id}`}><Pencil className="w-4 h-4" /></FxIconBtn>
                     <FxIconBtn onClick={() => removeEntry(it)} danger title="Verwijderen" testId={`kasgeld-row-delete-${it.id}`}><Trash2 className="w-4 h-4" /></FxIconBtn>
                   </>
@@ -4458,7 +4481,9 @@ function KasgeldPanel({ embedded = false, ui = false }) {
                     <div className={`divide-y divide-slate-100 border-t border-slate-100 bg-white ${embedded ? '' : 'rounded-b-2xl'}`} data-testid={`kasgeld-month-items-${g.key}`}>
                       {g.items.map((it) => (
                         <KasgeldMutationRow key={it.id} item={it} canManage={canManage} flush={embedded}
-                          onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)} />
+                          onEdit={() => setEditing(it)} onDelete={() => removeEntry(it)}
+                          onPrint={printKasgeld} printStatus={kasgeldPrintStatuses[it.id]}
+                          onPrintStatus={setKasgeldPrintStatus} />
                       ))}
                     </div>
                   )}
@@ -4888,7 +4913,7 @@ function KioskApartmentsPanel({ onBack, onNewApartment, reloadKey, onChanged }) 
 
 // Eén transactie-rij: gekleurd icoon-tegel + titel + sub (datum · methode · "Door ...") +
 // bedrag. Gebruikt in de accordion-month-groepen van KasgeldPanel.
-function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }) {
+function KasgeldMutationRow({ item, canManage, onEdit, onDelete, onPrint, onPrintStatus, printStatus, flush = false }) {
   const isIn = item.type === 'in';
   const d = item.entry_date || item.created_at;
   const dateLabel = d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -4911,6 +4936,10 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
           {dateLabel}{dateLabel && ' · '}<span className="capitalize">{sourceLabel}</span>
           {creator && <><span className="hidden sm:inline">{' · '}</span><span className="mt-0.5 block break-words text-[11px] text-slate-600 sm:mt-0 sm:inline sm:break-normal sm:text-xs" data-testid={`kasgeld-row-creator-${item.id}`}>Door {creator}</span></>}
         </p>
+        {printStatus && <p role="status" data-testid={`kasgeld-print-status-${item.id}`}
+          className={`mt-0.5 text-[10px] font-semibold ${printStatus.kind === 'err' ? 'text-red-600' : printStatus.kind === 'ok' ? 'text-emerald-600' : 'text-slate-500'}`}>
+          {printStatus.msg}
+        </p>}
       </div>
       <div className="kiosk-cash-row-values flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0">
       <p className={`kiosk-cash-row-amount text-sm sm:text-base font-black whitespace-nowrap tabular-nums shrink-0 ${
@@ -4923,6 +4952,11 @@ function KasgeldMutationRow({ item, canManage, onEdit, onDelete, flush = false }
         <span className="sm:w-[68px] shrink-0 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400" data-testid={`kasgeld-row-auto-${item.id}`}>auto</span>
       ) : (
         <div className="flex gap-1 shrink-0">
+          <PrintChoiceMenu paymentId={`kasgeld-${item.id}`} iconOnly showLocal
+            remoteUrl={`/kiosk/kasgeld/${item.id}/remote-print`}
+            printDataUrl={`/kiosk/kasgeld/${item.id}/print-data`}
+            onLocal={() => onPrint(item.id)}
+            onStatus={(status) => onPrintStatus(item.id, status)} />
           <button type="button" onClick={onEdit} data-testid={`kasgeld-row-edit-${item.id}`} aria-label="Bewerken"
             className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-orange-100 text-slate-500 hover:text-[#FF5C00] flex items-center justify-center transition-colors">
             <Pencil className="w-4 h-4" />
