@@ -6059,7 +6059,7 @@ function KioskUiAdminStep({ id, onBack, children }) {
   const Page = meta.Page;
   return (
     <KioskUiPageShell testId={`kiosk-popup-${id}`}>
-      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} onBack={onBack}
+      <KioskUiAdminPage title={meta.label || id} label={meta.label || id} Icon={meta.Icon} newItem={UI_NEW[id]} newItemFixed={id === 'appartementen'} onBack={onBack}
         onClose={id === 'appartementen' ? onBack : undefined} testId={`kiosk-ui-${id}`}>
         {children || (Page ? <Page embedded /> : null)}
       </KioskUiAdminPage>

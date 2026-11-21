@@ -2500,17 +2500,16 @@ export function Apartments({ embedded = false }) {
       {embedded && (
         <div className="grid grid-cols-3 gap-1.5 px-0.5" data-testid="apt-fx-stats">
           {aptStats.map(({ label, code, value, Icon, cardTone, glowTone, codeTone, iconTone }, i) => (
-            <div key={label} className={`kiosk-ui-stat relative min-w-0 overflow-hidden rounded-2xl border px-2.5 py-3 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.5)] ${cardTone}`}
+              <div key={label} className={`kiosk-ui-stat relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 overflow-hidden rounded-2xl border px-2 py-2 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.5)] md:grid-cols-[auto_1fr_auto] md:gap-x-3 md:px-3.5 md:py-2 ${cardTone}`}
               data-testid={`apt-fx-stats-${i}`}>
-              <span aria-hidden="true" className={`absolute -right-5 -top-6 h-16 w-16 rounded-full ${glowTone}`} />
-              <div className="relative flex items-center justify-between gap-1.5">
-                <span className="flex h-7 w-9 shrink-0 items-center justify-center rounded-md border border-white/80 bg-white shadow-sm">
+                <span aria-hidden="true" className={`absolute -right-5 -top-6 h-16 w-16 rounded-full ${glowTone}`} />
+                <span className="relative row-span-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/80 bg-white shadow-sm md:h-9 md:w-9 md:rounded-lg">
                   <Icon className={`h-4 w-4 ${iconTone}`} />
                 </span>
-                <span className={`rounded-full bg-white/75 px-2 py-1 text-[9px] font-extrabold tracking-wider ${codeTone}`}>{code}</span>
-              </div>
-              <p className="relative mt-3 text-[9px] font-semibold text-slate-500">{label}</p>
-              <p className="relative mt-0.5 truncate text-[14px] font-black leading-tight tabular-nums text-[#1B2A5C]" title={value}>{value}</p>
+                <p className="relative col-start-2 row-start-1 min-w-0 truncate text-[9px] font-semibold leading-tight text-slate-500 md:text-xs">{label}</p>
+                <p className="relative col-start-2 row-start-2 min-w-0 truncate text-[11px] font-black leading-tight tabular-nums text-[#1B2A5C] md:text-base"
+                  title={value}>{value}</p>
+                <p className={`relative hidden rounded-full bg-white/75 px-2 py-1 text-[9px] font-extrabold tracking-wider md:col-start-3 md:row-span-2 md:block md:self-center ${codeTone}`}>{code}</p>
             </div>
           ))}
         </div>
@@ -2526,16 +2525,17 @@ export function Apartments({ embedded = false }) {
             <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-[#FF5C00]"
               data-testid="apt-list-count">{filtered.length} {filtered.length === 1 ? 'appartement' : 'appartementen'}</span>
           </div>
-          <label className="flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3.5 transition focus-within:border-orange-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
-            <Search className="h-5 w-5 shrink-0 text-[#1B2A5C]" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek appartement..."
+          <div className="apt-search-field flex h-12 min-w-0 items-center rounded-2xl border bg-slate-50 px-3 transition focus-within:border-orange-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+            <Search aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-400" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek op appartement, adres of huurder"
               data-testid="apt-search"
-              className="w-full min-w-0 bg-transparent text-[15px] text-slate-800 outline-none placeholder:text-slate-400" />
+              aria-label="Zoek appartement, adres of huurder"
+              className="apt-search-input h-full min-w-0 flex-1 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400" />
             {q && <button type="button" onClick={() => setQ('')} aria-label="Zoekopdracht wissen"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               <X className="h-4 w-4" />
             </button>}
-          </label>
+          </div>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filter appartementen"
             data-testid="apt-filter-bar">
             {[

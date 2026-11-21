@@ -1632,6 +1632,9 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
 .kiosk-ui .kiosk-ui-admin [data-testid="apt-filter-bar"] > button { flex: 0 0 auto !important; min-width: max-content; height: 2.25rem; min-height: 2.25rem; padding: 0 0.875rem; border-radius: 9999px; }
 .kiosk-ui .kiosk-ui-admin [data-testid^="apt-row-"].kiosk-fx-row { border: 1px solid #F1F5F9; border-radius: 1rem; padding: 0.75rem; box-shadow: 0 8px 22px -14px rgba(15, 23, 42, 0.3); }
 .kiosk-ui .kiosk-ui-admin input:not([type="checkbox"]):not([type="radio"]) { border-radius: 1rem; }
+.kiosk-ui .kiosk-ui-admin .apt-search-field { border: 1px solid #E2E8F0; background: #F8FAFC; }
+.kiosk-ui .kiosk-ui-admin .apt-search-field:focus-within { border-color: #FDBA74; background: #FFFFFF; }
+.kiosk-ui .kiosk-ui-admin .apt-search-input { min-height: 0 !important; height: 100%; padding: 0 0.75rem !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
 
 /* UI-Thema mobiel: Fx-bouwstenen (rijen, stats, zoek, detailkop) in Facturen-stijl */
 .kiosk-ui .kiosk-ui-admin .fx-stats { gap: 0.625rem; }
@@ -1656,6 +1659,7 @@ body.kiosk-ui-body nav.kiosk-white-nav button[data-testid="kiosk-ui-bar-back"]:n
   body.kiosk-popup-active .ui-modal-root h1, body.kiosk-popup-active .ui-modal-root h2, body.kiosk-popup-active .ui-modal-root h3 { color: #1B2A5C !important; font-weight: 900; }
   body.kiosk-popup-active .ui-modal-root label, body.kiosk-popup-active .ui-modal-root .text-slate-500, body.kiosk-popup-active .ui-modal-root .text-slate-600 { color: #6B7794; }
   body.kiosk-popup-active .ui-modal-root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), body.kiosk-popup-active .ui-modal-root select, body.kiosk-popup-active .ui-modal-root textarea { background: #FFFFFF !important; border: 0 !important; border-radius: 1rem !important; box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45); color: #1B2A5C; min-height: 3rem; }
+  body.kiosk-popup-active .ui-modal-root input.apt-search-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 0 !important; height: 100%; padding: 0 0.75rem !important; background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   body.kiosk-popup-active .ui-modal-root button[class*="bg-[#FF5C00]"], body.kiosk-popup-active .ui-modal-root button[class*="bg-orange-"], body.kiosk-popup-active .ui-modal-root button[type="submit"] { border-radius: 1rem !important; min-height: 3rem; font-weight: 900; }
   body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-100"], body.kiosk-popup-active .ui-modal-root button[class*="bg-slate-200"], body.kiosk-popup-active .ui-modal-root button[class*="border-slate"] { background: #FFFFFF !important; border-radius: 1rem !important; border-color: transparent !important; color: #1B2A5C; font-weight: 900; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
   body.kiosk-popup-active .ui-modal-root .bg-slate-50, body.kiosk-popup-active .ui-modal-root .bg-slate-100:not(button), body.kiosk-popup-active .ui-modal-root .bg-white:is(.rounded-xl, .rounded-2xl) { background: #FFFFFF !important; border-radius: 1.25rem !important; border-color: transparent !important; }
