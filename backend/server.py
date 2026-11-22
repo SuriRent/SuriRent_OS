@@ -15529,6 +15529,7 @@ async def create_invoice(body: InvoiceCreate, user=Depends(get_current_user)):
     }
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
+    await _reconcile_power_after_payment(cid)
     return await _enrich_invoice(doc)
 
 
@@ -15597,6 +15598,7 @@ async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(
         print(f"[historical-invoice] credit apply failed: {e}")
     doc = await db.invoices.find_one({"id": doc["id"]}, {"_id": 0}) or doc
     doc.pop("_id", None)
+    await _reconcile_power_after_payment(cid)
     return await _enrich_invoice(doc)
 
 
