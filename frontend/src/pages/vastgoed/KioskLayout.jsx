@@ -33,7 +33,7 @@ import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { printReceipt, openReceiptImage, apkPrintMessage, apkBridge, printFinancialReceipt, printTextLines } from '../../lib/kiosk-print';
 import { PrinterLamp } from '../../components/PrinterLamp';
 import { KioskLiveStatus, KioskSheetLiveActions, KioskHeaderLiveButtons } from '../../components/KioskLiveStatus';
-import { getKioskUserKey } from '../../lib/kiosk-live';
+import { getKioskLiveState, getKioskUserKey } from '../../lib/kiosk-live';
 import { PhoneIdScan } from '../../components/PhoneIdScan';
 import { KioskInvoicesModal } from '../../components/KioskInvoicesModal';
 import { KioskCompanyOverview } from '../../components/KioskCompanyOverview';
@@ -50,7 +50,8 @@ import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
-import { isKtpDevice } from '../../lib/ktp-printer';
+import { isKtpDevice, otherPrinters } from '../../lib/ktp-printer';
+import { btReady, printLinesBluetooth } from '../../lib/bt-printer';
 import { BtPrintButton } from '../../components/BtPrintButton';
 import { setIosStatusBar, useWhitePageBehindModal } from '../../lib/ios-status-bar';
 import useKeyboardOpen from '../../lib/use-keyboard-open';
@@ -6622,8 +6623,50 @@ export default function KioskLayout() {
   }, []);
   useEffect(() => {
     const printPowerCutoffReceipt = async (event) => {
-      if (document.visibilityState !== 'visible' || !Array.isArray(event.detail?.lines)) return;
+      if (!Array.isArray(event.detail?.lines)) return;
+      const receiptId = event.detail.receipt_id;
+      if (receiptId) {
+        const key = 'surirent_last_power_cutoff_receipt';
+        try {
+          if (localStorage.getItem(key) === receiptId) return;
+          localStorage.setItem(key, receiptId);
+        } catch (error) {
+          console.warn('[kiosk-print] afsluitbon niet lokaal te dedupliceren:', error);
+        }
+      }
       try {
+        if (isKtpDevice()) {
+          try { await printTextLines(event.detail.lines, { receipt_type: 'financieel' }); }
+          catch (error) { console.warn('[kiosk-print] ingebouwde bonprinter mislukt:', error); }
+          return;
+        }
+        let printers = getKioskLiveState().printers || [];
+        if (!getKioskLiveState().printersKnown) {
+          try { printers = (await api.get('/kiosk/printers/online')).data || []; }
+          catch (error) { console.warn('[kiosk-print] netwerkprinters ophalen mislukt:', error); }
+        }
+        for (const remotePrinter of otherPrinters(printers)) {
+          try {
+            await api.post('/kiosk/power-cutoff/remote-print', {
+              printer_id: remotePrinter.id,
+              lines: event.detail.lines,
+            });
+            return;
+          } catch (error) {
+            if (error?.response?.status === 409) continue;
+            console.warn('[kiosk-print] netwerkbonprinter mislukt:', error);
+            return;
+          }
+        }
+        if (await btReady()) {
+          try {
+            await printLinesBluetooth(event.detail.lines);
+            return;
+          } catch (error) {
+            console.warn('[kiosk-print] Bluetoothbonprinter mislukt:', error);
+            return;
+          }
+        }
         const printed = await printTextLines(event.detail.lines, { receipt_type: 'financieel' });
         if (!printed) console.warn('[kiosk-print] afsluitbon kon niet worden afgedrukt');
       } catch (error) {

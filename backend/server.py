@@ -12042,9 +12042,6 @@ async def _kiosk_device_config(cid: str) -> dict:
 
 
 async def _publish_power_cutoff_receipt(cid: str, receipt: dict) -> None:
-    config = await _kiosk_device_config(cid)
-    if config.get("printer") in (None, "none"):
-        return
     company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
     try:
         at = datetime.fromisoformat(str(receipt.get("at") or "").replace("Z", "+00:00"))
@@ -12077,7 +12074,9 @@ async def _publish_power_cutoff_receipt(cid: str, receipt: dict) -> None:
         else "Handmatig uitgeschakeld door de beheerder.",
         "align": "center",
     })
-    await _kb_publish(_kiosk_admin_channel(cid), {"type": "POWER_CUTOFF_RECEIPT", "lines": lines})
+    await _kb_publish(_kiosk_admin_channel(cid), {
+        "type": "POWER_CUTOFF_RECEIPT", "receipt_id": str(uuid.uuid4()), "lines": lines,
+    })
 
 
 def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
@@ -12193,7 +12192,7 @@ async def _kiosk_ws_employee(ws: WebSocket, cid: str, channel: str, name: str, e
         await push_printers()
         while True:
             ev = await queue.get()
-            if ev.get("type") in ("device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
+            if ev.get("type") in ("POWER_CUTOFF_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
             elif ev.get("type") == "presence_changed":
                 await push_printers()
@@ -12567,6 +12566,21 @@ async def _publish_remote_print(cid: str, printer_id: str, payload: dict) -> str
 
 class RemotePrintIn(BaseModel):
     printer_id: str
+
+
+class PowerCutoffRemotePrintIn(BaseModel):
+    printer_id: str
+    lines: List[dict] = Field(min_items=1, max_items=100)
+
+
+@api.post("/kiosk/power-cutoff/remote-print")
+async def kiosk_power_cutoff_remote_print(
+    body: PowerCutoffRemotePrintIn, _session=Depends(get_kiosk_session),
+):
+    cid = _session["company_id"]
+    return {"job_id": await _publish_remote_print(cid, body.printer_id, {
+        "data": {"template": "lines", "receipt_type": "financieel", "lines": body.lines},
+    })}
 
 
 @api.post("/kiosk/print-log/by-payment/{payment_id}/remote-print")
