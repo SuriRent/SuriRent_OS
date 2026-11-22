@@ -294,6 +294,41 @@ async def _own_device(cid: str, dev_id: str) -> dict:
     return d
 
 
+async def _overdue_by_tenant(cid: str) -> tuple[dict, bool]:
+    try:
+        overdue = await _deps.get_overdue_tenants(cid)
+        return {item["tenant_id"]: item for item in overdue}, True
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] achterstandssaldo ophalen mislukt voor {cid}: {e}")
+        return {}, False
+
+
+async def _send_cutoff_receipt(
+    cid: str, dev: dict, overdue_by_tenant: dict, balance_available: bool,
+    automatic: bool = False, tenant: Optional[dict] = None, at: Optional[datetime] = None,
+) -> None:
+    try:
+        if tenant is None:
+            tenant = await _deps.db.tenants.find_one(
+                {"company_id": cid, "apartment_id": dev.get("apartment_id"), "status": {"$ne": "archived"}},
+                {"_id": 0, "id": 1, "name": 1},
+            ) or {}
+        apt = await _deps.db.apartments.find_one(
+            {"id": dev.get("apartment_id"), "company_id": cid},
+            {"_id": 0, "number": 1},
+        ) or {}
+        overdue = overdue_by_tenant.get(tenant.get("id"), {}) if balance_available else {}
+        await _deps.publish_power_cutoff_receipt(cid, {
+            "tenant_name": tenant.get("name") or "",
+            "apartment_number": apt.get("number") or "",
+            "at": _deps.iso(at or _deps.now_utc()),
+            "amounts": overdue.get("amounts") if balance_available else None,
+            "automatic": automatic,
+        })
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] afsluitbon versturen mislukt voor {cid}/{dev.get('id')}: {e}")
+
+
 @router.delete("/power/devices/{dev_id}")
 async def delete_device(dev_id: str, user: dict = Depends(_owner)):
     cid = _deps.company_id_of(user)
@@ -335,12 +370,15 @@ class SwitchIn(BaseModel):
 async def device_switch(dev_id: str, body: SwitchIn, user: dict = Depends(_admin)):
     cid = _deps.company_id_of(user)
     d = await _own_device(cid, dev_id)
+    overdue_by_tenant, balance_available = await _overdue_by_tenant(cid) if not body.on else ({}, False)
     try:
         await _switch(cid, d, body.on, user.get("name") or user.get("email") or "beheerder", "handmatig")
     except TuyaError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Tuya niet bereikbaar: {e}")
+    if not body.on and d.get("on") is not False:
+        await _send_cutoff_receipt(cid, d, overdue_by_tenant, balance_available)
     return {"ok": True, "on": body.on}
 
 
@@ -349,11 +387,14 @@ async def switch_all(body: SwitchIn, user: dict = Depends(_admin)):
     cid = _deps.company_id_of(user)
     by = user.get("name") or user.get("email") or "beheerder"
     devs = await _deps.db.power_devices.find({"company_id": cid}, {"_id": 0}).to_list(1000)
+    overdue_by_tenant, balance_available = await _overdue_by_tenant(cid) if not body.on else ({}, False)
     done, failed = 0, []
     for d in devs:
         try:
             await _switch(cid, d, body.on, by, "handmatig (alles)")
             done += 1
+            if not body.on and d.get("on") is not False:
+                await _send_cutoff_receipt(cid, d, overdue_by_tenant, balance_available)
         except Exception as e:  # noqa: BLE001
             failed.append({"id": d["id"], "error": str(e)})
     return {"ok": not failed, "done": done, "failed": failed}
@@ -375,7 +416,12 @@ async def enforce_company(cid: str, overdue_fn) -> None:
         return
     months = int(cfg.get("months") or DEFAULTS["months"])
     grace = int(cfg.get("grace_days") if cfg.get("grace_days") is not None else DEFAULTS["grace_days"])
-    late = {o["tenant_id"] for o in await overdue_fn(cid) if int(o.get("count") or 0) >= months}
+    overdue = await overdue_fn(cid)
+    late_by_tenant = {
+        o["tenant_id"]: o for o in overdue
+        if int(o.get("count") or 0) >= months
+    }
+    late = set(late_by_tenant)
     now = _deps.now_utc()
     async for dev in _deps.db.power_devices.find({"company_id": cid}, {"_id": 0}):
         tenant = await _deps.db.tenants.find_one(
@@ -406,6 +452,9 @@ async def enforce_company(cid: str, overdue_fn) -> None:
                     noticed = noticed.replace(tzinfo=timezone.utc)
                 if now - noticed >= timedelta(days=grace):
                     await _switch(cid, dev, False, "auto", f"{months} maanden achterstand")
+                    await _send_cutoff_receipt(
+                        cid, dev, late_by_tenant, True, automatic=True, tenant=tenant, at=now,
+                    )
                     await _deps.notify_company_admins(
                         cid, "Stroom uitgezet", f"Stroom van {tenant['name']} is uitgezet wegens achterstand.",
                         {"kind": "power", "url": "/admin/power"})
