@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -104,7 +105,11 @@ async def _tuya(cfg: dict, method: str, path: str, body: Optional[dict] = None, 
 def _parse_status(status: list) -> dict:
     """Zet Tuya-datapunten om naar eenheden (typische TONGOU-schalen)."""
     d = {s.get("code"): s.get("value") for s in status or []}
-    sw_code = "switch_1" if "switch_1" in d else ("switch" if "switch" in d else None)
+    switch_codes = sorted(
+        (code for code in d if code in ("switch", "switch_led") or (code.startswith("switch_") and code[7:].isdigit())),
+        key=lambda code: (code != "switch_1", code),
+    )
+    sw_code = switch_codes[0] if switch_codes else None
     out = {"switch_code": sw_code, "on": bool(d.get(sw_code)) if sw_code else None}
     if "cur_power" in d:
         out["power_w"] = round(float(d["cur_power"]) / 10, 1)
@@ -115,6 +120,37 @@ def _parse_status(status: list) -> dict:
     if "add_ele" in d:
         out["energy_kwh"] = round(float(d["add_ele"]) / 1000, 2)
     return out
+
+
+def _supported_switch_code(functions: dict, status_code: Optional[str]) -> Optional[str]:
+    """Choose a Boolean on/off command actually advertised by this Tuya device."""
+    entries = functions.get("functions", []) if isinstance(functions, dict) else []
+    supported = {}
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code")
+        if not isinstance(code, str) or not (
+            code in ("switch", "switch_led") or (code.startswith("switch_") and code[7:].isdigit())
+        ):
+            continue
+        values = item.get("values")
+        if isinstance(values, str):
+            try:
+                values = json.loads(values)
+            except json.JSONDecodeError:
+                values = {}
+        values_type = values.get("type") if isinstance(values, dict) else None
+        value_type = str(item.get("type") or values_type or "").lower()
+        if value_type == "boolean":
+            supported[code] = item
+    if status_code in supported:
+        return status_code
+    ordered = sorted(
+        supported,
+        key=lambda code: (code != "switch_1", code != "switch", code != "switch_led", code),
+    )
+    return ordered[0] if ordered else None
 
 
 async def _read(cfg: dict, device_id: str) -> dict:
@@ -134,7 +170,10 @@ async def _switch(cid: str, dev: dict, on: bool, by: str, reason: str = "") -> d
     if not str(dev.get("tuya_device_id", "")).startswith("demo-"):
         cfg = await _cfg(cid)
         st = await _read(cfg, dev["tuya_device_id"])
-        code = st.get("switch_code") or "switch_1"
+        function_data = await _tuya(cfg, "GET", f"/v1.0/devices/{dev['tuya_device_id']}/functions")
+        code = _supported_switch_code(function_data, st.get("switch_code"))
+        if not code:
+            raise TuyaError("Dit Tuya-apparaat ondersteunt geen aan/uit-schakeling")
         await _tuya(cfg, "POST", f"/v1.0/devices/{dev['tuya_device_id']}/commands",
                     {"commands": [{"code": code, "value": bool(on)}]})
     patch = {"on": bool(on), "updated_at": _deps.iso(_deps.now_utc())}
