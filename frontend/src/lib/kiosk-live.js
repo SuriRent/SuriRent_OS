@@ -116,7 +116,7 @@ function connect() {
       if (msg.ok) queuePrint();
     }
     else if (msg.type === 'PRINT_RECEIPT' && msg.payment_id) queuePrint();
-    else if (msg.type === 'POWER_CUTOFF_RECEIPT' && role === 'admin') {
+    else if (msg.type === 'POWER_CUTOFF_RECEIPT') {
       window.dispatchEvent(new CustomEvent('kiosk-power-cutoff-receipt', { detail: msg }));
     }
     else if (msg.type === 'id_scan') {
