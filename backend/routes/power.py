@@ -107,7 +107,7 @@ def _parse_status(status: list) -> dict:
     d = {s.get("code"): s.get("value") for s in status or []}
     switch_codes = sorted(
         (code for code in d if code in ("switch", "switch_led") or (code.startswith("switch_") and code[7:].isdigit())),
-        key=lambda code: (code != "switch_1", code),
+        key=lambda code: (code != "switch_led", code != "switch_1", code),
     )
     sw_code = switch_codes[0] if switch_codes else None
     out = {"switch_code": sw_code, "on": bool(d.get(sw_code)) if sw_code else None}
@@ -148,7 +148,7 @@ def _supported_switch_code(functions: dict, status_code: Optional[str]) -> Optio
         return status_code
     ordered = sorted(
         supported,
-        key=lambda code: (code != "switch_1", code != "switch", code != "switch_led", code),
+        key=lambda code: (code != "switch_led", code != "switch_1", code != "switch", code),
     )
     return ordered[0] if ordered else None
 
