@@ -264,13 +264,21 @@ async def delete_device(dev_id: str, user: dict = Depends(_owner)):
 
 
 @router.get("/power/devices/{dev_id}/status")
-async def device_status(dev_id: str, user: dict = Depends(_admin)):
+async def device_status(dev_id: str, connectivity_only: bool = False, user: dict = Depends(_admin)):
     cid = _deps.company_id_of(user)
     d = await _own_device(cid, dev_id)
     if str(d.get("tuya_device_id", "")).startswith("demo-"):
-        return {"switch_code": "switch_1", "on": d.get("on")}
+        return {"switch_code": "switch_1", "on": d.get("on"), "online": True}
     try:
-        st = await _read(await _cfg(cid), d["tuya_device_id"])
+        cfg = await _cfg(cid)
+        details = await _tuya(cfg, "GET", f"/v1.0/devices/{d['tuya_device_id']}")
+        online = details.get("online")
+        if online is False:
+            return {"switch_code": None, "on": None, "online": False}
+        if connectivity_only:
+            return {"on": d.get("on"), "online": online}
+        st = await _read(cfg, d["tuya_device_id"])
+        st["online"] = online
     except TuyaError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001

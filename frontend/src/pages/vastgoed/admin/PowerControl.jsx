@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Zap, Home, Power, Check, Loader2, X, AlertCircle } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 
 function PowerTile({ device, unlinked = false }) {
   const on = device.on;
-  const state = unlinked || on == null ? 'orange' : on ? 'green' : 'red';
+  const state = unlinked ? 'orange' : device.online === false ? 'offline' : on == null ? 'orange' : on ? 'green' : 'red';
   const th = {
     green: { glow: '34,197,94', border: 'border-green-500', head: 'bg-green-800', ring: 'border-green-200 bg-green-500 text-white', pill: 'bg-green-100 text-green-800', dot: 'bg-green-500', label: 'Stroom aan' },
     red: { glow: '239,68,68', border: 'border-red-500', head: 'bg-red-800', ring: 'border-red-200 bg-red-500 text-white', pill: 'bg-red-100 text-red-800', dot: 'bg-red-500', label: 'Stroom uit' },
     orange: { glow: '249,115,22', border: 'border-orange-400', head: 'bg-orange-700', ring: 'border-orange-200 bg-orange-500 text-white', pill: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500', label: unlinked ? 'Niet gekoppeld' : 'Status onbekend' },
+    offline: { glow: '148,163,184', border: 'border-slate-300', head: 'bg-slate-700', ring: 'border-slate-200 bg-slate-500 text-white', pill: 'bg-slate-100 text-slate-700', dot: 'bg-slate-500', label: 'Offline' },
   }[state];
   return (
     <div className={`overflow-hidden rounded-2xl border-2 bg-white ${th.border}`} data-lamp={state} style={{ '--glow': th.glow }}>
@@ -29,14 +30,15 @@ function PowerTile({ device, unlinked = false }) {
   );
 }
 
-function Rocker({ on, busy, onToggle, orangeMode = false }) {
+function Rocker({ on, busy, onToggle, orangeMode = false, offline = false }) {
   const isOn = on === true;
   const isOff = on === false;
   const leverPosition = isOn ? '-translate-y-7 -rotate-12' : isOff ? 'translate-y-7 rotate-12' : '';
   return (
-    <button type="button" onClick={onToggle} disabled={busy} role="switch" aria-checked={isOn}
+    <button type="button" onClick={onToggle} role="switch" aria-checked={isOn}
       aria-label={`Stroom ${isOn ? 'uitschakelen' : 'inschakelen'}`} data-testid="power-rocker"
-      className="relative w-40 h-56 rounded-2xl border border-slate-400 bg-gradient-to-br from-slate-100 via-slate-300 to-slate-400 p-3 shadow-[inset_0_2px_5px_rgba(255,255,255,0.9),0_12px_24px_rgba(15,23,42,0.22)] disabled:opacity-80">
+      className="relative w-40 h-56 rounded-2xl border border-slate-400 bg-gradient-to-br from-slate-100 via-slate-300 to-slate-400 p-3 shadow-[inset_0_2px_5px_rgba(255,255,255,0.9),0_12px_24px_rgba(15,23,42,0.22)] disabled:opacity-80"
+      disabled={busy || offline}>
       <span className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
       <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
       <span className="absolute bottom-2 left-2 h-2.5 w-2.5 rounded-full bg-slate-500 shadow-inner" />
@@ -63,11 +65,14 @@ function Rocker({ on, busy, onToggle, orangeMode = false }) {
 
 function SwitchDialog({ dev, onClose, onChanged, orangeMode = false }) {
   const [on, setOn] = useState(dev.on);
-  const [st, setSt] = useState(null);
+  const [st, setSt] = useState(() => (dev.online == null ? null : { online: dev.online }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const loadStatus = useCallback(() => {
-    api.get(`/power/devices/${dev.id}/status`).then(({ data }) => { setSt(data); if (data.on != null) setOn(data.on); }).catch(() => {});
+    api.get(`/power/devices/${dev.id}/status`).then(({ data }) => {
+      setSt(data);
+      setOn(data.online === false ? null : data.on ?? null);
+    }).catch(() => {});
   }, [dev.id]);
   useEffect(() => { loadStatus(); }, [loadStatus]);
   useEffect(() => {
@@ -99,8 +104,8 @@ function SwitchDialog({ dev, onClose, onChanged, orangeMode = false }) {
         </button>
         <p className="text-2xl font-black text-slate-900 pr-10 text-left">{dev.apartment_number}</p>
         <p className="text-sm text-slate-500 text-left mb-6">{dev.tenant_name || 'Geen huurder'}</p>
-        <div className="flex justify-center mb-4"><Rocker on={on} busy={busy} onToggle={toggle} orangeMode={orangeMode} /></div>
-        <p className={`font-black text-lg ${on ? 'text-emerald-600' : 'text-slate-500'}`}>{on ? 'Stroom staat aan' : on === false ? 'Stroom staat uit' : 'Status onbekend'}</p>
+        <div className="flex justify-center mb-4"><Rocker on={on} busy={busy} onToggle={toggle} orangeMode={orangeMode} offline={st?.online === false} /></div>
+        <p className={`font-black text-lg ${on ? 'text-emerald-600' : 'text-slate-500'}`}>{st?.online === false ? 'Apparaat offline' : on ? 'Stroom staat aan' : on === false ? 'Stroom staat uit' : 'Status onbekend'}</p>
         {st && (st.power_w != null || st.energy_kwh != null) && (
           <p className="mt-2 text-xs text-slate-500 tabular-nums">
             {st.power_w != null && `${st.power_w} W`}{st.power_w != null && st.energy_kwh != null && ' · '}{st.energy_kwh != null && `${st.energy_kwh} kWh`}
@@ -152,6 +157,7 @@ export function ApartmentPower({ apartmentId, onClose, orangeMode = false }) {
 // Stroom bedienen per appartement: kies een tegel, zet de schakelaar aan of uit.
 export default function PowerControl({ kiosk = false, orangeMode = false }) {
   const [devices, setDevices] = useState([]);
+  const connectivityCache = useRef(new Map());
   const [apts, setApts] = useState([]);
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -160,7 +166,22 @@ export default function PowerControl({ kiosk = false, orangeMode = false }) {
 
   const load = useCallback(async () => {
     const [d, a] = await Promise.all([api.get('/power/devices'), api.get('/apartments')]);
-    setDevices(d.data);
+    const now = Date.now();
+    const withConnectivity = await Promise.all(d.data.map(async (device) => {
+      const cached = connectivityCache.current.get(device.id);
+      if (cached && now - cached.checkedAt < 30_000) {
+        return { ...device, online: cached.online, ...(cached.online !== true ? { on: null } : {}) };
+      }
+      try {
+        const { data: status } = await api.get(`/power/devices/${device.id}/status?connectivity_only=true`);
+        connectivityCache.current.set(device.id, { online: status.online, checkedAt: Date.now() });
+        return { ...device, online: status.online, ...(status.online !== true ? { on: null } : {}) };
+      } catch {
+        connectivityCache.current.set(device.id, { online: null, checkedAt: Date.now() });
+        return { ...device, online: null, on: null };
+      }
+    }));
+    setDevices(withConnectivity);
     setApts(Array.isArray(a.data) ? a.data : a.data?.items || []);
   }, []);
   useEffect(() => {
