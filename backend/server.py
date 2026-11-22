@@ -991,6 +991,17 @@ async def _power_notify_tenant(cid: str, tenant_id: str, text: str) -> None:
         print(f"[power] huurder-bericht mislukt: {e}")
 
 
+async def _reconcile_power_after_payment(cid: Optional[str]) -> None:
+    """Direct herbeoordelen of een betaalde achterstand stroomherstel vereist."""
+    if not cid:
+        return
+    try:
+        from routes import power as _power
+        await _power.enforce_company(cid, _company_overdue_tenants)
+    except Exception as e:  # noqa: BLE001
+        print(f"[power] payment reconciliation failed for company={cid}: {e}")
+
+
 async def _power_enforce_loop():
     """Elke 10 minuten: stroom aankondigen/afsluiten bij achterstand en weer aanzetten na betaling."""
     import asyncio as _aio
@@ -7880,6 +7891,8 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
         except Exception as e:
             print(f"[ocr.auto-approve] invoice apply failed: {e}")
 
+    await _reconcile_power_after_payment(company_id)
+
     try:
         await _notify_company_admins(
             company_id,
@@ -10598,6 +10611,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                     )
         except Exception as e:
             print(f"[payments] invoice apply failed: {e}")
+    if status == "approved":
+        await _reconcile_power_after_payment(doc.get("company_id"))
     return doc
 
 
@@ -10995,6 +11010,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
             print(f"[payments.approve] plan allocation failed: {e}")
     await db.payments.update_one({"id": pid}, {"$set": update})
     p.update(update)
+    await _reconcile_power_after_payment(p.get("company_id"))
     asyncio.create_task(_notify_tenant_payment(dict(p)))
     if p.get("kiosk_employee_id"):
         asyncio.create_task(_notify_kiosk_employees(

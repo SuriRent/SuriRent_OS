@@ -51,3 +51,35 @@ def test_zero_grace_sends_notice_then_cuts_power_in_same_pass(monkeypatch):
     switch.assert_awaited_once_with("company-a", device, False, "auto", "1 maanden achterstand")
     assert devices.update_one.await_args.args[1] == {"$set": {"notice_at": now.isoformat()}}
     power._deps.notify_tenant_power.assert_awaited()
+
+
+def test_paid_overdue_tenant_restores_power_cut_automatically(monkeypatch):
+    device = {
+        "id": "device-a",
+        "apartment_id": "apartment-a",
+        "on": False,
+        "cut_by_auto": True,
+    }
+    devices = SimpleNamespace(
+        find=lambda *_args, **_kwargs: AsyncCursor([device]),
+        update_one=AsyncMock(),
+    )
+    tenants = SimpleNamespace(find_one=AsyncMock(return_value={"id": "tenant-a", "name": "Huurder"}))
+    monkeypatch.setattr(power._deps, "db", SimpleNamespace(power_devices=devices, tenants=tenants))
+    monkeypatch.setattr(power, "_cfg", AsyncMock(return_value={
+        "auto_cutoff": True, "access_id": "tuya-id", "months": 1, "grace_days": 0,
+    }))
+    monkeypatch.setattr(power, "_log", AsyncMock())
+    monkeypatch.setattr(power._deps, "notify_company_admins", AsyncMock())
+    notify_tenant = AsyncMock()
+    monkeypatch.setattr(power._deps, "notify_tenant_power", notify_tenant)
+    switch = AsyncMock()
+    monkeypatch.setattr(power, "_switch", switch)
+    overdue = AsyncMock(return_value=[])
+
+    asyncio.run(power.enforce_company("company-a", overdue))
+
+    switch.assert_awaited_once_with("company-a", device, True, "auto", "achterstand betaald")
+    notify_tenant.assert_awaited_once_with(
+        "company-a", "tenant-a", "Bedankt voor uw betaling. Uw stroom is weer aangezet.",
+    )
