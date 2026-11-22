@@ -12041,6 +12041,45 @@ async def _kiosk_device_config(cid: str) -> dict:
     return _device_config_msg((cs or {}).get("kiosk_devices") or {})
 
 
+async def _publish_power_cutoff_receipt(cid: str, receipt: dict) -> None:
+    config = await _kiosk_device_config(cid)
+    if config.get("printer") in (None, "none"):
+        return
+    company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
+    try:
+        at = datetime.fromisoformat(str(receipt.get("at") or "").replace("Z", "+00:00"))
+        at = at.astimezone(timezone(timedelta(hours=-3)))
+    except (TypeError, ValueError):
+        at = now_utc().astimezone(timezone(timedelta(hours=-3)))
+    lines = [
+        {"text": company.get("name") or "SuriRent", "align": "center", "bold": True, "size": "large"},
+        {"text": "STROOM AFGESLOTEN", "align": "center", "bold": True},
+        {"text": "WEGENS HUURACHTERSTAND" if receipt.get("automatic") else "HANDMATIGE UITSCHAKELING",
+         "align": "center", "bold": True},
+        {"text": "-" * 30},
+        {"text": f"Datum: {at.strftime('%d-%m-%Y %H:%M')}"},
+        {"text": f"Huurder: {receipt.get('tenant_name') or 'Huurder'}"},
+        {"text": f"Appartement: {receipt.get('apartment_number') or '-'}"},
+        {"text": "-" * 30},
+        {"text": "OPENSTAANDE ACHTERSTAND:", "bold": True},
+    ]
+    amounts = receipt.get("amounts")
+    if amounts is None:
+        lines.append({"text": "Saldo momenteel niet beschikbaar"})
+    elif amounts:
+        for currency, amount in sorted(amounts.items()):
+            lines.append({"text": _nl_money(currency, amount), "bold": True})
+    else:
+        lines.append({"text": "Geen achterstand geregistreerd"})
+    lines.append({"text": "-" * 30})
+    lines.append({
+        "text": "Na betaling wordt de stroom automatisch hersteld." if receipt.get("automatic")
+        else "Handmatig uitgeschakeld door de beheerder.",
+        "align": "center",
+    })
+    await _kb_publish(_kiosk_admin_channel(cid), {"type": "POWER_CUTOFF_RECEIPT", "lines": lines})
+
+
 def _ws_company(token: str, role: str, admin_token: str) -> Optional[str]:
     try:
         p = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": False})
@@ -12562,7 +12601,7 @@ async def _kiosk_ws_admin(ws: WebSocket, cid: str, channel: str):
                 continue
             if ev.get("type") == "presence_changed":
                 await push_presence()
-            elif ev.get("type") in ("PRINT_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
+            elif ev.get("type") in ("PRINT_RECEIPT", "POWER_CUTOFF_RECEIPT", "device_config", "REMOTE_PRINT_DONE", "overview_invalidate", "kiosk_theme", "id_scan", "data_changed"):
                 await ws.send_json(ev)
 
     async def receive():
@@ -21007,6 +21046,8 @@ _route_deps.notify_company_admins = _notify_company_admins
 _route_deps.notify_kiosk_employees = _notify_kiosk_employees
 _route_deps.notify_superadmins = _notify_superadmins
 _route_deps.notify_tenant_power = _power_notify_tenant
+_route_deps.publish_power_cutoff_receipt = _publish_power_cutoff_receipt
+_route_deps.get_overdue_tenants = _company_overdue_tenants
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")

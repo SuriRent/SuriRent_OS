@@ -6620,6 +6620,19 @@ export default function KioskLayout() {
     window.addEventListener('resize', updateViewport);
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
+  useEffect(() => {
+    const printPowerCutoffReceipt = async (event) => {
+      if (document.visibilityState !== 'visible' || !Array.isArray(event.detail?.lines)) return;
+      try {
+        const printed = await printTextLines(event.detail.lines, { receipt_type: 'financieel' });
+        if (!printed) console.warn('[kiosk-print] afsluitbon kon niet worden afgedrukt');
+      } catch (error) {
+        console.warn('[kiosk-print] afsluitbon afdrukken mislukt:', error);
+      }
+    };
+    window.addEventListener('kiosk-power-cutoff-receipt', printPowerCutoffReceipt);
+    return () => window.removeEventListener('kiosk-power-cutoff-receipt', printPowerCutoffReceipt);
+  }, []);
   const [supportActive, setSupportActive] = useState(false);
   // Start direct op de appartementkeuze.
   const [step, setStep] = useState(() => {

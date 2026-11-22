@@ -50,3 +50,5 @@ notify_company_admins = None           # async (company_id, title, body, data) -
 notify_superadmins = None              # async (category, title, body, data) -> int
 notify_kiosk_employees = None          # async (company_id, title, body, data, category) -> int
 notify_tenant_power = None             # async (company_id, tenant_id, tekst) -> None             # async (company_doc, user_email) -> invoice
+publish_power_cutoff_receipt = None    # async (company_id, receipt_data) -> None
+get_overdue_tenants = None             # async (company_id) -> [{tenant_id, amounts, ...}]
