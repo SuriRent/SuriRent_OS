@@ -387,7 +387,9 @@ async def enforce_company(cid: str, overdue_fn) -> None:
                 if dev.get("on") is False:
                     continue
                 if not dev.get("notice_at"):
-                    await _deps.db.power_devices.update_one({"id": dev["id"]}, {"$set": {"notice_at": _deps.iso(now)}})
+                    notice_at = _deps.iso(now)
+                    await _deps.db.power_devices.update_one({"id": dev["id"]}, {"$set": {"notice_at": notice_at}})
+                    dev["notice_at"] = notice_at
                     await _log(cid, dev, "aankondiging", "auto", f"{months} maanden achterstand")
                     await _deps.notify_company_admins(
                         cid, "Stroom wordt afgesloten",
@@ -397,7 +399,8 @@ async def enforce_company(cid: str, overdue_fn) -> None:
                         cid, tenant["id"],
                         f"Beste {tenant['name']}, u heeft {months} maanden of meer achterstand. "
                         f"Betaal binnen {grace} dag(en), anders wordt de stroom van uw appartement uitgezet.")
-                    continue
+                    if grace > 0:
+                        continue
                 noticed = datetime.fromisoformat(dev["notice_at"].replace("Z", "+00:00"))
                 if noticed.tzinfo is None:
                     noticed = noticed.replace(tzinfo=timezone.utc)
