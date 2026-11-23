@@ -555,10 +555,11 @@ function CompanyForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Companies({ searchQuery, onSearchQueryChange, createRequest, refreshRequest }) {
+export default function Companies({
+  searchQuery, onSearchQueryChange, statusFilter, onStatusFilterChange, createRequest, refreshRequest,
+}) {
   const { user, setActiveCompany, activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
-  const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -638,17 +639,18 @@ export default function Companies({ searchQuery, onSearchQueryChange, createRequ
   const scopedItems = activeCompanyId && !activeCompanyIsPlatform
     ? customerItems.filter((company) => company.id === activeCompanyId)
     : customerItems;
+  const searchTerm = searchQuery.trim().toLowerCase();
   const visibleItems = scopedItems.filter((company) => {
-    const term = searchQuery.trim().toLowerCase();
-    const matchesQuery = !term || [
-      company.name, company.slug, company.contact_email, company.owner_email, company.plan,
-    ].some((value) => String(value || '').toLowerCase().includes(term));
+    const matchesQuery = !searchTerm || [
+      company.name, company.slug, company.contact_email, company.owner_email, company.contact_phone,
+      company.plan, planMap[company.plan]?.name,
+    ].some((value) => String(value || '').toLowerCase().includes(searchTerm));
     const status = company.billing_status || 'active';
-    const matchesFilter = filter === 'all'
-      || (filter === 'trial' && status === 'trial')
-      || (filter === 'active' && status === 'active')
-      || (filter === 'attention' && ['expired', 'past_due', 'cancelled'].includes(status))
-      || (filter === 'disabled' && company.active === false);
+    const matchesFilter = statusFilter === 'all'
+      || (statusFilter === 'trial' && status === 'trial')
+      || (statusFilter === 'active' && status === 'active')
+      || (statusFilter === 'attention' && ['expired', 'past_due', 'cancelled'].includes(status))
+      || (statusFilter === 'disabled' && company.active === false);
     return matchesQuery && matchesFilter;
   });
   const counts = {
@@ -690,22 +692,22 @@ export default function Companies({ searchQuery, onSearchQueryChange, createRequ
           { id: 'trial', label: 'Proefperiodes', value: counts.trial, color: 'text-amber-700' },
           { id: 'attention', label: 'Aandacht nodig', value: counts.attention, color: 'text-red-700' },
         ].map((item) => (
-          <button key={item.id} type="button" onClick={() => setFilter(item.id)}
-            className={`rounded-2xl border bg-white p-2.5 text-left transition ${filter === item.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
+          <button key={item.id} type="button" onClick={() => onStatusFilterChange(item.id)}
+            className={`rounded-2xl border bg-white p-2.5 text-left transition ${statusFilter === item.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
               <p className="text-[10px] leading-tight font-bold text-slate-500">{item.label}</p>
               <p className={`text-lg font-black mt-0.5 ${item.color}`}>{loading ? '—' : item.value}</p>
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:flex xl:justify-end">
+      <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:hidden">
         <div className="relative min-w-0 xl:hidden">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input value={searchQuery} onChange={(e) => onSearchQueryChange(e.target.value)} placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
+          <input type="search" value={searchQuery} onChange={(e) => onSearchQueryChange(e.target.value)} placeholder="Zoek naam, e-mail, pakket of slug"
             aria-label="Bedrijven zoeken" data-testid="company-search"
-            className="w-full h-9 rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs sm:text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+            className="w-full h-9 rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs sm:text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
         </div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter bedrijven"
+        <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} aria-label="Filter bedrijven"
           className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 sm:px-3 sm:text-sm xl:w-48">
           <option value="all">Alle status</option>
           <option value="active">Actief abonnement</option>

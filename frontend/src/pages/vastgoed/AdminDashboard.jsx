@@ -5202,7 +5202,8 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
 }
 
 function SaasConsoleDesktopTopbar({
-  user, tab, tabs, companySearchQuery, onCompanySearchChange, onCreateCompany, onRefreshCompanies,
+  user, tab, tabs, companySearchQuery, onCompanySearchChange, companyStatusFilter, onCompanyStatusChange,
+  onCreateCompany, onRefreshCompanies,
 }) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
@@ -5234,13 +5235,29 @@ function SaasConsoleDesktopTopbar({
       <div className="flex min-w-0 items-center gap-3">
         {tab === 'companies' && (
           <div className="flex min-w-0 items-center gap-2">
-            <div className="relative min-w-[220px] max-w-[360px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={companySearchQuery} onChange={(event) => onCompanySearchChange(event.target.value)}
-                placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
+            <div className="relative min-w-[190px] w-[240px] max-w-[22vw]">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input type="text" value={companySearchQuery} onChange={(event) => onCompanySearchChange(event.target.value)}
+                placeholder="Zoek naam, e-mail, pakket of slug"
                 aria-label="Bedrijven zoeken" data-testid="company-topbar-search"
-                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100" />
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100" />
+              {companySearchQuery && (
+                <button type="button" onClick={() => onCompanySearchChange('')}
+                  aria-label="Zoekopdracht wissen" data-testid="company-topbar-search-clear"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
+            <select value={companyStatusFilter} onChange={(event) => onCompanyStatusChange(event.target.value)}
+              aria-label="Filter bedrijven op status" data-testid="company-topbar-status"
+              className="h-10 w-[162px] shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
+              <option value="all">Alle status</option>
+              <option value="active">Actief abonnement</option>
+              <option value="trial">Proefperiode</option>
+              <option value="attention">Aandacht nodig</option>
+              <option value="disabled">Toegang uitgeschakeld</option>
+            </select>
             <button type="button" onClick={onCreateCompany} data-testid="company-topbar-new-btn"
               className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-sm font-bold text-white shadow-sm hover:bg-[#E05200]">
               <Plus className="h-4 w-4" /> Nieuw bedrijf
@@ -5318,6 +5335,7 @@ export default function AdminDashboard() {
   const location = useLocation();
   const { count: badgeCount } = useBadge();
   const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [companyStatusFilter, setCompanyStatusFilter] = useState('all');
   const [companiesCreateRequest, setCompaniesCreateRequest] = useState(0);
   const [companiesRefreshRequest, setCompaniesRefreshRequest] = useState(0);
 
@@ -5520,7 +5538,9 @@ export default function AdminDashboard() {
         {isSaasConsole
           ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar
             user={user} tab={tab} tabs={tabs} companySearchQuery={companySearchQuery}
+            companyStatusFilter={companyStatusFilter}
             onCompanySearchChange={setCompanySearchQuery}
+            onCompanyStatusChange={setCompanyStatusFilter}
             onCreateCompany={() => setCompaniesCreateRequest((request) => request + 1)}
             onRefreshCompanies={() => setCompaniesRefreshRequest((request) => request + 1)}
           /></>
@@ -5552,6 +5572,8 @@ export default function AdminDashboard() {
             <Companies
               searchQuery={companySearchQuery}
               onSearchQueryChange={setCompanySearchQuery}
+              statusFilter={companyStatusFilter}
+              onStatusFilterChange={setCompanyStatusFilter}
               createRequest={companiesCreateRequest}
               refreshRequest={companiesRefreshRequest}
             />
