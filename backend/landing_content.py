@@ -163,16 +163,16 @@ LANDING_DEFAULTS: dict = {
     "pricing_starter": {
         "name": "Starter",
         "desc": "Voor kleinere vastgoedbeheerders.",
-        "features": ["Tot 15 huurders", "Alle kernfuncties", "Digitale kwitanties",
-                     "Mobile-first interface", "SRD/USD/EUR support", "Email support"],
+        "features": ["Tot 100 appartementen en huurders", "Kiosk terminal",
+                     "Digitale kwitanties", "Online betalen", "WhatsApp & E-mail"],
         "cta": "Start met Starter",
     },
     "pricing_pro": {
         "name": "Professional",
-        "desc": "Met Kiosk terminal en alle functies.",
-        "features": ["Onbeperkt huurders", "Alles uit Starter",
-                     "Kiosk terminal (4-cijferige PIN)",
-                     "Geavanceerde rapportages", "Prioritaire WhatsApp support"],
+        "desc": "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
+        "features": ["Alles uit Starter", "Tot 500 appartementen en huurders",
+                     "Stroombeheer", "White-label branding", "Eigen domein",
+                     "Marketing website", "Prioriteit support"],
         "cta": "Start met Professional",
     },
     "cta_section": {

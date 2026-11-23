@@ -55,6 +55,14 @@ def test_public_billing_plans_seeded():
     starter = next(p for p in plans if p["id"] == "starter")
     assert starter["amount"] == 3000
     assert starter["currency"] == "SRD"
+    professional = next(p for p in plans if p["id"] == "professional")
+    assert starter["limits"]["allow_kiosk"] is True
+    assert professional["limits"]["allow_kiosk"] is True
+    assert starter["limits"]["allow_power"] is False
+    assert professional["limits"]["allow_power"] is True
+    for feature in ("allow_custom_domain", "allow_marketing_site"):
+        assert starter["limits"][feature] is False
+        assert professional["limits"][feature] is True
 
 
 # ---------- Feature 2: Plans admin GET ----------

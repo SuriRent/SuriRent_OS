@@ -52,3 +52,4 @@ notify_kiosk_employees = None          # async (company_id, title, body, data, c
 notify_tenant_power = None             # async (company_id, tenant_id, tekst) -> None             # async (company_doc, user_email) -> invoice
 publish_power_cutoff_receipt = None    # async (company_id, receipt_data) -> None
 get_overdue_tenants = None             # async (company_id) -> [{tenant_id, amounts, ...}]
+require_plan_feature = None            # async (company_id, feature_key, feature_label) -> None

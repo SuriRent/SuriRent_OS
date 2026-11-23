@@ -2356,19 +2356,22 @@ async def company_onboarding(body: CompanyOnboardingIn, user=Depends(get_current
 PLAN_PRICES = {
     "starter": {"name": "Starter", "amount": 3000, "currency": "SRD", "interval": "month",
                 "description": "Voor kleinere vastgoedbeheerders.",
-                "features": ["Onbeperkt appartementen", "Online betalen", "WhatsApp & E-mail"],
+                "features": ["Kiosk terminal", "Online betalen", "WhatsApp & E-mail"],
                 "limits": {
                     "max_apartments": 100, "max_tenants": 100, "max_locations": 2, "max_employees": 5,
-                    "allow_kiosk": False, "allow_ocr": True, "allow_shelly": False,
-                    "allow_branding": False, "allow_backup": True,
+                    "allow_kiosk": True, "allow_ocr": True, "allow_power": False,
+                    "allow_branding": False, "allow_custom_domain": False,
+                    "allow_marketing_site": False, "allow_backup": True,
                 }},
     "professional": {"name": "Professional", "amount": 5000, "currency": "SRD", "interval": "month",
-                     "description": "Met Kiosk terminal en alle functies.",
-                     "features": ["Alles uit Starter", "Kiosk terminal", "Shelly stroombeheer", "Prioriteit support"],
+                     "description": "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
+                     "features": ["Alles uit Starter", "Stroombeheer", "White-label branding",
+                                  "Eigen domein", "Marketing website", "Prioriteit support"],
                      "limits": {
                          "max_apartments": 500, "max_tenants": 500, "max_locations": 10, "max_employees": 25,
-                         "allow_kiosk": True, "allow_ocr": True, "allow_shelly": True,
-                         "allow_branding": True, "allow_backup": True,
+                         "allow_kiosk": True, "allow_ocr": True, "allow_power": True,
+                         "allow_branding": True, "allow_custom_domain": True,
+                         "allow_marketing_site": True, "allow_backup": True,
                      }},
 }
 
@@ -2376,8 +2379,9 @@ PLAN_PRICES = {
 # Default limits voor plans die nog geen "limits" veld hebben (legacy DB rows).
 DEFAULT_PLAN_LIMITS = {
     "max_apartments": 50, "max_tenants": 50, "max_locations": 1, "max_employees": 3,
-    "allow_kiosk": False, "allow_ocr": False, "allow_shelly": False,
-    "allow_branding": False, "allow_backup": False,
+    "allow_kiosk": False, "allow_ocr": False, "allow_power": False,
+    "allow_branding": False, "allow_custom_domain": False,
+    "allow_marketing_site": False, "allow_backup": False,
 }
 
 
@@ -2400,6 +2404,18 @@ async def _resolve_company_limits(company_id: str) -> dict:
         return dict(DEFAULT_PLAN_LIMITS)
     limits = dict(DEFAULT_PLAN_LIMITS)
     limits.update(plan.get("limits") or {})
+    plan_limits = plan.get("limits") or {}
+    if "allow_power" not in plan_limits:
+        limits["allow_power"] = bool(
+            plan_limits.get("allow_shelly", plan_id in ("professional", "lifetime")),
+        )
+    for feature in ("allow_custom_domain", "allow_marketing_site"):
+        if feature not in plan_limits:
+            limits[feature] = bool(
+                plan_limits.get("allow_branding", plan_id in ("professional", "lifetime")),
+            )
+    if plan_id in ("starter", "professional"):
+        limits["allow_kiosk"] = True
     return limits
 
 
@@ -2426,7 +2442,7 @@ async def _enforce_count_limit(company_id: str, collection_name: str, limit_key:
 
 
 async def _require_plan_feature(company_id: str, feature_key: str, feature_label: str):
-    """Hard-block: raised HTTP 403 wanneer een feature (allow_kiosk/_ocr/_shelly/...)
+    """Hard-block: raised HTTP 403 wanneer een feature (allow_kiosk/_ocr/_power/...)
     niet beschikbaar is op het huidige plan."""
     limits = await _resolve_company_limits(company_id)
     if not limits.get(feature_key, False):
@@ -2437,6 +2453,10 @@ async def _require_plan_feature(company_id: str, feature_key: str, feature_label
             "message": f"{feature_label} is niet beschikbaar op uw huidige abonnement. "
                        f"Upgrade om deze functie te activeren.",
         })
+
+
+async def _company_has_plan_feature(company_id: str, feature_key: str) -> bool:
+    return bool((await _resolve_company_limits(company_id)).get(feature_key, False))
 
 
 # =====================================================================
@@ -2469,15 +2489,44 @@ async def _seed_plan_catalog():
                     "updated_at": now_utc_iso(),
                 }
                 await db.plan_catalog.insert_one(doc)
-            elif not existing.get("limits"):
-                # Backfill: bestaande rijen zonder limits → patch met defaults uit PLAN_PRICES.
-                await db.plan_catalog.update_one(
-                    {"id": pid},
-                    {"$set": {
-                        "limits": dict(pdata.get("limits", DEFAULT_PLAN_LIMITS)),
-                        "updated_at": now_utc_iso(),
-                    }},
-                )
+            else:
+                updates = {}
+                existing_limits = existing.get("limits") or {}
+                if not existing_limits:
+                    updates["limits"] = dict(pdata.get("limits", DEFAULT_PLAN_LIMITS))
+                else:
+                    if existing_limits.get("allow_kiosk") is not True:
+                        updates["limits.allow_kiosk"] = True
+                    if "allow_power" not in existing_limits:
+                        updates["limits.allow_power"] = existing_limits.get(
+                            "allow_shelly", pdata.get("limits", {}).get("allow_power", False),
+                        )
+                    for feature in ("allow_custom_domain", "allow_marketing_site"):
+                        if feature not in existing_limits:
+                            updates[f"limits.{feature}"] = existing_limits.get(
+                                "allow_branding", pdata.get("limits", {}).get(feature, False),
+                            )
+                existing_features = existing.get("features") or []
+                migrated_features = list(existing_features)
+                if pid == "starter" and "Onbeperkt appartementen" in migrated_features:
+                    migrated_features[migrated_features.index("Onbeperkt appartementen")] = "Kiosk terminal"
+                if pid == "professional" and migrated_features in (
+                    ["Alles uit Starter", "Kiosk terminal", "Shelly stroombeheer", "Prioriteit support"],
+                    ["Alles uit Starter", "Kiosk terminal", "Stroombeheer", "Prioriteit support"],
+                ):
+                    migrated_features = list(pdata.get("features", []))
+                elif pid == "professional" and "Shelly stroombeheer" in migrated_features:
+                    migrated_features[migrated_features.index("Shelly stroombeheer")] = "Stroombeheer"
+                if migrated_features != existing_features:
+                    updates["features"] = migrated_features
+                if pid == "professional" and existing.get("description") in (
+                    "Met Kiosk terminal en alle functies.",
+                    "Voor grotere vastgoedbeheerders met stroombeheer en white-label branding.",
+                ):
+                    updates["description"] = pdata["description"]
+                if updates:
+                    updates["updated_at"] = now_utc_iso()
+                    await db.plan_catalog.update_one({"id": pid}, {"$set": updates})
         # Extra seed: "Lifetime" — permanent gratis pakket voor speciale klanten
         # (partner-deals, demo-bedrijven, life-time toegang). Superadmin kan dit
         # via SaaS Pakketten bewerken of deactiveren. Idempotent seeded.
@@ -2496,6 +2545,30 @@ async def _seed_plan_catalog():
                 "created_at": now_utc_iso(),
                 "updated_at": now_utc_iso(),
             })
+        async for legacy_plan in db.plan_catalog.find(
+            {"$or": [
+                {"limits.allow_power": {"$exists": False}},
+                {"limits.allow_custom_domain": {"$exists": False}},
+                {"limits.allow_marketing_site": {"$exists": False}},
+            ]},
+            {"_id": 0, "id": 1, "limits": 1},
+        ):
+            legacy_limits = legacy_plan.get("limits") or {}
+            legacy_id = legacy_plan.get("id")
+            feature_updates = {}
+            if "allow_power" not in legacy_limits:
+                feature_updates["limits.allow_power"] = bool(
+                    legacy_limits.get("allow_shelly", legacy_id in ("professional", "lifetime")),
+                )
+            for feature in ("allow_custom_domain", "allow_marketing_site"):
+                if feature not in legacy_limits:
+                    feature_updates[f"limits.{feature}"] = bool(
+                        legacy_limits.get("allow_branding", legacy_id in ("professional", "lifetime")),
+                    )
+            await db.plan_catalog.update_one(
+                {"id": legacy_id},
+                {"$set": {**feature_updates, "updated_at": now_utc_iso()}},
+            )
     except Exception as e:
         import logging as _logging
         _logging.getLogger("uvicorn.error").warning(f"Plan catalog seed failed: {e}")
@@ -4089,6 +4162,9 @@ async def public_company_landing(request: Request, host: Optional[str] = None):
             company = await db.companies.find_one({"id": settings_doc["company_id"]}, COMPANY_FIELDS)
     if not company:
         return {"found": False}
+    domain_feature = "allow_marketing_site" if role == "marketing" else "allow_custom_domain"
+    if not await _company_has_plan_feature(company["id"], domain_feature):
+        return {"found": False}
 
     dom_cfg = ((await db.company_settings.find_one(
         {"company_id": company["id"]}, {"_id": 0, "domain": 1}) or {}).get("domain") or {})
@@ -4138,6 +4214,8 @@ async def public_company_landing_by_slug(slug: str):
     )
     if not company:
         return {"found": False}
+    if not await _company_has_plan_feature(company["id"], "allow_marketing_site"):
+        return {"found": False}
 
     landing_doc = await db.company_landings.find_one({"id": company["id"]}, {"_id": 0}) or {}
     content = landing_doc.get("published") or {}
@@ -4167,6 +4245,7 @@ async def get_my_landing(mode: Literal["draft", "published"] = "draft",
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     doc = await db.company_landings.find_one({"id": cid}, {"_id": 0}) or {}
     if mode == "draft":
         content = doc.get("draft") or doc.get("published") or {}
@@ -4192,6 +4271,7 @@ async def put_my_landing(body: CompanyLandingIn, user=Depends(get_current_user))
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     if not isinstance(body.content, dict):
         raise HTTPException(status_code=400, detail="content moet een object zijn")
     await db.company_landings.update_one(
@@ -4212,6 +4292,7 @@ async def publish_my_landing(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     doc = await db.company_landings.find_one({"id": cid}, {"_id": 0}) or {}
     draft = doc.get("draft")
     if not draft:
@@ -4234,6 +4315,7 @@ async def discard_my_landing(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     doc = await db.company_landings.find_one({"id": cid}, {"_id": 0}) or {}
     pub = doc.get("published") or {}
     await db.company_landings.update_one(
@@ -4254,6 +4336,7 @@ async def upload_my_landing_image(file: UploadFile = File(...), user=Depends(get
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
     if ctype not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
         raise HTTPException(status_code=400, detail="Kies een afbeelding (JPG, PNG, WebP of GIF).")
@@ -4288,6 +4371,7 @@ async def set_my_custom_domain(body: CustomDomainIn, user=Depends(require_role("
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     domain = _normalize_host(body.custom_domain or "")
     if domain:
+        await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
         # Validate basic shape — moet minstens 1 dot bevatten.
         if "." not in domain or len(domain) < 4:
             raise HTTPException(status_code=400, detail="Ongeldig domein (bv. gopiappartements.com)")
@@ -4312,6 +4396,7 @@ async def get_my_landing_apartments(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     out = []
     cursor = db.apartments.find(
         {"company_id": cid, "status": {"$in": ["vacant", "available", "occupied"]}},
@@ -4436,6 +4521,8 @@ async def submit_landing_lead(body: LandingLeadIn):
     company = await db.companies.find_one({"id": body.company_id}, {"_id": 0, "id": 1, "name": 1})
     if not company:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    if not await _company_has_plan_feature(company["id"], "allow_marketing_site"):
+        raise HTTPException(status_code=403, detail="Marketing website is niet beschikbaar op dit abonnement.")
     lead = {
         "id": new_id(),
         "company_id": body.company_id,
@@ -4456,6 +4543,7 @@ async def list_my_landing_leads(user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     leads = await db.landing_leads.find({"company_id": cid}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return leads
 
@@ -4463,6 +4551,9 @@ async def list_my_landing_leads(user=Depends(get_current_user)):
 @api.post("/companies/me/landing-leads/{lead_id}/status")
 async def update_lead_status(lead_id: str, body: dict, user=Depends(get_current_user)):
     cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     status = (body or {}).get("status", "new")
     if status not in ("new", "contacted", "won", "lost"):
         raise HTTPException(status_code=400, detail="Ongeldige status")
@@ -4752,6 +4843,8 @@ async def public_branding_by_host(request: Request):
             if s:
                 c = await db.companies.find_one({"id": s["company_id"]}, {"_id": 0})
         if c:
+            if not await _company_has_plan_feature(c["id"], "allow_custom_domain"):
+                return {"slug": None, "host": host, "found": False}
             out = _company_branding_response(c)
             out["host"] = host
             out["found"] = True
@@ -5169,6 +5262,7 @@ async def get_my_url_info(request: Request, user=Depends(get_current_user)):
     if not c:
         raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
     slug = c.get("slug") or ""
+    limits = await _resolve_company_limits(cid)
 
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower().split(":")[0].strip()
     forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
@@ -5177,7 +5271,7 @@ async def get_my_url_info(request: Request, user=Depends(get_current_user)):
     base_url = f"{scheme}://{app_domain}" if app_domain else ""
     query_url = f"{base_url}/login?c={slug}" if base_url else ""
     path_url = f"{base_url}/{slug}" if base_url else ""
-    landing_url = f"{base_url}/site/{slug}" if base_url else ""
+    landing_url = f"{base_url}/site/{slug}" if base_url and limits.get("allow_marketing_site") else ""
     kiosk_url = f"{base_url}/{slug}/kiosk" if base_url else ""
     tenant_kiosk_url = f"{base_url}/{slug}/kiosk/huurder" if base_url else ""
     tenant_portal_url = tenant_kiosk_url
@@ -5194,7 +5288,7 @@ async def get_my_url_info(request: Request, user=Depends(get_current_user)):
             custom_domain = (dom.get("custom_domain") or "").strip().lower()
     except Exception:
         custom_domain = None
-    custom_domain_url = f"{scheme}://{custom_domain}" if custom_domain else None
+    custom_domain_url = f"{scheme}://{custom_domain}" if custom_domain and limits.get("allow_custom_domain") else None
 
     return {
         "slug": slug,
@@ -19660,6 +19754,11 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
     doc = await _get_company_settings_doc(cid)
     existing_section = doc.get(section) or {}
     merged = _merge_section(section, existing_section, body or {})
+    if section == "domain":
+        if merged.get("enabled") and merged.get("custom_domain"):
+            await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
+        if merged.get("marketing_enabled") and merged.get("marketing_domain"):
+            await _require_plan_feature(cid, "allow_marketing_site", "Marketing website")
     if section == "kiosk_devices":
         if (body or {}).get("printer_mode") is not None and body["printer_mode"] not in _PRINTER_MODES:
             raise HTTPException(status_code=422, detail="Onbekend printertype")
@@ -19789,6 +19888,8 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
     cfg = await get_company_section(cid, section)
+    if section == "domain" and cfg.get("enabled") and cfg.get("custom_domain"):
+        await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
     if not cfg.get("enabled"):
         raise HTTPException(status_code=400, detail="Sectie is uitgeschakeld — vink 'Ingeschakeld' aan en bewaar eerst.")
 
@@ -20015,6 +20116,8 @@ async def public_domain_resolve(host: str = ""):
             )
     if not co:
         return {"found": False}
+    if not await _company_has_plan_feature(co["id"], "allow_custom_domain"):
+        return {"found": False}
     b = co.get("branding") or {}
     return {
         "found": True,
@@ -20176,6 +20279,8 @@ async def get_domain_status(user=Depends(get_current_user)):
     dom = settings.get("domain") or {}
     custom = (dom.get("custom_domain") or "").strip().lower()
     enabled = bool(dom.get("enabled"))
+    if custom and enabled:
+        await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
 
     # Target ophalen (dezelfde bron als /target endpoint)
     target_host = (os.environ.get("APP_PUBLIC_HOST")
@@ -20803,8 +20908,8 @@ async def _shelly_or_400(user) -> dict:
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
-    # Pakket-gate: Shelly stroombeheer moet in het abonnement zitten.
-    await _require_plan_feature(cid, "allow_shelly", "Shelly stroombeheer")
+    # Pakket-gate: stroombeheer zit alleen in Professional+.
+    await _require_plan_feature(cid, "allow_power", "Stroombeheer")
     cfg = await get_company_section(cid, "shelly")
     if not cfg.get("enabled"):
         raise HTTPException(status_code=400, detail="Shelly is niet ingeschakeld — configureer eerst onder Instellingen → Shelly.")
@@ -21062,6 +21167,7 @@ _route_deps.notify_superadmins = _notify_superadmins
 _route_deps.notify_tenant_power = _power_notify_tenant
 _route_deps.publish_power_cutoff_receipt = _publish_power_cutoff_receipt
 _route_deps.get_overdue_tenants = _company_overdue_tenants
+_route_deps.require_plan_feature = _require_plan_feature
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")
