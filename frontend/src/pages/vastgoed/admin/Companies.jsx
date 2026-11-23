@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus, Trash2, Pencil, X, Check, Loader2, Building2, Users, KeySquare,
   Search, RefreshCw, ArrowUpRight, CalendarDays,
-  CreditCard, Mail, Phone, MapPin, AlertCircle, LogIn, Clock3,
+  CreditCard, Mail, Phone, MapPin, AlertCircle, LogIn, Clock3, Landmark, Receipt,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
@@ -21,6 +22,204 @@ const formatDate = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
 };
+const OPEN_INVOICE_EXCLUDED_STATUSES = ['paid', 'superseded', 'cancelled', 'void'];
+const invoiceBalance = (invoice) => {
+  const balance = Number(invoice.balance_due ?? (Number(invoice.amount || 0) - Number(invoice.paid_amount || 0)));
+  return Number.isFinite(balance) ? Math.max(0, balance) : 0;
+};
+const formatInvoiceAmount = (amount, currency) => `${currency || 'SRD'} ${Number(amount || 0).toLocaleString('nl-NL', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`;
+
+function CompanyPaymentWizard({ company, onClose }) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [invoices, setInvoices] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [methods, setMethods] = useState([]);
+  const [method, setMethod] = useState('card');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.get('/superadmin/subscription-invoices'),
+      api.get('/saas-stripe/public-config'),
+    ]).then(([invoiceResponse, stripeResponse]) => {
+      if (!active) return;
+      const openInvoices = (Array.isArray(invoiceResponse.data) ? invoiceResponse.data : [])
+        .filter((invoice) => invoice.company_id === company.id
+          && !OPEN_INVOICE_EXCLUDED_STATUSES.includes(invoice.status)
+          && invoiceBalance(invoice) > 0)
+        .sort((a, b) => String(a.period_start || a.created_at).localeCompare(String(b.period_start || b.created_at)));
+      setInvoices(openInvoices);
+      if (openInvoices.length > 0) setSelectedIds([openInvoices[0].id]);
+      const availableMethods = stripeResponse.data?.enabled
+        ? (stripeResponse.data.methods || []).filter((item) => ['card', 'ideal'].includes(item))
+        : [];
+      setMethods(availableMethods);
+      if (availableMethods.length > 0) setMethod(availableMethods[0]);
+    }).catch((e) => {
+      if (active) setError(formatError(e, 'Facturen of betaalmethoden konden niet worden geladen.'));
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [company.id]);
+
+  const selectedInvoices = invoices.filter((invoice) => selectedIds.includes(invoice.id));
+  const currency = selectedInvoices[0]?.currency || 'SRD';
+  const total = selectedInvoices.reduce((sum, invoice) => sum + invoiceBalance(invoice), 0);
+
+  const toggleInvoice = (invoice) => {
+    setError('');
+    if (selectedIds.includes(invoice.id)) {
+      setSelectedIds((ids) => ids.filter((id) => id !== invoice.id));
+      return;
+    }
+    if (selectedInvoices.length > 0 && selectedInvoices[0].currency !== invoice.currency) {
+      setError('Facturen met verschillende valuta kunnen niet samen worden betaald.');
+      return;
+    }
+    setSelectedIds((ids) => [...ids, invoice.id]);
+  };
+
+  const continueToCheckout = () => {
+    if (selectedIds.length === 0 || !methods.includes(method)) return;
+    const back = encodeURIComponent('/admin/companies');
+    const ids = encodeURIComponent(selectedIds.join(','));
+    navigate(`/saas/checkout/selectie?ids=${ids}&method=${method}&back=${back}`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4"
+      data-testid="company-payment-wizard">
+      <section role="dialog" aria-modal="true" aria-labelledby="company-payment-title"
+        className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl bg-[#F7F8FA] shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-wider text-orange-600">Abonnement betalen</p>
+            <h2 id="company-payment-title" className="truncate text-xl font-black text-slate-900">{company.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Betaalvenster sluiten"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-slate-100">
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="flex items-center gap-2 text-xs font-bold">
+            <span className={`rounded-full px-3 py-1 ${step === 1 ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>1. Facturen</span>
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className={`rounded-full px-3 py-1 ${step === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>2. Betaalmethode</span>
+          </div>
+
+          {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+          {loading ? (
+            <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500">
+              <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-orange-500" />Facturen laden…
+            </div>
+          ) : invoices.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+              <Receipt className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+              <p className="font-bold text-slate-800">Geen openstaande facturen</p>
+              <p className="mt-1 text-sm text-slate-500">Voor {company.name} zijn er geen abonnementsfacturen om te betalen.</p>
+            </div>
+          ) : step === 1 ? (
+            <>
+              <div className="space-y-2">
+                {invoices.map((invoice) => {
+                  const checked = selectedIds.includes(invoice.id);
+                  return (
+                    <label key={invoice.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 bg-white p-4 transition ${checked ? 'border-orange-400 ring-2 ring-orange-50' : 'border-slate-200 hover:border-slate-300'}`}
+                      data-testid={`company-payment-invoice-${invoice.id}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleInvoice(invoice)}
+                        className="mt-1 h-5 w-5 accent-[#FF5C00]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-black text-slate-900">Factuur #{(invoice.invoice_number || invoice.id.slice(0, 8)).toUpperCase()}</span>
+                          <span className="font-black text-orange-600">{formatInvoiceAmount(invoiceBalance(invoice), invoice.currency)}</span>
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {invoice.plan || company.plan || 'Abonnement'} · {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
+                          {invoice.due_date ? ` · Vervaldatum ${formatDate(invoice.due_date)}` : ''}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3">
+                <span className="text-sm font-bold text-slate-600">{selectedInvoices.length} factuur{selectedInvoices.length === 1 ? '' : 'en'} geselecteerd</span>
+                <span className="font-black text-slate-900">{formatInvoiceAmount(total, currency)}</span>
+              </div>
+              <button type="button" onClick={() => { setError(''); setStep(2); }} disabled={!selectedIds.length}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-bold text-white hover:bg-[#E05200] disabled:cursor-not-allowed disabled:opacity-50">
+                Verder naar betaalmethode <ArrowUpRight className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {selectedInvoices.map((invoice) => (
+                  <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm">
+                    <span className="min-w-0 truncate font-bold text-slate-700">
+                      #{(invoice.invoice_number || invoice.id.slice(0, 8)).toUpperCase()} · {invoice.plan || company.plan || 'Abonnement'}
+                    </span>
+                    <span className="shrink-0 font-black text-slate-900">{formatInvoiceAmount(invoiceBalance(invoice), invoice.currency)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3 text-white">
+                  <span className="font-bold">Totaal te betalen</span>
+                  <span className="text-lg font-black">{formatInvoiceAmount(total, currency)}</span>
+                </div>
+              </div>
+
+              {methods.length === 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  Online betalen via Stripe is momenteel niet geactiveerd.
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {methods.map((item) => {
+                    const selected = method === item;
+                    const Icon = item === 'ideal' ? Landmark : CreditCard;
+                    const label = item === 'ideal' ? 'iDEAL' : 'Creditcard';
+                    return (
+                      <button key={item} type="button" onClick={() => setMethod(item)}
+                        className={`flex min-h-16 items-center gap-3 rounded-2xl border-2 bg-white px-4 text-left transition ${selected ? 'border-orange-400 ring-2 ring-orange-50' : 'border-slate-200 hover:border-slate-300'}`}
+                        data-testid={`company-payment-method-${item}`}>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><Icon className="h-5 w-5" /></span>
+                        <span className="flex-1 font-black text-slate-900">{label}</span>
+                        <span className={`h-5 w-5 rounded-full border-2 ${selected ? 'border-orange-500 bg-orange-500 ring-2 ring-orange-100' : 'border-slate-300'}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setError(''); setStep(1); }}
+                  className="h-12 flex-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50">
+                  Terug
+                </button>
+                <button type="button" onClick={continueToCheckout} disabled={!methods.includes(method) || selectedIds.length === 0}
+                  className="flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-bold text-white hover:bg-[#E05200] disabled:cursor-not-allowed disabled:opacity-50">
+                  <CreditCard className="h-4 w-4" /> Doorgaan naar betalen
+                </button>
+              </div>
+              <p className="text-center text-xs text-slate-500">De veilige betaling wordt verwerkt via Stripe.</p>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, onOpenAsCustomer, onChanged }) {
   const [busy, setBusy] = useState('');
@@ -366,6 +565,7 @@ export default function Companies() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [paymentCompany, setPaymentCompany] = useState(null);
   const [impersonating, setImpersonating] = useState(false);
   // Plan-catalog ook op lijst-niveau ophalen zodat we op elke bedrijfskaart
   // de LEESBARE plan-naam kunnen tonen i.p.v. de plan_id ("professional"
@@ -533,62 +733,66 @@ export default function Companies() {
           <p className="text-sm text-slate-500 mt-1">Pas je zoekopdracht of filter aan.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visibleItems.map((c) => {
             const isActive = c.id === activeCompanyId;
             const billing = BILLING_STATUSES[c.billing_status] || BILLING_STATUSES.active;
             return (
               <div key={c.id} data-testid={`company-card-${c.slug}`}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 transition-all ${isActive ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0"><Building2 className="w-5 h-5" /></div>
-                    <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-black text-slate-900 truncate">{c.name}</h3>
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ring-1 ring-inset ${billing.className}`}>{billing.label}</span>
-                      {isActive && <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Scope actief</span>}
-                      {c.active === false && <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Toegang uit</span>}
-                    </div>
-                    <p className="text-xs text-slate-500 truncate">/{c.slug} · {planMap[c.plan]?.name || c.plan} · {c.currency || 'SRD'} {Number(c.monthly_amount || 0).toLocaleString('nl-NL')}/{c.plan_interval || 'maand'}</p>
-                    <p className="text-xs text-slate-400 truncate mt-0.5">{c.contact_email || c.owner_email || 'Geen contact-e-mailadres'}</p>
-                    </div>
+                className={`flex flex-col rounded-3xl border bg-white p-4 shadow-sm transition-all ${isActive ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-orange-200 hover:shadow-md'}`}>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
+                    <Building2 className="h-6 w-6" />
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 lg:w-[300px] text-center">
-                    <div className="rounded-xl bg-slate-50 py-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Appartementen</p>
-                      <p className="text-lg font-black text-slate-900">{c.stats?.apartments ?? '—'}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                      <h3 className="max-w-full truncate font-black text-slate-900">{c.name}</h3>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ring-1 ring-inset ${billing.className}`}>{billing.label}</span>
+                      {isActive && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold text-orange-700">Scope actief</span>}
+                      {c.active === false && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold text-slate-500">Toegang uit</span>}
                     </div>
-                    <div className="rounded-xl bg-slate-50 py-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Huurders</p>
-                      <p className="text-lg font-black text-slate-900">{c.stats?.tenants ?? '—'}</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 py-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gebruikers</p>
-                      <p className="text-lg font-black text-slate-900">{c.stats?.admins ?? '—'}</p>
-                    </div>
+                    <p className="truncate text-xs font-semibold text-slate-600">{planMap[c.plan]?.name || c.plan} · {c.currency || 'SRD'} {Number(c.monthly_amount || 0).toLocaleString('nl-NL')}/{c.plan_interval || 'maand'}</p>
+                    <p className="mt-1 truncate text-xs text-slate-400">{c.contact_email || c.owner_email || 'Geen contact-e-mailadres'}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-400">/{c.slug}</p>
                   </div>
+                </div>
 
-                  <div className="flex gap-2">
-                    <button onClick={() => setSelectedCompany(c)}
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Appartementen', value: c.stats?.apartments ?? '—' },
+                    { label: 'Huurders', value: c.stats?.tenants ?? '—' },
+                    { label: 'Gebruikers', value: c.stats?.admins ?? '—' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-2xl bg-slate-50 px-2 py-2.5 text-center">
+                      <p className="text-lg font-black text-slate-900">{item.value}</p>
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <button type="button" onClick={() => setPaymentCompany(c)}
+                    data-testid={`company-pay-${c.slug}`}
+                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-xs font-extrabold text-white hover:bg-[#E05200]">
+                    <CreditCard className="h-4 w-4" /> Betalen
+                  </button>
+                  <button type="button" onClick={() => setSelectedCompany(c)}
                       data-testid={`company-manage-${c.slug}`}
-                      className="flex-1 lg:flex-none h-10 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center justify-center gap-2">
-                      Beheren <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => { setEditing(c); setShowForm(true); }}
-                      data-testid={`company-edit-${c.slug}`}
-                      aria-label={`${c.name} bewerken`} title="Gegevens wijzigen"
-                      className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => onDelete(c)}
-                      data-testid={`company-delete-${c.slug}`}
-                      aria-label={`${c.name} verwijderen`} title="Verwijderen"
-                      className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-extrabold text-white hover:bg-slate-800">
+                    Beheren <ArrowUpRight className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => { setEditing(c); setShowForm(true); }}
+                    data-testid={`company-edit-${c.slug}`}
+                    aria-label={`${c.name} bewerken`} title="Gegevens wijzigen"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => onDelete(c)}
+                    data-testid={`company-delete-${c.slug}`}
+                    aria-label={`${c.name} verwijderen`} title="Verwijderen"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             );
@@ -614,6 +818,9 @@ export default function Companies() {
           onOpenAsCustomer={openCustomerEnvironment}
           onChanged={load}
         />
+      )}
+      {paymentCompany && (
+        <CompanyPaymentWizard company={paymentCompany} onClose={() => setPaymentCompany(null)} />
       )}
       {impersonating && (
         <div className="fixed inset-0 z-[60] bg-slate-950/60 flex items-center justify-center p-5" role="status">
