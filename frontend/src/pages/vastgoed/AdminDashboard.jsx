@@ -5056,7 +5056,7 @@ function SaasConsoleDock({ tab, tabs, onChange }) {
             data-testid={`tab-${id}`} data-active={selected ? 'true' : 'false'}
             aria-current={selected ? 'page' : undefined}
             className={`${SAAS_MOBILE_DOCK_IDS.includes(id) ? 'flex' : 'hidden md:flex'} min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
-              selected ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+              selected ? 'bg-gradient-to-b from-emerald-500 to-emerald-700 text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
             }`}>
             <Icon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" strokeWidth={selected ? 2.5 : 2} />
             <span className="w-full truncate">{item.label}</span>
@@ -5068,7 +5068,7 @@ function SaasConsoleDock({ tab, tabs, onChange }) {
         data-active={!SAAS_DOCK_IDS.includes(tab) ? 'true' : 'false'}
         data-active-mobile={!SAAS_MOBILE_DOCK_IDS.includes(tab) ? 'true' : 'false'}
         className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
-          !SAAS_DOCK_IDS.includes(tab) ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+          !SAAS_DOCK_IDS.includes(tab) ? 'bg-gradient-to-b from-emerald-500 to-emerald-700 text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
         }`}>
         <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
         <span className="w-full truncate">Meer</span>

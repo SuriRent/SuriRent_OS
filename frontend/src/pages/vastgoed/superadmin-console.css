@@ -69,7 +69,7 @@ html[data-pwa-role="superadmin"] body {
 }
 
 [data-testid="saas-console-dock"] button[data-active="true"] {
-  background: linear-gradient(180deg, #ff8a2b, #ff5c00);
+  background: linear-gradient(180deg, #10b981, #047857);
   color: #fff;
 }
 
@@ -115,7 +115,7 @@ html[data-pwa-role="superadmin"] .saas-console-shell .text-orange-700 {
   }
 
   [data-testid="saas-console-more"][data-active-mobile="true"] {
-    background: linear-gradient(180deg, #ff8a2b, #ff5c00);
+    background: linear-gradient(180deg, #10b981, #047857);
     color: #fff;
   }
 }
