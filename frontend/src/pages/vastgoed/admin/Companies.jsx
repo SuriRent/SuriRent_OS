@@ -659,29 +659,23 @@ export default function Companies() {
   }
 
   return (
-    <div data-testid="companies-management-page" className="space-y-5 pb-24 sm:pb-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Bedrijven</h1>
-          <p className="text-sm text-slate-500 mt-1">Beheer bedrijven, abonnementen, toegang en klantondersteuning.</p>
-        </div>
-        <button onClick={load} disabled={loading} data-testid="company-refresh"
-          className="h-11 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-2 disabled:opacity-50">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Vernieuwen</span>
-        </button>
-      </div>
-
-      <div className="flex justify-end">
+    <div data-testid="companies-management-page" className="space-y-3 pb-24 sm:pb-6">
+      <div className="flex justify-end gap-2">
         <button onClick={() => { setEditing(null); setShowForm(true); }}
           data-testid="company-new-btn"
-          className="h-11 px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
+          className="h-10 px-3 sm:px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white text-sm font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
           <Plus className="w-4 h-4" /> Nieuw bedrijf
+        </button>
+        <button onClick={load} disabled={loading} data-testid="company-refresh"
+          aria-label="Bedrijven vernieuwen"
+          className="h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center justify-center disabled:opacity-50">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {err && <div role="alert" className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           { id: 'all', label: 'Alle bedrijven', value: counts.all, color: 'text-slate-900' },
           { id: 'active', label: 'Actieve abonnementen', value: counts.active, color: 'text-emerald-700' },
@@ -689,22 +683,22 @@ export default function Companies() {
           { id: 'attention', label: 'Aandacht nodig', value: counts.attention, color: 'text-red-700' },
         ].map((item) => (
           <button key={item.id} type="button" onClick={() => setFilter(item.id)}
-            className={`rounded-2xl border bg-white p-4 text-left transition ${filter === item.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
-            <p className="text-xs font-bold text-slate-500">{item.label}</p>
-            <p className={`text-2xl font-black mt-1 ${item.color}`}>{loading ? '—' : item.value}</p>
+            className={`rounded-2xl border bg-white p-2.5 text-left transition ${filter === item.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
+              <p className="text-[10px] leading-tight font-bold text-slate-500">{item.label}</p>
+              <p className={`text-lg font-black mt-0.5 ${item.color}`}>{loading ? '—' : item.value}</p>
           </button>
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="relative min-w-0">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
             aria-label="Bedrijven zoeken" data-testid="company-search"
-            className="w-full h-11 rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+            className="w-full h-9 rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs sm:text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
         </div>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter bedrijven"
-          className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 sm:px-3 text-xs sm:text-sm font-semibold text-slate-700">
           <option value="all">Alle status</option>
           <option value="active">Actief abonnement</option>
           <option value="trial">Proefperiode</option>
