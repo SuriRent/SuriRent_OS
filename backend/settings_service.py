@@ -49,6 +49,7 @@ SECTION_SECRETS = {
     "shelly": ["cloud_token"],
     "domain": [],
     "invoicing": [],
+    "mope": ["api_token"],
 }
 
 
@@ -118,6 +119,7 @@ def empty_section(section: str) -> dict:
             "fines_mode": "per_overdue",
             "fines_grace_days": 0,
         },
+        "mope": {"api_token": None, "enabled": False},
         "deposit": {"rent_multiplier": 1.0},
         # Kwitantie-afdruk: welk paginaformaat gebruikt de Kiosk voor het
         # renderen van betalingsbonnen. 'a4' = normale A4 kantoorprinter,

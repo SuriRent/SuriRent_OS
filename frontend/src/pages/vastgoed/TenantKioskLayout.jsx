@@ -1174,6 +1174,7 @@ function TenantPaySelect({ overview, onBack, onConfirm }) {
 const PIN_METHOD = { v: 'pin', l: 'PIN', sub: 'Betaal met uw pinpas', icon: CreditCard };
 
 const CARD_METHOD = { v: 'creditcard', l: 'Creditcard', sub: 'Scan de QR-code met uw telefoon', icon: CreditCard };
+const MOPE_METHOD = { v: 'mope', l: 'Mopé', sub: 'Scan de QR-code en betaal met Mopé', icon: Wallet };
 
 // QR-popup: de huurder scant de code en betaalt op de telefoon; de kiosk pollt de status.
 function TenantStripeQr({ payload, onPaid, onClose }) {
@@ -1225,17 +1226,77 @@ function TenantStripeQr({ payload, onPaid, onClose }) {
   );
 }
 
+function TenantMopeQr({ payload, onPaid, onClose }) {
+  const [state, setState] = useState({ phase: 'loading', paymentId: '', url: '', err: '' });
+  useEffect(() => {
+    let stop = false;
+    let timer = null;
+    const poll = (paymentId) => {
+      api.get(`/tenant-portal/mope/status/${paymentId}`).then(({ data }) => {
+        if (stop) return;
+        if (data?.status === 'paid') {
+          playSuccessPing();
+          onPaid(paymentId);
+          return;
+        }
+        if (data?.status === 'expired') {
+          setState((s) => ({ ...s, phase: 'error', err: 'Dit Mopé-betaalverzoek is verlopen. Sluit dit venster en probeer opnieuw.' }));
+          return;
+        }
+        timer = setTimeout(() => poll(paymentId), 2500);
+      }).catch(() => {
+        if (!stop) timer = setTimeout(() => poll(paymentId), 3500);
+      });
+    };
+    api.post('/tenant-portal/mope/request', { amount: payload.amount, currency: payload.currency || 'SRD' })
+      .then(({ data }) => {
+        if (stop) return;
+        setState({ phase: 'qr', paymentId: data.payment_id, url: data.url, err: '' });
+        poll(data.payment_id);
+      })
+      .catch((error) => {
+        if (!stop) setState({ phase: 'error', paymentId: '', url: '', err: formatError(error, 'Kon de Mopé-betaling niet starten') });
+      });
+    return () => { stop = true; if (timer) clearTimeout(timer); };
+  }, []);
+  const currency = payload.currency || 'SRD';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-testid="tk-mope-qr">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl">
+        <h3 className="text-2xl font-black text-slate-900">Betaal met Mopé</h3>
+        <p className="text-[#F26A12] font-black text-2xl mt-1">{fmtMoney(payload.amount, currency)}</p>
+        {state.phase === 'loading' && <p className="mt-8 mb-8 text-slate-500">Mopé-betaalverzoek wordt gemaakt…</p>}
+        {state.phase === 'qr' && (
+          <>
+            <div className="mt-5 inline-block p-4 bg-white rounded-2xl border-2 border-slate-200">
+              <QRCodeSVG value={state.url} size={220} />
+            </div>
+            <p className="mt-4 text-slate-600 text-sm">Scan de QR-code met de Mopé-app. Deze kiosk gaat vanzelf verder zodra Mopé de betaling bevestigt.</p>
+            <a href={state.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-bold text-[#FF5C00] underline">Open Mopé-betaallink</a>
+            <p className="mt-2 text-xs text-slate-500 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Wachten op betaling…</p>
+            <p className="mt-2 text-[11px] text-slate-400">Het verzoek blijft maximaal 24 uur actief. Sluiten annuleert het niet; betaal niet nadat u dit venster hebt gesloten.</p>
+          </>
+        )}
+        {state.phase === 'error' && <p className="mt-6 mb-4 text-red-600 font-semibold" data-testid="tk-mope-error">{state.err}</p>}
+        <button onClick={onClose} data-testid="tk-mope-cancel"
+          className="mt-6 w-full rounded-2xl bg-slate-100 text-slate-700 font-bold py-3">Sluiten</button>
+      </div>
+    </div>
+  );
+}
+
 function TenantPayMethod({ payload, onConfirm }) {
   const cur = payload.currency || 'SRD';
   const [methods, setMethods] = useState([PIN_METHOD]);
   const [qrOpen, setQrOpen] = useState(false);
+  const [mopeOpen, setMopeOpen] = useState(false);
   useEffect(() => {
     api.get('/tenant-portal/payment-methods')
       .then(({ data }) => {
         const list = (data?.methods || [])
-          .filter((m) => m.id === 'pin' || m.id === 'creditcard')
+          .filter((m) => m.id === 'pin' || m.id === 'creditcard' || m.id === 'mope')
           .map((m) => {
-            const base = m.id === 'creditcard' ? CARD_METHOD : PIN_METHOD;
+            const base = m.id === 'creditcard' ? CARD_METHOD : m.id === 'mope' ? MOPE_METHOD : PIN_METHOD;
             return { ...base, l: m.label || base.l, sub: m.sub || base.sub };
           });
         if (list.length) setMethods(list);
@@ -1255,7 +1316,7 @@ function TenantPayMethod({ payload, onConfirm }) {
           {methods.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.v} onClick={() => (m.v === 'creditcard' ? setQrOpen(true) : onConfirm({ ...payload, method: m.v }))}
+              <button key={m.v} onClick={() => (m.v === 'creditcard' ? setQrOpen(true) : m.v === 'mope' ? setMopeOpen(true) : onConfirm({ ...payload, method: m.v }))}
                 data-testid={`tk-method-${m.v}`}
                 className="bg-white rounded-3xl p-5 sm:p-8 flex items-center gap-5 text-left hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
                 <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 rounded-3xl flex items-center justify-center bg-[#FFF1E8] text-[#F26A12]">
@@ -1273,6 +1334,10 @@ function TenantPayMethod({ payload, onConfirm }) {
       {qrOpen && (
         <TenantStripeQr payload={payload} onClose={() => setQrOpen(false)}
           onPaid={(pi) => { setQrOpen(false); onConfirm({ ...payload, method: 'creditcard', stripe_payment_intent_id: pi, stripe_paid: true }); }} />
+      )}
+      {mopeOpen && (
+        <TenantMopeQr payload={payload} onClose={() => setMopeOpen(false)}
+          onPaid={(paymentId) => { setMopeOpen(false); onConfirm({ ...payload, method: 'mope', mope_payment_request_id: paymentId, mope_paid: true }); }} />
       )}
     </div>
   );
@@ -1471,12 +1536,15 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
       } : {};
       const stripeExtras = payload.method === 'creditcard'
         ? { stripe_payment_intent_id: payload.stripe_payment_intent_id } : {};
+      const mopeExtras = payload.method === 'mope'
+        ? { mope_payment_request_id: payload.mope_payment_request_id } : {};
       const planItems = payload.plan_items || [];
       const plainItems = payload.plain_items || [];
       for (const pi of planItems) {
         await api.post(`/tenant-portal/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`, {
           method: payload.method,
           ...stripeExtras,
+          ...mopeExtras,
           amount: pi.amount,
           note: `Huurder Kiosk — termijn ${pi.seq}`,
           ...bankExtras,
@@ -1494,6 +1562,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
             note: payload.note || '',
             ...bankExtras,
             ...stripeExtras,
+            ...mopeExtras,
           });
         }
       } else if (planItems.length === 0) {
@@ -1508,6 +1577,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
           note: payload.note || '',
           ...bankExtras,
           ...stripeExtras,
+          ...mopeExtras,
         });
       }
       playSuccessPing();
@@ -1521,7 +1591,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
   // Al betaald op de telefoon: direct boeken, geen extra bevestiging nodig.
   const autoSubmitted = useRef(false);
   useEffect(() => {
-    if (payload.stripe_paid && !autoSubmitted.current) {
+    if ((payload.stripe_paid || payload.mope_paid) && !autoSubmitted.current) {
       autoSubmitted.current = true;
       submit();
     }
@@ -1532,6 +1602,7 @@ function TenantPayConfirm({ payload, overview, onBack, onPaid }) {
     pin: 'PIN',
     creditcard: 'Creditcard',
     bank: 'Bankoverschrijving',
+    mope: 'Mopé',
   }[payload.method] || payload.method;
 
   return (

@@ -1,4 +1,4 @@
-import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate, Bell } from 'lucide-react';
+import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Wallet, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate, Bell } from 'lucide-react';
 
 // Eén bron voor de Instellingen-onderdelen: gebruikt door zijmenu-dropdown,
 // mobiele sheet en InstellingenHub.
@@ -10,6 +10,7 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'invoicing', label: 'Facturen automatisering', desc: 'Automatische maand-facturen na grace periode.', icon: FileText },
   { id: 'deposit', label: 'Borg', desc: 'Stel de standaardborg in als veelvoud van de maandhuur.', icon: ShieldCheck },
   { id: 'stripe', label: 'Stripe betalingen', desc: 'Laat huurders in de Kiosk betalen met Creditcard of iDEAL.', icon: CreditCard },
+  { id: 'mope', label: 'Mopé betalingen', desc: 'Koppel uw eigen Mopé-webshopaccount voor betalingen in de kiosk.', icon: Wallet },
   { id: 'stroom', label: 'Stroom', desc: 'Tuya-koppeling, schakelaars per appartement koppelen en automatisch afsluiten bij achterstand.', icon: Zap },
   { id: 'bon', label: 'Bon & afdrukken', desc: 'Kies wat er op de bon staat: bedrijfsnaam, velden en voettekst.', icon: Printer },
   { id: 'bon-printer', label: 'Bon printer', desc: 'Kies KT-V520 of een Bluetooth bonprinter en koppel hem.', icon: Bluetooth },

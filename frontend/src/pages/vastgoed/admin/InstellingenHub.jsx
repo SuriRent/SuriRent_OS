@@ -8,6 +8,7 @@ import BackupRestore from './BackupRestore';
 import Notifications from './Notifications';
 import SettingsPage from './Settings';
 import StripeCompanySettings from './StripeCompanySettings';
+import MopeCompanySettings from './MopeCompanySettings';
 import PowerSettings from './PowerSettings';
 import KioskDevices from './KioskDevices';
 import BonPrinter from './BonPrinter';
@@ -40,6 +41,7 @@ export const RENDER = {
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   deposit: () => <SettingsPage initialSection="deposit" hideSubNav />,
   stripe: () => <StripeCompanySettings />,
+  mope: () => <MopeCompanySettings />,
   stroom: () => <PowerSettings />,
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
   'bon-printer': () => <BonPrinter />,

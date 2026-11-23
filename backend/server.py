@@ -384,7 +384,8 @@ BACKUP_EXTRA_COLLECTIONS = {
     "payment_plans": "id", "payment_plan_installments": "id", "payment_plan_reminders": "id",
     "tenant_notes": "id", "fines": "id", "power_devices": "id", "power_log": "id",
     "kiosk_pins": "company_id", "kiosk_printers": "id", "kiosk_id_owners": "kiosk_id",
-    "kiosk_emp_state": "emp_key", "kiosk_stripe_payments": "id", "kiosk_print_log": "id",
+    "kiosk_emp_state": "emp_key", "kiosk_stripe_payments": "id", "kiosk_mope_payments": "id",
+    "kiosk_print_log": "id",
     "bank_statements": "id", "landing_assets": "id", "audit_log": "id",
     "notifications": "id", "fcm_tokens": "id", "sent_invoice_reminders": "invoice_id",
     "kiosk_devices_seen": "key",
@@ -457,6 +458,8 @@ async def lifespan(app: FastAPI):
     await db.kiosk_presence.delete_many({})
     await db.kiosk_print_log.create_index([("company_id", 1), ("printed_at", -1)])
     await db.kiosk_print_log.create_index([("company_id", 1), ("payment_id", 1)])
+    await db.kiosk_mope_payments.create_index("payment_request_id", unique=True)
+    await db.kiosk_mope_payments.create_index([("company_id", 1), ("tenant_id", 1)])
     await db.payments.create_index([("company_id", 1), ("kiosk_employee_id", 1), ("paid_at", -1)])
     await db.payment_plans.create_index([("company_id", 1), ("status", 1)])
     await db.payment_plans.create_index([("tenant_id", 1), ("status", 1)])
@@ -7657,6 +7660,12 @@ async def tenant_portal_payment_methods(tenant=Depends(get_tenant_session)):
             methods.append({"id": "creditcard", "label": "Creditcard", "sub": "Scan de QR-code met uw telefoon"})
     except Exception as e:  # noqa: BLE001
         print(f"[tenant-portal] stripe config lezen mislukt: {e}")
+    try:
+        from routes.company_mope import _active as _mope_active, _config as _mope_config
+        if _mope_active(await _mope_config(tenant.get("company_id"))):
+            methods.append({"id": "mope", "label": "Mopé", "sub": "Scan de QR-code en betaal met Mopé"})
+    except Exception as e:  # noqa: BLE001
+        print(f"[tenant-portal] mope config lezen mislukt: {e}")
     return {"methods": methods}
 
 
@@ -8010,13 +8019,14 @@ class TenantMaintenanceIn(BaseModel):
 class TenantPaymentIn(BaseModel):
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard", "mope"] = "contant"
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None
     note: Optional[str] = ""
     invoice_id: Optional[str] = None
     stripe_payment_intent_id: Optional[str] = None
+    mope_payment_request_id: Optional[str] = None
     # Bankoverschrijving-velden (alleen relevant als method == "bank")
     bank_country: Optional[Literal["SR", "NL"]] = None
     bank_statement_id: Optional[str] = None  # asset-id van geüpload afschrift
@@ -8459,6 +8469,16 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     else:
         period_month = body.period_month
         period_year = body.period_year
+    if body.method == "mope":
+        if not body.mope_payment_request_id:
+            raise HTTPException(status_code=400, detail="Mopé vereist een voltooide betaling")
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
+            amount=body.amount, currency=body.currency,
+        )
+    elif body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     pin = PaymentIn(
         tenant_id=tenant["id"],
         apartment_id=tenant.get("apartment_id"),
@@ -8471,6 +8491,7 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         note=body.note or "",
         received_by=tenant.get("name") or "Huurder Kiosk",
         stripe_payment_intent_id=body.stripe_payment_intent_id,
+        mope_payment_request_id=body.mope_payment_request_id,
     )
     payment_status = "pending_approval" if (needs_proof or body.method == "pin") else "approved"
     doc = await _create_payment_doc(
@@ -10602,6 +10623,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
         "currency": body.currency,
         "method": body.method,
         "stripe_payment_intent_id": getattr(body, "stripe_payment_intent_id", None),
+        "mope_payment_request_id": getattr(body, "mope_payment_request_id", None),
         "category": body.category,
         "period_month": body.period_month or (matched_invoice or {}).get("period_month"),
         "period_year": body.period_year or (matched_invoice or {}).get("period_year"),
@@ -11163,6 +11185,16 @@ async def _kiosk_overview_invalidate(cid: str, tenant_id: Optional[str]) -> None
 @api.post("/payments", response_model=PaymentOut)
 async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
     cid = company_id_of(user)
+    if body.method == "mope":
+        if not body.mope_payment_request_id:
+            raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
+            amount=body.amount, currency=body.currency,
+        )
+    elif body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     doc = await _create_payment_doc(body, cid, approved_by=user.get("name") or user.get("email"))
     enriched = await _enrich_payment(doc)
     await _kiosk_overview_invalidate(cid, doc.get("tenant_id"))
@@ -12849,6 +12881,17 @@ async def kiosk_create_payment(
         employee_id = None
     elif body.method in ("creditcard", "ideal"):
         raise HTTPException(status_code=400, detail="Creditcard/iDEAL vereist een Stripe-betaling")
+    if body.method == "mope":
+        if not body.mope_payment_request_id:
+            raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
+            amount=body.amount, currency=body.currency,
+        )
+        employee_id = None
+    elif body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     # Als een kiosk-medewerker is opgegeven → betaling gaat in pending_approval.
     # Beheerder ziet het en moet handtekening zetten om te bevestigen.
     # Zonder employee_id → klassieke directe boeking (legacy gedrag).
@@ -14048,7 +14091,8 @@ def _receipt_fonts(rcfg: dict) -> tuple:
 
 
 _PRINT_METHOD_LABELS = {"cash": "Contant", "contant": "Contant", "bank": "Bankoverschrijving",
-                        "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL", "other": "Anders"}
+                        "card": "PIN", "creditcard": "Creditcard", "ideal": "iDEAL",
+                        "mope": "Mopé", "other": "Anders"}
 
 
 async def _financial_receipt_data(tenant_id: str, session: dict, force_ktp: bool = False, opts: Optional[dict] = None) -> dict:
@@ -14822,7 +14866,8 @@ def _render_receipt_html_thermal(*, h, cb_paid, receipt_number, paid_at,
     pad = "1mm 0.5mm" if W <= 60 else "2mm 3mm"
     method_label = {
         "cash": "CONTANT", "contant": "CONTANT", "bank": "OVERSCHRIJVING",
-        "card": "PIN", "creditcard": "CREDITCARD", "ideal": "IDEAL", "other": "ANDERS",
+        "card": "PIN", "creditcard": "CREDITCARD", "ideal": "IDEAL", "mope": "MOPÉ",
+        "other": "ANDERS",
     }.get(method, (method or "").upper() or "—")
     outstanding_txt = (
         '<span class="paid">** VOLLEDIG VOLDAAN **</span>'
@@ -19655,7 +19700,7 @@ from settings_service import (
     SECTION_SECRETS as _SECTION_SECRETS,
 )
 
-VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "deposit", "receipts", "kiosk_devices", "fcm_prefs"]
+VALID_SETTINGS_SECTIONS = ["smtp", "twilio", "shelly", "domain", "invoicing", "mope", "deposit", "receipts", "kiosk_devices", "fcm_prefs"]
 
 
 async def _get_company_settings_doc(company_id: str) -> dict:
@@ -21139,6 +21184,7 @@ from routes import superadmin as _superadmin_routes  # noqa: E402
 _route_deps.db = db
 _route_deps.get_current_user = get_current_user
 _route_deps.get_kiosk_session = get_kiosk_session
+_route_deps.get_tenant_session = get_tenant_session
 _route_deps.company_id_of = company_id_of
 _route_deps.scope = scope
 _route_deps.require_role = require_role
@@ -21146,6 +21192,7 @@ _route_deps.saas_email = _saas_email
 _route_deps.iso = iso
 _route_deps.now_utc = now_utc
 _route_deps.new_id = new_id
+_route_deps.public_url = _public_url
 _route_deps.billing_summary = _billing_summary
 _route_deps.get_plan = _fetch_plan_by_id
 _route_deps.plan_period_end = _plan_period_end
@@ -21177,6 +21224,8 @@ from routes import saas_stripe as _saas_stripe_routes  # noqa: E402
 app.include_router(_saas_stripe_routes.router, prefix="/api")
 from routes import company_stripe as _company_stripe_routes  # noqa: E402
 app.include_router(_company_stripe_routes.router, prefix="/api")
+from routes import company_mope as _company_mope_routes  # noqa: E402
+app.include_router(_company_mope_routes.router, prefix="/api")
 from routes import power as _power_routes  # noqa: E402
 app.include_router(_power_routes.router, prefix="/api")
 
@@ -21594,6 +21643,35 @@ async def pwa_manifest(request: Request, role: str = "beheer", slug: str | None 
 _plan_core = _build_plan_pay_core(db, _pp_helpers)
 
 
+async def _mope_installment_amount(plan: dict, seq: int, requested_amount: Optional[float]) -> float:
+    if plan.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Regeling is niet actief")
+    installment = await db.payment_plan_installments.find_one(
+        {"plan_id": plan["id"], "sequence": seq}, {"_id": 0, "amount": 1, "status": 1},
+    )
+    if not installment:
+        raise HTTPException(status_code=404, detail="Termijn niet gevonden")
+    if installment.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Termijn is al betaald")
+    try:
+        amount = round(float(requested_amount if requested_amount is not None else installment["amount"]), 2)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
+    if not math.isfinite(amount) or amount <= 0:
+        raise HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
+    if plan.get("invoice_ids"):
+        invoice_open = 0.0
+        async for invoice in db.invoices.find(
+            {"id": {"$in": plan["invoice_ids"]}, "company_id": plan["company_id"]},
+            {"_id": 0, "amount": 1, "paid_amount": 1},
+        ):
+            invoice_open += max(0.0, float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0))
+        if invoice_open <= 0.01:
+            raise HTTPException(status_code=400, detail="Gekoppelde factuur is al volledig betaald")
+        amount = round(min(amount, invoice_open), 2)
+    return amount
+
+
 # ---------- Tenant Kiosk — Betalingsregelingen ----------
 @app.get("/api/tenant-portal/payment-plans")
 async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
@@ -21604,10 +21682,11 @@ async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
 
 
 class _TenantPayInstallmentIn(BaseModel):
-    method: Literal["contant", "bank", "pin", "creditcard"] = "contant"
+    method: Literal["contant", "bank", "pin", "creditcard", "mope"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
     stripe_payment_intent_id: Optional[str] = None
+    mope_payment_request_id: Optional[str] = None
 
 
 @app.post("/api/tenant-portal/payment-plans/{plan_id}/installments/{seq}/pay")
@@ -21626,9 +21705,22 @@ async def tenant_portal_pay_installment(
         if not body.stripe_payment_intent_id or not body.amount:
             raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
         await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
+    if body.method == "mope":
+        if not body.mope_payment_request_id:
+            raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
+        amount = await _mope_installment_amount(plan, seq, body.amount)
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
+            amount=amount, currency=plan.get("currency") or "SRD",
+        )
+        body.amount = amount
+    elif body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
+        mope_payment_request_id=body.mope_payment_request_id,
         received_by=tenant.get("name") or "Huurder Kiosk",
         approved_by_label=tenant.get("name") or "Huurder Kiosk",
         status="pending_approval" if body.method == "pin" else "approved",
@@ -21656,11 +21748,12 @@ async def kiosk_tenant_payment_plans(tenant_id: str, _session=Depends(get_kiosk_
 
 
 class _KioskPayInstallmentIn(BaseModel):
-    method: Literal["contant", "bank", "creditcard", "ideal"] = "contant"
+    method: Literal["contant", "bank", "creditcard", "ideal", "mope"] = "contant"
     note: Optional[str] = ""
     amount: Optional[float] = None
     employee_id: Optional[str] = None
     employee_pin: Optional[str] = None
+    mope_payment_request_id: Optional[str] = None
 
 
 @app.post("/api/kiosk/payment-plans/{plan_id}/installments/{seq}/pay")
@@ -21677,6 +21770,19 @@ async def kiosk_pay_installment(
     )
     if not plan:
         raise HTTPException(status_code=404, detail="Regeling niet gevonden")
+
+    if body.method == "mope":
+        if not body.mope_payment_request_id:
+            raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
+        amount = await _mope_installment_amount(plan, seq, body.amount)
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=cid, tenant_id=plan["tenant_id"],
+            amount=amount, currency=plan.get("currency") or "SRD",
+        )
+        body.amount = amount
+    elif body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
 
     kiosk_emp_id, kiosk_emp_name, status = None, None, "approved"
     if body.employee_id:
@@ -21695,6 +21801,7 @@ async def kiosk_pay_installment(
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
+        mope_payment_request_id=body.mope_payment_request_id,
         received_by=kiosk_emp_name or "Operator Kiosk",
         approved_by_label=kiosk_emp_name or "Operator Kiosk",
         status=status,
