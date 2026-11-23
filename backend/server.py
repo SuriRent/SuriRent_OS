@@ -94,6 +94,57 @@ from saas_billing_calendar import (
 )
 
 
+def _validated_superadmin_pin(value: Optional[str]) -> Optional[str]:
+    pin = (value or "").strip()
+    if not pin:
+        return None
+    if not pin.isdigit() or len(pin) != 4:
+        raise RuntimeError("SUPERADMIN_PIN must contain exactly four digits.")
+    return pin
+
+
+async def _bootstrap_superadmin_pin(user_id: str, pin: Optional[str]) -> bool:
+    if not pin:
+        return False
+
+    account = await db.users.find_one(
+        {"id": user_id}, {"_id": 0, "personal_pin_hash": 1},
+    )
+    if account is None:
+        raise RuntimeError("Could not find the seeded superadmin to initialize its PIN.")
+    if account.get("personal_pin_hash"):
+        return False
+
+    other_superadmins = await db.users.find(
+        {
+            "id": {"$ne": user_id},
+            "role": "superadmin",
+            "disabled": {"$ne": True},
+            "personal_pin_hash": {"$exists": True, "$ne": None},
+        },
+        {"_id": 0, "personal_pin_hash": 1},
+    ).to_list(100)
+    for other in other_superadmins:
+        if await asyncio.to_thread(verify_password, pin, other.get("personal_pin_hash", "")):
+            raise RuntimeError("SUPERADMIN_PIN is already assigned to another active superadmin.")
+
+    result = await db.users.update_one(
+        {
+            "id": user_id,
+            "$or": [
+                {"personal_pin_hash": {"$exists": False}},
+                {"personal_pin_hash": None},
+                {"personal_pin_hash": ""},
+            ],
+        },
+        {"$set": {
+            "personal_pin_hash": hash_password(pin),
+            "personal_pin_set_at": iso(now_utc()),
+        }},
+    )
+    return result.modified_count > 0
+
+
 # =====================================================================
 # Auth Dependencies
 # =====================================================================
@@ -406,6 +457,7 @@ BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    superadmin_pin = _validated_superadmin_pin(os.environ.get("SUPERADMIN_PIN"))
     # ---------- Indexes ----------
     # Hot-path indexes voor snelle queries op alle collecties die de
     # app gebruikt. Worden bij elke startup idempotent gegarandeerd.
@@ -597,7 +649,7 @@ async def lifespan(app: FastAPI):
     super_pw = os.environ.get("SUPERADMIN_PASSWORD", "super123")
     sa = await db.users.find_one({"email": super_email})
     if sa is None:
-        await db.users.insert_one({
+        sa = {
             "id": new_id(),
             "email": super_email,
             "name": "Superadmin",
@@ -605,7 +657,9 @@ async def lifespan(app: FastAPI):
             "company_id": None,
             "password_hash": hash_password(super_pw),
             "created_at": iso(now_utc()),
-        })
+        }
+        await db.users.insert_one(sa)
+    await _bootstrap_superadmin_pin(sa["id"], superadmin_pin)
 
     # Gedeelde kiosk-PIN is afgeschaft: alleen persoonlijke medewerker-PINs.
     await db.kiosk_pins.delete_many({})
