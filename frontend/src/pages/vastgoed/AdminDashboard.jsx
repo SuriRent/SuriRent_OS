@@ -649,7 +649,6 @@ const BASE_TABS = [
 ];
 const SUPER_TABS = [
   { id: 'companies', label: 'Bedrijven', icon: Briefcase },
-  { id: 'saas_clients', label: 'Klanten', icon: Users },
   { id: 'plans', label: 'Pakketten', icon: Package },
   { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
   { id: 'saas_payments', label: 'Betalingen', icon: Banknote },
@@ -682,7 +681,7 @@ const SIDEBAR_GROUPS = {
   account: { label: 'Account', ids: ['instellingen'] },
 };
 const SAAS_SIDEBAR_GROUPS = {
-  saas_platform: { label: 'Platform & bedrijven', ids: ['companies', 'saas_clients', 'plans', 'saas_contracts'] },
+  saas_platform: { label: 'Platform & bedrijven', ids: ['companies', 'plans', 'saas_contracts'] },
   saas_billing: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
   saas_operations: { label: 'Beheer', ids: ['saas_employees', 'saas_notifications', 'saas_pending', 'saas_kiosk'] },
   saas_content: { label: 'Website', ids: ['landing_editor'] },
@@ -5037,10 +5036,10 @@ function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
 }
 
 const SAAS_DOCK_IDS = [
-  'companies', 'saas_clients', 'saas_contracts',
+  'companies', 'saas_contracts',
   'saas_payments', 'saas_invoices', 'plans',
 ];
-const SAAS_MOBILE_DOCK_IDS = ['companies', 'saas_clients', 'saas_invoices'];
+const SAAS_MOBILE_DOCK_IDS = ['companies', 'saas_invoices'];
 
 function SaasConsoleDock({ tab, tabs, onChange }) {
   const byId = Object.fromEntries(tabs.map((item) => [item.id, item]));
@@ -5527,7 +5526,6 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'saas_kasgeld'} tabId="saas_kasgeld" currentTab={tab}><Subscriptions viewMode="kasgeld" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_client_payments'} tabId="saas_client_payments" currentTab={tab}><SaasClientPayments /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kiosk'} tabId="saas_kiosk" currentTab={tab}><SaasKasregister /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_clients'} tabId="saas_clients" currentTab={tab}><SaasClients /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_employees'} tabId="saas_employees" currentTab={tab}><SaasEmployees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_notifications'} tabId="saas_notifications" currentTab={tab}><SaasNotifications /></KeepAliveTab>
