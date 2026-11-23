@@ -5497,7 +5497,8 @@ export default function AdminDashboard() {
         <ImpersonationBanner />
         {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
-        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F2F4] md:pb-24' : ''}`}>
+        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F2F4] md:pb-24' : ''}`}
+          style={isSaasConsole ? { paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
           {isSaasConsole && activeCompanyId && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
