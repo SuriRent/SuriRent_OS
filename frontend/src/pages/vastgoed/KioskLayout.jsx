@@ -47,7 +47,7 @@ import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../co
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
-import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
+import { availableInstellingenSections } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
@@ -295,13 +295,14 @@ function KioskBell() {
 // Tandwiel rechtsboven opent de kiosk-instellingenweergave (alleen beheerder).
 function KioskSettingsMenu() {
   const { isAdmin, isUi } = useContext(KioskThemeCtx);
+  const { activeCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
   useEffect(() => { import('./admin/KioskSettingsPage'); }, []);
   if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
-  const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
+  const items = availableInstellingenSections(activeCompany?.limits).map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
   return (
@@ -317,6 +318,7 @@ function KioskSettingsMenu() {
 
 function KioskAdminMenu({ returnTo }) {
   const { isAdmin } = useContext(KioskThemeCtx);
+  const { activeCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
@@ -330,6 +332,7 @@ function KioskAdminMenu({ returnTo }) {
     ...Object.keys(KIOSK_ADMIN_PAGES)
       .filter((id) => id !== 'instellingen' && id !== 'overzicht')
       .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
+      .filter((id) => id !== 'stroom' || activeCompany?.limits?.allow_power === true)
       .map((id) => ({
         id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
         testid: `kiosk-admin-menu-${id}`,
@@ -6607,7 +6610,7 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
-function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
+function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, hasPowerAccess = false }) {
   // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
   // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
   // knopbalk gerenderd, NIET als cards.
@@ -6621,7 +6624,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
     { key: 'nfc',         label: 'NFC-tag koppelen',  Icon: Nfc },
-    ...(hasAdminAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
+    ...(hasPowerAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -6695,7 +6698,8 @@ export default function KioskLayout() {
   useHidePwaSplash();
   const keyboardOpen = useKeyboardOpen();
   const navigate = useBrandedNavigate();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
+  const hasPowerAccess = activeCompany?.limits?.allow_power === true;
   const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   useEffect(() => {
     const updateViewport = () => setIsMobileViewport(window.innerWidth < 768);
@@ -7370,7 +7374,7 @@ export default function KioskLayout() {
     { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-tb-maintenance', onClick: () => { setTenantModal(null); openOnly('add-maintenance'); } },
     { id: 'info', label: 'Gegevens', icon: User, testid: 'kiosk-tb-info', onClick: () => { openOnly(null); setTenantModal('info'); } },
     { id: 'contact', label: 'Contact', icon: Smartphone, testid: 'kiosk-tb-contact', onClick: () => { openOnly(null); setTenantModal('contact'); } },
-    ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
+    ...(hasPowerAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
   const isMobileUiPage = isMobileViewport && isUi
@@ -7391,7 +7395,7 @@ export default function KioskLayout() {
         setStep(e.detail);
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
-        && INSTELLINGEN_SECTIONS.some((s) => s.id === e.detail.slice(11))) {
+        && availableInstellingenSections(activeCompany?.limits).some((s) => s.id === e.detail.slice(11))) {
         setAdminPopup(null);
         setStep(e.detail);
       }
@@ -7399,7 +7403,7 @@ export default function KioskLayout() {
     };
     window.addEventListener('kiosk-nav', onNav);
     return () => window.removeEventListener('kiosk-nav', onNav);
-  }, []);
+  }, [activeCompany?.limits, hasAdminAccess, hasPowerAccess]);
   const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => {
     const onTourNavigate = (event) => {
@@ -7640,7 +7644,8 @@ export default function KioskLayout() {
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen' && step !== 'admin:bankreconciliatie'
-            && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
+            && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)]
+            && (step.slice(6) !== 'stroom' || hasPowerAccess) && (
             isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
               ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
               : <KioskAdminPopup id={step.slice(6)} Shell={KioskModalShell} onClose={goBack} />
@@ -7666,7 +7671,7 @@ export default function KioskLayout() {
               </KioskModalShell>
             )
           )}
-          {step === 'stroom' && hasAdminAccess && (
+          {step === 'stroom' && hasAdminAccess && hasPowerAccess && (
             isMobileViewport && isUi ? (
               <KioskUiAdminStep id="stroom" onBack={goBack}><PowerControl /></KioskUiAdminStep>
             ) : (
@@ -7793,6 +7798,7 @@ export default function KioskLayout() {
           onClose={() => setShowAddSheet(false)}
           onPick={handleSheetPick}
           hasAdminAccess={hasAdminAccess}
+          hasPowerAccess={hasPowerAccess}
         />
       )}
 
@@ -7926,7 +7932,7 @@ export default function KioskLayout() {
               ...(hasAdminAccess && user?.role !== 'boekhouder' ? [{ id: 'bankreconciliation', label: 'Bankreconciliatie', icon: LandmarkIcon, testid: 'kiosk-bank-reconciliation-btn-desktop', onClick: () => { openOnly(null); setStep('admin:bankreconciliatie'); } }] : []),
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
-              ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
+              ...(hasPowerAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')

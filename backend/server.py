@@ -1336,6 +1336,9 @@ async def register(body: RegisterIn, request: Request, response: Response):
             company_id = default["id"]
             company_payload = {k: default[k] for k in ("id", "slug", "name", "plan")}
 
+    if company_payload and company_id:
+        company_payload["limits"] = await _resolve_company_limits(company_id)
+
     if personal_pin and company_id:
         await _check_employee_pin_unique(company_id, personal_pin)
 
@@ -1496,6 +1499,7 @@ async def login(body: LoginIn, request: Request, response: Response):
         c = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0})
         if c:
             company = {k: c[k] for k in ("id", "slug", "name", "plan")}
+            company["limits"] = await _resolve_company_limits(user["company_id"])
     return {
         "token": token,
         "user": {
@@ -2073,6 +2077,7 @@ async def me(user=Depends(get_current_user)):
         c = await db.companies.find_one({"id": active_id}, {"_id": 0})
         if c:
             company = {k: c[k] for k in ("id", "slug", "name", "plan")}
+            company["limits"] = await _resolve_company_limits(active_id)
             # Expose de onboarding-flag zodat de frontend na reload nog
             # steeds weet dat er een "Kies uw portalnaam" modal moet komen.
             company["needs_onboarding"] = bool(c.get("needs_onboarding"))
@@ -2362,17 +2367,17 @@ PLAN_PRICES = {
                 "features": ["Kiosk terminal", "Online betalen", "WhatsApp & E-mail"],
                 "limits": {
                     "max_apartments": 100, "max_tenants": 100, "max_locations": 2, "max_employees": 5,
-                    "allow_kiosk": True, "allow_ocr": True, "allow_power": False,
+                    "allow_kiosk": True, "allow_ocr": True, "allow_power": False, "allow_mope": False,
                     "allow_branding": False, "allow_custom_domain": False,
                     "allow_marketing_site": False, "allow_backup": True,
                 }},
     "professional": {"name": "Professional", "amount": 5000, "currency": "SRD", "interval": "month",
                      "description": "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
-                     "features": ["Alles uit Starter", "Stroombeheer", "White-label branding",
+                     "features": ["Alles uit Starter", "Stroombeheer", "Mopé betalingen", "White-label branding",
                                   "Eigen domein", "Marketing website", "Prioriteit support"],
                      "limits": {
                          "max_apartments": 500, "max_tenants": 500, "max_locations": 10, "max_employees": 25,
-                         "allow_kiosk": True, "allow_ocr": True, "allow_power": True,
+                         "allow_kiosk": True, "allow_ocr": True, "allow_power": True, "allow_mope": True,
                          "allow_branding": True, "allow_custom_domain": True,
                          "allow_marketing_site": True, "allow_backup": True,
                      }},
@@ -2382,7 +2387,7 @@ PLAN_PRICES = {
 # Default limits voor plans die nog geen "limits" veld hebben (legacy DB rows).
 DEFAULT_PLAN_LIMITS = {
     "max_apartments": 50, "max_tenants": 50, "max_locations": 1, "max_employees": 3,
-    "allow_kiosk": False, "allow_ocr": False, "allow_power": False,
+    "allow_kiosk": False, "allow_ocr": False, "allow_power": False, "allow_mope": False,
     "allow_branding": False, "allow_custom_domain": False,
     "allow_marketing_site": False, "allow_backup": False,
 }
@@ -2412,6 +2417,8 @@ async def _resolve_company_limits(company_id: str) -> dict:
         limits["allow_power"] = bool(
             plan_limits.get("allow_shelly", plan_id in ("professional", "lifetime")),
         )
+    if "allow_mope" not in plan_limits:
+        limits["allow_mope"] = plan_id in ("professional", "lifetime")
     for feature in ("allow_custom_domain", "allow_marketing_site"):
         if feature not in plan_limits:
             limits[feature] = bool(
@@ -2504,6 +2511,8 @@ async def _seed_plan_catalog():
                         updates["limits.allow_power"] = existing_limits.get(
                             "allow_shelly", pdata.get("limits", {}).get("allow_power", False),
                         )
+                    if "allow_mope" not in existing_limits:
+                        updates["limits.allow_mope"] = pdata.get("limits", {}).get("allow_mope", False)
                     for feature in ("allow_custom_domain", "allow_marketing_site"):
                         if feature not in existing_limits:
                             updates[f"limits.{feature}"] = existing_limits.get(
@@ -2520,6 +2529,8 @@ async def _seed_plan_catalog():
                     migrated_features = list(pdata.get("features", []))
                 elif pid == "professional" and "Shelly stroombeheer" in migrated_features:
                     migrated_features[migrated_features.index("Shelly stroombeheer")] = "Stroombeheer"
+                if pid == "professional" and "Mopé betalingen" not in migrated_features:
+                    migrated_features.append("Mopé betalingen")
                 if migrated_features != existing_features:
                     updates["features"] = migrated_features
                 if pid == "professional" and existing.get("description") in (
@@ -2553,6 +2564,7 @@ async def _seed_plan_catalog():
                 {"limits.allow_power": {"$exists": False}},
                 {"limits.allow_custom_domain": {"$exists": False}},
                 {"limits.allow_marketing_site": {"$exists": False}},
+                {"limits.allow_mope": {"$exists": False}},
             ]},
             {"_id": 0, "id": 1, "limits": 1},
         ):
@@ -2563,6 +2575,8 @@ async def _seed_plan_catalog():
                 feature_updates["limits.allow_power"] = bool(
                     legacy_limits.get("allow_shelly", legacy_id in ("professional", "lifetime")),
                 )
+            if "allow_mope" not in legacy_limits:
+                feature_updates["limits.allow_mope"] = legacy_id in ("professional", "lifetime")
             for feature in ("allow_custom_domain", "allow_marketing_site"):
                 if feature not in legacy_limits:
                     feature_updates[f"limits.{feature}"] = bool(
@@ -21215,6 +21229,7 @@ _route_deps.notify_tenant_power = _power_notify_tenant
 _route_deps.publish_power_cutoff_receipt = _publish_power_cutoff_receipt
 _route_deps.get_overdue_tenants = _company_overdue_tenants
 _route_deps.require_plan_feature = _require_plan_feature
+_route_deps.company_has_plan_feature = _company_has_plan_feature
 app.include_router(_nfc_routes.router, prefix="/api")
 app.include_router(_saas_ops_routes.router, prefix="/api")
 app.include_router(_superadmin_routes.router, prefix="/api")

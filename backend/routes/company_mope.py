@@ -20,8 +20,10 @@ MOPE_API = "https://api.mope.sr/api"
 
 
 async def _admin(user: dict = Depends(_deps.get_current_user)) -> dict:
-    if user.get("role") not in ADMIN_ROLES or not _deps.company_id_of(user):
+    cid = _deps.company_id_of(user)
+    if user.get("role") not in ADMIN_ROLES or not cid:
         raise HTTPException(403, "Alleen de beheerder kan Mopé instellen")
+    await _deps.require_plan_feature(cid, "allow_mope", "Mopé-betalingen")
     return user
 
 
@@ -161,6 +163,7 @@ async def _create_request(
     currency: str,
     source: str,
 ) -> dict:
+    await _deps.require_plan_feature(company_id, "allow_mope", "Mopé-betalingen")
     config = await _config(company_id)
     if not _active(config):
         raise HTTPException(400, "Mopé-betalingen zijn niet ingeschakeld door de beheerder")
@@ -312,6 +315,8 @@ async def consume_mope_payment(
 
 @router.get("/kiosk/mope/config")
 async def kiosk_mope_config(session: dict = Depends(_deps.get_kiosk_session)):
+    if not await _deps.company_has_plan_feature(session.get("company_id"), "allow_mope"):
+        return {"enabled": False}
     config = await _config(session.get("company_id"))
     return {"enabled": _active(config)}
 

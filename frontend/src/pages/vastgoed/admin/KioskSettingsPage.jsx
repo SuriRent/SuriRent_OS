@@ -1,24 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Bell, Building2, ChevronRight, Search } from 'lucide-react';
+import { useAuth } from '../../../lib/auth';
 import { RENDER } from './InstellingenHub';
-import { INSTELLINGEN_SECTIONS } from './instellingenSections';
+import { availableInstellingenSections } from './instellingenSections';
 
 // Full-screen instellingenvenster voor desktop; bezochte onderdelen blijven
 // gemount zodat secties wisselen zonder opnieuw laden of flikkeren.
 export default function KioskSettingsPage({ id, onBack, user }) {
-  const [sec, setSec] = useState(INSTELLINGEN_SECTIONS.some((s) => s.id === id) ? id : 'abonnement');
+  const { activeCompany } = useAuth();
+  const sections = useMemo(
+    () => availableInstellingenSections(activeCompany?.limits),
+    [activeCompany?.limits],
+  );
+  const [sec, setSec] = useState(sections.some((s) => s.id === id) ? id : 'abonnement');
   const [visited, setVisited] = useState(() => new Set([sec]));
   const [query, setQuery] = useState('');
   useEffect(() => {
-    if (INSTELLINGEN_SECTIONS.some((s) => s.id === id)) setSec(id);
-  }, [id]);
+    if (sections.some((s) => s.id === id)) setSec(id);
+    else if (!sections.some((s) => s.id === sec)) setSec('abonnement');
+  }, [id, sections, sec]);
   useEffect(() => {
     setVisited((v) => (v.has(sec) ? v : new Set(v).add(sec)));
   }, [sec]);
-  const current = INSTELLINGEN_SECTIONS.find((s) => s.id === sec);
+  const current = sections.find((s) => s.id === sec) || sections[0];
   const Icon = current.icon;
-  const filteredSections = INSTELLINGEN_SECTIONS.filter((section) => (
+  const filteredSections = sections.filter((section) => (
     `${section.label} ${section.desc}`.toLowerCase().includes(query.trim().toLowerCase())
   ));
   const userName = user?.name || user?.email || 'Gebruiker';
@@ -137,7 +144,7 @@ export default function KioskSettingsPage({ id, onBack, user }) {
                 </div>
               </div>
             )}
-            {INSTELLINGEN_SECTIONS.filter((s) => visited.has(s.id)).map((s) => (
+            {sections.filter((s) => visited.has(s.id)).map((s) => (
               <div key={s.id} className={s.id === sec ? '' : 'hidden'}>{RENDER[s.id]()}</div>
             ))}
           </div>

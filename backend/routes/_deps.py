@@ -55,3 +55,4 @@ notify_tenant_power = None             # async (company_id, tenant_id, tekst) ->
 publish_power_cutoff_receipt = None    # async (company_id, receipt_data) -> None
 get_overdue_tenants = None             # async (company_id) -> [{tenant_id, amounts, ...}]
 require_plan_feature = None            # async (company_id, feature_key, feature_label) -> None
+company_has_plan_feature = None         # async (company_id, feature_key) -> bool

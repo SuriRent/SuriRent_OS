@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../../lib/branded-nav';
+import { useAuth } from '../../../lib/auth';
 import MijnAbonnement from './MijnAbonnement';
 import BusinessInfo from './BusinessInfo';
 import Branding from './Branding';
@@ -13,7 +14,7 @@ import PowerSettings from './PowerSettings';
 import KioskDevices from './KioskDevices';
 import BonPrinter from './BonPrinter';
 import TenantSiteEditor from './TenantSiteEditor';
-import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './instellingenSections';
+import { availableInstellingenSections, activeInstellingenSection } from './instellingenSections';
 
 function WebsiteSettings() {
   const [open, setOpen] = useState(false);
@@ -55,9 +56,15 @@ export const RENDER = {
 export default function InstellingenHub({ embedded = false, section = null }) {
   const location = useLocation();
   const navigate = useBrandedNavigate();
+  const { activeCompany } = useAuth();
   const [sec, setSec] = useState(section || 'bedrijf');
-  const active = embedded ? (section || sec) : activeInstellingenSection(location.hash);
-  const current = INSTELLINGEN_SECTIONS.find((s) => s.id === active);
+  const sections = useMemo(
+    () => availableInstellingenSections(activeCompany?.limits),
+    [activeCompany?.limits],
+  );
+  const requestedSection = embedded ? (section || sec) : activeInstellingenSection(location.hash, activeCompany?.limits);
+  const active = sections.some((s) => s.id === requestedSection) ? requestedSection : 'abonnement';
+  const current = sections.find((s) => s.id === active) || sections[0];
   const Icon = current.icon;
 
   // Deep-link vanuit andere pagina's:
@@ -67,19 +74,19 @@ export default function InstellingenHub({ embedded = false, section = null }) {
       let s = ev?.detail?.section;
       const sub = ev?.detail?.integrationsSection;
       if (s === 'integraties') s = sub || 'smtp';
-      if (!s) return;
+      if (!sections.some((item) => item.id === s)) return;
       if (embedded) window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${s}` }));
       else navigate(`/admin/instellingen#${s}`, { replace: true });
     };
     window.addEventListener('go-instellingen-section', onDeepLink);
     return () => window.removeEventListener('go-instellingen-section', onDeepLink);
-  }, [navigate, embedded]);
+  }, [navigate, embedded, sections]);
 
   return (
     <div data-testid="instellingen-hub" className="w-full max-w-none">
       {embedded && !section && (
         <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto pb-1" data-testid="instellingen-tabs">
-          {INSTELLINGEN_SECTIONS.map((s) => {
+          {sections.map((s) => {
             const I = s.icon;
             return (
               <button key={s.id} type="button" onClick={() => setSec(s.id)} data-testid={`instellingen-tab-${s.id}`}
