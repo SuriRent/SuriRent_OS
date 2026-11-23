@@ -648,7 +648,6 @@ const BASE_TABS = [
   { id: 'instellingen', label: 'Instellingen', icon: SettingsIcon },
 ];
 const SUPER_TABS = [
-  { id: 'saas_overview', label: 'Overzicht', icon: LayoutDashboard },
   { id: 'companies', label: 'Bedrijven', icon: Briefcase },
   { id: 'saas_clients', label: 'Klanten', icon: Users },
   { id: 'plans', label: 'Pakketten', icon: Package },
@@ -683,7 +682,7 @@ const SIDEBAR_GROUPS = {
   account: { label: 'Account', ids: ['instellingen'] },
 };
 const SAAS_SIDEBAR_GROUPS = {
-  saas_platform: { label: 'Platform & bedrijven', ids: ['saas_overview', 'companies', 'saas_clients', 'plans', 'saas_contracts'] },
+  saas_platform: { label: 'Platform & bedrijven', ids: ['companies', 'saas_clients', 'plans', 'saas_contracts'] },
   saas_billing: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
   saas_operations: { label: 'Beheer', ids: ['saas_employees', 'saas_notifications', 'saas_pending', 'saas_kiosk'] },
   saas_content: { label: 'Website', ids: ['landing_editor'] },
@@ -691,7 +690,7 @@ const SAAS_SIDEBAR_GROUPS = {
 };
 function groupTabs(tabs) {
   const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
-  const groups = byId.saas_overview ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
+  const groups = byId.companies ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
   return Object.entries(groups).map(([key, group]) => ({
     key, label: group.label,
     items: group.ids.map((id) => byId[id]).filter(Boolean),
@@ -926,7 +925,7 @@ const MOBILE_TAB_ICON_OVERRIDES = {
   tenants: UsersRound,
   apartments: Building,
 };
-const MOBILE_SUPER_PRIMARY_IDS = ['saas_overview', 'companies', 'saas_pending', 'saas_invoices'];
+const MOBILE_SUPER_PRIMARY_IDS = ['companies', 'saas_pending', 'saas_invoices'];
 
 function MobileHeader_REMOVED({ activeCompany, user, onOpenMenu }) {
   void activeCompany; void user; void onOpenMenu;
@@ -5038,10 +5037,10 @@ function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
 }
 
 const SAAS_DOCK_IDS = [
-  'saas_overview', 'companies', 'saas_clients', 'saas_contracts',
+  'companies', 'saas_clients', 'saas_contracts',
   'saas_payments', 'saas_invoices', 'plans',
 ];
-const SAAS_MOBILE_DOCK_IDS = ['saas_overview', 'companies', 'saas_clients', 'saas_invoices'];
+const SAAS_MOBILE_DOCK_IDS = ['companies', 'saas_clients', 'saas_invoices'];
 
 function SaasConsoleDock({ tab, tabs, onChange }) {
   const byId = Object.fromEntries(tabs.map((item) => [item.id, item]));
@@ -5301,13 +5300,13 @@ export default function AdminDashboard() {
   // kon raken en dubbele renders veroorzaakte bij navigatie.
   const tab = (() => {
     if (user?.role === 'superadmin' && (!location.pathname || location.pathname === '/admin')) {
-      return 'saas_overview';
+      return 'companies';
     }
     const seg = location.pathname.split('/').filter(Boolean);
     const adminIdx = seg.indexOf('admin');
     const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
     if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
-    if (user?.role === 'superadmin') return 'saas_overview';
+    if (user?.role === 'superadmin') return 'companies';
     // Fallback: mobile → invoices (facturen als landingpagina op verzoek
     // gebruiker feb 2026), anders overview.
     try {
@@ -5345,13 +5344,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     const seg = location.pathname.split('/').filter(Boolean);
     const adminIdx = seg.indexOf('admin');
-    if (adminIdx === -1 || !seg[adminIdx + 1]) return;
-    const wanted = seg[adminIdx + 1];
+    if (adminIdx === -1) return;
+    const wanted = seg[adminIdx + 1] || null;
     if (user?.role === 'superadmin'
-      && (wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
-      navigate('/admin/saas_overview', { replace: true });
+      && (!wanted || wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
+      navigate('/admin/companies', { replace: true });
       return;
     }
+    if (!wanted) return;
     const LEGACY_TO_HUB = {
       mijn_abonnement: 'abonnement',
       mijn_landing: 'landing',
