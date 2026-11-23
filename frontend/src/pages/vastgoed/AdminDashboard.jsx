@@ -14,7 +14,7 @@ import {
   FileText, ShieldCheck, Wrench, FileSignature, Bell, Briefcase, Mail,
   Power, Menu, MoreHorizontal, MapPin, Paintbrush,
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
-  ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
+  ReceiptText, UsersRound, Building, Calendar, ArrowLeft, RefreshCw,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
   UserCircle, Sparkles, StickyNote, Scissors, BookOpen,
@@ -5201,7 +5201,9 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
   );
 }
 
-function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
+function SaasConsoleDesktopTopbar({
+  user, tab, tabs, companySearchQuery, onCompanySearchChange, onCreateCompany, onRefreshCompanies,
+}) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
   const group = groupTabs(tabs).find((item) => item.items.some((entry) => entry.id === tab));
@@ -5229,9 +5231,31 @@ function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
-        <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        {tab === 'companies' && (
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative min-w-[220px] max-w-[360px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={companySearchQuery} onChange={(event) => onCompanySearchChange(event.target.value)}
+                placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
+                aria-label="Bedrijven zoeken" data-testid="company-topbar-search"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100" />
+            </div>
+            <button type="button" onClick={onCreateCompany} data-testid="company-topbar-new-btn"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-sm font-bold text-white shadow-sm hover:bg-[#E05200]">
+              <Plus className="h-4 w-4" /> Nieuw bedrijf
+            </button>
+            <button type="button" onClick={onRefreshCompanies} data-testid="company-topbar-refresh"
+              aria-label="Bedrijven vernieuwen"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+          <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
+        </div>
       </div>
     </header>
   );
@@ -5293,6 +5317,9 @@ export default function AdminDashboard() {
   }, { enabled: !!user && ['admin', 'employee', 'boekhouder'].includes(user.role) });
   const location = useLocation();
   const { count: badgeCount } = useBadge();
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [companiesCreateRequest, setCompaniesCreateRequest] = useState(0);
+  const [companiesRefreshRequest, setCompaniesRefreshRequest] = useState(0);
 
   // TAB-STATE = URL-derived (single source of truth). We lezen de actieve
   // tab uit `location.pathname` — geen aparte useState meer die uit sync
@@ -5491,7 +5518,12 @@ export default function AdminDashboard() {
         user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />}
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
-          ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
+          ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar
+            user={user} tab={tab} tabs={tabs} companySearchQuery={companySearchQuery}
+            onCompanySearchChange={setCompanySearchQuery}
+            onCreateCompany={() => setCompaniesCreateRequest((request) => request + 1)}
+            onRefreshCompanies={() => setCompaniesRefreshRequest((request) => request + 1)}
+          /></>
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
         {!isSaasConsole && <CompanySupportNotice />}
@@ -5516,7 +5548,14 @@ export default function AdminDashboard() {
             </div>
           )}
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
-          <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}>
+            <Companies
+              searchQuery={companySearchQuery}
+              onSearchQueryChange={setCompanySearchQuery}
+              createRequest={companiesCreateRequest}
+              refreshRequest={companiesRefreshRequest}
+            />
+          </KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_overview'} tabId="saas_overview" currentTab={tab}><SaasOverview /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_pending'} tabId="saas_pending" currentTab={tab}><Subscriptions viewMode="pending" /></KeepAliveTab>

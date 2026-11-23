@@ -555,10 +555,9 @@ function CompanyForm({ initial, onCancel, onSaved }) {
   );
 }
 
-export default function Companies() {
+export default function Companies({ searchQuery, onSearchQueryChange, createRequest, refreshRequest }) {
   const { user, setActiveCompany, activeCompanyId } = useAuth();
   const [items, setItems] = useState([]);
-  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -582,6 +581,15 @@ export default function Companies() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (refreshRequest > 0) load();
+  }, [refreshRequest, load]);
+  useEffect(() => {
+    if (createRequest > 0) {
+      setEditing(null);
+      setShowForm(true);
+    }
+  }, [createRequest]);
 
   useEffect(() => {
     let alive = true;
@@ -631,7 +639,7 @@ export default function Companies() {
     ? customerItems.filter((company) => company.id === activeCompanyId)
     : customerItems;
   const visibleItems = scopedItems.filter((company) => {
-    const term = query.trim().toLowerCase();
+    const term = searchQuery.trim().toLowerCase();
     const matchesQuery = !term || [
       company.name, company.slug, company.contact_email, company.owner_email, company.plan,
     ].some((value) => String(value || '').toLowerCase().includes(term));
@@ -660,7 +668,7 @@ export default function Companies() {
 
   return (
     <div data-testid="companies-management-page" className="space-y-3 pb-24 sm:pb-6">
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 xl:hidden">
         <button onClick={() => { setEditing(null); setShowForm(true); }}
           data-testid="company-new-btn"
           className="h-10 px-3 sm:px-4 rounded-xl bg-[#FF5C00] hover:bg-[#E05200] text-white text-sm font-bold flex items-center gap-2 shadow-[0_6px_15px_-3px_rgba(255,92,0,0.5)]">
@@ -690,15 +698,15 @@ export default function Companies() {
         ))}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="relative min-w-0">
+      <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:flex xl:justify-end">
+        <div className="relative min-w-0 xl:hidden">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
+          <input value={searchQuery} onChange={(e) => onSearchQueryChange(e.target.value)} placeholder="Zoek bedrijf, slug, contactpersoon of pakket"
             aria-label="Bedrijven zoeken" data-testid="company-search"
             className="w-full h-9 rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs sm:text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
         </div>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter bedrijven"
-          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 sm:px-3 text-xs sm:text-sm font-semibold text-slate-700">
+          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 sm:px-3 sm:text-sm xl:w-48">
           <option value="all">Alle status</option>
           <option value="active">Actief abonnement</option>
           <option value="trial">Proefperiode</option>
