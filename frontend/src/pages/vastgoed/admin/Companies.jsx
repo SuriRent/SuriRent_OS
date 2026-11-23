@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Trash2, Pencil, X, Check, Loader2, Building2, Users, KeySquare,
   Search, RefreshCw, ArrowUpRight, CalendarDays,
-  CreditCard, Mail, Phone, MapPin, AlertCircle, LogIn, Clock3, Landmark, Receipt,
+  Banknote, CheckCircle2, CreditCard, Mail, Phone, MapPin, AlertCircle, LogIn, Clock3,
+  Landmark, Receipt, Upload,
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
@@ -27,20 +28,31 @@ const invoiceBalance = (invoice) => {
   const balance = Number(invoice.balance_due ?? (Number(invoice.amount || 0) - Number(invoice.paid_amount || 0)));
   return Number.isFinite(balance) ? Math.max(0, balance) : 0;
 };
+const invoiceBankPaymentAmount = (invoice) => {
+  const next = (invoice.payment_plans || [])
+    .flatMap((plan) => (plan.schedule || []).map((term) => ({ plan, term })))
+    .filter(({ term }) => term.status !== 'paid' && Number(term.amount || 0) > Number(term.paid_amount || 0))
+    .sort((a, b) => (a.term.due_date || '').localeCompare(b.term.due_date || '') || a.term.seq - b.term.seq)[0];
+  return next ? Number(next.term.amount) - Number(next.term.paid_amount || 0) : invoiceBalance(invoice);
+};
 const formatInvoiceAmount = (amount, currency) => `${currency || 'SRD'} ${Number(amount || 0).toLocaleString('nl-NL', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })}`;
 
-function CompanyPaymentWizard({ company, onClose }) {
+function CompanyPaymentWizard({ company, onClose, onPaid }) {
   const navigate = useNavigate();
+  const fileRef = useRef(null);
   const [step, setStep] = useState(1);
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [methods, setMethods] = useState([]);
   const [method, setMethod] = useState('card');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [bankDetails, setBankDetails] = useState(null);
+  const [paymentResult, setPaymentResult] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -60,7 +72,7 @@ function CompanyPaymentWizard({ company, onClose }) {
         ? (stripeResponse.data.methods || []).filter((item) => ['card', 'ideal'].includes(item))
         : [];
       setMethods(availableMethods);
-      if (availableMethods.length > 0) setMethod(availableMethods[0]);
+      setMethod(availableMethods[0] || 'bank');
     }).catch((e) => {
       if (active) setError(formatError(e, 'Facturen of betaalmethoden konden niet worden geladen.'));
     }).finally(() => {
@@ -86,11 +98,77 @@ function CompanyPaymentWizard({ company, onClose }) {
     setSelectedIds((ids) => [...ids, invoice.id]);
   };
 
-  const continueToCheckout = () => {
-    if (selectedIds.length === 0 || !methods.includes(method)) return;
-    const back = encodeURIComponent('/admin/companies');
-    const ids = encodeURIComponent(selectedIds.join(','));
-    navigate(`/saas/checkout/selectie?ids=${ids}&method=${method}&back=${back}`);
+  const continueToCheckout = async () => {
+    setError('');
+    if (selectedIds.length === 0) return;
+    if (methods.includes(method)) {
+      const back = encodeURIComponent('/admin/companies');
+      const ids = encodeURIComponent(selectedIds.join(','));
+      navigate(`/saas/checkout/selectie?ids=${ids}&method=${method}&back=${back}`);
+      return;
+    }
+    if (!['bank', 'cash'].includes(method)) return;
+    if (selectedInvoices.length !== 1) {
+      setError('Bankoverschrijving en contant betalen verwerken één factuur tegelijk. Selecteer één factuur.');
+      return;
+    }
+    if (method === 'cash') {
+      if (!window.confirm(`Contante betaling van ${formatInvoiceAmount(total, currency)} voor ${company.name} registreren? De factuur wordt direct bijgewerkt.`)) return;
+      setBusy(true);
+      try {
+        const { data } = await api.post(`/superadmin/subscription-invoices/${selectedInvoices[0].id}/cash-payment`);
+        setPaymentResult({ ...data, method: 'cash' });
+        setStep(3);
+        await onPaid?.();
+      } catch (e) {
+        setError(formatError(e, 'De contante betaling kon niet worden geregistreerd.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (currency.toUpperCase() !== 'SRD') {
+      setError('Bankoverschrijving is momenteel alleen beschikbaar voor facturen in SRD.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data } = await api.get('/billing/bank-details');
+      setBankDetails(data);
+      setPaymentResult(null);
+      setStep(3);
+    } catch (e) {
+      setError(formatError(e, 'Bankgegevens konden niet worden geladen.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadBankProof = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Het betaalbewijs mag maximaal 5 MB zijn.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('invoice_id', selectedInvoices[0].id);
+      form.append('target_company_id', company.id);
+      const { data } = await api.post('/billing/me/bank-confirm', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setPaymentResult({ ...data, method: 'bank' });
+      if (data.status === 'paid') await onPaid?.();
+    } catch (e) {
+      setError(formatError(e, 'Het betaalbewijs kon niet worden gecontroleerd.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -113,7 +191,9 @@ function CompanyPaymentWizard({ company, onClose }) {
           <div className="flex items-center gap-2 text-xs font-bold">
             <span className={`rounded-full px-3 py-1 ${step === 1 ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>1. Facturen</span>
             <span className="h-px flex-1 bg-slate-200" />
-            <span className={`rounded-full px-3 py-1 ${step === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>2. Betaalmethode</span>
+            <span className={`rounded-full px-3 py-1 ${step === 2 ? 'bg-orange-100 text-orange-700' : step > 2 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>2. Betaalmethode</span>
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className={`rounded-full px-3 py-1 ${step === 3 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>3. Afronden</span>
           </div>
 
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -162,7 +242,7 @@ function CompanyPaymentWizard({ company, onClose }) {
                 Verder naar betaalmethode <ArrowUpRight className="h-4 w-4" />
               </button>
             </>
-          ) : (
+          ) : step === 2 ? (
             <>
               <div className="space-y-2">
                 {selectedInvoices.map((invoice) => (
@@ -179,27 +259,43 @@ function CompanyPaymentWizard({ company, onClose }) {
                 </div>
               </div>
 
-              {methods.length === 0 ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  Online betalen via Stripe is momenteel niet geactiveerd.
+              {methods.length === 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  Online betalen via Stripe is niet geactiveerd. Bankoverschrijving en contant blijven beschikbaar.
                 </div>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {methods.map((item) => {
-                    const selected = method === item;
-                    const Icon = item === 'ideal' ? Landmark : CreditCard;
-                    const label = item === 'ideal' ? 'iDEAL' : 'Creditcard';
-                    return (
-                      <button key={item} type="button" onClick={() => setMethod(item)}
-                        className={`flex min-h-16 items-center gap-3 rounded-2xl border-2 bg-white px-4 text-left transition ${selected ? 'border-orange-400 ring-2 ring-orange-50' : 'border-slate-200 hover:border-slate-300'}`}
-                        data-testid={`company-payment-method-${item}`}>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><Icon className="h-5 w-5" /></span>
-                        <span className="flex-1 font-black text-slate-900">{label}</span>
-                        <span className={`h-5 w-5 rounded-full border-2 ${selected ? 'border-orange-500 bg-orange-500 ring-2 ring-orange-100' : 'border-slate-300'}`} />
-                      </button>
-                    );
-                  })}
-                </div>
+              )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  ...methods.map((item) => ({
+                    id: item,
+                    label: item === 'ideal' ? 'iDEAL via Stripe' : 'Creditcard via Stripe',
+                    Icon: item === 'ideal' ? Landmark : CreditCard,
+                  })),
+                  { id: 'bank', label: 'Bankoverschrijving', Icon: Landmark },
+                  { id: 'cash', label: 'Contant', Icon: Banknote },
+                ].map(({ id, label, Icon }) => {
+                  const selected = method === id;
+                  return (
+                    <button key={id} type="button" onClick={() => { setMethod(id); setError(''); }}
+                      className={`flex min-h-16 items-center gap-3 rounded-2xl border-2 bg-white px-4 text-left transition ${selected ? 'border-orange-400 ring-2 ring-orange-50' : 'border-slate-200 hover:border-slate-300'}`}
+                      data-testid={`company-payment-method-${id}`}>
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><Icon className="h-5 w-5" /></span>
+                      <span className="flex-1 font-black text-slate-900">{label}</span>
+                      <span className={`h-5 w-5 rounded-full border-2 ${selected ? 'border-orange-500 bg-orange-500 ring-2 ring-orange-100' : 'border-slate-300'}`} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {['bank', 'cash'].includes(method) && selectedInvoices.length !== 1 && (
+                <p className="rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
+                  Kies voor deze betaalmethode één factuur tegelijk.
+                </p>
+              )}
+              {method === 'bank' && currency.toUpperCase() !== 'SRD' && (
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Bankoverschrijving is alleen beschikbaar voor SRD-facturen.
+                </p>
               )}
 
               <div className="flex gap-2">
@@ -207,13 +303,72 @@ function CompanyPaymentWizard({ company, onClose }) {
                   className="h-12 flex-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50">
                   Terug
                 </button>
-                <button type="button" onClick={continueToCheckout} disabled={!methods.includes(method) || selectedIds.length === 0}
+                <button type="button" onClick={continueToCheckout}
+                  disabled={busy || selectedIds.length === 0
+                    || (['bank', 'cash'].includes(method) && selectedInvoices.length !== 1)
+                    || (method === 'bank' && currency.toUpperCase() !== 'SRD')
+                    || (!methods.includes(method) && !['bank', 'cash'].includes(method))}
                   className="flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-bold text-white hover:bg-[#E05200] disabled:cursor-not-allowed disabled:opacity-50">
-                  <CreditCard className="h-4 w-4" /> Doorgaan naar betalen
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : method === 'cash' ? <Banknote className="h-4 w-4" />
+                    : method === 'bank' ? <Landmark className="h-4 w-4" />
+                    : <CreditCard className="h-4 w-4" />}
+                  {method === 'cash' ? 'Contante betaling registreren'
+                    : method === 'bank' ? 'Bankgegevens tonen' : 'Doorgaan naar betalen'}
                 </button>
               </div>
-              <p className="text-center text-xs text-slate-500">De veilige betaling wordt verwerkt via Stripe.</p>
+              {methods.includes(method) && <p className="text-center text-xs text-slate-500">De veilige betaling wordt verwerkt via Stripe.</p>}
             </>
+          ) : method === 'bank' ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4" data-testid="company-bank-details">
+                <h3 className="font-black text-slate-900">Maak de overschrijving</h3>
+                <p className="mt-1 text-sm text-slate-500">Bedrag: {formatInvoiceAmount(invoiceBankPaymentAmount(selectedInvoices[0]), selectedInvoices[0]?.currency)}</p>
+                <div className="mt-3 space-y-2 text-sm">
+                  <p><span className="text-slate-500">Bank:</span> <b>{bankDetails?.bank_name || '—'}</b></p>
+                  <p><span className="text-slate-500">Tenaamstelling:</span> <b>{bankDetails?.account_name || '—'}</b></p>
+                  <p><span className="text-slate-500">Rekeningnummer:</span> <b>{bankDetails?.account_number || '—'}</b></p>
+                  {bankDetails?.swift && <p><span className="text-slate-500">SWIFT:</span> <b>{bankDetails.swift}</b></p>}
+                  <p className="break-all"><span className="text-slate-500">Omschrijving:</span> <b>ABONNEMENT — {company.name} — {selectedInvoices[0]?.invoice_number || selectedInvoices[0]?.id.slice(0, 8).toUpperCase()}</b></p>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">Upload daarna het betaalbewijs. OCR keurt een duidelijke match automatisch goed; onduidelijke bewijzen verschijnen bij Superadmin → OCR-goedkeuring.</p>
+              </div>
+
+              {paymentResult?.status === 'paid' ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status" data-testid="company-bank-payment-paid">
+                  <p className="flex items-center gap-2 font-black text-emerald-800"><CheckCircle2 className="h-5 w-5" /> Betaling is goedgekeurd</p>
+                  <p className="mt-1 text-sm text-emerald-700">{paymentResult.invoice_paid ? 'Factuur betaald; abonnement geactiveerd.' : 'Betaling verwerkt; het resterende saldo blijft open.'}</p>
+                  <button type="button" onClick={onClose} className="mt-3 h-10 rounded-xl bg-emerald-600 px-4 font-bold text-white">Sluiten</button>
+                </div>
+              ) : paymentResult?.status === 'pending_approval' ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4" role="status" data-testid="company-bank-payment-pending">
+                  <p className="font-black text-amber-900">Bewijs wacht op goedkeuring</p>
+                  <p className="mt-1 text-sm text-amber-800">De OCR-controle kon de betaling niet met voldoende zekerheid bevestigen. Beoordeel het verzoek bij Superadmin → OCR-goedkeuring.</p>
+                  <button type="button" onClick={onClose} className="mt-3 h-10 rounded-xl border border-amber-300 px-4 font-bold text-amber-900">Sluiten</button>
+                </div>
+              ) : (
+                <>
+                  <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={uploadBankProof} className="hidden" data-testid="company-bank-proof-file" />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setStep(2)} disabled={busy}
+                      className="h-12 flex-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50">Terug</button>
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+                      className="flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#FF5C00] font-bold text-white hover:bg-[#E05200] disabled:opacity-50"
+                      data-testid="company-bank-proof-upload">
+                      {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> OCR controleert…</> : <><Upload className="h-4 w-4" /> Upload betaalbewijs</>}
+                    </button>
+                  </div>
+                  <p className="text-center text-xs text-slate-500">JPG, PNG, WEBP of PDF · maximaal 5 MB</p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5" role="status" data-testid="company-cash-payment-success">
+              <p className="flex items-center gap-2 font-black text-emerald-800"><CheckCircle2 className="h-5 w-5" /> Contante betaling geregistreerd</p>
+              <p className="text-sm text-emerald-700">{paymentResult?.invoice_paid ? 'De factuur is betaald en het abonnement is geactiveerd.' : 'De betaling is geboekt; het resterende factuursaldo blijft open.'}</p>
+              <button type="button" onClick={onClose} className="h-10 rounded-xl bg-emerald-600 px-4 font-bold text-white">Sluiten</button>
+            </div>
           )}
         </div>
       </section>
@@ -824,7 +979,7 @@ export default function Companies({
         />
       )}
       {paymentCompany && (
-        <CompanyPaymentWizard company={paymentCompany} onClose={() => setPaymentCompany(null)} />
+        <CompanyPaymentWizard company={paymentCompany} onClose={() => setPaymentCompany(null)} onPaid={load} />
       )}
       {impersonating && (
         <div className="fixed inset-0 z-[60] bg-slate-950/60 flex items-center justify-center p-5" role="status">

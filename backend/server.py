@@ -3456,7 +3456,13 @@ async def _record_saas_payment_manual(
         "installment_seq": installment_seq,
         "method": method,
         "reference": reference,
-        "note": "Auto-goedgekeurd na OCR-controle van bankafschrift" if auto_approved else "",
+        "note": (
+            "Auto-goedgekeurd na OCR-controle van bankafschrift"
+            if auto_approved and method == "bank"
+            else "Contante betaling handmatig geregistreerd"
+            if auto_approved and method == "contant"
+            else ""
+        ),
         "paid_at": paid_at,
         "created_at": paid_at,
         "created_by": approved_by,
@@ -3483,10 +3489,48 @@ async def _record_saas_payment_manual(
     }
 
 
+@api.post("/superadmin/subscription-invoices/{invoice_id}/cash-payment")
+async def superadmin_record_saas_cash_payment(
+    invoice_id: str,
+    user=Depends(require_role("superadmin")),
+):
+    """Register a cash subscription payment against an invoice and activate it when settled."""
+    invoice = await db.subscription_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    if invoice.get("merged_into_invoice_id") or invoice.get("status") in {
+        "paid", "merged", "superseded", "cancelled", "void",
+    }:
+        raise HTTPException(status_code=400, detail="Deze factuur kan niet contant worden betaald")
+    company = await db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    balance_value = invoice.get("balance_due")
+    if balance_value is None:
+        balance_value = float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0)
+    balance = float(balance_value or 0)
+    if not math.isfinite(balance) or balance <= 0:
+        raise HTTPException(status_code=400, detail="Deze factuur heeft geen openstaand saldo")
+
+    return await _record_saas_payment_manual(
+        invoice=invoice,
+        company=company,
+        amount=balance,
+        currency=invoice.get("currency") or "SRD",
+        method="contant",
+        reference=f"Contante betaling — {invoice.get('invoice_number') or invoice_id[:8]}",
+        statement_id=None,
+        ocr_meta={"source": "superadmin_cash"},
+        auto_approved=True,
+        approved_by=user.get("email") or "superadmin",
+    )
+
+
 @api.post("/billing/me/bank-confirm")
 async def billing_me_bank_confirm(
     file: UploadFile = File(...),
     invoice_id: Optional[str] = Form(None),
+    target_company_id: Optional[str] = Form(None),
     user=Depends(get_current_user),
 ):
     """Admin upload bankafschrift voor zijn lopende abonnement-factuur. Wij:
@@ -3499,6 +3543,12 @@ async def billing_me_bank_confirm(
     Returns: `{status: 'paid'|'pending_approval', ocr: {...}, invoice_id, mismatch_reasons?}`
     """
     cid = company_id_of(user)
+    if target_company_id:
+        if user.get("role") != "superadmin":
+            raise HTTPException(status_code=403, detail="Alleen superadmin kan voor een bedrijf betalen")
+        if not invoice_id:
+            raise HTTPException(status_code=400, detail="Factuur is verplicht voor een superadminbetaling")
+        cid = target_company_id
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
@@ -3525,6 +3575,8 @@ async def billing_me_bank_confirm(
             )
             if not inv:
                 raise HTTPException(status_code=404, detail="Hoofdfactuur niet gevonden")
+        if target_company_id and (inv.get("currency") or "SRD").upper() != "SRD":
+            raise HTTPException(status_code=400, detail="Bankoverschrijving is alleen beschikbaar voor SRD-facturen")
         if inv.get("status") == "paid":
             raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
     else:
