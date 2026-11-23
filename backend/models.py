@@ -131,8 +131,9 @@ class PaymentIn(BaseModel):
     apartment_id: Optional[str] = None
     amount: float
     currency: Literal["SRD", "USD", "EUR"] = "SRD"
-    method: Literal["contant", "bank", "creditcard", "ideal", "pin"] = "contant"
+    method: Literal["contant", "bank", "creditcard", "ideal", "pin", "mope"] = "contant"
     stripe_payment_intent_id: Optional[str] = None
+    mope_payment_request_id: Optional[str] = None
     category: Literal["huur", "servicekosten", "borg", "boete", "internet", "overig", "vooruitbetaling"] = "huur"
     period_month: Optional[int] = None
     period_year: Optional[int] = None

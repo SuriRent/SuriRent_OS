@@ -23,6 +23,7 @@ import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { resolveLogoUrl } from '../../lib/branding';
 import { postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
+import { QRCodeSVG } from 'qrcode.react';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
 import {
   getKioskEmployee, withKioskEmployee,
@@ -46,7 +47,7 @@ import { FxStats, FxTabs, FxRow, FxEmpty, FxIconBtn, KioskFxCtx } from '../../co
 import KioskManual from '../../components/KioskManual';
 import { KioskDepositModal } from '../../components/KioskDepositModal';
 import SubscriptionBell from '../../components/SubscriptionBell';
-import { INSTELLINGEN_SECTIONS } from './admin/instellingenSections';
+import { availableInstellingenSections } from './admin/instellingenSections';
 import InvoiceForm from './admin/invoices/InvoiceForm';
 import { ModalHostContext } from '../../components/KeyboardSafeModal';
 import { kioskLiveBye } from '../../lib/kiosk-live';
@@ -294,13 +295,14 @@ function KioskBell() {
 // Tandwiel rechtsboven opent de kiosk-instellingenweergave (alleen beheerder).
 function KioskSettingsMenu() {
   const { isAdmin, isUi } = useContext(KioskThemeCtx);
+  const { activeCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
   useMenuReopen('settings', setOpen);
   useEffect(() => { import('./admin/KioskSettingsPage'); }, []);
   if (!isAdmin || !role || role === 'boekhouder' || role === 'staff') return null;
-  const items = INSTELLINGEN_SECTIONS.map(({ id, label, icon }) => ({
+  const items = availableInstellingenSections(activeCompany?.limits).map(({ id, label, icon }) => ({
     id, label, Icon: icon, testid: `kiosk-settings-menu-${id}`, onClick: () => navAdmin(`inst-${id}`, 'settings'),
   }));
   return (
@@ -316,6 +318,7 @@ function KioskSettingsMenu() {
 
 function KioskAdminMenu({ returnTo }) {
   const { isAdmin } = useContext(KioskThemeCtx);
+  const { activeCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const role = useAdminRole(isAdmin);
   const close = useCallback(() => setOpen(false), []);
@@ -329,6 +332,7 @@ function KioskAdminMenu({ returnTo }) {
     ...Object.keys(KIOSK_ADMIN_PAGES)
       .filter((id) => id !== 'instellingen' && id !== 'overzicht')
       .filter((id) => role !== 'boekhouder' || BOEKHOUDER_KIOSK_PAGES.includes(id))
+      .filter((id) => id !== 'stroom' || activeCompany?.limits?.allow_power === true)
       .map((id) => ({
         id, label: KIOSK_ADMIN_PAGES[id].label, Icon: KIOSK_ADMIN_PAGES[id].Icon,
         testid: `kiosk-admin-menu-${id}`,
@@ -3359,18 +3363,23 @@ function MethodSelect({ payload, overview, onBack, onConfirm, posLayout = false 
   const cur = payload.currency || 'SRD';
   const [stripeCfg, setStripeCfg] = useState(null);
   const [stripeMethod, setStripeMethod] = useState(null);
+  const [mopeOpen, setMopeOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const pick = (m) => {
     if (m.stripe) setStripeMethod(m.stripe);
+    else if (m.v === 'mope') setMopeOpen(true);
     else if (m.v === 'bank') setBankOpen(true);
     else onConfirm({ ...payload, method: m.v });
   };
   useEffect(() => { api.get('/kiosk/stripe/config').then(({ data }) => setStripeCfg(data)).catch(() => {}); }, []);
+  const [mopeEnabled, setMopeEnabled] = useState(false);
+  useEffect(() => { api.get('/kiosk/mope/config').then(({ data }) => setMopeEnabled(!!data.enabled)).catch(() => {}); }, []);
   const methods = [
     { v: 'contant', l: 'Contant', sub: 'Betaal met contant geld', icon: Banknote, accent: 'emerald' },
     { v: 'bank', l: 'Bankoverschrijving', sub: 'Overboeking naar bankrekening', icon: CreditCard, accent: 'blue' },
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('card') ? [{ v: 'creditcard', l: 'Creditcard', sub: 'Direct betalen op dit scherm', icon: CreditCard, accent: 'orange', stripe: 'card' }] : []),
     ...(stripeCfg?.enabled && stripeCfg.methods.includes('ideal') ? [{ v: 'ideal', l: 'iDEAL', sub: 'Direct naar uw bank', icon: LandmarkIcon, accent: 'pink', stripe: 'ideal' }] : []),
+    ...(mopeEnabled ? [{ v: 'mope', l: 'Mopé', sub: 'Scan de QR-code en betaal met Mopé', icon: Wallet, accent: 'orange' }] : []),
   ];
   const methodCards = methods.map((m) => {
     const Icon = m.icon;
@@ -3444,7 +3453,81 @@ function MethodSelect({ payload, overview, onBack, onConfirm, posLayout = false 
           onClose={() => setStripeMethod(null)}
           onPaid={(pi) => onConfirm({ ...payload, method: stripeMethod === 'ideal' ? 'ideal' : 'creditcard', stripe_payment_intent_id: pi, stripe_paid: true })} />
       )}
+      {mopeOpen && (
+        <KioskMopePanel payload={payload} tenantName={tenant.name}
+          onClose={() => setMopeOpen(false)}
+          onPaid={(paymentId) => onConfirm({ ...payload, method: 'mope', mope_payment_request_id: paymentId, mope_paid: true })} />
+      )}
     </div>
+  );
+}
+
+function KioskMopePanel({ payload, tenantName, onClose, onPaid }) {
+  const [request, setRequest] = useState(null);
+  const [error, setError] = useState('');
+  const currency = payload.currency || 'SRD';
+
+  useEffect(() => {
+    let stopped = false;
+    let timer;
+    const poll = async (paymentId) => {
+      try {
+        const { data } = await api.get(`/kiosk/mope/status/${paymentId}`);
+        if (stopped) return;
+        if (data.status === 'paid') {
+          stopped = true;
+          playSuccessPing();
+          onPaid(paymentId);
+          return;
+        }
+        if (data.status === 'expired') {
+          setError('Dit Mopé-betaalverzoek is verlopen. Sluit dit venster en probeer opnieuw.');
+          return;
+        }
+      } catch {
+        if (stopped) return;
+      }
+      if (!stopped) timer = setTimeout(() => poll(paymentId), 2500);
+    };
+    api.post('/kiosk/mope/request', {
+      tenant_id: payload.tenant_id, amount: payload.amount, currency,
+    }).then(({ data }) => {
+      if (stopped) return;
+      setRequest(data);
+      poll(data.payment_id);
+    }).catch((e) => {
+      if (!stopped) setError(formatError(e, 'Kon het Mopé-betaalverzoek niet starten'));
+    });
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" data-testid="kiosk-mope-panel">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[92vh] overflow-auto shadow-2xl p-6 text-center">
+        <div className="flex items-start justify-between gap-3 mb-4 text-left">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Mopé · {tenantName}</p>
+            <p className="text-2xl font-black text-slate-900">{fmtMoney(payload.amount, currency)}</p>
+          </div>
+          <button onClick={onClose} data-testid="kiosk-mope-close" className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"><X className="w-5 h-5 text-slate-600" /></button>
+        </div>
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-3" data-testid="kiosk-mope-error">{error}</p>}
+        {!request && !error && <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}
+        {request && !error && (
+          <>
+            <div className="inline-block p-4 bg-white rounded-2xl border-2 border-slate-200">
+              <QRCodeSVG value={request.url} size={240} />
+            </div>
+            <p className="text-sm font-bold text-slate-900 mt-4">Scan de QR-code met de Mopé-app</p>
+            <p className="text-xs text-slate-500 mt-1 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Wachten op bevestiging van Mopé…</p>
+            <a href={request.url} target="_blank" rel="noreferrer" className="mt-4 block text-sm font-bold text-[#FF5C00] underline">Open Mopé-betaallink</a>
+            <p className="text-[11px] text-slate-400 mt-3">Het verzoek blijft maximaal 24 uur actief. Sluiten annuleert het niet; betaal niet nadat u dit venster hebt gesloten.</p>
+          </>
+        )}
+        <button onClick={onClose} data-testid="kiosk-mope-cancel" className="mt-6 w-full h-12 rounded-2xl bg-slate-100 text-slate-700 font-bold">Sluiten</button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -3509,7 +3592,7 @@ function KioskStripePanel({ payload, method, tenantName, onClose, onPaid }) {
 // Confirm + Receipt
 // =====================================================================
 // APK print-bridge: alleen binnen de Android-APK (ReactNativeWebView) actief.
-const METHOD_LABELS = { contant: 'Contant', bank: 'Bankoverschrijving', creditcard: 'Creditcard', ideal: 'iDEAL' };
+const METHOD_LABELS = { contant: 'Contant', bank: 'Bankoverschrijving', creditcard: 'Creditcard', ideal: 'iDEAL', mope: 'Mopé' };
 const fmtPrintDate = (d) => {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
@@ -3542,7 +3625,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess, posLayout = fals
   const canEditAmount = canChangeConfirmAmount(payload);
   const confirmPayload = buildConfirmPayment(payload, amount);
 
-  useEffect(() => { if (payload.stripe_paid) submit(); }, []);
+  useEffect(() => { if (payload.stripe_paid || payload.mope_paid) submit(); }, []);
   const submit = async () => {
     setLoading(true); setErr('');
     try {
@@ -3553,6 +3636,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess, posLayout = fals
         const pr = await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
           method: confirmPayload.method,
           amount: pi.amount,
+          mope_payment_request_id: confirmPayload.mope_payment_request_id,
           note: `Operator Kiosk — termijn ${pi.seq}`,
         });
         planReceipt = planReceipt || pr?.data?.receipt_number || pr?.data?.payment?.receipt_number || '';
@@ -6526,7 +6610,7 @@ function AddMaintenanceModal({ onClose, onSaved, initialApartmentId = '' }) {
 // Uniform Kiosk-oranje kleurenpalet: witte tegels met oranje icoon-vak
 // en donkere titeltekst. Vervangt de multi-kleur pastel-tegels.
 // =====================================================================
-function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
+function KioskAddSheet({ onClose, onPick, hasAdminAccess = false, hasPowerAccess = false }) {
   // Snel-aanmaak tegels (zelfde set als de desktop-balk). Kiosk-niveau
   // acties (Kasgeld, Beheerder, Uit) worden onder de grid als compacte
   // knopbalk gerenderd, NIET als cards.
@@ -6540,7 +6624,7 @@ function KioskAddSheet({ onClose, onPick, hasAdminAccess = false }) {
     { key: 'payments',    label: 'Betalingen inzien', Icon: Banknote },
     { key: 'maintenance', label: 'Onderhoud',         Icon: Wrench },
     { key: 'nfc',         label: 'NFC-tag koppelen',  Icon: Nfc },
-    ...(hasAdminAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
+    ...(hasPowerAccess ? [{ key: 'stroom', label: 'Stroom', Icon: Zap }] : []),
   ];
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -6614,7 +6698,8 @@ export default function KioskLayout() {
   useHidePwaSplash();
   const keyboardOpen = useKeyboardOpen();
   const navigate = useBrandedNavigate();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
+  const hasPowerAccess = activeCompany?.limits?.allow_power === true;
   const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   useEffect(() => {
     const updateViewport = () => setIsMobileViewport(window.innerWidth < 768);
@@ -7289,7 +7374,7 @@ export default function KioskLayout() {
     { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-tb-maintenance', onClick: () => { setTenantModal(null); openOnly('add-maintenance'); } },
     { id: 'info', label: 'Gegevens', icon: User, testid: 'kiosk-tb-info', onClick: () => { openOnly(null); setTenantModal('info'); } },
     { id: 'contact', label: 'Contact', icon: Smartphone, testid: 'kiosk-tb-contact', onClick: () => { openOnly(null); setTenantModal('contact'); } },
-    ...(hasAdminAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
+    ...(hasPowerAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
   const isMobileUiPage = isMobileViewport && isUi
@@ -7309,16 +7394,20 @@ export default function KioskLayout() {
         setAdminPopup(null);
         setStep(e.detail);
       }
-      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
-        && INSTELLINGEN_SECTIONS.some((s) => s.id === e.detail.slice(11))) {
-        setAdminPopup(null);
-        setStep(e.detail);
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768) {
+        const requestedSection = e.detail.slice(11);
+        const sectionId = requestedSection === 'stripe' || requestedSection === 'mope'
+          ? 'betaalmethoden' : requestedSection;
+        if (availableInstellingenSections(activeCompany?.limits).some((s) => s.id === sectionId)) {
+          setAdminPopup(null);
+          setStep(`admin:inst-${sectionId}`);
+        }
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };
     window.addEventListener('kiosk-nav', onNav);
     return () => window.removeEventListener('kiosk-nav', onNav);
-  }, []);
+  }, [activeCompany?.limits, hasAdminAccess, hasPowerAccess]);
   const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => {
     const onTourNavigate = (event) => {
@@ -7559,7 +7648,8 @@ export default function KioskLayout() {
             </Suspense>
           )}
           {step.startsWith('admin:') && step !== 'admin:appartementen' && step !== 'admin:huurders' && step !== 'admin:locaties' && step !== 'admin:contracten' && step !== 'admin:betalingen' && step !== 'admin:regelingen' && step !== 'admin:facturen' && step !== 'admin:bankreconciliatie'
-            && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)] && (
+            && hasAdminAccess && KIOSK_ADMIN_PAGES[step.slice(6)]
+            && (step.slice(6) !== 'stroom' || hasPowerAccess) && (
             isMobileViewport && isUi && UI_NEW_PAGES.includes(step.slice(6))
               ? <KioskUiAdminStep id={step.slice(6)} onBack={goBack} />
               : <KioskAdminPopup id={step.slice(6)} Shell={KioskModalShell} onClose={goBack} />
@@ -7585,7 +7675,7 @@ export default function KioskLayout() {
               </KioskModalShell>
             )
           )}
-          {step === 'stroom' && hasAdminAccess && (
+          {step === 'stroom' && hasAdminAccess && hasPowerAccess && (
             isMobileViewport && isUi ? (
               <KioskUiAdminStep id="stroom" onBack={goBack}><PowerControl /></KioskUiAdminStep>
             ) : (
@@ -7712,6 +7802,7 @@ export default function KioskLayout() {
           onClose={() => setShowAddSheet(false)}
           onPick={handleSheetPick}
           hasAdminAccess={hasAdminAccess}
+          hasPowerAccess={hasPowerAccess}
         />
       )}
 
@@ -7845,7 +7936,7 @@ export default function KioskLayout() {
               ...(hasAdminAccess && user?.role !== 'boekhouder' ? [{ id: 'bankreconciliation', label: 'Bankreconciliatie', icon: LandmarkIcon, testid: 'kiosk-bank-reconciliation-btn-desktop', onClick: () => { openOnly(null); setStep('admin:bankreconciliatie'); } }] : []),
               { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-add-maintenance-btn-desktop', onClick: () => openOnly('add-maintenance') },
               { id: 'kasgeld', label: 'Kasgeld', icon: Database, testid: 'kiosk-kasgeld-btn-desktop', onClick: () => { openOnly(null); setStep('kasgeld'); } },
-              ...(hasAdminAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
+              ...(hasPowerAccess ? [{ id: 'stroom', label: 'Stroom', icon: Zap, testid: 'kiosk-stroom-btn-desktop', onClick: () => { openOnly(null); setStep('stroom'); } }] : []),
               { id: 'logout', label: 'Uitloggen', icon: LogOut, testid: 'kiosk-lock-btn-desktop', onClick: exit },
             ]).map(({ id, label, icon: Icon, testid, onClick }) => {
               const active = (id === 'kasgeld' && step === 'kasgeld') || (id === 'stroom' && step === 'stroom')

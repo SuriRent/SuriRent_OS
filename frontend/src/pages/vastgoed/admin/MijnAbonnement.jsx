@@ -7,6 +7,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, formatError } from '../../../lib/api';
 import { useAutoRefresh } from '../../../lib/auto-refresh';
+import { useAuth } from '../../../lib/auth';
 
 const fmt = (n, c = 'SRD') => {
   const cur = (c || 'SRD').toUpperCase();
@@ -426,6 +427,7 @@ export default function MijnAbonnement() {
   const [apBusy, setApBusy] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { refresh: refreshAuth } = useAuth();
 
   useEffect(() => {
     if (new URLSearchParams(location.search).get('tab') === 'bank') {
@@ -481,6 +483,7 @@ export default function MijnAbonnement() {
         : `Pakketwijziging gepland â€” gaat in bij volgende vernieuwing op ${fmtDate(data.renews_at)}.`);
       setTimeout(() => setMsg(''), 5000);
       await load();
+      if (data.effective === 'immediately') await refreshAuth();
     } catch (e) { setErr(formatError(e)); } finally { setBusy(false); }
   };
 

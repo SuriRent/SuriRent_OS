@@ -503,8 +503,8 @@ function FeaturesSection({ c = {} }) {
   );
 }
 
-const STARTER = ['Tot 15 huurders', 'Alle kernfuncties', 'Digitale kwitanties', 'Mobile-first interface', 'SRD/USD/EUR support', 'Email support'];
-const PRO = ['Onbeperkt huurders', 'Alles uit Starter', 'Kiosk terminal (4-cijferige PIN)', 'Geavanceerde rapportages', 'Prioritaire WhatsApp support'];
+const STARTER = ['Tot 100 appartementen en huurders', 'Kiosk terminal', 'Digitale kwitanties', 'SRD/USD/EUR support', 'WhatsApp & E-mail'];
+const PRO = ['Alles uit Starter', 'Tot 500 appartementen en huurders', 'Stripe betalingen', 'Mopé betalingen', 'Stroombeheer', 'White-label branding', 'Eigen domein', 'Marketing website', 'Prioriteit support'];
 
 function PricingCard({ name, price, currency = 'SRD', desc, features, cta, onCta, featured, testid }) {
   const isEUR = (currency || 'SRD').toUpperCase() === 'EUR';
@@ -648,7 +648,7 @@ function PricingSection({ onLogin, c = {} }) {
             name={pp.name || 'Professional'}
             price={pro?.amount ?? 5000}
             currency={pro?.currency || currency}
-            desc={pp.desc || 'Met Kiosk terminal en alle functies.'}
+            desc={pp.desc || 'Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.'}
             features={proFeatures}
             cta={pp.cta || 'Start met Professional'}
             onCta={onLogin}

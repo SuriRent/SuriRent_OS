@@ -1,30 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Bell, Building2, ChevronRight, Search } from 'lucide-react';
+import { ArrowLeft, Bell, Building2, ChevronDown, ChevronRight, LayoutDashboard, Search } from 'lucide-react';
+import { useAuth } from '../../../lib/auth';
+import { KIOSK_ADMIN_PAGES } from '../../../components/KioskAdminInvoices';
 import { RENDER } from './InstellingenHub';
-import { INSTELLINGEN_SECTIONS } from './instellingenSections';
+import { availableInstellingenSections } from './instellingenSections';
+
+const BOOKKEEPER_PAGES = new Set(['huurders', 'betalingen', 'facturen', 'regelingen', 'borg', 'notificaties']);
 
 // Full-screen instellingenvenster voor desktop; bezochte onderdelen blijven
 // gemount zodat secties wisselen zonder opnieuw laden of flikkeren.
 export default function KioskSettingsPage({ id, onBack, user }) {
-  const [sec, setSec] = useState(INSTELLINGEN_SECTIONS.some((s) => s.id === id) ? id : 'abonnement');
+  const { activeCompany } = useAuth();
+  const sectionId = id === 'stripe' || id === 'mope' ? 'betaalmethoden' : id;
+  const sections = useMemo(
+    () => availableInstellingenSections(activeCompany?.limits),
+    [activeCompany?.limits],
+  );
+  const [sec, setSec] = useState(sections.some((s) => s.id === sectionId) ? sectionId : 'abonnement');
   const [visited, setVisited] = useState(() => new Set([sec]));
   const [query, setQuery] = useState('');
+  const [pageMenuOpen, setPageMenuOpen] = useState(false);
   useEffect(() => {
-    if (INSTELLINGEN_SECTIONS.some((s) => s.id === id)) setSec(id);
-  }, [id]);
+    if (sections.some((s) => s.id === sectionId)) setSec(sectionId);
+  }, [sectionId, sections]);
+  useEffect(() => {
+    if (!sections.some((s) => s.id === sec)) setSec('abonnement');
+  }, [sections, sec]);
   useEffect(() => {
     setVisited((v) => (v.has(sec) ? v : new Set(v).add(sec)));
   }, [sec]);
-  const current = INSTELLINGEN_SECTIONS.find((s) => s.id === sec);
+  const current = sections.find((s) => s.id === sec) || sections[0];
   const Icon = current.icon;
-  const filteredSections = INSTELLINGEN_SECTIONS.filter((section) => (
+  const filteredSections = sections.filter((section) => (
     `${section.label} ${section.desc}`.toLowerCase().includes(query.trim().toLowerCase())
   ));
   const userName = user?.name || user?.email || 'Gebruiker';
   const initials = userName.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'G';
   const roleLabels = { admin: 'Beheerder', superadmin: 'Superbeheerder', employee: 'Medewerker' };
   const userRole = roleLabels[user?.role] || 'Gebruiker';
+  const pageItems = Object.entries(KIOSK_ADMIN_PAGES)
+    .filter(([pageId]) => pageId !== 'instellingen' && pageId !== 'overzicht')
+    .filter(([pageId]) => user?.role !== 'boekhouder' || BOOKKEEPER_PAGES.has(pageId))
+    .filter(([pageId]) => pageId !== 'stroom' || activeCompany?.limits?.allow_power === true);
   const contentHasHeading = ['bedrijf', 'branding', 'bon', 'backup'].includes(current.id);
   const selectSection = (sectionId) => {
     setSec(sectionId);
@@ -63,6 +81,36 @@ export default function KioskSettingsPage({ id, onBack, user }) {
           </label>
         </div>
         <div className="flex shrink-0 items-center gap-3 px-3 sm:gap-5 sm:px-6">
+          <div className="relative">
+            <button type="button" onClick={() => setPageMenuOpen((open) => !open)}
+              aria-label="Andere beheerpagina openen" aria-expanded={pageMenuOpen}
+              data-testid="kiosk-settings-pages-toggle"
+              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white">
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">Pagina's</span>
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            {pageMenuOpen && (
+              <div className="absolute right-0 top-full z-[401] mt-2 max-h-[min(70vh,28rem)] w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-xl"
+                data-testid="kiosk-settings-pages-menu">
+                {pageItems.map(([pageId, page]) => {
+                  const PageIcon = page.Icon;
+                  return (
+                    <button key={pageId} type="button"
+                      onClick={() => {
+                        setPageMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:${pageId}` }));
+                      }}
+                      data-testid={`kiosk-settings-page-${pageId}`}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-orange-50 hover:text-[#FF5C00]">
+                      <PageIcon className="h-4 w-4 shrink-0" />
+                      <span>{page.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <button type="button" onClick={() => selectSection('notificaties')}
             aria-label="Notificatie-instellingen openen" title="Notificatie-instellingen"
             className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-200 transition hover:bg-white/10 hover:text-white">
@@ -137,7 +185,7 @@ export default function KioskSettingsPage({ id, onBack, user }) {
                 </div>
               </div>
             )}
-            {INSTELLINGEN_SECTIONS.filter((s) => visited.has(s.id)).map((s) => (
+            {sections.filter((s) => visited.has(s.id)).map((s) => (
               <div key={s.id} className={s.id === sec ? '' : 'hidden'}>{RENDER[s.id]()}</div>
             ))}
           </div>

@@ -5,7 +5,7 @@ import { hostConfirm } from '../../components/EmbedConfirm';
 import { useEmbedConfirm } from '../../components/EmbedConfirm';
 import { useLocation } from 'react-router-dom';
 import { useBrandedNavigate } from '../../lib/branded-nav';
-import { INSTELLINGEN_SECTIONS, activeInstellingenSection } from './admin/instellingenSections';
+import { availableInstellingenSections, activeInstellingenSection } from './admin/instellingenSections';
 import { useBadge } from '../../lib/pwa';
 import { useAutoRefresh } from '../../lib/auto-refresh';
 import {
@@ -698,12 +698,13 @@ function groupTabs(tabs) {
   })).filter((g) => g.items.length > 0);
 }
 
-function SidebarSettingsDropdown({ tab, isActive }) {
+function SidebarSettingsDropdown({ tab, isActive, activeCompany }) {
   const navigate = useBrandedNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(isActive);
   useEffect(() => { if (isActive) setOpen(true); }, [isActive]);
-  const activeSub = isActive ? activeInstellingenSection(location.hash) : null;
+  const activeSub = isActive ? activeInstellingenSection(location.hash, activeCompany?.limits) : null;
+  const sections = availableInstellingenSections(activeCompany?.limits);
   const Icon = tab.icon;
   return (
     <div data-testid="sidebar-instellingen-dropdown">
@@ -717,7 +718,7 @@ function SidebarSettingsDropdown({ tab, isActive }) {
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
           <div className="ml-5 mt-1 pl-3 border-l-2 border-orange-100 space-y-0.5 pb-1">
-            {INSTELLINGEN_SECTIONS.map((s) => {
+            {sections.map((s) => {
               const SIcon = s.icon;
               const on = activeSub === s.id;
               return (
@@ -838,7 +839,7 @@ function Sidebar({ active, onChange, onLogout, user, tabs, badgeCount, activeCom
                 const showBadge = t.id === 'notifications' && badgeCount > 0;
                 const isPulsing = pulsingTabs.has(t.id);
                 if (t.id === 'instellingen') {
-                  return <SidebarSettingsDropdown key={t.id} tab={t} isActive={isActive} />;
+                  return <SidebarSettingsDropdown key={t.id} tab={t} isActive={isActive} activeCompany={activeCompany} />;
                 }
                 return (
                   <button key={t.id} onClick={() => onChange(t.id)}
@@ -1099,9 +1100,10 @@ function MobileSheet({ open, onClose, active, onChange, onLogout, onManual, user
             <div className="mt-3 rounded-2xl bg-orange-50/60 border border-orange-100 p-2 animate-fade-in" data-testid="sheet-instellingen-list">
               <p className="px-2 pt-1 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#FF5C00]">Instellingen</p>
               <div className="grid grid-cols-2 gap-1.5">
-                {INSTELLINGEN_SECTIONS.map((s) => {
+                {availableInstellingenSections(activeCompany?.limits).map((s) => {
                   const SIcon = s.icon;
-                  const on = active === 'instellingen' && activeInstellingenSection(location.hash) === s.id;
+                  const on = active === 'instellingen'
+                    && activeInstellingenSection(location.hash, activeCompany?.limits) === s.id;
                   return (
                     <button key={s.id} data-testid={`tab-sheet-instellingen-${s.id}`}
                       onClick={() => { navigate(`/admin/instellingen#${s.id}`); onClose(); }}
@@ -5247,7 +5249,9 @@ function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
 export default function AdminDashboard() {
   useHidePwaSplash();
   const { user, logout, activeCompany, activeCompanyId, setActiveCompany, refresh: refreshAuth } = useAuth();
-  const tabs = getTabsFor(user);
+  const tabs = getTabsFor(user).filter(
+    (tab) => tab.id !== 'power' || activeCompany?.limits?.allow_power === true,
+  );
   const isSaasConsole = user?.role === 'superadmin';
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
@@ -5549,7 +5553,8 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'payment_plans'} tabId="payment_plans" currentTab={tab}><PaymentPlans /></KeepAliveTab>
           <KeepAliveTab active={tab === 'deposits'} tabId="deposits" currentTab={tab}><Deposits /></KeepAliveTab>
           <KeepAliveTab active={tab === 'maintenance'} tabId="maintenance" currentTab={tab}><Maintenance /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'power'} tabId="power" currentTab={tab}><PowerAdmin /></KeepAliveTab>
+          {activeCompany?.limits?.allow_power === true
+            && <KeepAliveTab active={tab === 'power'} tabId="power" currentTab={tab}><PowerAdmin /></KeepAliveTab>}
           <KeepAliveTab active={tab === 'kasgeld'} tabId="kasgeld" currentTab={tab}><Kasgeld /></KeepAliveTab>
           <KeepAliveTab active={tab === 'employees'} tabId="employees" currentTab={tab}><Employees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'notifications'} tabId="notifications" currentTab={tab}><Notifications /></KeepAliveTab>

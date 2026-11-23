@@ -163,16 +163,16 @@ LANDING_DEFAULTS: dict = {
     "pricing_starter": {
         "name": "Starter",
         "desc": "Voor kleinere vastgoedbeheerders.",
-        "features": ["Tot 15 huurders", "Alle kernfuncties", "Digitale kwitanties",
-                     "Mobile-first interface", "SRD/USD/EUR support", "Email support"],
+        "features": ["Tot 100 appartementen en huurders", "Kiosk terminal",
+                     "Digitale kwitanties", "WhatsApp & E-mail"],
         "cta": "Start met Starter",
     },
     "pricing_pro": {
         "name": "Professional",
-        "desc": "Met Kiosk terminal en alle functies.",
-        "features": ["Onbeperkt huurders", "Alles uit Starter",
-                     "Kiosk terminal (4-cijferige PIN)",
-                     "Geavanceerde rapportages", "Prioritaire WhatsApp support"],
+        "desc": "Voor grotere vastgoedbeheerders met Stripe- en Mopé-betalingen, stroombeheer en een eigen website en domein.",
+        "features": ["Alles uit Starter", "Tot 500 appartementen en huurders",
+                     "Stripe betalingen", "Mopé betalingen", "Stroombeheer", "White-label branding", "Eigen domein",
+                     "Marketing website", "Prioriteit support"],
         "cta": "Start met Professional",
     },
     "cta_section": {
@@ -222,7 +222,24 @@ def deep_merge(base: dict, override: Any) -> dict:
 
 def merge_with_defaults(stored: dict | None) -> dict:
     """Return a content document with defaults applied for any missing fields."""
-    return deep_merge(LANDING_DEFAULTS, (stored or {}).get("content") if stored else {})
+    content = deep_merge(LANDING_DEFAULTS, (stored or {}).get("content") if stored else {})
+    starter_pricing = content.get("pricing_starter")
+    if isinstance(starter_pricing, dict) and isinstance(starter_pricing.get("features"), list):
+        starter_pricing["features"] = [
+            feature for feature in starter_pricing["features"] if feature != "Online betalen"
+        ]
+    pro_pricing = content.get("pricing_pro")
+    if isinstance(pro_pricing, dict):
+        pro_features = pro_pricing.get("features")
+        if isinstance(pro_features, list):
+            for feature in ("Stripe betalingen", "Mopé betalingen"):
+                if feature not in pro_features:
+                    pro_features.append(feature)
+    if isinstance(pro_pricing, dict) and pro_pricing.get("desc") in (
+        "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
+    ):
+        pro_pricing["desc"] = LANDING_DEFAULTS["pricing_pro"]["desc"]
+    return content
 
 
 # Whitelist of lucide-react icons that the editor exposes for features.

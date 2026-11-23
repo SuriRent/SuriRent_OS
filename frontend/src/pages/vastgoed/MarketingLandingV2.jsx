@@ -282,8 +282,10 @@ const LIMIT_LABELS = [
 const FEATURE_LABELS = [
   { key: 'allow_kiosk',    label: 'Kiosk terminal' },
   { key: 'allow_ocr',      label: 'AI-OCR (Gemini)' },
-  { key: 'allow_shelly',   label: 'Shelly stroombeheer' },
+  { key: 'allow_power',    label: 'Stroombeheer' },
   { key: 'allow_branding', label: 'White-label branding' },
+  { key: 'allow_custom_domain', label: 'Eigen domein' },
+  { key: 'allow_marketing_site', label: 'Marketing website' },
   { key: 'allow_backup',   label: 'Backup & Herstel' },
 ];
 const fmtLimit = (v, language) => (v === -1 || v == null ? '∞' : new Intl.NumberFormat(language === 'en' ? 'en-US' : 'nl-NL').format(v));
@@ -336,11 +338,12 @@ function PricingSection({ onDemo, onWhatsApp, onRegister, editMode }) {
         setPlans([
           { name: 'Starter', price: formatAmount(3000, language), sub: 'SRD / maand',
             desc: 'Voor kleinere vastgoedbeheerders.',
-            features: ['Onbeperkt appartementen', 'Online betalen', 'WhatsApp & E-mail'],
+            features: ['Kiosk terminal', 'WhatsApp & E-mail'],
             cta: 'Start trial' },
           { name: 'Professional', price: formatAmount(5000, language), sub: 'SRD / maand', highlight: true,
-            desc: 'Met Kiosk terminal en alle functies.',
-            features: ['Alles uit Starter', 'Kiosk terminal', 'Shelly stroombeheer', 'Prioriteit support'],
+            desc: 'Voor grotere vastgoedbeheerders met Stripe- en Mopé-betalingen, stroombeheer en een eigen website en domein.',
+            features: ['Alles uit Starter', 'Stripe betalingen', 'Mopé betalingen', 'Stroombeheer', 'White-label branding',
+              'Eigen domein', 'Marketing website', 'Prioriteit support'],
             cta: 'Demo aanvragen' },
           PLAN_UI_META.enterprise,
         ]);

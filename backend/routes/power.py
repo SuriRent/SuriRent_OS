@@ -37,8 +37,10 @@ _token_cache: dict = {}
 
 
 async def _admin(user: dict = Depends(_deps.get_current_user)) -> dict:
-    if user.get("role") not in ADMIN_ROLES or not _deps.company_id_of(user):
+    cid = _deps.company_id_of(user)
+    if user.get("role") not in ADMIN_ROLES or not cid:
         raise HTTPException(403, "Alleen de beheerder kan stroom beheren")
+    await _deps.require_plan_feature(cid, "allow_power", "Stroombeheer")
     return user
 
 
