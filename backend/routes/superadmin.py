@@ -308,52 +308,83 @@ async def create_subscription_invoice(body: NewInvoiceIn,
 
 
 async def saas_auto_invoice_tick() -> list[dict]:
-    """Invoice completed monthly service in arrears; preserve quarter/year billing intervals."""
+    """Create monthly invoices on the 28th and preserve quarter/year intervals."""
     db = _deps.db
     now = _deps.now_utc()
     created: list[dict] = []
-    cursor = db.companies.find({"billing_status": "active"}, {"_id": 0})
+    cursor = db.companies.find(
+        {"billing_status": {"$in": ["active", "expired"]}}, {"_id": 0},
+    )
     async for c in cursor:
-        renews_at_raw = c.get("subscription_renews_at")
-        if not renews_at_raw:
-            continue
-        try:
-            renews_at = datetime.fromisoformat(str(renews_at_raw).replace("Z", "+00:00"))
-        except Exception:
-            continue
-        if renews_at > now:
-            continue  # nog niet verlopen — wachten
         # Gebruik dezelfde plan-catalogus als pakkettenbeheer en registratie.
         plan_id = c.get("plan") or "starter"
         plan = await _deps.get_plan(plan_id)
+        interval = str((plan or {}).get("interval") or "month").lower()
+        is_trial_expiry = c.get("billing_status") == "expired"
+        if is_trial_expiry and (
+            interval != "month"
+            or c.get("subscription_started_at")
+            or c.get("subscription_renews_at")
+            or not c.get("trial_ends_at")
+        ):
+            continue
+
         summary = await _deps.billing_summary(c)
         amount = float(summary.get("monthly_amount") or 0)
         currency = str(summary.get("currency") or (plan or {}).get("currency") or "SRD").upper()
         if amount <= 0:
             continue
-        if str((plan or {}).get("interval") or "month").lower() == "month":
-            period_start, period_end = _deps.monthly_billing_period(renews_at)
-            subscription_started_at = c.get("subscription_started_at")
-            if subscription_started_at:
-                try:
-                    started = datetime.fromisoformat(
-                        str(subscription_started_at).replace("Z", "+00:00"),
-                    )
-                    if started.date() > period_end.date():
-                        await db.companies.update_one(
-                            {"id": c["id"]},
-                            {"$set": {"subscription_renews_at": _deps.iso(
-                                _deps.next_monthly_invoice_date(period_end),
-                            )}},
-                        )
-                        continue
-                    if started.date() > period_start.date():
-                        period_start = _deps.plan_period_start(plan, started)
-                except (TypeError, ValueError):
-                    pass
-            amount = _deps.saas_invoice_amount(plan, amount, period_start, period_end)
-            due_date = _deps.saas_due_date(period_end + timedelta(days=1))
+        next_invoice_at = None
+        if interval == "month" and is_trial_expiry:
+            try:
+                trial_ends_at = datetime.fromisoformat(
+                    str(c["trial_ends_at"]).replace("Z", "+00:00"),
+                )
+                if trial_ends_at.tzinfo is None:
+                    trial_ends_at = trial_ends_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if trial_ends_at > now:
+                continue
+            period_start, period_end, next_invoice_at = _deps.first_monthly_invoice_after_trial(
+                trial_ends_at,
+            )
+            due_date = _deps.saas_due_date(now)
+        elif interval == "month":
+            renews_at_raw = c.get("subscription_renews_at")
+            try:
+                renews_at = datetime.fromisoformat(str(renews_at_raw).replace("Z", "+00:00"))
+                if renews_at.tzinfo is None:
+                    renews_at = renews_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                renews_at = None
+            if renews_at is None or renews_at.day != 28:
+                renews_at = _deps.fixed_monthly_invoice_date(now, include_current=True)
+                await db.companies.update_one(
+                    {"id": c["id"]},
+                    {"$set": {"subscription_renews_at": _deps.iso(renews_at)}},
+                )
+            if renews_at > now:
+                continue
+            period_start, period_end = _deps.fixed_monthly_billing_period(renews_at)
+            next_invoice_at = _deps.fixed_monthly_invoice_date(
+                renews_at, include_current=False,
+            )
+            due_date = _deps.saas_due_date(renews_at)
         else:
+            if is_trial_expiry:
+                continue
+            renews_at_raw = c.get("subscription_renews_at")
+            if not renews_at_raw:
+                continue
+            try:
+                renews_at = datetime.fromisoformat(str(renews_at_raw).replace("Z", "+00:00"))
+                if renews_at.tzinfo is None:
+                    renews_at = renews_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if renews_at > now:
+                continue
             period_start = _deps.plan_period_start(plan, renews_at)
             period_end = _deps.plan_period_end(plan, period_start)
             due_date = _deps.saas_due_date(now)
@@ -362,15 +393,24 @@ async def saas_auto_invoice_tick() -> list[dict]:
         except ValueError as exc:
             print(f"[saas-invoice] could not check existing charges for {c['id']}: {exc}")
             continue
-        if _deps.invoice_covers_period(current_invoice, period_start, period_end):
-            if str((plan or {}).get("interval") or "month").lower() == "month":
+        covers_period = (
+            _deps.invoice_fully_covers_period(current_invoice, period_start, period_end)
+            if interval == "month"
+            else _deps.invoice_covers_period(current_invoice, period_start, period_end)
+        )
+        if covers_period:
+            if interval == "month" and next_invoice_at:
                 await db.companies.update_one(
                     {"id": c["id"]},
-                    {"$set": {"subscription_renews_at": _deps.iso(
-                        _deps.next_monthly_invoice_date(period_end),
-                    )}},
+                    {"$set": {"subscription_renews_at": _deps.iso(next_invoice_at)}},
                 )
             continue
+        cycle_fields = _deps.saas_invoice_cycle_fields(plan)
+        if interval == "month":
+            cycle_fields.update({
+                "billing_cycle": "fixed_28_advance",
+                "next_invoice_at": _deps.iso(next_invoice_at),
+            })
         inv = {
             "id": _deps.new_id(),
             "company_id": c["id"],
@@ -386,21 +426,19 @@ async def saas_auto_invoice_tick() -> list[dict]:
             "created_at": _deps.iso(now),
             "created_by": "auto_saas_invoice",
             "auto_generated": True,
-            **_deps.saas_invoice_cycle_fields(plan),
+            **cycle_fields,
         }
         try:
             inv, created_charge = await append_company_invoice_charge(
-                db, inv, f"subscription:{_deps.iso(period_start)}",
+                db, inv, f"subscription:{_deps.iso(period_start)[:10]}",
             )
         except ValueError as exc:
             print(f"[saas-invoice] could not add charge for {c['id']}: {exc}")
             continue
-        if str((plan or {}).get("interval") or "month").lower() == "month":
+        if interval == "month" and next_invoice_at:
             await db.companies.update_one(
                 {"id": c["id"]},
-                {"$set": {"subscription_renews_at": _deps.iso(
-                    _deps.next_monthly_invoice_date(period_end),
-                )}},
+                {"$set": {"subscription_renews_at": _deps.iso(next_invoice_at)}},
             )
         if not created_charge:
             continue

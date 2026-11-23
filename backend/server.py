@@ -90,7 +90,11 @@ from saas_billing_calendar import (
     saas_next_renewal as _saas_next_renewal,
     monthly_billing_period as _monthly_billing_period,
     next_monthly_invoice_date as _next_monthly_invoice_date,
+    fixed_monthly_invoice_date as _fixed_monthly_invoice_date,
+    fixed_monthly_billing_period as _fixed_monthly_billing_period,
+    first_monthly_invoice_after_trial as _first_monthly_invoice_after_trial,
     invoice_covers_period as _invoice_covers_period,
+    invoice_fully_covers_period as _invoice_fully_covers_period,
 )
 
 
@@ -805,9 +809,8 @@ async def _daily_billing_checks_loop():
                 _log.info(f"[billing-cron] expired {len(expired)} companies @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[billing-cron] cycle failed: {e}")
-            # SaaS auto-invoice cyclus: 1x per dag, genereert nieuwe
-            # maand-factuur voor elk actief bedrijf waar `subscription_renews_at`
-            # verlopen is en er nog geen open factuur bestaat.
+            # SaaS auto-invoice: first full monthly invoice after trial expiry,
+            # then advance invoices on the 28th for the following calendar month.
             try:
                 from routes.superadmin import saas_auto_invoice_tick as _saas_inv
                 new_invoices = await _saas_inv()
@@ -3338,30 +3341,79 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
     now = now_utc()
-    period_start = c.get("subscription_renews_at") or iso(now)
-    try:
-        period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
-    except ValueError:
-        period_start_dt = now
-        period_start = iso(now)
-    period_start_dt = _plan_period_start(plan, period_start_dt)
+    interval = str((plan or {}).get("interval") or "month").lower()
+    next_invoice_at = None
+    if interval == "month":
+        if c.get("trial_ends_at") and not c.get("subscription_started_at"):
+            try:
+                trial_ends_at = datetime.fromisoformat(
+                    str(c["trial_ends_at"]).replace("Z", "+00:00"),
+                )
+                if trial_ends_at.tzinfo is None:
+                    trial_ends_at = trial_ends_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=409, detail="De einddatum van de proefperiode is ongeldig")
+            period_start_dt, period_end_dt, next_invoice_at = _first_monthly_invoice_after_trial(
+                trial_ends_at,
+            )
+        else:
+            renews_at_raw = c.get("subscription_renews_at")
+            try:
+                renews_at = datetime.fromisoformat(str(renews_at_raw).replace("Z", "+00:00"))
+                if renews_at.tzinfo is None:
+                    renews_at = renews_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                renews_at = _fixed_monthly_invoice_date(now, include_current=True)
+                await db.companies.update_one(
+                    {"id": cid},
+                    {"$set": {"subscription_renews_at": iso(renews_at)}},
+                )
+            if renews_at.day != 28:
+                renews_at = _fixed_monthly_invoice_date(now, include_current=True)
+                await db.companies.update_one(
+                    {"id": cid},
+                    {"$set": {"subscription_renews_at": iso(renews_at)}},
+                )
+            if renews_at > now:
+                raise HTTPException(
+                    status_code=409,
+                    detail="De volgende abonnementsfactuur wordt op de 28e aangemaakt",
+                )
+            period_start_dt, period_end_dt = _fixed_monthly_billing_period(renews_at)
+            next_invoice_at = _fixed_monthly_invoice_date(renews_at, include_current=False)
+        amount = float(plan.get("amount") or 0)
+    else:
+        period_start = c.get("subscription_renews_at") or iso(now)
+        try:
+            period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
+        except ValueError:
+            period_start_dt = now
+        period_start_dt = _plan_period_start(plan, period_start_dt)
+        period_end_dt = _plan_period_end(plan, period_start_dt)
+        amount = _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end_dt)
     period_start = iso(period_start_dt)
-    period_end = _plan_period_end(plan, period_start_dt)
+    period_end = iso(period_end_dt) if period_end_dt else None
+    cycle_fields = _saas_invoice_cycle_fields(plan)
+    if interval == "month":
+        cycle_fields.update({
+            "billing_cycle": "fixed_28_advance",
+            "next_invoice_at": iso(next_invoice_at),
+        })
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": plan_id,
-        "amount": _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end),
+        "amount": amount,
         "currency": plan["currency"],
         "status": "open",
         "kind": "subscription",
         "period_start": period_start,
-        "period_end": iso(period_end) if period_end else None,
+        "period_end": period_end,
         "due_date": _saas_invoice_due_date(now),
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
-        **_saas_invoice_cycle_fields(plan),
+        **cycle_fields,
     }
     try:
         inv, _ = await append_company_invoice_charge(
@@ -3369,6 +3421,11 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    if interval == "month":
+        await db.companies.update_one(
+            {"id": cid},
+            {"$set": {"subscription_renews_at": iso(next_invoice_at)}},
+        )
     return inv
 
 
@@ -5787,9 +5844,26 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
     price = await _plan_for_company(plan_id, c)
     amount = float(price.get("amount") or 0)
     currency = (price.get("currency") or "SRD").upper()
-    period_start = _plan_period_start(plan, now)
-    period_end = _plan_period_end(plan, period_start)
-    amount = _saas_invoice_amount(plan, amount, period_start, period_end)
+    interval = str((plan or {}).get("interval") or "month").lower()
+    next_invoice_at = None
+    if interval == "month":
+        initial_start = now
+        if c.get("trial_ends_at") and not c.get("subscription_started_at"):
+            try:
+                initial_start = datetime.fromisoformat(
+                    str(c["trial_ends_at"]).replace("Z", "+00:00"),
+                )
+                if initial_start.tzinfo is None:
+                    initial_start = initial_start.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                initial_start = now
+        period_start, period_end, next_invoice_at = _first_monthly_invoice_after_trial(
+            initial_start,
+        )
+    else:
+        period_start = _plan_period_start(plan, now)
+        period_end = _plan_period_end(plan, period_start)
+        amount = _saas_invoice_amount(plan, amount, period_start, period_end)
     inv = None
     pending_invoice_id = c.get("pending_invoice_id")
     if pending_invoice_id:
@@ -5825,6 +5899,10 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "created_by": user.get("email"),
                 "manual": True,
                 **_saas_invoice_cycle_fields(plan),
+                **({
+                    "billing_cycle": "fixed_28_advance",
+                    "next_invoice_at": iso(next_invoice_at),
+                } if next_invoice_at else {}),
             }
             try:
                 inv, _ = await append_company_invoice_charge(
@@ -21337,7 +21415,11 @@ _route_deps.saas_invoice_amount = _saas_invoice_amount
 _route_deps.saas_invoice_cycle_fields = _saas_invoice_cycle_fields
 _route_deps.monthly_billing_period = _monthly_billing_period
 _route_deps.next_monthly_invoice_date = _next_monthly_invoice_date
+_route_deps.fixed_monthly_invoice_date = _fixed_monthly_invoice_date
+_route_deps.fixed_monthly_billing_period = _fixed_monthly_billing_period
+_route_deps.first_monthly_invoice_after_trial = _first_monthly_invoice_after_trial
 _route_deps.invoice_covers_period = _invoice_covers_period
+_route_deps.invoice_fully_covers_period = _invoice_fully_covers_period
 _route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment
